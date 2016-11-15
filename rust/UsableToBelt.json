@@ -1,0 +1,16 @@
+{
+    "name": "UsableToBelt",
+    "description": "Any usable item will be moved to your belt if there is space",
+    "author": "Wulf",
+    "version": "1.2.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/usabletobelt.1141",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

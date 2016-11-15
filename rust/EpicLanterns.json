@@ -1,0 +1,16 @@
+{
+    "name": "EpicLanterns",
+    "description": "Automatically toggles lanterns after sunrise and sunset or in other given time",
+    "author": "",
+    "version": "0.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/epiclanterns.1361",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

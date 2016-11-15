@@ -1,0 +1,16 @@
+{
+    "name": "Magic Loot",
+    "description": "Simple loot system",
+    "author": "Norn",
+    "version": "0.1.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/magic-loot.2212",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

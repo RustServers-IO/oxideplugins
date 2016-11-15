@@ -1,0 +1,23 @@
+{
+    "name": "Hotel",
+    "description": "Hotel System",
+    "author": "Reneb",
+    "version": "1.1.4",
+    "configuration": true,
+    "suggest": {
+        "HumanNPC": "*",
+        "Economics": "*"
+    },
+    "require": {
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hotel.1298",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

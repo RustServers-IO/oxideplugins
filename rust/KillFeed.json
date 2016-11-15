@@ -1,0 +1,16 @@
+{
+    "name": "Kill Feed",
+    "description": "Displays a basic Kill Feed on screen!",
+    "author": "Tuntenfisch",
+    "version": "1.15.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/kill-feed.1433",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

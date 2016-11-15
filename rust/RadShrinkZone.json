@@ -1,0 +1,19 @@
+{
+    "name": "BattleRoyale Local RadZone",
+    "description": "BattleRoyale-styled radiation system",
+    "author": "",
+    "version": "1.0.4",
+    "configuration": true,
+    "require": {
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/battleroyale-local-radzone.1828",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,22 @@
+{
+    "name": "Player Rankings",
+    "description": "Automatically gives players ranks based on playtime",
+    "author": "Ankawi",
+    "version": "2.0.2",
+    "configuration": true,
+    "suggest": {
+        "BetterChat": "*"
+    },
+    "require": {
+        "ConnectionDB": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/player-rankings.1469",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

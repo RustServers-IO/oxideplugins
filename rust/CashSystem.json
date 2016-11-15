@@ -1,0 +1,16 @@
+{
+    "name": "Cash System",
+    "description": "A simple cash system",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/cash-system.844",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

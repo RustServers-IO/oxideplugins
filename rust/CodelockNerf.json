@@ -1,0 +1,16 @@
+{
+    "name": "CodeLockNerf",
+    "description": "If you die, your character can forget door codes, better keep that notepad ready.",
+    "author": "Kyrah Abattoir",
+    "version": "0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/codelocknerf.1908",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

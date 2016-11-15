@@ -1,0 +1,16 @@
+{
+    "name": "Bounty Board",
+    "description": "Adds a Bounty System to the server",
+    "author": "KillParadise",
+    "version": "1.1.2",
+    "configuration": true,
+    "language": "js",
+    "url": "http:\/\/oxidemod.org\/plugins\/bounty-board.849",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

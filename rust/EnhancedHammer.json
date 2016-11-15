@@ -1,0 +1,16 @@
+{
+    "name": "Enhanced Hammer",
+    "description": "Quickly upgrade your base!",
+    "author": "Visagalis",
+    "version": "0.5.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/enhanced-hammer.1439",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

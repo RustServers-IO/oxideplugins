@@ -1,0 +1,16 @@
+{
+    "name": "Warp System",
+    "description": "Create warp points for players",
+    "author": "PaiN",
+    "version": "1.9.8",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/warp-system.760",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

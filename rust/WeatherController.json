@@ -1,0 +1,16 @@
+{
+    "name": "Weather Controller",
+    "description": "Allows you to control the weather.",
+    "author": "AnExiledGod",
+    "version": "1.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/weather-controller.1180",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

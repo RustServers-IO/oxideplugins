@@ -1,0 +1,19 @@
+{
+    "name": "Airstrike",
+    "description": "Call an airstrike using a supply signal\/chat command",
+    "author": "k1lly0u",
+    "version": "0.2.4",
+    "configuration": true,
+    "suggest": {
+        "Economics": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/airstrike.1489",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,17 @@
+{
+    "name": "Ragnarok",
+    "description": "Ragnarok Hellscape: A constant barrage of meteors.",
+    "author": "",
+    "version": "0.7.8",
+    "configuration": true,
+    "suggest": {},
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ragnarok.1985",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

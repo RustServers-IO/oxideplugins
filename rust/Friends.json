@@ -1,0 +1,16 @@
+{
+    "name": "Friends API",
+    "description": "An API to manage a friend list",
+    "author": "Nogrod",
+    "version": "2.1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/friends-api.686",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

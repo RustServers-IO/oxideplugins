@@ -1,0 +1,21 @@
+{
+    "name": "GunGame",
+    "description": "GunGame event arena game",
+    "author": "k1lly0u",
+    "version": "0.3.52",
+    "configuration": true,
+    "require": {
+        "EventManager": "*",
+        "ZoneManager": "*",
+        "Spawns": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/gungame.1485",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "UEconomics",
+    "description": "A universal economics system with API",
+    "author": "k1lly0u",
+    "version": "0.1.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ueconomics.2129",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

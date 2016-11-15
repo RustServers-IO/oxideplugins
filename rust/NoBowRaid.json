@@ -1,0 +1,16 @@
+{
+    "name": "NoBowRaid",
+    "description": "Removes bow raiding",
+    "author": "Bamabo",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nobowraid.2021",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

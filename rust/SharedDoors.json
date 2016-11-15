@@ -1,0 +1,19 @@
+{
+    "name": "SharedDoors",
+    "description": "Sharing doors with friends via the tool cupboard.",
+    "author": "",
+    "version": "0.6.0",
+    "configuration": false,
+    "suggest": {
+        "Clans": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/shareddoors.2108",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

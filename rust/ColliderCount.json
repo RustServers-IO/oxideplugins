@@ -1,0 +1,17 @@
+{
+    "name": "Collider Count",
+    "description": "Use a chat\/console command to check current collider count and the *estimated* days to wipe!",
+    "author": "Cheeze",
+    "version": "0.0.3",
+    "configuration": true,
+    "suggest": {},
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/collider-count.1306",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

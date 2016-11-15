@@ -1,0 +1,19 @@
+{
+    "name": "Player Inmations",
+    "description": "Stores player IPs , usernames, positions, last seen, first connection ...",
+    "author": "Reneb",
+    "version": "1.2.7",
+    "configuration": true,
+    "require": {
+        "PlayerDatabase": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/player-informations.1940",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

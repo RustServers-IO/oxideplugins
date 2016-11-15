@@ -1,0 +1,16 @@
+{
+    "name": "Timed Execute",
+    "description": "Execute commands every (x) seconds.",
+    "author": "PaiN",
+    "version": "0.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/timed-execute.1937",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Automatic Build Grades",
+    "description": "Auto update grade on build to what you need (oxide permission\/language support)",
+    "author": "",
+    "version": "0.0.7",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/automatic-build-grades.921",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

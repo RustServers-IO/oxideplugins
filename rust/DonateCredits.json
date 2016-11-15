@@ -1,0 +1,22 @@
+{
+    "name": "Donation Credits",
+    "description": "Rewards players with Economy credits for donations on a website",
+    "author": "",
+    "version": "1.0.3",
+    "configuration": true,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "require": {
+        "Economics": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/donation-credits.1709",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

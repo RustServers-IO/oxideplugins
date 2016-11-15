@@ -1,0 +1,16 @@
+{
+    "name": "Player Chatcontrol",
+    "description": "Chat through a player",
+    "author": "LaserHydra",
+    "version": "2.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/player-chatcontrol.866",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

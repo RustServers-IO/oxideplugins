@@ -1,0 +1,16 @@
+{
+    "name": "Anti-Wounded",
+    "description": "Players will skip the wounded state before dying.",
+    "author": "SkinN \u00f5.\u00d5'.|.",
+    "version": "2.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/anti-wounded.1045",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

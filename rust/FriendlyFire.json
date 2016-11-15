@@ -1,0 +1,17 @@
+{
+    "name": "Rust:IO FriendlyFire",
+    "description": "Disables friendly fire for Rust:IO friends",
+    "author": "dcode",
+    "version": "1.6.0",
+    "configuration": true,
+    "require": {},
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/rust-io-friendlyfire.840",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

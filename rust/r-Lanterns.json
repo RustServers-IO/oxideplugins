@@ -1,0 +1,16 @@
+{
+    "name": "R-Lanterns",
+    "description": "Auto switch on & off lanterns when players enter a tool cupboard radius",
+    "author": "Reneb",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/r-lanterns.738",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

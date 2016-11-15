@@ -1,0 +1,16 @@
+{
+    "name": "ImageLibrary",
+    "description": "A Plugin to Manage External Images - For Devs",
+    "author": "{Midgard}Altimus Maximus",
+    "version": "1.2.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/imagelibrary.2193",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

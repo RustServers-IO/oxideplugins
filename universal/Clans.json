@@ -1,0 +1,19 @@
+{
+    "name": "Clans",
+    "description": "Universal clans with alliance support",
+    "author": "k1lly0u",
+    "version": "0.1.31",
+    "configuration": true,
+    "require": {
+        "BetterChat": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/clans.2087",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

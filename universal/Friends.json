@@ -1,0 +1,16 @@
+{
+    "name": "Friends",
+    "description": "Universal friends plugin. Compatible with BattleLink.",
+    "author": "dcode",
+    "version": "2.5.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/friends.2120",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

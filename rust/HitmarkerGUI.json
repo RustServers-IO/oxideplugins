@@ -1,0 +1,16 @@
+{
+    "name": "HitMarker GUI",
+    "description": "Informs the attacker\/player on the screen if someone is hit",
+    "author": "PaiN",
+    "version": "1.3.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hitmarker-gui.1241",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

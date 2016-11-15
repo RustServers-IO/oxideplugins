@@ -1,0 +1,16 @@
+{
+    "name": "Rewarding Craft",
+    "description": "The more you craft, the more you learn",
+    "author": "",
+    "version": "0.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/rewarding-craft.1739",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

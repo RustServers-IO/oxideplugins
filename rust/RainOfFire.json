@@ -1,0 +1,19 @@
+{
+    "name": "Rain of Fire",
+    "description": "Custom event that adds meteor showers to the game",
+    "author": "k1lly0u",
+    "version": "0.2.2",
+    "configuration": true,
+    "suggest": {
+        "PopupNotifications": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/rain-of-fire.1249",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

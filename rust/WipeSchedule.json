@@ -1,0 +1,16 @@
+{
+    "name": "Wipe Schedule",
+    "description": "The ablity to report regular wipe cycles",
+    "author": "k1lly0u",
+    "version": "2.0.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/wipe-schedule.1451",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

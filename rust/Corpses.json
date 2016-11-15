@@ -1,0 +1,16 @@
+{
+    "name": "Corpse Handler",
+    "description": "Count and clean corpses",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/corpse-handler.1229",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

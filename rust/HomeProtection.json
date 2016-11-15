@@ -1,0 +1,16 @@
+{
+    "name": "HomeProtection",
+    "description": "Protects you and your home from intruders",
+    "author": "Wulf",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/homeprotection.1391",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

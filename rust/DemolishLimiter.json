@@ -1,0 +1,16 @@
+{
+    "name": "Immediate Demolish Limiter",
+    "description": "Block the usage of immediate demolish per auth level",
+    "author": "Mughisi",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/immediate-demolish-limiter.848",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

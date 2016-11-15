@@ -1,0 +1,16 @@
+{
+    "name": "Remove Parachutes",
+    "description": "Adds an in-game command for admins to remove leftover parachutes",
+    "author": "Mughisi",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/remove-parachutes.786",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

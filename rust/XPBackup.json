@@ -1,0 +1,16 @@
+{
+    "name": "XP Backup",
+    "description": "Backup player's experience.",
+    "author": "PaiN",
+    "version": "0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/xp-backup.2035",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

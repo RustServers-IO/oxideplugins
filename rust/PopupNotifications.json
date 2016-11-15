@@ -1,0 +1,16 @@
+{
+    "name": "Popup Notifications",
+    "description": "Popup notifications that can be created by admins and other plugins",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/popup-notifications.1252",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

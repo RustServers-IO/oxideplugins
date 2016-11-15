@@ -1,0 +1,16 @@
+{
+    "name": "BlockBugPrevent",
+    "description": "Prevent foundation block build on another foundation",
+    "author": "sami37",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/blockbugprevent.2166",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

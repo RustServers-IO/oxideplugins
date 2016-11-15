@@ -1,0 +1,16 @@
+{
+    "name": "Push API",
+    "description": "API for sending messages via Pushover and Pushalot mobile notification services",
+    "author": "Wulf",
+    "version": "0.2.0",
+    "configuration": true,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/push-api.705",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

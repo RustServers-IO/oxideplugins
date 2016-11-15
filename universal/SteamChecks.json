@@ -1,0 +1,16 @@
+{
+    "name": "SteamChecks",
+    "description": "Check Steam servers to grab information about players.",
+    "author": "Spicy",
+    "version": "2.4.15",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/steamchecks.2113",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

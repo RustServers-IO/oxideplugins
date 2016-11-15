@@ -1,0 +1,16 @@
+{
+    "name": "Emote",
+    "description": "Because everyone loves to portray themselves in the third person",
+    "author": "",
+    "version": "1.0.8",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/emote.1353",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

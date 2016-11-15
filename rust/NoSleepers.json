@@ -1,0 +1,16 @@
+{
+    "name": "NoSleepers",
+    "description": "Prevents players from sleeping and optionally removes player corpses",
+    "author": "Wulf",
+    "version": "0.4.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nosleepers.1452",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

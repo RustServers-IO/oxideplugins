@@ -1,0 +1,16 @@
+{
+    "name": "NukeWipe",
+    "description": "Wipe with style and explosion",
+    "author": "LaserHydra",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nukewipe.1713",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

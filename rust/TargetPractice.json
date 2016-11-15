@@ -1,0 +1,16 @@
+{
+    "name": "TargetPractice",
+    "description": "Auto-reset Reactive Targets with a GUI hit marker and score board",
+    "author": "k1lly0u",
+    "version": "0.1.55",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/targetpractice.1731",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

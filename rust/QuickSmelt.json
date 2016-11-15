@@ -1,0 +1,16 @@
+{
+    "name": "QuickSmelt",
+    "description": "Increases the speed of the furnace smelting",
+    "author": "Wulf",
+    "version": "1.3.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/quicksmelt.1067",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

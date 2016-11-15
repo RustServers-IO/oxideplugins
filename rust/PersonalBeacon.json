@@ -1,0 +1,16 @@
+{
+    "name": "Personal Beacon",
+    "description": "Displays a beacon at a marked location for easier navigation",
+    "author": "",
+    "version": "1.0.7",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/personal-beacon.997",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

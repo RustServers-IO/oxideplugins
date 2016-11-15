@@ -1,0 +1,16 @@
+{
+    "name": "DeathKick",
+    "description": "Kicks a player for a specified amount of time upon death",
+    "author": "k1lly0u",
+    "version": "0.1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/deathkick.1779",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

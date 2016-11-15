@@ -1,0 +1,16 @@
+{
+    "name": "Admin Inventory Cleaner",
+    "description": "This is simple plugin that will do what is says it does, clean your inventory :)",
+    "author": "",
+    "version": "1.2.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/admin-inventory-cleaner.973",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,21 @@
+{
+    "name": "R-Remover Tool",
+    "description": "Remover tool",
+    "author": "Reneb",
+    "version": "4.0.9",
+    "configuration": true,
+    "suggest": {
+        "BuildingOwners": "*",
+        "Friends": "*",
+        "Economics": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/r-remover-tool.651",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

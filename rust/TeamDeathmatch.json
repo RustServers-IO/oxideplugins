@@ -1,0 +1,22 @@
+{
+    "name": "Team Deathmatch",
+    "description": "Team Deathmatch event arena game",
+    "author": "k1lly0u",
+    "version": "0.2.21",
+    "configuration": true,
+    "require": {
+        "EventManager": "*",
+        "ZoneManager": "*",
+        "Spawns": "*",
+        "Kits": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/team-deathmatch.1484",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

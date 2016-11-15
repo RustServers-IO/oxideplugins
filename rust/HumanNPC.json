@@ -1,0 +1,20 @@
+{
+    "name": "Human NPC - Core",
+    "description": "Add Interactive Human NPC Ingame, can be modded by other plugins",
+    "author": "Nogrod",
+    "version": "0.3.9",
+    "configuration": true,
+    "require": {
+        "Waypoints": "*",
+        "PathFinding": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/human-npc-core.856",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

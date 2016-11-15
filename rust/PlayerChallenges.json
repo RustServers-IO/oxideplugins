@@ -1,0 +1,19 @@
+{
+    "name": "Player Challenges",
+    "description": "Allows titles to be set when certain criteria are met, with a UI Leader board",
+    "author": "k1lly0u",
+    "version": "2.0.36",
+    "configuration": true,
+    "suggest": {
+        "BetterChat": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/player-challenges.1442",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

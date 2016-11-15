@@ -1,0 +1,16 @@
+{
+    "name": "Crosshair",
+    "description": "Adds a customizable crosshair to your screen",
+    "author": "Kappasaurus",
+    "version": "2.1.5",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/crosshair.1236",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

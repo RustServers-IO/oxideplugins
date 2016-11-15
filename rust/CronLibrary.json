@@ -1,0 +1,16 @@
+{
+    "name": "Cron Library",
+    "description": "Add crontab expressions to your scheduled works",
+    "author": "Feramor",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/cron-library.1754",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

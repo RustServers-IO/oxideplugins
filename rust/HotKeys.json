@@ -1,0 +1,16 @@
+{
+    "name": "HotKeys",
+    "description": "Manage default binds for your server",
+    "author": "Calytic",
+    "version": "0.0.31",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hotkeys.2135",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

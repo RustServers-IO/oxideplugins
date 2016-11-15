@@ -1,0 +1,23 @@
+{
+    "name": "Jail",
+    "description": "Send players to jail",
+    "author": "k1lly0u",
+    "version": "3.0.2",
+    "configuration": true,
+    "suggest": {
+        "Kits": "*"
+    },
+    "require": {
+        "ZoneManager": "*",
+        "Spawns": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/jail.794",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

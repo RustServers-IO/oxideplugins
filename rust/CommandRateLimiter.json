@@ -1,0 +1,16 @@
+{
+    "name": "CommandRateLimiter",
+    "description": "Prevent bind abuse now!",
+    "author": "Calytic",
+    "version": "0.0.9",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/commandratelimiter.1812",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,25 @@
+{
+    "name": "Rewards",
+    "description": "Reward players for killing animals, players, entities, and activity using Economics\/ServerRewards",
+    "author": "",
+    "version": "1.3.5",
+    "configuration": true,
+    "suggest": {
+        "Friends": "*",
+        "Clans": "*",
+        "HumanNPC": "*"
+    },
+    "require": {
+        "Economics": "*",
+        "ServerRewards": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/rewards.1961",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

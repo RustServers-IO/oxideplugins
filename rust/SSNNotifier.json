@@ -1,0 +1,16 @@
+{
+    "name": "SSNNotifier",
+    "description": "Collects and sends game information to the Survival Servers Network",
+    "author": "",
+    "version": "0.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ssnnotifier.1679",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

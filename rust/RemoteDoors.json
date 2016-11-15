@@ -1,0 +1,16 @@
+{
+    "name": "RemoteDoors",
+    "description": "Switch that allows you to open \/ close doors remotely",
+    "author": "Reneb",
+    "version": "1.0.8",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/remotedoors.1379",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,22 @@
+{
+    "name": "Last Man Standing Event",
+    "description": "Last player alive in the event wins",
+    "author": "k1lly0u",
+    "version": "1.1.3",
+    "configuration": true,
+    "require": {
+        "EventManager": "*",
+        "ZoneManager": "*",
+        "Kits": "*",
+        "Spawns": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/last-man-standing-event.1663",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,28 @@
+{
+    "name": "NoEscape",
+    "description": "Prevent teleportation (and more) while in raid or combat",
+    "author": "Calytic",
+    "version": "0.4.1",
+    "configuration": true,
+    "suggest": {
+        "Clans": "*",
+        "Friends": "*",
+        "RemoverTool": "*",
+        "MagicTeleportation": "*",
+        "NTeleportation": "*",
+        "BuildingGrades": "*",
+        "ZoneManager": "*",
+        "Trade": "*",
+        "Recycle": "*",
+        "Bank": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/noescape.1394",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

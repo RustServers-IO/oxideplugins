@@ -1,0 +1,16 @@
+{
+    "name": "ComponentBlocker",
+    "description": "Removes items or entities entirely from the game",
+    "author": "Calytic",
+    "version": "0.1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/componentblocker.1382",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

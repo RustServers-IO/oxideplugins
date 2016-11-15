@@ -1,0 +1,16 @@
+{
+    "name": "Elevators",
+    "description": "Build elevators that will be auto triggered when you get on them",
+    "author": "Reneb",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/elevators.983",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Ignore API",
+    "description": "An API to manage an ignore list",
+    "author": "Nogrod",
+    "version": "2.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ignore-api.1054",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

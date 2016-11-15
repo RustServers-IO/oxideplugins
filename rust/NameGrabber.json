@@ -1,0 +1,16 @@
+{
+    "name": "Name Grabber",
+    "description": "A command to grab name of any item, deployable or entity",
+    "author": "WolfsDarker",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/name-grabber.1292",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

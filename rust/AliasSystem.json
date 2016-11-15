@@ -1,0 +1,16 @@
+{
+    "name": "Alias System",
+    "description": "Create an aliases for an existing commands",
+    "author": "LaserHydra",
+    "version": "2.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/alias-system.1307",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "HideAndSeek",
+    "description": "The classic game(mode) of hide and seek, as props",
+    "author": "Wulf",
+    "version": "0.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hideandseek.1421",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

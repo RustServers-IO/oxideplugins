@@ -1,0 +1,16 @@
+{
+    "name": "Repair Tool",
+    "description": "Repair any entity that has health",
+    "author": "k1lly0u",
+    "version": "0.1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/repair-tool.1833",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

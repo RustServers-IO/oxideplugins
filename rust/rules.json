@@ -1,0 +1,16 @@
+{
+    "name": "Server Rules",
+    "description": "Gives users rules command and admins ability to add or remove rules",
+    "author": "KillParadise",
+    "version": "1.5.0",
+    "configuration": false,
+    "language": "js",
+    "url": "http:\/\/oxidemod.org\/plugins\/server-rules.827",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

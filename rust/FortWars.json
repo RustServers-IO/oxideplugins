@@ -1,0 +1,16 @@
+{
+    "name": "Fort Wars Gamemode",
+    "description": "Never ending Build - Fight phases",
+    "author": "",
+    "version": "0.3.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/fort-wars-gamemode.1618",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

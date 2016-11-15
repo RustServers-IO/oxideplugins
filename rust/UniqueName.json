@@ -1,0 +1,16 @@
+{
+    "name": "Unique Name",
+    "description": "Reserve users name for given time.(Default 1 week)",
+    "author": "Feramor",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/unique-name.803",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

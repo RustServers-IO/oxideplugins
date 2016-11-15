@@ -1,0 +1,16 @@
+{
+    "name": "Godmode",
+    "description": "Allows players with permission to become invincible\/invulnerable",
+    "author": "Wulf",
+    "version": "3.2.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/godmode.673",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

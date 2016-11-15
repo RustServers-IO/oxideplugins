@@ -1,0 +1,16 @@
+{
+    "name": "IGather",
+    "description": "Adds the ability to create gather groups!",
+    "author": "DylanSMR",
+    "version": "1.0.9",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/igather.1763",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

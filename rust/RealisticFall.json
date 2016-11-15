@@ -1,0 +1,16 @@
+{
+    "name": "RealisticFall",
+    "description": "Modify the maximum fall height for player deaths",
+    "author": "Wulf",
+    "version": "2.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/realisticfall.855",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

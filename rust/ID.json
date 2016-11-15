@@ -1,0 +1,16 @@
+{
+    "name": "Steam ID Lookup",
+    "description": "Lookup a player's Steam ID quickly",
+    "author": "Cheeze",
+    "version": "0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/steam-id-lookup.1387",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "TruePVE",
+    "description": "Better PVE implementation",
+    "author": "ignignokt84",
+    "version": "0.4.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/truepve.1789",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

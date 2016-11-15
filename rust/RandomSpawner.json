@@ -1,0 +1,16 @@
+{
+    "name": "Random Spawner",
+    "description": "Randomly spawn a specific amount of an entity on the map",
+    "author": "LaserHydra",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/random-spawner.1456",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

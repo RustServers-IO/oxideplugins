@@ -1,0 +1,16 @@
+{
+    "name": "ShowHealth",
+    "description": "Check any player's health",
+    "author": "Troubled",
+    "version": "0.2.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/showhealth.1851",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,23 @@
+{
+    "name": "Admin Panel",
+    "description": "A small panel for clickable commands for admins",
+    "author": "Austinv900",
+    "version": "1.2.2",
+    "configuration": true,
+    "suggest": {
+        "Vanish": "*",
+        "Godmode": "*",
+        "NTeleportation": "*",
+        "AdminRadar": "*",
+        "Updater": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/admin-panel.2034",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

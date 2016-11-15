@@ -1,0 +1,16 @@
+{
+    "name": "Admin Leave and Join",
+    "description": "Displays a chat message when a admin leaves or joins to all the players",
+    "author": "Austinv900",
+    "version": "0.1.9",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/admin-leave-and-join.2032",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

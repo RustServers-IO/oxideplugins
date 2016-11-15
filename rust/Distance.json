@@ -1,0 +1,16 @@
+{
+    "name": "Distance",
+    "description": "Distance measuring tool - useful for setting up zones",
+    "author": "ignignokt84",
+    "version": "0.1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/distance.1780",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

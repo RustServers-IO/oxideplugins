@@ -1,0 +1,16 @@
+{
+    "name": "Mind Freeze",
+    "description": "Allows you to freeze players with a legit way.",
+    "author": "PaiN",
+    "version": "2.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/mind-freeze.1198",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Mage MOTD",
+    "description": "Daily message for your server",
+    "author": "",
+    "version": "1.1",
+    "configuration": true,
+    "language": "js",
+    "url": "http:\/\/oxidemod.org\/plugins\/mage-motd.815",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

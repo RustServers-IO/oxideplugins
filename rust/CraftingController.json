@@ -1,0 +1,16 @@
+{
+    "name": "Crafting Controller",
+    "description": "Allows you to modify the time spend crafting and which items can be crafted",
+    "author": "Mughisi",
+    "version": "2.4.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/crafting-controller.695",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

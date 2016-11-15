@@ -1,0 +1,20 @@
+{
+    "name": "LustyMap",
+    "description": "In-game Map and Minimap GUI",
+    "author": "k1lly0u",
+    "version": "2.0.61",
+    "configuration": true,
+    "suggest": {
+        "Clans": "*",
+        "Friends": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/lustymap.1333",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

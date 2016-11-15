@@ -1,0 +1,16 @@
+{
+    "name": "Draw",
+    "description": "A helper plugin \/ library for easily drawing stuff into a player's world using Rust's ddraw tools.",
+    "author": "dcode",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/draw.968",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

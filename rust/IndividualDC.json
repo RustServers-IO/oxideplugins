@@ -1,0 +1,16 @@
+{
+    "name": "Individual Damage Controller",
+    "description": "Change damage values for each weapon to any body part",
+    "author": "k1lly0u",
+    "version": "0.1.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/individual-damage-controller.1758",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

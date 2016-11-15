@@ -1,0 +1,16 @@
+{
+    "name": "Hardcore GUI",
+    "description": "Hides players  health, hydration, and saturation level",
+    "author": "LaserHydra",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hardcore-gui.1237",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

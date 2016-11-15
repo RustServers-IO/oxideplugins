@@ -1,0 +1,16 @@
+{
+    "name": "Restore Upon Death",
+    "description": "Restore player inventorys on death and remove the items from their corpse.",
+    "author": "k1lly0u",
+    "version": "0.1.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/restore-upon-death.1859",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

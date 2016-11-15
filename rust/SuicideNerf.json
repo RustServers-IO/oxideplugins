@@ -1,0 +1,16 @@
+{
+    "name": "Suicide Nerf",
+    "description": "Configurable suicide cooldown with a bleedout only mode.",
+    "author": "Kyrah Abattoir",
+    "version": "0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/suicide-nerf.1312",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Admin Chat",
+    "description": "Chat in a chatroom for admins only",
+    "author": "LaserHydra",
+    "version": "1.3.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/admin-chat.1123",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "AutoReply",
+    "description": "Plugin for AutoReply system, based on key words or phrases",
+    "author": "Wulf",
+    "version": "1.5.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/autoreply.908",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

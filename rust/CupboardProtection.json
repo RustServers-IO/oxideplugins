@@ -1,0 +1,16 @@
+{
+    "name": "CupboardProtection",
+    "description": "Makes cupboards invulnerable, unable to be destroyed",
+    "author": "Wulf",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/cupboardprotection.1390",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Item Skin Randomizer",
+    "description": "Randomizes item skins on item creation",
+    "author": "Mughisi",
+    "version": "1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/item-skin-randomizer.1328",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

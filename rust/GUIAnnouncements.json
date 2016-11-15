@@ -1,0 +1,16 @@
+{
+    "name": "GUI Announcements",
+    "description": "Creates announcements with custom messages across the top of every player's screen.",
+    "author": "",
+    "version": "1.17.48",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/gui-announcements.1222",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

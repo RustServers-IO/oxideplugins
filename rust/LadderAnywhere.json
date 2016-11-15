@@ -1,0 +1,17 @@
+{
+    "name": "LadderAnywhere",
+    "description": "Allows players to deploy ladders anywhere regardless of building privs",
+    "author": "",
+    "version": "1.0.7",
+    "configuration": true,
+    "suggest": {},
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ladderanywhere.1327",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

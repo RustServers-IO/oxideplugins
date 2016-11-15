@@ -1,0 +1,19 @@
+{
+    "name": "BuildingWrapper",
+    "description": "Automatically wrap buildings in a zone",
+    "author": "ignignokt84",
+    "version": "0.1.3",
+    "configuration": false,
+    "require": {
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/buildingwrapper.1798",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

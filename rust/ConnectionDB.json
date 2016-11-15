@@ -1,0 +1,16 @@
+{
+    "name": "ConnectionDB",
+    "description": "Connection DB api for devs.",
+    "author": "Norn",
+    "version": "0.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/connectiondb.1459",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "BlockStructure",
+    "description": "Sets a limit build in height and depth in water",
+    "author": "Marat 2",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/blockstructure.2092",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

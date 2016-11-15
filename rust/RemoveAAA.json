@@ -1,0 +1,16 @@
+{
+    "name": "RemoveAAA",
+    "description": "Removes admin abuse announcements!",
+    "author": "Tuntenfisch",
+    "version": "0.4.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/removeaaa.1645",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Updater",
+    "description": "Automatic update checking and notifications for plugins",
+    "author": "LaserHydra",
+    "version": "2.1.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/updater.681",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

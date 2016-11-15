@@ -1,0 +1,19 @@
+{
+    "name": "FancyDrop",
+    "description": "The \"Next Level\" of a fancy airdrop-toolset",
+    "author": "Fujikura",
+    "version": "2.2.0",
+    "configuration": true,
+    "suggest": {
+        "GUIAnnouncements": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/fancydrop.1934",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "TwitchAuth",
+    "description": "Only allow your followers on Twitch to join your server",
+    "author": "",
+    "version": "0.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/twitchauth.1838",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

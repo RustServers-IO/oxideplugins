@@ -1,0 +1,16 @@
+{
+    "name": "ReportBot",
+    "description": "Forwards server reports to their owners via Steam.",
+    "author": "Spicy",
+    "version": "1.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/reportbot.2047",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

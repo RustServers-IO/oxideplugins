@@ -1,0 +1,16 @@
+{
+    "name": "Hammer Time",
+    "description": "Tweak \"Demolish\" and \"Rotate\" time when using the hammer",
+    "author": "Shady757",
+    "version": "1.0.10",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hammer-time.1711",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

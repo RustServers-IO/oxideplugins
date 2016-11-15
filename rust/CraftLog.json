@@ -1,0 +1,16 @@
+{
+    "name": "CraftLog",
+    "description": "Logs crafting and crafter information",
+    "author": "sqroot",
+    "version": "1.4.1",
+    "configuration": true,
+    "language": "py",
+    "url": "http:\/\/oxidemod.org\/plugins\/craftlog.1694",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

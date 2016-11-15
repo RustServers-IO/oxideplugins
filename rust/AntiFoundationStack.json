@@ -1,0 +1,16 @@
+{
+    "name": "Anti Foundation Stacking",
+    "description": "Prevents players from stacking foundations",
+    "author": "Jake Rich",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/anti-foundation-stacking.2207",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

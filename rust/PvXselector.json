@@ -1,0 +1,19 @@
+{
+    "name": "PvX Selector",
+    "description": "Allows PvE\/PvP Gameplay on one server.",
+    "author": "Alphawar",
+    "version": "0.9.5",
+    "configuration": true,
+    "suggest": {
+        "BetterChat": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/pvx-selector.1817",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

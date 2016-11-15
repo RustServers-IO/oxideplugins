@@ -1,0 +1,16 @@
+{
+    "name": "Political Survival",
+    "description": "Become the President, tax the server, and subjugate everyone!",
+    "author": "Jonty",
+    "version": "0.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/political-survival.1906",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

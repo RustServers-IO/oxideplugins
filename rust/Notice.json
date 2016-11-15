@@ -1,0 +1,16 @@
+{
+    "name": "Notice",
+    "description": "Notice players anonymously",
+    "author": "LaserHydra",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/notice.1193",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "ResolutionAPI",
+    "description": "Simple plugin that provides API to plugin developers.",
+    "author": "",
+    "version": "0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/resolutionapi.2204",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

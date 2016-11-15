@@ -1,0 +1,16 @@
+{
+    "name": "IPBlacklist",
+    "description": "Blacklist IPs to prevent them from joining your server",
+    "author": "Ankawi",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ipblacklist.2090",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

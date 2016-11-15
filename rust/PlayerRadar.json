@@ -1,0 +1,16 @@
+{
+    "name": "Radar GUI",
+    "description": "Radar that shows in a grid where players are around you",
+    "author": "Reneb",
+    "version": "1.0.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/radar-gui.1326",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

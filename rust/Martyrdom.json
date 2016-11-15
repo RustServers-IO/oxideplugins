@@ -1,0 +1,16 @@
+{
+    "name": "Martyrdom",
+    "description": "Drop a grenade\/beancan grenade\/timed explosive on death",
+    "author": "k1lly0u",
+    "version": "0.2.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/martyrdom.1523",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

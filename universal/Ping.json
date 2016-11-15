@@ -1,0 +1,16 @@
+{
+    "name": "Ping",
+    "description": "Ping command and automatic kicking of players with high pings",
+    "author": "Wulf",
+    "version": "1.7.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ping.1921",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

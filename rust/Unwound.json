@@ -1,0 +1,20 @@
+{
+    "name": "Unwound",
+    "description": "The sky presents the newest technology in calling the MEDIC!",
+    "author": "mk_sky",
+    "version": "1.0.9",
+    "configuration": true,
+    "suggest": {
+        "Economics": "*",
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/unwound.1352",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

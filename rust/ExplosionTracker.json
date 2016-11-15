@@ -1,0 +1,16 @@
+{
+    "name": "Explosion Tracker",
+    "description": "This plugin tracks every explosion that happens in the server.",
+    "author": "PaiN",
+    "version": "0.7",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/explosion-tracker.1282",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "PaiN AFK",
+    "description": "Simple \"Away From Keyboard\" system",
+    "author": "PaiN",
+    "version": "0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/pain-afk.976",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

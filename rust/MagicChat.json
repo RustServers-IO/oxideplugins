@@ -1,0 +1,16 @@
+{
+    "name": "Magic Chat",
+    "description": "Custom chat system for public and local chat",
+    "author": "Norn",
+    "version": "0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/magic-chat.1437",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

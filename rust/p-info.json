@@ -1,0 +1,16 @@
+{
+    "name": "Player Info",
+    "description": "Check your target's info and yours.",
+    "author": "PaiN",
+    "version": "2.5.0",
+    "configuration": true,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/player-info.1063",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

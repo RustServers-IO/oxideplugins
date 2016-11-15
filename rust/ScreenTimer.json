@@ -1,0 +1,16 @@
+{
+    "name": "ScreenTimer",
+    "description": "Allows you to create a timer on screen for (x) seconds.",
+    "author": "DylanSMR",
+    "version": "1.0.7",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/screentimer.1918",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

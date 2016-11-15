@@ -1,0 +1,16 @@
+{
+    "name": "Building Grades",
+    "description": "Allows admins to easily upgrade or downgrade an entire building",
+    "author": "Nogrod",
+    "version": "0.3.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/building-grades.865",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

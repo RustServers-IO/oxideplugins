@@ -1,0 +1,16 @@
+{
+    "name": "Portals",
+    "description": "Create portals and feel like in Star Trek",
+    "author": "LaserHydra",
+    "version": "2.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/portals.1234",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

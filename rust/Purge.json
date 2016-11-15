@@ -1,0 +1,16 @@
+{
+    "name": "The Purge",
+    "description": "Enforce PVP only after sundown.",
+    "author": "",
+    "version": "0.01",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/the-purge.1102",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

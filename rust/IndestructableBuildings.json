@@ -1,0 +1,16 @@
+{
+    "name": "Indestructable Buildings",
+    "description": "Disable damage being dealt to foundations or buildings on the server.",
+    "author": "Mughisi",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/indestructable-buildings.966",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

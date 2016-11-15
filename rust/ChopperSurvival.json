@@ -1,0 +1,22 @@
+{
+    "name": "Chopper Survival",
+    "description": "Survival event arena game with helicopters as enemies",
+    "author": "k1lly0u",
+    "version": "0.2.42",
+    "configuration": true,
+    "require": {
+        "EventManager": "*",
+        "ZoneManager": "*",
+        "Spawns": "*",
+        "Kits": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/chopper-survival.1590",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

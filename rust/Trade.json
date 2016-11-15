@@ -1,0 +1,16 @@
+{
+    "name": "Trade",
+    "description": "Allows players to trade items safely at a distance",
+    "author": "Calytic",
+    "version": "1.0.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/trade.1242",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

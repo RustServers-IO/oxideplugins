@@ -1,0 +1,16 @@
+{
+    "name": "Restrict Names",
+    "description": "Restricts names and characters",
+    "author": "Reneb",
+    "version": "0.1.1",
+    "configuration": false,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/restrict-names.648",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

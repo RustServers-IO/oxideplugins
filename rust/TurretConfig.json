@@ -1,0 +1,16 @@
+{
+    "name": "TurretConfig",
+    "description": "Change turret damage, accuracy, bullet speed, health, targeting, etc",
+    "author": "Calytic",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/turretconfig.1418",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

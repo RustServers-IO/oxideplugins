@@ -1,0 +1,16 @@
+{
+    "name": "SDonate Donation System",
+    "description": "Automatically process donations with SDonate",
+    "author": "",
+    "version": "1.7.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/sdonate-donation-system.1965",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

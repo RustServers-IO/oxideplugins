@@ -1,0 +1,16 @@
+{
+    "name": "Flashbang Grenade",
+    "description": "Replaces grenade with a flashbang grenade",
+    "author": "PaiN",
+    "version": "0.6",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/flashbang-grenade.1283",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

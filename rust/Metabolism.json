@@ -1,0 +1,16 @@
+{
+    "name": "Metabolism",
+    "description": "Allows control over player metabolism stats and rates",
+    "author": "Wulf",
+    "version": "2.3.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/metabolism.680",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

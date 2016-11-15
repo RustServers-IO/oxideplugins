@@ -1,0 +1,16 @@
+{
+    "name": "EmptyLowFPS",
+    "description": "Set low cpu usage when no players connected",
+    "author": "",
+    "version": "0.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/emptylowfps.1889",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

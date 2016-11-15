@@ -1,0 +1,21 @@
+{
+    "name": "Tickets",
+    "description": "Gives players the opportunity to send a ticket to admins",
+    "author": "LaserHydra",
+    "version": "3.1.1",
+    "configuration": true,
+    "suggest": {
+        "PushAPI": "*",
+        "EmailAPI": "*",
+        "Slack": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/tickets.1065",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

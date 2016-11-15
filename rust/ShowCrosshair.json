@@ -1,0 +1,16 @@
+{
+    "name": "ShowCrosshair",
+    "description": "Shows a crosshair on the screen",
+    "author": "Marat 2",
+    "version": "1.0.7",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/showcrosshair.2057",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

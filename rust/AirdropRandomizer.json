@@ -1,0 +1,16 @@
+{
+    "name": "Airdrop Randomizer",
+    "description": "Randomize airdrop locations within a set radius of the initial target location",
+    "author": "k1lly0u",
+    "version": "0.1.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/airdrop-randomizer.1898",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

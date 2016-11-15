@@ -1,0 +1,16 @@
+{
+    "name": "EasyFurnace",
+    "description": "Auto fills and auto starts furnaces",
+    "author": "",
+    "version": "1.1.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/easyfurnace.1191",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

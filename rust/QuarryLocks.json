@@ -1,0 +1,16 @@
+{
+    "name": "QuarryLocks",
+    "description": "Ads customizable locks to a quarry",
+    "author": "DylanSMR",
+    "version": "1.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/quarrylocks.1819",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

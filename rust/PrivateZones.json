@@ -1,0 +1,19 @@
+{
+    "name": "PrivateZones",
+    "description": "Add permissions to zones to keep them private",
+    "author": "k1lly0u",
+    "version": "0.1.3",
+    "configuration": false,
+    "require": {
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/privatezones.1703",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

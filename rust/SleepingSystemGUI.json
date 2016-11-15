@@ -1,0 +1,16 @@
+{
+    "name": "Sleeping System GUI",
+    "description": "GUI Based Sleeping system.",
+    "author": "PaiN",
+    "version": "0.2.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/sleeping-system-gui.1291",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

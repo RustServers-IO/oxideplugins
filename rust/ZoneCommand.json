@@ -1,0 +1,20 @@
+{
+    "name": "Zone Command",
+    "description": "Executes the commands when a player is entering a zone",
+    "author": "deer_SWAG",
+    "version": "0.1.0",
+    "configuration": false,
+    "suggest": {
+        "ZoneManager": "*",
+        "RectZones": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/zone-command.1254",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

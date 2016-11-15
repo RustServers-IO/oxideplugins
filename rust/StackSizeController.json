@@ -1,0 +1,19 @@
+{
+    "name": "Stack Size Controller",
+    "description": "Allows you to set the max stack size of every item.",
+    "author": "AnExiledGod",
+    "version": "1.9",
+    "configuration": true,
+    "suggest": {
+        "Updater": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/stack-size-controller.1185",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

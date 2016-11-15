@@ -1,0 +1,16 @@
+{
+    "name": "BoxLooters",
+    "description": "[AntiCheat] Log looters for a containers",
+    "author": "k1lly0u",
+    "version": "0.3.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/boxlooters.989",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

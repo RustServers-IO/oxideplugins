@@ -1,0 +1,16 @@
+{
+    "name": "Damage Controller",
+    "description": "Controls the damage for player, animals, buildings and barricades.",
+    "author": "WolfsDarker",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/damage-controller.1215",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

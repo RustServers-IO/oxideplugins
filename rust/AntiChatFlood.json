@@ -1,0 +1,16 @@
+{
+    "name": "AntiChatFlood",
+    "description": "Prevents chat flood and warns players",
+    "author": "DylanSMR",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/antichatflood.1759",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

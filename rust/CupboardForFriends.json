@@ -1,0 +1,22 @@
+{
+    "name": "Cupboard  Friends",
+    "description": "Only allow friends of already authorized people to authorize themselves.",
+    "author": "LaserHydra",
+    "version": "1.2.4",
+    "configuration": false,
+    "suggest": {
+        "Clans": "*"
+    },
+    "require": {
+        "Friends": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/cupboard-for-friends.1578",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

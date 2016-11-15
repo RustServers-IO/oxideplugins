@@ -1,0 +1,23 @@
+{
+    "name": "Vote For Money",
+    "description": "Players who vote are rewarded with Economics, Server Rewards, Kits...",
+    "author": "",
+    "version": "0.5.3",
+    "configuration": true,
+    "suggest": {
+        "Kits": "*"
+    },
+    "require": {
+        "Economics": "*",
+        "ServerRewards": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/vote-for-money.2086",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

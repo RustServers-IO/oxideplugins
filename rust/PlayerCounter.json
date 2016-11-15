@@ -1,0 +1,16 @@
+{
+    "name": "PlayerCounter",
+    "description": "Adds a discrete player counter to the HUD",
+    "author": "Bamabo",
+    "version": "1.5.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/playercounter.2005",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

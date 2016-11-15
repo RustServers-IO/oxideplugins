@@ -1,0 +1,16 @@
+{
+    "name": "Radtown Animals",
+    "description": "Spawns animals at designated monuments",
+    "author": "k1lly0u",
+    "version": "0.2.11",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/radtown-animals.1561",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

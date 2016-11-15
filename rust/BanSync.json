@@ -1,0 +1,16 @@
+{
+    "name": "BanSync",
+    "description": "Syncs bans across multiple servers.",
+    "author": "sqroot",
+    "version": "1.0.2",
+    "configuration": true,
+    "language": "py",
+    "url": "http:\/\/oxidemod.org\/plugins\/bansync.1897",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

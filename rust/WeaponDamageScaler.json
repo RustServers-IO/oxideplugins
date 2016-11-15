@@ -1,0 +1,16 @@
+{
+    "name": "Weapon Damage Scaler",
+    "description": "Allows scaling of player damage per weapon\/ammo",
+    "author": "Shady757",
+    "version": "1.0.7",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/weapon-damage-scaler.1594",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

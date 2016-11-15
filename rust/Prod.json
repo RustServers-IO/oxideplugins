@@ -1,0 +1,16 @@
+{
+    "name": "Prod (Who Owns)",
+    "description": "Get owners of deployable, building structures and whitelist of tool cupboards",
+    "author": "Reneb",
+    "version": "2.2.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/prod-who-owns.683",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

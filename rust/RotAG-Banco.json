@@ -1,0 +1,16 @@
+{
+    "name": "RotAG-Banco",
+    "description": "Bank System + API to use with Economics from Bombardir.",
+    "author": "",
+    "version": "1.3.0",
+    "configuration": false,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/rotag-banco.735",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Rect Zones",
+    "description": "Creates polygonal zones",
+    "author": "deer_SWAG",
+    "version": "0.0.25",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/rect-zones.2029",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

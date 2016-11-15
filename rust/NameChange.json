@@ -1,0 +1,16 @@
+{
+    "name": "NameChange",
+    "description": "Instantly rename any player and keep it that way",
+    "author": "Wulf",
+    "version": "0.1.5",
+    "configuration": true,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/namechange.1184",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

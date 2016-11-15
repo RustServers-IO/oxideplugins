@@ -1,0 +1,16 @@
+{
+    "name": "Respawner",
+    "description": "Automatically respawns players after they die",
+    "author": "Wulf",
+    "version": "0.2.1",
+    "configuration": true,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/respawner.669",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

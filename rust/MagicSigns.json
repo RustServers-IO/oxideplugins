@@ -1,0 +1,16 @@
+{
+    "name": "Magic Signs",
+    "description": "Load random images into signs upon deploy",
+    "author": "Norn",
+    "version": "0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/magic-signs.1446",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

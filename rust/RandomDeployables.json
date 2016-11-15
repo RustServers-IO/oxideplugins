@@ -1,0 +1,16 @@
+{
+    "name": "Random Deployables",
+    "description": "Randomize deployable skins",
+    "author": "Norn",
+    "version": "0.1.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/random-deployables.2187",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

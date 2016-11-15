@@ -1,0 +1,16 @@
+{
+    "name": "ItemCostCalculator",
+    "description": "Automatically Calculates Item Costs based on ingredients",
+    "author": "{Midgard}Altimus Maximus",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/itemcostcalculator.2215",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

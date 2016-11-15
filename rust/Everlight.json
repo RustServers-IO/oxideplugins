@@ -1,0 +1,16 @@
+{
+    "name": "Everlight",
+    "description": "Lanterns will never consume fuel",
+    "author": "",
+    "version": "1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/everlight.2170",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

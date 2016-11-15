@@ -1,0 +1,19 @@
+{
+    "name": "HitIcon",
+    "description": "Configurable GUI icon and damage when you hit player|friend|clanmate|head",
+    "author": "",
+    "version": "0.6",
+    "configuration": true,
+    "suggest": {
+        "Friends": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hiticon.1917",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

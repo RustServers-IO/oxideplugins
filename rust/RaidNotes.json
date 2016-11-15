@@ -1,0 +1,19 @@
+{
+    "name": "RaidNotes",
+    "description": "Broadcasts raid activity to chat",
+    "author": "Calytic",
+    "version": "0.0.3",
+    "configuration": true,
+    "suggest": {
+        "Clans": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/raidnotes.2117",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

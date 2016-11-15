@@ -1,0 +1,16 @@
+{
+    "name": "Chat Head",
+    "description": "Displays chat messages above other players head within range",
+    "author": "LeoCurtss",
+    "version": "0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/chat-head.1803",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Give",
+    "description": "Give a player or yourself",
+    "author": "Reneb",
+    "version": "2.1.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/give.666",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

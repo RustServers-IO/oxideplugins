@@ -1,0 +1,16 @@
+{
+    "name": "Copy-Paste",
+    "description": "Copy paste buildings",
+    "author": "Reneb",
+    "version": "3.0.18",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/copy-paste.716",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

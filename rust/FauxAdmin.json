@@ -1,0 +1,16 @@
+{
+    "name": "FauxAdmin",
+    "description": "Allows Authorized players use of admin noclip and have Green chat name.",
+    "author": "Colon Blow",
+    "version": "1.0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/fauxadmin.1933",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

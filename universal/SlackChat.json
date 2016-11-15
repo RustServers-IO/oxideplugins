@@ -1,0 +1,19 @@
+{
+    "name": "SlackChat",
+    "description": "Sends all chat messages or keyword-based chat to Slack channel",
+    "author": "Wulf",
+    "version": "0.1.2",
+    "configuration": true,
+    "require": {
+        "Slack": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/slackchat.1953",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

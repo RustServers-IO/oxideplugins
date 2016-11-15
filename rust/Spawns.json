@@ -1,0 +1,16 @@
+{
+    "name": "Spawns Database",
+    "description": "Spawns database plugin for external plugins",
+    "author": "k1lly0u",
+    "version": "2.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/spawns-database.720",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

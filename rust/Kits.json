@@ -1,0 +1,19 @@
+{
+    "name": "Kits",
+    "description": "Kits",
+    "author": "Reneb",
+    "version": "3.1.11",
+    "configuration": true,
+    "suggest": {
+        "CopyPaste": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/kits.668",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

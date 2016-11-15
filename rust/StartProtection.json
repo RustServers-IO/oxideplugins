@@ -1,0 +1,16 @@
+{
+    "name": "StartProtection",
+    "description": "Protect new players when they first connect",
+    "author": "Wulf",
+    "version": "1.9",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/startprotection.1342",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

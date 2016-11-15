@@ -1,0 +1,16 @@
+{
+    "name": "Monument Radiation",
+    "description": "Create radiation zones at designated monuments",
+    "author": "k1lly0u",
+    "version": "0.2.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/monument-radiation.1562",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

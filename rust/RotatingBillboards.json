@@ -1,0 +1,16 @@
+{
+    "name": "Rotating Billboards",
+    "description": "Create signs that rotate on the spot",
+    "author": "k1lly0u",
+    "version": "0.1.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/rotating-billboards.2199",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

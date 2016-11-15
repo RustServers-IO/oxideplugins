@@ -1,0 +1,16 @@
+{
+    "name": "Suicide & Kill",
+    "description": "Suicide chat command & Admin commands to kill a player",
+    "author": "Reneb",
+    "version": "0.1.2",
+    "configuration": false,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/suicide-kill.653",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "StructureRefund",
+    "description": "Refunds previous build materials when demolishing and\/or upgrading",
+    "author": "Wulf",
+    "version": "1.2.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/structurerefund.1692",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "LastName",
+    "description": "Stores all player usernames",
+    "author": "deer_SWAG",
+    "version": "0.1.15",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/lastname.1227",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

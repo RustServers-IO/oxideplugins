@@ -1,0 +1,16 @@
+{
+    "name": "Purifier Config",
+    "description": "Allows configuration of Water Purifiers",
+    "author": "Shady757",
+    "version": "1.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/purifier-config.1911",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

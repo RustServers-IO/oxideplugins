@@ -1,0 +1,16 @@
+{
+    "name": "AbsolutMarket",
+    "description": "Global Trade Menu. Any player can buy and sell items. Simply list it!",
+    "author": "{Midgard}Altimus Maximus",
+    "version": "1.3.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/absolutmarket.2118",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

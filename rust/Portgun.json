@@ -1,0 +1,16 @@
+{
+    "name": "Portgun",
+    "description": "Teleport to where you are looking at",
+    "author": "Reneb",
+    "version": "2.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/portgun.664",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

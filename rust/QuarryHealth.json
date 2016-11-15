@@ -1,0 +1,16 @@
+{
+    "name": "Quarry Health",
+    "description": "Changes the health value of quarries.",
+    "author": "AnExiledGod",
+    "version": "1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/quarry-health.1181",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

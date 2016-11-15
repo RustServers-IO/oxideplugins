@@ -1,0 +1,16 @@
+{
+    "name": "ExplodingBarrels",
+    "description": "Barrels containing certain items can explode",
+    "author": "ignignokt84",
+    "version": "0.3.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/explodingbarrels.1902",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

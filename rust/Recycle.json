@@ -1,0 +1,16 @@
+{
+    "name": "Recycle",
+    "description": "Recycle crafted items to base resources",
+    "author": "Calytic",
+    "version": "2.0.21",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/recycle.1296",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

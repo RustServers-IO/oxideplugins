@@ -1,0 +1,16 @@
+{
+    "name": "PsyArrows",
+    "description": "Adds more arrows to Rust through commands",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/psyarrows.1413",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

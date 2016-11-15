@@ -1,0 +1,16 @@
+{
+    "name": "HandyMan",
+    "description": "AOE repair.",
+    "author": "",
+    "version": "1.0.2.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/handyman.1737",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Wanted For Murder",
+    "description": "Players can punish unwanted PvP.",
+    "author": "",
+    "version": "1.0.7",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/wanted-for-murder.2033",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

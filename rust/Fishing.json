@@ -1,0 +1,16 @@
+{
+    "name": "Fishing",
+    "description": "Allows players to use weapons to fish ingame",
+    "author": "Colon Blow",
+    "version": "1.2.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/fishing.1537",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
