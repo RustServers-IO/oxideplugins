@@ -2,7 +2,7 @@
     "name": "CapsNoCaps",
     "description": "Converts messages written in caps to lowercase",
     "author": "PsychoTea",
-    "version": "1.0",
+    "version": "1.0.1",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/capsnocaps.1324",

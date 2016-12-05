@@ -16,7 +16,7 @@ using System.Drawing;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.61", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.65", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -84,7 +84,13 @@ namespace Oxide.Plugins
             private bool isBlocked;
 
             private SpamOptions spam;
-                    
+
+            private bool afkDisabled;
+            private int lastMoveTime;
+            private float lastX;
+            private float lastZ;
+
+
             void Awake()
             {                
                 player = GetComponent<BasePlayer>();
@@ -97,6 +103,7 @@ namespace Oxide.Plugins
                 spam = instance.configData.SpamOptions;             
                 inEvent = false;
                 mapOpen = false;
+                afkDisabled = false;
                 mode = MapMode.None;
                 lastMode = MapMode.None;
                 adminMode = false;
@@ -161,7 +168,7 @@ namespace Oxide.Plugins
             #endregion
 
             #region Maps
-            public float Rotation() => GetDirection(player.transform.rotation.eulerAngles.y);
+            public float Rotation() => GetDirection(player?.transform?.rotation.eulerAngles.y ?? 0);
             public int Position(bool x) => x ? mapX : mapZ;            
             public void Position(bool x, int pos)
             {
@@ -342,7 +349,33 @@ namespace Oxide.Plugins
             public void ToggleEvent(bool isPlaying) => inEvent = isPlaying;
             public void ToggleAdmin(bool enabled) => adminMode = enabled;
             public void DestroyUI() => LustyUI.DestroyUI(player);
-            private void UpdateMarker() => marker = new MapMarker { name = RemoveSpecialCharacters(player.displayName), r = GetDirection(player.eyes.rotation.eulerAngles.y), x = GetPosition(transform.position.x), z = GetPosition(transform.position.z) };
+            private void UpdateMarker()
+            {
+                var currentX = (float)Math.Round(transform.position.x, 1);
+                var currentZ = (float)Math.Round(transform.position.z, 1);
+
+                marker = new MapMarker { name = RemoveSpecialCharacters(player.displayName), r = GetDirection(player?.eyes?.rotation.eulerAngles.y ?? 0), x = GetPosition(transform.position.x), z = GetPosition(transform.position.z) };
+
+                if (lastX == currentX && lastZ == currentZ)
+                    ++lastMoveTime;
+                else
+                {
+                    lastX = currentX;
+                    lastZ = currentZ;
+                    lastMoveTime = 0;
+                    if (afkDisabled)
+                    {
+                        afkDisabled = false;
+                        EnableUser();
+                    }                    
+                }
+
+                if (lastMoveTime == 90)
+                {
+                    afkDisabled = true;
+                    DisableUser();
+                }                
+            }
             public MapMarker GetMarker() => marker;
             
             public void ToggleMain()
@@ -442,7 +475,7 @@ namespace Oxide.Plugins
             {                
                 if (type == AEType.Helicopter || type == AEType.Plane)
                 {
-                    marker.r = GetDirection(entity.transform.rotation.eulerAngles.y);
+                    marker.r = GetDirection(entity?.transform?.rotation.eulerAngles.y ?? 0);
                     marker.icon = $"{icon}{marker.r}";
                 }
                 else marker.icon = $"{icon}";
@@ -880,9 +913,9 @@ namespace Oxide.Plugins
             LustyUI.MainMin = "0.2271875 0.015";
             LustyUI.MainMax = "0.7728125 0.985";
 
-            var mapContainer = LMUI.CreateElementContainer(LustyUI.Main, "0 0 0 1", LustyUI.MainMin, LustyUI.MainMax, true);
+            var mapContainer = LMUI.CreateElementContainer(LustyUI.Main, "0 0 0 1", LustyUI.MainMin, LustyUI.MainMax, string.IsNullOrEmpty(configData.MapOptions.MapKeybind));
             LMUI.LoadImage(ref mapContainer, LustyUI.Main, mapimage, "0 0", "1 1");
-            LMUI.CreatePanel(ref mapContainer, LustyUI.Main, LustyUI.Color("2b627a", 1), "0 0.96", "1 1", true);
+            LMUI.CreatePanel(ref mapContainer, LustyUI.Main, LustyUI.Color("2b627a", 0.4f), "0 0.96", "1 1");
             LMUI.CreateLabel(ref mapContainer, LustyUI.Main, "", $"{Title}  v{Version}", 14, "0.01 0.96", "0.99 1");            
 
             foreach(var marker in staticMarkers)
@@ -1037,10 +1070,11 @@ namespace Oxide.Plugins
             foreach (var player in BasePlayer.activePlayerList)            
                 OnPlayerInit(player);            
         }
-        void CreateCompass(BasePlayer player, ref CuiElementContainer mapContainer, string panel, int fontsize, string offsetMin, string offsetMax)
+        void AddMapCompass(BasePlayer player, ref CuiElementContainer mapContainer, string panel, int fontsize, string offsetMin, string offsetMax)
         {
             string direction = null;
-            float lookRotation = player.eyes.rotation.eulerAngles.y;
+            if (player?.eyes?.rotation == null) return;
+            float lookRotation = player?.eyes?.rotation.eulerAngles.y ?? 0;
             int playerdirection = (Convert.ToInt16((lookRotation - 5) / 10 + 0.5) * 10);
             if (lookRotation >= 355) playerdirection = 0;
             if (lookRotation > 337.5 || lookRotation < 22.5) { direction = msg("cpsN"); }
@@ -1112,7 +1146,7 @@ namespace Oxide.Plugins
             if (user == null) return;            
             foreach (var marker in customMarkers)
             {
-                var image = GetImage(marker.Value.name);
+                var image = GetImage(marker.Value.icon);
                 if (string.IsNullOrEmpty(image)) continue;
                 AddIconToMap(ref mapContainer, panel, image, marker.Value.name, iconsize * 1.25f, marker.Value.x, marker.Value.z);
             }
@@ -1167,15 +1201,16 @@ namespace Oxide.Plugins
 
             if (panel == LustyUI.MainOverlay)
             {
-                LMUI.CreateButton(ref mapContainer, panel, LustyUI.Color("88a8b6", 1), "X", 14, "0.95 0.961", "0.999 0.999", "LMUI_Control closeui");
+                if (string.IsNullOrEmpty(configData.MapOptions.MapKeybind))
+                    LMUI.CreateButton(ref mapContainer, panel, LustyUI.Color("88a8b6", 1), "X", 14, "0.95 0.961", "0.999 0.999", "LMUI_Control closeui");
                 if (MapSettings.compass)
-                    CreateCompass(player, ref mapContainer, panel, 14, "0.75 0.88", "1 0.95");
+                    AddMapCompass(player, ref mapContainer, panel, 14, "0.75 0.88", "1 0.95");
             }
 
             if (panel == LustyUI.MiniOverlay)
             {                
-                if (MapSettings.compass)                
-                    CreateCompass(player, ref mapContainer, panel, 10, "0 -0.25", "1 -0.02");                
+                if (MapSettings.compass)
+                    AddMapCompass(player, ref mapContainer, panel, 10, "0 -0.25", "1 -0.02");                
             }
 
             CuiHelper.DestroyUi(player, panel);
@@ -1221,9 +1256,9 @@ namespace Oxide.Plugins
 
             foreach (var marker in customMarkers)
             {
-                var image = GetImage(marker.Value.name);
+                var image = GetImage(marker.Value.icon);
                 if (string.IsNullOrEmpty(image)) continue;
-                AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.5f, marker.Value.x, marker.Value.z, colStart, colEnd, rowStart, rowEnd);
+                AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.3f, marker.Value.x, marker.Value.z, colStart, colEnd, rowStart, rowEnd);
             }
             foreach (var entity in temporaryMarkers)
             {
@@ -1243,7 +1278,7 @@ namespace Oxide.Plugins
                     if (marker == null) continue;
                     var image = GetImage($"other{marker.r}");
                     if (string.IsNullOrEmpty(image)) continue;
-                    AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.25f, marker.x, marker.z, colStart, colEnd, rowStart, rowEnd);
+                    AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.3f, marker.x, marker.z, colStart, colEnd, rowStart, rowEnd);
                 }
             }
             else if (MapSettings.friends)
@@ -1260,7 +1295,7 @@ namespace Oxide.Plugins
                         if (marker == null) continue;
                         var image = GetImage($"friend{marker.r}");
                         if (string.IsNullOrEmpty(image)) continue;
-                        AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.25f, marker.x, marker.z, colStart, colEnd, rowStart, rowEnd);
+                        AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.3f, marker.x, marker.z, colStart, colEnd, rowStart, rowEnd);
                     }
                 }
             }            
@@ -1275,7 +1310,7 @@ namespace Oxide.Plugins
                 }
             }
             if (MapSettings.compass)
-                CreateCompass(player, ref mapContainer, LustyUI.ComplexOverlay, 10, "0 -0.25", "1 -0.02");
+                AddMapCompass(player, ref mapContainer, LustyUI.ComplexOverlay, 10, "0 -0.25", "1 -0.02");
             
             CuiHelper.DestroyUi(player, LustyUI.ComplexOverlay);
             CuiHelper.AddUi(player, mapContainer);
@@ -1639,7 +1674,7 @@ namespace Oxide.Plugins
 
             customMarkers.Add(name, marker);
             if (!string.IsNullOrEmpty(icon) && icon != "special")
-                assets.Add(name, $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}");            
+                assets.Add(icon, $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}");            
             SaveMarkers();
             return true;
         }
@@ -1658,7 +1693,7 @@ namespace Oxide.Plugins
             customMarkers[name] = marker;
 
             if (!string.IsNullOrEmpty(icon) && icon != "special")
-                assets.Add(name, $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}");
+                assets.Add(icon, $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}");
             SaveMarkers();
         }
         bool RemoveMarker(string name)
@@ -2162,9 +2197,8 @@ namespace Oxide.Plugins
 
             foreach (var image in customMarkers)
             {
-                if (image.Value.icon == "special")                    
-                    assets.Add(image.Value.name, dataDirectory + "icons" + Path.DirectorySeparatorChar + image.Value.icon + ".png");
-                else assets.Add(image.Value.name, dataDirectory + "custom" + Path.DirectorySeparatorChar + image.Value.icon);
+                if (image.Value.icon != "special")                    
+                    assets.Add(image.Value.icon, dataDirectory + "custom" + Path.DirectorySeparatorChar + image.Value.icon);
             }          
         } 
         private void LoadMapImage()
@@ -2201,7 +2235,7 @@ namespace Oxide.Plugins
             var url = $"http://beancan.io/map-queue-generate?level={level}&seed={mapSeed}&size={mapSize}&key={configData.MapOptions.MapImage.APIKey}";
             webrequest.EnqueueGet(url, (code, response) =>
             {
-                if (string.IsNullOrEmpty(response))
+                if (code != 200 || string.IsNullOrEmpty(response))
                 {
                     if (code == 403)
                         PrintError($"Error: {code} - Invalid API key. Unable to download map image");
@@ -2235,7 +2269,7 @@ namespace Oxide.Plugins
                     GetMapURL(queueId);
                     return;
                 default:
-                    PrintWarning($"Error retrieving map: Invalid response from beancan.io : Response code {response}");
+                    PrintWarning($"Error retrieving map: Invalid response from beancan.io: Response code {response}");
                     return;
             }
             timer.Once(10, () => CheckAvailability(queueId));

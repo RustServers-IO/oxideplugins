@@ -1,15 +1,14 @@
 ﻿namespace Oxide.Plugins
 {
-    [Info("DMDeployables", "ColonBlow", "1.1.5", ResourceId = 1240)]
+    [Info("DMDeployables", "ColonBlow", "1.1.6", ResourceId = 1240)]
     class DMDeployables : RustPlugin
     {
-
 
 	public bool ProtectToolCupboard => Config.Get<bool>("ProtectToolCupboard");
 	public bool ProtectSignage => Config.Get<bool>("ProtectSignage");
 	public bool ProtectBaseOven => Config.Get<bool>("ProtectBaseOven");
         public bool ProtectMiningQuarry => Config.Get<bool>("ProtectMiningQuarry");
-	public bool ProtectWaterCatcher => Config.Get<bool>("ProtectWaterCatcher");
+	public bool ProtectWaterContainers => Config.Get<bool>("ProtectWaterContainers");
 	public bool ProtectResearchTable => Config.Get<bool>("ProtectResearchTable");
 	public bool ProtectSleepingBag => Config.Get<bool>("ProtectSleepingBag");
         public bool ProtectRepairBench => Config.Get<bool>("ProtectRepairBench");
@@ -28,6 +27,8 @@
 	public bool ProtectExternalGates => Config.Get<bool>("ProtectExternalGates");
 	public bool ProtectFloorGrill => Config.Get<bool>("ProtectFloorGrill");
 	public bool ProtectFloorLadder => Config.Get<bool>("ProtectFloorLadder");
+	public bool ProtectFishTrap => Config.Get<bool>("ProtectFishTrap");
+	public bool ProtectReactiveTarget => Config.Get<bool>("ProtectReactiveTarget");
 
         protected override void LoadDefaultConfig()
         	{
@@ -35,7 +36,7 @@
 	    	Config["ProtectSignage"] = true;
 	    	Config["ProtectBaseOven"] = true;
 	   	Config["ProtectMiningQuarry"] = true;
-           	Config["ProtectWaterCatcher"] = true;
+           	Config["ProtectWaterContainers"] = true;
 	   	Config["ProtectResearchTable"] = true;
 	    	Config["ProtectSleepingBag"] = true;
 	    	Config["ProtectRepairBench"] = true;
@@ -54,12 +55,19 @@
 		Config["ProtectExternalWalls"] = true;
 		Config["ProtectFloorGrill"] = true;
 		Config["ProtectFloorLadder"] = true;
+		Config["ProtectFishTrap"] = true;
+		Config["ProtectReactiveTarget"] = true;
 
             	SaveConfig();
         	}
 
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
+            	if (entity == null || hitInfo == null) return null;
+          	if (entity is BasePlayer) return null;  	
+          	if (entity is BuildingBlock) return null;
+		if (entity is BaseNPC) return null;
+		if (entity is BaseHelicopter) return null;
 
 		if ((entity.name.Contains("cupboard.tool")) & (ProtectToolCupboard == true)) return false;
 				
@@ -70,8 +78,6 @@
                    			hitInfo.damageTypes = new Rust.DamageTypeList();
 					}
 				}
-
-		// Lanterns, Furnaces, Campfires Protection
            	   if (entity as BaseOven != null && hitInfo.damageTypes.GetMajorityDamageType().ToString().Contains(""))
 				{
 				if (ProtectBaseOven == true)
@@ -79,7 +85,6 @@
                    			hitInfo.damageTypes = new Rust.DamageTypeList();
 					}
 				}
-
            	   if (entity as SleepingBag != null && hitInfo.damageTypes.GetMajorityDamageType().ToString().Contains(""))
 				{
 				if (ProtectSleepingBag == true)
@@ -87,7 +92,6 @@
                    			hitInfo.damageTypes = new Rust.DamageTypeList();
 					}
 				}
-
            	   if (entity as AutoTurret != null && hitInfo.damageTypes.GetMajorityDamageType().ToString().Contains(""))
 				{
 				if (ProtectAutoTurret == true)
@@ -96,7 +100,11 @@
 					}
 				}
 
+		   if ((entity.name.Contains("target.reactive")) & (ProtectReactiveTarget == true)) return false;
+
 		   if ((entity.name.Contains("repair.bench")) & (ProtectRepairBench == true)) return false;
+			
+		   if ((entity.name.Contains("fishtrap")) & (ProtectFishTrap == true)) return false;
 
 		   if ((entity.name.Contains("mining.quarry")) & (ProtectMiningQuarry == true)) return false;
 
@@ -104,11 +112,12 @@
 
 		   if ((entity.name.Contains("barricade")) & (ProtectBarricade == true)) return false;
 
-                   if ((entity.name.Contains("water.catcher")) & (ProtectWaterCatcher == true)) return false;
+			//protects Water Catchers, Water Purifiers and Water Barrels
+                   if ((entity is LiquidContainer) & (ProtectWaterContainers == true)) return false;
 
-		   if ((entity.name.Contains("gates.external")) & (ProtectExternalGates == true)) return false;
+		   if ((entity.name.Contains("gates.external.high")) & (ProtectExternalGates == true)) return false;
 
-		   if ((entity.name.Contains("wall.external")) & (ProtectExternalWalls == true)) return false;
+		   if ((entity.name.Contains("wall.external.high")) & (ProtectExternalWalls == true)) return false;
 
            	   if ((entity.name.Contains("door.hinged")) & (ProtectSingleDoors == true)) return false;
 
@@ -131,7 +140,7 @@
 
 		   if ((entity.name.Contains("floor.grill")) & (ProtectFloorGrill == true)) return false;
 
-		   if ((entity.name.Contains("floor.ladder")) & (ProtectFloorLadder == true)) return false;		
+		   if ((entity.name.Contains("floor.ladder")) & (ProtectFloorLadder == true)) return false;
 
 		return null;
         }

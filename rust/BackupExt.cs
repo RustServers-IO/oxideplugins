@@ -10,15 +10,15 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("BackupExt", "Fujikura", "0.1.0")]
+    [Info("BackupExt", "Fujikura", "0.3.0", ResourceId = 2137 )]
     class BackupExt : RustPlugin
     {
 		bool Changed;
 		bool _backup;
-		bool _startup;
+		int currentRetry;
 		string [] backupFolders;
+		string [] backupFoldersShutdown;
 
-		bool backupOnStartup;
 		int numberOfBackups;
 		bool backupBroadcast;
 		int backupDelay;
@@ -27,6 +27,9 @@ namespace Oxide.Plugins
 		string prefixColor;
 		bool useTimer;
 		int timerInterval;
+		int maxPlayers;
+		int maxRetry;
+		int delayRetrySeconds;
 	
 		object GetConfig(string menu, string datavalue, object defaultValue)
 		{
@@ -49,8 +52,7 @@ namespace Oxide.Plugins
 
 		void LoadVariables()
 		{
-			backupOnStartup = Convert.ToBoolean(GetConfig("Settings", "backupOnStartup", false));
-			numberOfBackups = Convert.ToInt32(GetConfig("Settings", "numberOfBackups", 4));
+			numberOfBackups = Convert.ToInt32(GetConfig("Settings", "numberOfBackups", 8));
 			backupBroadcast = Convert.ToBoolean(GetConfig("Notification", "backupBroadcast", false));
 			backupDelay = Convert.ToInt32(GetConfig("Notification", "backupDelay", 5));
 			useBroadcastDelay = Convert.ToBoolean(GetConfig("Notification", "useBroadcastDelay", true));
@@ -58,6 +60,9 @@ namespace Oxide.Plugins
 			prefixColor = Convert.ToString(GetConfig("Notification", "prefixColor", "orange"));
 			useTimer = Convert.ToBoolean(GetConfig("Timer", "useTimer", false));
 			timerInterval = Convert.ToInt32(GetConfig("Timer", "timerInterval", 3600));
+			maxPlayers = Convert.ToInt32(GetConfig("Timer", "maxPlayers", 20));
+			maxRetry =  Convert.ToInt32(GetConfig("Timer", "maxRetry", 10));
+			delayRetrySeconds = Convert.ToInt32(GetConfig("Timer", "delayRetrySeconds", 120));
 
 			if (!Changed) return;
 			SaveConfig();
@@ -72,7 +77,8 @@ namespace Oxide.Plugins
 									{"backupannounce", "Starting server backup in {0} seconds."},
 									{"backuprunning", "Running server backup."},
 									{"backupautomatic", "Running automated server backup every {0} seconds."},									
-			                      },this);
+									{"backupdelay", "Backup delayed ({0} of {1}) for next '{2}' seconds."},				                      
+								  },this);
 		}
 
 		protected override void LoadDefaultConfig()
@@ -83,31 +89,26 @@ namespace Oxide.Plugins
 		
 		void Loaded()
 		{
-			if (_startup) return;
 			LoadVariables();
 			LoadDefaultMessages();
 			backupFolders = BackupFolders();
-			_startup = true;
+			backupFoldersShutdown = BackupFoldersShutdown();
 		}
-		
-		void OnTerrainInitialized()
+
+		void OnServerInitialized()
         {
-			if (_startup) Loaded();
-			if (backupOnStartup && !_backup)
+			currentRetry = 0;
+			if (useTimer)
 			{
-				_backup = true;
-				BackupCreate();
+				timer.Once(timerInterval, TimerCheck);
+				Puts(string.Format(lang.GetMessage("backupautomatic", this), timerInterval));
 			}
         }
 		
-		void OnServerInitialized()
-        {
-			if (useTimer)
-			{
-				timer.Every(timerInterval, () => ccmdExtBackup(new ConsoleSystem.Arg(null)));
-				Puts(string.Format(lang.GetMessage("backupautomatic", this), timerInterval));
-			}
-        }		
+		void OnServerShutdown()
+		{
+			try { DirectoryEx.Backup(BackupFoldersShutdown()); } catch {}
+		}		
 
 		void BackupCreate(bool manual = false)
 		{
@@ -115,6 +116,27 @@ namespace Oxide.Plugins
 			DirectoryEx.CopyAll(ConVar.Server.rootFolder, backupFolders[0]);
 			if (!manual)
 				Puts(lang.GetMessage("backupfinish", this));
+		}
+		
+		void TimerCheck()
+		{
+			if (SaveRestore.IsSaving)
+			{
+				timer.Once(1f, TimerCheck);
+				return;
+			}
+			if (BasePlayer.activePlayerList.Count > maxPlayers && currentRetry < maxRetry)
+			{
+				currentRetry++;
+				Puts(string.Format(lang.GetMessage("backupdelay", this), currentRetry, maxRetry, delayRetrySeconds));
+				timer.Once(delayRetrySeconds, TimerCheck);
+			}
+			else
+			{
+				currentRetry = 0;
+				ccmdExtBackup(new ConsoleSystem.Arg(null));
+				timer.Once(timerInterval, TimerCheck);
+			}
 		}
 
 		[ConsoleCommand("extbackup")]
@@ -131,31 +153,37 @@ namespace Oxide.Plugins
 				}
 				else
 				{
-					BackupRun(arg);
+					timer.Once(0f, () => BackupRun(arg));
 				}
 			}
 			else
-				BackupRun(arg);
+				timer.Once(0f, () => BackupRun(arg));
 		}
 		
 		void BackupRun(ConsoleSystem.Arg arg)
 		{
-				if (backupBroadcast)
-					BroadcastChat(lang.GetMessage("backuprunning", this));
-				SendReply(arg, lang.GetMessage("backuprunning", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
-				BackupCreate(true);
-				SendReply(arg, lang.GetMessage("backupfinish", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
-				if (backupBroadcast)
-					BroadcastChat(lang.GetMessage("backupfinish", this));
+			if (backupBroadcast)
+				BroadcastChat(lang.GetMessage("backuprunning", this));
+			SendReply(arg, lang.GetMessage("backuprunning", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+			BackupCreate(true);
+			SendReply(arg, lang.GetMessage("backupfinish", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+			if (backupBroadcast)
+				BroadcastChat(lang.GetMessage("backupfinish", this));
 		}
 		
 		string [] BackupFolders()
 		{
 			string [] dp = new string[numberOfBackups];
 			for (int i = 0; i < numberOfBackups; i++)
-			{
 				dp[i] = $"backup/{i}/{ConVar.Server.identity}";
-			}
+			return dp;
+		}
+		
+		string [] BackupFoldersShutdown()
+		{
+			string [] dp = new string[numberOfBackups];
+			for (int i = 3; i < numberOfBackups; i++)
+				dp[i] = $"backup/{i}/{ConVar.Server.identity}";
 			return dp;
 		}
 		

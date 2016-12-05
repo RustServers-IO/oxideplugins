@@ -1,5 +1,4 @@
-﻿// Requires: ImageLibrary
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System;
 using System.Linq;
 using UnityEngine;
@@ -12,12 +11,12 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutGifts", "Absolut", "1.1.1", ResourceId = 2159)]
+    [Info("AbsolutGifts", "Absolut", "1.2.0", ResourceId = 2159)]
 
     class AbsolutGifts : RustPlugin
     {
         [PluginReference]
-        ImageLibrary ImageLibrary;
+        Plugin ImageLibrary;
 
         [PluginReference]
         Plugin ServerRewards;
@@ -31,6 +30,7 @@ namespace Oxide.Plugins
         GiftData agdata;
         private DynamicConfigFile AGData;
 
+        bool localimages = true;
         int GlobalTime = 0;
 
         string TitleColor = "<color=orange>";
@@ -67,6 +67,16 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
+            try
+            {
+                ImageLibrary.Call("isLoaded", null);
+            }
+            catch (Exception)
+            {
+                PrintWarning("No Image Library.. load ImageLibrary to use this Plugin", Name);
+                Interface.Oxide.UnloadPlugin(Name);
+                return;
+            }
             LoadVariables();
             LoadData();
             AddImage("http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/simple-black-square-icons-arrows/126517-simple-black-square-icon-arrows-double-arrowhead-left.png", "FIRST");
@@ -109,7 +119,7 @@ namespace Oxide.Plugins
             if (agdata.Players.ContainsKey(player.userID))
             {
                 //Puts("Contains Player");
-                if (GrabCurrentTime() > agdata.Players[player.userID].Lastconnection + 86400)
+                if (GrabCurrentTime() > agdata.Players[player.userID].Lastconnection + (configData.ResetInDays * (24 * 60 * 60)) )
                 {
                     //Puts("Time is Greater");
                     agdata.Players[player.userID].ReceivedGifts.Clear();
@@ -119,7 +129,7 @@ namespace Oxide.Plugins
                 else
                 {
                     //Puts("Time is Less");
-                    double timeremaining = (agdata.Players[player.userID].Lastconnection + 86400) - GrabCurrentTime();
+                    double timeremaining = (agdata.Players[player.userID].Lastconnection + (configData.ResetInDays * (24 * 60 * 60)) ) - GrabCurrentTime();
                     float time = (float)timeremaining;
                     timers.Add(player.userID.ToString(), timer.Once(time, () => ResetGifts(player)));
                     //Puts(time.ToString());
@@ -157,21 +167,16 @@ namespace Oxide.Plugins
         #endregion
 
         #region Functions
-
-        public string GetImage(string shortname, ulong skin = 0)
+        private string TryForImage(string shortname, ulong skin = 0)
         {
-            var img = ImageLibrary.GetImage(shortname, skin);
-            return img;
+            if (localimages)
+                return GetImage(shortname, skin);
+            return GetImageURL(shortname, skin);
         }
 
-        public bool AddImage(string url, string shortname, ulong skin = 0)
-        {
-            var img = ImageLibrary.AddImage(url, shortname, skin);
-            return img;
-        }
-
-
-
+        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
+        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
 
         private void CancelGiftCreation(BasePlayer player)
         {
@@ -350,6 +355,7 @@ namespace Oxide.Plugins
 
         public class UI
         {
+            static bool localimage = true;
             static public CuiElementContainer CreateElementContainer(string panel, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
@@ -398,18 +404,32 @@ namespace Oxide.Plugins
                 panel);
             }
 
-            static public void LoadImage(ref CuiElementContainer element, string panel, string png, string aMin, string aMax)
+            static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                element.Add(new CuiElement
+                if (localimage)
                 {
-                    Parent = panel,
-                    Components =
+                    container.Add(new CuiElement
                     {
-                        new CuiRawImageComponent {Png = png },
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Png = img },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
-                });
+                    });
+                }
+                else
+                    container.Add(new CuiElement
+                    {
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Url = img },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                    });
             }
+
             static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string DistanceA, string DistanceB, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 element.Add(new CuiElement
@@ -559,22 +579,22 @@ namespace Oxide.Plugins
                     {
                         if (page <= totalpages - 1)
                         {
-                            UI.LoadImage(ref element, PanelGift, GetImage("LAST"), "0.8 0.02", "0.85 0.075");
+                            UI.LoadImage(ref element, PanelGift, TryForImage("LAST"), "0.8 0.02", "0.85 0.075");
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 16, "0.8 0.02", "0.85 0.075", $"UI_CreateGifts {2} {totalpages}");
                         }
                         if (remainingentries > entriesallowed)
                         {
-                            UI.LoadImage(ref element, PanelGift, GetImage("NEXT"), "0.74 0.02", "0.79 0.075");
+                            UI.LoadImage(ref element, PanelGift, TryForImage("NEXT"), "0.74 0.02", "0.79 0.075");
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 16, "0.74 0.02", "0.79 0.075", $"UI_CreateGifts {2} {page + 1}");
                         }
                         if (page > 0)
                         {
-                            UI.LoadImage(ref element, PanelGift, GetImage("BACK"), "0.68 0.02", "0.73 0.075");
+                            UI.LoadImage(ref element, PanelGift, TryForImage("BACK"), "0.68 0.02", "0.73 0.075");
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 16, "0.68 0.02", "0.73 0.075", $"UI_CreateGifts {2} {page - 1}");
                         }
                         if (page > 1)
                         {
-                            UI.LoadImage(ref element, PanelGift, GetImage("FIRST"), "0.62 0.02", "0.67 0.075");
+                            UI.LoadImage(ref element, PanelGift, TryForImage("FIRST"), "0.62 0.02", "0.67 0.075");
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 16, "0.62 0.02", "0.67 0.075", $"UI_CreateGifts {2} {0}");
                         }
                     }
@@ -585,7 +605,7 @@ namespace Oxide.Plugins
                     {
                         if (ServerRewards)
                         {
-                            UI.LoadImage(ref element, PanelGift, GetImage("SR"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelGift, TryForImage("SR"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectGift SR");
                             n++;
                             i++;
@@ -593,7 +613,7 @@ namespace Oxide.Plugins
                         if (Economics)
                         {
                             pos = CalcButtonPos(n);
-                            UI.LoadImage(ref element, PanelGift, GetImage("ECO"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelGift, TryForImage("ECO"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectGift ECO");
                             n++;
                             i++;
@@ -601,11 +621,19 @@ namespace Oxide.Plugins
                         if (AbsolutCombat)
                         {
                             pos = CalcButtonPos(n);
-                            UI.LoadImage(ref element, PanelGift, GetImage("AC"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelGift, TryForImage("AC"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectGift AC");
                             n++;
                             i++;
                         }
+                        //if (configData.UseGatherIncrease)
+                        //{
+                        //    pos = CalcButtonPos(n);
+                        //    UI.LoadImage(ref element, PanelGift, TryForImage("GATHER"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                        //    UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectGift GATHER");
+                        //    n++;
+                        //    i++;
+                        //}
                     }
                     foreach (var item in ItemManager.itemList)
                     {
@@ -614,7 +642,7 @@ namespace Oxide.Plugins
                         else if (i <= shownentries + entriesallowed)
                         {
                             pos = CalcButtonPos(n);
-                            UI.LoadImage(ref element, PanelGift, GetImage(item.shortname), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelGift, TryForImage(item.shortname), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             //UI.CreateLabel(ref element, PanelGift, UIColors["limegreen"], item.shortname, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", TextAnchor.MiddleCenter);
                             UI.CreateButton(ref element, PanelGift, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectGift {item.itemid}");
                             n++;
@@ -756,13 +784,13 @@ namespace Oxide.Plugins
                         xmax += 0.12f;
                     }
                     if(item != null)
-                    UI.LoadImage(ref container, PanelGift, GetImage(item.info.shortname), $"{xmin} {ymin}", $"{xmax} {ymax}");
+                    UI.LoadImage(ref container, PanelGift, TryForImage(item.info.shortname), $"{xmin} {ymin}", $"{xmax} {ymax}");
                     else if (entry.Eco)
-                        UI.LoadImage(ref container, PanelGift, GetImage("ECO"), $"{xmin} {ymin}", $"{xmax} {ymax}");
+                        UI.LoadImage(ref container, PanelGift, TryForImage("ECO"), $"{xmin} {ymin}", $"{xmax} {ymax}");
                     else if (entry.SR)
-                        UI.LoadImage(ref container, PanelGift, GetImage("SR"), $"{xmin} {ymin}", $"{xmax} {ymax}");
+                        UI.LoadImage(ref container, PanelGift, TryForImage("SR"), $"{xmin} {ymin}", $"{xmax} {ymax}");
                     else if (entry.AC)
-                        UI.LoadImage(ref container, PanelGift, GetImage("AC"), $"{xmin} {ymin}", $"{xmax} {ymax}");
+                        UI.LoadImage(ref container, PanelGift, TryForImage("AC"), $"{xmin} {ymin}", $"{xmax} {ymax}");
                     UI.CreateLabel(ref container, PanelGift, UIColors["limegreen"], entry.amount.ToString(), 16, $"{xmin} {ymin - 0.025f}", $"{xmax} {ymax - 0.025f}", TextAnchor.MiddleCenter);
                     i++;
                 }
@@ -1299,6 +1327,8 @@ namespace Oxide.Plugins
         {
             public int InfoInterval { get; set; }
             public bool NoAFK { get; set; }
+            public bool UseGatherIncrease { get; set; }
+            public int ResetInDays { get; set; }
         }
         private void LoadVariables()
         {
@@ -1311,6 +1341,8 @@ namespace Oxide.Plugins
             {
                 InfoInterval = 15,
                 NoAFK = true,
+                UseGatherIncrease = true,
+                ResetInDays = 1,
             };
             SaveConfig(config);
         }

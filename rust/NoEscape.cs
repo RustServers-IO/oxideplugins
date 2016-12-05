@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "Calytic", "0.4.1", ResourceId = 1394)]
+    [Info("NoEscape", "Calytic", "0.4.2", ResourceId = 1394)]
     [Description("Prevent commands while raid/combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -154,9 +154,14 @@ namespace Oxide.Plugins
             Config["blockAll"] = false;
             Config["friendCheck"] = false;
             Config["clanCheck"] = false;
-            Config["unblockOnDeath"] = true;
-            Config["unblockOnWakeup"] = false;
-            Config["unblockOnRespawn"] = true;
+
+            Config["raidUnblockOnDeath"] = true;
+            Config["raidUnblockOnWakeup"] = false;
+            Config["raidUnblockOnRespawn"] = true;
+            Config["combatUnblockOnDeath"] = true;
+            Config["combatUnblockOnWakeup"] = false;
+            Config["combatUnblockOnRespawn"] = true;
+
             Config["damageTypes"] = GetDefaultDamageTypes();
             Config["cacheMinutes"] = 1f;
 
@@ -512,7 +517,7 @@ namespace Oxide.Plugins
                 }
 
                 if (ownerBlock)
-                    OwnerBlock(source, target.Id, targetEntity.transform.position, sourceMembers);
+                    OwnerBlock(source, sourceEntity, target.Id, targetEntity.transform.position, sourceMembers);
 
                 if (raiderBlock)
                     RaiderBlock(source, target.Id, targetEntity.transform.position, sourceMembers);
@@ -532,7 +537,7 @@ namespace Oxide.Plugins
 
         private readonly int cupboardMask = UnityEngine.LayerMask.GetMask("Deployed");
 
-        void OwnerBlock(string source, string target, Vector3 position, List<string> sourceMembers = null)
+        void OwnerBlock(string source, BaseEntity sourceEntity, string target, Vector3 position, List<string> sourceMembers = null)
         {
             var targetMembers = new List<string>();
 
@@ -543,7 +548,7 @@ namespace Oxide.Plugins
             Vis.Entities<BasePlayer>(position, raidDistance, nearbyTargets, blockLayer);
             if (cupboardShare)
             {
-                sourceMembers = CupboardShare(target, position, sourceMembers);
+                sourceMembers = CupboardShare(target, position, sourceEntity, sourceMembers);
             }
             if (nearbyTargets.Count > 0)
                 foreach (BasePlayer nearbyTarget in nearbyTargets)
@@ -561,7 +566,7 @@ namespace Oxide.Plugins
                     }
         }
 
-        List<string> CupboardShare(string owner, Vector3 position, List<string> sourceMembers = null)
+        List<string> CupboardShare(string owner, Vector3 position, BaseEntity sourceEntity, List<string> sourceMembers = null)
         {
             var nearbyCupboards = new List<BuildingPrivlidge>();
             Vis.Entities<BuildingPrivlidge>(position, raidDistance, nearbyCupboards, cupboardMask);
@@ -573,28 +578,31 @@ namespace Oxide.Plugins
 
             foreach (var cup in nearbyCupboards)
             {
-                bool ownerOrFriend = false;
-
-                if (owner == cup.OwnerID.ToString())
+                if (cup.CheckEntity(sourceEntity))
                 {
-                    ownerOrFriend = true;
-                }
+                    bool ownerOrFriend = false;
 
-                foreach (var member in sourceMembers)
-                {
-                    if (member == cup.OwnerID.ToString())
+                    if (owner == cup.OwnerID.ToString())
                     {
                         ownerOrFriend = true;
                     }
-                }
 
-                if (ownerOrFriend)
-                {
-                    foreach (var proto in cup.authorizedPlayers)
+                    foreach (var member in sourceMembers)
                     {
-                        if (!sourceMembers.Contains(proto.userid.ToString()))
+                        if (member == cup.OwnerID.ToString())
                         {
-                            cupboardMembers.Add(proto.userid.ToString());
+                            ownerOrFriend = true;
+                        }
+                    }
+
+                    if (ownerOrFriend)
+                    {
+                        foreach (var proto in cup.authorizedPlayers)
+                        {
+                            if (!sourceMembers.Contains(proto.userid.ToString()))
+                            {
+                                cupboardMembers.Add(proto.userid.ToString());
+                            }
                         }
                     }
                 }

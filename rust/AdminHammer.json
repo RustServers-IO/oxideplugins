@@ -1,0 +1,16 @@
+{
+    "name": "AdminHammer",
+    "description": "Use the hammer to display info about entities\/authorization",
+    "author": "mvrb",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/adminhammer.2237",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

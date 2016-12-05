@@ -11,7 +11,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutMarket", "Absolut", "1.3.0", ResourceId = 2118)]
+    [Info("AbsolutMarket", "Absolut", "1.4.0", ResourceId = 2118)]
 
     class AbsolutMarket : RustPlugin
     {
@@ -19,18 +19,16 @@ namespace Oxide.Plugins
         [PluginReference]
         Plugin ServerRewards;
 
-        static GameObject webObject;
-        static UnityImages uImage;
-        static UnityBackgrounds uBackground;
+        [PluginReference]
+        Plugin ImageLibrary;
 
         MarketData mData;
         private DynamicConfigFile MData;
 
-        AMImages imgData;
-        private DynamicConfigFile IMGData;
-
         Backgrounds bkData;
         private DynamicConfigFile BKData;
+
+        bool localimages = true;
 
         class Backgrounds
         {
@@ -56,7 +54,6 @@ namespace Oxide.Plugins
         void Loaded()
         {
             MData = Interface.Oxide.DataFileSystem.GetFile("AbsolutMarket_Data");
-            IMGData = Interface.Oxide.DataFileSystem.GetFile("AbsolutMarket_Images");
             BKData = Interface.Oxide.DataFileSystem.GetFile("AbsolutMarket_AddBackgrounds");
             lang.RegisterMessages(messages, this);
         }
@@ -106,23 +103,29 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            webObject = new GameObject("WebObject");
-            uImage = webObject.AddComponent<UnityImages>();
-            uImage.SetDataDir(this);
-            uBackground = webObject.AddComponent<UnityBackgrounds>();
-            uBackground.SetDataDir(this);
             LoadVariables();
             LoadData();
             timers.Add("info", timer.Once(configData.InfoInterval, () => InfoLoop()));
             timers.Add("save", timer.Once(600, () => SaveLoop()));
             SaveData();
-            if (imgData.SavedImages == null || imgData.SavedImages.Count == 0)
-                Getimages();
-            else Refreshimages();
+            //if (imgData.SavedImages == null || imgData.SavedImages.Count == 0)
+            //    Getimages();
+            //else Refreshimages();
             //if (imgData.SavedBackgrounds == null || imgData.SavedBackgrounds.Count == 0)
-                //GetBackgrounds();
-           // else
+            //GetBackgrounds();
+            // else
+            AddNeededImages();
             RefreshBackgrounds();
+            try
+            {
+                ImageLibrary.Call("isLoaded", null);
+            }
+            catch (Exception)
+            {
+                PrintWarning($"ImageLibrary is missing. Unloading {Name} as it will not work without ImageLibrary.");
+                Interface.Oxide.UnloadPlugin(Name);
+                return;
+            }
             foreach (BasePlayer p in BasePlayer.activePlayerList)
                 OnPlayerInit(p);
         }
@@ -272,7 +275,7 @@ namespace Oxide.Plugins
                         bl++;
                     if (mData.MarketListings.ContainsKey(entry.ID))
                         listed++;
-                    foreach (var cat in imgData.SavedImages)
+                    foreach (var cat in Categorization)
                         foreach (var item in cat.Value)
                         {
                             if (item.Key == entry.shortname)
@@ -367,6 +370,18 @@ namespace Oxide.Plugins
                 mData.OutstandingMessages.Remove(player.userID);
             }
         }
+
+        private string TryForImage(string shortname, ulong skin = 0)
+        {
+            if (localimages)
+                return GetImage(shortname, skin);
+            return GetImageURL(shortname, skin);
+        }
+
+        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
+        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
+
 
         private IEnumerable<AMItem> GetItems(ItemContainer container)
         {
@@ -700,15 +715,13 @@ namespace Oxide.Plugins
         void MarketMainScreen(BasePlayer player, int page = 0, Category cat = Category.All)
         {
             CuiHelper.DestroyUi(player, PanelMarket);
-            string purchaseimage = imgData.SavedImages[Category.None]["MISSINGIMG"][0].ToString();
-            string priceitemimage = imgData.SavedImages[Category.None]["MISSINGIMG"][0].ToString();
-            string Background = imgData.SavedBackgrounds["NEVERDELETE"].ToString();
             if (!mData.mode.ContainsKey(player.userID))
                 mData.mode.Add(player.userID, false);
             var i = 0;
             var c = 0;
             bool seller = false;
             double count = 0;
+            string Background = TryForImage("NEVERDELETE");
             if (cat == Category.All)
                 count = mData.MarketListings.Count();
             else count = mData.MarketListings.Where(kvp => kvp.Value.cat == cat).Count();
@@ -720,28 +733,27 @@ namespace Oxide.Plugins
             if (mData.mode[player.userID] == false)
             {
                 if (mData.background.ContainsKey(player.userID))
-                    if (imgData.SavedBackgrounds.ContainsKey(mData.background[player.userID]))
-                        if (imgData.SavedBackgrounds[mData.background[player.userID]].ToString() != mData.background[player.userID])
-                            Background = imgData.SavedBackgrounds[mData.background[player.userID]].ToString();
+                    if (mData.SavedBackgrounds.Contains(mData.background[player.userID]))
+                        Background = TryForImage(mData.background[player.userID]);
                 UI.LoadImage(ref element, PanelMarket, Background, "0 0", "1 1");
                 if (page <= totalpages - 1)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["LAST"][0].ToString(), "0.8 0.02", "0.85 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("LAST", (ulong)ResourceId), "0.8 0.02", "0.85 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 18, "0.8 0.02", "0.85 0.075", $"UI_MarketMainScreen {totalpages} {Enum.GetName(typeof(Category), cat)}");
                 }
                 if (remainingentries > entriesallowed)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["NEXT"][0].ToString(), "0.74 0.02", "0.79 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("NEXT", (ulong)ResourceId), "0.74 0.02", "0.79 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 18, "0.74 0.02", "0.79 0.075", $"UI_MarketMainScreen {page + 1} {Enum.GetName(typeof(Category), cat)}");
                 }
                 if (page > 0)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["BACK"][0].ToString(), "0.68 0.02", "0.73 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("BACK", (ulong)ResourceId), "0.68 0.02", "0.73 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 18, "0.68 0.02", "0.73 0.075", $"UI_MarketMainScreen {page - 1} {Enum.GetName(typeof(Category), cat)}");
                 }
                 if (page > 1)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["FIRST"][0].ToString(), "0.62 0.02", "0.67 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("FIRST", (ulong)ResourceId), "0.62 0.02", "0.67 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 18, "0.62 0.02", "0.67 0.075", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), cat)}");
                 }
 
@@ -753,21 +765,21 @@ namespace Oxide.Plugins
                     {
                         if (cat == ct)
                         {
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["UFILTER"][0].ToString(), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("UFILTER", (ulong)ResourceId), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
                             UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", TextAnchor.MiddleCenter);
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
                             c++;
                         }
                         else
                         {
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["OFILTER"][0].ToString(), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("OFILTER", (ulong)ResourceId), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
                             UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", TextAnchor.MiddleCenter);
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
                             c++;
                         }
                     }
                 }
-                UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.Building]["box.wooden.large"][0].ToString(), $"0.05 0.9", "0.15 1");
+                UI.LoadImage(ref element, PanelMarket, TryForImage("box.wooden.large"), $"0.05 0.9", "0.15 1");
                 UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], "", 12, $"0.05 0.9", "0.15 1", TextAnchor.MiddleCenter);
                 if (!SettingBox.Contains(player.userID))
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", GetLang("TradeBoxAssignment"), 12, $"0.05 0.9", "0.15 1", $"UI_SetBoxMode");
@@ -776,30 +788,30 @@ namespace Oxide.Plugins
 
 
 
-                UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["SELL"][0].ToString(), $"0.35 0.9", "0.65 1.0");
+                UI.LoadImage(ref element, PanelMarket, TryForImage("SELL", (ulong)ResourceId), $"0.35 0.9", "0.65 1.0");
                 UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], GetLang("ListItem"), 12, $"0.35 0.9", "0.65 1.0", TextAnchor.MiddleCenter);
                 UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"0.35 0.9", "0.65 1.0", $"UI_MarketSellScreen {0}");
 
                 if (mData.mode[player.userID] == false)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["OFILTER"][0].ToString(), "0.66 0.9", "0.75 1");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("OFILTER", (ulong)ResourceId), "0.66 0.9", "0.75 1");
                     UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], GetLang("ChangeMode"), 12, "0.66 0.9", "0.75 1", TextAnchor.MiddleCenter);
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, "0.66 0.9", "0.75 1", $"UI_Mode {1}");
                 }
                 else
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["UFILTER"][0].ToString(), "0.66 0.9", "0.75 1");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("UFILTER", (ulong)ResourceId), "0.66 0.9", "0.75 1");
                     UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], GetLang("ChangeMode"), 12, "0.66 0.9", "0.75 1", TextAnchor.MiddleCenter);
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, "0.66 0.9", "0.75 1", $"UI_Mode {0}");
                 }
 
-                UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["OFILTER"][0].ToString(), "0.76 0.9", "0.86 1");
+                UI.LoadImage(ref element, PanelMarket, TryForImage("OFILTER", (ulong)ResourceId), "0.76 0.9", "0.86 1");
                 UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], GetLang("ChangeTheme"), 12, "0.76 0.9", "0.86 1", TextAnchor.MiddleCenter);
                 UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, "0.76 0.9", "0.86 1", $"UI_MarketBackgroundMenu {0}");
 
                 if (isAuth(player))
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["UFILTER"][0].ToString(), "0.87 0.9", "0.97 1");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("UFILTER", (ulong)ResourceId), "0.87 0.9", "0.97 1");
                     UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], GetLang("AdminPanel"), 12, "0.87 0.9", "0.97 1", TextAnchor.MiddleCenter);
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, "0.87 0.9", "0.97 1", $"UI_AdminPanel");
                 }
@@ -814,31 +826,15 @@ namespace Oxide.Plugins
                         if (i < shownentries + 1) continue;
                         else if (i <= shownentries + entriesallowed)
                         {
-                            if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.cat].ContainsKey(item.Value.shortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.cat][item.Value.shortname].ContainsKey(item.Value.skin))
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][item.Value.skin].ToString();
-                                    else
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][0].ToString();
-                                }
-                            }
-                            if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.pricecat].ContainsKey(item.Value.priceItemshortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname].ContainsKey(0))
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                    else
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                }
-                            }
+                            //    if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
+                            //        TryForImage(item.Value.shortname, item.Value.skin);
+                            //if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
+                            //    TryForImage(item.Value.priceItemshortname);
                             if (item.Value.seller == player.userID)
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButton(ref element, PanelMarket, item.Value, purchaseimage, priceitemimage, seller, n);
+                            CreateMarketListingButton(ref element, PanelMarket, item.Value, seller, n);
 
                             n++;
                         }
@@ -852,32 +848,32 @@ namespace Oxide.Plugins
                         if (i < shownentries + 1) continue;
                         else if (i <= shownentries + entriesallowed)
                         {
-                            if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.cat].ContainsKey(item.Value.shortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.cat][item.Value.shortname].ContainsKey(item.Value.skin))
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][item.Value.skin].ToString();
-                                    else
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][0].ToString();
-                                }
-                            }
+                            //if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
+                            //{
+                            //    if (imgData.SavedImages[item.Value.cat].ContainsKey(item.Value.shortname))
+                            //    {
+                            //        if (imgData.SavedImages[item.Value.cat][item.Value.shortname].ContainsKey(item.Value.skin))
+                            //            purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][item.Value.skin].ToString();
+                            //        else
+                            //            purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][0].ToString();
+                            //    }
+                            //}
 
-                            if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.pricecat].ContainsKey(item.Value.priceItemshortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname].ContainsKey(0))
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                    else
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                }
-                            }
+                            //if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
+                            //{
+                            //    if (imgData.SavedImages[item.Value.pricecat].ContainsKey(item.Value.priceItemshortname))
+                            //    {
+                            //        if (imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname].ContainsKey(0))
+                            //            priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
+                            //        else
+                            //            priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
+                            //    }
+                            //}
                             if (item.Value.seller == player.userID)
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButton(ref element, PanelMarket, item.Value, purchaseimage, priceitemimage, seller, n);
+                            CreateMarketListingButton(ref element, PanelMarket, item.Value, seller, n);
                             n++;
                         }
                     }
@@ -954,32 +950,31 @@ namespace Oxide.Plugins
                         if (i < shownentries + 1) continue;
                         else if (i <= shownentries + entriesallowed)
                         {
-                            if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.cat].ContainsKey(item.Value.shortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.cat][item.Value.shortname].ContainsKey(item.Value.skin))
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][item.Value.skin].ToString();
-                                    else
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][0].ToString();
-                                }
-                            }
-                            if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.pricecat].ContainsKey(item.Value.priceItemshortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname].ContainsKey(0))
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                    else
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                }
-                            }
+                            //if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
+                            //{
+                            //    if (imgData.SavedImages[item.Value.cat].ContainsKey(item.Value.shortname))
+                            //    {
+                            //        if (imgData.SavedImages[item.Value.cat][item.Value.shortname].ContainsKey(item.Value.skin))
+                            //            purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][item.Value.skin].ToString();
+                            //        else
+                            //            purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][0].ToString();
+                            //    }
+                            //}
+                            //if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
+                            //{
+                            //    if (imgData.SavedImages[item.Value.pricecat].ContainsKey(item.Value.priceItemshortname))
+                            //    {
+                            //        if (imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname].ContainsKey(0))
+                            //            priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
+                            //        else
+                            //            priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
+                            //    }
+                            //}
                             if (item.Value.seller == player.userID)
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButtonSimple(ref element, PanelMarket, item.Value, purchaseimage, priceitemimage, seller, n);
-
+                            CreateMarketListingButtonSimple(ref element, PanelMarket, item.Value, seller, n);
                             n++;
                         }
                     }
@@ -992,32 +987,32 @@ namespace Oxide.Plugins
                         if (i < shownentries + 1) continue;
                         else if (i <= shownentries + entriesallowed)
                         {
-                            if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.cat].ContainsKey(item.Value.shortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.cat][item.Value.shortname].ContainsKey(item.Value.skin))
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][item.Value.skin].ToString();
-                                    else
-                                        purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][0].ToString();
-                                }
-                            }
+                            //if (item.Value.cat != Category.None && item.Value.cat != Category.Extra)
+                            //{
+                            //    if (imgData.SavedImages[item.Value.cat].ContainsKey(item.Value.shortname))
+                            //    {
+                            //        if (imgData.SavedImages[item.Value.cat][item.Value.shortname].ContainsKey(item.Value.skin))
+                            //            purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][item.Value.skin].ToString();
+                            //        else
+                            //            purchaseimage = imgData.SavedImages[item.Value.cat][item.Value.shortname][0].ToString();
+                            //    }
+                            //}
 
-                            if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
-                            {
-                                if (imgData.SavedImages[item.Value.pricecat].ContainsKey(item.Value.priceItemshortname))
-                                {
-                                    if (imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname].ContainsKey(0))
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                    else
-                                        priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
-                                }
-                            }
+                            //if (item.Value.pricecat != Category.None && item.Value.pricecat != Category.Extra)
+                            //{
+                            //    if (imgData.SavedImages[item.Value.pricecat].ContainsKey(item.Value.priceItemshortname))
+                            //    {
+                            //        if (imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname].ContainsKey(0))
+                            //            priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
+                            //        else
+                            //            priceitemimage = imgData.SavedImages[item.Value.pricecat][item.Value.priceItemshortname][0].ToString();
+                            //    }
+                            //}
                             if (item.Value.seller == player.userID)
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButtonSimple(ref element, PanelMarket, item.Value, purchaseimage, priceitemimage, seller, n);
+                            CreateMarketListingButtonSimple(ref element, PanelMarket, item.Value, seller, n);
                             n++;
                         }
                     }
@@ -1026,18 +1021,21 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, element);
         }
 
-        private void CreateMarketListingButton(ref CuiElementContainer container, string panelName, AMItem item, string listingimg, string costimg, bool seller, int num)
+        private void CreateMarketListingButton(ref CuiElementContainer container, string panelName, AMItem item, bool seller, int num)
         {
             var pos = MarketEntryPos(num);
             var name = item.shortname;
             if (configData.UseUniqueNames && item.name != "")
                 name = item.name;
             else if (item.shortname == "SR")
+            {
                 name = "SR Points";
+                item.skin = (ulong)ResourceId;
+            }
             UI.CreatePanel(ref container, panelName, UIColors["header"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
 
             //SALE ITEM
-            UI.LoadImage(ref container, panelName, listingimg, $"{pos[0] + 0.001f} {pos[3] - 0.125f}", $"{pos[0] + 0.1f} {pos[3] - 0.005f}");
+            UI.LoadImage(ref container, panelName, TryForImage(item.shortname, item.skin), $"{pos[0] + 0.001f} {pos[3] - 0.125f}", $"{pos[0] + 0.1f} {pos[3] - 0.005f}");
             UI.CreateLabel(ref container, panelName, UIColors["dark"], name, 12, $"{pos[0] + .1f} {pos[3] - .04f}", $"{pos[2] - .001f} {pos[3] - .001f}", TextAnchor.MiddleLeft);
             UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Amount", item.amount.ToString()), 12, $"{pos[0] + .1f} {pos[3] - .07f}", $"{pos[2] - .001f} {pos[3] - .041f}", TextAnchor.MiddleLeft);
 
@@ -1061,14 +1059,20 @@ namespace Oxide.Plugins
                 }
             }
 
-            UI.LoadImage(ref container, PanelMarket, imgData.SavedImages[Category.None]["ARROW"][0].ToString(), $"{pos[0] + .08f} {pos[1] + .07f}", $"{pos[0] + .2f} {pos[1] + .135f}");
+            UI.LoadImage(ref container, PanelMarket, TryForImage("ARROW", (ulong)ResourceId), $"{pos[0] + .08f} {pos[1] + .07f}", $"{pos[0] + .2f} {pos[1] + .135f}");
             UI.CreateLabel(ref container, panelName, UIColors["dark"], GetLang("InExchange"), 14, $"{ pos[0] + .08f} {pos[1] + .07f}", $"{pos[0] + .2f} {pos[1] + .135f}", TextAnchor.UpperCenter);
 
             //COST ITEM
             if (item.priceItemshortname == "SR")
+            {
                 name = "SR Points";
-            else name = item.priceItemshortname;
-            UI.LoadImage(ref container, panelName, costimg, $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+                UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname, (ulong)ResourceId), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+            }
+            else
+            {
+                name = item.priceItemshortname;
+                UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+            }
             UI.CreateLabel(ref container, panelName, UIColors["dark"], name, 12, $"{pos[0] + 0.005f} {pos[1] + 0.03f}", $"{pos[0] + 0.175f} {pos[1] + 0.06f}", TextAnchor.MiddleRight);
             UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Amount", item.priceAmount.ToString()), 12, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[0] + 0.175f} {pos[1] + 0.0299f}", TextAnchor.MiddleRight);
             if (mData.names.ContainsKey(item.seller))
@@ -1078,7 +1082,7 @@ namespace Oxide.Plugins
 
             if (seller == true)
             {
-                UI.LoadImage(ref container, PanelMarket, imgData.SavedImages[Category.None]["UFILTER"][0].ToString(), $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}");
+                UI.LoadImage(ref container, PanelMarket, TryForImage("UFILTER", (ulong)ResourceId), $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}");
                 UI.CreateLabel(ref container, panelName, UIColors["dark"], GetLang("removelisting"), 10, $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}", TextAnchor.MiddleCenter);
                 UI.CreateButton(ref container, panelName, "0 0 0 0", "", 40, $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}", $"UI_RemoveListing {item.ID}");
             }
@@ -1088,18 +1092,21 @@ namespace Oxide.Plugins
             }
         }
 
-        private void CreateMarketListingButtonSimple(ref CuiElementContainer container, string panelName, AMItem item, string listingimg, string costimg, bool seller, int num)
+        private void CreateMarketListingButtonSimple(ref CuiElementContainer container, string panelName, AMItem item, bool seller, int num)
         {
             var pos = MarketEntryPos(num);
             var name = item.shortname;
             if (configData.UseUniqueNames && item.name != "")
                 name = item.name;
-            else if (item.shortname == "SR")
+            if (item.shortname == "SR")
+            {
                 name = "SR Points";
+                item.skin = (ulong)ResourceId;
+            }
             UI.CreatePanel(ref container, panelName, UIColors["white"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
 
             //SALE ITEM
-            UI.LoadImage(ref container, panelName, listingimg, $"{pos[0] + 0.001f} {pos[3] - 0.125f}", $"{pos[0] + 0.1f} {pos[3] - 0.005f}");
+            UI.LoadImage(ref container, panelName, TryForImage(item.shortname, item.skin), $"{pos[0] + 0.001f} {pos[3] - 0.125f}", $"{pos[0] + 0.1f} {pos[3] - 0.005f}");
             UI.CreateLabel(ref container, panelName, UIColors["dark"], name, 12, $"{pos[0] + .1f} {pos[3] - .04f}", $"{pos[2] - .001f} {pos[3] - .001f}", TextAnchor.MiddleLeft);
             UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Amount", item.amount.ToString()), 12, $"{pos[0] + .1f} {pos[3] - .07f}", $"{pos[2] - .001f} {pos[3] - .041f}", TextAnchor.MiddleLeft);
 
@@ -1125,9 +1132,15 @@ namespace Oxide.Plugins
 
             //COST ITEM
             if (item.priceItemshortname == "SR")
+            {
                 name = "SR Points";
-            else name = item.priceItemshortname;
-            UI.LoadImage(ref container, panelName, costimg, $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+                UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname, (ulong)ResourceId), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+            }
+            else
+            {
+                name = item.priceItemshortname;
+                UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+            }
             UI.CreateLabel(ref container, panelName, UIColors["dark"], name, 12, $"{pos[0] + 0.005f} {pos[1] + 0.03f}", $"{pos[0] + 0.175f} {pos[1] + 0.06f}", TextAnchor.MiddleRight);
             UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Amount", item.priceAmount.ToString()), 12, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[0] + 0.175f} {pos[1] + 0.0299f}", TextAnchor.MiddleRight);
             if (mData.names.ContainsKey(item.seller))
@@ -1137,7 +1150,7 @@ namespace Oxide.Plugins
 
             if (seller == true)
             {
-                UI.LoadImage(ref container, PanelMarket, imgData.SavedImages[Category.None]["UFILTER"][0].ToString(), $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}");
+                UI.LoadImage(ref container, PanelMarket, TryForImage("UFILTER", (ulong)ResourceId), $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}");
                 UI.CreateLabel(ref container, panelName, UIColors["dark"], GetLang("removelisting"), 10, $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}", TextAnchor.MiddleCenter);
                 UI.CreateButton(ref container, panelName, "0 0 0 0", "", 40, $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}", $"UI_RemoveListing {item.ID}");
             }
@@ -1163,7 +1176,6 @@ namespace Oxide.Plugins
             }
             float[] pos;
             var i = 0;
-            var image = "";
             var element = UI.CreateElementContainer(PanelMarket, "0 0 0 0", "0.275 0.25", "0.725 0.75", true);
             //var count = PlayerBoxContents[player.userID].Count();
             UI.CreateLabel(ref element, PanelMarket, UIColors["black"], $"{TextColors["limegreen"]} {GetLang("SelectItemToSell")}", 20, "0.05 .9", "1 1", TextAnchor.MiddleCenter);
@@ -1172,26 +1184,14 @@ namespace Oxide.Plugins
                 foreach (AMItem item in PlayerBoxContents[player.userID].Where(bl => !mData.Blacklist.Contains(bl.shortname) && !mData.MarketListings.ContainsKey(bl.ID)))
                 {
                     pos = CalcButtonPos(i);
-                    if (item.cat != Category.None && item.cat != Category.Extra)
-                    {
-                        if (imgData.SavedImages[item.cat].ContainsKey(item.shortname))
-                        {
-                            if (imgData.SavedImages[item.cat][item.shortname].ContainsKey(item.skin))
-                            {
-                                image = imgData.SavedImages[item.cat][item.shortname][item.skin].ToString();
-                                UI.LoadImage(ref element, PanelMarket, image, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        image = imgData.SavedImages[Category.None]["MISSINGIMG"][0].ToString();
-                        UI.LoadImage(ref element, PanelMarket, image, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    //if (item.cat != Category.None && item.cat != Category.Extra)
+                    //{
+                                UI.LoadImage(ref element, PanelMarket, TryForImage(item.shortname, item.skin), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    //}
+                    if (TryForImage(item.shortname, item.skin) == TryForImage("BLAHBLAH"))
                         UI.CreateLabel(ref element, PanelMarket, UIColors["limegreen"], item.shortname.ToUpper(), 16, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}", TextAnchor.LowerCenter);
-                    }
                     if (item.amount > 9999)
                         UI.CreateLabel(ref element, PanelMarket, UIColors["limegreen"], item.amount.ToString(), 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", TextAnchor.MiddleCenter);
-
                     else if (item.amount > 1)
                         UI.CreateLabel(ref element, PanelMarket, UIColors["limegreen"], item.amount.ToString(), 16, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", TextAnchor.MiddleCenter);
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectSalesItem {item.ID}"); i++;
@@ -1206,7 +1206,7 @@ namespace Oxide.Plugins
                         {
                             pos = CalcButtonPos(i);
                             UI.CreatePanel(ref element, PanelMarket, "1 1 1 1", $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.Money]["SR"][0].ToString(), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("SR", (ulong)ResourceId), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectSR"); i++;
                         }
                 }
@@ -1220,7 +1220,6 @@ namespace Oxide.Plugins
             AMItem SalesItem;
 
             var i = 0;
-            string image = "";
             var name = "";
             var element = UI.CreateElementContainer(PanelMarket, "0 0 0 0", "0.3 0.3", "0.7 0.9");
             switch (step)
@@ -1249,22 +1248,22 @@ namespace Oxide.Plugins
                     {
                         if (page <= totalpages - 1)
                         {
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["LAST"][0].ToString(), "0.8 0.02", "0.85 0.075");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("LAST", (ulong)ResourceId), "0.8 0.02", "0.85 0.075");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.8 0.02", "0.85 0.075", $"UI_SellItems {totalpages}");
                         }
                         if (remainingentries > entriesallowed)
                         {
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["NEXT"][0].ToString(), "0.74 0.02", "0.79 0.075");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("NEXT", (ulong)ResourceId), "0.74 0.02", "0.79 0.075");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.74 0.02", "0.79 0.075", $"UI_SellItems {page + 1}");
                         }
                         if (page > 0)
                         {
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["BACK"][0].ToString(), "0.68 0.02", "0.73 0.075");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("BACK", (ulong)ResourceId), "0.68 0.02", "0.73 0.075");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.68 0.02", "0.73 0.075", $"UI_SellItems {page - 1}");
                         }
                         if (page > 1)
                         {
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["FIRST"][0].ToString(), "0.62 0.02", "0.67 0.075");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("FIRST", (ulong)ResourceId), "0.62 0.02", "0.67 0.075");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.62 0.02", "0.67 0.075", $"UI_SellItems {0}");
                         }
                     }
@@ -1275,7 +1274,7 @@ namespace Oxide.Plugins
                     {
                         if (configData.ServerRewards == true && ServerRewards)
                         {
-                            UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.Money]["SR"][0].ToString(), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("SR", (ulong)ResourceId), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectpriceItemshortname SR");
                             n++;
                             i++;
@@ -1284,23 +1283,22 @@ namespace Oxide.Plugins
                     foreach (var item in ItemManager.itemList.Where(a => !mData.Blacklist.Contains(a.shortname)))
                     {
                         i++;
-                        image = imgData.SavedImages[Category.None]["MISSINGIMG"][0].ToString();
                         if (i < shownentries + 1) continue;
                         else if (i <= shownentries + entriesallowed)
                         {
                             pos = CalcButtonPos(n);
-                            foreach (var category in imgData.SavedImages)
-                            {
-                                if (category.Value.ContainsKey(item.shortname))
-                                    foreach (var entry in category.Value.Where(e => e.Key == item.shortname))
-                                    {
-                                        image = imgData.SavedImages[category.Key][entry.Key][0].ToString();
-                                        break;
-                                    }
-                                else continue;
-                            }
-                            UI.LoadImage(ref element, PanelMarket, image, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            if (image == imgData.SavedImages[Category.None]["MISSINGIMG"][0].ToString()) UI.CreateLabel(ref element, PanelMarket, UIColors["limegreen"], item.shortname, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", TextAnchor.MiddleCenter);
+                            //foreach (var category in Categorization)
+                            //{
+                            //    if (category.Value.ContainsKey(item.shortname))
+                            //        foreach (var entry in category.Value.Where(e => e.Key == item.shortname))
+                            //        {
+                            //            image = entry.Key;
+                            //            break;
+                            //        }
+                            //    else continue;
+                            //}
+                            UI.LoadImage(ref element, PanelMarket, TryForImage(item.shortname), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            if (TryForImage(item.shortname) == TryForImage("BLAHBLAH")) UI.CreateLabel(ref element, PanelMarket, UIColors["limegreen"], item.shortname, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", TextAnchor.MiddleCenter);
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectpriceItemshortname {item.shortname}");
                             n++;
                         }
@@ -1329,7 +1327,6 @@ namespace Oxide.Plugins
         {
             CuiHelper.DestroyUi(player, PanelPurchase);
             AMItem purchaseitem = mData.MarketListings[index];
-            string purchaseimage = imgData.SavedImages[Category.None]["MISSINGIMG"][0].ToString();
             var name = "";
             if (configData.UseUniqueNames && purchaseitem.name != "")
                 name = purchaseitem.name;
@@ -1341,18 +1338,18 @@ namespace Oxide.Plugins
             Vector2 dimensions = new Vector2(0.25f, 0.25f);
             Vector2 posMin = position;
             Vector2 posMax = posMin + dimensions;
-            if (purchaseitem.cat != Category.None && purchaseitem.cat != Category.Extra)
-            {
-                if (imgData.SavedImages[purchaseitem.cat].ContainsKey(purchaseitem.shortname))
-                {
-                    if (imgData.SavedImages[purchaseitem.cat][purchaseitem.shortname].ContainsKey(purchaseitem.skin))
-                        purchaseimage = imgData.SavedImages[purchaseitem.cat][purchaseitem.shortname][purchaseitem.skin].ToString();
-                    else
-                        purchaseimage = imgData.SavedImages[purchaseitem.cat][purchaseitem.shortname][0].ToString();
-                }
-            }
-            else UI.CreateLabel(ref element, PanelPurchase, UIColors["limegreen"], purchaseitem.shortname, 14, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", TextAnchor.MiddleCenter);
-            UI.LoadImage(ref element, PanelPurchase, purchaseimage, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}");
+            //if (purchaseitem.cat != Category.None && purchaseitem.cat != Category.Extra)
+            //{
+            //    if (imgData.SavedImages[purchaseitem.cat].ContainsKey(purchaseitem.shortname))
+            //    {
+            //        if (imgData.SavedImages[purchaseitem.cat][purchaseitem.shortname].ContainsKey(purchaseitem.skin))
+            //            purchaseimage = imgData.SavedImages[purchaseitem.cat][purchaseitem.shortname][purchaseitem.skin].ToString();
+            //        else
+            //            purchaseimage = imgData.SavedImages[purchaseitem.cat][purchaseitem.shortname][0].ToString();
+            //    }
+            //}
+            if (TryForImage(purchaseitem.shortname) == TryForImage("BLAHBLAH")) UI.CreateLabel(ref element, PanelPurchase, UIColors["limegreen"], purchaseitem.shortname, 14, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", TextAnchor.MiddleCenter);
+            UI.LoadImage(ref element, PanelPurchase, TryForImage(purchaseitem.shortname), $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}");
             if (purchaseitem.amount > 1)
                 UI.CreateLabel(ref element, PanelPurchase, UIColors["limegreen"], $"x {purchaseitem.amount}", 14, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", TextAnchor.MiddleCenter);
             if (mData.MarketListings[index].cat != Category.Money)
@@ -1412,46 +1409,46 @@ namespace Oxide.Plugins
             var element = UI.CreateElementContainer(PanelMarket, UIColors["dark"], "0.3 0.3", "0.7 0.9", true);
             UI.CreatePanel(ref element, PanelMarket, UIColors["light"], "0.01 0.02", "0.99 0.98");
             UI.CreateLabel(ref element, PanelMarket, MsgColor, GetLang("SelectTheme"), 20, "0 .9", "1 1");
-            var count = imgData.SavedBackgrounds.Count();
+            var count = mData.SavedBackgrounds.Count();
             double entriesallowed = 30;
             double remainingentries = count - (page * (entriesallowed - 1));
             double totalpages = (Math.Floor(count / (entriesallowed - 1)));
             {
                 if (page <= totalpages - 1)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["LAST"][0].ToString(), "0.8 0.02", "0.85 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("LAST", (ulong)ResourceId), "0.8 0.02", "0.85 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.8 0.02", "0.85 0.075", $"UI_MarketBackgroundMenu {totalpages}");
                 }
                 if (remainingentries > entriesallowed)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["NEXT"][0].ToString(), "0.74 0.02", "0.79 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("NEXT", (ulong)ResourceId), "0.74 0.02", "0.79 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.74 0.02", "0.79 0.075", $"UI_MarketBackgroundMenu {page + 1}");
                 }
                 if (page > 0)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["BACK"][0].ToString(), "0.68 0.02", "0.73 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("BACK", (ulong)ResourceId), "0.68 0.02", "0.73 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.68 0.02", "0.73 0.075", $"UI_MarketBackgroundMenu {page - 1}");
                 }
                 if (page > 1)
                 {
-                    UI.LoadImage(ref element, PanelMarket, imgData.SavedImages[Category.None]["FIRST"][0].ToString(), "0.62 0.02", "0.67 0.075");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("FIRST", (ulong)ResourceId), "0.62 0.02", "0.67 0.075");
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 16, "0.62 0.02", "0.67 0.075", $"UI_MarketBackgroundMenu {0}");
                 }
             }
 
             double shownentries = page * entriesallowed;
             int n = 0;
-            foreach (var entry in imgData.SavedBackgrounds)
+            foreach (var entry in mData.SavedBackgrounds)
             {
                 i++;
                 if (i < shownentries + 1) continue;
                 else if (i <= shownentries + entriesallowed)
                 {
                     var loc = CalcButtonPos(n);
-                    if (mData.background[player.userID] != entry.Key)
+                    if (mData.background[player.userID] != entry)
                     {
-                        UI.LoadImage(ref element, PanelMarket, entry.Value.ToString(), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
-                        UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_ChangeBackground {entry.Key}");
+                        UI.LoadImage(ref element, PanelMarket, TryForImage(entry), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
+                        UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_ChangeBackground {entry}");
                         n++;
                     }
                 }
@@ -1464,7 +1461,6 @@ namespace Oxide.Plugins
         {
             CuiHelper.DestroyUi(player, PanelMarket);
             var i = 0;
-            string image = "";
             double count = 0;
             var element = UI.CreateElementContainer(PanelMarket, UIColors["dark"], "0.3 0.3", "0.7 0.9", true);
             UI.CreatePanel(ref element, PanelMarket, UIColors["light"], "0.01 0.02", "0.99 0.98");
@@ -1473,11 +1469,11 @@ namespace Oxide.Plugins
             int n = 0;
             if (action == "add")
             {
-                foreach (var cat in imgData.SavedImages)
+                foreach (var cat in Categorization)
                     foreach (var entry in cat.Value)
                         count++;
                 UI.CreateLabel(ref element, PanelMarket, UIColors["black"], $"{TextColors["limegreen"]} {GetLang("SelectItemToBlacklist")}", 75, "0.05 0", ".95 1", TextAnchor.MiddleCenter);
-                foreach (var category in imgData.SavedImages.Where(kvp => kvp.Key != Category.Extra && kvp.Key != Category.None))
+                foreach (var category in Categorization.Where(kvp => kvp.Key != Category.Extra && kvp.Key != Category.None))
                     foreach (var entry in category.Value.Where(bl => !mData.Blacklist.Contains(bl.Key)).OrderBy(kvp => kvp.Key))
                     {
                         i++;
@@ -1485,8 +1481,7 @@ namespace Oxide.Plugins
                         else if (i <= shownentries + entriesallowed)
                         {
                             var pos = CalcButtonPos(n);
-                            image = imgData.SavedImages[category.Key][entry.Key][0].ToString();
-                            UI.LoadImage(ref element, PanelMarket, image, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage(entry.Key), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_BackListItem add {entry.Key}");
                             n++;
                         }
@@ -1496,7 +1491,7 @@ namespace Oxide.Plugins
             {
                 count = mData.Blacklist.Count();
                 UI.CreateLabel(ref element, PanelMarket, UIColors["black"], $"{TextColors["limegreen"]} {GetLang("SelectItemToUnBlacklist")}", 75, "0.05 0", ".95 1", TextAnchor.MiddleCenter);
-                foreach (var category in imgData.SavedImages.Where(kvp => kvp.Key != Category.Extra && kvp.Key != Category.None))
+                foreach (var category in Categorization.Where(kvp => kvp.Key != Category.Extra && kvp.Key != Category.None))
                     foreach (var entry in category.Value.Where(bl => mData.Blacklist.Contains(bl.Key)).OrderBy(kvp => kvp.Key))
                     {
                         i++;
@@ -1504,8 +1499,7 @@ namespace Oxide.Plugins
                         else if (i <= shownentries + entriesallowed)
                         {
                             var pos = CalcButtonPos(n);
-                            image = imgData.SavedImages[category.Key][entry.Key][0].ToString();
-                            UI.LoadImage(ref element, PanelMarket, image, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage(entry.Key), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_BackListItem remove {entry.Key}");
                             n++;
                         }
@@ -1848,7 +1842,7 @@ namespace Oxide.Plugins
                 return;
             string priceItemshortname = arg.Args[0];
             SalesItemPrep[player.userID].priceItemshortname = priceItemshortname;
-            foreach (var cat in imgData.SavedImages)
+            foreach (var cat in Categorization)
             {
                 if (cat.Value.ContainsKey(priceItemshortname))
                 {
@@ -2355,13 +2349,14 @@ namespace Oxide.Plugins
             public Dictionary<ulong, List<Unsent>> OutstandingMessages = new Dictionary<ulong, List<Unsent>>();
             public List<string> Blacklist = new List<string>();
             public Dictionary<ulong, string> names = new Dictionary<ulong, string>();
+            public List<string> SavedBackgrounds = new List<string>();
         }
 
-        class AMImages
-        {
-            public Dictionary<Category, Dictionary<string, Dictionary<ulong, uint>>> SavedImages = new Dictionary<Category, Dictionary<string, Dictionary<ulong, uint>>>();
-            public Dictionary<string, uint> SavedBackgrounds = new Dictionary<string, uint>();
-        }
+        //class AMImages
+        //{
+        //    public Dictionary<Category, Dictionary<string, Dictionary<ulong, uint>>> SavedImages = new Dictionary<Category, Dictionary<string, Dictionary<ulong, uint>>>();
+
+        //}
 
         class Unsent
         {
@@ -2410,215 +2405,227 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Unity WWW
-        class QueueImage
+        //#region Unity WWW
+        //class QueueImage
+        //{
+        //    public string url;
+        //    public string shortname;
+        //    public ulong skinid;
+        //    public Category cat;
+        //    public QueueImage(string ur, Category ct, string st, ulong sk)
+        //    {
+        //        url = ur;
+        //        shortname = st;
+        //        skinid = sk;
+        //        cat = ct;
+        //    }
+        //}
+
+        //class UnityImages : MonoBehaviour
+        //{
+        //    AbsolutMarket filehandler;
+        //    const int MaxActiveLoads = 3;
+        //    static readonly List<QueueImage> QueueList = new List<QueueImage>();
+        //    static byte activeLoads;
+        //    private MemoryStream stream = new MemoryStream();
+
+        //    public void SetDataDir(AbsolutMarket am) => filehandler = am;
+        //    public void Add(string url, Category cat, string shortname, ulong skinid)
+        //    {
+        //        QueueList.Add(new QueueImage(url, cat, shortname, skinid));
+        //        if (activeLoads < MaxActiveLoads) Next();
+        //    }
+
+        //    void Next()
+        //    {
+        //        activeLoads++;
+        //        var qi = QueueList[0];
+        //        QueueList.RemoveAt(0);
+        //        var www = new WWW(qi.url);
+        //        StartCoroutine(WaitForRequest(www, qi));
+        //    }
+
+        //    private void ClearStream()
+        //    {
+        //        stream.Position = 0;
+        //        stream.SetLength(0);
+        //    }
+
+        //    IEnumerator WaitForRequest(WWW www, QueueImage info)
+        //    {
+        //        yield return www;
+
+        //        if (www.error == null)
+        //        {
+        //            if (!filehandler.imgData.SavedImages.ContainsKey(info.cat))
+        //                filehandler.imgData.SavedImages.Add(info.cat, new Dictionary<string, Dictionary<ulong, uint>>());
+        //            if (!filehandler.imgData.SavedImages[info.cat].ContainsKey(info.shortname))
+        //                filehandler.imgData.SavedImages[info.cat].Add(info.shortname, new Dictionary<ulong, uint>());
+        //            if (!filehandler.imgData.SavedImages[info.cat][info.shortname].ContainsKey(info.skinid))
+        //            {
+        //                ClearStream();
+        //                stream.Write(www.bytes, 0, www.bytes.Length);
+        //                uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
+        //                ClearStream();
+        //                filehandler.imgData.SavedImages[info.cat][info.shortname].Add(info.skinid, textureID);
+        //            }
+        //        }
+        //        activeLoads--;
+        //        if (QueueList.Count > 0) Next();
+        //        else filehandler.SaveData();
+        //    }
+        //}
+
+        //class QueueBackground
+        //{
+        //    public string url;
+        //    public string name;
+        //    public QueueBackground(string ur, string nm)
+        //    {
+        //        url = ur;
+        //        name = nm;
+        //    }
+        //}
+
+        //class UnityBackgrounds : MonoBehaviour
+        //{
+        //    AbsolutMarket filehandler;
+        //    const int MaxActiveLoads = 3;
+        //    static readonly List<QueueBackground> QueueList = new List<QueueBackground>();
+        //    static byte activeLoads;
+        //    private MemoryStream stream = new MemoryStream();
+
+        //    public void SetDataDir(AbsolutMarket am) => filehandler = am;
+        //    public void Add(string url, string name)
+        //    {
+        //        QueueList.Add(new QueueBackground(url, name));
+        //        if (activeLoads < MaxActiveLoads) Next();
+        //    }
+
+        //    void Next()
+        //    {
+        //        activeLoads++;
+        //        var qi = QueueList[0];
+        //        QueueList.RemoveAt(0);
+        //        var www = new WWW(qi.url);
+        //        StartCoroutine(WaitForRequest(www, qi));
+        //    }
+
+        //    private void ClearStream()
+        //    {
+        //        stream.Position = 0;
+        //        stream.SetLength(0);
+        //    }
+
+        //    IEnumerator WaitForRequest(WWW www, QueueBackground info)
+        //    {
+        //        yield return www;
+
+        //        if (www.error == null)
+        //        {
+        //            if (!filehandler.imgData.SavedBackgrounds.ContainsKey(name))
+        //            {
+        //                ClearStream();
+        //                stream.Write(www.bytes, 0, www.bytes.Length);
+        //                uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
+        //                ClearStream();
+        //                filehandler.imgData.SavedBackgrounds.Add(info.name, textureID);
+        //            }
+        //        }
+        //        activeLoads--;
+        //        if (QueueList.Count > 0) Next();
+        //        else filehandler.SaveData();
+        //    }
+        //}
+
+        //[ConsoleCommand("getimages")]
+        //private void cmdgetimages(ConsoleSystem.Arg arg)
+        //{
+        //    if (arg.connection == null)
+        //    {
+        //        Getimages();
+        //    }
+        //}
+
+        //private void Getimages()
+        //{
+        //    imgData.SavedImages.Clear();
+        //    foreach (var category in urls)
+        //        foreach (var entry in category.Value)
+        //            foreach (var item in entry.Value)
+        //            {
+        //                if (!string.IsNullOrEmpty(item.Value))
+        //                {
+        //                    uImage.Add(item.Value, category.Key, entry.Key, item.Key);
+        //                }
+        //            }
+        //    Puts(GetLang("ImgReload"));
+        //}
+
+        //[ConsoleCommand("refreshimages")]
+        //private void cmdrefreshimages(ConsoleSystem.Arg arg)
+        //{
+        //    if (arg.connection == null)
+        //    {
+        //        Refreshimages();
+        //    }
+        //}
+
+        //private void Refreshimages()
+        //{
+        //    foreach (var category in urls)
+        //    {
+        //        if (!imgData.SavedImages.ContainsKey(category.Key))
+        //            imgData.SavedImages.Add(category.Key, new Dictionary<string, Dictionary<ulong, uint>>());
+        //        foreach (var entry in category.Value)
+        //        {
+        //            if (!imgData.SavedImages[category.Key].ContainsKey(entry.Key))
+        //                imgData.SavedImages[category.Key].Add(entry.Key, new Dictionary<ulong, uint>());
+        //            foreach (var item in entry.Value)
+        //            {
+        //                if (!string.IsNullOrEmpty(item.Value))
+        //                {
+        //                    uImage.Add(item.Value, category.Key, entry.Key, item.Key);
+        //                }
+        //            }
+        //        }
+        //    }
+        //    Puts(GetLang("ImgRefresh"));
+        //}
+
+        //[ConsoleCommand("getbackgrounds")]
+        //private void cmdgetbackgrounds(ConsoleSystem.Arg arg)
+        //{
+        //    if (arg.connection == null)
+        //    {
+        //        GetBackgrounds();
+        //    }
+        //}
+
+        //private void GetBackgrounds()
+        //{
+        //    imgData.SavedBackgrounds.Clear();
+        //    foreach (var entry in defaultBackgrounds)
+        //            uBackground.Add(entry.Value, entry.Key);
+        //    timer.Once(10, () =>
+        //    {
+
+        //        SaveBackgrounds();
+        //        Puts(GetLang("BckReload"));
+        //        RefreshBackgrounds();
+        //    });
+        //}
+
+        #region Backgrounds
+
+        private void AddNeededImages()
         {
-            public string url;
-            public string shortname;
-            public ulong skinid;
-            public Category cat;
-            public QueueImage(string ur, Category ct, string st, ulong sk)
-            {
-                url = ur;
-                shortname = st;
-                skinid = sk;
-                cat = ct;
-            }
-        }
-        
-        class UnityImages : MonoBehaviour
-        {
-            AbsolutMarket filehandler;
-            const int MaxActiveLoads = 3;
-            static readonly List<QueueImage> QueueList = new List<QueueImage>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            public void SetDataDir(AbsolutMarket am) => filehandler = am;
-            public void Add(string url, Category cat, string shortname, ulong skinid)
-            {
-                QueueList.Add(new QueueImage(url, cat, shortname, skinid));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                activeLoads++;
-                var qi = QueueList[0];
-                QueueList.RemoveAt(0);
-                var www = new WWW(qi.url);
-                StartCoroutine(WaitForRequest(www, qi));
-            }
-
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(WWW www, QueueImage info)
-            {
-                yield return www;
-
-                if (www.error == null)
-                {
-                    if (!filehandler.imgData.SavedImages.ContainsKey(info.cat))
-                        filehandler.imgData.SavedImages.Add(info.cat, new Dictionary<string, Dictionary<ulong, uint>>());
-                    if (!filehandler.imgData.SavedImages[info.cat].ContainsKey(info.shortname))
-                        filehandler.imgData.SavedImages[info.cat].Add(info.shortname, new Dictionary<ulong, uint>());
-                    if (!filehandler.imgData.SavedImages[info.cat][info.shortname].ContainsKey(info.skinid))
-                    {
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
-                        ClearStream();
-                        filehandler.imgData.SavedImages[info.cat][info.shortname].Add(info.skinid, textureID);
-                    }
-                }
-                activeLoads--;
-                if (QueueList.Count > 0) Next();
-                else filehandler.SaveData();
-            }
-        }
-
-        class QueueBackground
-        {
-            public string url;
-            public string name;
-            public QueueBackground(string ur, string nm)
-            {
-                url = ur;
-                name = nm;
-            }
-        }
-
-        class UnityBackgrounds : MonoBehaviour
-        {
-            AbsolutMarket filehandler;
-            const int MaxActiveLoads = 3;
-            static readonly List<QueueBackground> QueueList = new List<QueueBackground>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            public void SetDataDir(AbsolutMarket am) => filehandler = am;
-            public void Add(string url, string name)
-            {
-                QueueList.Add(new QueueBackground(url, name));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                activeLoads++;
-                var qi = QueueList[0];
-                QueueList.RemoveAt(0);
-                var www = new WWW(qi.url);
-                StartCoroutine(WaitForRequest(www, qi));
-            }
-
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(WWW www, QueueBackground info)
-            {
-                yield return www;
-
-                if (www.error == null)
-                {
-                    if (!filehandler.imgData.SavedBackgrounds.ContainsKey(name))
-                    {
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
-                        ClearStream();
-                        filehandler.imgData.SavedBackgrounds.Add(info.name, textureID);
-                    }
-                }
-                activeLoads--;
-                if (QueueList.Count > 0) Next();
-                else filehandler.SaveData();
-            }
-        }
-
-        [ConsoleCommand("getimages")]
-        private void cmdgetimages(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                Getimages();
-            }
-        }
-
-        private void Getimages()
-        {
-            imgData.SavedImages.Clear();
-            foreach (var category in urls)
-                foreach (var entry in category.Value)
-                    foreach (var item in entry.Value)
-                    {
-                        if (!string.IsNullOrEmpty(item.Value))
-                        {
-                            uImage.Add(item.Value, category.Key, entry.Key, item.Key);
-                        }
-                    }
-            Puts(GetLang("ImgReload"));
-        }
-
-        [ConsoleCommand("refreshimages")]
-        private void cmdrefreshimages(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                Refreshimages();
-            }
-        }
-
-        private void Refreshimages()
-        {
-            foreach (var category in urls)
-            {
-                if (!imgData.SavedImages.ContainsKey(category.Key))
-                    imgData.SavedImages.Add(category.Key, new Dictionary<string, Dictionary<ulong, uint>>());
-                foreach (var entry in category.Value)
-                {
-                    if (!imgData.SavedImages[category.Key].ContainsKey(entry.Key))
-                        imgData.SavedImages[category.Key].Add(entry.Key, new Dictionary<ulong, uint>());
-                    foreach (var item in entry.Value)
-                    {
-                        if (!string.IsNullOrEmpty(item.Value))
-                        {
-                            uImage.Add(item.Value, category.Key, entry.Key, item.Key);
-                        }
-                    }
-                }
-            }
-            Puts(GetLang("ImgRefresh"));
-        }
-
-        [ConsoleCommand("getbackgrounds")]
-        private void cmdgetbackgrounds(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                GetBackgrounds();
-            }
-        }
-
-        private void GetBackgrounds()
-        {
-            imgData.SavedBackgrounds.Clear();
-            foreach (var entry in defaultBackgrounds)
-                    uBackground.Add(entry.Value, entry.Key);
-            timer.Once(10, () =>
-            {
-
-                SaveBackgrounds();
-                Puts(GetLang("BckReload"));
-                RefreshBackgrounds();
-            });
+            foreach (var entry in Categorization[Category.None])
+                foreach (var url in entry.Value)
+                    AddImage(url.Value, entry.Key, (ulong)ResourceId);
+            foreach (var entry in Categorization[Category.Money])
+                foreach (var url in entry.Value)
+                    AddImage(url.Value, entry.Key, (ulong)ResourceId);
         }
 
         [ConsoleCommand("refreshbackgrounds")]
@@ -2634,15 +2641,6 @@ namespace Oxide.Plugins
         {
             try
             {
-                imgData = IMGData.ReadObject<AMImages>();
-            }
-            catch
-            {
-                Puts("Couldn't load the Absolut Market Image File, creating a new datafile");
-                imgData = new AMImages();
-            }
-            try
-            {
                 bkData = BKData.ReadObject<Backgrounds>();
             }
             catch
@@ -2651,35 +2649,37 @@ namespace Oxide.Plugins
                 bkData = new Backgrounds();
                 bkData.PendingBackgrounds = defaultBackgrounds;
                 BKData.WriteObject(bkData);
+                timer.Once(10, () => Puts("Default Backgrounds Loaded"));
             }
-            var i = 0;
+            if (mData.SavedBackgrounds == null || mData.SavedBackgrounds.Count < 1)
+            {
+                bkData.PendingBackgrounds = defaultBackgrounds;
+                timer.Once(10, () => Puts("Default Backgrounds Loaded"));
+            }
+                var i = 0;
             foreach (var entry in bkData.PendingBackgrounds)
-                if (!imgData.SavedBackgrounds.ContainsKey(entry.Key))
+            {
+                if (!mData.SavedBackgrounds.Contains(entry.Key))
                 {
-                    uBackground.Add(entry.Value, entry.Key);
-                    i++;
+                    mData.SavedBackgrounds.Add(entry.Key);
+                    AddImage(entry.Value, entry.Key); i++;
                 }
-            //bkData.PendingBackgrounds.Clear();
+
+            }
             //BKData.WriteObject(bkData);
             timer.Once(10, () =>
             {
-                SaveBackgrounds();
+                SaveData();
                 Puts(GetMSG("BckRefresh", i.ToString()));
             });
             //IMGData.WriteObject(imgData);
             
         }
-
-        private void SaveBackgrounds()
-        {
-            IMGData.WriteObject(imgData);
-        }
-
         #endregion
 
         #region Absolut Market Data Management
 
-        private Dictionary<Category, Dictionary<string, Dictionary<ulong, string>>> urls = new Dictionary<Category, Dictionary<string, Dictionary<ulong, string>>>
+        private Dictionary<Category, Dictionary<string, Dictionary<ulong, string>>> Categorization = new Dictionary<Category, Dictionary<string, Dictionary<ulong, string>>>
         {
             {Category.Money, new Dictionary<string, Dictionary<ulong, string>>
             {
@@ -4181,17 +4181,8 @@ namespace Oxide.Plugins
                 Puts("Couldn't load the Absolut Market Data, creating a new datafile");
                 mData = new MarketData();
             }
-            try
-            {
-                imgData = IMGData.ReadObject<AMImages>();
-            }
-            catch
-            {
-                Puts("Couldn't load the Absolut Market Image File, creating a new datafile");
-                imgData = new AMImages();
-            }
-            if (!imgData.SavedBackgrounds.ContainsKey("NEVERDELETE"))
-                GetBackgrounds(); 
+            //if (!imgData.SavedBackgrounds.ContainsKey("NEVERDELETE"))
+            //    GetBackgrounds(); 
         //try
         //{
         //    bkData = BKData.ReadObject<Backgrounds>();

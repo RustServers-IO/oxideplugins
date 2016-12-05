@@ -2,7 +2,7 @@
     "name": "Freeze Arrows",
     "description": "Freezes players within radius for a short time",
     "author": "Colon Blow",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/freeze-arrows.1601",

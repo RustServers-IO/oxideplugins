@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.0.3", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.0.4", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -120,9 +120,6 @@ namespace Oxide.Plugins
 
                 PlayerLootContainer(player, entity.GetComponent<StorageContainer>());
                 StorageCloser.Attach(entity, Close);
-
-                foreach (var backpackItem in Inventory.Items)
-                    Instance.PrintWarning($"{backpackItem.ToItem().info.displayName.english}: {backpackItem.FlameFuel}");
             }
 
             private void Close(BasePlayer player)
@@ -162,7 +159,7 @@ namespace Oxide.Plugins
 
             public void SpawnVisual(BasePlayer player)
             {
-                if (visualEntity != null)
+                if (visualEntity != null || !Configuration.ShowOnBack)
                     return;
 
                 var ent = GameManager.server.CreateEntity("assets/prefabs/weapons/satchelcharge/explosive.satchel.deployed.prefab", new Vector3(0, 0.35F, -0.075F), Quaternion.Euler(0, 90, -90));
@@ -182,7 +179,7 @@ namespace Oxide.Plugins
 
                 DudTimedExplosive explosive = ent.GetComponent<DudTimedExplosive>();
 
-                explosive.itemToGive = new ItemDefinition();
+                explosive.itemToGive = ItemManager.FindItemDefinition(1916127949);
                 explosive.dudChance = 2;
                 explosive.CancelInvoke("Explode");
                 explosive.CancelInvoke("Kill");

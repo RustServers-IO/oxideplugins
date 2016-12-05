@@ -2,7 +2,7 @@
     "name": "Smart Homes",
     "description": "Control your home and make it smart",
     "author": "DylanSMR",
-    "version": "0.1.3",
+    "version": "0.1.6",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/smart-homes.2051",

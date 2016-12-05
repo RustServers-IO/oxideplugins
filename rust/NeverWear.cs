@@ -2,7 +2,7 @@
 
 namespace Oxide.Plugins
 {
-    [Info("NeverWear", "k1lly0u", "0.1.32", ResourceId = 1816)]
+    [Info("NeverWear", "k1lly0u", "0.1.4", ResourceId = 1816)]
     class NeverWear : RustPlugin
     {
         void Loaded() => RegisterPermissions();
@@ -26,10 +26,11 @@ namespace Oxide.Plugins
                 BasePlayer player;
                 if (item.GetOwnerPlayer() == null)
                 {
-                    if (!item.info.shortname.Contains(".mod.")) return;
-                    if (item?.parent?.GetType() == null) return;
-                    if (item?.parentItem?.GetOwnerPlayer() == null) return;
-                    player = item.parentItem.GetOwnerPlayer();
+                    if (item?.info == null) return;
+                    if (!item.info.shortname.Contains("mod")) return;
+                    player = item?.GetRootContainer()?.GetOwnerPlayer();
+                    if (player == null)
+                        return;
                 }
                 else player = item.GetOwnerPlayer();
                 if (player != null)

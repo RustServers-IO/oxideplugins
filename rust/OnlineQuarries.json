@@ -1,0 +1,16 @@
+{
+    "name": "OnlineQuarries",
+    "description": "Automatically disable players' Quarries when offline.",
+    "author": "mvrb",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/onlinequarries.2216",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

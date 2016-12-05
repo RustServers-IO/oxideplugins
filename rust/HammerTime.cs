@@ -4,21 +4,21 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Hammer Time", "Shady", "1.0.10", ResourceId = 1711)]
+    [Info("Hammer Time", "Shady", "1.0.12", ResourceId = 1711)]
     [Description("Tweak settings for building blocks like demolish time, and rotate time.")]
     class HammerTime : RustPlugin
     {
         #region Config/Init
-        float DemolishTime => GetConfig("DemolishTime", 600f);
-        float RotateTime => GetConfig("RotateTime", 600f);
-        float RepairCooldown => GetConfig("RepairDamageCooldown", 8f);
+        float DemolishTime;
+        float RotateTime;
+        float RepairCooldown;
         float pluginInitTime = 0f;
 
-        bool DemolishAfterRestart => GetConfig("AllowDemolishAfterServerRestart", false);
-        bool RotateAfterServerRestart => GetConfig("AllowRotateAfterServerRestart", false);
-        bool MustOwnDemolish => GetConfig("MustOwnToDemolish", false);
-        bool MustOwnRotate => GetConfig("MustOwnToRotate", false);
-        bool AuthLevelOverride => GetConfig("AuthLevelOverrideDemolish", true);
+        bool DemolishAfterRestart;
+        bool RotateAfterRestart;
+        bool MustOwnDemolish;
+        bool MustOwnRotate;
+        bool AuthLevelOverride;
 
 
         /*--------------------------------------------------------------//
@@ -26,15 +26,14 @@ namespace Oxide.Plugins
 		//--------------------------------------------------------------*/
         protected override void LoadDefaultConfig()
         {
-            Config.Clear();
-            Config["DemolishTime"] = DemolishTime;
-            Config["RotateTime"] = RotateTime;
-            Config["MustOwnToDemolish"] = MustOwnDemolish;
-            Config["MustOwnToRotate"] = MustOwnRotate;
-            Config["AllowDemolishAfterServerRestart"] = DemolishAfterRestart;
-            Config["AllowRotateAfterServerRestart"] = RotateAfterServerRestart;
-            Config["AuthLevelOverrideDemolish"] = AuthLevelOverride;
-            Config["RepairDamageCooldown"] = RepairCooldown;
+            Config["DemolishTime"] = DemolishTime = GetConfig("DemolishTime", 600f);
+            Config["RotateTime"] = RotateTime = GetConfig("RotateTime", 600f);
+            Config["MustOwnToDemolish"] = MustOwnDemolish = GetConfig("MustOwnToDemolish", false);
+            Config["MustOwnToRotate"] = MustOwnRotate = GetConfig("MustOwnToRotate", false);
+            Config["AllowDemolishAfterServerRestart"] = DemolishAfterRestart = GetConfig("AllowDemolishAfterServerRestart", false);
+            Config["AllowRotateAfterServerRestart"] = RotateAfterRestart = GetConfig("AllowRotateAfterServerRestart", false);
+            Config["AuthLevelOverrideDemolish"] =  AuthLevelOverride = GetConfig("AuthLevelOverrideDemolish", true);
+            Config["RepairDamageCooldown"] = RepairCooldown = GetConfig("RepairDamageCooldown", 8f);
             SaveConfig();
         }
 
@@ -43,29 +42,28 @@ namespace Oxide.Plugins
         {
             pluginInitTime = UnityEngine.Time.realtimeSinceStartup;
             LoadDefaultMessages();
+            LoadDefaultConfig();
         }
 
         void OnServerInitialized()
         {
-            /*/
-            var time = UnityEngine.Time.realtimeSinceStartup;
-            var timeInit = time - pluginInitTime;
-            if (timeInit < 1)
+            var timeInit = UnityEngine.Time.realtimeSinceStartup - pluginInitTime;
+            if (timeInit < 1) return; //server was probably already running, and not first start up
+            if (!DemolishAfterRestart && !RotateAfterRestart) return;
+            foreach(var entity in BaseEntity.saveList)
             {
-                Puts("server is probably already running?");
-                return;
-            }-- Untested/*/
-            if (!DemolishAfterRestart && !RotateAfterServerRestart) return;
-            var blocks = GameObject.FindObjectsOfType<BuildingBlock>();
-            for(int i = 0; i < blocks.Length; i++)
-            {
-                var block = blocks[i];
-                var grade = block?.grade.ToString() ?? string.Empty;
-                if (grade.ToLower().Contains("twig")) continue; //ignore twigs (performance)
-                var doRotate = RotateAfterServerRestart;
-                if (doRotate) doRotate = block?.blockDefinition?.canRotate ?? RotateAfterServerRestart;
-                if (!doRotate && !DemolishAfterRestart) continue;
-                DoInvokes(block, DemolishAfterRestart, doRotate, false);
+                var isBlock = (entity?.GetType()?.ToString() ?? string.Empty) == "BuildingBlock";
+                if (!isBlock) continue;
+                var block = entity?.GetComponent<BuildingBlock>() ?? null;
+                if (block != null)
+                {
+                    var isTwig = (block?.grade ?? BuildingGrade.Enum.Twigs) == BuildingGrade.Enum.Twigs;
+                    if (isTwig) continue;
+                    var doRotate = RotateAfterRestart;
+                    if (doRotate) doRotate = block?.blockDefinition?.canRotate ?? RotateAfterRestart;
+                    if (!doRotate && !DemolishAfterRestart) continue;
+                    DoInvokes(block, DemolishAfterRestart, doRotate, false);
+                }
             }
         }
 
@@ -87,13 +85,18 @@ namespace Oxide.Plugins
         #region InvokeBlocks
         void DoInvokes(BuildingBlock block, bool demo, bool rotate, bool justCreated)
         {
-            if (block == null || !block.IsAlive()) return;
+            if (block == null || (block?.isDestroyed ?? true)) return;
             if (demo)
             {
                 if (DemolishTime < 0)
                 {
                     block.CancelInvoke("StopBeingDemolishable");
-                    block.SetFlag(BaseEntity.Flags.Reserved2, true, false); //reserved2 is demolishable
+                    NextTick(() =>
+                    {
+                        //next tick just in case?
+                        block.SetFlag(BaseEntity.Flags.Reserved2, true, false); //reserved2 is demolishable
+                    });
+                  
                 }
                 if (DemolishTime == 0) block.Invoke("StopBeingDemolishable", 0.01f);
                 if (DemolishTime >= 1 && DemolishTime != 600) //if time is = to 600, then it's default, and there's no point in changing anything
@@ -108,7 +111,11 @@ namespace Oxide.Plugins
                 if (RotateTime < 0)
                 {
                     block.CancelInvoke("StopBeingRotatable");
-                    block.SetFlag(BaseEntity.Flags.Reserved1, true, false); //reserved1 is rotatable
+                    NextTick(() =>
+                    {
+                        block.SetFlag(BaseEntity.Flags.Reserved1, true, false); //reserved1 is rotatable
+                        //next tick just in case?
+                    });
                 }
                 if (RotateTime == 0) block.Invoke("StopBeingRotatable", 0.01f);
                 if (RotateTime >= 1 && RotateTime != 600) //if time is = to 600, then it's default, and there's no point in changing anything
@@ -129,8 +136,7 @@ namespace Oxide.Plugins
             var doRotate = block?.blockDefinition?.canRotate ?? true;
             NextTick(() => DoInvokes(block, true, doRotate, true));
         }
-
-       private void OnStructureUpgrade(BuildingBlock block, BasePlayer player, BuildingGrade.Enum grade) =>  NextTick(() => DoInvokes(block, false, block?.blockDefinition?.canRotate ?? true, false));
+        private void OnStructureUpgrade(BuildingBlock block, BasePlayer player, BuildingGrade.Enum grade) { NextTick(() => DoInvokes(block, false, block?.blockDefinition?.canRotate ?? true, false)); }
 
        object OnStructureRepair(BaseCombatEntity block, BasePlayer player)
         {

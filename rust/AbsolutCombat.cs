@@ -1,5 +1,4 @@
-﻿// Requires: ImageLibrary
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System;
 using System.Linq;
 using UnityEngine;
@@ -15,7 +14,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutCombat", "Absolut", "2.2.0", ResourceId = 2103)]
+    [Info("AbsolutCombat", "Absolut", "2.2.2", ResourceId = 2103)]
 
     class AbsolutCombat : RustPlugin
     {
@@ -34,7 +33,7 @@ namespace Oxide.Plugins
         Plugin BetterChat;
 
         [PluginReference]
-        ImageLibrary ImageLibrary;
+        Plugin ImageLibrary;
 
         Gear_Weapon_Data gwData;
         private DynamicConfigFile GWData;
@@ -44,6 +43,7 @@ namespace Oxide.Plugins
 
         string TitleColor = "<color=orange>";
         string MsgColor = "<color=#A9A9A9>";
+        bool localimages = true;
 
         private Dictionary<ulong, Timer> PlayerGearSetTimer = new Dictionary<ulong, Timer>();
         private Dictionary<ulong, Timer> PlayerWeaponSetTimer = new Dictionary<ulong, Timer>();
@@ -354,11 +354,16 @@ namespace Oxide.Plugins
 
         #region Functions
 
-        public string GetImage(string shortname, ulong skin = 0)
+        private string TryForImage(string shortname, ulong skin = 0)
         {
-            var img = ImageLibrary.GetImage(shortname, skin);
-            return img;
+            if (localimages)
+                return GetImage(shortname, skin);
+            return GetImageURL(shortname, skin);
         }
+
+        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
+        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
 
         private void InitializeACPlayer(BasePlayer player)
         {
@@ -1034,6 +1039,7 @@ namespace Oxide.Plugins
 
         public class UI
         {
+            static bool localimage = true;
             static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
@@ -1082,17 +1088,30 @@ namespace Oxide.Plugins
                 panel);
             }
 
-            static public void LoadImage(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
+            static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                container.Add(new CuiElement
+                if (UI.localimage)
                 {
-                    Parent = panel,
-                    Components =
+                    container.Add(new CuiElement
                     {
-                        new CuiRawImageComponent {Png = png },
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Png = img },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
-                });
+                    });
+                }
+                else
+                    container.Add(new CuiElement
+                    {
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Url = img },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                    });
             }
 
             static public void CreateTextOverlay(ref CuiElementContainer container, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
@@ -1232,12 +1251,12 @@ namespace Oxide.Plugins
             {
                 if (ACUIInfo[player.userID].GearIndex != 0)
                 {
-                    UI.LoadImage(ref element, GLPanel, GetImage("up"), "0.25 0.9", "0.75 1");
+                    UI.LoadImage(ref element, GLPanel, TryForImage("up"), "0.25 0.9", "0.75 1");
                     UI.CreateButton(ref element, GLPanel, "0 0 0 0", "", 12, "0.25 0.9", "0.75 1", $"UI_GearIndexShownChange {ACUIInfo[player.userID].GearIndex - 1}");
                 }
                 if (ACUIInfo[player.userID].GearIndex + 6 < gwData.GearSets.Max(kvp => kvp.Value.index))
                 {
-                    UI.LoadImage(ref element, GLPanel, GetImage("down"), "0.25 -.05", "0.75 0.05");
+                    UI.LoadImage(ref element, GLPanel, TryForImage("down"), "0.25 -.05", "0.75 0.05");
                     UI.CreateButton(ref element, GLPanel, "0 0 0 0", "", 12, "0.25 -.05", "0.75 0.05", $"UI_GearIndexShownChange {ACUIInfo[player.userID].GearIndex + 1}");
                 }
                 foreach (var entry in gwData.GearSets)
@@ -1267,12 +1286,12 @@ namespace Oxide.Plugins
             {
                 if (ACUIInfo[player.userID].WeaponIndex != 0)
                 {
-                    UI.LoadImage(ref element, WLPanel, GetImage("up"), "0.25 0.9", "0.75 1");
+                    UI.LoadImage(ref element, WLPanel, TryForImage("up"), "0.25 0.9", "0.75 1");
                     UI.CreateButton(ref element, WLPanel, "0 0 0 0", "", 12, "0.25 0.9", "0.75 1", $"UI_WeaponIndexShownChange {ACUIInfo[player.userID].WeaponIndex - 1}");
                 }
                 if (ACUIInfo[player.userID].WeaponIndex + 6 < gwData.WeaponSets.Max(kvp => kvp.Value.index))
                 {
-                    UI.LoadImage(ref element, WLPanel, GetImage("down"), "0.25 -.05", "0.75 0.05");
+                    UI.LoadImage(ref element, WLPanel, TryForImage("down"), "0.25 -.05", "0.75 0.05");
                     UI.CreateButton(ref element, WLPanel, "0 0 0 0", "", 12, "0.25 -.05", "0.75 0.05", $"UI_WeaponIndexShownChange {ACUIInfo[player.userID].WeaponIndex + 1}");
                 }
                 foreach (var entry in gwData.WeaponSets)
@@ -1339,7 +1358,7 @@ namespace Oxide.Plugins
                     altmin = min - offset2;
                     altmax = altmin + dimension;
 
-                    UI.LoadImage(ref element, GPanel, GetImage(entry.Value, NewGearCollection[player.userID].collection.set[entry.Value].skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                    UI.LoadImage(ref element, GPanel, TryForImage(entry.Value, NewGearCollection[player.userID].collection.set[entry.Value].skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                     UI.CreateButton(ref element, GPanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), entry.Key)} gear", TextAnchor.MiddleCenter);
                     if (NewGearCollection[player.userID].collection.set[entry.Value].free)
                     {
@@ -1389,7 +1408,7 @@ namespace Oxide.Plugins
                     altmin = min + offset2;
                     altmax = altmin + dimension;
 
-                    UI.LoadImage(ref element, GPanel, GetImage(entry.Value, NewGearCollection[player.userID].collection.set[entry.Value].skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                    UI.LoadImage(ref element, GPanel, TryForImage(entry.Value, NewGearCollection[player.userID].collection.set[entry.Value].skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                     UI.CreateButton(ref element, GPanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), entry.Key)} gear", TextAnchor.MiddleCenter);
                     if (NewGearCollection[player.userID].collection.set[entry.Value].free)
                     {
@@ -1505,14 +1524,14 @@ namespace Oxide.Plugins
                             var RequiredKills = GetACPlayer(player).GearSetKills[set];
                             if (GetACPlayer(player).PlayerGearSets[set].Contains(item.shortname))
                             {
-                                UI.LoadImage(ref element, GPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, GPanel, UIColors["green"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetLang("Owned");
                                 UI.CreateLabel(ref element, GPanel, UIColors["white"], info, 16, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
                             }
                             else if (money >= item.price && RequiredKills >= item.killsrequired)
                             {
-                                UI.LoadImage(ref element, GPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, GPanel, UIColors["red"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemGearCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateTextOutline(ref element, GPanel, UIColors["white"], UIColors["green"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -1520,7 +1539,7 @@ namespace Oxide.Plugins
                             }
                             else
                             {
-                                UI.LoadImage(ref element, GPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, GPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemGearCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateLabel(ref element, GPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -1528,7 +1547,7 @@ namespace Oxide.Plugins
                         }
                         else
                         {
-                            UI.LoadImage(ref element, GPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                            UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                             UI.CreatePanel(ref element, GPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                             info = GetMSG("ItemGearCost", item.price.ToString(), item.killsrequired.ToString());
                             UI.CreateLabel(ref element, GPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -1590,7 +1609,7 @@ namespace Oxide.Plugins
                     altmin = min + offset2;
                     altmax = altmin + dimension;
 
-                    UI.LoadImage(ref element, WPanel, GetImage(entry.Value, NewWeaponCollection[player.userID].collection.set[entry.Value].skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                    UI.LoadImage(ref element, WPanel, TryForImage(entry.Value, NewWeaponCollection[player.userID].collection.set[entry.Value].skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                     UI.CreateButton(ref element, WPanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), entry.Key)} weapon", TextAnchor.MiddleCenter);
                     if (NewWeaponCollection[player.userID].collection.set[entry.Value].free)
                     {
@@ -1691,14 +1710,14 @@ namespace Oxide.Plugins
                             var RequiredKills = GetACPlayer(player).WeaponSetKills[set];
                             if (GetACPlayer(player).PlayerWeaponSets[set].ContainsKey(item.shortname))
                             {
-                                UI.LoadImage(ref element, WPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, WPanel, UIColors["green"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetLang("Owned");
                                 UI.CreateLabel(ref element, WPanel, UIColors["white"], info, 16, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
                             }
                             else if (money >= item.price && RequiredKills >= item.killsrequired)
                             {
-                                UI.LoadImage(ref element, WPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, WPanel, UIColors["red"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["green"], info, 16, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -1706,7 +1725,7 @@ namespace Oxide.Plugins
                             }
                             else
                             {
-                                UI.LoadImage(ref element, WPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateLabel(ref element, WPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -1714,7 +1733,7 @@ namespace Oxide.Plugins
                         }
                         else
                         {
-                            UI.LoadImage(ref element, WPanel, GetImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                            UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                             UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                             info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
                             UI.CreateLabel(ref element, WPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -1789,7 +1808,7 @@ namespace Oxide.Plugins
                             altmin = min - offset2;
                             altmax = altmin + dimension;
 
-                            UI.LoadImage(ref element, APanel, GetImage(entry.Value, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                            UI.LoadImage(ref element, APanel, TryForImage(entry.Value, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                             UI.CreateButton(ref element, APanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), entry.Key)} attachment {UsedWeaponSlots[Slot.main]}", TextAnchor.MiddleCenter);
                             if (NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.main]].attachments[entry.Value].free)
                             {
@@ -1845,7 +1864,7 @@ namespace Oxide.Plugins
                             altmin = min + offset2;
                             altmax = altmin + dimension;
 
-                            UI.LoadImage(ref element, APanel, GetImage(entry.Value, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                            UI.LoadImage(ref element, APanel, TryForImage(entry.Value, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                             UI.CreateButton(ref element, APanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), entry.Key)} attachment {UsedWeaponSlots[Slot.secondary]}", TextAnchor.MiddleCenter);
                             if (NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.secondary]].attachments[entry.Value].free)
                             {
@@ -1892,7 +1911,7 @@ namespace Oxide.Plugins
                         UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{min.x + 0.002f} {min.y + 0.003f}", $"{max.x - 0.002f} {max.y - 0.003f}");
                         if (NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.main]].ammoType != null)
                         {
-                            UI.LoadImage(ref element, APanel, GetImage(NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.main]].ammoType, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                            UI.LoadImage(ref element, APanel, TryForImage(NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.main]].ammoType, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                         }
                             UI.CreateButton(ref element, APanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), Slot.ammunitionMain)} ammo {UsedWeaponSlots[Slot.main]}", TextAnchor.MiddleCenter);
                     }
@@ -1911,7 +1930,7 @@ namespace Oxide.Plugins
                         UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{min.x + 0.002f} {min.y + 0.003f}", $"{max.x - 0.002f} {max.y - 0.003f}");
                         if (NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.secondary]].ammoType != null)
                         {
-                            UI.LoadImage(ref element, APanel, GetImage(NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.secondary]].ammoType, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                            UI.LoadImage(ref element, APanel, TryForImage(NewWeaponCollection[player.userID].collection.set[UsedWeaponSlots[Slot.secondary]].ammoType, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                         }
                         UI.CreateButton(ref element, APanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), Slot.ammunitionMain)} ammo {UsedWeaponSlots[Slot.secondary]}", TextAnchor.MiddleCenter);
                     }
@@ -1946,7 +1965,7 @@ namespace Oxide.Plugins
                                 Vector2 pos = AmmunitionSlotsPos[Slot.ammunitionMain];
                                 UI.CreatePanel(ref element, APanel, UIColors["black"], $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{pos.x + offset.x} {pos.y + offset.y}", $"{pos.x + dimension.x - offset.x} {pos.y + dimension.y - offset.y}");
-                                UI.LoadImage(ref element, APanel, GetImage(item.ammoType), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
+                                UI.LoadImage(ref element, APanel, TryForImage(item.ammoType), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                             }
 
                         if (item.slot == Slot.secondary)
@@ -1957,7 +1976,7 @@ namespace Oxide.Plugins
                                 Vector2 pos = AmmunitionSlotsPos[Slot.ammunitionSecondary];
                                 UI.CreatePanel(ref element, APanel, UIColors["black"], $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{pos.x + offset.x} {pos.y + offset.y}", $"{pos.x + dimension.x - offset.x} {pos.y + dimension.y - offset.y}");
-                                UI.LoadImage(ref element, APanel, GetImage(item.ammoType), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
+                                UI.LoadImage(ref element, APanel, TryForImage(item.ammoType), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                             }
 
                         if (item.attachments.Count() > 0)
@@ -2020,7 +2039,7 @@ namespace Oxide.Plugins
                                                 {
                                                     if (WeaponSelection[player.userID][entry.Key][item.shortname].Count == 0)
                                                     {
-                                                        UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                        UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                         info = GetLang("Unequipped");
                                                         UI.CreatePanel(ref element, APanel, UIColors["white"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                         UI.CreateTextOutline(ref element, APanel, UIColors["red"], UIColors["black"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2031,7 +2050,7 @@ namespace Oxide.Plugins
                                                         {
                                                             if (DefaultAttachments[a].location != DefaultAttachments[attachment.Value.shortname].location)
                                                             {
-                                                                UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                                 info = GetLang("Unequipped");
                                                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                                 UI.CreateTextOutline(ref element, APanel, UIColors["red"], UIColors["black"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2039,7 +2058,7 @@ namespace Oxide.Plugins
                                                             }
                                                             else if (DefaultAttachments[a].location == DefaultAttachments[attachment.Value.shortname].location)
                                                             {
-                                                                UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                                 info = GetLang("PositionFull");
                                                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                                 UI.CreateTextOutline(ref element, APanel, UIColors["black"], UIColors["red"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2048,7 +2067,7 @@ namespace Oxide.Plugins
                                                 }
                                                 else
                                                 {
-                                                    UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                    UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                     info = GetLang("GunFull");
                                                     UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                     UI.CreateTextOutline(ref element, APanel, UIColors["white"], UIColors["red"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2056,7 +2075,7 @@ namespace Oxide.Plugins
                                             }
                                             else
                                             {
-                                                UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                 info = GetLang("Equipped");
                                                 UI.CreatePanel(ref element, APanel, UIColors["green"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                 UI.CreateTextOutline(ref element, APanel, UIColors["green"], UIColors["black"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2065,7 +2084,7 @@ namespace Oxide.Plugins
                                         }
                                         else if (money >= attachment.Value.cost && GetACPlayer(player).WeaponSetKills[set] >= attachment.Value.killsrequired)
                                         {
-                                            UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                            UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                             UI.CreatePanel(ref element, APanel, UIColors["red"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                             info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                             UI.CreateTextOutline(ref element, APanel, UIColors["black"], UIColors["white"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2073,7 +2092,7 @@ namespace Oxide.Plugins
                                         }
                                         else
                                         {
-                                            UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                            UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                             UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                             info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                             UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2081,7 +2100,7 @@ namespace Oxide.Plugins
                                     }
                                     else
                                     {
-                                        UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                        UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                         UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                         info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                         UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2089,7 +2108,7 @@ namespace Oxide.Plugins
                                 }
                                 else
                                 {
-                                    UI.LoadImage(ref element, APanel, GetImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                     UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                     info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                     UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2147,7 +2166,7 @@ namespace Oxide.Plugins
             if (pending.set == false)
             {
                 UI.CreateTextOutline(ref element, PanelPurchaseConfirmation, UIColors["white"], UIColors["black"], GetMSG("PurchaseInfo", itemname, itemprice), 18, "1", "1", "0.1 0.6", "0.9 0.95");
-                UI.LoadImage(ref element, PanelPurchaseConfirmation, GetImage(itemshortname), "0.35 0.275", "0.65 0.575");
+                UI.LoadImage(ref element, PanelPurchaseConfirmation, TryForImage(itemshortname), "0.35 0.275", "0.65 0.575");
             }
             else UI.CreateTextOutline(ref element, PanelPurchaseConfirmation, UIColors["white"], UIColors["black"], GetMSG("PurchaseSetInfo", itemname, itemprice), 18, "1", "1", "0.1 0.3", "0.9 0.89"); 
             UI.CreateButton(ref element, PanelPurchaseConfirmation, UIColors["buttongreen"], "Yes", 18, "0.2 0.05", "0.475 0.25", $"UI_Purchase {item}");
@@ -2422,7 +2441,7 @@ namespace Oxide.Plugins
                 else if (i <= shownentries + entriesallowed)
                 {
                     var pos = CalcButtonPos(n);
-                    UI.LoadImage(ref element, PanelAC, GetImage(entry), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    UI.LoadImage(ref element, PanelAC, TryForImage(entry), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                     UI.CreateButton(ref element, PanelAC, "0 0 0 0", "", 14, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}", $"UI_AddItem {entry} {Enum.GetName(typeof(Slot), slot)} {type}", TextAnchor.MiddleCenter);
                     n++;
                 }

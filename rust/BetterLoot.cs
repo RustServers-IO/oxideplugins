@@ -8,16 +8,16 @@ using System.Reflection;
 using UnityEngine;
 using Oxide.Core.Plugins;
 using Random = System.Random;
-
 using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("BetterLoot", "Fujikura/dcode", "2.10.0", ResourceId = 828)]
+	[Info("BetterLoot", "Fujikura/dcode", "2.11.2", ResourceId = 828)]
 	[Description("A complete re-implementation of the drop system")]
 	public class BetterLoot : RustPlugin
 	{
 		bool Changed = false;
+		int populatedContainers;
 
 		StoredSupplyDrop storedSupplyDrop = new StoredSupplyDrop();
 		StoredHeliCrate storedHeliCrate = new StoredHeliCrate();
@@ -32,21 +32,21 @@ namespace Oxide.Plugins
 		Regex crateEx;
 		Regex heliEx = new Regex(@"heli_crate");
 
-		List<string>[] items = new List<string>[4];
-		List<string>[] itemsB = new List<string>[4];
-		List<string>[] itemsC = new List<string>[4];		
-		List<string>[] itemsHeli = new List<string>[4];
-		List<string>[] itemsSupply = new List<string>[4];
+		List<string>[] items = new List<string>[5];
+		List<string>[] itemsB = new List<string>[5];
+		List<string>[] itemsC = new List<string>[5];
+		List<string>[] itemsHeli = new List<string>[5];
+		List<string>[] itemsSupply = new List<string>[5];
 		int totalItems;
 		int totalItemsB;
 		int totalItemsC;
 		int totalItemsHeli;
 		int totalItemsSupply;
-		int[] itemWeights = new int[4];
-		int[] itemWeightsB = new int[4];
-		int[] itemWeightsC = new int[4];
-		int[] itemWeightsHeli = new int[4];
-		int[] itemWeightsSupply = new int[4];
+		int[] itemWeights = new int[5];
+		int[] itemWeightsB = new int[5];
+		int[] itemWeightsC = new int[5];
+		int[] itemWeightsHeli = new int[5];
+		int[] itemWeightsSupply = new int[5];
 		int totalItemWeight;
 		int totalItemWeightB;
 		int totalItemWeightC;
@@ -62,43 +62,15 @@ namespace Oxide.Plugins
 		Random rng = new Random();
 
 		bool initialized = false;
-		int lastMinute; 
+		int lastMinute;
 
 		List<ContainerToRefresh> refreshList = new List<ContainerToRefresh>();
-		DateTime lastRefresh = DateTime.MinValue;
 
-		static Dictionary<string,object> defaultItemOverride()
-		{
-			var dp = new Dictionary<string, object>();
-			dp.Add("autoturret", 3);
-			dp.Add("trap.bear", 1);
-			dp.Add("box.wooden", 0);
-			dp.Add("crude.oil", 1);
-			dp.Add("fat.animal", 0);
-			dp.Add("furnace", 0);
-			dp.Add("hq.metal.ore", 0);
-			dp.Add("trap.landmine", 2);
-			dp.Add("lmg.m249", 3);
-			dp.Add("rifle.lr300", 2);
-			dp.Add("metal.fragments", 1);
-			dp.Add("metal.refined", 3);
-			dp.Add("mining.quarry", 2);
-			dp.Add("target.reactive", 1);
-			dp.Add("researchpaper", 0);
-			dp.Add("stash.small", 0);
-			dp.Add("spikes.floor", 1);
-			dp.Add("targeting.computer", 2);
-			dp.Add("water.catcher.large", 1);
-			dp.Add("water.catcher.small", 1);
-			return dp;
-		}
-
-		static List<string> itemListExcludes = new List<string>( new string[] {"water","water.salt","flare","generator.wind.scrap","battery.small","blood","mining.pumpjack","rock","coal","supply.signal","autoturret","door.key" });
+		Regex _findTrash = new Regex(@"explosives|leather|gunpowder|cloth|map|wall.window.bars.wood|torch|paper|note|jackolantern.happy|jackolantern.angry|hat.cap|hat.boonie|hammer|lowgradefuel|door.hinged.wood|door.double.hinged.wood|campfire|building.planner|bone.club|bandage|ammo.rocket.smoke|tool.camera|hide|bone.fragments|boar|burlap|cactus|corn|seed|meat|flare|generator|battery|blood|pumpjack|signal|key|human|chicken|spoiled|cooked|burned|raw", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
 		#region Config
 
 		bool pluginEnabled;
-		int delayPluginInit;
 		bool seperateLootTables;
 		string barrelTypes;
 		string crateTypes;
@@ -112,21 +84,19 @@ namespace Oxide.Plugins
 		int maxItemsPerSupplyDrop;
 		int minItemsPerHeliCrate;
 		int maxItemsPerHeliCrate;
-		double baseItemRarity;
+		double baseItemRarity = 2;
 		int refreshMinutes;
 		bool removeStackedContainers;
 		bool enforceBlacklist;
 		bool dropWeaponsWithAmmo;
 		bool includeSupplyDrop;
-		bool excludeHeliCrate;
+		bool includeHeliCrate;
 		bool listUpdatesOnLoaded;
 		bool listUpdatesOnRefresh;
 		bool useCustomTableHeli;
 		bool useCustomTableSupply;
 		bool refreshBarrels;
 		bool refreshCrates;
-		
-		Dictionary<string,object> rarityItemOverride = null;
 
 		object GetConfig(string menu, string datavalue, object defaultValue)
 		{
@@ -147,57 +117,43 @@ namespace Oxide.Plugins
 			return value;
 		}
 
-		void LoadDefaultMessages()
-		{
-			lang.RegisterMessages(new Dictionary<string, string>
-			                      {
-									{"msgDefault", "dummy Text"},
-									{"msgNotAuthorized", "You are not authorized to use this command"},
-								  },this);
-		}
-
 		void LoadVariables()
 		{
+			//baseItemRarity = Convert.ToDouble(GetConfig("Chances", "baseItemRarity", 2));
+			minItemsPerBarrel =  Convert.ToInt32(GetConfig("Barrel", "minItemsPerBarrel", 1));
+			maxItemsPerBarrel = Convert.ToInt32(GetConfig("Barrel", "maxItemsPerBarrel", 3));
+			refreshBarrels = Convert.ToBoolean(GetConfig("Barrel", "refreshBarrels", false));
+			barrelTypes = Convert.ToString(GetConfig("Barrel","barrelTypes","loot-barrel|loot_barrel|loot_trash"));
+			enableBarrels = Convert.ToBoolean(GetConfig("Barrel", "enableBarrels", true));
 
-		rarityItemOverride = (Dictionary<string, object>)GetConfig("RarityIndex", "ItemOverrides", defaultItemOverride());
+			minItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "minItemsPerCrate", 3));
+			maxItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "maxItemsPerCrate", 6));
+			refreshCrates = Convert.ToBoolean(GetConfig("Crate", "refreshCrates", true));
+			crateTypes = Convert.ToString(GetConfig("Crate","crateTypes","crate_normal"));
+			enableCrates = Convert.ToBoolean(GetConfig("Crate", "enableCrates", true));
 
-		baseItemRarity = Convert.ToDouble(GetConfig("Chances", "baseItemRarity", 2));
+			minItemsPerSupplyDrop = Convert.ToInt32(GetConfig("SupplyDrop", "minItemsPerSupplyDrop", 3));
+			maxItemsPerSupplyDrop = Convert.ToInt32(GetConfig("SupplyDrop", "maxItemsPerSupplyDrop", 6));
+			includeSupplyDrop = Convert.ToBoolean(GetConfig("SupplyDrop", "includeSupplyDrop", false));
+			useCustomTableSupply = Convert.ToBoolean(GetConfig("SupplyDrop", "useCustomTableSupply", true));
 
-		minItemsPerBarrel =  Convert.ToInt32(GetConfig("Barrel", "minItemsPerBarrel", 1));
-		maxItemsPerBarrel = Convert.ToInt32(GetConfig("Barrel", "maxItemsPerBarrel", 3));
-		refreshBarrels = Convert.ToBoolean(GetConfig("Barrel", "refreshBarrels", true));
-		barrelTypes = Convert.ToString(GetConfig("Barrel","barrelTypes","loot-barrel|loot_barrel"));
-		enableBarrels = Convert.ToBoolean(GetConfig("Barrel", "enableBarrels", true));
+			minItemsPerHeliCrate = Convert.ToInt32(GetConfig("HeliCrate", "minItemsPerHeliCrate", 2));
+			maxItemsPerHeliCrate = Convert.ToInt32(GetConfig("HeliCrate", "maxItemsPerHeliCrate", 4));
+			includeHeliCrate = Convert.ToBoolean(GetConfig("HeliCrate", "includeHeliCrate", false));
+			useCustomTableHeli = Convert.ToBoolean(GetConfig("HeliCrate", "useCustomTableHeli", true));
 
-		minItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "minItemsPerCrate", 3));
-		maxItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "maxItemsPerCrate", 6));
-		refreshCrates = Convert.ToBoolean(GetConfig("Crate", "refreshCrates", true));
-		crateTypes = Convert.ToString(GetConfig("Crate","crateTypes","crate_normal"));
-		enableCrates = Convert.ToBoolean(GetConfig("Crate", "enableCrates", true));
+			refreshMinutes = Convert.ToInt32(GetConfig("Generic", "refreshMinutes", 30));
+			enforceBlacklist = Convert.ToBoolean(GetConfig("Generic", "enforceBlacklist", false));
+			dropWeaponsWithAmmo = Convert.ToBoolean(GetConfig("Generic", "dropWeaponsWithAmmo", true));
+			listUpdatesOnLoaded = Convert.ToBoolean(GetConfig("Generic", "listUpdatesOnLoaded", true));
+			listUpdatesOnRefresh = Convert.ToBoolean(GetConfig("Generic", "listUpdatesOnRefresh", false));
+			pluginEnabled = Convert.ToBoolean(GetConfig("Generic", "pluginEnabled", true));
+			removeStackedContainers = Convert.ToBoolean(GetConfig("Generic", "removeStackedContainers", true));
+			seperateLootTables = Convert.ToBoolean(GetConfig("Generic", "seperateLootTables", true));
 
-		minItemsPerSupplyDrop = Convert.ToInt32(GetConfig("SupplyDrop", "minItemsPerSupplyDrop", 3));
-		maxItemsPerSupplyDrop = Convert.ToInt32(GetConfig("SupplyDrop", "maxItemsPerSupplyDrop", 6));
-		includeSupplyDrop = Convert.ToBoolean(GetConfig("SupplyDrop", "includeSupplyDrop", false));
-		useCustomTableSupply = Convert.ToBoolean(GetConfig("SupplyDrop", "useCustomTableSupply", true));
-
-		minItemsPerHeliCrate = Convert.ToInt32(GetConfig("HeliCrate", "minItemsPerHeliCrate", 2));
-		maxItemsPerHeliCrate = Convert.ToInt32(GetConfig("HeliCrate", "maxItemsPerHeliCrate", 4));
-		excludeHeliCrate = Convert.ToBoolean(GetConfig("HeliCrate", "excludeHeliCrate", true));
-		useCustomTableHeli = Convert.ToBoolean(GetConfig("HeliCrate", "useCustomTableHeli", true));
-
-		refreshMinutes = Convert.ToInt32(GetConfig("Generic", "refreshMinutes", 30));
-		enforceBlacklist = Convert.ToBoolean(GetConfig("Generic", "enforceBlacklist", false));
-		dropWeaponsWithAmmo = Convert.ToBoolean(GetConfig("Generic", "dropWeaponsWithAmmo", true));
-		listUpdatesOnLoaded = Convert.ToBoolean(GetConfig("Generic", "listUpdatesOnLoaded", true));
-		listUpdatesOnRefresh = Convert.ToBoolean(GetConfig("Generic", "listUpdatesOnRefresh", false));
-		pluginEnabled = Convert.ToBoolean(GetConfig("Generic", "pluginEnabled", true));
-		delayPluginInit = Convert.ToInt32(GetConfig("Generic", "delayPluginInit", 3));
-		removeStackedContainers = Convert.ToBoolean(GetConfig("Generic", "removeStackedContainers", false));
-		seperateLootTables = Convert.ToBoolean(GetConfig("Generic", "seperateLootTables", false));
-
-		if (!Changed) return;
-		SaveConfig();
-		Changed = false;
+			if (!Changed) return;
+			SaveConfig();
+			Changed = false;
 		}
 
 		protected override void LoadDefaultConfig()
@@ -233,7 +189,7 @@ namespace Oxide.Plugins
 			LoadVariables();
 			lastMinute = DateTime.UtcNow.Minute;
 		}
-		
+
 		void OnServerInitialized()
 		{
 			if (initialized)
@@ -260,7 +216,7 @@ namespace Oxide.Plugins
 			foreach (var ctr in all) {
 				if (ctr.time < now) {
 					if (ctr.container.isDestroyed)
-					{ 
+					{
 						++m;
 						continue;
 					}
@@ -279,7 +235,7 @@ namespace Oxide.Plugins
 					refreshList.Add(ctr); // Re-add for later
 			}
 			if (n > 0 || m > 0)
-					if (listUpdatesOnRefresh) Puts("Refreshed " + n + " containers (" + m + " destroyed)");
+					if (listUpdatesOnRefresh) Puts("Refreshed " + n + " containers");
 		}
 
 		void UpdateInternals(bool doLog)
@@ -291,7 +247,7 @@ namespace Oxide.Plugins
 				LoadLootTable();
 			LoadHeliCrate();
 			LoadSupplyDrop();
-			SaveExportNames();
+			timer.Once(0.1f, SaveExportNames);
 			if (Changed)
 			{
 				SaveConfig();
@@ -316,7 +272,7 @@ namespace Oxide.Plugins
 
 			originalItemsHeli = new List<ItemDefinition>();
 			originalItemsSupply = new List<ItemDefinition>();
-			
+
 			if (seperateLootTables)
 			{
 				foreach (KeyValuePair<string, int> pair in separateLootTable.ItemListBarrels)
@@ -328,7 +284,7 @@ namespace Oxide.Plugins
 				foreach (KeyValuePair<string, int> pair in storedLootTable.ItemList)
 					originalItems.Add(ItemManager.FindItemDefinition(pair.Key));
 
-			if (useCustomTableHeli && !excludeHeliCrate)
+			if (useCustomTableHeli && includeHeliCrate)
 				foreach (KeyValuePair<string, int> pair in storedHeliCrate.ItemList)
 					originalItemsHeli.Add(ItemManager.FindItemDefinition(pair.Key));
 			if (useCustomTableSupply && includeSupplyDrop)
@@ -344,13 +300,13 @@ namespace Oxide.Plugins
 				}
 				else
 					Puts("There are " + originalItems.Count+ " items in the global LootTable.");
-				
-				if (useCustomTableHeli && !excludeHeliCrate)
+
+				if (useCustomTableHeli && includeHeliCrate)
 					Puts("There are " + originalItemsHeli.Count + " items in the HeliTable.");
 				if (useCustomTableSupply && includeSupplyDrop)
 					Puts("There are " + originalItemsSupply.Count + " items in the SupplyTable.");
 			}
-			for (var i = 0; i < 4; ++i)
+			for (var i = 0; i < 5; ++i)
 			{
 				if (seperateLootTables)
 				{
@@ -359,8 +315,8 @@ namespace Oxide.Plugins
 				}
 				else
 					items[i] = new List<string>();
-				
-				if (useCustomTableHeli && !excludeHeliCrate) itemsHeli[i] = new List<string>();
+
+				if (useCustomTableHeli && includeHeliCrate) itemsHeli[i] = new List<string>();
 				if (useCustomTableSupply && includeSupplyDrop) itemsSupply[i] = new List<string>();
 			}
 			if (seperateLootTables)
@@ -370,223 +326,135 @@ namespace Oxide.Plugins
 			}
 			else
 				totalItems = 0;
-			
-			if (useCustomTableHeli && !excludeHeliCrate) totalItemsHeli = 0;
+
+			if (useCustomTableHeli && includeHeliCrate) totalItemsHeli = 0;
 			if (useCustomTableSupply && includeSupplyDrop) totalItemsSupply = 0;
 
 			var notExistingItems = 0;
-			var notExistingItemsB = 0;				
+			var notExistingItemsB = 0;
 			var notExistingItemsC = 0;
-			
+
 			var notExistingItemsHeli = 0;
 			var notExistingItemsSupply = 0;
-			
-			var itemsWithNoRarity = 0;
-			var itemsWithNoRarityB = 0;
-			var itemsWithNoRarityC = 0;			
-			
-			var itemsWithNoRarityHeli = 0;
-			var itemsWithNoRaritySupply = 0;
-			
+
 			if (seperateLootTables)
 			{
 				foreach (var item in originalItemsB)
 				{
-					if (item == null) continue;
-					int index = RarityIndex(item.rarity);
-					object indexoverride;
-					if (index == -1)
-					{
-						if (item.category.ToString().ToLower() == "component")
-						{
-							index++;
-						}
-						if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
-						{
-							index = Convert.ToInt32(indexoverride);
+					if (item == null)
+						continue;
+					if (ItemExists(item.shortname)) {
+						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
+							itemsB[RarityIndex(item.rarity)].Add(item.shortname);
+							++totalItemsB;
 						}
 					}
-					if (index >= 0 )
+					else
 					{
-						if (ItemExists(item.shortname)) {
-							if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-								itemsB[index].Add(item.shortname);
-								++totalItemsB;
-							}
-						}
-						else
-						{
-							++notExistingItemsB;
-						}
+						++notExistingItemsB;
 					}
-					else ++itemsWithNoRarityB;
 				}
 				foreach (var item in originalItemsC)
 				{
-					if (item == null) continue;
-					int index = RarityIndex(item.rarity);
-					object indexoverride;
-					if (index == -1)
-					{
-						if (item.category.ToString().ToLower() == "component")
-						{
-							index++;
-						}
-						if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
-						{
-							index = Convert.ToInt32(indexoverride);
+					if (item == null)
+						continue;
+					if (ItemExists(item.shortname)) {
+						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
+							itemsC[RarityIndex(item.rarity)].Add(item.shortname);
+							++totalItemsC;
 						}
 					}
-					if (index >= 0 )
+					else
 					{
-						if (ItemExists(item.shortname)) {
-							if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-								itemsC[index].Add(item.shortname);
-								++totalItemsC;
-							}
-						}
-						else
-						{
-							++notExistingItemsC;
-						}
+						++notExistingItemsC;
 					}
-					else ++itemsWithNoRarityC;
 				}
 			}
 			else
-				foreach (var item in originalItems) {
+			{
+				foreach (var item in originalItems)
+				{
 					if (item == null) continue;
-					int index = RarityIndex(item.rarity);
-					object indexoverride;
-					if (index == -1)
-					{
-						if (item.category.ToString().ToLower() == "component")
-						{
-							index++;
+					if (ItemExists(item.shortname)) {
+						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
+							items[RarityIndex(item.rarity)].Add(item.shortname);
+							++totalItems;
 						}
-						if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
-						{
-							index = Convert.ToInt32(indexoverride);
-						}
-					}
-					if (index >= 0 )
-					{
-						if (ItemExists(item.shortname)) {
-							if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-								items[index].Add(item.shortname);
-								++totalItems;
-							}
-						}
-						else
-						{
-							++notExistingItems;
-						}
-					}
-					else ++itemsWithNoRarity;
-				}
-			if (useCustomTableHeli && !excludeHeliCrate)
-				foreach (var item in originalItemsHeli) {
-					int index = RarityIndex(item.rarity);
-					object indexoverride;
-					if (index == -1)
-					{
-						if (item.category.ToString().ToLower() == "component")
-						{
-							index++;
-						}
-						if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
-						{
-							index = Convert.ToInt32(indexoverride);
-						}
-					}
-					if (index >= 0)
-					{
-						if (ItemExists(item.shortname)) {
-							if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-								itemsHeli[index].Add(item.shortname);
-								++totalItemsHeli;
-							}
-						}
-						else
-						{
-							++notExistingItemsHeli;
-							}
 					}
 					else
-					{						++itemsWithNoRarityHeli;
+					{
+						++notExistingItems;
 					}
+				}
+			}
+			if (useCustomTableHeli && includeHeliCrate)
+			{
+				foreach (var item in originalItemsHeli)
+				{
+					if (ItemExists(item.shortname))
+					{
+						if (!storedBlacklist.ItemList.Contains(item.shortname))
+						{
+							itemsHeli[RarityIndex(item.rarity)].Add(item.shortname);
+							++totalItemsHeli;
+						}
+					}
+					else
+					{
+						++notExistingItemsHeli;
+					}
+				}
 			}
 			if (useCustomTableSupply && includeSupplyDrop)
-				foreach (var item in originalItemsSupply) {
-					int index = RarityIndex(item.rarity);
-					object indexoverride;
-					if (index == -1)
-					{
-						if (item.category.ToString().ToLower() == "component")
-						{
-							index++;
-						}
-						if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
-						{
-							index = Convert.ToInt32(indexoverride);
-						}
-					}
-					if (index >= 0)
-					{
-						if (ItemExists(item.shortname)) {
-							if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-								itemsSupply[index].Add(item.shortname);
-								++totalItemsSupply;
-							}
-						}
-						else
-						{
-							++notExistingItemsSupply;
-						}
-					}
-					else ++itemsWithNoRaritySupply;
-				}
-			if (doLog)
-				if (seperateLootTables)
+			{
+				foreach (var item in originalItemsSupply)
 				{
-					Puts("We are going to use " + totalItemsB + " items for the global Barrel LootTable.");
-					Puts("We are going to use " + totalItemsC + " items for the global Crate LootTable.");
+					if (ItemExists(item.shortname)) {
+						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
+							itemsSupply[RarityIndex(item.rarity)].Add(item.shortname);
+							++totalItemsSupply;
+						}
+					}
+					else
+					{
+						++notExistingItemsSupply;
+					}
 				}
-				else
-					Puts("We are going to use " + totalItems + " items for the global LootTable.");
-				if (useCustomTableHeli && !excludeHeliCrate) Puts("We are going to use " + totalItemsHeli + " items for Heli Crates.");
-				if (useCustomTableSupply && includeSupplyDrop) Puts("We are going to use " + totalItemsSupply + " items for Supply Drops.");
-			
+			}
 			totalItemWeight = 0;
 			totalItemWeightB = 0;
 			totalItemWeightC = 0;
 			totalItemWeightHeli = 0;
 			totalItemWeightSupply = 0;
-			for (var i = 0; i < 4; ++i) {
+			for (var i = 0; i < 5; ++i) {
 				if (seperateLootTables)
 				{
-					totalItemWeightB += (itemWeightsB[i] = ItemWeight(baseItemRarity, i) * itemsB[i].Count);				
-					totalItemWeightC += (itemWeightsC[i] = ItemWeight(baseItemRarity, i) * itemsC[i].Count);	
+					totalItemWeightB += (itemWeightsB[i] = ItemWeight(baseItemRarity, i) * itemsB[i].Count);
+					totalItemWeightC += (itemWeightsC[i] = ItemWeight(baseItemRarity, i) * itemsC[i].Count);
 				}
 				else
 				{
 					totalItemWeight += (itemWeights[i] = ItemWeight(baseItemRarity, i) * items[i].Count);
 				}
-				if (useCustomTableHeli && !excludeHeliCrate) { totalItemWeightHeli += (itemWeightsHeli[i] = ItemWeight(baseItemRarity, i) * itemsHeli[i].Count); }
+				if (useCustomTableHeli && includeHeliCrate) { totalItemWeightHeli += (itemWeightsHeli[i] = ItemWeight(baseItemRarity, i) * itemsHeli[i].Count); }
 				if (useCustomTableSupply && includeSupplyDrop) { totalItemWeightSupply += (itemWeightsSupply[i] = ItemWeight(baseItemRarity, i) * itemsSupply[i].Count); }
 				}
-
-			foreach (var container in UnityEngine.Object.FindObjectsOfType<LootContainer>()) {
-				try {
-					PopulateContainer(container);
-				} catch (Exception ex) {
-					PrintWarning("Failed to populate container " + ContainerName(container) + ": " + ex.Message + "\n" + ex.StackTrace);
+			populatedContainers = 0;
+			timer.Once( 0.1f, () => {
+				if (removeStackedContainers) FixLoot();
+				foreach (var container in UnityEngine.Object.FindObjectsOfType<LootContainer>()) {
+					try {
+						PopulateContainer(container);
+					} catch (Exception ex) {
+						PrintWarning("Failed to populate container " + ContainerName(container) + ": " + ex.Message + "\n" + ex.StackTrace);
+					}
 				}
-			}
-			if (removeStackedContainers) FixLoot();
-			initialized = true;
-			Puts("Internals have been updated");
+				Puts($"Internals have been updated. Populated '{populatedContainers}' supported containers.");
+				initialized = true;
+				populatedContainers = 0;
+			});
 		}
+		
 
 		void FixLoot()
 		{
@@ -654,7 +522,7 @@ namespace Oxide.Plugins
 									selectFrom = null;
 									item = null;
 									var r = rng.Next(totalItemWeight);
-									for (var i=0; i<4; ++i) {
+									for (var i=0; i<5; ++i) {
 										limit += itemWeights[i];
 										if (r < limit) {
 											selectFrom = items[i];
@@ -690,7 +558,7 @@ namespace Oxide.Plugins
 									selectFrom = null;
 									item = null;
 									var r = rng.Next(totalItemWeightC);
-									for (var i=0; i<4; ++i) {
+									for (var i=0; i<5; ++i) {
 										limit += itemWeightsC[i];
 										if (r < limit) {
 											selectFrom = itemsC[i];
@@ -726,7 +594,7 @@ namespace Oxide.Plugins
 									selectFrom = null;
 									item = null;
 									var r = rng.Next(totalItemWeightB);
-									for (var i=0; i<4; ++i) {
+									for (var i=0; i<5; ++i) {
 										limit += itemWeightsB[i];
 										if (r < limit) {
 											selectFrom = itemsB[i];
@@ -762,7 +630,7 @@ namespace Oxide.Plugins
 									selectFrom = null;
 									item = null;
 									var r = rng.Next(totalItemWeightHeli);
-									for (var i=0; i<4; ++i) {
+									for (var i=0; i<5; ++i) {
 										limit += itemWeightsHeli[i];
 										if (r < limit) {
 											selectFrom = itemsHeli[i];
@@ -798,7 +666,7 @@ namespace Oxide.Plugins
 									selectFrom = null;
 									item = null;
 									var r = rng.Next(totalItemWeightSupply);
-									for (var i=0; i<4; ++i) {
+									for (var i=0; i<5; ++i) {
 										limit += itemWeightsSupply[i];
 										if (r < limit) {
 											selectFrom = itemsSupply[i];
@@ -853,7 +721,6 @@ namespace Oxide.Plugins
 		void PopulateContainer(LootContainer container)
 		{
 			if (container.inventory == null) {
-				PrintWarning("Container " + ContainerName(container) + " has no inventory (skipping)");
 				return;
 			}
 			int min = 1;
@@ -883,7 +750,7 @@ namespace Oxide.Plugins
 					type = "default";
 				refresh = refreshCrates;
 			}
-			else if (heliEx.IsMatch(container.gameObject.name) && !excludeHeliCrate) {
+			else if (heliEx.IsMatch(container.gameObject.name) && includeHeliCrate) {
 				SuppressRefresh(container);
 				ClearContainer(container);
 				min = minItemsPerHeliCrate;
@@ -964,6 +831,7 @@ namespace Oxide.Plugins
 			foreach (var item in items)
 				item.MoveToContainer(container.inventory, -1, false);
 			container.inventory.MarkDirty();
+			populatedContainers++;
 			if (refresh)
 				refreshList.Add(new ContainerToRefresh() { container = container, time = DateTime.UtcNow.AddMinutes(refreshMinutes) });
 		}
@@ -983,35 +851,6 @@ namespace Oxide.Plugins
 				PrintError("OnEntitySpawned failed: " + ex.Message);
 			}
 		}
-
-		/*
-		[ChatCommand("loot")]
-		void cmdChatLoot(BasePlayer player, string command, string[] args) {
-			if (!initialized)
-			{
-				SendReply(player, string.Format("Plugin not enabled."));
-				return;
-			}
-			var sb = new StringBuilder();
-			sb.Append("<size=22>BetterLoot</size> "+Version+" by <color=#ce422b>dcode/Fujikura</color>\n");
-			sb.Append(_("A barrel drops up to %N% items, a chest up to %M% items.", new Dictionary<string,string>() {
-				{ "N", maxItemsPerBarrel.ToString() },
-				{ "M", maxItemsPerCrate.ToString() }
-			})).Append("\n");
-		   sb.Append(_("Base item rarity is %N%.", new Dictionary<string,string>() {
-				{ "N", string.Format("{0:0.00}", baseItemRarity) }
-			})).Append("\n");
-
-			for (var i = 0; i < 4; ++i) {
-				double prob = (1) * 100d * itemWeights[i] / totalItemWeight;
-				sb.Append(_("There is a <color=#f4e75b>%P%%</color> chance to get one of %N% %RARITY% items.", new Dictionary<string, string>() {
-					{ "P", string.Format("{0:0.000}", prob) },
-					{ "N", items[i].Count.ToString() },
-					{ "RARITY", _(RarityName(i)) }
-				})).Append("\n");
-			}
-			SendReply(player, sb.ToString().TrimEnd());
-		} */
 
 		[ChatCommand("blacklist")]
 		void cmdChatBlacklist(BasePlayer player, string command, string[] args) {
@@ -1036,7 +875,6 @@ namespace Oxide.Plugins
 				return;
 			}
 			if (!ServerUsers.Is(player.userID, ServerUsers.UserGroup.Owner)) {
-				//SendReply(player, string.Format(lang.GetMessage("msgNotAuthorized", this, player.UserIDString)));
 				SendReply(player, "You are not authorized to use this command");
 				return;
 			}
@@ -1113,23 +951,13 @@ namespace Oxide.Plugins
 		static int RarityIndex(Rarity rarity)
 		{
 			switch (rarity) {
-				case Rarity.Common: return 0;
-				case Rarity.Uncommon: return 1;
-				case Rarity.Rare: return 2;
-				case Rarity.VeryRare: return 3;
+				case Rarity.None: return 0;
+				case Rarity.Common: return 1;
+				case Rarity.Uncommon: return 2;
+				case Rarity.Rare: return 3;
+				case Rarity.VeryRare: return 4;
 			}
 			return -1;
-		}
-
-		static string RarityName(int index)
-		{
-			switch (index) {
-				case 0: return "common";
-				case 1: return "uncommon";
-				case 2: return "rare";
-				case 3: return "very rare";
-			}
-			return null;
 		}
 
 		bool ItemExists(string name)
@@ -1153,7 +981,7 @@ namespace Oxide.Plugins
 
 		int ItemWeight(double baseRarity, int index)
 		{
-			return (int)(Math.Pow(baseRarity, 3 - index) * 1000); // Round to 3 decimals
+			return (int)(Math.Pow(baseRarity, 4 - index) * 1000); // Round to 3 decimals
 		}
 
 		string _(string text, Dictionary<string, string> replacements = null)
@@ -1196,47 +1024,36 @@ namespace Oxide.Plugins
 			storedLootTable = Interface.GetMod().DataFileSystem.ReadObject<StoredLootTable>("BetterLoot\\LootTable");
 			if (storedLootTable.ItemList.Count == 0)
 			{
-				pluginEnabled = false;
-				Config["Generic","pluginEnabled"]= pluginEnabled;
-				Changed = true;
-				PrintWarning("Plugin disabled, no table data found > Creating a new file.");
 				storedLootTable = new StoredLootTable();
-				List<ItemDefinition> defaultItemBlueprints = new List<ItemDefinition>();
-
-				foreach( int num in ItemManager.defaultBlueprints)
-					defaultItemBlueprints.Add(ItemManager.itemDictionary[num]);
-				foreach(var bp in ItemManager.bpList.Where(p => !p.userCraftable).ToList())
-					defaultItemBlueprints.Add(bp.targetItem);
-				int stack = 0;
-				foreach(var it in ItemManager.itemList.ToList())
+				foreach(var it in ItemManager.itemList)
 				{
+					int stack = 0;
 					if(!ItemExists(it.shortname)) continue;
-					if(itemListExcludes.Contains(it.shortname)) continue;
-					if(!defaultItemBlueprints.Contains(it))
-					{
-						if (it.category == ItemCategory.Weapon) stack = 1;
-						if (it.category == ItemCategory.Ammunition) stack = 32;
-						if (it.category == ItemCategory.Tool) stack = 1;
-						if (it.category == ItemCategory.Traps) stack = 5;
-						if (it.category == ItemCategory.Construction) stack = 5;
-						if (it.category == ItemCategory.Attire) stack = 1;						
-						if (it.category == ItemCategory.Resources) stack = 100;		
-						if (it.category == ItemCategory.Food) stack = 10;	
-						if (it.category == ItemCategory.Medical) stack = 5;							
-						if (it.category == ItemCategory.Component) stack = 5;
-						if (stack == 0) stack = 1;
-						storedLootTable.ItemList.Add(it.shortname,stack);
-					}
+					if(_findTrash.IsMatch(it.shortname)) continue;
+					if (it.category == ItemCategory.Weapon) continue;
+					if (it.category == ItemCategory.Ammunition) continue;
+					if (it.category == ItemCategory.Tool) continue;
+					if (it.category == ItemCategory.Traps) continue;
+					if (it.category == ItemCategory.Construction) continue;
+					if (it.category == ItemCategory.Attire) continue;
+					if (it.category == ItemCategory.Resources) continue;
+					if (it.category == ItemCategory.Misc) continue;
+					if (it.category == ItemCategory.Items) continue;					
+					if (it.category == ItemCategory.Food) stack = 10;
+					if (it.category == ItemCategory.Medical) stack = 5;
+					if (it.category == ItemCategory.Component) stack = 5;
+					if (stack == 0) stack = 1;
+					storedLootTable.ItemList.Add(it.shortname,stack);
 				}
 				Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\LootTable", storedLootTable);
-				return;
 			}
 		}
+		
 
 		void SaveLootTable() => Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\LootTable", storedLootTable);
 
 		#endregion LootTable
-		
+
 		#region SeparateLootTable
 
 		class SeparateLootTable
@@ -1261,41 +1078,29 @@ namespace Oxide.Plugins
 					Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\LootTable", separateLootTable);
 					return;
 				}
-				pluginEnabled = false;
-				Config["Generic","pluginEnabled"]= pluginEnabled;
-				Changed = true;
-				PrintWarning("Plugin disabled, no table data found > Creating a new file.");
 				separateLootTable = new SeparateLootTable();
-				List<ItemDefinition> defaultItemBlueprints = new List<ItemDefinition>();
-
-				foreach( int num in ItemManager.defaultBlueprints)
-					defaultItemBlueprints.Add(ItemManager.itemDictionary[num]);
-				foreach(var bp in ItemManager.bpList.Where(p => !p.userCraftable).ToList())
-					defaultItemBlueprints.Add(bp.targetItem);
-				int stack = 0;
-				foreach(var it in ItemManager.itemList.ToList())
+				foreach(var it in ItemManager.itemList)
 				{
+					int stack = 0;
 					if(!ItemExists(it.shortname)) continue;
-					if(itemListExcludes.Contains(it.shortname)) continue;
-					if(!defaultItemBlueprints.Contains(it))
-					{
-						if (it.category == ItemCategory.Weapon) stack = 1;
-						if (it.category == ItemCategory.Ammunition) stack = 32;
-						if (it.category == ItemCategory.Tool) stack = 1;
-						if (it.category == ItemCategory.Traps) stack = 5;
-						if (it.category == ItemCategory.Construction) stack = 5;
-						if (it.category == ItemCategory.Attire) stack = 1;						
-						if (it.category == ItemCategory.Resources) stack = 100;		
-						if (it.category == ItemCategory.Food) stack = 10;	
-						if (it.category == ItemCategory.Medical) stack = 5;
-						if (it.category == ItemCategory.Component) stack = 5;						
-						if (stack == 0) stack = 1;
-						separateLootTable.ItemListBarrels.Add(it.shortname,stack);
-						separateLootTable.ItemListCrates.Add(it.shortname,stack);
-					}
+					if(_findTrash.IsMatch(it.shortname)) continue;
+					if (it.category == ItemCategory.Weapon) continue;
+					if (it.category == ItemCategory.Ammunition) continue;
+					if (it.category == ItemCategory.Tool) continue;
+					if (it.category == ItemCategory.Traps) continue;
+					if (it.category == ItemCategory.Construction) continue;
+					if (it.category == ItemCategory.Attire) continue;
+					if (it.category == ItemCategory.Resources) continue;
+					if (it.category == ItemCategory.Misc) continue;
+					if (it.category == ItemCategory.Items) continue;		
+					if (it.category == ItemCategory.Food) stack = 10;
+					if (it.category == ItemCategory.Medical) stack = 5;
+					if (it.category == ItemCategory.Component) stack = 5;
+					if (stack == 0) stack = 1;
+					separateLootTable.ItemListBarrels.Add(it.shortname,stack);
+					separateLootTable.ItemListCrates.Add(it.shortname,stack);
 				}
 				Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\LootTable", separateLootTable);
-				return;
 			}
 		}
 
@@ -1308,8 +1113,7 @@ namespace Oxide.Plugins
 		class StoredExportNames
 		{
 			public int version;
-			public List<string> AllItemsAvailable = new List<string>();
-			public Dictionary<string, int> ItemListStackable = new Dictionary<string, int>();
+			public Dictionary<string, string> AllItemsAvailable = new Dictionary<string, string>();
 			public StoredExportNames()
 			{
 			}
@@ -1325,25 +1129,7 @@ namespace Oxide.Plugins
 				storedExportNames.version = Rust.Protocol.network;
 				foreach(var it in exportItems)
 					if(ItemExists(it.shortname))
-						storedExportNames.AllItemsAvailable.Add(it.shortname);
-				int stack = 0;
-				foreach(var it in exportItems.Where(p => p.stackable > 0))
-					if(ItemExists(it.shortname))
-					{
-						if (it.category == ItemCategory.Weapon) stack = 1;
-						if (it.category == ItemCategory.Ammunition) stack = 32;
-						if (it.category == ItemCategory.Tool) stack = 1;
-						if (it.category == ItemCategory.Traps) stack = 5;
-						if (it.category == ItemCategory.Construction) stack = 5;
-						if (it.category == ItemCategory.Attire) stack = 1;						
-						if (it.category == ItemCategory.Resources) stack = 100;		
-						if (it.category == ItemCategory.Food) stack = 10;	
-						if (it.category == ItemCategory.Medical) stack = 5;
-						if (it.category == ItemCategory.Component) stack = 5;							
-						if (stack == 0) stack = 1;
-						storedExportNames.ItemListStackable.Add(it.shortname,stack);
-					}
-
+						storedExportNames.AllItemsAvailable.Add(it.shortname, it.displayName.english);
 				Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\NamesList", storedExportNames);
 				Puts($"Exported {storedExportNames.AllItemsAvailable.Count} items to 'NamesList'");
 			}
@@ -1374,38 +1160,30 @@ namespace Oxide.Plugins
 				includeSupplyDrop = false;
 				Config["SupplyDrop","includeSupplyDrop"]= includeSupplyDrop;
 				Changed = true;
-				PrintWarning("SupplyDrop > table not found, option disabled by 'includeSupplyDrop' > Creating a new file.");
+				Puts("SupplyDrop > table not found, option disabled by 'includeSupplyDrop' > Creating a new file.");
 				storedSupplyDrop = new StoredSupplyDrop();
-				List<ItemDefinition> defaultItemBlueprints = new List<ItemDefinition>();
-
-				foreach( int num in ItemManager.defaultBlueprints)
-					defaultItemBlueprints.Add(ItemManager.itemDictionary[num]);
-				foreach(var bp in ItemManager.bpList.Where(p => !p.userCraftable).ToList())
-					defaultItemBlueprints.Add(bp.targetItem);
-
-				int stack = 0;
-				foreach(var it in ItemManager.itemList.Where(p => p.category == ItemCategory.Weapon || p.category == ItemCategory.Ammunition || p.category == ItemCategory.Tool || p.category == ItemCategory.Traps || p.category == ItemCategory.Construction || p.category == ItemCategory.Attire || p.category == ItemCategory.Resources).ToList())
+				foreach(var it in ItemManager.itemList)
 				{
+					int stack = 0;
 					if(!ItemExists(it.shortname)) continue;
-					if(itemListExcludes.Contains(it.shortname)) continue;
-					if(!defaultItemBlueprints.Contains(it))
-					{
-						if (it.category == ItemCategory.Weapon) stack = 1;
-						if (it.category == ItemCategory.Ammunition) stack = 32;
-						if (it.category == ItemCategory.Tool) stack = 1;
-						if (it.category == ItemCategory.Traps) stack = 5;
-						if (it.category == ItemCategory.Construction) stack = 5;
-						if (it.category == ItemCategory.Attire) stack = 1;						
-						if (it.category == ItemCategory.Resources) stack = 100;		
-						if (it.category == ItemCategory.Food) stack = 10;	
-						if (it.category == ItemCategory.Medical) stack = 5;
-						if (it.category == ItemCategory.Component) stack = 5;							
-						if (stack == 0) stack = 1;
-						storedSupplyDrop.ItemList.Add(it.shortname,stack);
-					}
+					if(_findTrash.IsMatch(it.shortname)) continue;
+					if(it.shortname == "rock" || it.shortname == "lmg.m249" || it.shortname.Contains("arrow") || it.shortname.Contains("rocket.") || it.shortname.Contains("hazmat.")) continue;
+					if (it.category == ItemCategory.Weapon) stack = 1;
+					if (it.category == ItemCategory.Ammunition) stack = 32;
+					if (it.category == ItemCategory.Tool) stack = 1;
+					if (it.category == ItemCategory.Traps && it.shortname != "autoturret") stack = 5;
+					if (it.category == ItemCategory.Construction) continue;
+					if (it.category == ItemCategory.Attire) stack = 1;
+					if (it.category == ItemCategory.Resources && it.shortname != "targeting.computer" && it.shortname != "cctv.camera") continue;
+					if (it.category == ItemCategory.Misc) continue;
+					if (it.category == ItemCategory.Items) continue;		
+					if (it.category == ItemCategory.Food) continue;
+					if (it.category == ItemCategory.Medical) continue;
+					if (it.category == ItemCategory.Component) continue;
+					if (stack == 0) stack = 1;
+					storedSupplyDrop.ItemList.Add(it.shortname,stack);
 				}
 				Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\SupplyDrop", storedSupplyDrop);
-				return;
 			}
 		}
 
@@ -1427,46 +1205,43 @@ namespace Oxide.Plugins
 		void LoadHeliCrate()
 		{
 			storedHeliCrate = Interface.GetMod().DataFileSystem.ReadObject<StoredHeliCrate>("BetterLoot\\HeliCrate");
-			if (pluginEnabled && storedHeliCrate.ItemList.Count > 0 && excludeHeliCrate && !useCustomTableHeli)
-				Puts("HeliCrate > loot population is disabled by 'excludeHeliCrate'");
-			if (pluginEnabled && storedHeliCrate.ItemList.Count > 0 && excludeHeliCrate && useCustomTableHeli)
-				Puts("HeliCrate > 'useCustomTableHeli' enabled, but loot population inactive by 'excludeHeliCrate'");
+			if (pluginEnabled && storedHeliCrate.ItemList.Count > 0 && !includeHeliCrate && !useCustomTableHeli)
+				Puts("HeliCrate > loot population is disabled by 'includeHeliCrate'");
+			if (pluginEnabled && storedHeliCrate.ItemList.Count > 0 && !includeHeliCrate && useCustomTableHeli)
+				Puts("HeliCrate > 'useCustomTableHeli' enabled, but loot population inactive by 'includeHeliCrate'");
 			if (storedHeliCrate.ItemList.Count == 0)
 			{
-				excludeHeliCrate = true;
-				Config["HeliCrate","excludeHeliCrate"]= excludeHeliCrate;
+				includeHeliCrate = false;
+				Config["HeliCrate","includeHeliCrate"]= includeHeliCrate;
 				Changed = true;
-				PrintWarning("HeliCrate > table not found, option disabled by 'excludeHeliCrate' > Creating a new file.");
+				Puts("HeliCrate > table not found, option disabled by 'includeHeliCrate' > Creating a new file.");
 				storedHeliCrate = new StoredHeliCrate();
-				List<ItemDefinition> defaultItemBlueprints = new List<ItemDefinition>();
-				foreach( int num in ItemManager.defaultBlueprints)
-				defaultItemBlueprints.Add(ItemManager.itemDictionary[num]);
-				foreach(var bp in ItemManager.bpList.Where(p => !p.userCraftable).ToList())
-					defaultItemBlueprints.Add(bp.targetItem);
-
-				int stack = 0;
-				foreach(var it in ItemManager.itemList.Where(p => p.category == ItemCategory.Weapon || p.category == ItemCategory.Ammunition || p.category == ItemCategory.Tool).ToList())
+				foreach(var it in ItemManager.itemList)
 				{
+					int stack = 0;
 					if(!ItemExists(it.shortname)) continue;
-					if(itemListExcludes.Contains(it.shortname)) continue;
-					if(!defaultItemBlueprints.Contains(it))
-					{
-						if (it.category == ItemCategory.Weapon) stack = 1;
-						if (it.category == ItemCategory.Ammunition) stack = 32;
-						if (it.category == ItemCategory.Tool) stack = 1;
-						if (it.category == ItemCategory.Traps) stack = 5;
-						if (it.category == ItemCategory.Construction) stack = 5;
-						if (it.category == ItemCategory.Attire) stack = 1;						
-						if (it.category == ItemCategory.Resources) stack = 100;		
-						if (it.category == ItemCategory.Food) stack = 10;	
-						if (it.category == ItemCategory.Medical) stack = 5;							
-						if (it.category == ItemCategory.Component) stack = 5;	
-						if (stack == 0) stack = 1;
-						storedHeliCrate.ItemList.Add(it.shortname,stack);
-					}
+					if(_findTrash.IsMatch(it.shortname)) continue;
+					if(it.shortname == "rock" || it.shortname.Contains("arrow") || it.shortname.Contains("grenade") || it.shortname.Contains("handmade") ||
+					 it.shortname.Contains("bow") || it.shortname.Contains("salvaged") || it.shortname.Contains("knife") ||
+					 it.shortname.Contains("mac") || it.shortname.Contains("waterpipe") || it.shortname.Contains("spear") || it.shortname == "longsword") continue;
+
+					if (it.category == ItemCategory.Weapon) stack = 1;
+					if (it.category == ItemCategory.Ammunition && !it.shortname.Contains("rocket.")) stack = 128;
+					if (it.category == ItemCategory.Ammunition && it.shortname.Contains("rocket.")) stack = 8;
+					if (it.category == ItemCategory.Tool) continue;
+					if (it.category == ItemCategory.Traps) continue;
+					if (it.category == ItemCategory.Construction) continue;
+					if (it.category == ItemCategory.Attire) continue;
+					if (it.category == ItemCategory.Resources && it.shortname != "targeting.computer" && it.shortname != "cctv.camera") continue;
+					if (it.category == ItemCategory.Misc) continue;
+					if (it.category == ItemCategory.Items) continue;		
+					if (it.category == ItemCategory.Food) continue;
+					if (it.category == ItemCategory.Medical) continue;
+					if (it.category == ItemCategory.Component) continue;
+					if (stack == 0) stack = 1;
+					storedHeliCrate.ItemList.Add(it.shortname,stack);
 				}
 				Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\HeliCrate", storedHeliCrate);
-				return;
 			}
 		}
 

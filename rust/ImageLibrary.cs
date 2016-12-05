@@ -5,10 +5,12 @@ using Oxide.Core;
 using System.IO;
 using System.Collections;
 using Oxide.Core.Plugins;
+using System.Reflection;
+using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut", "1.2.1", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut", "1.3.0", ResourceId = 2193)]
 
     class ImageLibrary : RustPlugin
     {
@@ -20,10 +22,12 @@ namespace Oxide.Plugins
         public class ImageData
         {
             public Dictionary<string, Dictionary<ulong, uint>> Images = new Dictionary<string, Dictionary<ulong, uint>>();
+            public Dictionary<string, Dictionary<ulong, string>> ImageURLs = new Dictionary<string, Dictionary<ulong, string>>();
         }
 
         static GameObject webObject;
         static Images images;
+        static MethodInfo getFileData = typeof(FileStorage).GetMethod("StorageGet", (BindingFlags.Instance | BindingFlags.NonPublic));
 
         #endregion
 
@@ -45,11 +49,22 @@ namespace Oxide.Plugins
             images = webObject.AddComponent<Images>();
             images.SetDataDir(this);
             LoadData();
+            GetLocalImages();
         }
 
         #endregion
 
         #region External Calls
+
+        [HookMethod("GetImageURL")]
+        public string GetImageURL(string shortname, ulong skin = 0)
+        {
+            if (!imageData.ImageURLs.ContainsKey(shortname)) return imageData.ImageURLs["NONE"][0].ToString();
+            if (!imageData.ImageURLs[shortname].ContainsKey(skin))
+                return imageData.ImageURLs["NONE"][0].ToString();
+            return imageData.ImageURLs[shortname][skin].ToString();
+        }
+
         [HookMethod("GetImage")]
         public string GetImage(string shortname, ulong skin = 0)
         {
@@ -71,12 +86,19 @@ namespace Oxide.Plugins
         [HookMethod("AddImage")]
         public bool AddImage(string url, string name, ulong skin = 0)
         {
-            if (!HasImage(name, skin))
+            try
             {
+                if (imageData.Images.ContainsKey(name))
+                    if (imageData.Images[name].ContainsKey(skin))
+                        imageData.Images[name].Remove(skin);
                 images.Add(url, name, skin);
                 return true;
             }
-            return false;
+            catch
+            {
+                Puts("An error occured while trying to add an image. Check the Image Data File for corruption");
+                return false;
+            }
         }
         #endregion
 
@@ -105,6 +127,10 @@ namespace Oxide.Plugins
             public void SetDataDir(ImageLibrary fc) => filehandler = fc;
             public void Add(string url, string name, ulong skin)
             {
+                if (!filehandler.imageData.ImageURLs.ContainsKey(name))
+                    filehandler.imageData.ImageURLs.Add(name, new Dictionary<ulong, string>());
+                if (!filehandler.imageData.ImageURLs[name].ContainsKey(skin))
+                    filehandler.imageData.ImageURLs[name].Add(skin, url);
                 QueueList.Add(new QueueImages(url, name, skin));
                 if (activeLoads < MaxActiveLoads) Next();
             }
@@ -136,7 +162,8 @@ namespace Oxide.Plugins
                     {
                         ClearStream();
                         stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
+                        //uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
+                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                         ClearStream();
                         filehandler.imageData.Images[info.name].Add(info.skin, textureID);
                     }
@@ -150,7 +177,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("RefreshAllImages")]
         private void cmdRefreshAllImages(ConsoleSystem.Arg arg)
         {
-                RefreshAllImages();
+            RefreshAllImages();
         }
 
         private void RefreshAllImages()
@@ -166,8 +193,173 @@ namespace Oxide.Plugins
             });
         }
 
+        //TESTING
+        #region UI Creation
+        private string tester = "tester";
+
+        public class UI
+        {
+            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
+            {
+                var NewElement = new CuiElementContainer()
+            {
+                {
+                    new CuiPanel
+                    {
+                        Image = {Color = color},
+                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                        CursorEnabled = cursor
+                    },
+                    new CuiElement().Parent,
+                    panelName
+                }
+            };
+                return NewElement;
+            }
+            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
+            {
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = color },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                    CursorEnabled = cursor
+                },
+                panel);
+            }
+            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiLabel
+                {
+                    Text = { Color = color, FontSize = size, Align = align, FadeIn = 1.0f, Text = text },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
+                },
+                panel);
+            }
+
+            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiButton
+                {
+                    Button = { Color = color, Command = command, FadeIn = 1.0f },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                    Text = { Text = text, FontSize = size, Align = align }
+                },
+                panel);
+            }
+
+            static public void LoadImage(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
+            {
+                container.Add(new CuiElement
+                {
+                    Parent = panel,
+                    Components =
+                    {
+                        new CuiRawImageComponent {Png = png },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                });
+            }
+
+            static public void CreateTextOverlay(ref CuiElementContainer container, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
+            {
+                //if (configdata.DisableUI_FadeIn)
+                //    fadein = 0;
+                container.Add(new CuiLabel
+                {
+                    Text = { Color = color, FontSize = size, Align = align, FadeIn = fadein, Text = text },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
+                },
+                panel);
+            }
+            static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string DistanceA, string DistanceB, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                element.Add(new CuiElement
+                {
+                    Parent = panel,
+                    Components =
+                    {
+                        new CuiTextComponent{Color = colorText, FontSize = size, Align = align, Text = text },
+                        new CuiOutlineComponent {Distance = DistanceA + " " + DistanceB, Color = colorOutline},
+                        new CuiRectTransformComponent {AnchorMax = aMax, AnchorMin = aMin }
+                    }
+                });
+            }
+        }
+
+        private Dictionary<string, string> UIColors = new Dictionary<string, string>
+        {
+            {"black", "0 0 0 1.0" },
+            {"dark", "0.1 0.1 0.1 0.98" },
+            {"header", "1 1 1 0.3" },
+            {"light", ".564 .564 .564 1.0" },
+            {"grey1", "0.6 0.6 0.6 1.0" },
+            {"brown", "0.3 0.16 0.0 1.0" },
+            {"yellow", "0.9 0.9 0.0 1.0" },
+            {"orange", "1.0 0.65 0.0 1.0" },
+            {"blue", "0.2 0.6 1.0 1.0" },
+            {"red", "1.0 0.1 0.1 1.0" },
+            {"white", "1 1 1 1" },
+            {"limegreen", "0.42 1.0 0 1.0" },
+            {"green", "0.28 0.82 0.28 1.0" },
+            {"grey", "0.85 0.85 0.85 1.0" },
+            {"lightblue", "0.6 0.86 1.0 1.0" },
+            {"buttonbg", "0.2 0.2 0.2 0.7" },
+            {"buttongreen", "0.133 0.965 0.133 0.9" },
+            {"buttonred", "0.964 0.133 0.133 0.9" },
+            {"buttongrey", "0.8 0.8 0.8 0.9" },
+            {"customblue", "0.454 0.77 1.0 1.0" },
+            {"CSorange", "1.0 0.64 0.10 1.0" }
+        };
+        #endregion 
+
+
+        [ConsoleCommand("testimage")]
+        private void cmdtestimage(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            var image = arg.Args[0];
+            ImageTester(player, image);
+        }
+
+        [ConsoleCommand("destroy")]
+        private void cmddestroy(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            CuiHelper.DestroyUi(player, tester);
+        }
+
+        void ImageTester(BasePlayer player, string image)
+        {
+            CuiHelper.DestroyUi(player, tester);
+            var element = UI.CreateElementContainer(tester, UIColors["dark"], "0.15 0.5", "0.25 0.8", true);
+            UI.LoadImage(ref element, tester, GetImage(image), "0 0", "1 1");
+            CuiHelper.AddUi(player, element);
+        }
+
+
+
+        private void GetLocalImages()
+        {
+            //string dir = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "ImageLibrary" + Path.DirectorySeparatorChar;
+            //DirectoryInfo rdir = new DirectoryInfo(dir);
+            //FileInfo[] info = rdir.GetFiles("*.*");
+            //Puts("TRYING");
+            //foreach (FileInfo f in info)
+            //    if (!imageData.Images.ContainsKey(f.Name))
+            //    {
+            //        Puts($"Imagepath: {f.FullName}... Name: {Name}");
+            //        images.Add(f.FullName, f.Name, 0);
+            //    }
+        }
+
+
         private void CheckNewImages()
         {
+            images.Add("http://www.hngu.net/Images/College_Logo/28/b894b451_c203_4c08_922c_ebc95077c157.png", "NONE", 0);
             foreach (var entry in ItemImages)
                 foreach (var item in entry.Value)
                     if (!imageData.Images[entry.Key].ContainsKey(item.Key))
@@ -1824,6 +2016,12 @@ namespace Oxide.Plugins
             try
             {
                 imageData = ImageLibraryData.ReadObject<ImageData>();
+                if (imageData == null)
+                {
+                    imageData = new ImageData();
+                    RefreshAllImages();
+                }
+                else
                 CheckNewImages();
             }
             catch

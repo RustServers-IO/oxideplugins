@@ -2,7 +2,7 @@
     "name": "Event - Headquarters",
     "description": "Capture the headquarters",
     "author": "Reneb",
-    "version": "0.0.1",
+    "version": "0.0.4",
     "configuration": true,
     "require": {
         "EventManager": "*"

@@ -8,7 +8,7 @@ using IEnumerator = System.Collections.IEnumerator;
 
 namespace Oxide.Plugins
 {
-	[Info("SaveMyMap", "Fujikura", "1.1.0", ResourceId = 2111)] 
+	[Info("SaveMyMap", "Fujikura", "1.2.0", ResourceId = 2111)] 
 	class SaveMyMap : RustPlugin
 	{
 		bool Changed;
@@ -114,6 +114,8 @@ namespace Oxide.Plugins
 		void SaveLoop()
 		{
 			if (!Initialized) return;
+			BaseEntity.saveList.RemoveWhere(p => !p);
+            BaseEntity.saveList.RemoveWhere(p => p == null);
 			if (Rounds < saveCustomAfter && saveCustomAfter > 0) {
 				foreach (BaseEntity current in BaseEntity.saveList)
 					current.InvalidateNetworkCache();
@@ -211,6 +213,8 @@ namespace Oxide.Plugins
 			string saveName;
 			saveName = saveFolder + SaveRestore.SaveFileName;
 			try {
+				BaseEntity.saveList.RemoveWhere(p => !p);
+				BaseEntity.saveList.RemoveWhere(p => p == null);
 				foreach (BaseEntity current in BaseEntity.saveList)
 					current.InvalidateNetworkCache();
 				IEnumerator enumerator = SaveRestore.Save(saveName, true);
@@ -267,6 +271,34 @@ namespace Oxide.Plugins
 				player.Kick(lang.GetMessage("kickreason", this));
 
 			if (SaveRestore.Load(file, allowOutOfDateSaves))
+			{
+				if (saveAfterLoadFile)
+				{
+					foreach (BaseEntity current in BaseEntity.saveList)
+						current.InvalidateNetworkCache();
+					SaveRestore.Save(true);
+				}
+			}
+			else
+			{
+				SendReply(arg, lang.GetMessage("filenotfound", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+				return;
+			}
+		}
+		
+		[ConsoleCommand("smm.loadnamed")]
+		void cLoadNamed(ConsoleSystem.Arg arg)
+		{
+			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if (arg.Args == null || arg.Args.Length < 1 )
+			{
+					SendReply(arg, lang.GetMessage("definefilename", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+					return;
+			}
+			foreach (var player in BasePlayer.activePlayerList.ToList())
+				player.Kick(lang.GetMessage("kickreason", this));
+
+			if (SaveRestore.Load(ConVar.Server.rootFolder+"/"+arg.Args[0], true))
 			{
 				if (saveAfterLoadFile)
 				{

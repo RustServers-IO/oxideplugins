@@ -22,7 +22,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("HeadQuarters", "Reneb", "0.0.1", ResourceId = 0)]
+    [Info("HeadQuarters", "Reneb", "0.0.4", ResourceId = 2211)]
     class HeadQuarters : RustPlugin
     {
         #region Fields
@@ -122,8 +122,8 @@ namespace Oxide.Plugins
                 GameMode = EventManager.GameMode.Normal,
                 GameRounds = 0,
                 Kit = configData.EventSettings.DefaultKit,
-                MaximumPlayers = 4,
-                MinimumPlayers = 20,
+                MaximumPlayers = 0,
+                MinimumPlayers = 4,
                 ScoreLimit = configData.GameSettings.ScoreLimit,
                 Spawnfile = configData.GameSettings.HQSpawnfile,
                 Spawnfile2 = configData.GameSettings.PlayersSpawnfile,
@@ -200,10 +200,10 @@ namespace Oxide.Plugins
                 {
                     return (string)c;
                 }
-                else 
+                else
                 {
-                    
-                    if((int)c < 3)
+
+                    if ((int)c < 3)
                     {
                         return "3 spawns are required for the headquarters.";
                     }
@@ -218,20 +218,20 @@ namespace Oxide.Plugins
                 Subscribe(nameof(OnEntityTakeDamage));
                 EventManager.BroadcastEvent(Msg("Capture the headquarter to gain points, and maintain it at all cost", null));
             }
-                
+
             return null;
         }
         void OnEventEndPre()
         {
             if (usingHQ)
             {
-                foreach(var hqe in UnityEngine.Object.FindObjectsOfType<HQ>())
+                foreach (var hqe in UnityEngine.Object.FindObjectsOfType<HQ>())
                 {
                     UnityEngine.Object.Destroy(hqe);
                 }
-                foreach(var hqplayer in UnityEngine.Object.FindObjectsOfType<HQPlayer>())
+                foreach (var hqplayer in UnityEngine.Object.FindObjectsOfType<HQPlayer>())
                 {
-                        UnityEngine.Object.Destroy(hqplayer);
+                    UnityEngine.Object.Destroy(hqplayer);
                 }
                 HQPlayers.Clear();
                 HQs.Clear();
@@ -242,7 +242,7 @@ namespace Oxide.Plugins
             if (usingHQ)
             {
                 hasStarted = false;
-                foreach(HQPlayer hqplayer in HQPlayers.Values)
+                foreach (HQPlayer hqplayer in HQPlayers.Values)
                 {
                     CuiHelper.DestroyUi(hqplayer.player, "WaitingToRespawn");
                     CuiHelper.DestroyUi(hqplayer.player, "FriendlyFire");
@@ -259,6 +259,8 @@ namespace Oxide.Plugins
                 hasStarted = true;
                 try
                 {
+                    ScoreA = 0;
+                    ScoreB = 0;
                     AddHeadquarters();
                     InitializeSpawns();
                     InitializeHeadquarters();
@@ -269,7 +271,7 @@ namespace Oxide.Plugins
                     EventManager.CloseEvent();
                     EventManager.EndEvent();
                 }
-                
+
             }
             return null;
         }
@@ -328,7 +330,7 @@ namespace Oxide.Plugins
             {
                 if (HQPlayers.ContainsKey(player.userID))
                 {
-                    if(HQs.Where(x => (x.status == HQStatus.Captured || x.status == HQStatus.Destroying)).Where(w => w.team == HQPlayers[player.userID].team).ToList().Count > 0)
+                    if (HQs.Where(x => (x.status == HQStatus.Captured || x.status == HQStatus.Destroying)).Where(w => w.team == HQPlayers[player.userID].team).ToList().Count > 0)
                     {
                         UIWaitingToRespawn(player);
                         return true;
@@ -347,7 +349,7 @@ namespace Oxide.Plugins
                     return HQs.Where(x => x.status == HQStatus.Spawnable && x.team == HQPlayers[player.userID].team).ElementAt(0).GetRandomSpawn();
                 }
             }
-            return null; 
+            return null;
         }
 
 
@@ -649,8 +651,9 @@ namespace Oxide.Plugins
         {
             public string DefaultKit { get; set; }
             public string DefaultZoneID { get; set; }
-            public int ScoreOnKill { get; set; }
             public int TokensOnWin { get; set; }
+            public int TokensOnCapture { get; set; }
+            public int TokensOnDestroy { get; set; }
             public int ScoreOnHQCapture { get; set; }
             public int ScoreOnHQDestroy { get; set; }
             public int ScoreOnHQDefendPerSec { get; set; }
@@ -693,12 +696,12 @@ namespace Oxide.Plugins
                 {
                     DefaultKit = "hqkit",
                     DefaultZoneID = "hqzone",
-                    ScoreOnKill = 2,
                     TokensOnWin = 20,
-                    ScoreOnHQCapture = 10,
-                    ScoreOnHQDestroy = 10,
+                    TokensOnCapture = 3,
+                    TokensOnDestroy = 2,
+                    ScoreOnHQCapture = 20,
+                    ScoreOnHQDestroy = 15,
                     ScoreOnHQDefendPerSec = 1
-                    
                 },
                 GameSettings = new GameSettings
                 {
@@ -790,7 +793,7 @@ namespace Oxide.Plugins
 
             public Vector3 GetRandomSpawn()
             {
-                return spawns[Oxide.Core.Random.Range(0, spawns.Count-1)];
+                return spawns[Oxide.Core.Random.Range(0, spawns.Count - 1)];
             }
 
             public void SetStatus(HQStatus status)
@@ -812,7 +815,7 @@ namespace Oxide.Plugins
                         p.player.SendConsoleCommand("ddraw.text", 1f, color, location + Vector3Up3, $"<size=30>Capture the objective</size>");
                     }
                 }
-                else if(status == HQStatus.Capturing)
+                else if (status == HQStatus.Capturing)
                 {
                     color = hq.TeamColors[(team == Team.A ? (Colors)hq.configData.TeamA.Color : (Colors)hq.configData.TeamB.Color)].rgba;
                     foreach (var p in HQPlayers.Select(x => x.Value))
@@ -820,56 +823,56 @@ namespace Oxide.Plugins
                         p.player.SendConsoleCommand("ddraw.text", 1f, color, location + Vector3Up3, $"<size=20>{hq.GetTeamName(team)} Capturing ... </size>{timeToCapture.ToString()}s");
                     }
                 }
-                else if(status == HQStatus.Captured)
+                else if (status == HQStatus.Captured)
                 {
-                    if(lastStatus == HQStatus.Capturing)
+                    if (lastStatus == HQStatus.Capturing)
                     {
                         Effect.server.Run("assets/prefabs/npc/patrol helicopter/effects/rocket_explosion.prefab", location);
                         hq.EventManager.PopupMessage($"<color={hq.TeamColors[(team == Team.A ? (Colors)hq.configData.TeamA.Color : (Colors)hq.configData.TeamB.Color)].hex}>{hq.GetTeamName(team)}</color> captured the head quarters</color>");
                         timeToCapture = 5;
                         autoDestroy = 45;
-                        if (team == Team.A) ScoreA += 20;
-                        else ScoreB += 20;
-                        hq.GivePoints(capturingPlayers, 5);
+                        if (team == Team.A) ScoreA += hq.configData.EventSettings.ScoreOnHQCapture;
+                        else ScoreB += hq.configData.EventSettings.ScoreOnHQCapture;
+                        hq.GivePoints(capturingPlayers, hq.configData.EventSettings.TokensOnCapture);
                         hq.UpdateScores();
                     }
                     else
                     {
-                        if (team == Team.A) ScoreA += 1;
-                        else ScoreB += 1;
+                        if (team == Team.A) ScoreA += hq.configData.EventSettings.ScoreOnHQDefendPerSec;
+                        else ScoreB += hq.configData.EventSettings.ScoreOnHQDefendPerSec;
                         hq.UpdateScores();
                     }
                     foreach (var p in HQPlayers.Select(x => x.Value))
                     {
                         p.player.SendConsoleCommand("ddraw.text", 1f, color, location + Vector3Up3, $"<size=20>{hq.GetTeamName(team)} Captured</size>");
                     }
-                    
+
                 }
-                else if(status == HQStatus.Destroying)
+                else if (status == HQStatus.Destroying)
                 {
-                    if (team == Team.A) ScoreA += 1;
-                    else ScoreB += 1;
+                    if (team == Team.A) ScoreA += hq.configData.EventSettings.ScoreOnHQDefendPerSec;
+                    else ScoreB += hq.configData.EventSettings.ScoreOnHQDefendPerSec;
                     hq.UpdateScores();
                     foreach (var p in HQPlayers.Select(x => x.Value))
                     {
                         p.player.SendConsoleCommand("ddraw.text", 1f, color, location + Vector3Up3, $"<size=20>{hq.GetTeamName(team == Team.A ? Team.B : Team.A)} Destroying ...</size>{timeToCapture.ToString()}s");
                     }
                 }
-                else if(status == HQStatus.Destroyed)
+                else if (status == HQStatus.Destroyed)
                 {
                     if (lastStatus == HQStatus.Destroying)
                     {
                         Effect.server.Run("assets/prefabs/npc/patrol helicopter/effects/rocket_explosion.prefab", location);
                         hq.EventManager.PopupMessage($"<color={hq.TeamColors[(team == Team.A ? (Colors)hq.configData.TeamB.Color : (Colors)hq.configData.TeamA.Color)].hex}> {hq.GetTeamName(team == Team.A ? Team.B : Team.A)} destroyed the head quarters</color>");
-                        if (team == Team.A) ScoreB += 20;
-                        else ScoreA += 20;
-                        hq.GivePoints(capturingPlayers, 3);
+                        if (team == Team.A) ScoreB += hq.configData.EventSettings.ScoreOnHQDestroy;
+                        else ScoreA += hq.configData.EventSettings.ScoreOnHQDestroy;
+                        hq.GivePoints(capturingPlayers, hq.configData.EventSettings.TokensOnDestroy);
                         hq.UpdateScores();
                     }
                     lastDestroyedHQ = this;
                     hq.LoopHQ();
                 }
-                else if(status == HQStatus.Spawnable)
+                else if (status == HQStatus.Spawnable)
                 {
                     if (IsInvoking("UpdateTrigger")) CancelInvoke("UpdateTrigger");
                     if (IsInvoking("Think")) CancelInvoke("Think");
@@ -885,12 +888,12 @@ namespace Oxide.Plugins
                 foreach (Collider col in Physics.OverlapSphere(location, size, playerLayer))
                 {
                     BasePlayer player = col.gameObject.ToBaseEntity() as BasePlayer;
-                    if(player != null)
+                    if (player != null)
                     {
                         HQPlayer hqplayer = player.GetComponent<HQPlayer>();
-                        if(hqplayer != null && player.IsInvoking("InventoryUpdate"))
+                        if (hqplayer != null && player.IsInvoking("InventoryUpdate"))
                         {
-                            if(!capturingPlayers.Contains(hqplayer))
+                            if (!capturingPlayers.Contains(hqplayer))
                                 capturingPlayers.Add(hqplayer);
                         }
                     }
@@ -957,11 +960,11 @@ namespace Oxide.Plugins
 
                 int teamA = capturingPlayers.Where(x => x.team == Team.A).Count();
                 int teamB = capturingPlayers.Where(x => x.team == Team.B).Count();
-                if(teamA != 0 && teamB != 0)
+                if (teamA != 0 && teamB != 0)
                 {
                     SetStatus(status);
                 }
-                else if(teamA == 0 && teamB == 0)
+                else if (teamA == 0 && teamB == 0)
                 {
                     if (status == HQStatus.Capturing)
                     {
@@ -975,7 +978,7 @@ namespace Oxide.Plugins
                             SetStatus(HQStatus.Contested);
                         }
                     }
-                    else if(status == HQStatus.Destroying)
+                    else if (status == HQStatus.Destroying)
                     {
                         if (timeToCapture < 5)
                         {
@@ -994,7 +997,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                        SetCapturing(teamA > teamB ? Team.A : Team.B);
+                    SetCapturing(teamA > teamB ? Team.A : Team.B);
                 }
             }
 
@@ -1153,7 +1156,7 @@ namespace Oxide.Plugins
         {
             if (HQPlayers.Count == 0)
             {
-                EventManager.BroadcastToChat(Msg("There is no more players in the event.",null));
+                EventManager.BroadcastToChat(Msg("There is no more players in the event.", null));
                 EventManager.CloseEvent();
                 EventManager.EndEvent();
                 return;
@@ -1187,13 +1190,13 @@ namespace Oxide.Plugins
             {
                 EventManager.AddTokens(member.player.userID, configData.EventSettings.TokensOnWin, true);
             }
-            foreach(var member in HQPlayers.Select(x => x.Value))
+            foreach (var member in HQPlayers.Select(x => x.Value))
             {
                 EventManager.AddTokens(member.player.userID, member.score, false);
             }
             if (team == Team.NONE)
-                EventManager.BroadcastToChat(Msg("It's a draw! No winners today",null));
-            else EventManager.BroadcastToChat(string.Format(Msg("{0} has won the event!",null), GetTeamName(team)));
+                EventManager.BroadcastToChat(Msg("It's a draw! No winners today", null));
+            else EventManager.BroadcastToChat(string.Format(Msg("{0} has won the event!", null), GetTeamName(team)));
             EventManager.CloseEvent();
             EventManager.EndEvent();
         }

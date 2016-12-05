@@ -1,0 +1,16 @@
+{
+    "name": "UniversalUI",
+    "description": "This is a fully Customizable UI for .",
+    "author": "{Midgard}Altimus Maximus",
+    "version": "1.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/universalui.2226",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

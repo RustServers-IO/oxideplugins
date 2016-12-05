@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.4.6", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.4.7", ResourceId = 1789)]
 	class TruePVE : RustPlugin
 	{
 		private TruePVEData data = new TruePVEData();
@@ -384,6 +384,7 @@ namespace Oxide.Plugins
 			
 			Hurtable traps = data.CreateHurtable("traps");
 			traps.description = "Traps, landmines, and spikes";
+			traps.types.Add(typeof(AutoTurret).Name);
 			traps.types.Add(typeof(BearTrap).Name);
 			traps.types.Add(typeof(Landmine).Name);
 			traps.prefabs.Add("spikes.floor");
@@ -578,7 +579,7 @@ namespace Oxide.Plugins
 			
 			// if unlocked damage allowed - check for lock
 			BaseLock alock = entity.GetSlot(BaseEntity.Slot.Lock) as BaseLock; // get lock
-			if (alock == null) return null; // no lock, allow damage
+			if (alock == null) return null; // no lock, return null
 
 			if (alock.IsLocked()) // is locked, cancel damage except heli
 			{
@@ -598,7 +599,8 @@ namespace Oxide.Plugins
 			// Check for heli initiator
 			if(hitinfo.Initiator is BaseHelicopter ||
 			   hitinfo.Initiator is HelicopterTurret ||
-			   hitinfo.Initiator is FireBall)
+			   hitinfo.Initiator.ShortPrefabName == "oilfireballsmall" ||
+			   hitinfo.Initiator.ShortPrefabName == "napalm")
 				return data.config[Option.heliDamage];
 			else if(hitinfo.WeaponPrefab != null) // prevent null spam
 			{

@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-     	[Info("FreezeArrows", "Colon Blow", "1.0.7", ResourceId = 1601)]
+     	[Info("FreezeArrows", "Colon Blow", "1.0.8", ResourceId = 1601)]
      	class FreezeArrows : RustPlugin
 	{
 
@@ -142,21 +142,19 @@ namespace Oxide.Plugins
 
 		void OnPlayerAttack(BasePlayer player, HitInfo hitInfo, Vector3 newPos, int arrows, bool arrowenabled)
 		{
-			if (!loadArrow.ContainsKey(player.userID)) return;
-			if (!loadArrow[player.userID].arrowenabled) return;
 			if (!HasPermission(player, "freezearrows.allowed")) return;
+			if (!loadArrow[player.userID].arrowenabled) return;
+
 			if (usingCorrectWeapon(player))
 			{
-				var CurrentArrows = loadArrow[player.userID].arrows;
 				findTarget(player, hitInfo, newPos);
-				loadArrow[player.userID].arrowenabled = !loadArrow[player.userID].arrowenabled;
 				if (showHitExplosionFX)
 					{
 					Effect.server.Run("assets/bundled/prefabs/fx/explosions/explosion_03.prefab", hitInfo.HitPositionWorld);
 					}
+				loadArrow[player.userID].arrowenabled = !loadArrow[player.userID].arrowenabled;
 				if (HasPermission(player, "freezearrows.unlimited")) return;
-				CurrentArrows = CurrentArrows - 1;
-				loadArrow[player.userID].arrows = CurrentArrows;
+				loadArrow[player.userID].arrows = loadArrow[player.userID].arrows - 1;
 			}
 		return;
 		}
@@ -174,21 +172,18 @@ namespace Oxide.Plugins
         void OnEntityDeath(BaseCombatEntity entity, HitInfo hitInfo, int arrows)
         {
 		if (hitInfo == null) return;
-
-            	if (!(hitInfo.Initiator is BasePlayer)) return;
+		if (!(hitInfo.Initiator is BasePlayer)) return;
 		if (entity is BaseNPC || entity is BasePlayer)
 		{
 			var player = (BasePlayer)hitInfo.Initiator;
+
+			if (!HasPermission(player, "freezearrows.allowed")) return;
+			if (!loadArrow.ContainsKey(player.userID)) return;
 			if (HasPermission(player, "freezearrows.unlimited")) return;
-			if (!usingCorrectWeapon(player)) return;
-			if (usingCorrectWeapon(player))
-			{
-	    			loadArrow[player.userID].arrows = loadArrow[player.userID].arrows + 1;
-           	 		PrintToChat(player, "You have added a freeze arrow to your quiver");
-	    			PrintToChat(player, "Arrows Available: " + (loadArrow[player.userID].arrows));
-				return;
-			}
-		return;
+
+	    		loadArrow[player.userID].arrows = loadArrow[player.userID].arrows + 1;
+           	 	PrintToChat(player, "You have added a freeze arrow to your quiver");
+	    		PrintToChat(player, "Arrows Available: " + (loadArrow[player.userID].arrows));
 		}
 	return;
         }
@@ -276,6 +271,7 @@ namespace Oxide.Plugins
         void cmdChatfreezearrow(BasePlayer player, string command, string[] args, int arrows, bool arrowenabled)
 	{	
 		if (!HasPermission(player, "freezearrows.allowed")) return;
+
 		if (!loadArrow.ContainsKey(player.userID))
 			{
 				loadArrow.Add(player.userID, new ShotArrowData
@@ -290,6 +286,13 @@ namespace Oxide.Plugins
 				SendReply(player, "Arrows Left: " + (loadArrow[player.userID].arrows));
 			return;
 			}
+		if (loadArrow[player.userID].arrowenabled)
+			{
+				loadArrow[player.userID].arrowenabled = false;
+				SendReply(player, lang.GetMessage("offnextshottxt", this));
+				return;
+			}
+
 		if (HasPermission(player, "freezearrows.unlimited"))
 			{
 			loadArrow[player.userID].arrowenabled = true;

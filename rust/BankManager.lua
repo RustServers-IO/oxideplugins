@@ -1,7 +1,7 @@
 PLUGIN.Title        = "Bank Manager"
 PLUGIN.Description  = "Allows players to deposit and withdraw items from a bank."
 PLUGIN.Author       = "InSaNe8472"
-PLUGIN.Version      = V(1,1,7)
+PLUGIN.Version      = V(1,1,8)
 PLUGIN.ResourceId   = 1331
 
 local ClanPlugin = "Clans"
@@ -186,6 +186,7 @@ function PLUGIN:LoadDefaultLang()
 		["DeleteAll"] = "You no longer share your bank with anyone. (<color=#cd422b>{entries}</color> player(s) removed)",
 		["Disabled"] = "disabled",
 		["Enabled"] = "enabled",
+		["ForcedClose"] = "Forced close completed successfully.  If an open bank was found, your items have been saved and containers removed.",
 		["GroupClan"] = "clan",
 		["GroupEconomics"] = "economics",
 		["GroupPlayer"] = "player",
@@ -254,6 +255,7 @@ function PLUGIN:LoadDefaultLang()
 		"	<color=#ffd479>/bank info <item | clan></color> - View item information (first inventory slot) or clan information\n"..
 		"	<color=#ffd479>/bank buy <bank | clan> [# slots]</color> - Buy additional bank slots\n"..
 		"	<color=#ffd479>/bank <bank | clan></color> - Open personal or clan bank\n"..
+		"	<color=#ffd479>/bank close</color> - Manually force bank to close\n"..
 		"	<color=#ffd479>/bank share <player></color> - Open bank of shared player\n"..
 		"	<color=#ffd479>/bank add <player></color> - Share your bank with player\n"..
 		"	<color=#ffd479>/bank remove <player></color> - Unshare your bank with player\n"..
@@ -523,8 +525,8 @@ function PLUGIN:OnPlayerDisconnected(player)
 	if ProximityClan[playerSteamID] ~= nil and ProximityClan[playerSteamID] == "true" then
 		ProximityClan[playerSteamID] = nil
 	end
-	BankOpened[playerSteamID] = nil
-	LocPos[player] = nil
+	self:ResetPlayerConfig(player)
+	self:ClosePlayerContainers(player)
 end
 
 function PLUGIN:cmdBank(player, cmd, args)
@@ -543,7 +545,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 		return
 		elseif args.Length > 0 then
 		local func = args[0]
-		if func ~= "toggle" and func ~= "admin" and func ~= "view" and func ~= "set" and func ~= "limits" and func ~= "info" and func ~= "buy" and func ~= "confirm" and func ~= "bank" and func ~= "clan" and func ~= "share" and func ~= "add" and func ~= "remove" and func ~= "removeall" and func ~= "list" then
+		if func ~= "toggle" and func ~= "admin" and func ~= "view" and func ~= "set" and func ~= "limits" and func ~= "info" and func ~= "buy" and func ~= "confirm" and func ~= "bank" and func ~= "close" and func ~= "clan" and func ~= "share" and func ~= "add" and func ~= "remove" and func ~= "removeall" and func ~= "list" then
 			self:RustMessage(player, self:Lang(player, "WrongArgs"))
 			return
 		end
@@ -1335,6 +1337,17 @@ function PLUGIN:cmdBank(player, cmd, args)
 				return
 			end
 		end
+		if func == "close" then
+			if Bank[playerSteamID] or ClanBank[playerSteamID] then
+				if Bank[playerSteamID] then self:SaveBank(player, 1, "false") end
+				if ClanBank[playerSteamID] then self:SaveBank(player, 2, "false") end
+				else
+				self:ResetPlayerConfig(player)
+				self:ClosePlayerContainers(player)
+			end
+			self:RustMessage(player, self:Lang(player, "ForcedClose"))
+			return
+		end
 		if func == "share" then
 			if self.Config.Player.ShareEnabled ~= "true" then
 				self:RustMessage(player, self:Lang(player, "NotShareEnabled"))
@@ -1688,28 +1701,8 @@ function PLUGIN:OpenClanBank(player, clan, group, call)
 	end)
 end
 
-function PLUGIN:SaveBank(player, call)
+function PLUGIN:SaveBank(player, call, destroyed)
 	local playerSteamID = rust.UserIDFromPlayer(player)
-	if Bank[playerSteamID]:GetComponent("StorageContainer") == nil or not Bank[playerSteamID]:GetComponent("StorageContainer") then
-		if call == 1 then
-			Bank[playerSteamID] = nil
-			if Shared[playerSteamID] then
-				local TargetName, SteamID = tostring(Shared[playerSteamID]):match("([^:]+):([^:]+)")
-				BankUser[SteamID] = nil
-				Shared[playerSteamID] = nil
-			end
-			self:SaveDataFile(1)
-			else
-			ClanBank[playerSteamID] = nil
-			ClanName[playerSteamID] = nil
-			ClanUser[playerClan] = nil
-			Owner[playerSteamID] = nil
-			self:SaveDataFile(3)
-		end
-		BankOpened[playerSteamID] = "false"
-		LocPos[player] = nil
-		return
-	end
 	local playerData, box, playerClan, found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems
 	if call == 1 then
 		local TargetName, SteamID = "", playerSteamID
@@ -1830,24 +1823,12 @@ function PLUGIN:SaveBank(player, call)
 			end
 		end
 	end
-	box.inventory.itemList:Clear()
-	box:Kill()
-	BankItem = {}
-	if call == 1 then
-		Bank[playerSteamID] = nil
-		if Shared[playerSteamID] then
-			local TargetName, SteamID = tostring(Shared[playerSteamID]):match("([^:]+):([^:]+)")
-			BankUser[SteamID] = nil
-			Shared[playerSteamID] = nil
-		end
-		self:SaveDataFile(1)
-		else
-		ClanBank[playerSteamID] = nil
-		ClanName[playerSteamID] = nil
-		ClanUser[playerClan] = nil
-		Owner[playerSteamID] = nil
-		self:SaveDataFile(3)
+	if destroyed == "false" then
+		box.inventory.itemList:Clear()
+		box:Kill()
 	end
+	BankItem = {}
+	self:ResetPlayerConfig(player)
 	if Returned ~= "0" then
 		local Reason = ""
 		if string.match(Returned, "1") then Reason = Reason..self:Lang(player, "ReturnReason1") end
@@ -1857,8 +1838,6 @@ function PLUGIN:SaveBank(player, call)
 		local message = FormatMessage(self:Lang(player, "Returned"), { reason = string.sub(Reason, 1, -3) })
 		self:RustMessage(player, message)
 	end
-	BankOpened[playerSteamID] = "false"
-	LocPos[player] = nil
 end
 
 function PLUGIN:ReturnItem(player, loot, call)
@@ -1898,17 +1877,94 @@ function PLUGIN:CloseBanks(call)
 		if Bank[playerSteamID] or ClanBank[playerSteamID] then
 			if call == 1 or call == 2 then
 				if Bank[playerSteamID] then
-					self:SaveBank(players.Current, 1)
+					self:SaveBank(players.Current, 1, "false")
 					self:RustMessage(players.Current, self:Lang(player, "BankDisabled"))
 				end
 			end
 			if call == 1 or call == 3 then
 				if ClanBank[playerSteamID] then
-					self:SaveBank(players.Current, 2)
+					self:SaveBank(players.Current, 2, "false")
 					self:RustMessage(players.Current, self:Lang(player, "BankDisabled"))
 				end
 			end
 		end
+	end
+end
+
+function PLUGIN:ResetPlayerConfig(player)
+	local playerSteamID = rust.UserIDFromPlayer(player)
+	Bank[playerSteamID] = nil
+	if Shared[playerSteamID] then
+		local TargetName, SteamID = tostring(Shared[playerSteamID]):match("([^:]+):([^:]+)")
+		BankUser[SteamID] = nil
+		Shared[playerSteamID] = nil
+	end
+	ClanBank[playerSteamID] = nil
+	ClanName[playerSteamID] = nil
+	local found, playerClan, playerGroup, count = self:GetClanMember(player)
+	if found then
+		if ClanUser[playerClan] then
+			local user, id = tostring(ClanUser[playerClan]):match("([^:]+):([^:]+)")
+			if playerSteamID == id then ClanUser[playerClan] = nil end
+		end
+	end
+	Owner[playerSteamID] = nil
+	BankOpened[playerSteamID] = "false"
+	LocPos[player] = nil
+	self:SaveDataFile(1)
+	self:SaveDataFile(3)
+end
+
+function PLUGIN:ClosePlayerContainers(player)
+	local playerSteamID = rust.UserIDFromPlayer(player)
+	local StorageList = UnityEngine.Object.FindObjectsOfTypeAll(global.StorageContainer._type)
+	StorageList = StorageList:GetEnumerator()
+	while StorageList:MoveNext() do
+		if StorageList.Current:GetComponentInParent(global.StorageContainer._type) then
+			if string.match(StorageList.Current.name, "bank:") then
+				local TargetName, SteamID = tostring(StorageList.Current.name):match("([^:]+):([^:]+)")
+				if playerSteamID == SteamID then
+					StorageList.Current.inventory.itemList:Clear()
+					StorageList.Current:Kill()
+				end
+			end
+		end
+	end
+end
+
+function PLUGIN:OnEntityDeath(entity, info)
+	if string.match(entity.name, "bank:") then
+		local TargetName, SteamID = tostring(entity.name):match("([^:]+):([^:]+)")
+		local players = global.BasePlayer.activePlayerList:GetEnumerator()
+		while players:MoveNext() do
+			local playerSteamID = rust.UserIDFromPlayer(players.Current)
+			if playerSteamID == SteamID then
+				if Bank[SteamID] or ClanBank[SteamID] then
+				if Bank[SteamID] then self:SaveBank(players.Current, 1, "true") end
+				if ClanBank[SteamID] then self:SaveBank(players.Current, 2, "true") end
+				else
+				self:ResetPlayerConfig(players.Current)
+				end
+				entity.inventory.itemList:Clear()
+				return
+			end
+		end
+		local players = global.BasePlayer.sleepingPlayerList:GetEnumerator()
+		while players:MoveNext() do
+			local playerSteamID = rust.UserIDFromPlayer(players.Current)
+			if playerSteamID == SteamID then
+				if Bank[SteamID] or ClanBank[SteamID] then
+					if Bank[SteamID] then self:SaveBank(players.Current, 1, "true") end
+					if ClanBank[SteamID] then self:SaveBank(players.Current, 2, "true") end
+					else
+					self:ResetPlayerConfig(players.Current)
+				end
+				entity.inventory.itemList:Clear()
+				return
+			end
+		end
+		entity.inventory.itemList:Clear()
+		return
 	end
 end
 
@@ -1953,7 +2009,7 @@ function PLUGIN:OnPlayerLootEnd(source)
 		if Shared[playerSteamID] then
 			TargetName, SteamID = tostring(Shared[playerSteamID]):match("([^:]+):([^:]+)")
 		end
-		self:SaveBank(player, 1)
+		self:SaveBank(player, 1, "false")
 		if player:IsConnected() then
 			local message = FormatMessage(self:Lang(player, "BankClosed"), { player = TargetName })
 			self:RustMessage(player, message)
@@ -1961,14 +2017,12 @@ function PLUGIN:OnPlayerLootEnd(source)
 	end
 	if ClanBank[playerSteamID] then
 		local TargetName = ClanName[playerSteamID]
-		self:SaveBank(player, 2)
+		self:SaveBank(player, 2, "false")
 		if player:IsConnected() then
 			local message = FormatMessage(self:Lang(player, "ClanBankClosed"), { clan = TargetName })
 			self:RustMessage(player, message)
 		end
 	end
-	BankOpened[playerSteamID] = "false"
-	LocPos[player] = nil
 end
 
 function PLUGIN:CheckPlayer(player, target, admin)

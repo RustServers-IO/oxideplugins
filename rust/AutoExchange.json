@@ -1,0 +1,20 @@
+{
+    "name": "AutoExchange",
+    "description": "Converts Economics to RP automatically",
+    "author": "",
+    "version": "1.0.4",
+    "configuration": false,
+    "require": {
+        "ServerRewards": "*",
+        "Economics": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/autoexchange.2224",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

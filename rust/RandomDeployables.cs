@@ -5,7 +5,7 @@ using UnityEngine;
 using System.Linq;
 namespace Oxide.Plugins
 {
-    [Info("RandomDeployables", "Norn", "0.1.5", ResourceId = 2187)]
+    [Info("RandomDeployables", "Norn", "0.1.6", ResourceId = 2187)]
     [Description("Randomize deployable skins")]
 
     class RandomDeployables : RustPlugin
@@ -14,13 +14,13 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission("randomdeployables.able", this);
             InitializeTable();
-            if (Config["Settings", "AllowDefaultSkin"] == null)
+            if (Config["Enabled", "ArmouredDoor"] == null)
             {
                 Puts("Updating configuration...");
-                Config["Settings", "AllowDefaultSkin"] = false;
+                Config["Enabled", "ArmouredDoor"] = true;
                 SaveConfig();
             }
-            Puts("[Enabled] Bags: " + Config["Enabled", "SleepingBags"].ToString() + " | Boxes: " + Config["Enabled", "Boxes"].ToString());
+            Puts("[Enabled] Bags: " + Config["Enabled", "SleepingBags"].ToString() + " | Boxes: " + Config["Enabled", "Boxes"].ToString() + " | Armoured Doors: " + Config["Enabled", "ArmouredDoor"].ToString());
         }
         private static Dictionary<string, int> deployedToItem = new Dictionary<string, int>();
         private static List<ulong> SkinList = new List<ulong>();
@@ -56,17 +56,19 @@ namespace Oxide.Plugins
 
             Config["Enabled", "SleepingBags"] = true;
             Config["Enabled", "Boxes"] = true;
+            Config["Enabled", "ArmouredDoor"] = true;
 
             // --- [ PREFABS ] ---
 
             Config["PrefabID", "SleepingBag"] = "assets/prefabs/deployable/sleeping bag/sleepingbag_leather_deployed.prefab";
             Config["PrefabID", "LargeBox"] = "assets/prefabs/deployable/large wood storage/box.wooden.large.prefab";
+            Config["PrefabID", "ArmouredDoor"] = "assets/prefabs/building/door.hinged/door.hinged.toptier.prefab";
         }
         private List<int> GetSkins(ItemDefinition def)
         {
             List<int> skins = new List<int> { 0 };
             skins.AddRange(ItemSkinDirectory.ForItem(def).Select(skin => skin.id));
-            skins.AddRange(Rust.Workshop.Approved.All.Where(skin => skin.ItemName == def.shortname).Select(skin => (int)skin.WorkshopdId));
+            skins.AddRange(Rust.Workshop.Approved.All.Where(skin => skin.ItemType.ItemName == def.shortname).Select(skin => (int)skin.WorkshopdId));
             if (!Convert.ToBoolean(Config["Settings", "AllowDefaultSkin"])) { if (skins.Contains(0)) { skins.Remove(0); } }
             return skins;
         }
@@ -77,6 +79,7 @@ namespace Oxide.Plugins
             if (permission.UserHasPermission(player.net.connection.userid.ToString(), "randomdeployables.able"))
             {
                 if (!(e is BaseEntity) || player == null) { return; }
+                //Puts(gameObject.name);
                 if (Convert.ToBoolean(Config["Settings", "AllDeployables"]))
                 {
                     if (deployedToItem.ContainsKey(e.PrefabName))
@@ -104,6 +107,15 @@ namespace Oxide.Plugins
                     {
                         var skin = 0;
                         var def = ItemManager.FindItemDefinition(deployedToItem[Config["PrefabID", "LargeBox"].ToString()]);
+                        if (!Convert.ToBoolean(Config["Settings", "UseAllSkins"])) { skin = GetSkins(def).GetRandom(); }
+                        else { skin = (int)SkinList.GetRandom(); }
+                        e.skinID = Convert.ToUInt64(skin);
+                        e.SendNetworkUpdate();
+                    }
+                    else if (gameObject.name == Config["PrefabID", "ArmouredDoor"].ToString() && Convert.ToBoolean(Config["Enabled", "ArmouredDoor"])) // Fire Up
+                    {
+                        var skin = 0;
+                        var def = ItemManager.FindItemDefinition(deployedToItem[Config["PrefabID", "ArmouredDoor"].ToString()]);
                         if (!Convert.ToBoolean(Config["Settings", "UseAllSkins"])) { skin = GetSkins(def).GetRandom(); }
                         else { skin = (int)SkinList.GetRandom(); }
                         e.skinID = Convert.ToUInt64(skin);

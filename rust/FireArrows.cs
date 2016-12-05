@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FireArrows", "Colon Blow", "1.2.3")]
+    [Info("FireArrows", "Colon Blow", "1.2.4")]
     class FireArrows : RustPlugin
     {
 
@@ -18,7 +18,13 @@ namespace Oxide.Plugins
 	Dictionary<ulong, FireArrowData> FireArrowOn = new Dictionary<ulong, FireArrowData>();
 	Dictionary<ulong, FireBallData> FireBallOn = new Dictionary<ulong, FireBallData>();
 	Dictionary<ulong, FireBombData> FireBombOn = new Dictionary<ulong, FireBombData>();
+	Dictionary<ulong, FireArrowCooldown> Cooldown = new Dictionary<ulong, FireArrowCooldown>();
 	Dictionary<ulong, string> GuiInfoFA = new Dictionary<ulong, string>();
+
+	class FireArrowCooldown
+        {
+             	public BasePlayer player;
+        }
 
         class FireArrowData
         {
@@ -73,6 +79,7 @@ namespace Oxide.Plugins
 	static float DurationFireArrow = 10f;
 	static float DurationFireBallArrow = 10f;
 	static float DurationFireBombArrow = 10f;
+	static float UsageCooldown = 60f;
 
 	static string RestrictedZoneID = "24072018";
 	static int cloth = 5;
@@ -111,6 +118,7 @@ namespace Oxide.Plugins
         	CheckCfg("Icon - Fire Arrow", ref IconFireArrow);
         	CheckCfg("Icon - Fire Ball Arrow", ref IconFireBall);
         	CheckCfg("Icon - Fire Bomb Arrow", ref IconFireBomb);
+		CheckCfgFloat("Cooldown - Time needed to wait", ref UsageCooldown);
         }
 
         private void CheckCfg<T>(string Key, ref T var)
@@ -159,6 +167,7 @@ namespace Oxide.Plugins
                 	{"doesnothavemattxt", "You don't have required materials..."},
                	 	{"defaultarrowtxt", "Your Arrows are set for Normal."},
 			{"restricted", "You are not allowed FireArrows in this Zone"},
+			{"cooldown", "You must wait for cooldown to shoot again."},	
 			{"deniedarrowtxt", "No Access to This Arrow Tier."}
             	};
 
@@ -176,24 +185,44 @@ namespace Oxide.Plugins
 
 	void ArrowFX(BasePlayer player, HitInfo hitInfo)
 	{
-
 		if (FireArrowOn.ContainsKey(player.userID))
 			{
-			FireArrowFX(player, hitInfo);
-			return;
+				FireArrowFX(player, hitInfo);
+				ArrowCooldownControl(player);
+				return;
 			}
 		if (FireBallOn.ContainsKey(player.userID))
 			{
-			FireBallFX(player, hitInfo);
-			return;			
+				FireBallFX(player, hitInfo);
+				ArrowCooldownControl(player);
+				return;			
 			}
 		if (FireBombOn.ContainsKey(player.userID))
 			{
-			FireBombFX(player, hitInfo);
-			return;
+				FireBombFX(player, hitInfo);
+				ArrowCooldownControl(player);
+				return;
 			}
 		else
 		return;
+	}
+
+	void ArrowCooldownControl(BasePlayer player)
+	{
+		if (UsageCooldown == null) return;
+		if (UsageCooldown <= 0f) return;
+		if (UsageCooldown >= 1f)
+			{
+				Cooldown.Add(player.userID, new FireArrowCooldown { player = player, });
+				timer.Once(UsageCooldown, () => Cooldown.Remove(player.userID));
+			}
+	}
+
+	void ArrowCooldownToggle(BasePlayer player)
+	{
+		if (UsageCooldown == null) return;
+		if (UsageCooldown <= 0f) return;
+		NormalArrowToggle(player);
 	}
 
 	void FireArrowFX(BasePlayer player, HitInfo hitInfo)
@@ -205,6 +234,7 @@ namespace Oxide.Plugins
 		BaseEntity FireArrow = GameManager.server.CreateEntity("assets/bundled/prefabs/fireball.prefab", hitInfo.HitPositionWorld);
 		FireArrow?.Spawn();
 		timer.Once(DurationFireArrow, () => FireArrow.Kill());
+		ArrowCooldownToggle(player);
 		return;
 	}
 
@@ -222,6 +252,7 @@ namespace Oxide.Plugins
 		BaseEntity FireBallArrow = GameManager.server.CreateEntity("assets/bundled/prefabs/napalm.prefab", hitInfo.HitPositionWorld);
 		FireBallArrow?.Spawn();
 		timer.Once(DurationFireBallArrow, () => FireBallArrow.Kill());
+		ArrowCooldownToggle(player);
 		return;
 	}
 
@@ -236,6 +267,7 @@ namespace Oxide.Plugins
 		BaseEntity FireBombArrow = GameManager.server.CreateEntity("assets/bundled/prefabs/oilfireballsmall.prefab", hitInfo.HitPositionWorld);
 		FireBombArrow?.Spawn();
 		timer.Once(DurationFireBombArrow, () => FireBombArrow.Kill());
+		ArrowCooldownToggle(player);
 		return;
 	}
 
@@ -265,6 +297,11 @@ namespace Oxide.Plugins
         {
         	if (input.WasJustPressed(BUTTON.FIRE_THIRD))
 		{
+			if (Cooldown.ContainsKey(player.userID))
+			{
+				SendReply(player, lang.GetMessage("cooldown", this));
+				return;
+			}
 			ToggleArrowType(player);
 		}
 	}
@@ -272,6 +309,11 @@ namespace Oxide.Plugins
 	[ChatCommand("firearrow")]
         void cmdChatfirearrow(BasePlayer player, string command, string[] args)
 	{
+		if (Cooldown.ContainsKey(player.userID))
+		{
+			SendReply(player, lang.GetMessage("cooldown", this));
+			return;
+		}
 		ToggleArrowType(player);
 	}
 
@@ -284,6 +326,11 @@ namespace Oxide.Plugins
                 return;
             }
 		var player = arg.Player();
+		if (Cooldown.ContainsKey(player.userID))
+		{
+			SendReply(player, lang.GetMessage("cooldown", this));
+			return;
+		}
 		ToggleArrowType(player);
 	}
 

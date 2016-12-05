@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Reference: Rust.Workshop
+using System;
 using Oxide.Core;
 using System.Collections.Generic;
 using Oxide.Core.Plugins;
@@ -10,10 +11,11 @@ using System.Collections;
 using System.Reflection;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.3.6", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.3.7", ResourceId = 1751)]
     public class ServerRewards : RustPlugin
     {
         #region Fields
@@ -58,9 +60,9 @@ namespace Oxide.Plugins
         {
             public Dictionary<ulong, int> Players = new Dictionary<ulong, int>();
         }
-        
+
         #endregion
-        
+
         #region Reward data
         class RewardDataStorage
         {
@@ -68,17 +70,17 @@ namespace Oxide.Plugins
             public Dictionary<int, ItemInfo> RewardItems = new Dictionary<int, ItemInfo>();
             public Dictionary<string, CommandInfo> RewardCommands = new Dictionary<string, CommandInfo>();
             public Dictionary<string, Dictionary<ulong, uint>> storedImages = new Dictionary<string, Dictionary<ulong, uint>>();
-        } 
+        }
         class SaleDataStorage
         {
             public Dictionary<int, Dictionary<ulong, SaleInfo>> Prices = new Dictionary<int, Dictionary<ulong, SaleInfo>>();
-        }   
+        }
         class SaleInfo
         {
             public float SalePrice;
             public string Name;
             public bool Enabled;
-        }    
+        }
         class KitInfo
         {
             public string KitName;
@@ -91,7 +93,7 @@ namespace Oxide.Plugins
             public string DisplayName;
             public string URL;
             public int ID;
-            public int Amount;            
+            public int Amount;
             public ulong Skin;
             public int Cost;
             public int TargetID;
@@ -197,14 +199,14 @@ namespace Oxide.Plugins
                 panel, CuiHelper.GetGuid());
             }
             static public void LoadImage(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
-            {               
+            {
                 container.Add(new CuiElement
                 {
                     Name = CuiHelper.GetGuid(),
                     Parent = panel,
                     Components =
                     {
-                        new CuiRawImageComponent {Png = png },                        
+                        new CuiRawImageComponent {Png = png },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                 });
@@ -259,7 +261,7 @@ namespace Oxide.Plugins
                     if (!string.IsNullOrEmpty(playTime))
                         message = $"{configData.Messaging.MSG_MainColor}{msg("storePlaytime", player.UserIDString)}: {playTime}</color> || " + message;
                 }
-            }              
+            }
 
             SR_UI.CreateLabel(ref element, UIRP, "0 0 0 0", message, 20, "0 0", "1 1", TextAnchor.MiddleCenter, 0f);
             CuiHelper.AddUi(player, element);
@@ -277,25 +279,31 @@ namespace Oxide.Plugins
 
         private void OpenNavMenu(BasePlayer player, string npcid = null)
         {
-            CuiElementContainer element = GetElement(ElementType.Navigation, 0, npcid);            
+            CuiElementContainer element = GetElement(ElementType.Navigation, 0, npcid);
             CuiHelper.AddUi(player, element);
             DisplayPoints(player);
-        }        
+        }
         private void SwitchElement(BasePlayer player, ElementType type, int page = 0, string npcid = null)
         {
+            if (!OpenUI.ContainsKey(player.userID))
+            {
+                DestroyUI(player);
+                UIElements.DestroyWholeList(player);
+                return;
+            }
             if (type == ElementType.Transfer)
             {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);
-                CreateTransferElement(player, page);
+                UIElements.DestroyUI(player, OpenUI[player.userID]);                
                 OpenUI[player.userID].type = ElementType.Transfer;
                 OpenUI[player.userID].page = 0;
+                CreateTransferElement(player, page);
             }
             else if (type == ElementType.Sell)
             {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);
-                CreateSaleElement(player);
+                UIElements.DestroyUI(player, OpenUI[player.userID]);                
                 OpenUI[player.userID].type = ElementType.Sell;
                 OpenUI[player.userID].page = 0;
+                CreateSaleElement(player);
             }
             else if (type == ElementType.Exchange)
             {
@@ -315,10 +323,10 @@ namespace Oxide.Plugins
                 OpenUI[player.userID].page = page;
                 OpenUI[player.userID].type = type;
                 CuiHelper.AddUi(player, element);
-            }            
-        }        
+            }
+        }
         private CuiElementContainer GetElement(ElementType type, int page, string npcid = null)
-        {            
+        {
             if (!string.IsNullOrEmpty(npcid))
             {
                 if (UIElements.npcElements.ContainsKey(npcid))
@@ -336,7 +344,7 @@ namespace Oxide.Plugins
                 UIElements.DestroyUI(player, OpenUI[player.userID]);
                 UIElements.DestroyNav(player, OpenUI[player.userID]);
                 OpenUI.Remove(player.userID);
-            }            
+            }
             OpenMap(player);
         }
 
@@ -356,22 +364,22 @@ namespace Oxide.Plugins
         #region UI Creation
         #region Static UI cache
         public static class UIElements
-        {            
+        {
             public static Dictionary<ElementType, CuiElementContainer[]> standardElements;
             public static Dictionary<string, Dictionary<ElementType, CuiElementContainer[]>> npcElements;
             public static List<string> elementIDs;
-            
+
             public static void RenameComponents(CuiElementContainer[] container)
             {
-                foreach(var element in container)
+                foreach (var element in container)
                 {
-                    foreach(var e in element)
+                    foreach (var e in element)
                     {
                         if (e.Name == "AddUI CreatedPanel")
                             e.Name = CuiHelper.GetGuid();
                         elementIDs.Add(e.Name);
                     }
-                }                             
+                }
             }
             public static void DestroyUI(BasePlayer player, OUIData data)
             {
@@ -380,7 +388,7 @@ namespace Oxide.Plugins
                 {
                     CuiHelper.DestroyUi(player, UIMain);
                     return;
-                }                
+                }
 
                 CuiElementContainer element = null;
 
@@ -410,11 +418,11 @@ namespace Oxide.Plugins
                 {
                     DestroyWholeList(player);
                     return;
-                }                
+                }
 
-                for (int i = 0; i < element.ToArray().Length; i++)                
-                    CuiHelper.DestroyUi(player, element.ToArray()[i].Name);                                
-            } 
+                for (int i = 0; i < element.ToArray().Length; i++)
+                    CuiHelper.DestroyUi(player, element.ToArray()[i].Name);
+            }
             public static void DestroyNav(BasePlayer player, OUIData data)
             {
                 CuiElementContainer element = null;
@@ -425,12 +433,12 @@ namespace Oxide.Plugins
 
                 for (int i = 0; i < element.ToArray().Length; i++)
                     CuiHelper.DestroyUi(player, element.ToArray()[i].Name);
-            }  
-            static void DestroyWholeList(BasePlayer player)
+            }
+            public static void DestroyWholeList(BasePlayer player)
             {
-                foreach(var element in elementIDs)
+                foreach (var element in elementIDs)
                     CuiHelper.DestroyUi(player, element);
-            }         
+            }
         }
         void InitializeAllElements()
         {
@@ -440,7 +448,7 @@ namespace Oxide.Plugins
             CreateItemsUI();
             CreateCommandsUI();
             CreateExchangeUI();
-            CreateAllNPCs(); 
+            CreateAllNPCs();
         }
 
         #region Standard Elements
@@ -449,7 +457,7 @@ namespace Oxide.Plugins
             var Selector = SR_UI.CreateElementContainer(UISelect, UIColors["dark"], "0 0.92", "1 1");
             SR_UI.CreatePanel(ref Selector, UISelect, UIColors["light"], "0.01 0.05", "0.99 0.95", true);
             SR_UI.CreateLabel(ref Selector, UISelect, "", $"{configData.Messaging.MSG_MainColor}{msg("storeTitle")}</color>", 30, "0.01 0", "0.2 1");
-                       
+
             int number = 0;
             if (!configData.Categories.Disable_Kits) { CreateMenuButton(ref Selector, UISelect, msg("storeKits"), $"SRUI_ChangeElement Kits 0", number); number++; }
             if (!configData.Categories.Disable_Items) { CreateMenuButton(ref Selector, UISelect, msg("storeItems"), $"SRUI_ChangeElement Items 0", number); number++; }
@@ -466,10 +474,10 @@ namespace Oxide.Plugins
         {
             int maxPages = 0;
             var count = rewardData.RewardKits;
-            if (count.Count > 10)            
+            if (count.Count > 10)
                 maxPages = (count.Count - 1) / 10 + 1;
             List<CuiElementContainer> kitList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)            
+            for (int i = 0; i <= maxPages; i++)
                 kitList.Add(CreateKitsElement(i));
             UIElements.standardElements.Add(ElementType.Kits, kitList.ToArray());
             UIElements.RenameComponents(UIElements.standardElements[ElementType.Kits]);
@@ -589,7 +597,7 @@ namespace Oxide.Plugins
                 maxentries = rew.Count;
             int rewardcount = 10 * page;
 
-            List<string> commNames = rewardData.RewardCommands.Keys.ToList();            
+            List<string> commNames = rewardData.RewardCommands.Keys.ToList();
 
             int i = 0;
             for (int n = rewardcount; n < maxentries; n++)
@@ -602,17 +610,17 @@ namespace Oxide.Plugins
             return Main;
         }
         #endregion
-                
+
         #region NPC Elements
         private void CreateAllNPCs()
         {
-            foreach(var npc in npcDealers.NPCIDs)
+            foreach (var npc in npcDealers.NPCIDs)
             {
                 if (npc.Value.isCustom)
                 {
-                    CreateNPCMenu(npc.Key);                    
+                    CreateNPCMenu(npc.Key);
                 }
-            }            
+            }
             PrintWarning("All UI elements created successfully!");
         }
         private void CreateNPCMenu(string npcid)
@@ -652,7 +660,7 @@ namespace Oxide.Plugins
             int maxPages = 0;
             var count = npcDealers.NPCIDs[npcid].kitList;
             if (count.Count > 10)
-                maxPages = (count.Count - 1) / 10 + 1;            
+                maxPages = (count.Count - 1) / 10 + 1;
             List<CuiElementContainer> kitList = new List<CuiElementContainer>();
             for (int i = 0; i <= maxPages; i++)
                 kitList.Add(CreateNPCKitsElement(npcid, i));
@@ -666,8 +674,8 @@ namespace Oxide.Plugins
             if (count.Count > 21)
                 maxPages = (count.Count - 1) / 21 + 1;
             List<CuiElementContainer> itemList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)            
-                itemList.Add(CreateNPCItemsElement(npcid, i));            
+            for (int i = 0; i <= maxPages; i++)
+                itemList.Add(CreateNPCItemsElement(npcid, i));
             UIElements.npcElements[npcid].Add(ElementType.Items, itemList.ToArray());
             UIElements.RenameComponents(UIElements.npcElements[npcid][ElementType.Items]);
         }
@@ -701,7 +709,7 @@ namespace Oxide.Plugins
             if (maxentries > kitNames.Count)
                 maxentries = kitNames.Count;
             int rewardcount = 10 * page;
-                        
+
             int i = 0;
             for (int n = rewardcount; n < maxentries; n++)
             {
@@ -736,7 +744,7 @@ namespace Oxide.Plugins
             int rewardcount = 21 * page;
 
             for (int n = rewardcount; n < maxentries; n++)
-            {                
+            {
                 CreateItemEntry(ref Main, UIMain, rew[n], i);
                 i++;
             }
@@ -762,7 +770,7 @@ namespace Oxide.Plugins
             if (maxentries > commNames.Count)
                 maxentries = commNames.Count;
             int rewardcount = 10 * page;
-            
+
             int i = 0;
             for (int n = rewardcount; n < maxentries; n++)
             {
@@ -787,7 +795,7 @@ namespace Oxide.Plugins
             SR_UI.CreateLabel(ref HelpMain, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("selectSell")}</color>", 22, "0 0.9", "1 1");
 
             int i = 0;
-            foreach(var item in player.inventory.containerMain.itemList)
+            foreach (var item in player.inventory.containerMain.itemList)
             {
                 if (saleData.Prices.ContainsKey(item.info.itemid))
                 {
@@ -811,13 +819,13 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, HelpMain);
         }
         private void CreateInventoryEntry(ref CuiElementContainer container, string panelName, int itemId, ulong skinId, string name, int amount, int number)
-        {            
+        {
             var pos = CalcPosInv(number);
 
             SR_UI.CreateLabel(ref container, panelName, "", $"{msg("Name")}:  {configData.Messaging.MSG_MainColor}{name}</color>", 14, $"{pos[0]} {pos[1]}", $"{pos[0] + 0.22f} {pos[3]}", TextAnchor.MiddleLeft);
             SR_UI.CreateLabel(ref container, panelName, "", $"{msg("Amount")}:  {configData.Messaging.MSG_MainColor}{amount}</color>", 14, $"{pos[0] + 0.22f} {pos[1]}", $"{pos[0] + 0.32f} {pos[3]}", TextAnchor.MiddleLeft);
             SR_UI.CreateButton(ref container, panelName, UIColors["buttonbg"], msg("Sell"), 14, $"{pos[0] + 0.35f} {pos[1]}", $"{pos[2]} {pos[3]}", $"SRUI_SellItem {itemId} {skinId} {amount} {name}");
-        }       
+        }
         private void SellItem(BasePlayer player, int itemId, ulong skinId, string name, int amount)
         {
             var HelpMain = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
@@ -831,7 +839,7 @@ namespace Oxide.Plugins
             SR_UI.CreateLabel(ref HelpMain, UIMain, "", string.Format(msg("sellUnitF"), configData.Messaging.MSG_MainColor, amount), 18, "0.1 0.72", "0.3 0.76", TextAnchor.MiddleLeft);
             SR_UI.CreateLabel(ref HelpMain, UIMain, "", string.Format(msg("sellTotalF"), configData.Messaging.MSG_MainColor, salePrice, msg("storeRP")), 18, "0.1 0.68", "0.3 0.72", TextAnchor.MiddleLeft);
 
-            
+
             SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 10000", 16, "0.84 0.72", "0.89 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 10000} {name}");
             SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 1000", 16, "0.78 0.72", "0.83 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 1000} {name}");
             SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 100", 16, "0.72 0.72", "0.77 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 100} {name}");
@@ -872,11 +880,11 @@ namespace Oxide.Plugins
             var max = GetAmount(player, itemId, skinId);
 
             if (amount <= 0)
-                amount = 1;            
+                amount = 1;
             if (amount > max)
                 amount = max;
 
-            SellItem(player, itemId, skinId, name, amount);            
+            SellItem(player, itemId, skinId, name, amount);
         }
         [ConsoleCommand("SRUI_Sell")]
         private void cmdSell(ConsoleSystem.Arg arg)
@@ -963,11 +971,11 @@ namespace Oxide.Plugins
                             {
                                 num = num + item.amount;
                                 items.Add(item);
-                                if (collect != null)                                
-                                    collect.Add(item);                                
+                                if (collect != null)
+                                    collect.Add(item);
                             }
-                            if (num != iAmount)                            
-                                continue;                            
+                            if (num != iAmount)
+                                continue;
                             break;
                         }
                         else
@@ -980,15 +988,15 @@ namespace Oxide.Plugins
                             item2.AddOwners(item.owners, 1f);
                             item2.amount = num1;
                             item2.CollectedForCrafting(player);
-                            if (collect != null)                            
-                                collect.Add(item2);                            
+                            if (collect != null)
+                                collect.Add(item2);
                             break;
                         }
                     }
                 }
             }
-            foreach (Item item3 in items)            
-                item3.RemoveFromContainer();            
+            foreach (Item item3 in items)
+                item3.RemoveFromContainer();
             return num;
         }
         #endregion
@@ -996,7 +1004,7 @@ namespace Oxide.Plugins
 
         #region Transfer System
         private void CreateTransferElement(BasePlayer player, int page = 0)
-        {            
+        {
             var HelpMain = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
             SR_UI.CreatePanel(ref HelpMain, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
             SR_UI.CreateLabel(ref HelpMain, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("transfer1", player.UserIDString)}</color>", 22, "0 0.9", "1 1");
@@ -1008,7 +1016,7 @@ namespace Oxide.Plugins
                 if (page < maxpages - 1)
                     SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], msg("storeNext", player.UserIDString), 18, "0.87 0.92", "0.97 0.97", $"SRUI_Transfer {page + 1}");
                 if (page > 0)
-                    SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], msg("storeBack",  player.UserIDString), 18, "0.03 0.92", "0.13 0.97", $"SRUI_Transfer {page - 1}");
+                    SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], msg("storeBack", player.UserIDString), 18, "0.03 0.92", "0.13 0.97", $"SRUI_Transfer {page - 1}");
             }
             int maxentries = (96 * (page + 1));
             if (maxentries > playerCount)
@@ -1113,13 +1121,13 @@ namespace Oxide.Plugins
             Vector2 posMin = position + offset;
             Vector2 posMax = posMin + dimensions;
             return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
-        }       
-       
+        }
+
         #endregion
 
         #region Item Entries
         private void CreateMenuButton(ref CuiElementContainer container, string panelName, string buttonname, string command, int number)
-        {            
+        {
             Vector2 dimensions = new Vector2(0.1f, 0.6f);
             Vector2 origin = new Vector2(0.2f, 0.2f);
             Vector2 offset = new Vector2((0.005f + dimensions.x) * number, 0);
@@ -1133,7 +1141,7 @@ namespace Oxide.Plugins
         {
             Vector2 dimensions = new Vector2(0.8f, 0.079f);
             Vector2 origin = new Vector2(0.03f, 0.86f);
-            float offsetY = (0.004f + dimensions.y) * number; 
+            float offsetY = (0.004f + dimensions.y) * number;
             Vector2 offset = new Vector2(0, offsetY);
             Vector2 posMin = origin - offset;
             Vector2 posMax = posMin + dimensions;
@@ -1142,28 +1150,28 @@ namespace Oxide.Plugins
             {
                 command = $"SRUI_BuyKit {name}";
                 if (!string.IsNullOrEmpty(rewardData.RewardKits[name].URL))
-                {                    
+                {
                     string fileLocation = rewardData.storedImages[999999999.ToString()][0].ToString();
                     if (rewardData.storedImages.ContainsKey(rewardData.RewardKits[name].KitName))
                         fileLocation = rewardData.storedImages[rewardData.RewardKits[name].KitName][0].ToString();
 
-                    SR_UI.LoadImage(ref container, panelName, fileLocation, $"{posMin.x} {posMin.y}", $"{posMin.x + 0.05} {posMax.y}");                    
+                    SR_UI.LoadImage(ref container, panelName, fileLocation, $"{posMin.x} {posMin.y}", $"{posMin.x + 0.05} {posMax.y}");
                 }
                 posMin.x = 0.09f;
             }
             else command = $"SRUI_BuyCommand {name}";
             SR_UI.CreateLabel(ref container, panelName, "", $"{configData.Messaging.MSG_MainColor}{name}</color> -- {configData.Messaging.MSG_Color}{description}</color>", 18, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", TextAnchor.MiddleLeft);
             SR_UI.CreateButton(ref container, panelName, UIColors["buttonbg"], $"{msg("storeCost")}: {cost}", 18, $"0.84 {posMin.y + 0.015}", $"0.97 {posMax.y - 0.015f}", command);
-        }       
+        }
         private void CreateItemEntry(ref CuiElementContainer container, string panelName, int itemnumber, int number)
         {
             if (rewardData.RewardItems.ContainsKey(itemnumber))
-            {                
+            {
                 var item = rewardData.RewardItems[itemnumber];
                 Vector2 dimensions = new Vector2(0.13f, 0.24f);
                 Vector2 origin = new Vector2(0.03f, 0.7f);
                 float offsetY = 0;
-                float offsetX = 0;                
+                float offsetX = 0;
                 switch (number)
                 {
                     case 0:
@@ -1300,7 +1308,7 @@ namespace Oxide.Plugins
                             PopupMessage(player, string.Format(msg("buyKit", player.UserIDString), kitName));
                             return;
                         }
-                    }                    
+                    }
                 }
                 PopupMessage(player, msg("notEnoughPoints", player.UserIDString));
                 return;
@@ -1374,7 +1382,7 @@ namespace Oxide.Plugins
             }
             PopupMessage(player, msg("errorItem", player.UserIDString));
             return;
-        }        
+        }
 
         [ConsoleCommand("SRUI_ChangeElement")]
         private void cmdChangeElement(ConsoleSystem.Arg arg)
@@ -1387,12 +1395,12 @@ namespace Oxide.Plugins
             int page = 0;
             string npcid = null;
 
-            if (arg.Args.Length >= 2)            
+            if (arg.Args.Length >= 2)
                 page = arg.GetInt(1);
 
             if (arg.Args.Length >= 3)
                 npcid = arg.GetString(2);
-            
+
             switch (type)
             {
                 case "Kits":
@@ -1412,17 +1420,17 @@ namespace Oxide.Plugins
                     return;
                 case "Sell":
                     SwitchElement(player, ElementType.Sell);
-                    return;             
+                    return;
             }
         }
-        
+
         [ConsoleCommand("SRUI_Exchange")]
         private void cmdExchange(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
-                return;            
-            var type = int.Parse(arg.GetString(0).Replace("'", ""));           
+                return;
+            var type = int.Parse(arg.GetString(0).Replace("'", ""));
             if (type == 1)
             {
                 if (!PointCache.ContainsKey(player.userID) || PointCache[player.userID] < configData.CurrencyExchange.RP_ExchangeRate)
@@ -1468,7 +1476,7 @@ namespace Oxide.Plugins
                 return;
             var ID = args.GetString(0);
             var name = args.GetString(1);
-            TransferElement(player, name, ID);            
+            TransferElement(player, name, ID);
         }
 
         [ConsoleCommand("SRUI_TransferID")]
@@ -1490,19 +1498,19 @@ namespace Oxide.Plugins
                     return;
                 }
             }
-            PopupMessage(player, msg("notEnoughPoints"));            
+            PopupMessage(player, msg("notEnoughPoints"));
         }
-       
+
         [ConsoleCommand("SRUI_DestroyAll")]
         private void cmdDestroyAll(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
-                return;            
+                return;
             DestroyUI(player);
         }
         #endregion
-        
+
         #endregion
 
         #region Oxide Hooks  
@@ -1528,7 +1536,7 @@ namespace Oxide.Plugins
             webObject = new GameObject("WebObject");
             uWeb = webObject.AddComponent<UnityWeb>();
             uWeb.Add("http://i.imgur.com/zq9zuKw.jpg", "999999999", 0);
-                                              
+
             LoadData();
             LoadVariables();
 
@@ -1536,12 +1544,12 @@ namespace Oxide.Plugins
 
             if (!Kits) PrintWarning($"Kits could not be found! Unable to issue kit rewards");
             if (configData.Options.Use_PTT && !PlaytimeTracker) PrintWarning("Playtime Tracker could not be found! Unable to monitor user playtime");
-               
+
             foreach (var item in ItemManager.itemList)
             {
                 if (!ItemNames.ContainsKey(item.itemid.ToString()))
                     ItemNames.Add(item.itemid.ToString(), item.displayName.translated);
-            }            
+            }
 
             InitializeAllElements();
             UpdatePriceList();
@@ -1549,24 +1557,24 @@ namespace Oxide.Plugins
             foreach (var player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);
 
-            SaveLoop();            
+            SaveLoop();
         }
         void OnPlayerInit(BasePlayer player)
         {
             if (player != null)
             {
                 DestroyUI(player);
-                var ID = player.userID; 
+                var ID = player.userID;
                 if (PointCache.ContainsKey(ID))
                     if (PointCache[ID] > 0)
                         InformPoints(player);
-            }           
+            }
         }
         void OnPlayerDisconnected(BasePlayer player) => DestroyUI(player);
         void Unload()
         {
             if (saveTimer != null)
-                saveTimer.Destroy();    
+                saveTimer.Destroy();
             foreach (var player in BasePlayer.activePlayerList)
                 DestroyUI(player);
             SaveData();
@@ -1595,7 +1603,7 @@ namespace Oxide.Plugins
             CloseMap(player);
             OpenNavMenu(player, npcid);
 
-            if (!configData.Categories.Disable_Kits)            
+            if (!configData.Categories.Disable_Kits)
                 SwitchElement(player, ElementType.Kits, 0, npcid);
             else if (!configData.Categories.Disable_Items)
                 SwitchElement(player, ElementType.Items, 0, npcid);
@@ -1638,7 +1646,7 @@ namespace Oxide.Plugins
                     return target.Object as BasePlayer;
             }
 
-            var targets = covalence.Players.FindPlayers(arg);            
+            var targets = covalence.Players.FindPlayers(arg);
 
             if (targets.ToArray().Length == 0)
             {
@@ -1652,7 +1660,7 @@ namespace Oxide.Plugins
             if (targets.ToArray().Length > 1)
             {
                 if (player != null)
-                { 
+                {
                     SendMSG(player, msg("multiPlayers", player.UserIDString));
                     return null;
                 }
@@ -1669,7 +1677,7 @@ namespace Oxide.Plugins
                 }
                 else return msg("noPlayers");
             }
-        }        
+        }
         private bool RemovePlayer(ulong ID)
         {
             if (PointCache.ContainsKey(ID))
@@ -1677,8 +1685,8 @@ namespace Oxide.Plugins
                 PointCache.Remove(ID);
                 return true;
             }
-            return false;           
-        }                
+            return false;
+        }
         void SendEchoConsole(Network.Connection cn, string msg)
         {
             if (Network.Net.sv.IsConnected())
@@ -1688,7 +1696,7 @@ namespace Oxide.Plugins
                 Network.Net.sv.write.String(msg);
                 Network.Net.sv.write.Send(new Network.SendInfo(cn));
             }
-        }        
+        }
         #endregion
 
         #region API
@@ -1699,12 +1707,12 @@ namespace Oxide.Plugins
             var success = GetUserID(userID);
             if (success is bool)
                 return false;
-            else ID = (ulong)success;            
+            else ID = (ulong)success;
 
             if (!PointCache.ContainsKey(ID))
                 PointCache.Add(ID, amount);
             else PointCache[ID] += amount;
-            
+
             if (configData.Options.LogRPTransactions)
             {
                 BasePlayer player = BasePlayer.FindByID(ID);
@@ -1729,7 +1737,7 @@ namespace Oxide.Plugins
 
             if (!PointCache.ContainsKey(ID)) return null;
             PointCache[ID] -= amount;
-            
+
             if (configData.Options.LogRPTransactions)
             {
                 BasePlayer player = BasePlayer.FindByID(ID);
@@ -1779,6 +1787,38 @@ namespace Oxide.Plugins
                 return ulong.Parse((userID as IPlayer).Id);
             return false;
         }
+
+        private JObject GetItemList()
+        {
+            var obj = new JObject();
+            foreach (var item in rewardData.RewardItems)
+            {
+                var itemobj = new JObject();
+                itemobj["name"] = item.Value.DisplayName;
+                itemobj["itemid"] = item.Value.ID;
+                itemobj["skinid"] = item.Value.Skin;
+                itemobj["targetid"] = item.Value.TargetID;
+                itemobj["amount"] = item.Value.Amount;
+                itemobj["cost"] = item.Value.Cost;
+                obj[item.Key] = itemobj;
+            }
+            return obj;
+        }
+        private bool AddItem(string name, int itemId, ulong skinId, int amount, int cost, string url = "", int targetId = 0)
+        {
+            ItemInfo newItem = new ItemInfo
+            {
+                Amount = amount,
+                Cost = cost,
+                DisplayName = name,
+                ID = itemId,
+                Skin = skinId,
+                URL = url,
+                TargetID = targetId
+            };
+            rewardData.RewardItems.Add(rewardData.RewardItems.Count, newItem);
+            return true;
+        }
         #endregion
 
         #region External API Calls        
@@ -1814,7 +1854,7 @@ namespace Oxide.Plugins
         {
             if (player == null || npc == null) return;
             var npcID = npc.UserIDString;
-            if (npcDealers.NPCIDs.ContainsKey(npcID))
+            if (npcDealers.NPCIDs.ContainsKey(npcID) && !OpenUI.ContainsKey(player.userID))
             {
                 OpenStore(player, npcID);
             }
@@ -2241,6 +2281,18 @@ namespace Oxide.Plugins
                             changed = true;
                         }
                     }
+                    foreach(var skin in Rust.Workshop.Approved.All.Where(x => x.ItemType.ItemName == item.shortname))
+                    {
+                        if (saleData.Prices[item.itemid].ContainsKey(skin.InventoryId))
+                            saleData.Prices[item.itemid].Remove(skin.InventoryId);
+
+                        if (!saleData.Prices[item.itemid].ContainsKey(skin.WorkshopdId))
+                        {
+                            SaleInfo saleInfo = new SaleInfo { Enabled = false, SalePrice = 1, Name = skin.Name };
+                            saleData.Prices[item.itemid].Add(skin.WorkshopdId, saleInfo);
+                            changed = true;
+                        }
+                    }
                 }
             }
             if (changed)
@@ -2253,6 +2305,9 @@ namespace Oxide.Plugins
                 var skins = ItemSkinDirectory.ForItem(item).ToList();
                 if (skins.Count > 0)
                     return true;
+                else if (Rust.Workshop.Approved.All.Where(x => x.ItemType.ItemName == item.shortname).Count() > 0)
+                    return true;
+
             }
             return false;
         }

@@ -9,7 +9,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("SmartHomes", "k1lly0u & DylanSMR", "0.1.3", ResourceId = 2051)]
+    [Info("SmartHomes", "k1lly0u & DylanSMR", "0.1.6", ResourceId = 2051)]
     class SmartHomes : RustPlugin
     {
         // / ////// / //   
@@ -29,7 +29,7 @@ namespace Oxide.Plugins
             public string entType;
             public Vector3 entLocation;
 
-            public newData(){ }
+            public newData() { }
         }
 
         // / ////// / //   
@@ -42,16 +42,18 @@ namespace Oxide.Plugins
         }
         void Unload()
         {
-            foreach(var player in BasePlayer.activePlayerList){
-            CuiHelper.DestroyUi(player, PublicSideBar);
-            CuiHelper.DestroyUi(player, PublicSetupName);
-            CuiHelper.DestroyUi(player, PublicObjectSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetupTurret);
-            CuiHelper.DestroyUi(player, PublicControlSetupDoor);
-            CuiHelper.DestroyUi(player, PublicControlSetupLight);
-            barUI.Remove(player.userID);
-            setupUI.Remove(player.userID);}
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                CuiHelper.DestroyUi(player, PublicSideBar);
+                CuiHelper.DestroyUi(player, PublicSetupName);
+                CuiHelper.DestroyUi(player, PublicObjectSetup);
+                CuiHelper.DestroyUi(player, PublicControlSetup);
+                CuiHelper.DestroyUi(player, PublicControlSetupTurret);
+                CuiHelper.DestroyUi(player, PublicControlSetupDoor);
+                CuiHelper.DestroyUi(player, PublicControlSetupLight);
+                barUI.Remove(player.userID);
+                setupUI.Remove(player.userID);
+            }
             SaveData();
         }
         void OnServerSave()
@@ -60,7 +62,8 @@ namespace Oxide.Plugins
         }
         void OnPlayerInit(BasePlayer player)
         {
-            if (Homes.Find(player) == null){
+            if (Homes.Find(player) == null)
+            {
                 var info = new Homes()
                 {
                     locx = 0.0f,
@@ -69,15 +72,20 @@ namespace Oxide.Plugins
                     playerID = player.userID
                 };
                 homeData.homeD.Add(player.userID, info);
-                SaveData();  
-            }        
+                SaveData();
+            }
         }
         void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(this.Title, homeData);
+        bool HasPerm(string uid, string permissions) => permission.UserHasPermission(uid, permissions);
         void OnServerInitialized()
         {
             updatelayer = typeof(BuildingBlock).GetMethod("UpdateLayer", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             LoadVariables();
-        }   
+
+            permission.RegisterPermission(configData.Permissions.DoorPermissions, this);
+            permission.RegisterPermission(configData.Permissions.LightPermissions, this);
+            permission.RegisterPermission(configData.Permissions.TurretPermissions, this); 
+        }
         // / ////// / //   
         // / data s / //
         // / ////// / // 
@@ -102,21 +110,21 @@ namespace Oxide.Plugins
             public Dictionary<string, DoorData> dData = new Dictionary<string, DoorData>();
 
             public List<float> objectX = new List<float>();
-            public Homes(){}
+            public Homes() { }
             internal static Homes Find(BasePlayer player)
             {
                 return homeData.homeD.Values.ToList().Find((d) => d.playerID == player.userID);
             }
-        }       
+        }
         public class TurretData
-        {   
+        {
             public float locx;
             public float locy;
             public float locz;
             public uint key;
             public bool status;
             public string name;
-            public TurretData(){}
+            public TurretData() { }
         }
         public class LightData
         {
@@ -126,7 +134,7 @@ namespace Oxide.Plugins
             public uint key;
             public bool status;
             public string name;
-            public LightData(){}
+            public LightData() { }
         }
         public class DoorData
         {
@@ -136,7 +144,7 @@ namespace Oxide.Plugins
             public uint key;
             public bool status;
             public string name;
-            public DoorData(){}
+            public DoorData() { }
         }
 
         // / ////// / //   
@@ -147,9 +155,16 @@ namespace Oxide.Plugins
         {
             public float ActivationDistance { get; set; }
         }
+        class Permissions
+        {
+            public string TurretPermissions { get; set; }
+            public string DoorPermissions { get; set; }
+            public string LightPermissions { get; set; }
+        }
         class ConfigData
         {
             public Options Options { get; set; }
+            public Permissions Permissions { get; set; }
         }
         private void LoadVariables()
         {
@@ -163,6 +178,12 @@ namespace Oxide.Plugins
                 Options = new Options
                 {
                     ActivationDistance = 30
+                },
+                Permissions = new Permissions
+                {
+                    TurretPermissions = "smarthomes.useturrets",
+                    DoorPermissions = "smarthomes.usedoors",
+                    LightPermissions = "smarthomes.uselights"
                 }
             };
             SaveConfig(config);
@@ -194,7 +215,7 @@ namespace Oxide.Plugins
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
-                return;          
+                return;
             CuiHelper.DestroyUi(player, PublicSetupName);
             CuiHelper.DestroyUi(player, PublicObjectSetup);
             CuiHelper.DestroyUi(player, PublicControlSetup);
@@ -202,7 +223,7 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, PublicControlSetupDoor);
             CuiHelper.DestroyUi(player, PublicControlSetupLight);
             barUI.Remove(player.userID);
-            setupUI.Remove(player.userID);  
+            setupUI.Remove(player.userID);
         }
 
         [ChatCommand("rem")]
@@ -210,7 +231,7 @@ namespace Oxide.Plugins
         {
             barUI.Add(player.userID);
             RemoteBar(player);
-        }   
+        }
 
         // / ////// / //   
         // / GUI Co / //
@@ -222,7 +243,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
 
             var element = UI.CreateElementContainer(PublicControlSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicControlSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
@@ -235,31 +256,49 @@ namespace Oxide.Plugins
             UI.CreateButton(ref element, PublicControlSetup, UIColors["buttongreen"], lang.GetMessage("OpenLight", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_ControlOpen Light");
             UI.CreatePanel(ref element, PublicControlSetup, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
             UI.CreateButton(ref element, PublicControlSetup, UIColors["buttongreen"], lang.GetMessage("OpenDoor", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ControlOpen Door");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_ControlOpen")]
         void ControlOpen(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
-                return;  
-            switch(arg.Args[0])
+                return;
+            switch (arg.Args[0])
             {
                 case "Turret":
+                    if(!HasPerm(player.UserIDString, configData.Permissions.TurretPermissions)){
+                        destroyUIN(arg);
+                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
+                        return;
+                    }
+
                     destroyUIN(arg);
                     player.SendConsoleCommand("CUI_OpenTurret");
-                break;
+                    break;
                 case "Light":
+                    if(!HasPerm(player.UserIDString, configData.Permissions.LightPermissions)){
+                        destroyUIN(arg);
+                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
+                        return;
+                    }
+
                     destroyUIN(arg);
                     player.SendConsoleCommand("CUI_OpenLight");
-                break;
+                    break;
                 case "Door":
+                    if(!HasPerm(player.UserIDString, configData.Permissions.DoorPermissions)){
+                        destroyUIN(arg);
+                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
+                        return;
+                    }
+                
                     destroyUIN(arg);
                     player.SendConsoleCommand("CUI_OpenDoor");
-                break;
+                    break;
             }
-        } 
+        }
 
         [ConsoleCommand("CUI_ChangeElement")]
         private void ChangeElement(ConsoleSystem.Arg arg)
@@ -272,15 +311,18 @@ namespace Oxide.Plugins
             {
                 case "listpage":
                     {
-                        if(arg.GetString(1) == "turret"){
+                        if (arg.GetString(1) == "turret")
+                        {
                             var pageNumber = arg.GetString(2);
                             ControlTurret(arg, int.Parse(pageNumber));
                         }
-                        if(arg.GetString(1) == "light"){
+                        if (arg.GetString(1) == "light")
+                        {
                             var pageNumber = arg.GetString(2);
                             ControlLight(arg, int.Parse(pageNumber));
                         }
-                        if(arg.GetString(1) == "door"){
+                        if (arg.GetString(1) == "door")
+                        {
                             var pageNumber = arg.GetString(2);
                             ControlDoor(arg, int.Parse(pageNumber));
                         }
@@ -295,20 +337,23 @@ namespace Oxide.Plugins
             destroyUIN(arg);
             var player = arg.connection.player as BasePlayer;
             if (player == null)
-                return;   
+                return;
 
             var i = homeData.homeD[player.userID].tData.Count;
             var element = UI.CreateElementContainer(PublicControlSetupTurret, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicControlSetupTurret, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
             UI.CreateLabel(ref element, PublicControlSetupTurret, UIColors["header"], lang.GetMessage("TList", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
 
-            if(i >= 18){ 
+            if (i >= 18)
+            {
                 var maxpages = (i - 1) / 18 + 1;
-                if (page < maxpages - 1){
-                    UI.CreatePanel(ref element, PublicControlSetupTurret, UIColors["dark"], "0.64 0.05", "0.88 0.15", true); 
-                    UI.CreateButton(ref element, PublicControlSetupTurret, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage turret {page + 1}"); 
+                if (page < maxpages - 1)
+                {
+                    UI.CreatePanel(ref element, PublicControlSetupTurret, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
+                    UI.CreateButton(ref element, PublicControlSetupTurret, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage turret {page + 1}");
                 }
-                if(page > 0){
+                if (page > 0)
+                {
                     UI.CreatePanel(ref element, PublicControlSetupTurret, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
                     UI.CreateButton(ref element, PublicControlSetupTurret, UIColors["buttongreen"], lang.GetMessage("Back", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ChangeElement listpage turret {page - 1}");
                 }
@@ -323,26 +368,26 @@ namespace Oxide.Plugins
             var k = 0;
             var entries = homeData.homeD[player.userID].tData;
 
-            List <string> questNames = new List<string>();
+            List<string> questNames = new List<string>();
             foreach (var entry in homeData.homeD[player.userID].tData)
                 questNames.Add(entry.Key);
 
             for (int n = rewardcount; n < maxentries; n++)
-            {                
+            {
                 CreateTurretButton(ref element, PublicControlSetupTurret, entries[questNames[n]], player, k); k++;
             }
             CuiHelper.AddUi(player, element);
-        } 
+        }
 
         private void CreateTurretButton(ref CuiElementContainer container, string panelName, TurretData data, BasePlayer player, int num)
         {
 
             string name = homeData.homeD[player.userID].tData[data.name].name;
             var status = "<color='#818884'>Disabled</color>";
-            if(homeData.homeD[player.userID].tData[name].status) status = "<color='#818884'>Enabled</color>";
+            if (homeData.homeD[player.userID].tData[name].status) status = "<color='#818884'>Enabled</color>";
             else status = "<color='#818884'>Disabled</color>";
             var color = "";
-            if(homeData.homeD[player.userID].tData[data.name].status) color = "0.06 0.47 0.39 1.0";
+            if (homeData.homeD[player.userID].tData[data.name].status) color = "0.06 0.47 0.39 1.0";
             else color = "0.91 0.0 0.0 1.0";
             string cmd = $"CUI_ToggleTurret {homeData.homeD[player.userID].tData[data.name].name}";
             var pos = CalcButtonPos(num);
@@ -356,24 +401,26 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             var name = arg.Args[0];
             if (player == null)
-                return;   
-            if(homeData.homeD[player.userID].tData[name].status)
+                return;
+            if (homeData.homeD[player.userID].tData[name].status)
             {
                 var newLocation = new Vector3(homeData.homeD[player.userID].tData[name].locx, homeData.homeD[player.userID].tData[name].locy, homeData.homeD[player.userID].tData[name].locz);
                 homeData.homeD[player.userID].tData[name].status = false;
-                    List<BaseEntity> turretnear= new List<BaseEntity>();
-                    Vis.Entities(newLocation, 0.2f, turretnear);
+                List<BaseEntity> turretnear = new List<BaseEntity>();
+                Vis.Entities(newLocation, 0.2f, turretnear);
                 var i = 0;
-                foreach(var turret in turretnear)
+                foreach (var turret in turretnear)
                 {
-                    if(turret.ToString().Contains("turret")){
+                    if (turret.ToString().Contains("turret"))
+                    {
                         if (turret is AutoTurret) turret.GetComponent<AutoTurret>().target = null;
                         i++;
                         turret.SetFlag(BaseEntity.Flags.On, false);
                         turret.SendNetworkUpdateImmediate();
-                    }else{}
+                    }
+                    else { }
                 }
-                if(i == 0)
+                if (i == 0)
                 {
                     homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].tData[name].locx);
                     homeData.homeD[player.userID].tData.Remove(name);
@@ -385,25 +432,27 @@ namespace Oxide.Plugins
             {
                 var newLocation = new Vector3(homeData.homeD[player.userID].tData[name].locx, homeData.homeD[player.userID].tData[name].locy, homeData.homeD[player.userID].tData[name].locz);
                 homeData.homeD[player.userID].tData[name].status = true;
-                    List<BaseEntity> turretnear= new List<BaseEntity>();
-                    Vis.Entities(newLocation, 0.2f, turretnear);
+                List<BaseEntity> turretnear = new List<BaseEntity>();
+                Vis.Entities(newLocation, 0.2f, turretnear);
                 var i = 0;
-                foreach(var turret in turretnear)
+                foreach (var turret in turretnear)
                 {
-                    if(turret.ToString().Contains("turret")){
+                    if (turret.ToString().Contains("turret"))
+                    {
                         if (turret is AutoTurret) turret.GetComponent<AutoTurret>().target = null;
                         i++;
                         turret.SetFlag(BaseEntity.Flags.On, true);
                         turret.SendNetworkUpdateImmediate();
-                    }else{}
+                    }
+                    else { }
                 }
-                if(i == 0)
+                if (i == 0)
                 {
                     homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].tData[name].locx);
                     homeData.homeD[player.userID].tData.Remove(name);
                     SaveData();
                     SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }       
+                }
             }
             ControlTurret(arg);
             SaveData();
@@ -411,14 +460,14 @@ namespace Oxide.Plugins
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
-            if(entity is BasePlayer) return;
-            if(entity.OwnerID == null) return;
-            if(entity.ToString().Contains("autoturret"))
+            if (entity is BasePlayer) return;
+            if (entity.OwnerID == null) return;
+            if (entity.ToString().Contains("autoturret"))
             {
-                foreach(var entry in homeData.homeD[entity.OwnerID].tData)
+                foreach (var entry in homeData.homeD[entity.OwnerID].tData)
                 {
-                    if(homeData.homeD[entity.OwnerID].tData[entry.Key] == null) return;
-                    if(homeData.homeD[entity.OwnerID].tData[entry.Key].locx == entity.transform.position.x)
+                    if (homeData.homeD[entity.OwnerID].tData[entry.Key] == null) return;
+                    if (homeData.homeD[entity.OwnerID].tData[entry.Key].locx == entity.transform.position.x)
                     {
                         var namen = homeData.homeD[entity.OwnerID].tData[entry.Key].name;
                         homeData.homeD[entity.OwnerID].objectX.Remove(entity.transform.position.x);
@@ -430,12 +479,12 @@ namespace Oxide.Plugins
                     else continue;
                 }
             }
-            else if(entity.ToString().Contains("hinged"))
+            else if (entity.ToString().Contains("hinged"))
             {
-                foreach(var entry2 in homeData.homeD[entity.OwnerID].dData)
+                foreach (var entry2 in homeData.homeD[entity.OwnerID].dData)
                 {
-                    if(homeData.homeD[entity.OwnerID].dData[entry2.Key] == null) return;
-                    if(homeData.homeD[entity.OwnerID].dData[entry2.Key].locx == entity.transform.position.x)
+                    if (homeData.homeD[entity.OwnerID].dData[entry2.Key] == null) return;
+                    if (homeData.homeD[entity.OwnerID].dData[entry2.Key].locx == entity.transform.position.x)
                     {
                         var namenew = homeData.homeD[entity.OwnerID].dData[entry2.Key].name;
                         homeData.homeD[entity.OwnerID].objectX.Remove(entity.transform.position.x);
@@ -447,12 +496,12 @@ namespace Oxide.Plugins
                     else continue;
                 }
             }
-            else if(entity.ToString().Contains("lantern") || entity.ToString().Contains("ceilinglight"))
+            else if (entity.ToString().Contains("lantern") || entity.ToString().Contains("ceilinglight"))
             {
-                foreach(var entry3 in homeData.homeD[entity.OwnerID].lData)
+                foreach (var entry3 in homeData.homeD[entity.OwnerID].lData)
                 {
-                    if(homeData.homeD[entity.OwnerID].lData[entry3.Key] == null) return;
-                    if(homeData.homeD[entity.OwnerID].lData[entry3.Key].locx == entity.transform.position.x)
+                    if (homeData.homeD[entity.OwnerID].lData[entry3.Key] == null) return;
+                    if (homeData.homeD[entity.OwnerID].lData[entry3.Key].locx == entity.transform.position.x)
                     {
                         var namenew = homeData.homeD[entity.OwnerID].lData[entry3.Key].name;
                         homeData.homeD[entity.OwnerID].objectX.Remove(entity.transform.position.x);
@@ -477,20 +526,23 @@ namespace Oxide.Plugins
             destroyUIN(arg);
             var player = arg.connection.player as BasePlayer;
             if (player == null)
-                return;   
+                return;
 
             var i = homeData.homeD[player.userID].lData.Count;
             var element = UI.CreateElementContainer(PublicControlSetupLight, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicControlSetupLight, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
             UI.CreateLabel(ref element, PublicControlSetupLight, UIColors["header"], lang.GetMessage("LList", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
 
-            if(i >= 18){ 
+            if (i >= 18)
+            {
                 var maxpages = (i - 1) / 18 + 1;
-                if (page < maxpages - 1){
-                    UI.CreatePanel(ref element, PublicControlSetupLight, UIColors["dark"], "0.64 0.05", "0.88 0.15", true); 
-                    UI.CreateButton(ref element, PublicControlSetupLight, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage light {page + 1}"); 
+                if (page < maxpages - 1)
+                {
+                    UI.CreatePanel(ref element, PublicControlSetupLight, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
+                    UI.CreateButton(ref element, PublicControlSetupLight, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage light {page + 1}");
                 }
-                if(page > 0){
+                if (page > 0)
+                {
                     UI.CreatePanel(ref element, PublicControlSetupLight, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
                     UI.CreateButton(ref element, PublicControlSetupLight, UIColors["buttongreen"], lang.GetMessage("Back", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ChangeElement listpage light {page - 1}");
                 }
@@ -505,30 +557,30 @@ namespace Oxide.Plugins
             var k = 0;
             var entries2 = homeData.homeD[player.userID].lData;
 
-            List <string> questNames = new List<string>();
+            List<string> questNames = new List<string>();
             foreach (var entry in homeData.homeD[player.userID].lData)
                 questNames.Add(entry.Key);
 
             for (int n = rewardcount; n < maxentries; n++)
-            {                
+            {
                 CreateLightButton(ref element, PublicControlSetupLight, entries2[questNames[n]], player, k); k++;
             }
             CuiHelper.AddUi(player, element);
-        } 
+        }
 
         private void CreateLightButton(ref CuiElementContainer container, string panelName, LightData light, BasePlayer player, int num)
         {
             string name = light.name;
             var status = "<color='#818884'>Disabled</color>";
-            if(homeData.homeD[player.userID].lData[name].status) status = "<color='#818884'>Enabled</color>";
+            if (homeData.homeD[player.userID].lData[name].status) status = "<color='#818884'>Enabled</color>";
             else status = "<color='#818884'>Disabled</color>";
             var color = "";
-            if(homeData.homeD[player.userID].lData[light.name].status) color = "0.06 0.47 0.39 1.0";
+            if (homeData.homeD[player.userID].lData[light.name].status) color = "0.06 0.47 0.39 1.0";
             else color = "0.91 0.0 0.0 1.0";
             string cmd = $"CUI_ToggleLight {homeData.homeD[player.userID].lData[light.name].name}";
             var pos = CalcButtonPos(num);
             UI.CreatePanel(ref container, panelName, UIColors["dark"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", true);
-            UI.CreateButton(ref container, panelName, color, $"<color='#818884'>{name}</color>\n{status}", 13, $"{pos[0] + 0.01} {pos[1] + 0.01}", $"{pos[2] - 0.01} {pos[3] - 0.01}", cmd);          
+            UI.CreateButton(ref container, panelName, color, $"<color='#818884'>{name}</color>\n{status}", 13, $"{pos[0] + 0.01} {pos[1] + 0.01}", $"{pos[2] - 0.01} {pos[3] - 0.01}", cmd);
         }
 
         [ConsoleCommand("CUI_ToggleLight")]
@@ -537,46 +589,50 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             var name = arg.Args[0];
             if (player == null)
-                return;   
-            if(homeData.homeD[player.userID].lData[name].status)
+                return;
+            if (homeData.homeD[player.userID].lData[name].status)
             {
                 var newLocation = new Vector3(homeData.homeD[player.userID].lData[name].locx, homeData.homeD[player.userID].lData[name].locy, homeData.homeD[player.userID].lData[name].locz);
                 homeData.homeD[player.userID].lData[name].status = false;
-                    List<BaseEntity> lightnear = new List<BaseEntity>();
-                    Vis.Entities(newLocation, 0.2f, lightnear);
+                List<BaseEntity> lightnear = new List<BaseEntity>();
+                Vis.Entities(newLocation, 0.2f, lightnear);
                 var i = 0;
-                foreach(var light in lightnear)
+                foreach (var light in lightnear)
                 {
-                    if(light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight")){
+                    if (light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight"))
+                    {
                         i++;
                         light.SetFlag(BaseEntity.Flags.On, false);
-                        light.SendNetworkUpdateImmediate();}
-                    else{}
+                        light.SendNetworkUpdateImmediate();
+                    }
+                    else { }
                 }
-                if(i == 0)
+                if (i == 0)
                 {
                     homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].lData[name].locx);
                     homeData.homeD[player.userID].lData.Remove(name);
                     SaveData();
                     SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }  
+                }
             }
             else
             {
                 var newLocation = new Vector3(homeData.homeD[player.userID].lData[name].locx, homeData.homeD[player.userID].lData[name].locy, homeData.homeD[player.userID].lData[name].locz);
                 homeData.homeD[player.userID].lData[name].status = true;
-                    List<BaseEntity> lightnear = new List<BaseEntity>();
-                    Vis.Entities(newLocation, 0.2f, lightnear);
+                List<BaseEntity> lightnear = new List<BaseEntity>();
+                Vis.Entities(newLocation, 0.2f, lightnear);
                 var i = 0;
-                foreach(var light in lightnear)
+                foreach (var light in lightnear)
                 {
-                    if(light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight")){
+                    if (light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight"))
+                    {
                         i++;
                         light.SetFlag(BaseEntity.Flags.On, true);
-                        light.SendNetworkUpdateImmediate();}
-                    else{}
+                        light.SendNetworkUpdateImmediate();
+                    }
+                    else { }
                 }
-                if(i == 0)
+                if (i == 0)
                 {
                     homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].lData[name].locx);
                     homeData.homeD[player.userID].lData.Remove(name);
@@ -598,20 +654,23 @@ namespace Oxide.Plugins
             destroyUIN(arg);
             var player = arg.connection.player as BasePlayer;
             if (player == null)
-                return;   
+                return;
 
             var i = homeData.homeD[player.userID].dData.Count;
             var element = UI.CreateElementContainer(PublicControlSetupDoor, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicControlSetupDoor, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicControlSetupDoor, UIColors["header"], lang.GetMessage("LList", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
+            UI.CreateLabel(ref element, PublicControlSetupDoor, UIColors["header"], lang.GetMessage("DList", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
 
-            if(i >= 18){ 
+            if (i >= 18)
+            {
                 var maxpages = (i - 1) / 18 + 1;
-                if (page < maxpages - 1){
-                    UI.CreatePanel(ref element, PublicControlSetupDoor, UIColors["dark"], "0.64 0.05", "0.88 0.15", true); 
-                    UI.CreateButton(ref element, PublicControlSetupDoor, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage door{page + 1}"); 
+                if (page < maxpages - 1)
+                {
+                    UI.CreatePanel(ref element, PublicControlSetupDoor, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
+                    UI.CreateButton(ref element, PublicControlSetupDoor, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage door{page + 1}");
                 }
-                if(page > 0){
+                if (page > 0)
+                {
                     UI.CreatePanel(ref element, PublicControlSetupDoor, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
                     UI.CreateButton(ref element, PublicControlSetupDoor, UIColors["buttongreen"], lang.GetMessage("Back", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ChangeElement listpage door {page - 1}");
                 }
@@ -626,25 +685,25 @@ namespace Oxide.Plugins
             var k = 0;
             var entries3 = homeData.homeD[player.userID].dData;
 
-            List <string> questNames = new List<string>();
+            List<string> questNames = new List<string>();
             foreach (var entry in homeData.homeD[player.userID].dData)
                 questNames.Add(entry.Key);
 
             for (int n = rewardcount; n < maxentries; n++)
-            {                
+            {
                 CreateDoorButton(ref element, PublicControlSetupDoor, entries3[questNames[n]], player, k); k++;
             }
             CuiHelper.AddUi(player, element);
-        } 
+        }
 
         private void CreateDoorButton(ref CuiElementContainer container, string panelName, DoorData door, BasePlayer player, int num)
         {
             string name = door.name;
             var status = "<color='#818884'>Disabled</color>";
-            if(homeData.homeD[player.userID].dData[name].status) status = "<color='#818884'>Enabled</color>";
+            if (homeData.homeD[player.userID].dData[name].status) status = "<color='#818884'>Enabled</color>";
             else status = "<color='#818884'>Disabled</color>";
             var color = "";
-            if(homeData.homeD[player.userID].dData[door.name].status) color = "0.06 0.47 0.39 1.0";
+            if (homeData.homeD[player.userID].dData[door.name].status) color = "0.06 0.47 0.39 1.0";
             else color = "0.91 0.0 0.0 1.0";
             string cmd = $"CUI_ToggleDoor {homeData.homeD[player.userID].dData[door.name].name}";
             var pos = CalcButtonPos(num);
@@ -658,23 +717,25 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             var name = arg.Args[0];
             if (player == null)
-                return;   
-            if(homeData.homeD[player.userID].dData[name].status)
+                return;
+            if (homeData.homeD[player.userID].dData[name].status)
             {
                 var newLocation = new Vector3(homeData.homeD[player.userID].dData[name].locx, homeData.homeD[player.userID].dData[name].locy, homeData.homeD[player.userID].dData[name].locz);
                 homeData.homeD[player.userID].dData[name].status = false;
-                    List<BaseEntity> doornear = new List<BaseEntity>();
-                    Vis.Entities(newLocation, 1.0f, doornear);
+                List<BaseEntity> doornear = new List<BaseEntity>();
+                Vis.Entities(newLocation, 1.0f, doornear);
                 var i = 0;
-                foreach(var door in doornear)
+                foreach (var door in doornear)
                 {
-                    if (door.ToString().Contains("hinged")){
-                    i++;
-                    door.SetFlag(BaseEntity.Flags.Open, false);
-                    door.SendNetworkUpdateImmediate();}
-                    else{}
+                    if (door.ToString().Contains("hinged"))
+                    {
+                        i++;
+                        door.SetFlag(BaseEntity.Flags.Open, false);
+                        door.SendNetworkUpdateImmediate();
+                    }
+                    else { }
                 }
-                if(i == 0)
+                if (i == 0)
                 {
                     homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].dData[name].locx);
                     homeData.homeD[player.userID].dData.Remove(name);
@@ -686,18 +747,20 @@ namespace Oxide.Plugins
             {
                 var newLocation = new Vector3(homeData.homeD[player.userID].dData[name].locx, homeData.homeD[player.userID].dData[name].locy, homeData.homeD[player.userID].dData[name].locz);
                 homeData.homeD[player.userID].dData[name].status = true;
-                    List<BaseEntity> doornear = new List<BaseEntity>();
-                    Vis.Entities(newLocation, 1.0f, doornear);
+                List<BaseEntity> doornear = new List<BaseEntity>();
+                Vis.Entities(newLocation, 1.0f, doornear);
                 var i = 0;
-                foreach(var door in doornear)
+                foreach (var door in doornear)
                 {
-                    if (door.ToString().Contains("hinged")){
-                    i++;
-                    door.SetFlag(BaseEntity.Flags.Open, true);
-                    door.SendNetworkUpdateImmediate();}
-                    else{}
+                    if (door.ToString().Contains("hinged"))
+                    {
+                        i++;
+                        door.SetFlag(BaseEntity.Flags.Open, true);
+                        door.SendNetworkUpdateImmediate();
+                    }
+                    else { }
                 }
-                if(i == 0)
+                if (i == 0)
                 {
                     homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].dData[name].locx);
                     homeData.homeD[player.userID].dData.Remove(name);
@@ -749,13 +812,16 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (!player.CanBuild()){
+            if (!player.CanBuild())
+            {
                 SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString));
                 return;
             }
-            if(setupUI.Contains(player.userID)){
+            if (setupUI.Contains(player.userID))
+            {
                 destroyUIN(arg);
-                setupUI.Remove(player.userID);}
+                setupUI.Remove(player.userID);
+            }
             setupUI.Add(player.userID);
 
             var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
@@ -765,8 +831,8 @@ namespace Oxide.Plugins
             UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("WalkThrough", this, player.UserIDString), 20, "0 .9", "1 1");
             UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
             UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("BeginProcess", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_Homesetup2");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_HomesNew")]
         void SetUPB(ConsoleSystem.Arg arg)
@@ -774,33 +840,35 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (!player.CanBuild()){
+            if (!player.CanBuild())
+            {
                 SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString).Replace("0", configData.Options.ActivationDistance.ToString()));
                 return;
             }
-            var i = 0;
             List<BaseEntity> nearby = new List<BaseEntity>();
             Vis.Entities(player.transform.position, configData.Options.ActivationDistance, nearby);
-            foreach(BaseEntity entity in nearby)
+            foreach (BaseEntity entity in nearby)
             {
                 if (entity is BuildingPrivlidge)
-                { 
+                {
                     List<string> authedPlayers = new List<string>();
-                    var tc = entity.GetComponent<BuildingPrivlidge>();       
+                    var tc = entity.GetComponent<BuildingPrivlidge>();
                     if (tc != null)
                     {
-                        if(tc.IsAuthed(player)) break;
+                        if (tc.IsAuthed(player)) break;
                         else
                         {
                             SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString).Replace("0", configData.Options.ActivationDistance.ToString()));
-                            return;       
+                            return;
                         }
                     }
                 }
             }
-            if(setupUI.Contains(player.userID)){
+            if (setupUI.Contains(player.userID))
+            {
                 destroyUIN(arg);
-                setupUI.Remove(player.userID);}
+                setupUI.Remove(player.userID);
+            }
             setupUI.Add(player.userID);
 
             var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
@@ -810,8 +878,8 @@ namespace Oxide.Plugins
             UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("WalkThroughNew", this, player.UserIDString), 20, "0 .9", "1 1");
             UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
             UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("BeginProcessNew", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_HomeNew2");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_HomeNew2")]
         void SetUP2B(ConsoleSystem.Arg arg)
@@ -819,7 +887,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
 
             var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
@@ -828,8 +896,8 @@ namespace Oxide.Plugins
             UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("StandWhereNew", this, player.UserIDString), 20, "0 .9", "1 1");
             UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
             UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("NextRe", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_HomeNew3");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_Homesetup2")]
         void SetUP2(ConsoleSystem.Arg arg)
@@ -837,7 +905,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
 
             var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
@@ -846,8 +914,8 @@ namespace Oxide.Plugins
             UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("StandWhere", this, player.UserIDString), 20, "0 .9", "1 1");
             UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
             UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("NextNext", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_Homesetup3");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_HomeNew3")]
         void SetUP3B(ConsoleSystem.Arg arg)
@@ -855,7 +923,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
             Homes playerData = Homes.Find(player);
             playerData.locx = player.transform.position.x;
             playerData.locy = player.transform.position.y;
@@ -879,8 +947,8 @@ namespace Oxide.Plugins
             barUI.Add(player.userID);
             RemoteBar(player);
 
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_Homesetup3")]
         void SetUP3(ConsoleSystem.Arg arg)
@@ -888,7 +956,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
             Homes playerData = Homes.Find(player);
             playerData.locx = player.transform.position.x;
             playerData.locy = player.transform.position.y;
@@ -905,19 +973,20 @@ namespace Oxide.Plugins
             RemoteBar(player);
 
             UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("SmartHome", this, player.UserIDString).Replace("0", configData.Options.ActivationDistance.ToString()), 20, "0 .9", "1 1");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
         [ConsoleCommand("CUI_ObjectSetup")]
         void ObjectSetup(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (!player.CanBuild()){
+            if (!player.CanBuild())
+            {
                 SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString));
                 return;
             }
-                destroyUIN(arg);
+            destroyUIN(arg);
 
             var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
@@ -928,8 +997,8 @@ namespace Oxide.Plugins
             UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "<color='#818884'>Add</color>", 20, "0.15 0.06", "0.37 0.14", $"CUI_ObjectSetup2");
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], $"0.64 0.05", $"0.88 0.15", true);
             UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "<color='#818884'>Remove</color>", 20, "0.65 0.06", "0.87 0.14", $"CUI_ObjectRemove1");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_ObjectRemove1")]
         void ObjectRemove(ConsoleSystem.Arg arg)
@@ -937,7 +1006,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
 
             var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
@@ -950,8 +1019,8 @@ namespace Oxide.Plugins
             UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "Remove Light", 20, "0.40 0.06", "0.62 0.14", $"CUI_ObjectRemove2 Light");
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
             UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "Remove Door", 20, "0.65 0.06", "0.87 0.14", $"CUI_ObjectRemove2 Door");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_ObjectRemove2")]
         void ObjectRemove2(ConsoleSystem.Arg arg)
@@ -959,11 +1028,11 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
-            switch(arg.Args[0])
+            destroyUIN(arg);
+            switch (arg.Args[0])
             {
                 case "Turret":
-                    if(homeData.homeD[player.userID].tData.Count == 0)
+                    if (homeData.homeD[player.userID].tData.Count == 0)
                     {
                         SendReply(player, "You have no turrets.");
                         return;
@@ -971,7 +1040,7 @@ namespace Oxide.Plugins
                     List<BaseEntity> turretnear = new List<BaseEntity>();
                     Vis.Entities(player.transform.position, 1.5f, turretnear);
                     var locationT = new Vector3();
-                    foreach(var turret in turretnear)
+                    foreach (var turret in turretnear)
                     {
                         if (turret.ToString().Contains("auto"))
                         {
@@ -979,16 +1048,16 @@ namespace Oxide.Plugins
                             break;
                         }
                     }
-                    if(locationT == new Vector3())
+                    if (locationT == new Vector3())
                     {
                         SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
                         return;
                     }
                     var i = 0;
                     var ent2 = "";
-                    foreach(var entry in homeData.homeD[player.userID].tData)
+                    foreach (var entry in homeData.homeD[player.userID].tData)
                     {
-                        if(homeData.homeD[player.userID].tData[entry.Key].locx == locationT.x)
+                        if (homeData.homeD[player.userID].tData[entry.Key].locx == locationT.x)
                         {
                             i++;
                             player.SendConsoleCommand("CUI_ObjectRemove3");
@@ -1004,19 +1073,19 @@ namespace Oxide.Plugins
                             openUI(player);
                         }
                     }
-                    if(i == 0)
+                    if (i == 0)
                     {
                         SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
-                        return;              
+                        return;
                     }
-                    if(i != 0)
+                    if (i != 0)
                     {
                         homeData.homeD[player.userID].tData.Remove(homeData.homeD[player.userID].tData[ent2].name);
                         SaveData();
                     }
-                break;
-                case "Light":       
-                    if(homeData.homeD[player.userID].lData.Count == 0)
+                    break;
+                case "Light":
+                    if (homeData.homeD[player.userID].lData.Count == 0)
                     {
                         SendReply(player, "You have no lights.");
                         return;
@@ -1024,7 +1093,7 @@ namespace Oxide.Plugins
                     List<BaseEntity> lightnear = new List<BaseEntity>();
                     Vis.Entities(player.transform.position, 1.5f, lightnear);
                     var locationL = new Vector3();
-                    foreach(var light in lightnear)
+                    foreach (var light in lightnear)
                     {
                         if (light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight"))
                         {
@@ -1032,16 +1101,16 @@ namespace Oxide.Plugins
                             break;
                         }
                     }
-                    if(locationL == new Vector3())
+                    if (locationL == new Vector3())
                     {
                         SendReply(player, lang.GetMessage("NoLightInRange", this, player.UserIDString));
                         return;
                     }
                     var n = 0;
                     var ent4 = "";
-                    foreach(var entry2 in homeData.homeD[player.userID].lData)
+                    foreach (var entry2 in homeData.homeD[player.userID].lData)
                     {
-                        if(homeData.homeD[player.userID].lData[entry2.Key].locx == locationL.x)
+                        if (homeData.homeD[player.userID].lData[entry2.Key].locx == locationL.x)
                         {
                             n++;
                             player.SendConsoleCommand("CUI_ObjectRemove3");
@@ -1057,19 +1126,19 @@ namespace Oxide.Plugins
                             openUI(player);
                         }
                     }
-                    if(n == 0)
+                    if (n == 0)
                     {
                         SendReply(player, lang.GetMessage("NoLightInRange", this, player.UserIDString));
-                        return;              
+                        return;
                     }
-                    if(n != 0)
+                    if (n != 0)
                     {
                         homeData.homeD[player.userID].lData.Remove(homeData.homeD[player.userID].lData[ent4].name);
                         SaveData();
                     }
-                break;
-                case "Door":         
-                    if(homeData.homeD[player.userID].dData.Count == 0)
+                    break;
+                case "Door":
+                    if (homeData.homeD[player.userID].dData.Count == 0)
                     {
                         SendReply(player, "You have no doors.");
                         return;
@@ -1077,7 +1146,7 @@ namespace Oxide.Plugins
                     List<BaseEntity> doornear = new List<BaseEntity>();
                     Vis.Entities(player.transform.position, 1.5f, doornear);
                     var locationD = new Vector3();
-                    foreach(var door in doornear)
+                    foreach (var door in doornear)
                     {
                         if (door.ToString().Contains("hinged"))
                         {
@@ -1085,16 +1154,16 @@ namespace Oxide.Plugins
                             break;
                         }
                     }
-                    if(locationD == new Vector3())
+                    if (locationD == new Vector3())
                     {
                         SendReply(player, lang.GetMessage("NoDoorInRange", this, player.UserIDString));
                         return;
                     }
                     var k = 0;
                     var ent3 = "";
-                    foreach(var entry1 in homeData.homeD[player.userID].dData)
+                    foreach (var entry1 in homeData.homeD[player.userID].dData)
                     {
-                        if(homeData.homeD[player.userID].dData[entry1.Key].locx == locationD.x)
+                        if (homeData.homeD[player.userID].dData[entry1.Key].locx == locationD.x)
                         {
                             k++;
                             player.SendConsoleCommand("CUI_ObjectRemove3");
@@ -1110,19 +1179,19 @@ namespace Oxide.Plugins
                             openUI(player);
                         }
                     }
-                    if(k == 0)
+                    if (k == 0)
                     {
                         SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
-                        return;              
+                        return;
                     }
-                    if(k != 0)
+                    if (k != 0)
                     {
                         homeData.homeD[player.userID].dData.Remove(homeData.homeD[player.userID].dData[ent3].name);
                         SaveData();
                     }
-                break;
+                    break;
             }
-        } 
+        }
 
         [ConsoleCommand("CUI_ObjectSetup2")]
         void ObjectSetup2(ConsoleSystem.Arg arg)
@@ -1130,7 +1199,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
 
             var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
@@ -1143,8 +1212,8 @@ namespace Oxide.Plugins
             UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], lang.GetMessage("AddLight", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_ObjectSetup3 Light");
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
             UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], lang.GetMessage("AddDoor", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ObjectSetup3 Door");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         List<T> FindEntities<T>(Vector3 position, float distance) where T : BaseEntity
         {
@@ -1159,20 +1228,21 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
-            switch(arg.Args[0])
+            destroyUIN(arg);
+            switch (arg.Args[0])
             {
                 case "Turret":
-                    if(homeData.homeD[player.userID].tData.Count >= 19)
-                    {
-                        SendReply(player, lang.GetMessage("You may only have 18 of each object.", this, player.UserIDString));
+                    if(!HasPerm(player.UserIDString, configData.Permissions.TurretPermissions)){
+                        destroyUIN(arg);
+                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
                         return;
                     }
+
                     List<BaseEntity> turretnear = new List<BaseEntity>();
                     Vis.Entities(player.transform.position, 1.5f, turretnear);
                     var newKeyT = (uint)(5);
                     var locationT = new Vector3();
-                    foreach(var turret in turretnear)
+                    foreach (var turret in turretnear)
                     {
                         if (turret.ToString().Contains("auto"))
                         {
@@ -1181,16 +1251,16 @@ namespace Oxide.Plugins
                             break;
                         }
                     }
-                    if(locationT == new Vector3())
+                    if (locationT == new Vector3())
                     {
                         SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
                         return;
                     }
-                    if(homeData.homeD[player.userID].objectX.Contains(locationT.x))
+                    if (homeData.homeD[player.userID].objectX.Contains(locationT.x))
                     {
                         SendReply(player, lang.GetMessage("AlreadyAddedTurret", this, player.UserIDString));
                         return;
-                    }  
+                    }
                     isEditing.Add(player.userID);
                     var tinfo = new newData()
                     {
@@ -1201,12 +1271,14 @@ namespace Oxide.Plugins
                         entLocation = locationT,
                     };
                     newD.Add(player.userID, tinfo);
-                break;
+                    break;
                 case "Light":
-                    if(homeData.homeD[player.userID].lData.Count >= 18)
-                    {
-                        SendReply(player, lang.GetMessage("You may only have 18 of each object.", this, player.UserIDString));
-                    }             
+                    if(!HasPerm(player.UserIDString, configData.Permissions.LightPermissions)){
+                        destroyUIN(arg);
+                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
+                        return;
+                    }
+
                     var newKeyL = (uint)(5);
                     var locationL = new Vector3();
                     List<BaseEntity> nearby = new List<BaseEntity>();
@@ -1220,16 +1292,16 @@ namespace Oxide.Plugins
                             break;
                         }
                     }
-                    if(locationL == new Vector3())
+                    if (locationL == new Vector3())
                     {
                         SendReply(player, lang.GetMessage("NoLightInRange", this, player.UserIDString));
                         return;
                     }
-                    if(homeData.homeD[player.userID].objectX.Contains(locationL.x))
+                    if (homeData.homeD[player.userID].objectX.Contains(locationL.x))
                     {
                         SendReply(player, lang.GetMessage("AlreadyAddedLight", this, player.UserIDString));
                         return;
-                    }      
+                    }
                     isEditing.Add(player.userID);
                     var linfo = new newData()
                     {
@@ -1240,13 +1312,14 @@ namespace Oxide.Plugins
                         entLocation = locationL,
                     };
                     newD.Add(player.userID, linfo);
-                break;
+                    break;
                 case "Door":
-                    if(homeData.homeD[player.userID].dData.Count >= 18)
-                    {
-                        SendReply(player, lang.GetMessage("You may only have 18 of each object.", this, player.UserIDString));
+                    if(!HasPerm(player.UserIDString, configData.Permissions.DoorPermissions)){
+                        destroyUIN(arg);
+                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
                         return;
-                    }           
+                    }
+
                     var newKeyD = (uint)(5);
                     var locationD = new Vector3();
                     List<BaseEntity> nearby2 = new List<BaseEntity>();
@@ -1260,12 +1333,12 @@ namespace Oxide.Plugins
                             break;
                         }
                     }
-                    if(locationD == new Vector3())
+                    if (locationD == new Vector3())
                     {
                         SendReply(player, lang.GetMessage("NoDoorInRange", this, player.UserIDString));
                         return;
                     }
-                    if(homeData.homeD[player.userID].objectX.Contains(locationD.x))
+                    if (homeData.homeD[player.userID].objectX.Contains(locationD.x))
                     {
                         SendReply(player, lang.GetMessage("AlreadyAddedDoor", this, player.UserIDString));
                         return;
@@ -1280,7 +1353,7 @@ namespace Oxide.Plugins
                         entLocation = locationD,
                     };
                     newD.Add(player.userID, Dinfo);
-                break;
+                    break;
             }
 
             var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
@@ -1290,8 +1363,8 @@ namespace Oxide.Plugins
             UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("NameObje", this), 20, "0 .9", "1 1");
             UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
             UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("Exit", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CloseCUIMain");
-            CuiHelper.AddUi(player, element);    
-        } 
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_ObjectSetup4")]
         void ObjectSetup4(ConsoleSystem.Arg arg)
@@ -1299,7 +1372,7 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-                destroyUIN(arg);
+            destroyUIN(arg);
 
             var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
@@ -1308,8 +1381,8 @@ namespace Oxide.Plugins
             UI.CreateLabel(ref element, PublicObjectSetup, UIColors["dark"], lang.GetMessage("Completed", this, player.UserIDString), 20, "0 .9", "1 1");
             UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
             UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], lang.GetMessage("Save", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_SaveNewObject");
-            CuiHelper.AddUi(player, element);    
-        }        
+            CuiHelper.AddUi(player, element);
+        }
 
         [ConsoleCommand("CUI_SaveNewObject")]
         void ObjectSetup5(ConsoleSystem.Arg arg)
@@ -1325,98 +1398,105 @@ namespace Oxide.Plugins
             barUI.Remove(player.userID);
             setupUI.Remove(player.userID);
             openUI(player);
-        }        
+        }
 
         void OnPlayerChat(ConsoleSystem.Arg arg)
         {
-            try{
+            try
+            {
                 var player = arg.connection.player as BasePlayer;
                 if (player == null)
                     return;
-                    if(isEditing.Contains(player.userID))
+                if (isEditing.Contains(player.userID))
+                {
+                    if (Homes.Find(player) == null)
+                        OnPlayerInit(player);
+                    Homes playerData = Homes.Find(player);
+                    newD[player.userID].entName = arg.Args[0];
+
+                    switch (newD[player.userID].entType)
                     {
-                        if (Homes.Find(player) == null)
-                            OnPlayerInit(player);
-                            Homes playerData = Homes.Find(player);
-                            newD[player.userID].entName = arg.Args[0];
-
-                            switch(newD[player.userID].entType)
+                        case "Turret":
+                            foreach (var entry in homeData.homeD[player.userID].tData)
                             {
-                                case "Turret":
-                                   foreach(var entry in homeData.homeD[player.userID].tData){
-                                        if(entry.Key.ToString() == arg.Args[0]){
-                                            isEditing.Remove(player.userID);
-                                            newD.Remove(player.userID);
-                                            SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
-                                            return;
-                                        }
-                                    }
-                                    var infoT = new TurretData()
-                                    {
-                                        locx = newD[player.userID].entLocation.x,
-                                        locy = newD[player.userID].entLocation.y,
-                                        locz = newD[player.userID].entLocation.z,
-                                        key = newD[player.userID].entKey,
-                                        status = newD[player.userID].entStatus,
-                                        name = newD[player.userID].entName,
-                                    };
-                                    homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
-                                    playerData.tData.Add(newD[player.userID].entName, infoT);
-                                    player.SendConsoleCommand("CUI_ObjectSetup4");
+                                if (entry.Key.ToString() == arg.Args[0])
+                                {
+                                    isEditing.Remove(player.userID);
                                     newD.Remove(player.userID);
-                                break;
-                                case "Light":
-                                   foreach(var entry in homeData.homeD[player.userID].lData){
-                                        if(entry.Key.ToString() == arg.Args[0]){
-                                            isEditing.Remove(player.userID);
-                                            newD.Remove(player.userID);
-                                            SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
-                                            return;
-                                        }
-                                    }
-                                    var infoL = new LightData()
-                                    {
-                                        locx = newD[player.userID].entLocation.x,
-                                        locy = newD[player.userID].entLocation.y,
-                                        locz = newD[player.userID].entLocation.z,
-                                        key = newD[player.userID].entKey,
-                                        status = newD[player.userID].entStatus,
-                                        name = newD[player.userID].entName,
-
-                                    };
-                                    homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
-                                    playerData.lData.Add(newD[player.userID].entName, infoL);
-                                    player.SendConsoleCommand("CUI_ObjectSetup4");
-                                    newD.Remove(player.userID);
-                                break;
-                                case "Door":
-                                    foreach(var entry in homeData.homeD[player.userID].dData){
-                                        if(entry.Key.ToString() == arg.Args[0]){
-                                            isEditing.Remove(player.userID);
-                                            newD.Remove(player.userID);
-                                            SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
-                                            return;
-                                        }
-                                    }
-                                    var infoD = new DoorData()
-                                    {
-                                        locx = newD[player.userID].entLocation.x,
-                                        locy = newD[player.userID].entLocation.y,
-                                        locz = newD[player.userID].entLocation.z,
-                                        key = newD[player.userID].entKey,
-                                        status = newD[player.userID].entStatus,
-                                        name = newD[player.userID].entName,
-
-                                    };
-                                    homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
-                                    playerData.dData.Add(newD[player.userID].entName, infoD);
-                                    player.SendConsoleCommand("CUI_ObjectSetup4");
-                                    newD.Remove(player.userID);
-                                break;
+                                    SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
+                                    return;
+                                }
                             }
-                    }  
+                            var infoT = new TurretData()
+                            {
+                                locx = newD[player.userID].entLocation.x,
+                                locy = newD[player.userID].entLocation.y,
+                                locz = newD[player.userID].entLocation.z,
+                                key = newD[player.userID].entKey,
+                                status = newD[player.userID].entStatus,
+                                name = newD[player.userID].entName,
+                            };
+                            homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
+                            playerData.tData.Add(newD[player.userID].entName, infoT);
+                            player.SendConsoleCommand("CUI_ObjectSetup4");
+                            newD.Remove(player.userID);
+                            break;
+                        case "Light":
+                            foreach (var entry in homeData.homeD[player.userID].lData)
+                            {
+                                if (entry.Key.ToString() == arg.Args[0])
+                                {
+                                    isEditing.Remove(player.userID);
+                                    newD.Remove(player.userID);
+                                    SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
+                                    return;
+                                }
+                            }
+                            var infoL = new LightData()
+                            {
+                                locx = newD[player.userID].entLocation.x,
+                                locy = newD[player.userID].entLocation.y,
+                                locz = newD[player.userID].entLocation.z,
+                                key = newD[player.userID].entKey,
+                                status = newD[player.userID].entStatus,
+                                name = newD[player.userID].entName,
+
+                            };
+                            homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
+                            playerData.lData.Add(newD[player.userID].entName, infoL);
+                            player.SendConsoleCommand("CUI_ObjectSetup4");
+                            newD.Remove(player.userID);
+                            break;
+                        case "Door":
+                            foreach (var entry in homeData.homeD[player.userID].dData)
+                            {
+                                if (entry.Key.ToString() == arg.Args[0])
+                                {
+                                    isEditing.Remove(player.userID);
+                                    newD.Remove(player.userID);
+                                    SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
+                                    return;
+                                }
+                            }
+                            var infoD = new DoorData()
+                            {
+                                locx = newD[player.userID].entLocation.x,
+                                locy = newD[player.userID].entLocation.y,
+                                locz = newD[player.userID].entLocation.z,
+                                key = newD[player.userID].entKey,
+                                status = newD[player.userID].entStatus,
+                                name = newD[player.userID].entName,
+
+                            };
+                            homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
+                            playerData.dData.Add(newD[player.userID].entName, infoD);
+                            player.SendConsoleCommand("CUI_ObjectSetup4");
+                            newD.Remove(player.userID);
+                            break;
+                    }
+                }
             }
-            catch(System.Exception)
+            catch (System.Exception)
             {
                 return;
             }
@@ -1431,26 +1511,28 @@ namespace Oxide.Plugins
         void RemoteBar(BasePlayer player)
         {
             if (Homes.Find(player) == null)
-                    OnPlayerInit(player);
+                OnPlayerInit(player);
             Homes playerData = Homes.Find(player);
             var location = new Vector3(playerData.locx, playerData.locy, playerData.locz);
             var element = UI.CreateElementContainer(PublicSideBar, UIColors["dark"], "0.1 0.1", "0.205 0.5", true);
             UI.CreatePanel(ref element, PublicSideBar, UIColors["light"], "0.05 0.03", "0.95 0.97", true);
             UI.CreateButton(ref element, PublicSideBar, UIColors["blue"], lang.GetMessage("HomeMenu", this, player.UserIDString), 20, "0.1 0.86", "0.9 0.96", $"");
 
-            if(playerData.locx == 0.0f){
-            UI.CreateButton(ref element, PublicSideBar, UIColors["green"], lang.GetMessage("HomeSetup", this, player.UserIDString), 16, "0.1 0.73", "0.9 0.83", "CUI_Homes");
-            } else { UI.CreateButton(ref element, PublicSideBar, UIColors["green"], lang.GetMessage("HomeSetup", this, player.UserIDString), 16, "0.1 0.73", "0.9 0.83", "CUI_HomesNew"); }
+            if (playerData.locx == 0.0f)
+            {
+                UI.CreateButton(ref element, PublicSideBar, UIColors["green"], lang.GetMessage("HomeSetup", this, player.UserIDString), 16, "0.1 0.73", "0.9 0.83", "CUI_Homes");
+            }
+            else { UI.CreateButton(ref element, PublicSideBar, UIColors["green"], lang.GetMessage("HomeSetup", this, player.UserIDString), 16, "0.1 0.73", "0.9 0.83", "CUI_HomesNew"); }
 
             List<BaseEntity> nearby = new List<BaseEntity>();
             Vis.Entities(location, configData.Options.ActivationDistance, nearby);
             var dotrue = false;
-            foreach(var ent in nearby)
+            foreach (var ent in nearby)
             {
-                if(ent is BasePlayer)
+                if (ent is BasePlayer)
                 {
                     BasePlayer newplayer = ent.ToPlayer();
-                    if(newplayer != player) break;
+                    if (newplayer != player) break;
                     else
                     {
                         dotrue = true;
@@ -1459,11 +1541,65 @@ namespace Oxide.Plugins
                 }
                 else dotrue = false;
             }
-            if(dotrue) UI.CreateButton(ref element, PublicSideBar, UIColors["orange"], lang.GetMessage("ObjectSet", this, player.UserIDString), 16, "0.1 0.59", "0.9 0.69", "CUI_ObjectSetup");
+            if (dotrue) UI.CreateButton(ref element, PublicSideBar, UIColors["orange"], lang.GetMessage("ObjectSet", this, player.UserIDString), 16, "0.1 0.59", "0.9 0.69", "CUI_ObjectSetup");
             else UI.CreateButton(ref element, PublicSideBar, UIColors["orange"], lang.GetMessage("ObjectSet", this, player.UserIDString), 16, "0.1 0.59", "0.9 0.69", "");
             UI.CreateButton(ref element, PublicSideBar, UIColors["lightblue"], lang.GetMessage("CtrlMenu", this, player.UserIDString), 16, "0.1 0.45", "0.9 0.55", "CUI_ControlMenu");
+            UI.CreateButton(ref element, PublicSideBar, UIColors["yellow"], lang.GetMessage("RadiusOpen", this, player.UserIDString), 16, "0.1 0.31", "0.9 0.41", "remsphere");
             UI.CreateButton(ref element, PublicSideBar, UIColors["buttonred"], lang.GetMessage("Close", this, player.UserIDString), 16, "0.1 0.04", "0.9 0.14", "CloseCUIMain");
             CuiHelper.AddUi(player, element);
+        }
+
+        // / ////// / //
+        // / Sphere / //
+        // / ////// / //
+
+        [ConsoleCommand("remsphere")]
+        private void ActiveSphere(ConsoleSystem.Arg arg){
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+
+            SendReply(player, "Your radius for your home will show for around 30 seconds, if you need more time simply click it again.");
+
+            CuiHelper.DestroyUi(player, PublicSideBar);
+            CuiHelper.DestroyUi(player, PublicSetupName);
+            CuiHelper.DestroyUi(player, PublicObjectSetup);
+            CuiHelper.DestroyUi(player, PublicControlSetup);
+            CuiHelper.DestroyUi(player, PublicControlSetupTurret);
+            CuiHelper.DestroyUi(player, PublicControlSetupDoor);
+            CuiHelper.DestroyUi(player, PublicControlSetupLight);
+
+            Homes playerData = Homes.Find(player);
+            var location = new Vector3(playerData.locx, playerData.locy, playerData.locz);
+            if(location == null || playerData.locx == null || playerData.locy == null || playerData.locz == null)
+                return;
+
+			BaseEntity sphere;
+			BaseEntity entity;
+
+			Vector3 pos = new Vector3(0, 0, 0);
+			Quaternion rot = new Quaternion();
+			string strPrefab = "assets/prefabs/visualization/sphere.prefab";
+            string strPrefab2 = "assets/prefabs/weapons/f1 grenade/grenade.f1.entity.prefab";
+
+            sphere = GameManager.server.CreateEntity(strPrefab, pos, rot, true);
+            entity = GameManager.server.CreateEntity(strPrefab2, location, rot, true);
+            entity?.Spawn();
+
+            SphereEntity ball = sphere.GetComponent<SphereEntity>();
+            ball.currentRadius = 1f;
+            ball.lerpRadius = 2.0f*configData.Options.ActivationDistance;
+            ball.lerpSpeed = 250f;
+
+            sphere.SetParent(entity, "");
+            sphere?.Spawn();
+
+            timer.Once(30f, () =>
+            {
+                if(sphere == null) return;
+                sphere.Kill(BaseNetworkable.DestroyMode.None);
+                entity.Kill(BaseNetworkable.DestroyMode.None);
+            });
         }
 
         // / ////// / //   
@@ -1546,7 +1682,7 @@ namespace Oxide.Plugins
             {"buttongreen", "0.133 0.965 0.133 0.9" },
             {"buttonred", "0.964 0.133 0.133 0.9" },
             {"buttongrey", "0.8 0.8 0.8 0.9" }
-        }; 
+        };
 
         // / ////// / //   
         // / Langua / //
@@ -1602,6 +1738,8 @@ namespace Oxide.Plugins
             {"CtrlMenu", "<color='#818884'>Control Menu</color>"},
             {"Next", "Next"},
             {"Back", "Back"},
+            {"NoAccess", "Im sorry. You do not have access to that page. Feel free to contact a server admin about this issue!"},
+            {"RadiusOpen", "<color='#818884'>Radius View</color>"},
         };
     }
 }

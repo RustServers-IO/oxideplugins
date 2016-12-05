@@ -12,7 +12,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Kill Feed", "Tuntenfisch", "1.15.0", ResourceId = 1433)]
+    [Info("Kill Feed", "Tuntenfisch", "1.15.4", ResourceId = 1433)]
     [Description("Displays a basic Kill Feed on screen!")]
     public class KillFeed : RustPlugin
     {
@@ -23,7 +23,7 @@ namespace Oxide.Plugins
 
         static int _debugging;
 
-        static char _formattingCharacter = '§';
+        static char _formattingChar = '§';
 
         static List<string> debugLog;
 
@@ -55,6 +55,7 @@ namespace Oxide.Plugins
         bool displayPlayerDeaths;
         bool logEntries;
         bool printEntriesToConsole;
+        bool useServerFileStorage;
         bool[] allowedCharacters;
 
         string chatIcon;
@@ -326,12 +327,13 @@ namespace Oxide.Plugins
                 { "hitEntity",                  new ConfigValue("#800000",                                                                  "2. Kill Feed", "2.8 Colors", "2.8.3 hit entity") },
                 { "npc",                        new ConfigValue("#267326",                                                                  "2. Kill Feed", "2.8 Colors", "2.8.4 npc") },
 
-                { "fileDirectory",              new ConfigValue("http://vignette1.wikia.nocookie.net/play-rust/images/",                    "3. Data", "3.1 file directory") },
-                { "Files",                      new ConfigValue(GetDefaultFiles(),                                                          "3. Data", "3.2 Files") },
-                { "DamageTypeFiles",            new ConfigValue(GetDefaultDamageTypeFiles(),                                                "3. Data", "3.3 Damagetype Files") },
-                { "NPCNames",                   new ConfigValue(GetDefaultNPCNames(),                                                       "3. Data", "3.4 NPC Names") },
-                { "BoneNames",                  new ConfigValue(GetDefaultBoneNames(),                                                      "3. Data", "3.5 Bone Names") },
-                { "AllowedSpecialCharacters",   new ConfigValue(GetDefaultAllowedSpecialCharacters(),                                       "3. Data", "3.6 Allowed Special Characters") },
+                { "useServerFileStorage",       new ConfigValue(true,                                                                       "3. Data", "3.1 use server file storage") },
+                { "fileDirectory",              new ConfigValue("http://vignette1.wikia.nocookie.net/play-rust/images/",                    "3. Data", "3.2 file directory") },
+                { "Files",                      new ConfigValue(GetDefaultFiles(),                                                          "3. Data", "3.3 Files") },
+                { "DamageTypeFiles",            new ConfigValue(GetDefaultDamageTypeFiles(),                                                "3. Data", "3.4 Damagetype Files") },
+                { "NPCNames",                   new ConfigValue(GetDefaultNPCNames(),                                                       "3. Data", "3.5 NPC Names") },
+                { "BoneNames",                  new ConfigValue(GetDefaultBoneNames(),                                                      "3. Data", "3.6 Bone Names") },
+                { "AllowedSpecialCharacters",   new ConfigValue(GetDefaultAllowedSpecialCharacters(),                                       "3. Data", "3.7 Allowed Special Characters") }
             };
 
             private static Dictionary<string, string> GetDefaultFiles()
@@ -365,6 +367,7 @@ namespace Oxide.Plugins
                     { "machete", "3/34/Machete_icon.png" },
                     { "pickaxe", "8/86/Pick_Axe_icon.png" },
                     { "pistol.eoka", "b/b5/Eoka_Pistol_icon.png" },
+                    { "pistol.m92", "4/43/M92_Pistol_icon.png" },
                     { "pistol.revolver", "5/58/Revolver_icon.png" },
                     { "pistol.semiauto", "6/6b/Semi-Automatic_Pistol_icon.png" },
                     { "rifle.ak", "d/d1/Assault_Rifle_icon.png" },
@@ -379,7 +382,7 @@ namespace Oxide.Plugins
                     { "shotgun.waterpipe", "1/1b/Waterpipe_Shotgun_icon.png" },
                     { "shotgun.double", "3/3f/Double_Barrel_Shotgun_icon.png" },
                     { "smg.2", "9/95/Custom_SMG_icon.png" },
-                    { "smg.mp5", "http://i.imgur.com/38vtmPD.png" },
+                    { "smg.mp5", "c/c0/MP5A4_icon.png" },
                     { "smg.thompson", "4/4e/Thompson_icon.png" },
                     { "spear.stone", "0/0a/Stone_Spear_icon.png" },
                     { "spear.wooden", "f/f2/Wooden_Spear_icon.png" },
@@ -789,6 +792,8 @@ namespace Oxide.Plugins
             EntryData._npcColor = GetConfig<string>(ref saveConfig, DefaultConfig.values["npc"]);
 
             // 3. Data
+            useServerFileStorage = GetConfig<bool>(ref saveConfig, DefaultConfig.values["useServerFileStorage"]);
+
             FileManager.fileDirectory = GetConfig<string>(ref saveConfig, DefaultConfig.values["fileDirectory"]);
 
             FileManager.fileIDs.Clear();
@@ -803,7 +808,7 @@ namespace Oxide.Plugins
 
             foreach (char c in GetConfig<List<char>>(ref saveConfig, DefaultConfig.values["AllowedSpecialCharacters"]))
             {
-                if (c == _formattingCharacter) continue;
+                if (c == _formattingChar) continue;
                 allowedCharacters[c] = true;
             }
 
@@ -873,36 +878,16 @@ namespace Oxide.Plugins
             /// Removes special characters from a string.
             /// </summary>
             /// <param name="str"> The string that should be modified.</param>
-            /// <param name="bannedCharacters"> The characters that are banned.</param>
-            /// <returns> The string with all non allowed characters removed.</returns>
-            public static string RemoveSpecialCharacters(string str, params char[] bannedCharacters)
-            {
-                char[] buffer = new char[str.Length];
-                int index = 0;
-                foreach (char c in str)
-                {
-                    if (!bannedCharacters.Contains(c))
-                    {
-                        buffer[index] = c;
-                        index++;
-                    }
-                }
-                return new string(buffer, 0, index);
-            }
-
-            /// <summary>
-            /// Removes special characters from a string.
-            /// </summary>
-            /// <param name="str"> The string that should be modified.</param>
             /// <param name="allowedCharacters"> The characters that are allowed.</param>
+            /// /// <param name="flag"> The flag indicates whether the characters provided are allowed characters (false) or banned characters (true).</param>
             /// <returns> The string with all non allowed characters removed.</returns>
-            public static string RemoveSpecialCharacters(string str, bool[] allowedCharacters)
+            public static string RemoveSpecialCharacters(string str, bool[] characters, bool flag = false)
             {
                 char[] buffer = new char[str.Length];
                 int index = 0;
                 foreach (char c in str)
                 {
-                    if (allowedCharacters[c])
+                    if (characters[c] ^ flag)
                     {
                         buffer[index] = c;
                         index++;
@@ -961,7 +946,9 @@ namespace Oxide.Plugins
         {
             public static string fileDirectory;
 
-            public static Dictionary<string, string> fileIDs = new Dictionary<string, string>();
+            public static Dictionary<string, KeyValuePair<string, string>> fileIDs = new Dictionary<string, KeyValuePair<string, string>>();
+
+            private static MemoryStream stream = new MemoryStream();
 
             /// <summary>
             /// Stores a value inside the server's file storage.
@@ -1011,9 +998,11 @@ namespace Oxide.Plugins
 
                 if (string.IsNullOrEmpty(www.error))
                 {
-                    MemoryStream stream = new MemoryStream();
+                    stream.Position = 0;
+                    stream.SetLength(0);
+
                     stream.Write(www.bytes, 0, www.bytes.Length);
-                    fileIDs[shortname] = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue).ToString();
+                    fileIDs[shortname] = new KeyValuePair<string, string>(url, FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString());
                 }
                 else
                 {
@@ -1126,7 +1115,9 @@ namespace Oxide.Plugins
             }
             else
             {
-                username = StringHelper.RemoveSpecialCharacters(username, _formattingCharacter);
+                bool[] characters = new bool[65536];
+                characters[_formattingChar] = true;
+                username = StringHelper.RemoveSpecialCharacters(username, characters, true);
                 username = StringHelper.TrimToSize(username, numberOfCharacters);
             }
             return username;
@@ -1356,7 +1347,7 @@ namespace Oxide.Plugins
             /// <seealso cref="WeaponInfo"/>
             WeaponInfo GetWeapon(HitInfo info)
             {
-                string weaponID;
+                KeyValuePair<string, string> weaponID;
 
                 string weapon = info.Weapon?.GetItem()?.info?.shortname;
 
@@ -1556,9 +1547,9 @@ namespace Oxide.Plugins
             public class WeaponInfo
             {
                 public string shortname { get; private set; }
-                public string weaponID { get; private set; }
+                public KeyValuePair<string, string> weaponID { get; private set; }
 
-                public WeaponInfo(string shortname, string weaponID)
+                public WeaponInfo(string shortname, KeyValuePair<string, string> weaponID)
                 {
                     this.shortname = shortname;
                     this.weaponID = weaponID;
@@ -1627,12 +1618,13 @@ namespace Oxide.Plugins
             builder.Replace("{distance}", "<color=" + entryData.infoColor + ">" + entryData.distance + "</color>");
             builder.Replace("{hitEntity}", "<color=" + entryData.hitEntityColor + ">" + (entryData.needsFormatting ? FormatUsername(entryData.hitEntityInfo.name) : entryData.hitEntityInfo.name) + "</color>");
 
-            string[] splitStrings = builder.ToString().Split(new char[] { _formattingCharacter }, 4, StringSplitOptions.None);
+            string[] splitStrings = builder.ToString().Split(new char[] { _formattingChar }, 4, StringSplitOptions.None);
             string[] stringElements = { "", "", "", "" };
             Array.Copy(splitStrings, stringElements, splitStrings.Length);
 
             CuiElementContainer container = new CuiElementContainer();
 
+            #region feedEntryElement
             CuiElement feedEntryElement = new CuiElement
             {
                 Name = "{0} feedEntry",
@@ -1642,7 +1634,7 @@ namespace Oxide.Plugins
                     {
                         new CuiRawImageComponent
                         {
-                            Color = "1.0 1.0 1.0 0.0"
+                            Sprite = "assets/content/textures/generic/fulltransparent.tga",
                         },
                         new CuiRectTransformComponent
                         {
@@ -1651,7 +1643,9 @@ namespace Oxide.Plugins
                         }
                     }
             };
+            #endregion
 
+            #region outerLeftHandElement
             CuiElement outerLeftHandElement = new CuiElement
             {
                 Name = "{0} outerLeftHandString",
@@ -1674,7 +1668,9 @@ namespace Oxide.Plugins
                     }
                 }
             };
+            #endregion
 
+            #region innerLeftHandElement
             CuiElement innerLeftHandElement = new CuiElement
             {
                 Name = "{0} innerLeftHandString",
@@ -1697,27 +1693,31 @@ namespace Oxide.Plugins
                     }
                 }
             };
+            #endregion
 
+            #region weaponElement
             CuiElement weaponElement = new CuiElement
             {
                 Name = "{0} weapon",
                 Parent = "{0} feedEntry",
-                FadeOut = fadeOut,
-                Components =
-                    {
-                        new CuiRawImageComponent
-                        {
-                            Png = entryData.weaponInfo.weaponID,
-                            FadeIn = fadeIn
-                        },
-                        new CuiRectTransformComponent
-                        {
-                            AnchorMin = 0.5f - iconHalfWidth + " " + (0.5f - iconHalfHeight),
-                            AnchorMax = 0.5f + iconHalfWidth + " " + (0.5f + iconHalfHeight),
-                        }
-                    }
+                FadeOut = fadeOut
             };
 
+            CuiRawImageComponent weaponRawImageComponent = new CuiRawImageComponent();
+            weaponRawImageComponent.Sprite = "assets/content/textures/generic/fulltransparent.tga";
+            if (useServerFileStorage) weaponRawImageComponent.Png = entryData.weaponInfo.weaponID.Value;
+            else weaponRawImageComponent.Url = entryData.weaponInfo.weaponID.Key;
+            weaponRawImageComponent.FadeIn = fadeIn;
+
+            CuiRectTransformComponent weaponRectTransformComponent = new CuiRectTransformComponent();
+            weaponRectTransformComponent.AnchorMin = 0.5f - iconHalfWidth + " " + (0.5f - iconHalfHeight);
+            weaponRectTransformComponent.AnchorMax = 0.5f + iconHalfWidth + " " + (0.5f + iconHalfHeight);
+
+            weaponElement.Components.Add(weaponRawImageComponent);
+            weaponElement.Components.Add(weaponRectTransformComponent);
+            #endregion
+
+            #region outerRightHandElement
             CuiElement outerRightHandElement = new CuiElement
             {
                 Name = "{0} outerRightHandString",
@@ -1740,7 +1740,9 @@ namespace Oxide.Plugins
                     }
                 }
             };
+            #endregion
 
+            #region innerRightHandElement
             CuiElement innerRightHandElement = new CuiElement
             {
                 Name = "{0} innerRightHandString",
@@ -1763,7 +1765,9 @@ namespace Oxide.Plugins
                     }
                 }
             };
+            #endregion
 
+            #region outline
             if (outline)
             {
                 CuiOutlineComponent outline = new CuiOutlineComponent
@@ -1776,6 +1780,7 @@ namespace Oxide.Plugins
                 outerRightHandElement.Components.Add(outline);
                 innerRightHandElement.Components.Add(outline);
             }
+            #endregion
 
             container.Add(feedEntryElement);
             container.Add(outerLeftHandElement);

@@ -9,7 +9,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("Copy Paste", "Reneb", "3.0.18", ResourceId = 5981)]
+    [Info("Copy Paste", "Reneb", "3.0.19", ResourceId = 5981)]
     class CopyPaste : RustPlugin
     {
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +88,7 @@ namespace Oxide.Plugins
         // Copy
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        bool isValid(BaseEntity entity) { return entity.GetComponentInParent<BuildingBlock>() || entity.GetComponentInParent<BaseCombatEntity>() || entity.GetComponentInParent<Spawnable>(); }
+        bool isValid(BaseEntity entity) { return (entity.GetComponentInParent<BuildingBlock>() != null || entity.GetComponentInParent<BaseCombatEntity>() != null || entity.GetComponentInParent<Spawnable>() != null); }
 
         void TryCopyLock(BaseEntity lockableEntity, IDictionary<string, object> housedata)
         {

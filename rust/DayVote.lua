@@ -1,7 +1,7 @@
 PLUGIN.Title        = "Day Vote"
 PLUGIN.Description  = "Allows automatic or player voting to skip night cycles."
 PLUGIN.Author       = "InSaNe8472"
-PLUGIN.Version      = V(1,1,3)
+PLUGIN.Version      = V(1,1,4)
 PLUGIN.ResourceId   = 1275
 
 local CanVote = true
@@ -15,7 +15,7 @@ local AllowAirdrop = false
 local AirdropControl = {}
 local AirdropDelay = 1
 local VoteRequired = ""
-local VSky
+local VSky, VoteEnd, RevoteEnd
 
 function PLUGIN:Init()
 	permission.RegisterPermission("dayvote.use", self.Plugin)
@@ -462,7 +462,8 @@ function PLUGIN:cmdDayVote(player, cmd, args)
 				return
 			end
 			local CurTime = tostring(VSky.Cycle.Hour):match"([^.]*)"
-			if tonumber(CurTime) >= tonumber(self.Config.Settings.DayHour):match"([^.]*)" and tonumber(CurTime) < tonumber(self.Config.Settings.NightHour):match"([^.]*)" then
+			local DayHour, NightHour = self.Config.Settings.DayHour:match"([^.]*)", self.Config.Settings.NightHour:match"([^.]*)"
+			if tonumber(CurTime) >= tonumber(DayHour) and tonumber(CurTime) < tonumber(NightHour) then
 				local message = FormatMessage(self:Lang(player, "VoteNotNight"), { current = CurTime, day = self.Config.Settings.DayHour, night = self.Config.Settings.NightHour })
 				self:RustMessage(player, message)
 				return

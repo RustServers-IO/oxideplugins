@@ -3,19 +3,16 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
-using Oxide.Game.Rust;
-using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("MagazinBoost", "Fujikura", "1.2.1", ResourceId = 1962)]
+    [Info("MagazinBoost", "Fujikura", "1.5.0", ResourceId = 1962)]
     [Description("Can change magazines, ammo and conditon for most projectile weapons")]
     public class MagazinBoost : RustPlugin
     {	
 		private bool Changed;
-
-		StoredWeapons storedWeapons = new StoredWeapons();
+		
+		Dictionary <string, object> weaponContainer = new Dictionary <string, object>();
 		
 		private FieldInfo _itemCondition = typeof(Item).GetField("_condition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
 		private FieldInfo _itemMaxCondition = typeof(Item).GetField("_maxCondition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
@@ -58,6 +55,7 @@ namespace Oxide.Plugins
 			permissionAmmoType = Convert.ToString(GetConfig("Permissions", "permissionAmmoType", "magazinboost.canammotype"));
 			checkPermission = Convert.ToBoolean(GetConfig("CheckRights", "checkForRightsInBelt", true));
 			removeSkinIfNoRights = Convert.ToBoolean(GetConfig("CheckRights", "removeSkinIfNoRights", true));
+			weaponContainer = (Dictionary<string, object>)GetConfig("Weapons", "Data", new Dictionary<string, object>());
             
 			if (!Changed) return;
             SaveConfig();
@@ -71,163 +69,83 @@ namespace Oxide.Plugins
         }
 		
 		#endregion Config
-		
-		
-		#region WeaponData
-
-		private void SetupDefaultWeapons()
-        {
-			var defaultWeapons = new Dictionary<string,ItemDefinition>();
-			var weapons = ItemManager.itemList.Where(p => p.category == ItemCategory.Weapon);
-			foreach( var weapon in weapons )
+				
+		void GetWeapons()
+		{
+			weaponContainer = (Dictionary <string, object>)Config["Weapons", "Data"];
+			var weapons = ItemManager.itemList.Where(p => p.category == ItemCategory.Weapon && p.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>() != null);
+			if (weaponContainer != null && weaponContainer.Count() > 0)
 			{
-				var item = ItemManager.CreateByName(weapon.shortname);
-				if (item.GetHeldEntity() is BaseProjectile)
-					defaultWeapons.Add(item.info.shortname, item.info);
-				item.Remove(0f);
-			}
-			for(int i=0; i < storedWeapons.weaponStatsList.Count; ++i)
-				foreach (WeaponStats stats in storedWeapons.weaponStatsList[i].weaponStatsContent)
-					{
-						if (stats.servermaxammo > 0 && stats.serverpreload > 0 && stats.serverammotype != null && stats.servermaxcondition > 0 && stats.serveractive)
-						{
-							defaultWeapons[stats.name].GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize = stats.servermaxammo;
-							defaultWeapons[stats.name].GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents = stats.serverpreload;
-							var ammo = ItemManager.FindItemDefinition(stats.serverammotype);
-							if (ammo != null)
-								defaultWeapons[stats.name].GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType = ammo;
-							defaultWeapons[stats.name].condition.max = (float)stats.servermaxcondition;
-
-						}
-						if (stats.servermaxammo == 0 || stats.serverpreload == 0 || stats.serverammotype == null || stats.servermaxcondition == 0) 
-						{
-							stats.servermaxammo = defaultWeapons[stats.name].GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize;
-							stats.serverpreload = defaultWeapons[stats.name].GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents;
-							stats.serverammotype = defaultWeapons[stats.name].GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname;
-							stats.servermaxcondition = (int)defaultWeapons[stats.name].condition.max;
-						}
-					}
-		}
-		
-		class StoredWeapons
-        {
-            public List<WeaponInventory> weaponStatsList = new List<WeaponInventory>();
-
-            public StoredWeapons()
-            {
-            }
-        }
-		
-		class WeaponInventory
-        {
-            private FieldInfo _itemMaxCon = typeof(Item).GetField("_maxCondition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-			
-			public List<WeaponStats> weaponStatsContent = new List<WeaponStats>();
-
-            public WeaponInventory() { }
-
-            public WeaponInventory(List<WeaponStats> list)
-            {
-                weaponStatsContent = list;
-            }
-
-            public WeaponInventory(string name, string displayname, int maxammo, int preload, int maxcondition, string ammotype, ulong skinid)
-            {
-                weaponStatsContent.Add(new WeaponStats(name, displayname, maxammo, preload, maxcondition, ammotype, skinid));
-            }
-
-            public int InventorySize()
-            {
-                return weaponStatsContent.Count;
-            }
-
-            public List<WeaponStats> GetweaponStatsContent()
-            {
-                return weaponStatsContent;
-            }
-        }
-		
-		private class WeaponStats
-        {
-            public string name;
-            public string displayname;
-			public int maxammo;
-			public int preload;
-			public int maxcondition;
-			public string ammotype;
-			public ulong skinid;
-			public bool settingactive;
-			
-			public int servermaxammo;
-			public int serverpreload;
-			public string serverammotype;
-			public int servermaxcondition;
-			public bool serveractive;
-
-            public WeaponStats() { }
-
-            public WeaponStats(string name, string displayname, int maxammo, int preload, int maxcondition, string ammotype, ulong skinid)
-            {
-                this.name = name;
-                this.displayname = displayname;
-				this.maxammo = maxammo;
-                this.preload = preload;
-				this.maxcondition = maxcondition;
-				this.ammotype = ammotype;
-				this.skinid = skinid;
-				this.settingactive = true;
-            }
-        }
-
-		private void LoadWeaponData()
-        {
-            storedWeapons = Interface.GetMod().DataFileSystem.ReadObject<StoredWeapons>("MagazinBoost");
-            if (storedWeapons.weaponStatsList.Count == 0)
-            {
-                storedWeapons = new StoredWeapons();
-                WeaponInventory inv;
-				var weapons = ItemManager.itemList.Where(p => p.category == ItemCategory.Weapon).ToList();
-				foreach( var weapon in weapons )
+				int countLoadedServerStats = 0;
+				foreach (var weapon in weapons)
 				{
-					var item = ItemManager.CreateByName(weapon.shortname);
-					if (item.GetHeldEntity() is BaseProjectile)
+					if (weaponContainer.ContainsKey(weapon.shortname)) 
 					{
-						inv = new WeaponInventory(
-							item.info.shortname,
-							item.info.displayName.english,
-							(item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity,
-							(item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents,
-							Convert.ToInt32(_itemMaxCondition.GetValue(item)),
-							(item.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.shortname,
-							item.GetHeldEntity().skinID
-							);
-						storedWeapons.weaponStatsList.Add(inv);
+						Dictionary <string, object> serverDefaults = weaponContainer[weapon.shortname] as Dictionary <string, object>;
+						if ((bool)serverDefaults["serveractive"])
+						{
+							ItemDefinition weaponDef = ItemManager.FindItemDefinition(weapon.shortname);
+							weaponDef.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize = (int)serverDefaults["servermaxammo"];
+							weaponDef.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents = (int)serverDefaults["serverpreload"];
+							ItemDefinition ammo = ItemManager.FindItemDefinition((string)serverDefaults["serverammotype"]);
+							if (ammo != null)
+								weaponDef.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType = ammo;
+							weaponDef.condition.max = Convert.ToSingle(serverDefaults["servermaxcondition"]);
+							countLoadedServerStats++;
+						}
+						continue;
 					}
-					item.Remove(0f);
+					Dictionary <string, object> weaponStats = new Dictionary <string, object>();
+					weaponStats.Add("displayname", weapon.displayName.english);
+					weaponStats.Add("maxammo", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize);
+					weaponStats.Add("preload", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents);
+					weaponStats.Add("maxcondition", weapon.condition.max);
+					weaponStats.Add("ammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
+					weaponStats.Add("skinid", 0);
+					weaponStats.Add("settingactive", true);
+					weaponStats.Add("servermaxammo", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize);
+					weaponStats.Add("serverpreload", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents);
+					weaponStats.Add("serverammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
+					weaponStats.Add("servermaxcondition", weapon.condition.max);
+					weaponStats.Add("serveractive", false);				
+					weaponContainer.Add(weapon.shortname, weaponStats);
+					Puts($"Added NEW weapon '{weapon.displayName.english} ({weapon.shortname})' to weapons list");
 				}
-				SaveWeaponData();
-            }
-        }
-		
-		private void SaveWeaponData()
-		{
-			Interface.GetMod().DataFileSystem.WriteObject("MagazinBoost", storedWeapons);
+				if (countLoadedServerStats > 0)
+					Puts($"Changed server default values for '{countLoadedServerStats}' weapons");
+				Config["Weapons", "Data"] = weaponContainer;
+				Config.Save();
+				return;
+			}
+			else
+			{
+				int counter = 0;
+				foreach (var weapon in weapons)
+				{
+					Dictionary <string, object> weaponStats = new Dictionary <string, object>();
+					weaponStats.Add("displayname", weapon.displayName.english);
+					weaponStats.Add("maxammo", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize);
+					weaponStats.Add("preload", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents);
+					weaponStats.Add("maxcondition", weapon.condition.max);
+					weaponStats.Add("ammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
+					weaponStats.Add("skinid", 0);
+					weaponStats.Add("settingactive", true);
+					weaponStats.Add("servermaxammo", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize);
+					weaponStats.Add("serverpreload", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents);
+					weaponStats.Add("serverammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
+					weaponStats.Add("servermaxcondition", weapon.condition.max);
+					weaponStats.Add("serveractive", false);				
+					weaponContainer.Add(weapon.shortname, weaponStats);
+					counter++;
+				}
+				Puts($"Created initial weaponlist with '{counter}' projectile weapons.");
+				Config["Weapons", "Data"] = weaponContainer;
+				Config.Save();
+				return;
+			}
 		}
-		
-		#endregion WeaponData
-		        
-		private WeaponStats craftedWeapon(string name)
-		{
-			for(int i=0; i < storedWeapons.weaponStatsList.Count; ++i)
-				foreach (WeaponStats stats in storedWeapons.weaponStatsList[i].weaponStatsContent.ToList())
-					{
-						if (stats.name == name)
-						return stats;
-					}
-					return null;
-		}
-		
-		private bool hasAnyRight(BasePlayer player)
+
+		bool hasAnyRight(BasePlayer player)
 		{
 			if (permission.UserHasPermission(player.UserIDString, permissionAll)) return true;
 			if (permission.UserHasPermission(player.UserIDString, permissionMaxAmmo)) return true;
@@ -237,7 +155,7 @@ namespace Oxide.Plugins
 			return false;
 		}
 		
-		private bool hasRight(BasePlayer player, string perm)
+		bool hasRight(BasePlayer player, string perm)
 		{
 			bool right = false;
 			switch (perm)
@@ -264,53 +182,44 @@ namespace Oxide.Plugins
 			return right;
 		}
 
-		private void OnServerInitialized()
+		void OnServerInitialized()
         {
-			NextTick( ()=> {
-				LoadVariables();
-				LoadWeaponData();
-				SetupDefaultWeapons();
-				SaveWeaponData();
-				if (!permission.PermissionExists(permissionAll)) permission.RegisterPermission(permissionAll, this);
-				if (!permission.PermissionExists(permissionMaxAmmo)) permission.RegisterPermission(permissionMaxAmmo, this);
-				if (!permission.PermissionExists(permissionPreLoad)) permission.RegisterPermission(permissionPreLoad, this);
-				if (!permission.PermissionExists(permissionMaxCondition)) permission.RegisterPermission(permissionMaxCondition, this);
-				if (!permission.PermissionExists(permissionAmmoType)) permission.RegisterPermission(permissionAmmoType, this);
-			});
+			LoadVariables();
+			GetWeapons();
+			if (!permission.PermissionExists(permissionAll)) permission.RegisterPermission(permissionAll, this);
+			if (!permission.PermissionExists(permissionMaxAmmo)) permission.RegisterPermission(permissionMaxAmmo, this);
+			if (!permission.PermissionExists(permissionPreLoad)) permission.RegisterPermission(permissionPreLoad, this);
+			if (!permission.PermissionExists(permissionMaxCondition)) permission.RegisterPermission(permissionMaxCondition, this);
+			if (!permission.PermissionExists(permissionAmmoType)) permission.RegisterPermission(permissionAmmoType, this);
 		}
 
-		private void OnItemCraftFinished(ItemCraftTask task, Item item)
+		void OnItemCraftFinished(ItemCraftTask task, Item item)
 		{
-			if(item.GetHeldEntity() is BaseProjectile)
+			if(!(item.GetHeldEntity() is BaseProjectile)) return;
+			if(!hasAnyRight(task.owner)) return;
+			Dictionary <string, object> weaponStats = null;
+			if (weaponContainer.ContainsKey(item.info.shortname))
+				weaponStats = weaponContainer[item.info.shortname] as Dictionary <string, object>;
+			if (!(bool)weaponStats["settingactive"]) return;
+			if (hasRight(task.owner,"maxammo") || hasRight(task.owner, "all"))
+				(item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity = (int)weaponStats["maxammo"];
+			if (hasRight(task.owner,"preload") || hasRight(task.owner, "all"))
+				(item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (int)weaponStats["preload"];
+			if (hasRight(task.owner,"ammotype") || hasRight(task.owner, "all"))
 			{
-				if(!hasAnyRight(task.owner)) return;
-				var weaponstats = craftedWeapon(item.info.shortname);
-				if(weaponstats != null && weaponstats.settingactive == true)			
-				{
-					if (hasRight(task.owner,"maxammo") || hasRight(task.owner, "all"))
-						(item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity = Convert.ToInt32(weaponstats.maxammo);
-					if (hasRight(task.owner,"preload") || hasRight(task.owner, "all"))
-						(item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = Convert.ToInt32(weaponstats.preload);
-					if (hasRight(task.owner,"ammotype") || hasRight(task.owner, "all"))
-					{
-						var ammo = ItemManager.FindItemDefinition(weaponstats.ammotype);
-						if (ammo != null)
-							(item.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType = ammo;
-					}
-					if (hasRight(task.owner,"maxcondition") || hasRight(task.owner, "all"))
-					{
-						_itemMaxCondition.SetValue(item, Convert.ToSingle(weaponstats.maxcondition));
-						_itemCondition.SetValue(item, Convert.ToSingle(weaponstats.maxcondition));				
-					}
-					if(weaponstats.skinid != 0)
-						foreach( var skin in item.info.skins.ToList())
-							if (skin.id == (int)weaponstats.skinid)
-							{
-								item.skin = weaponstats.skinid;
-								item.GetHeldEntity().skinID = weaponstats.skinid;
-								break;
-							}
-				}
+				var ammo = ItemManager.FindItemDefinition((string)weaponStats["ammotype"]);
+				if (ammo != null)
+					(item.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType = ammo;
+			}
+			if (hasRight(task.owner,"maxcondition") || hasRight(task.owner, "all"))
+			{
+				_itemMaxCondition.SetValue(item, Convert.ToSingle(weaponStats["maxcondition"]));
+				_itemCondition.SetValue(item, Convert.ToSingle(weaponStats["maxcondition"]));				
+			}
+			if((int)weaponStats["skinid"] > 0)
+			{
+				item.skin = Convert.ToUInt64(weaponStats["skinid"]);
+				item.GetHeldEntity().skinID = Convert.ToUInt64(weaponStats["skinid"]);
 			}
 		}
 		
@@ -319,29 +228,33 @@ namespace Oxide.Plugins
 			if(!checkPermission) return;
 			if(item.GetHeldEntity() is BaseProjectile && container.HasFlag(ItemContainer.Flag.Belt))
 			{
-				var weaponstats = craftedWeapon(item.info.shortname);
-				if(weaponstats != null && weaponstats.settingactive)	
+				Dictionary <string, object> weaponStats = null;
+				object checkStats;
+				if (weaponContainer.TryGetValue(item.info.shortname, out checkStats))
 				{
-					if ((item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity > item.info.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize && !(hasRight(container.playerOwner, "maxammo") || hasRight(container.playerOwner, "all")))
-					{
-						(item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity = item.info.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize;
-						if ((item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents > (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity)
-							(item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-					}
-					if (item.maxCondition > item.info.condition.max && !(hasRight(container.playerOwner, "maxcondition") || hasRight(container.playerOwner, "all")))
-					{
-						var newCon = item.condition * (item.info.condition.max / item.maxCondition);
-						_itemMaxCondition.SetValue(item, Convert.ToSingle(item.info.condition.max));
-						_itemCondition.SetValue(item, Convert.ToSingle(newCon));
-					}
-					if (removeSkinIfNoRights && !hasAnyRight(container.playerOwner) && item.GetHeldEntity().skinID == weaponstats.skinid && item.GetHeldEntity().skinID != 0)
-					{
-						item.skin = 0;
-						item.GetHeldEntity().skinID = 0;
-					}
+					weaponStats = checkStats as Dictionary <string, object>;
+					if (!(bool)weaponStats["settingactive"]) return;
+				}
+				else
+					return;
+				if ((item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity > item.info.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize && !(hasRight(container.playerOwner, "maxammo") || hasRight(container.playerOwner, "all")))
+				{
+					(item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity = item.info.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize;
+					if ((item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents > (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity)
+						(item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+				}
+				if (item.maxCondition > item.info.condition.max && !(hasRight(container.playerOwner, "maxcondition") || hasRight(container.playerOwner, "all")))
+				{
+					var newCon = item.condition * (item.info.condition.max / item.maxCondition);
+					_itemMaxCondition.SetValue(item, Convert.ToSingle(item.info.condition.max));
+					_itemCondition.SetValue(item, Convert.ToSingle(newCon));
+				}
+				if (removeSkinIfNoRights && !hasAnyRight(container.playerOwner) && item.GetHeldEntity().skinID == Convert.ToUInt64(weaponStats["skinid"]) && item.GetHeldEntity().skinID != 0uL)
+				{
+					item.skin = 0uL;
+					item.GetHeldEntity().skinID = 0uL;
 				}
 			}
 		}
-
 	}
 }
