@@ -2,7 +2,7 @@
     "name": "Position",
     "description": "Shows players their positions.",
     "author": "Spicy",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/position.2192",

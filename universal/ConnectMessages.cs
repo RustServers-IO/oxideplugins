@@ -1,10 +1,11 @@
 using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("ConnectMessages", "Spicy", "1.1.1")]
+    [Info("ConnectMessages", "Spicy", "1.1.5")]
     [Description("Provides connect and disconnect messages.")]
 
     class ConnectMessages : CovalencePlugin
@@ -25,6 +26,7 @@ namespace Oxide.Plugins
         private bool showConnectCountry;
         private bool showDisconnectMessage;
         private bool showDisconnectReason;
+        private bool showAdminMessages;
 
         private bool GetConfigValue(string key) => Config.Get<bool>("Settings", key);
 
@@ -35,7 +37,8 @@ namespace Oxide.Plugins
                 ["ShowConnectMessage"] = true,
                 ["ShowConnectCountry"] = false,
                 ["ShowDisconnectMessage"] = true,
-                ["ShowDisconnectReason"] = false
+                ["ShowDisconnectReason"] = false,
+                ["ShowAdminMessages"] = true
             };
         }
 
@@ -45,6 +48,7 @@ namespace Oxide.Plugins
             showConnectCountry = GetConfigValue("ShowConnectCountry");
             showDisconnectMessage = GetConfigValue("ShowDisconnectMessage");
             showDisconnectReason = GetConfigValue("ShowDisconnectReason");
+            showAdminMessages = GetConfigValue("ShowAdminMessages");
         }
 
         #endregion
@@ -96,13 +100,13 @@ namespace Oxide.Plugins
 
         private void OnUserConnected(IPlayer player)
         {
-            if (!showConnectMessage)
+            if (!showConnectMessage || (player.IsAdmin && !showAdminMessages))
                 return;
 
             if (!showConnectCountry)
             {
                 foreach (IPlayer _player in players.Connected)
-                    _player.Message(string.Format(GetLangValue("ConnectMessage", _player.Id), player.Name));
+                    _player.Message(string.Format(GetLangValue("ConnectMessage", _player.Id), player.Name.Sanitize()));
 
                 return;
             }
@@ -120,21 +124,21 @@ namespace Oxide.Plugins
                 string country = JsonConvert.DeserializeObject<Response>(response).Country;
 
                 foreach (IPlayer _player in players.Connected)
-                    _player.Message(string.Format(GetLangValue("ConnectMessageCountry", _player.Id), player.Name, country));
+                    _player.Message(string.Format(GetLangValue("ConnectMessageCountry", _player.Id), player.Name.Sanitize(), country));
             }, this);
         }
 
         private void OnUserDisconnected(IPlayer player, string reason)
         {
-            if (!showDisconnectMessage)
+            if (!showDisconnectMessage || (player.IsAdmin && !showAdminMessages))
                 return;
 
             foreach (IPlayer _player in players.Connected)
             {
                 if (!showDisconnectReason)
-                    _player.Message(string.Format(GetLangValue("DisconnectMessage", _player.Id), player.Name));
+                    _player.Message(string.Format(GetLangValue("DisconnectMessage", _player.Id), player.Name.Sanitize()));
                 else
-                    _player.Message(string.Format(GetLangValue("DisconnectMessageReason", _player.Id), player.Name, reason));
+                    _player.Message(string.Format(GetLangValue("DisconnectMessageReason", _player.Id), player.Name.Sanitize(), reason));
             }
         }
 

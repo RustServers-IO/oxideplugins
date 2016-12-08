@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Administration ChatRoom", "austinv900", "1.0.0")]
+    [Info("Administration ChatRoom", "austinv900", "1.0.2", ResourceId = 2185)]
     [Description("Allow admins to send messages back and forth between other admins")]
 
     class AdminChatroom : CovalencePlugin
@@ -22,6 +22,8 @@ namespace Oxide.Plugins
             {
                 if (pl.IsConnected && IsAdmin(pl)) AdminChat.Add(pl);
             }
+
+            permission.RegisterPermission(Permission, this);
         }
         void OnUserConnected(IPlayer player)
         {
@@ -34,12 +36,12 @@ namespace Oxide.Plugins
         #endregion
 
         #region Configuration
-        string Permission;
+        string Permission = "adminchatroom.";
         protected override void LoadDefaultConfig()
         {
-            SetConfig("General", "Allowed To Join Permission", $"{Name}.allowed");
+            SetConfig("General", "Allowed To Join Permission 'adminchatroom.'", $"allowed");
             SaveConfig();
-            GetConfig($"{Name}.allowed", "General", "Allowed To Join Permission");
+            Permission += GetConfig($"allowed", "General", "Allowed To Join Permission 'adminchatroom.'");
         }
         #endregion
 

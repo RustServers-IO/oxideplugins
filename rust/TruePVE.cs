@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.4.7", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.4.8", ResourceId = 1789)]
 	class TruePVE : RustPlugin
 	{
 		private TruePVEData data = new TruePVEData();
@@ -599,8 +599,9 @@ namespace Oxide.Plugins
 			// Check for heli initiator
 			if(hitinfo.Initiator is BaseHelicopter ||
 			   hitinfo.Initiator is HelicopterTurret ||
-			   hitinfo.Initiator.ShortPrefabName == "oilfireballsmall" ||
-			   hitinfo.Initiator.ShortPrefabName == "napalm")
+			   (hitinfo.Initiator != null && (
+				   hitinfo.Initiator.ShortPrefabName == "oilfireballsmall" ||
+				   hitinfo.Initiator.ShortPrefabName == "napalm")))
 				return data.config[Option.heliDamage];
 			else if(hitinfo.WeaponPrefab != null) // prevent null spam
 			{

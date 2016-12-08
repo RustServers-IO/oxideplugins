@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerList", "Wulf/lukespragg", "0.2.0", ResourceId = 2126)]
-    [Description("Shows a count and list of all online players unless hidden")]
+    [Info("PlayerList", "Wulf/lukespragg", "0.3.1", ResourceId = 2126)]
+    [Description("Shows a list and count of all online, non-hidden players")]
 
     class PlayerList : CovalencePlugin
     {
@@ -14,13 +15,19 @@ namespace Oxide.Plugins
 
         const string permAllow = "playerlist.allow";
         const string permHide = "playerlist.hide";
-        bool separateAdmin;
+
+        bool adminSeparate;
         string adminColor;
 
         protected override void LoadDefaultConfig()
         {
-            Config["AdminColor"] = adminColor = GetConfig("AdminColor", "e68c17");
-            Config["SeparateAdmin"] = separateAdmin = GetConfig("SeparateAdmin", false);
+            Config["Admin List Separate (true/false)"] = adminSeparate = GetConfig("Admin List Separate (true/false)", false);
+            Config["Admin Color (Hex Format or Name)"] = adminColor = GetConfig("Admin Color (Hex Format or Name)", "e68c17");
+
+            // Cleanup
+            Config.Remove("SeparateAdmin");
+            Config.Remove("AdminColor");
+
             SaveConfig();
         }
 
@@ -28,6 +35,7 @@ namespace Oxide.Plugins
         {
             LoadDefaultConfig();
             LoadDefaultMessages();
+
             permission.RegisterPermission(permAllow, this);
             permission.RegisterPermission(permHide, this);
         }
@@ -106,7 +114,7 @@ namespace Oxide.Plugins
         [Command("online")]
         void OnlineCommand(IPlayer player, string command, string[] args)
         {
-            if (!permission.UserHasPermission(player.Id, permAllow) && player.Id != "server_console")
+            if (player.Id != "server_console" && !permission.UserHasPermission(player.Id, permAllow))
             {
                 player.Reply(Lang("NotAllowed", player.Id, command));
                 return;
@@ -121,7 +129,7 @@ namespace Oxide.Plugins
         [Command("players", "who")]
         void PlayersCommand(IPlayer player, string command, string[] args)
         {
-            if (!permission.UserHasPermission(player.Id, permAllow) && player.Id != "server_console")
+            if (player.Id != "server_console" && !permission.UserHasPermission(player.Id, permAllow))
             {
                 player.Reply(Lang("NotAllowed", player.Id, command));
                 return;
@@ -131,27 +139,31 @@ namespace Oxide.Plugins
             var playerCount = players.Connected.Count(p => !p.IsAdmin && !permission.UserHasPermission(p.Id, permHide));
             var totalCount = adminCount + playerCount;
 
-            switch (totalCount)
+            if (totalCount == 0) player.Reply(Lang("NobodyOnline", player.Id));
+            else if (totalCount == 1 && player.Id != "server_console") player.Reply(Lang("OnlyYou", player.Id));
+            else
             {
-                case 0:
-                    player.Reply(Lang("NobodyOnline", player.Id));
-                    break;
-                case 1:
-                    player.Reply(Lang("OnlyYou", player.Id));
-                    break;
-                default:
-                    var adminList = string.Join(", ", players.Connected.Where(p => p.IsAdmin).Select(p => covalence.FormatText($"[#{adminColor}]{p.Name}[/#]")).ToArray());
-                    var playerList = string.Join(", ", players.Connected.Where(p => !p.IsAdmin).Select(p => p.Name).ToArray());
-                    if (separateAdmin && !string.IsNullOrEmpty(adminList)) player.Reply(Lang("AdminList", player.Id, adminCount, adminList));
-                    if (!string.IsNullOrEmpty(playerList)) player.Reply(Lang("PlayerList", player.Id, playerCount, playerList));
-                    break;
+                var adminList = string.Join(", ", players.Connected.Where(p => p.IsAdmin).Select(p => covalence.FormatText($"[#{adminColor}]{p.Name.Sanitize()}[/#]")).ToArray());
+                var playerList = string.Join(", ", players.Connected.Where(p => !p.IsAdmin).Select(p => p.Name.Sanitize()).ToArray());
+
+                if (adminSeparate && !string.IsNullOrEmpty(adminList)) player.Reply(Lang("AdminList", player.Id, adminCount, adminList.TrimEnd(' ').TrimEnd(',')));
+                else
+                {
+                    playerCount = adminCount + playerCount;
+                    playerList = string.Concat(adminList, ", ", playerList);
+                }
+                if (!string.IsNullOrEmpty(playerList)) player.Reply(Lang("PlayerList", player.Id, playerCount, playerList.TrimEnd(' ').TrimEnd(',')));
             }
         }
 
         #endregion
 
+        #region Helpers
+
         T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
 
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
+        #endregion
     }
 }

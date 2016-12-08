@@ -12,7 +12,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Kill Feed", "Tuntenfisch", "1.15.4", ResourceId = 1433)]
+    [Info("Kill Feed", "Tuntenfisch", "1.15.5", ResourceId = 1433)]
     [Description("Displays a basic Kill Feed on screen!")]
     public class KillFeed : RustPlugin
     {
@@ -22,6 +22,8 @@ namespace Oxide.Plugins
         const float _halfHeight = _height / 2f;
 
         static int _debugging;
+
+        static bool useServerFileStorage;
 
         static char _formattingChar = '§';
 
@@ -55,7 +57,6 @@ namespace Oxide.Plugins
         bool displayPlayerDeaths;
         bool logEntries;
         bool printEntriesToConsole;
-        bool useServerFileStorage;
         bool[] allowedCharacters;
 
         string chatIcon;
@@ -946,7 +947,7 @@ namespace Oxide.Plugins
         {
             public static string fileDirectory;
 
-            public static Dictionary<string, KeyValuePair<string, string>> fileIDs = new Dictionary<string, KeyValuePair<string, string>>();
+            public static Dictionary<string, string> fileIDs = new Dictionary<string, string>();
 
             private static MemoryStream stream = new MemoryStream();
 
@@ -959,7 +960,7 @@ namespace Oxide.Plugins
             public static void Store(string key, string value)
             {
                 StringBuilder url = new StringBuilder();
-                if (value.StartsWith("file:///") || value.StartsWith(("http://")))
+                if (value.StartsWith("file:///") || value.StartsWith("http://"))
                 {
                     url.Append(value);
                 }
@@ -968,7 +969,15 @@ namespace Oxide.Plugins
                     url.Append(fileDirectory);
                     url.Append(value);
                 }
-                _fileManager.StartCoroutine(WaitForRequest(key, url.ToString()));
+
+                if (useServerFileStorage)
+                {
+                    _fileManager.StartCoroutine(WaitForRequest(key, url.ToString()));
+                }
+                else
+                {
+                    fileIDs[key] = url.ToString();
+                }
             }
 
             /// <summary>
@@ -1002,7 +1011,7 @@ namespace Oxide.Plugins
                     stream.SetLength(0);
 
                     stream.Write(www.bytes, 0, www.bytes.Length);
-                    fileIDs[shortname] = new KeyValuePair<string, string>(url, FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString());
+                    fileIDs[shortname] = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
                 }
                 else
                 {
@@ -1347,7 +1356,7 @@ namespace Oxide.Plugins
             /// <seealso cref="WeaponInfo"/>
             WeaponInfo GetWeapon(HitInfo info)
             {
-                KeyValuePair<string, string> weaponID;
+                string weaponID;
 
                 string weapon = info.Weapon?.GetItem()?.info?.shortname;
 
@@ -1547,9 +1556,9 @@ namespace Oxide.Plugins
             public class WeaponInfo
             {
                 public string shortname { get; private set; }
-                public KeyValuePair<string, string> weaponID { get; private set; }
+                public string weaponID { get; private set; }
 
-                public WeaponInfo(string shortname, KeyValuePair<string, string> weaponID)
+                public WeaponInfo(string shortname, string weaponID)
                 {
                     this.shortname = shortname;
                     this.weaponID = weaponID;
@@ -1705,8 +1714,8 @@ namespace Oxide.Plugins
 
             CuiRawImageComponent weaponRawImageComponent = new CuiRawImageComponent();
             weaponRawImageComponent.Sprite = "assets/content/textures/generic/fulltransparent.tga";
-            if (useServerFileStorage) weaponRawImageComponent.Png = entryData.weaponInfo.weaponID.Value;
-            else weaponRawImageComponent.Url = entryData.weaponInfo.weaponID.Key;
+            if (useServerFileStorage) weaponRawImageComponent.Png = entryData.weaponInfo.weaponID;
+            else weaponRawImageComponent.Url = entryData.weaponInfo.weaponID;
             weaponRawImageComponent.FadeIn = fadeIn;
 
             CuiRectTransformComponent weaponRectTransformComponent = new CuiRectTransformComponent();

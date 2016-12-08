@@ -1,19 +1,27 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using Oxide.Game.Rust.Cui;
-using System.IO;
-using System.Collections;
 using System;
 using System.Linq;
+using Oxide.Core.Plugins;
+using Oxide.Core.Libraries.Covalence;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("UniversalUI", "Absolut", "1.1.0", ResourceId = 2226)]
+    [Info("UniversalUI", "Absolut", "2.0.0", ResourceId = 2226)]
 
     class UniversalUI : RustPlugin
     {
+        [PluginReference]
+        Plugin ImageLibrary;
+
+        [PluginReference]
+        Plugin BetterChat;
+
         string TitleColor = "<color=orange>";
         string MsgColor = "<color=#A9A9A9>";
+        bool localimages = true;
         private Dictionary<ulong, screen> UniversalUIInfo = new Dictionary<ulong, screen>();
         class screen
         {
@@ -24,13 +32,8 @@ namespace Oxide.Plugins
         }
         private bool Debugging;
         private List<ulong> NoInfo = new List<ulong>();
-        private Dictionary<string , Dictionary<int, uint>> CachedImages;
-        private Dictionary<string, Dictionary<int, Dictionary<int, uint>>> CachedInfoButtonImages;
-        static GameObject webObject;
-        static SavedImages savedimages;
-        static SavedInfoButtons savedinfobuttons;
+        private Dictionary<ulong, List<string>> OnDelay = new Dictionary<ulong, List<string>>();
         private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
-        private string ImageID;
 
         #region Server Hooks
 
@@ -53,18 +56,20 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
+            try
+            {
+                ImageLibrary.Call("isLoaded", null);
+            }
+            catch (Exception)
+            {
+                PrintWarning($"ImageLibrary is missing. Unloading {Name} as it will not work without ImageLibrary.");
+                Interface.Oxide.UnloadPlugin(Name);
+                return;
+            }
             LoadVariables();
-            if (!permission.PermissionExists("UniversalUI.admin"))
-                permission.RegisterPermission("UniversalUI.admin", this);
+            RegisterPermissions();
             foreach (BasePlayer p in BasePlayer.activePlayerList)
                 OnPlayerInit(p);
-            webObject = new GameObject("WebObject");
-            savedinfobuttons = webObject.AddComponent<SavedInfoButtons>();
-            savedinfobuttons.SetDataDir(this);
-            savedimages = webObject.AddComponent<SavedImages>();
-            savedimages.SetDataDir(this);
-            CachedImages = new Dictionary<string, Dictionary<int, uint>>();
-            CachedInfoButtonImages = new Dictionary<string, Dictionary<int, Dictionary<int, uint>>>();
             GetAllImages();
             //foreach (var entry in configData.buttons)
             //    messages.Add(entry.Value.name, entry.Value.name);
@@ -78,9 +83,12 @@ namespace Oxide.Plugins
                 //player.Command("bind tab \"UI_DestroyUniversalUI;inventory.toggle\"");
                 //player.Command("bind q \"inventory.togglecrafting;UI_DestroyUniversalUI\"");
                 //player.Command("bind escape \"UI_DestroyUniversalUI\"");
-                player.Command($"bind {configData.MenuKeyBinding} \"UI_OpenUniversalUI\"");
+                if (configData.MenuKeyBinding != "")
+                    player.Command($"bind {configData.MenuKeyBinding} \"UI_OpenUniversalUI\"");
                 if (configData.InfoInterval != 0)
-                    GetSendMSG(player, "UIInfo", configData.MenuKeyBinding.ToString());
+                    if (configData.MenuKeyBinding != "")
+                        GetSendMSG(player, "UIInfo", configData.MenuKeyBinding.ToString());
+                    else GetSendMSG(player, "UIInfo1");
             }
         }
 
@@ -93,10 +101,86 @@ namespace Oxide.Plugins
         {
             DestroyPlayer(player);
         }
-        #endregion
+
+        private object OnPlayerChat(ConsoleSystem.Arg arg)
+        {
+            if (BetterChat) return null;
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return null;
+            if (OnDelay.ContainsKey(player.userID))
+            {
+                if (arg.Args[0].ToString() == "quit")
+                {
+                    OnDelay.Remove(player.userID);
+                    GetSendMSG(player, "ExitDelayed");
+                    return false;
+                }
+                foreach (var e in arg.Args)
+                    OnDelay[player.userID].Add(e);
+                RunCommand(player, OnDelay[player.userID].ToArray());
+                return false;
+            }
+            return null;
+        }
+
+        object OnBetterChat(IPlayer iplayer, string message)
+        {
+            var player = iplayer.Object as BasePlayer;
+            if (player == null) return message;
+            if (OnDelay.ContainsKey(player.userID))
+            {
+                if(message[0].ToString() == "quit")
+                {
+                    OnDelay.Remove(player.userID);
+                    GetSendMSG(player, "ExitDelayed");
+                    return true;
+                }
+                foreach (var e in message.Split(' '))
+                    OnDelay[player.userID].Add(e);
+                RunCommand(player, OnDelay[player.userID].ToArray());
+                return true;
+            }
+            return message;
+        }
+
+        //object OnServerCommand(ConsoleSystem.Arg arg)
+        //{
+        //    var player = arg.connection?.player as BasePlayer;
+        //    if (player == null)
+        //        return null;
+        //    if (OnDelay.ContainsKey(player.userID))
+        //    {
+        //        List<string> args = new List<string>();
+        //        foreach (var e in arg.Args)
+        //            OnDelay[player.userID].Add(e);
+        //        RunCommand(player, OnDelay[player.userID].ToArray());
+        //        return false;
+        //    }
+        //    return null;
+        //}
+
+
+        private void RunCommand(BasePlayer player, string[] command)
+        {
+            if (command[0] == "chat.say")
+            {
+                rust.RunClientCommand(player, $"chat.say", string.Join(" ", command.Skip(1).ToArray()));
+                if(Debugging) Puts($"Chat say:");
+            }
+            else
+            {
+                rust.RunClientCommand(player, string.Join(" ", command.ToArray()));
+                if (Debugging) Puts($"Console Command: {string.Join(" ", command.ToArray())}");
+            }
+            if (OnDelay.ContainsKey(player.userID))
+                OnDelay.Remove(player.userID);
+        }
+
+    #endregion
 
         #region Functions
-        [ConsoleCommand("UI_OpenUniversalUI")]
+    [ConsoleCommand("UI_OpenUniversalUI")]
         private void cmdUI_OpenUniversalUI(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
@@ -163,6 +247,20 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var cmd = "";
+            if (arg.Args[0] == "delay")
+            {
+                if (OnDelay.ContainsKey(player.userID))
+                    OnDelay.Remove(player.userID);
+                List<string> args = new List<string>();
+                foreach (var e in arg.Args.Where(e=> e != "delay"))
+                    args.Add(e);
+                OnDelay.Add(player.userID, args);
+                var message = string.Join(" ", arg.Args.Skip(1).ToArray());
+                if (arg.Args[1] == "chat.say")
+                   message = string.Join(" ", arg.Args.Skip(2).ToArray());
+                GetSendMSG(player, "DelayedCMD", message);
+                DestroyUniversalUI(player);
+            }
             if (arg.Args[0] == "chat.say")
             {
                 cmd = string.Join(" ", arg.Args.Skip(1).ToArray());
@@ -193,17 +291,30 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var section = Convert.ToInt32(arg.Args[0]);
-            var admin = arg.Args[1];
-            if (admin == "false" || isAuth(player))
+            if (section != 0)
             {
-                UniversalUIInfo[player.userID].section = section;
-                UniversalUIInfo[player.userID].page = 0;
-                UIInfoPanel(player);
+                var admin = arg.Args[1];
+                if (admin == "false")
+                {
+                    if (arg.Args.Length > 2)
+                        if (!isAllowed(player, false, arg.Args[2]))
+                        {
+                            GetSendMSG(player, "NotAuth");
+                            return;
+                        }
+                }
+                else
+                {
+                    if (!isAllowed(player, true))
+                    {
+                        GetSendMSG(player, "NotAuth");
+                        return;
+                    }
+                }
             }
-            else
-            {
-                GetSendMSG(player, "NotAuth");
-            }
+            UniversalUIInfo[player.userID].section = section;
+            UniversalUIInfo[player.userID].page = 0;
+            UIInfoPanel(player);
         }
 
         [ConsoleCommand("UI_InfoSectionButtonChange")]
@@ -237,7 +348,8 @@ namespace Oxide.Plugins
             //player.Command("bind tab \"inventory.toggle\"");
             //player.Command("bind q \"inventory.togglecrafting\"");
             //player.Command("bind escape \"\"");
-            player.Command($"bind {configData.MenuKeyBinding} \"\"");
+            if (configData.MenuKeyBinding != "")
+                player.Command($"bind {configData.MenuKeyBinding} \"\"");
         }
 
         private string GetLang(string msg)
@@ -256,10 +368,62 @@ namespace Oxide.Plugins
         bool isAuth(BasePlayer player)
         {
             if (player.net.connection != null)
-                if (player.net.connection.authLevel < 2 || !permission.UserHasPermission(player.UserIDString, "UniversalUI.admin"))
+                if (player.net.connection.authLevel < 2 && !permission.UserHasPermission(player.UserIDString, "UniversalUI.admin"))
                     return false;
             return true;
         }
+
+        private void RegisterPermissions()
+        {
+            if (!permission.PermissionExists("UniversalUI.admin"))
+                permission.RegisterPermission("UniversalUI.admin", this);
+            foreach (var entry in configData.buttons)
+                if (!string.IsNullOrEmpty(entry.Value.permission) && !permission.PermissionExists("UniversalUI." + entry.Value.permission))
+                    permission.RegisterPermission("UniversalUI."+entry.Value.permission, this);
+            foreach (var section in configData.sections)
+            {
+                if (!string.IsNullOrEmpty(section.Value.permission) && !permission.PermissionExists("UniversalUI." + section.Value.permission))
+                    permission.RegisterPermission("UniversalUI." + section.Value.permission, this);
+                foreach (var page in section.Value.pages)
+                    foreach (var button in page.buttons)
+                        if (!string.IsNullOrEmpty(button.permission) && !permission.PermissionExists("UniversalUI." + button.permission))
+                            permission.RegisterPermission("UniversalUI." + button.permission, this);
+            }
+
+        }
+
+        bool isAllowed(BasePlayer player, bool adminonly, string perm = "")
+        {
+            if (isAuth(player)) return true;
+            if (adminonly) return false;
+            if (!string.IsNullOrEmpty(perm))
+                if (!permission.UserHasPermission(player.UserIDString, "UniversalUI." + perm)) return false;
+            return true;
+        }
+
+        private string TryForImage(string shortname, ulong skin = 99)
+        {
+            if (localimages)
+                if (skin == 99)
+                    return GetImage(shortname, (ulong)ResourceId);
+                else return GetImage(shortname, skin);
+            else if (skin == 99)
+                return GetImageURL(shortname, (ulong)ResourceId);
+            else return GetImageURL(shortname, skin);
+        }
+
+        private bool Valid(string name, ulong id = 99)
+        {
+            if (id == 99)
+                return HasImage(name, (ulong)ResourceId);
+            return HasImage(name, id);
+        }
+
+        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
+        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname, skin);
+
 
         #endregion
 
@@ -270,7 +434,8 @@ namespace Oxide.Plugins
 
         public class UI
         {
-            static public CuiElementContainer CreateElementContainer(string panel, string color, string aMin, string aMax, bool cursor = false)
+            static bool localimage = true;
+            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
             {
@@ -282,14 +447,14 @@ namespace Oxide.Plugins
                         CursorEnabled = cursor
                     },
                     new CuiElement().Parent,
-                    panel
+                    panelName
                 }
             };
                 return NewElement;
             }
-            static public void CreatePanel(ref CuiElementContainer element, string panel, string color, string aMin, string aMax, bool cursor = false)
+            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
             {
-                element.Add(new CuiPanel
+                container.Add(new CuiPanel
                 {
                     Image = { Color = color },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
@@ -297,9 +462,9 @@ namespace Oxide.Plugins
                 },
                 panel);
             }
-            static public void CreateLabel(ref CuiElementContainer element, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
             {
-                element.Add(new CuiLabel
+                container.Add(new CuiLabel
                 {
                     Text = { Color = color, FontSize = size, Align = align, FadeIn = 1.0f, Text = text },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
@@ -307,9 +472,9 @@ namespace Oxide.Plugins
                 panel);
             }
 
-            static public void CreateButton(ref CuiElementContainer element, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
+            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
             {
-                element.Add(new CuiButton
+                container.Add(new CuiButton
                 {
                     Button = { Color = color, Command = command, FadeIn = 1.0f },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
@@ -318,31 +483,32 @@ namespace Oxide.Plugins
                 panel);
             }
 
-            static public void LoadImage(ref CuiElementContainer element, string panel, string png, string aMin, string aMax)
+            static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                element.Add(new CuiElement
+                if (UI.localimage)
                 {
-                    Parent = panel,
-                    Components =
+                    container.Add(new CuiElement
                     {
-                        new CuiRawImageComponent {Png = png },
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
-                });
+                    });
+                }
+                else
+                    container.Add(new CuiElement
+                    {
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                    });
             }
 
-            static public void LoadURLImage(ref CuiElementContainer element, string panel, string url, string aMin, string aMax)
-            {
-                element.Add(new CuiElement
-                {
-                    Parent = panel,
-                    Components =
-                    {
-                        new CuiRawImageComponent {Url = url },
-                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
-                    }
-                });
-            }
             static public void CreateTextOverlay(ref CuiElementContainer element, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
             {
                 //if (configdata.DisableUI_FadeIn)
@@ -412,11 +578,8 @@ namespace Oxide.Plugins
                 var element = UI.CreateElementContainer(PanelUUI, "0 0 0 0", "0.85 0.225", "1.0 0.725", true);
                 //UI.CreatePanel(ref element, PanelUUI, UIColors["light"], "0 0", "1 1");
                 foreach (var entry in configData.buttons)
-                    if (!string.IsNullOrEmpty(entry.Value.command) && entry.Value.command != "NONE")
-                    {
-                        if (!entry.Value.adminOnly || isAuth(player))
+                        if (!string.IsNullOrEmpty(entry.Value.command) && isAllowed(player, entry.Value.adminOnly, entry.Value.permission))
                             CreateButtonOnUI(ref element, PanelUUI, entry.Value, entry.Key);
-                    }
                 if (configData.UseInfoPanel)
                     if (NoInfo.Contains(player.userID))
                         UI.CreateButton(ref element, PanelUUI, UIColors["blue"], GetLang("InfoPanel"), 12, "0.2 -.1", "0.8 -.06", "UI_OpenInfoUI");
@@ -427,18 +590,11 @@ namespace Oxide.Plugins
         private void CreateButtonOnUI(ref CuiElementContainer container, string panelName, MainButton button, int num)
         {
             var pos = CalcButtonPos(num);
-            if (CachedImages.ContainsKey("mainbuttons"))
-            {
-                if (CachedImages["mainbuttons"].ContainsKey(num))
+            if (Valid($"UUIMainButton{num}"))
                 {
-                    UI.LoadImage(ref container, panelName, CachedImages["mainbuttons"][num].ToString(), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    UI.LoadImage(ref container, panelName, TryForImage($"UUIMainButton{num}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
                     UI.CreateButton(ref container, panelName, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
                 }
-                else
-                {
-                    UI.CreateButton(ref container, panelName, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
-                }
-            }
             else
             {
                 UI.CreateButton(ref container, panelName, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
@@ -458,68 +614,78 @@ namespace Oxide.Plugins
             if (UniversalUIInfo[player.userID].section != 0)
                 foreach (var entry in configData.sections)
                 {
-                    if (Debugging) Puts($"Trying Section: {entry.Key.ToString()} - Name: {entry.Value.name}");
+                    if (Debugging) Puts($"No Home Page - Trying Section: {entry.Key.ToString()}");
                     if (entry.Key < UniversalUIInfo[player.userID].showSection) continue;
                     if (entry.Key > UniversalUIInfo[player.userID].showSection + 4) continue;
                     if (entry.Key == UniversalUIInfo[player.userID].section)
                         foreach (var page in entry.Value.pages.Where(kvp => kvp.page == UniversalUIInfo[player.userID].page))
                         {
-                            if (CachedImages.ContainsKey(entry.Key.ToString()) && CachedImages[entry.Key.ToString()].ContainsKey(UniversalUIInfo[player.userID].page))
-                                UI.LoadImage(ref element, PanelInfo, CachedImages[entry.Key.ToString()][UniversalUIInfo[player.userID].page].ToString(), "0 0", "1 0.88");
+                            if (Valid($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"))
+                                UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"), "0 0", "1 0.88");
                             else
                             {
                                 UI.CreatePanel(ref element, PanelInfo, UIColors["dark"], "0 0", "1 1");
                                 UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.02", "0.99 0.98");
                             }
-                            UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.name.ToUpper(), 24, "0.3 0.8", "0.7 0.9");
-                            UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.text, 12, "0.03 0.2", "0.97 0.65", TextAnchor.UpperLeft);
+                            if (!string.IsNullOrEmpty(page.name))
+                                UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.name.ToUpper(), 24, "0.3 0.8", "0.7 0.9");
+                            if (!string.IsNullOrEmpty(page.text))
+                                UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.text, 12, "0.03 0.2", "0.97 0.65", TextAnchor.UpperLeft);
                             foreach (var button in page.buttons.OrderBy(kvp => kvp.order))
-                            {
-                                if (!string.IsNullOrEmpty(button.command) && button.command != "NONE")
+                                if (!string.IsNullOrEmpty(button.command) && isAllowed(player, button.adminOnly, button.permission))
                                 {
-                                    if (!button.adminOnly || isAuth(player))
+                                    var pos = CalcInfoButtonPos(button.order);
+                                    if (Valid($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"))
                                     {
-                                        var pos = CalcInfoButtonPos(button.order);
-                                        if (CachedInfoButtonImages.ContainsKey(entry.Key.ToString()) && CachedInfoButtonImages[entry.Key.ToString()].ContainsKey(page.page) && CachedInfoButtonImages[entry.Key.ToString()][page.page].ContainsKey(button.order))
-                                                {
-                                                    UI.LoadImage(ref element, PanelInfo, CachedInfoButtonImages[entry.Key.ToString()][page.page][button.order].ToString(), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                                                    UI.CreateButton(ref element, PanelInfo, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
-                                                }
-                                                else
-                                                {
-                                                    UI.CreateButton(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
-                                                }
+                                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                        if (!string.IsNullOrEmpty(button.name))
+                                        {
+                                            UI.CreateLabel(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
+                                        }
+                                        else
+                                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
+                                    }
+                                    else
+                                    {
+                                        if (!string.IsNullOrEmpty(button.name))
+                                            UI.CreateButton(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
+                                        else
+                                            UI.CreateButton(ref element, PanelInfo, UIColors["red"], "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
                                     }
                                 }
-                            }
                         }
                 }
             //Create Section Buttons at the Top
             if (UniversalUIInfo[player.userID].section == 0)
             {
-                if (CachedImages.ContainsKey(configData.HomePage.name) && !string.IsNullOrEmpty(CachedImages[configData.HomePage.name][0].ToString()))
-                    UI.LoadImage(ref element, PanelInfo, CachedImages[configData.HomePage.name][0].ToString(), "0 0", "1 0.88");
+                if (Valid(configData.HomePage.name))
+                    UI.LoadImage(ref element, PanelInfo, TryForImage(configData.HomePage.name), "0 0", "1 0.88");
                 else
                 {
                     UI.CreatePanel(ref element, PanelInfo, UIColors["dark"], "0 0", "1 1");
                     UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.02", "0.99 0.98");
                 }
+                if (!string.IsNullOrEmpty(configData.HomePage.text))
+                    UI.CreateLabel(ref element, PanelInfo, UIColors["white"], configData.HomePage.text, 12, "0.02 0.2", "0.97 0.65");
+
                 UI.CreatePanel(ref element, PanelInfo, UIColors["red"], "0.02 0.9", "0.16 0.975");
                 UI.CreateLabel(ref element, PanelInfo, UIColors["white"], configData.HomePage.name.ToUpper(), 12, "0.02 0.9", "0.16 0.975");
             }
             else
             {
-                UI.CreateButton(ref element, PanelInfo, UIColors["blue"], configData.HomePage.name.ToUpper(), 12, "0.02 0.9", "0.16 0.975", $"UI_SwitchSection {0} false");
+                UI.CreateButton(ref element, PanelInfo, UIColors["blue"], configData.HomePage.name.ToUpper(), 12, "0.02 0.9", "0.16 0.975", $"UI_SwitchSection {0} false ");
             }
             foreach (var entry in configData.sections)
             {
                 var pos = CalcSectionButtonPos(entry.Key - UniversalUIInfo[player.userID].showSection);
-                if (Debugging) Puts("Section Button");
+                if (Debugging) Puts($"Trying Section: {entry.Key}");
                 var admin = "false";
                 if (entry.Value.adminOnly)
                     admin = "true";
                 if (entry.Key == UniversalUIInfo[player.userID].section)
                 {
+                    if (Debugging) Puts($"Section Match: {entry.Key}");
                     var lastpage = configData.sections[UniversalUIInfo[player.userID].section].pages.Count() - 1;
                     var currentpage = UniversalUIInfo[player.userID].page;
                     if (currentpage < lastpage - 1)
@@ -538,22 +704,32 @@ namespace Oxide.Plugins
                     {
                         UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("First"), 12, "0.62 0.03", "0.67 0.085", $"UI_PageTurn {0}");
                     }
+                    if (Debugging) Puts($"Past Page Turning Buttons");
                     UI.CreatePanel(ref element, PanelInfo, UIColors["red"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    UI.CreateLabel(ref element, PanelInfo, UIColors["white"], entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    if (Debugging) Puts("Past Selected");
+                    if (!string.IsNullOrEmpty(entry.Value.name))
+                        UI.CreateLabel(ref element, PanelInfo, UIColors["white"], entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    else UI.CreateLabel(ref element, PanelInfo, UIColors["white"], $"Section:{entry.Key.ToString().ToUpper()}", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    if (Debugging) Puts("Passed Select Section");
                 }
 
                 else
                 {
-                    if (CachedImages.ContainsKey(entry.Key.ToString()) && CachedImages[entry.Key.ToString()].ContainsKey(99))
+                    if (Debugging) Puts($"Section Didn't Match: {entry.Key}");
+                    if (Valid($"UUISectionButton{entry.Key}"))
                     {
-                        UI.LoadImage(ref element, PanelInfo, CachedImages[entry.Key.ToString()][99].ToString(), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                        UI.CreateButton(ref element, PanelInfo, "0 0 0 0", entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin}");
+                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUISectionButton{entry.Key}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                        if (!string.IsNullOrEmpty(entry.Value.name))
+                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
+                        else
+                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", $"Section:{entry.Key.ToString().ToUpper()}", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
                         if (Debugging) Puts("Section Button Image Try - Non Selected");
                     }
                     else
                     {
-                        UI.CreateButton(ref element, PanelInfo, UIColors["blue"], entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin}");
+                        if (!string.IsNullOrEmpty(entry.Value.name))
+                            UI.CreateButton(ref element, PanelInfo, UIColors["blue"], entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
+                        else
+                            UI.CreateButton(ref element, PanelInfo, UIColors["blue"], $"Section:{entry.Key.ToString().ToUpper()}", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
                     }
                 }
             }
@@ -628,6 +804,7 @@ namespace Oxide.Plugins
             public string command;
             public string ButtonImage;
             public bool adminOnly;
+            public string permission;
         }
 
         class PageButton
@@ -637,6 +814,7 @@ namespace Oxide.Plugins
             public string PageButtonImage;
             public bool adminOnly;
             public int order;
+            public string permission;
         }
 
         class Section
@@ -645,6 +823,7 @@ namespace Oxide.Plugins
             public string SectionButtonimage;
             public bool adminOnly;
             public List<Page> pages = new List<Page>();
+            public string permission;
         }
 
         class Page
@@ -658,142 +837,28 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Images
+        #region Misc Commands
 
-        class QueueImages
+        [ChatCommand("ui")]
+        private void cmdui(BasePlayer player, string command, string[] args)
         {
-            public string url;
-            public string section;
-            public int page;
-            public QueueImages(string ur, string sec, int pg)
+            if (UniversalUIInfo.ContainsKey(player.userID) && !UniversalUIInfo[player.userID].open)
             {
-                url = ur;
-                section = sec;
-                page = pg;
+                UniversalUIInfo[player.userID].open = true;
+                OpenUniversalUI(player);
             }
+            else
+                OpenUniversalUI(player);
         }
 
-        class SavedImages : MonoBehaviour
+
+        [ChatCommand("uuidebug")]
+        private void cmduuidebug(BasePlayer player, string command, string[] args)
         {
-            UniversalUI filehandler;
-            const int MaxActiveLoads = 3;
-            static readonly List<QueueImages> QueueList = new List<QueueImages>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            public void SetDataDir(UniversalUI fc) => filehandler = fc;
-            public void Add(string url, string section, int page)
-            {
-                QueueList.Add(new QueueImages(url, section, page));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                activeLoads++;
-                var qi = QueueList[0];
-                QueueList.RemoveAt(0);
-                var www = new WWW(qi.url);
-                StartCoroutine(WaitForRequest(www, qi));
-            }
-
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(WWW www, QueueImages info)
-            {
-                yield return www;
-
-                if (www.error == null)
-                {
-                    if (!filehandler.CachedImages.ContainsKey(info.section))
-                        filehandler.CachedImages.Add(info.section, new Dictionary<int, uint>());
-                    if (!filehandler.CachedImages[info.section].ContainsKey(info.page))
-                    {
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
-                        ClearStream();
-                        filehandler.CachedImages[info.section].Add(info.page, textureID);
-                    }
-                }
-                activeLoads--;
-                if (QueueList.Count > 0) Next();
-            }
+            if (Debugging)
+                Debugging = false;
+            else Debugging = true;
         }
-
-        class QueueInfoButtons
-        {
-            public string url;
-            public string section;
-            public int page;
-            public int order;
-            public QueueInfoButtons(string ur, string sec, int pg, int ord)
-            {
-                url = ur;
-                section = sec;
-                page = pg;
-                order = ord;
-            }
-        }
-
-        class SavedInfoButtons : MonoBehaviour
-        {
-            UniversalUI filehandler;
-            const int MaxActiveLoads = 3;
-            static readonly List<QueueInfoButtons> QueueList = new List<QueueInfoButtons>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            public void SetDataDir(UniversalUI fc) => filehandler = fc;
-            public void Add(string url, string section, int page, int order)
-            {
-                QueueList.Add(new QueueInfoButtons(url, section, page, order));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                activeLoads++;
-                var qi = QueueList[0];
-                QueueList.RemoveAt(0);
-                var www = new WWW(qi.url);
-                StartCoroutine(WaitForRequest(www, qi));
-            }
-
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(WWW www, QueueInfoButtons info)
-            {
-                yield return www;
-
-                if (www.error == null)
-                {
-                    if (!filehandler.CachedInfoButtonImages.ContainsKey(info.section))
-                        filehandler.CachedInfoButtonImages.Add(info.section, new Dictionary<int, Dictionary<int, uint>>());
-                    if (!filehandler.CachedInfoButtonImages[info.section].ContainsKey(info.page))
-                        filehandler.CachedInfoButtonImages[info.section].Add(info.page, new Dictionary<int, uint>());
-                    if (!filehandler.CachedInfoButtonImages[info.section][info.page].ContainsKey(info.order))
-                    {
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
-                        ClearStream();
-                        filehandler.CachedInfoButtonImages[info.section][info.page].Add(info.order, textureID);
-                    }
-                }
-                activeLoads--;
-                if (QueueList.Count > 0) Next();
-            }
-        }
-
 
         [ConsoleCommand("GetAllImages")]
         private void cmdGetAllImages(ConsoleSystem.Arg arg)
@@ -803,27 +868,52 @@ namespace Oxide.Plugins
 
         private void GetAllImages()
         {
-            CachedImages.Clear();
-            CachedInfoButtonImages.Clear();
+            if (string.IsNullOrEmpty(configData.HomePage.PageImage)) configData.HomePage = DefaultHomePage;
+            AddImage(configData.HomePage.PageImage, configData.HomePage.name, (ulong)ResourceId);
             foreach (var entry in configData.buttons)
-                    savedimages.Add(entry.Value.ButtonImage, "mainbuttons", entry.Key);
+                if (!string.IsNullOrEmpty(entry.Value.ButtonImage))
+                    AddImage(entry.Value.ButtonImage, $"UUIMainButton{entry.Key}", (ulong)ResourceId);
             foreach (var entry in configData.sections)
             {
-                if (entry.Value.SectionButtonimage != "www")
-                    savedimages.Add(entry.Value.SectionButtonimage, entry.Key.ToString(), 99);
+                if (!string.IsNullOrEmpty(entry.Value.SectionButtonimage))
+                    AddImage(entry.Value.SectionButtonimage, $"UUISectionButton{entry.Key}", (ulong)ResourceId);
                 foreach (var page in entry.Value.pages)
                 {
-                    if (page.PageImage != "www")
-                        savedimages.Add(page.PageImage, entry.Key.ToString(), page.page);
+                    if (!string.IsNullOrEmpty(page.PageImage))
+                        AddImage(page.PageImage, $"UUIPage{entry.Key}-{page.page}", (ulong)ResourceId);
                     foreach (var button in page.buttons)
-                        if (button.PageButtonImage != "www")
-                            savedinfobuttons.Add(button.PageButtonImage, entry.Key.ToString(), page.page, button.order);
+                        if (!string.IsNullOrEmpty(button.PageButtonImage))
+                            AddImage(button.PageButtonImage, $"UUIPageButton{entry.Key}-{page.page}-{button.order}", (ulong)ResourceId);
                 }
             }
-            if (string.IsNullOrEmpty(configData.HomePage.PageImage)) configData.HomePage = DefaultHomePage;
-                savedimages.Add(configData.HomePage.PageImage, configData.HomePage.name, 0);
         }
 
+        private void CheckNewImages()
+        {
+            if (string.IsNullOrEmpty(configData.HomePage.PageImage)) configData.HomePage = DefaultHomePage;
+            if (!Valid(configData.HomePage.name))
+                AddImage(configData.HomePage.PageImage, configData.HomePage.name, (ulong)ResourceId);
+            foreach (var entry in configData.buttons)
+                if (!string.IsNullOrEmpty(entry.Value.ButtonImage))
+                    if (!Valid($"UUIMainButton{entry.Key}"))
+                        AddImage(entry.Value.ButtonImage, $"UUIMainButton{entry.Key}", (ulong)ResourceId);
+            foreach (var entry in configData.sections)
+            {
+                if (!string.IsNullOrEmpty(entry.Value.SectionButtonimage))
+                    if (!Valid($"UUISectionButton{entry.Key}"))
+                        AddImage(entry.Value.SectionButtonimage, $"UUISectionButton{entry.Key}", (ulong)ResourceId);
+                foreach (var page in entry.Value.pages)
+                {
+                    if (!string.IsNullOrEmpty(page.PageImage))
+                        if (!Valid($"UUIPage{entry.Key}-{page.page}"))
+                            AddImage(page.PageImage, $"UUIPage{entry.Key}-{page.page}", (ulong)ResourceId);
+                    foreach (var button in page.buttons)
+                        if (!string.IsNullOrEmpty(button.PageButtonImage))
+                            if (!Valid($"UUIPageButton{entry.Key}-{page.page}-{button.order}"))
+                                AddImage(button.PageButtonImage, $"UUIPageButton{entry.Key}-{page.page}-{button.order}", (ulong)ResourceId);
+                }
+            }
+        }
 
         #endregion
 
@@ -838,7 +928,9 @@ namespace Oxide.Plugins
             if (configData.InfoInterval == 0) return;
             foreach (BasePlayer p in BasePlayer.activePlayerList)
             {
-                GetSendMSG(p, "UIInfo", configData.MenuKeyBinding.ToString());
+                if (configData.MenuKeyBinding != "")
+                    GetSendMSG(p, "UIInfo", configData.MenuKeyBinding.ToString());
+                else GetSendMSG(p, "UIInfo1");
             }
             timers.Add("info", timer.Once(configData.InfoInterval * 60, () => InfoLoop()));
         }
@@ -881,122 +973,104 @@ namespace Oxide.Plugins
                     PageImage = "http://i.imgur.com/ygJ6m7w.png",
                     name = "HomePage",
                     buttons = new List<PageButton> {
-                        new PageButton {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 },
-                        new PageButton {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },
-                        new PageButton {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },
-                        new PageButton {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 }
+                        new PageButton {order = 0 },
+                        new PageButton {order = 1 },
+                        new PageButton {order = 2 },
+                        new PageButton {order = 3 }
                     } },
                 sections = new Dictionary<int, Section>
                     {
                     {1, new Section
-                    {SectionButtonimage = "www", name = "First", adminOnly = false, pages = new List<Page>
+                    {pages = new List<Page>
                     {
                     { new Page
-                {page = 0, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } },
+                {page = 0, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } },
                     { new Page
-                {page = 1, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } },
-                    {new Page
-                {page = 2, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 }, new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } }
+                {page = 1, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } },
+                    { new Page
+                {page = 2, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } }
                     } } },
                     {2, new Section
-                    {SectionButtonimage = "www", name = "Second", adminOnly = false, pages = new List<Page>
+                    {pages = new List<Page>
                     {
                     { new Page
-                {page = 0, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } },
+                {page = 0, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } },
                     { new Page
-                {page = 1, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } },
-                    {new Page
-                {page = 2, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 }, new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } }
+                {page = 1, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } },
+                    { new Page
+                {page = 2, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } }
                     } } },
                     {3, new Section
-                    {SectionButtonimage = "www", name = "Third", adminOnly = false, pages = new List<Page>
+                    {pages = new List<Page>
                     {
                     { new Page
-                {page = 0, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } },
+                {page = 0, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } },
                     { new Page
-                {page = 1, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } },
-                    {new Page
-                {page = 2, name = "", text = "NONE", PageImage = "www", buttons = new List<PageButton> {new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 0 }, new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 1 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 2 },new PageButton
-                {name = "", command = "NONE", PageButtonImage = "www", adminOnly = false, order = 3 } } } }
+                {page = 1, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } },
+                    { new Page
+                {page = 2, buttons = new List<PageButton> {new PageButton
+                { order = 0 },new PageButton
+                { order = 1 },new PageButton
+                { order = 2 },new PageButton
+                { order = 3 } } } }
                     } } },
                 },
 
                 buttons = new Dictionary<int, MainButton>
                 {
-                    {0, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {1, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {2, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {3, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {4, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {5, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {6, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {7, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {8, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {9, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {10, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {12, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {13, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {14, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {15, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {16, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {17, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {18, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    {19, new MainButton
-                {name = "", command = "NONE", ButtonImage = "www", adminOnly = false } },
-                    },
+                    {0, new MainButton() },
+                    {1, new MainButton() },
+                    {2, new MainButton() },
+                    {3, new MainButton() },
+                    {4, new MainButton() },
+                    {5, new MainButton() },
+                    {6, new MainButton() },
+                    {7, new MainButton() },
+                    {8, new MainButton() },
+                    {9, new MainButton() },
+                    {10, new MainButton() },
+                    {11, new MainButton() },
+                    {12, new MainButton() },
+                    {13, new MainButton() },
+                    {14, new MainButton() },
+                    {15, new MainButton() },
+                    {16, new MainButton() },
+                    {17, new MainButton() },
+                    {18, new MainButton() },
+                    {19, new MainButton() },
+                }
             };
             SaveConfig(config);
         }
@@ -1008,10 +1082,13 @@ namespace Oxide.Plugins
         Dictionary<string, string> messages = new Dictionary<string, string>()
         {
             {"title", "UniversalUI: " },
-            {"UIInfo", "This server is running Universal UI. Press <color=yellow>( {0} )</color> to access the Menu."},
+            {"UIInfo", "This server is running Universal UI. Press <color=yellow>( {0} )</color> or Type <color=yellow>( /ui )</color> to access the Menu."},
+            {"UIInfo1", "This server is running Universal UI. Type <color=yellow>( /ui )</color> to access the Menu."},
             {"InfoPanel","Show Info" },
             {"HideInfoPanel", "Hide Info" },
-            {"NotAuth", "You are not authorized." }
+            {"NotAuth", "You are not authorized." },
+            {"DelayedCMD", "You have selected a Delayed Command. To finish the command please type a 'parameter' for command: {0}. Or Type 'quit' to exit." },
+            {"ExitDelayed", "You have exited the Delayed Command." }
         };
         #endregion
 

@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Server Announcer", "austinv900", "1.0.0", ResourceId = 0)]
+    [Info("Server Announcer", "austinv900", "1.0.3", ResourceId = 2198)]
     [Description("Allows you to send messages as the server with custom prefix")]
 
     class ServerAnnouncer : CovalencePlugin
@@ -16,6 +16,7 @@ namespace Oxide.Plugins
         {
             LoadDefaultConfig();
             LoadDefaultMessages();
+            permission.RegisterPermission(Permission, this);
         }
         #endregion
 
@@ -68,7 +69,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
-        bool IsAdmin(IPlayer player) => permission.UserHasGroup(player.Id, "admin") || permission.UserHasPermission(player.Id, Permission);
+        bool IsAdmin(IPlayer player) => permission.UserHasGroup(player.Id, "admin") || permission.UserHasPermission(player.Id, Permission) || player.IsAdmin;
         string Lang(string Key, IPlayer player, params object[] args) => string.Format(lang.GetMessage(Key, this, player.Id), args);
         string ListToString<T>(List<T> list, int first = 0, string seperator = ", ") => string.Join(seperator, (from val in list select val.ToString()).Skip(first).ToArray());
         void SetConfig(params object[] args) { List<string> stringArgs = (from arg in args select arg.ToString()).ToList(); stringArgs.RemoveAt(args.Length - 1); if (Config.Get(stringArgs.ToArray()) == null) Config.Set(args); }

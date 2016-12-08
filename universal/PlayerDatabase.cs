@@ -15,7 +15,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerDatabase", "Reneb", "1.5.4")]
+    [Info("PlayerDatabase", "Reneb", "1.5.5")]
     class PlayerDatabase : CovalencePlugin
     {
         List<string> changedPlayersData = new List<string>();
@@ -201,17 +201,24 @@ namespace Oxide.Plugins
 
         void LoadPlayer(string userid)
         {
-            if (dataType == DataType.SQLite)
+            try
             {
-                LoadPlayerSQLite(userid);
+                if (dataType == DataType.SQLite)
+                {
+                    LoadPlayerSQLite(userid);
+                }
+                else if (dataType == DataType.MySql)
+                {
+                    LoadPlayerSQL(userid);
+                }
+                else
+                {
+                    LoadPlayerData(userid);
+                }
             }
-            else if (dataType == DataType.MySql)
+            catch(Exception e)
             {
-                LoadPlayerSQL(userid);
-            }
-            else
-            {
-                LoadPlayerData(userid);
+                LogError(string.Format("Loading {0} got this error: {1}", userid, e.Message));
             }
         }
 

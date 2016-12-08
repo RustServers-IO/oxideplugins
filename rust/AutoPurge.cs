@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoPurge", "Fujikura/Norn", "1.4.4", ResourceId = 1566)]
+    [Info("AutoPurge", "Fujikura/Norn", "1.5.0", ResourceId = 1566)]
     [Description("Remove entities if the owner becomes inactive.")]
     public class AutoPurge : RustPlugin
     {
@@ -27,6 +27,15 @@ namespace Oxide.Plugins
 		private string logFile = "oxide/logs/AutoPurgeLog.txt";
 		private bool friendsEnabled = false;
 		private bool clansEnabled = false;
+		private int lastMinute;
+		
+		static List<object> defaultRealTimers()
+		{
+			var dp = new List<object>();
+			dp.Add("06:00");
+			dp.Add("18:00");
+			return dp;
+		}
 		
 		#region Config
 		
@@ -46,6 +55,9 @@ namespace Oxide.Plugins
 		private string excludePermission;
 		private bool useFriendsApi;
 		private bool useClansIO;
+		private bool useRealTimer;
+		private bool logRealTimerToConsole;
+		List<object> realTimers = new List<object>();
 		
 		private object GetConfig(string menu, string datavalue, object defaultValue)
         {
@@ -71,6 +83,9 @@ namespace Oxide.Plugins
 			timerJob = Convert.ToInt32(GetConfig("Timing", "timerJob", 21600));
 			timerEnabled = Convert.ToBoolean(GetConfig("Timing", "timerEnabled", true));
 			inactiveAfter = Convert.ToInt32(GetConfig("Timing", "inactiveAfter", 172800));
+			useRealTimer = Convert.ToBoolean(GetConfig("RealTimer", "enable RealTimer", false));
+			logRealTimerToConsole = Convert.ToBoolean(GetConfig("RealTimer", "log to console", true));
+			realTimers = (List<object>)GetConfig("RealTimer", "RealTime", defaultRealTimers());
 			removeRecordAfterDays = Convert.ToInt32(GetConfig("Generic", "removeRecordAfterDays", 30));
 			showMessages = Convert.ToBoolean(GetConfig("Messaging", "showMessages", true));
             testMode = Convert.ToBoolean(GetConfig("Generic", "testMode", false));
@@ -274,9 +289,9 @@ namespace Oxide.Plugins
 					Puts($"Players become inactive after: {its.TotalDays.ToString("0")} days ({its.Days.ToString("0")}D | {its.Hours.ToString("0")}H | {its.Minutes.ToString("0")}M | {its.Seconds.ToString("0")}S)");
 					timer.Every(timerJob, () => MainTimer(false));
 				}
-				else
-					Puts("Timer function disabled by config. Purge needs to be started by command 'autopurge.run'");
-
+				if (useRealTimer)
+					Puts($"RealTimer active with '{realTimers.Count}' entries");
+				
 				if (Clans && useClansIO)
 				{
 					clansEnabled = true;
@@ -295,6 +310,18 @@ namespace Oxide.Plugins
 				if (purgeOnStart)
 					MainTimer(true);
 			});
+		}
+		
+		void OnTick()
+		{
+			if (!useRealTimer || lastMinute == DateTime.UtcNow.Minute) return;
+			lastMinute = DateTime.UtcNow.Minute;
+			if (realTimers.Contains(DateTime.Now.ToString("HH:mm")))
+			{
+				if (logRealTimerToConsole)
+					Puts($"Running RealTimer purge ({DateTime.Now.ToString("HH:mm")})");
+				ccmdRunPurge( new ConsoleSystem.Arg(null) );
+			}
 		}
 
 		#endregion serverhooks

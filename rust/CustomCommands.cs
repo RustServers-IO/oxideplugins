@@ -6,33 +6,21 @@ using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core;
 using Oxide.Core.Plugins;
-using System.Collections;
-using System.IO;
-using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomCommands", "Absolut", "1.0.2", ResourceId = 2158)]
+    [Info("CustomCommands", "Absolut", "1.1.0", ResourceId = 2158)]
 
     class CustomCommands : RustPlugin
     {
-        [PluginReference]
-        Plugin BetterChat;
 
-        static GameObject webObject;
-        static CCImages ccImage;
-        static buttonImage bImage;
+        [PluginReference]
+        Plugin ImageLibrary;
+        bool localimages = true;
 
         CustomCommandData ccData;
         private DynamicConfigFile CCData;
 
-        ButtonImages bimages;
-        private DynamicConfigFile BImages;
-
-        class ButtonImages
-        {
-            public List<string> AdminImages = new List<string>();
-        }
         string TitleColor = "<color=orange>";
         string MsgColor = "<color=#A9A9A9>";
         bool ForceBar = false;
@@ -47,7 +35,6 @@ namespace Oxide.Plugins
         void Loaded()
         {
             CCData = Interface.Oxide.DataFileSystem.GetFile("CustomCommands_Data");
-            BImages = Interface.Oxide.DataFileSystem.GetFile("CustomCommands_ImageLoader");
             lang.RegisterMessages(messages, this);
         }
 
@@ -81,10 +68,8 @@ namespace Oxide.Plugins
             {
                 if (configData.InfoInterval != 0)
                 {
-                    if (!configData.AdminOnlyButtons)
-                        GetSendMSG(player, "CCInfo", configData.OptionsKeyBinding);
-                    else if (isAuth(player))
-                        GetSendMSG(player, "CCInfo", configData.OptionsKeyBinding);
+                    if (CanUse(player))
+                        GetSendMSG(player, "CCInfo", configData.MouseLookKeyBinding);
                 }
                 InitializePlayer(player);
             }
@@ -94,7 +79,7 @@ namespace Oxide.Plugins
         {
             if (!ccData.PlayerCommands.ContainsKey(player.userID))
                 ccData.PlayerCommands.Add(player.userID, new List<Command>());
-            player.Command($"bind {configData.OptionsKeyBinding} \"MouseFreeLookUI\"");
+            player.Command($"bind {configData.MouseLookKeyBinding} \"MouseFreeLookUI\"");
             player.Command("bind tab \"inventory.toggle;UI_DestroyMouse\"");
             player.Command("bind mouse1 \"+attack2;UI_DestroyMouse\"");
 
@@ -102,7 +87,7 @@ namespace Oxide.Plugins
 
         private void DestroyPlayer(BasePlayer player)
         {
-            player.Command($"bind {configData.OptionsKeyBinding} \"\"");
+            player.Command($"bind {configData.MouseLookKeyBinding} \"\"");
             player.Command("bind tab \"inventory.toggle\"");
             player.Command("bind mouse1 \"+attack2\"");
             if (UIOpen.Contains(player.userID))
@@ -115,48 +100,44 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            webObject = new GameObject("WebObject");
-            ccImage = webObject.AddComponent<CCImages>();
-            ccImage.SetDataDir(this);
-            bImage = webObject.AddComponent<buttonImage>();
-            bImage.SetDataDir(this);
+            try
+            {
+                ImageLibrary.Call("isLoaded", null);
+            }
+            catch (Exception)
+            {
+                PrintWarning("No Image Library.. load ImageLibrary to use this Plugin", Name);
+                Interface.Oxide.UnloadPlugin(Name);
+                return;
+            }
+            if (!permission.PermissionExists("CustomCommands.admin"))
+                permission.RegisterPermission("CustomCommands.admin", this);
+            if (!permission.PermissionExists("CustomCommands.create"))
+                permission.RegisterPermission("CustomCommands.create", this);
+            if (!permission.PermissionExists("CustomCommands.allowed"))
+                permission.RegisterPermission("CustomCommands.allowed", this);
+
             LoadVariables();
             LoadData();
             timers.Add("info", timer.Once(900, () => InfoLoop()));
             timers.Add("save", timer.Once(600, () => SaveLoop()));
             SaveData();
-            if (ccData.SavedImages == null || ccData.SavedImages.Count == 0)
-                Getimages();
-            else Refreshimages();
-            GetServerImages();
+            GetButtonImages();
             foreach (BasePlayer p in BasePlayer.activePlayerList)
                 OnPlayerInit(p);
         }
 
-        private object OnPlayerChat(ConsoleSystem.Arg arg)
+        object OnServerCommand(ConsoleSystem.Arg arg)
         {
-            if (BetterChat) return null;
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.connection?.player as BasePlayer;
             if (player == null)
                 return null;
-            if (cmdCreation.ContainsKey(player.userID))
+            if (cmdCreation.ContainsKey(player.userID) && arg.cmd?.namefull == "chat.say")
             {
                 CommandCreationChat(player, arg.Args);
                 return false;
             }
             return null;
-        }
-
-        object OnBetterChat(IPlayer iplayer, string message)
-        {
-            var player = iplayer.Object as BasePlayer;
-            if (player == null) return message;
-            if (cmdCreation.ContainsKey(player.userID))
-            {
-                CommandCreationChat(player, message.Split(' '));
-                return true;
-            }
-            return message;
         }
 
         private void CommandCreationChat(BasePlayer player, string[] Args)
@@ -173,11 +154,31 @@ namespace Oxide.Plugins
                 CreateCommand(player, 2);
                 return;
             }
+            if (cmdCreation[player.userID].step == 3)
+            {
+                cmdCreation[player.userID].cmd.title = string.Join(" ", Args);
+                CreateCommand(player, 99);
+                return;
+            }
         }
 
         #endregion
 
         #region Functions
+        private string TryForImage(string shortname, ulong skin = 99)
+        {
+            if (localimages)
+                if (skin == 99)
+                return GetImage(shortname, (ulong)ResourceId);
+                else return GetImage(shortname, skin);
+            else if (skin == 99)
+                return GetImageURL(shortname, (ulong)ResourceId);
+                else return GetImageURL(shortname, skin);
+        }
+
+        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
+        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
+        public bool AddImage(string url, string shortname, ulong ID = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, ID);
 
         public void DestroyCCPanel(BasePlayer player)
         {
@@ -211,7 +212,25 @@ namespace Oxide.Plugins
         bool isAuth(BasePlayer player)
         {
             if (player.net.connection != null)
-                if (player.net.connection.authLevel < 1)
+                if (player.net.connection.authLevel < 1 && !permission.UserHasPermission(player.UserIDString,"CustomCommands.admin"))
+                    return false;
+            return true;
+        }
+
+        bool CanCreate(BasePlayer player)
+        {
+            if (!configData.AdminCreatesButtons) return true;
+            if (player.net.connection != null)
+                if (!isAuth(player) && !permission.UserHasPermission(player.UserIDString, "CustomCommands.create"))
+                    return false;
+            return true;
+        }
+
+        bool CanUse(BasePlayer player)
+        {
+            if (!configData.RequirePermissions) return true;
+            if (player.net.connection != null)
+                if (!CanCreate(player) && !permission.UserHasPermission(player.UserIDString, "CustomCommands.allowed"))
                     return false;
             return true;
         }
@@ -226,7 +245,8 @@ namespace Oxide.Plugins
 
         public class UI
         {
-            static public CuiElementContainer CreateElementContainer(string panel, string color, string aMin, string aMax, bool cursor = false)
+            static bool localimage = true;
+            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
             {
@@ -238,14 +258,14 @@ namespace Oxide.Plugins
                         CursorEnabled = cursor
                     },
                     new CuiElement().Parent,
-                    panel
+                    panelName
                 }
             };
                 return NewElement;
             }
-            static public void CreatePanel(ref CuiElementContainer element, string panel, string color, string aMin, string aMax, bool cursor = false)
+            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
             {
-                element.Add(new CuiPanel
+                container.Add(new CuiPanel
                 {
                     Image = { Color = color },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
@@ -253,9 +273,9 @@ namespace Oxide.Plugins
                 },
                 panel);
             }
-            static public void CreateLabel(ref CuiElementContainer element, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
             {
-                element.Add(new CuiLabel
+                container.Add(new CuiLabel
                 {
                     Text = { Color = color, FontSize = size, Align = align, FadeIn = 1.0f, Text = text },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
@@ -263,9 +283,9 @@ namespace Oxide.Plugins
                 panel);
             }
 
-            static public void CreateButton(ref CuiElementContainer element, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
+            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
             {
-                element.Add(new CuiButton
+                container.Add(new CuiButton
                 {
                     Button = { Color = color, Command = command, FadeIn = 1.0f },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
@@ -274,29 +294,54 @@ namespace Oxide.Plugins
                 panel);
             }
 
-            static public void LoadImage(ref CuiElementContainer element, string panel, string png, string aMin, string aMax)
+            static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                element.Add(new CuiElement
+                if (UI.localimage)
                 {
-                    Parent = panel,
-                    Components =
+                    container.Add(new CuiElement
                     {
-                        new CuiRawImageComponent {Png = png },
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
-                });
+                    });
+                }
+                else
+                    container.Add(new CuiElement
+                    {
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                    });
             }
-            static public void CreateTextOverlay(ref CuiElementContainer element, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
+
+            static public void CreateTextOverlay(ref CuiElementContainer container, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
             {
-                //if (configdata.DisableUI_FadeIn)
-                //    fadein = 0;
-                element.Add(new CuiLabel
+                container.Add(new CuiLabel
                 {
                     Text = { Color = color, FontSize = size, Align = align, FadeIn = fadein, Text = text },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
                 },
                 panel);
 
+            }
+            static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                element.Add(new CuiElement
+                {
+                    Parent = panel,
+                    Components =
+                    {
+                        new CuiTextComponent{Color = colorText, FontSize = size, Align = align, Text = text },
+                        new CuiOutlineComponent {Distance = "1 1", Color = colorOutline},
+                        new CuiRectTransformComponent {AnchorMax = aMax, AnchorMin = aMin }
+                    }
+                });
             }
         }
 
@@ -316,6 +361,7 @@ namespace Oxide.Plugins
             {"white", "1 1 1 1" },
             {"green", "0.28 0.82 0.28 1.0" },
             {"grey", "0.85 0.85 0.85 1.0" },
+            {"spectator",  "0.9 0.9 0.0 1.0" },
             {"lightblue", "0.6 0.86 1.0 1.0" },
             {"buttonbg", "0.2 0.2 0.2 0.7" },
             {"buttongreen", "0.133 0.965 0.133 0.9" },
@@ -324,9 +370,12 @@ namespace Oxide.Plugins
             {"CSorange", "1.0 0.64 0.10 1.0" }
         };
 
-        private Dictionary<string, string> TextColors = new Dictionary<string, string>
+        private Dictionary<string, string> ChatColor = new Dictionary<string, string>
         {
-            {"limegreen", "<color=#6fff00>" }
+            {"blue", "<color=#3366ff>" },
+            {"red", "<color=#e60000>" },
+            {"green", "<color=#29a329>" },
+            {"spectator", "<color=#ffff00>"}
         };
 
         #endregion
@@ -338,13 +387,12 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, PanelCC);
             if (!ccData.PlayerCommands.ContainsKey(player.userID))
                 ccData.PlayerCommands.Add(player.userID, new List<Command>());
-            if (configData.AdminOnlyButtons && !isAuth(player))
+            if (!CanUse(player))
             {
                 GetSendMSG(player, "NotAuth");
                 return;
             }
             var i = 0;
-            var image = ccData.SavedImages["PurpleLongButton"].ToString();
             var command = "";
             float[] pos = CmdButtonPos(i);
             var element = UI.CreateElementContainer(PanelCC, "0 0 0 0", "0.95 0.25", "1.0 0.9");
@@ -354,13 +402,14 @@ namespace Oxide.Plugins
                 command = $"any {i}";
                 foreach (var entry in ccData.ForceCommands)
                 {
+                    var title = "";
+                    if (configData.CustomTitles)
+                        title = entry.title;
+                    else if (!configData.HideText)
+                        title = entry.cmd;
                     pos = CmdButtonPos(i);
-                    if (entry.img != 0)
-                        if (ccData.ButtonImages.Contains(entry.img))
-                            image = entry.img.ToString();
-                        else image = ccData.SavedImages["PurpleLongButton"].ToString();
-                    UI.LoadImage(ref element, PanelCC, image, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    UI.CreateButton(ref element, PanelCC, "0 0 0 0", entry.cmd, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", command, TextAnchor.MiddleCenter);
+                    UI.LoadImage(ref element, PanelCC, TryForImage(entry.img), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    UI.CreateButton(ref element, PanelCC, "0 0 0 0", title, 10, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", command, TextAnchor.MiddleCenter);
                     i++;
                 }
             }
@@ -368,70 +417,53 @@ namespace Oxide.Plugins
             {
                 foreach (var entry in ccData.PlayerCommands[player.userID])
                 {
+                    var title = "";
+                    if (configData.CustomTitles)
+                        title = entry.title;
+                    else if (!configData.HideText)
+                        title = entry.cmd;
                     pos = CmdButtonPos(i);
                     if (mode == "norm")
                         command = $"any {i}";
                     else if (mode == "edit")
                         command = $"UI_RemoveCommand {i}";
-                    if (entry.img != 0)
-                        if (ccData.ButtonImages.Contains(entry.img))
-                            image = entry.img.ToString();
-                        else image = ccData.SavedImages["PurpleLongButton"].ToString();
-                    UI.LoadImage(ref element, PanelCC, image, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    UI.CreateButton(ref element, PanelCC, "0 0 0 0", entry.cmd, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", command, TextAnchor.MiddleCenter);
+                    UI.LoadImage(ref element, PanelCC, TryForImage(entry.img), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    UI.CreateButton(ref element, PanelCC, "0 0 0 0", title, 10, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", command, TextAnchor.MiddleCenter);
                     i++;
                 }
-                if (configData.AdminCreatesButtons && isAuth(player))
+                if (CanCreate(player))
                 {
                     if (ccData.PlayerCommands[player.userID].Count() < 17 && mode == "norm")
                     {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["GreenSquareButton"].ToString(), "0.01 0.15", "0.49 0.19");
+                        UI.LoadImage(ref element, PanelCC, TryForImage("GreenSquareButton"), "0.01 0.15", "0.49 0.19");
                         UI.CreateButton(ref element, PanelCC, "0 0 0 0", "+", 16, "0.01 0.15", "0.49 0.19", $"UI_CreateCommand", TextAnchor.MiddleCenter);
                     }
                     if (ccData.PlayerCommands[player.userID].Count() > 0 && mode == "norm")
                     {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["RedSquareButton"].ToString(), "0.51 0.15", "0.99 0.19");
+                        UI.LoadImage(ref element, PanelCC, TryForImage("RedSquareButton"), "0.51 0.15", "0.99 0.19");
                         UI.CreateButton(ref element, PanelCC, "0 0 0 0", "-", 16, "0.51 0.15", "0.99 0.19", $"UI_CCPanel yes", TextAnchor.MiddleCenter);
                     }
                     if (mode == "edit")
                     {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["RedSquareButton"].ToString(), "0.01 0.15", "0.99 0.19");
+                        UI.LoadImage(ref element, PanelCC, TryForImage("RedSquareButton"), "0.01 0.15", "0.99 0.19");
                         UI.CreateButton(ref element, PanelCC, "0 0 0 0", GetLang("ExitEraseMode"), 14, "0.01 0.15", "0.99 0.19", $"UI_CCPanel no", TextAnchor.MiddleCenter);
                     }
                 }
-                if (configData.AdminCreatesButtons && !isAuth(player))
+                else
                 {
                     if (ccData.PlayerCommands[player.userID].Count() < 17 && mode == "norm")
                     {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["GreenSquareButton"].ToString(), "0.01 0.15", "0.49 0.19");
+                        UI.LoadImage(ref element, PanelCC, TryForImage("GreenSquareButton"), "0.01 0.15", "0.49 0.19");
                         UI.CreateButton(ref element, PanelCC, "0 0 0 0", "+", 16, "0.01 0.15", "0.49 0.19", $"UI_AddCommand", TextAnchor.MiddleCenter);
                     }
                     if (ccData.PlayerCommands[player.userID].Count() > 0 && mode == "norm")
                     {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["RedSquareButton"].ToString(), "0.51 0.15", "0.99 0.19");
+                        UI.LoadImage(ref element, PanelCC, TryForImage("RedSquareButton"), "0.51 0.15", "0.99 0.19");
                         UI.CreateButton(ref element, PanelCC, "0 0 0 0", "-", 16, "0.51 0.15", "0.99 0.19", $"UI_CCPanel yes", TextAnchor.MiddleCenter);
                     }
                     if (mode == "edit")
                     {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["RedSquareButton"].ToString(), "0.01 0.15", "0.99 0.19");
-                        UI.CreateButton(ref element, PanelCC, "0 0 0 0", GetLang("ExitEraseMode"), 14, "0.01 0.15", "0.99 0.19", $"UI_CCPanel no", TextAnchor.MiddleCenter);
-                    }
-                }
-                else if (!configData.AdminCreatesButtons)
-                {
-                    if (ccData.PlayerCommands[player.userID].Count() < 17 && mode == "norm")
-                    {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["GreenSquareButton"].ToString(), "0.01 0.15", "0.49 0.19");
-                        UI.CreateButton(ref element, PanelCC, "0 0 0 0", "+", 16, "0.01 0.15", "0.49 0.19", $"UI_CreateCommand", TextAnchor.MiddleCenter);
-                    }
-                    if (ccData.PlayerCommands[player.userID].Count() > 0 && mode == "norm")
-                    {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["RedSquareButton"].ToString(), "0.51 0.15", "0.99 0.19");
-                        UI.CreateButton(ref element, PanelCC, "0 0 0 0", "-", 16, "0.51 0.15", "0.99 0.19", $"UI_CCPanel yes", TextAnchor.MiddleCenter);
-                    }
-                    if (mode == "edit")
-                    {
-                        UI.LoadImage(ref element, PanelCC, ccData.SavedImages["RedSquareButton"].ToString(), "0.01 0.15", "0.99 0.19");
+                        UI.LoadImage(ref element, PanelCC, TryForImage("RedSquareButton"), "0.01 0.15", "0.99 0.19");
                         UI.CreateButton(ref element, PanelCC, "0 0 0 0", GetLang("ExitEraseMode"), 14, "0.01 0.15", "0.99 0.19", $"UI_CCPanel no", TextAnchor.MiddleCenter);
                     }
                 }
@@ -440,10 +472,10 @@ namespace Oxide.Plugins
             {
                 if (!ForceBar)
                 {
-                    UI.LoadImage(ref element, PanelCC, ccData.SavedImages["BlueSquareButton"].ToString(), "0.01 0.1", "0.99 0.14");
+                    UI.LoadImage(ref element, PanelCC, TryForImage("BlueSquareButton"), "0.01 0.1", "0.99 0.14");
                     UI.CreateButton(ref element, PanelCC, "0 0 0 0", GetLang("SaveBar"), 14, "0.01 0.1", "0.99 0.14", $"UI_SavePanel", TextAnchor.MiddleCenter);
                 }
-                UI.LoadImage(ref element, PanelCC, ccData.SavedImages["OrangeSquareButton"].ToString(), "0.01 0.05", "0.99 0.09");
+                UI.LoadImage(ref element, PanelCC, TryForImage("OrangeSquareButton"), "0.01 0.05", "0.99 0.09");
                 UI.CreateButton(ref element, PanelCC, "0 0 0 0", GetLang("ForceBar"), 14, "0.01 0.05", "0.99 0.09", $"UI_ForcePanel", TextAnchor.MiddleCenter);
             }
             UI.CreateButton(ref element, PanelCC, UIColors["red"], GetLang("Close"), 10, "0.01 0.01", "0.99 0.04", $"UI_DestroyCC", TextAnchor.MiddleCenter);
@@ -467,10 +499,10 @@ namespace Oxide.Plugins
                     cmdCreation[player.userID].cmd = new Command();
                     UI.CreatePanel(ref element, PanelCreation, "0 0 0 0", $".0001 0.0001", $"0.0002 0.0002", true);
 
-                    UI.LoadImage(ref element, PanelCreation, ccData.SavedImages["OrangeSquareButton"].ToString(), "0.15 0.4", "0.45 0.6");
+                    UI.LoadImage(ref element, PanelCreation, TryForImage("OrangeSquareButton"), "0.15 0.4", "0.45 0.6");
                     UI.CreateButton(ref element, PanelCreation, "0 0 0 0", GetLang("CONSOLE"), 16, "0.15 0.4", "0.45 0.6", $"UI_SetType console");
 
-                    UI.LoadImage(ref element, PanelCreation, ccData.SavedImages["BlueSquareButton"].ToString(), "0.55 0.4", "0.85 0.6");
+                    UI.LoadImage(ref element, PanelCreation, TryForImage("BlueSquareButton"), "0.55 0.4", "0.85 0.6");
                     UI.CreateButton(ref element, PanelCreation, "0 0 0 0", GetLang("CHAT"), 16, "0.55 0.4", "0.85 0.6", $"UI_SetType chat");
                     break;
                 case 1:
@@ -480,23 +512,38 @@ namespace Oxide.Plugins
                         UI.CreateLabel(ref element, PanelCreation, UIColors["limegreen"], GetMSG("ProvideAConsoleCommand"), 20, "0.05 0", ".95 1", TextAnchor.MiddleCenter);
                     break;
                 case 2:
-                    if (ccData.ButtonImages.Count > 0)
+                    if (configData.buttonImages != null && configData.buttonImages.Count > 0)
                     {
                         UI.CreatePanel(ref element, PanelCreation, "0 0 0 0", $".0001 0.0001", $"0.0002 0.0002", true);
                         i = 0;
-                        foreach (var entry in ccData.ButtonImages)
+                        foreach (var entry in configData.buttonImages)
                         {
-                            CreateButtonSelection(ref element, PanelCreation, entry, i); i++;
+                            CreateButtonSelection(ref element, PanelCreation, entry.Key, i); i++;
                         }
                     }
                     else
                     {
-                        CreateCommand(player, 99);
+                        if (!configData.CustomTitles)
+                            CreateCommand(player, 99);
+                        else
+                        {
+                            cmdCreation[player.userID].step = 3;
+                            CreateCommand(player, 3);
+                        }
                         return;
                     }
                     break;
+                case 3:
+                        UI.CreateLabel(ref element, PanelCreation, UIColors["limegreen"], GetMSG("ProvideAButtonTitle"), 20, "0.05 0", ".95 1", TextAnchor.MiddleCenter);
+                    break;
+
                 case 10:
                     i = 0;
+                    if (ccData.AdminCommands == null || ccData.AdminCommands.Count < 1 )
+                    {
+                        GetSendMSG(player, "NoCommandsAvailable");
+                        return;
+                    }
                     UI.CreatePanel(ref element, PanelCreation, "0 0 0 0", $".0001 0.0001", $"0.0002 0.0002", true);
                     foreach (var entry in ccData.AdminCommands)
                     {
@@ -517,17 +564,17 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, element);
         }
 
-        private void CreateButtonSelection(ref CuiElementContainer container, string panelName, uint img, int num)
+        private void CreateButtonSelection(ref CuiElementContainer container, string panelName, string img, int num)
         {
             var pos = CalcButtonPos(num);
-            UI.LoadImage(ref container, panelName, img.ToString(), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+            UI.LoadImage(ref container, panelName, TryForImage(img), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
             UI.CreateButton(ref container, panelName, "0 0 0 0", "", 16, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SetImg {img}");
         }
 
-        private void CreateCommandSelection(ref CuiElementContainer container, string panelName, string cmd, string type, uint img, int num)
+        private void CreateCommandSelection(ref CuiElementContainer container, string panelName, string cmd, string type, string img, int num)
         {
             var pos = CalcButtonPos(num);
-            UI.LoadImage(ref container, panelName, img.ToString(), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+            UI.LoadImage(ref container, panelName, TryForImage(img), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
             UI.CreateTextOverlay(ref container, panelName, cmd, UIColors["white"], 10, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
             UI.CreateButton(ref container, panelName, "0 0 0 0", "", 16, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_AddPlayerCommand {num}");
         }   
@@ -542,8 +589,6 @@ namespace Oxide.Plugins
             var element = UI.CreateElementContainer(PanelMouse, "0 0 0 0", $".0001 0.0001", $"0.0002 0.0002", true);
             CuiHelper.AddUi(player, element);
         }
-
-
 
         #endregion
 
@@ -851,11 +896,17 @@ namespace Oxide.Plugins
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
-            uint img = Convert.ToUInt32(arg.Args[0]);
+            var img = arg.Args[0];
             cmdCreation[player.userID].cmd.img = img;
-            CreateCommand(player, 99);
+            if (!configData.CustomTitles)
+                CreateCommand(player, 99);
+            else
+            {
+                cmdCreation[player.userID].step = 3;
+                CreateCommand(player, 3);
+            }
         }
-        
+
 
         [ConsoleCommand("UI_SaveCommand")]
         private void cmdUI_SaveCommand(ConsoleSystem.Arg arg)
@@ -918,10 +969,8 @@ namespace Oxide.Plugins
             if (configData.InfoInterval == 0) return;
             foreach (BasePlayer p in BasePlayer.activePlayerList)
             {
-                if (!configData.AdminOnlyButtons)
-                    GetSendMSG(p, "CCInfo", configData.OptionsKeyBinding);
-                else if (isAuth(p))
-                    GetSendMSG(p, "CCInfo", configData.OptionsKeyBinding);
+                if (CanUse(p))
+                    GetSendMSG(p, "CCInfo", configData.MouseLookKeyBinding);
             }
             timers.Add("info", timer.Once(configData.InfoInterval * 60, () => InfoLoop()));
         }
@@ -936,8 +985,6 @@ namespace Oxide.Plugins
         #region Classes
         class CustomCommandData
         {
-            public Dictionary<string, uint> SavedImages = new Dictionary<string, uint>();
-            public List<uint> ButtonImages = new List<uint>();
             public List<Command> ForceCommands = new List<Command>();
             public List<Command> AdminCommands = new List<Command>();
             public Dictionary<ulong, List<Command>> PlayerCommands = new Dictionary<ulong, List<Command>>();
@@ -948,7 +995,8 @@ namespace Oxide.Plugins
         {
             public string cmd;
             public string type;
-            public uint img;
+            public string img;
+            public string title;
         }
 
         class CommandCreation
@@ -959,253 +1007,22 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Unity WWW
-        class QueueImage
+        private void GetButtonImages()
         {
-            public string url;
-            public string name;
-            public QueueImage(string st, string ur)
-            {
-                name = st;
-                url = ur;
-            }
+            AddImage("https://pixabay.com/static/uploads/photo/2016/01/23/11/41/button-1157299_960_720.png", "BlueLongButton", (ulong)ResourceId);
+            AddImage("https://pixabay.com/static/uploads/photo/2016/01/23/11/42/button-1157301_960_720.png", "RedLongButton", (ulong)ResourceId);
+            AddImage("https://pixabay.com/static/uploads/photo/2016/01/23/11/26/button-1157269_960_720.png", "BlackLongButton", (ulong)ResourceId);
+            AddImage("https://pixabay.com/static/uploads/photo/2015/07/25/08/03/the-button-859349_960_720.png", "GreenLongButton",(ulong)ResourceId);
+            AddImage("https://pixabay.com/static/uploads/photo/2015/07/25/07/55/the-button-859343_960_720.png", "PurpleLongButton", (ulong)ResourceId);
+            AddImage("http://www.pd4pic.com/images/libya-flag-country-nationality-square-button.png", "GreenSquareButton", (ulong)ResourceId);
+            AddImage("https://openclipart.org/image/2400px/svg_to_png/78601/Red-button.png", "RedSquareButton", (ulong)ResourceId);
+            AddImage("http://downloadicons.net/sites/default/files/yellow-blue-crystal-icon-style-rectangular-button-32172.png", "BlueSquareButton", (ulong)ResourceId);
+            AddImage("http://downloadicons.net/sites/default/files/orange-button,-square-icons-32177.png", "OrangeSquareButton", (ulong)ResourceId);
+            foreach (var image in configData.buttonImages)
+                AddImage(image.Value, image.Key,(ulong)ResourceId);
         }
-
-        class CCImages : MonoBehaviour
-        {
-            CustomCommands filehandler;
-            const int MaxActiveLoads = 3;
-            static readonly List<QueueImage> QueueList = new List<QueueImage>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            public void SetDataDir(CustomCommands cc) => filehandler = cc;
-            public void Add(string name, string url)
-            {
-                QueueList.Add(new QueueImage(name, url));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                activeLoads++;
-                var qi = QueueList[0];
-                QueueList.RemoveAt(0);
-                var www = new WWW(qi.url);
-                StartCoroutine(WaitForRequest(www, qi));
-            }
-
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(WWW www, QueueImage info)
-            {
-                yield return www;
-
-                if (www.error == null)
-                {
-                    if (!filehandler.ccData.SavedImages.ContainsKey(info.name))
-                    {
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
-                        ClearStream();
-                        filehandler.ccData.SavedImages.Add(info.name, textureID);
-                    }
-                }
-                activeLoads--;
-                if (QueueList.Count > 0) Next();
-                else filehandler.SaveData();
-            }
-        }
-
-        [ConsoleCommand("getUIimages")]
-        private void cmdgetimages(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                Getimages();
-            }
-        }
-
-        private void Getimages()
-        {
-            ccData.SavedImages.Clear();
-                    foreach (var item in urls)
-                    {
-                        if (!string.IsNullOrEmpty(item.Value))
-                        {
-                            ccImage.Add(item.Key, item.Value);
-                        }
-                    }
-            Puts(GetLang("ImgReload"));
-        }
-
-        [ConsoleCommand("checkUIimages")]
-        private void cmdrefreshimages(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                Refreshimages();
-            }
-        }
-
-        private void Refreshimages()
-        {
-
-            foreach (var item in urls)
-                if (!ccData.SavedImages.ContainsKey(item.Key))
-                    if (!string.IsNullOrEmpty(item.Value))
-                    {
-                        ccImage.Add(item.Key, item.Value);
-                    }
-            Puts(GetLang("ImgRefresh"));
-        }
-
-        class QueueAdminImage
-        {
-            public string url;
-            public QueueAdminImage(string ur)
-            {
-                url = ur;
-            }
-        }
-
-        class buttonImage : MonoBehaviour
-        {
-            CustomCommands filehandler;
-            const int MaxActiveLoads = 3;
-            static readonly List<QueueAdminImage> QueueList = new List<QueueAdminImage>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            public void SetDataDir(CustomCommands cc) => filehandler = cc;
-            public void Add(string url)
-            {
-                QueueList.Add(new QueueAdminImage(url));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                activeLoads++;
-                var qi = QueueList[0];
-                QueueList.RemoveAt(0);
-                var www = new WWW(qi.url);
-                StartCoroutine(WaitForRequest(www, qi));
-            }
-
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(WWW www, QueueAdminImage info)
-            {
-                yield return www;
-
-                if (www.error == null)
-                {
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
-                        ClearStream();
-                        filehandler.ccData.ButtonImages.Add(textureID);
-                }
-                activeLoads--;
-                if (QueueList.Count > 0) Next();
-                else filehandler.SaveData();
-            }
-        }
-
-        [ConsoleCommand("getserverimages")]
-        private void cmdgetserverimages(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                GetServerImages();
-            }
-        }
-
-        private void GetServerImages()
-        {
-            try
-            {
-                bimages = BImages.ReadObject<ButtonImages>();
-            }
-            catch
-            {
-                Puts("Couldn't Find a Server Admin Button Image Load File, creating a new File");
-                bimages = new ButtonImages();
-                bimages.AdminImages = defaultButtonImages;
-                BImages.WriteObject(bimages);
-            }
-            if (ccData.ButtonImages == null || ccData.ButtonImages.Count == 0)
-            {
-                foreach (var entry in defaultButtonImages)
-                {
-                    bimages.AdminImages.Add(entry);
-                }
-            }
-            var i = 0;
-            foreach (var entry in bimages.AdminImages)
-            {
-                bImage.Add(entry);
-                i++;
-
-            }
-            bimages.AdminImages.Clear();
-            timer.Once(10, () =>
-            {
-                SaveServerImages();
-                Puts(GetMSG("ButtonImagesAdded", i.ToString()));
-            });
-
-        }
-
-        private void SaveServerImages()
-        {
-            CCData.WriteObject(ccData);
-            BImages.WriteObject(bimages);
-        }
-
-        #endregion
 
         #region Custom Commands Data Management
-
-        private Dictionary<string, string> urls = new Dictionary<string, string>
-        {
-            { "FIRST", "http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/simple-black-square-icons-arrows/126517-simple-black-square-icon-arrows-double-arrowhead-left.png" },
-            { "BACK", "https://image.freepik.com/free-icon/back-left-arrow-in-square-button_318-76403.png" },
-            { "NEXT", "https://image.freepik.com/free-icon/right-arrow-square-button-outline_318-76302.png" },
-            { "LAST", "http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/matte-white-square-icons-arrows/124577-matte-white-square-icon-arrows-double-arrowhead-right.png" },
-            { "BlueLongButton", "https://pixabay.com/static/uploads/photo/2016/01/23/11/41/button-1157299_960_720.png" },
-            { "RedLongButton", "https://pixabay.com/static/uploads/photo/2016/01/23/11/42/button-1157301_960_720.png" },
-            { "BlackLongButton", "https://pixabay.com/static/uploads/photo/2016/01/23/11/26/button-1157269_960_720.png" },
-            { "GreenLongButton", "https://pixabay.com/static/uploads/photo/2015/07/25/08/03/the-button-859349_960_720.png" },
-            { "PurpleLongButton", "https://pixabay.com/static/uploads/photo/2015/07/25/07/55/the-button-859343_960_720.png" },
-            { "GreenSquareButton", "http://www.pd4pic.com/images/libya-flag-country-nationality-square-button.png" },
-            { "RedSquareButton", "https://openclipart.org/image/2400px/svg_to_png/78601/Red-button.png" },
-            { "BlueSquareButton", "http://downloadicons.net/sites/default/files/yellow-blue-crystal-icon-style-rectangular-button-32172.png" },
-            { "OrangeSquareButton", "http://downloadicons.net/sites/default/files/orange-button,-square-icons-32177.png" },            
-        };
-
-        private List<string> defaultButtonImages = new List<string>
-        {
-            { "https://pixabay.com/static/uploads/photo/2016/01/23/11/41/button-1157299_960_720.png" },
-            { "https://pixabay.com/static/uploads/photo/2016/01/23/11/42/button-1157301_960_720.png" },
-            { "https://pixabay.com/static/uploads/photo/2016/01/23/11/26/button-1157269_960_720.png" },
-            { "https://pixabay.com/static/uploads/photo/2015/07/25/08/03/the-button-859349_960_720.png" },
-            { "https://pixabay.com/static/uploads/photo/2015/07/25/07/55/the-button-859343_960_720.png" },
-            { "http://www.pd4pic.com/images/libya-flag-country-nationality-square-button.png" },
-            { "https://openclipart.org/image/2400px/svg_to_png/78601/Red-button.png" },
-            { "http://downloadicons.net/sites/default/files/yellow-blue-crystal-icon-style-rectangular-button-32172.png" },
-            { "http://downloadicons.net/sites/default/files/orange-button,-square-icons-32177.png" },
-        };
 
         void SaveData()
         {
@@ -1217,6 +1034,11 @@ namespace Oxide.Plugins
             try
             {
                 ccData = CCData.ReadObject<CustomCommandData>();
+                if (ccData == null)
+                {
+                    Puts("Created a new CustomCommands Data File");
+                    ccData = new CustomCommandData();
+                }
             }
             catch
             {
@@ -1232,9 +1054,12 @@ namespace Oxide.Plugins
         class ConfigData
         {
             public int InfoInterval { get; set; }
-            public string OptionsKeyBinding { get; set; }
-            public bool AdminOnlyButtons { get; set; }
+            public string MouseLookKeyBinding { get; set; }
+            public bool RequirePermissions { get; set; }
             public bool AdminCreatesButtons { get; set; }
+            public bool CustomTitles { get; set; }
+            public bool HideText { get; set; }
+            public Dictionary<string, string> buttonImages { get; set; }
         }
         private void LoadVariables()
         {
@@ -1246,9 +1071,21 @@ namespace Oxide.Plugins
             var config = new ConfigData
             {
                 InfoInterval = 15,
-                OptionsKeyBinding = "h",
-                AdminOnlyButtons = false,
+                MouseLookKeyBinding = "h",
+                RequirePermissions = false,
                 AdminCreatesButtons = false,
+                buttonImages = new Dictionary<string, string>
+                {
+                { "1", "https://pixabay.com/static/uploads/photo/2016/01/23/11/41/button-1157299_960_720.png" },
+                { "2", "https://pixabay.com/static/uploads/photo/2016/01/23/11/42/button-1157301_960_720.png" },
+                {"3",  "https://pixabay.com/static/uploads/photo/2016/01/23/11/26/button-1157269_960_720.png" },
+                {"4",  "https://pixabay.com/static/uploads/photo/2015/07/25/08/03/the-button-859349_960_720.png" },
+                { "5", "https://pixabay.com/static/uploads/photo/2015/07/25/07/55/the-button-859343_960_720.png" },
+                { "6", "http://www.pd4pic.com/images/libya-flag-country-nationality-square-button.png" },
+                { "7", "https://openclipart.org/image/2400px/svg_to_png/78601/Red-button.png" },
+                { "8", "http://downloadicons.net/sites/default/files/yellow-blue-crystal-icon-style-rectangular-button-32172.png" },
+                { "9", "http://downloadicons.net/sites/default/files/orange-button,-square-icons-32177.png" },
+                }
             };
             SaveConfig(config);
         }
@@ -1260,15 +1097,13 @@ namespace Oxide.Plugins
         Dictionary<string, string> messages = new Dictionary<string, string>()
         {
             {"title", "CustomCommands: " },
-            {"CCInfo", "This server is running CustomCommands. Type /cc to open your personal CC Menu! Pressing '{0}' enables a player to enter 'Mouse Look Mode' to click buttons."},
+            {"CCInfo", "This server is running CustomCommands. Type <color=yellow>( '/cc' )</color> to open your personal CC Menu! Pressing  <color=red>( '{0}' )</color> enables a player to enter 'Mouse Look Mode' to click buttons."},
             {"Next", "Next" },
             {"Back", "Back" },
             {"First", "First" },
             {"Last", "Last" },
             {"Close", "Close"},
             {"Quit", "Quit"},
-            {"ImgReload", "Images have been wiped and reloaded!" },
-            {"ImgRefresh", "Images have been refreshed !" },
             {"Delete", "Delete" },
             {"Remove", "Remove" },
             {"SelectaCMDType", "Please Select a Command Type" },
@@ -1279,6 +1114,7 @@ namespace Oxide.Plugins
             {"CancelCommand", "Cancel Command?" },
             {"ProvideAChatCommand", "Please Provide a Chat Command but leave the '/' out. For example, to create a Chat Command for this plugin type cc to create a button that opens /cc" },
             {"ProvideAConsoleCommand", "Please Provide a Console Command" },
+            {"ProvideAButtonTitle", "Please type a Title for this button" },
             {"CanceledCmdCreation", "You have successfully cancelled Command Creation " },
             {"NewCommand", "You have successfully created a new command!" },
             {"NewPlayerCommand", "You have successfully created a new Player Command!" },           
@@ -1289,7 +1125,8 @@ namespace Oxide.Plugins
             {"SaveBar", "Save CC" },
             {"SavePlayerCommand", "Save Player Command" },
             {"NotAuth", "You are not authorized to use this command" },
-            {"InvalidFormat", "Invalid Command: try '/cc clear all' or '/cc clear players'" }
+            {"InvalidFormat", "Invalid Command: try '/cc clear all' or '/cc clear players'" },
+            {"NoCommandsAvailable", "There are no commands available to add!" }
         };
         #endregion
     }

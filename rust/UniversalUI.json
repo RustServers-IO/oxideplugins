@@ -1,9 +1,12 @@
 {
     "name": "UniversalUI",
-    "description": "This is a fully Customizable UI for .",
+    "description": "This is a fully Customizable UI for Info and Buttons!",
     "author": "{Midgard}Altimus Maximus",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "configuration": true,
+    "require": {
+        "ImageLibrary": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/universalui.2226",
     "games": [

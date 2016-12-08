@@ -2,7 +2,7 @@
     "name": "Npctp",
     "description": "Create a npc that will tp a player to any x y z. or run console commands.",
     "author": "",
-    "version": "1.1.10",
+    "version": "2.0.0",
     "configuration": true,
     "suggest": {
         "Spawns": "*"

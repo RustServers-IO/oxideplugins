@@ -7,7 +7,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("WeaponsShownOnBack", "Jake_Rich", 0.11)]
+    [Info("WeaponsShownOnBack", "Jake_Rich", 0.20)]
     [Description("Shows player's best two weapons holstered on their back")]
 
     public class WeaponsOnBack : RustPlugin
@@ -17,6 +17,8 @@ namespace Oxide.Plugins
         public static int displayMode = 1; //0 = Only from player's belt
                                            //1 = From player's belt and inventory
         #region Loading / Unloading
+        Timer pluginTimer { get; set; }
+
         void Loaded()
         {
             thisPlugin = this;
@@ -29,7 +31,8 @@ namespace Oxide.Plugins
                 }
             }
             displayMode = (int)Config["displayMode"];
-
+            pluginTimer?.Destroy();
+            pluginTimer = timer.Every(0.15f, UpdateTick);
             //testing
             //ShowAllGuns(BasePlayer.activePlayerList[0], null, null);
             //SpawnPlayersTest(BasePlayer.activePlayerList[0], null, null);
@@ -38,6 +41,7 @@ namespace Oxide.Plugins
 
         void Unload()
         {
+            pluginTimer?.Destroy();
             foreach (WeaponData data in weaponData.Values)
             {
                 data.Destroy();
@@ -219,7 +223,7 @@ namespace Oxide.Plugins
         int playersPerTick = 1;
         int lastPlayerIndex = 0;
         DateTime lastTimeCompleted = new DateTime(); //Shouldnt update more often then once every 2 seconds
-        void OnTick()
+        void UpdateTick()
         {
             playersPerTick = (BasePlayer.activePlayerList.Count / 20) + 1;
             if (BasePlayer.activePlayerList.Count <= 0)
@@ -296,7 +300,7 @@ namespace Oxide.Plugins
         {"shotgun.waterpipe", new GunConfig(new Vector3(0.0f,-0.065f,0.0f),new Vector3(0,30,0), new Vector3(0.0f,0.0f,0.0f), new Vector3(0,0,0), "assets/prefabs/weapons/pipe shotgun/shotgun_waterpipe.entity.prefab",40) },
         {"spear.wooden", new GunConfig(new Vector3(-0.5f,-0.08f,0.0f),new Vector3(0,110,0), new Vector3(0.0f,0.0f,0.0f), new Vector3(0,0,0), "assets/prefabs/weapons/wooden spear/spear_wooden.entity.prefab",  10) },
         {"spear.stone", new GunConfig(new Vector3(-0.5f,-0.055f,0.0f),new Vector3(0,110,90), new Vector3(0.0f,0.0f,0.0f), new Vector3(0,0,0), "assets/prefabs/weapons/stone spear/spear_stone.entity.prefab",20) },
-        {"bow.hunting", new GunConfig(new Vector3(-0.1f,-0f,-0.05f),new Vector3(351,65,135), new Vector3(0.0f,0.0f,0.0f), new Vector3(0,0,0), "assets/prefabs/weapons/bow/bow_hunting.entity.prefab") },
+        {"bow.hunting", new GunConfig(new Vector3(-0.1f,-0f,-0.05f),new Vector3(351,65,135), new Vector3(0.0f,0.0f,0.0f), new Vector3(0,0,0), "assets/prefabs/weapons/bow/bow_hunting.entity.prefab",25)},
         
         
     };
@@ -389,6 +393,11 @@ namespace Oxide.Plugins
             {
                 if (player == null)
                 {
+                    return;
+                }
+                if (player.IsSleeping())
+                {
+                    DestroyWeapons();
                     return;
                 }
                 int mainGunValue = -1;

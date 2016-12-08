@@ -9,7 +9,7 @@ using System.IO;
 using System.Linq;
 using Rust;
 namespace Oxide.Plugins {
-	[Info("HitIcon", "serezhadelaet", "1.4", ResourceId = 1917)]
+	[Info("HitIcon", "serezhadelaet", "1.5", ResourceId = 1917)]
     [Description("Configurable precached icon when you hit player|friend|clanmate")]
     class HitIcon : RustPlugin {
 
@@ -288,7 +288,8 @@ namespace Oxide.Plugins {
                     Components = {
                         new CuiRawImageComponent {
                             Png = image,
-                            Color = colour
+                            Color = colour,
+                            Sprite = "assets/content/textures/generic/fulltransparent.tga"
                         },
                         new CuiRectTransformComponent {
                             AnchorMin = start,
@@ -312,7 +313,6 @@ namespace Oxide.Plugins {
                                 Font = "robotocondensed-regular.ttf",
                                 Color = uicolor,
                                 Align = TextAnchor.MiddleCenter
-
                             },
                             new CuiRectTransformComponent {
                                 AnchorMin = start,

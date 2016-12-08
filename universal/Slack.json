@@ -2,7 +2,7 @@
     "name": "Slack",
     "description": "Plugin API for sending messages and notifications to Slack",
     "author": "Wulf",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/slack.1952",

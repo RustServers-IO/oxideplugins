@@ -3,12 +3,14 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("ProfanityFilter", "Spicy", "1.0.0")]
+    [Info("ProfanityFilter", "Spicy", "1.0.1")]
     [Description("Filters profanity.")]
 
     class ProfanityFilter : CovalencePlugin
     {
         #region Config
+
+        private List<string> bannedWords;
 
         protected override void LoadDefaultConfig()
         {
@@ -22,10 +24,12 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Lang
+        #region Hooks
 
-        private void InitialiseLang()
+        private void OnServerInitialized()
         {
+            bannedWords = Config.Get<List<string>>("BannedWords");
+
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 ["BannedWord"] = "That's a banned word."
@@ -42,24 +46,26 @@ namespace Oxide.Plugins
             }, this, "es");
         }
 
-        #endregion
-
-        #region Hooks
-
-        private void OnServerInitialized() => InitialiseLang();
-
         private object OnUserChat(IPlayer player, string message)
         {
-            foreach (string bannedWord in Config.Get<List<string>>("BannedWords"))
+            if (IsProfanity(message))
             {
-                if (message.Contains(bannedWord))
-                {
-                    player.Reply(lang.GetMessage("BannedWord", this, player.Id));
-                    return true;
-                }
-                return null;
+                player.Reply(lang.GetMessage("BannedWord", this, player.Id));
+                return true;
             }
             return null;
+        }
+
+        #endregion
+
+        #region API
+
+        bool IsProfanity(string message)
+        {
+            foreach (string bannedWord in bannedWords)
+                if (message.ToLower().Contains(bannedWord.ToLower()))
+                    return true;
+            return false;
         }
 
         #endregion

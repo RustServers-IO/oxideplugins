@@ -1,7 +1,7 @@
 PLUGIN.Title        = "Npctp"
 PLUGIN.Description  = "Allows npc to tp player."
 PLUGIN.Author       = "razor"
-PLUGIN.Version      = V(1,1,10)
+PLUGIN.Version      = V(2,0,0)
 PLUGIN.ResourceId   = 2229
 
 local NPCPlugin = "HumanNPC"
@@ -15,6 +15,8 @@ function PLUGIN:Init()
 	permission.RegisterPermission("Npctp.use3", self.Plugin)
 	permission.RegisterPermission("Npctp.use4", self.Plugin)
 	permission.RegisterPermission("Npctp.use5", self.Plugin)
+	permission.RegisterPermission("Npctp.use6", self.Plugin)
+	permission.RegisterPermission("Npctp.use7", self.Plugin)
         command.AddChatCommand( "npctp",       self.Plugin, "cmdNPCTP" )
 
 	self:LoadDefaultConfig()
@@ -32,11 +34,22 @@ function PLUGIN:LoadDefaultConfig()
 	self.Config.NPC3 = self.Config.NPC3 or {}
 	self.Config.NPC4 = self.Config.NPC4 or {}
 	self.Config.NPC5 = self.Config.NPC5 or {}
+	self.Config.NPC6 = self.Config.NPC6 or {}
+	self.Config.NPC7 = self.Config.NPC7 or {}
 	self.Config.Messages = self.Config.Messages or {}
 
         self.Config.Messages.NPCTPLimitReached      = self.Config.Messages.NPCTPLimitReached or "No More limit Reached"
-        self.Config.Messages.NPCTPCooldownReached   = self.Config.Messages.NPCTPCooldownReached or "Cooldown you must wate "
-        self.Config.Messages.YouLackPerms           = self.Config.Messages.YouLackPerms or "You do not have the correct permissions"
+        self.Config.Messages.NPCTPCooldownReached   = self.Config.Messages.NPCTPCooldownReached or "Cooldown you must wait "
+        self.Config.Messages.YouLackPermsNPC        = self.Config.Messages.YouLackPermsNPC or "NPC You do not have the correct permissions"
+        self.Config.Messages.YouLackPermsNPC2       = self.Config.Messages.YouLackPermsNPC2 or "NPC 2 You do not have the correct permissions"
+        self.Config.Messages.YouLackPermsNPC3       = self.Config.Messages.YouLackPermsNPC3 or "NPC 3 You do not have the correct permissions"
+        self.Config.Messages.YouLackPermsNPC4       = self.Config.Messages.YouLackPermsNPC4 or "NPC 4 You do not have the correct permissions"
+        self.Config.Messages.YouLackPermsNPC5       = self.Config.Messages.YouLackPermsNPC5 or "NPC 5 You do not have the correct permissions"
+        self.Config.Messages.YouLackPermsNPC6       = self.Config.Messages.YouLackPermsNPC6 or "NPC 6 You do not have the correct permissions"
+        self.Config.Messages.YouLackPermsNPC7       = self.Config.Messages.YouLackPermsNPC7 or "NPC 7 You do not have the correct permissions"
+        self.Config.Messages.NpcUSE5                = self.Config.Messages.NpcUSE5 or "Hope you enjoy your gift."
+        self.Config.Messages.NpcUSE6                = self.Config.Messages.NpcUSE6 or "Hope you enjoy your gift."
+        self.Config.Messages.NpcUSE7                = self.Config.Messages.NpcUSE7 or "Hope you enjoy your gift."
 
 	self.Config.NPC.Enabled         = self.Config.NPC.Enabled or "true"
         self.Config.NPC.UsePermissions  = self.Config.NPC.UsePermissions or "true"
@@ -86,6 +99,7 @@ function PLUGIN:LoadDefaultConfig()
         self.Config.NPC4.y               = self.Config.NPC4.y or "58"
         self.Config.NPC4.z               = self.Config.NPC4.z or "100"
 
+	self.Config.NPC5.Messages        = self.Config.NPC5.Messages or "true"
 	self.Config.NPC5.Cooldown        = self.Config.NPC5.Cooldown or 86400
 	self.Config.NPC5.MustInteract    = self.Config.NPC5.MustInteract or "true"
 	self.Config.NPC5.Enabled         = self.Config.NPC5.Enabled or "false"
@@ -96,6 +110,27 @@ function PLUGIN:LoadDefaultConfig()
         self.Config.NPC5.CommandOnPlayer = self.Config.NPC5.CommandOnPlayer or "true"
         self.Config.NPC5.Option          = self.Config.NPC5.Option or "lmg.m249"
 
+	self.Config.NPC6.Messages        = self.Config.NPC6.Messages or "true"
+	self.Config.NPC6.Cooldown        = self.Config.NPC6.Cooldown or 600
+	self.Config.NPC6.MustInteract    = self.Config.NPC6.MustInteract or "true"
+	self.Config.NPC6.Enabled         = self.Config.NPC6.Enabled or "false"
+        self.Config.NPC6.UsePermissions  = self.Config.NPC6.UsePermissions or "true"
+        self.Config.NPC6.PlayerNPCTPName = self.Config.NPC6.PlayerNPCTPName or "Food_Man12345"
+        self.Config.NPC6.DailyLimit      = self.Config.NPC6.DailyLimit or 0
+        self.Config.NPC6.ServerCommand   = self.Config.NPC6.ServerCommand or "inv.giveplayer"
+        self.Config.NPC6.CommandOnPlayer = self.Config.NPC6.CommandOnPlayer or "true"
+        self.Config.NPC6.Option          = self.Config.NPC6.Option or "meat.pork.cooked 20"
+
+	self.Config.NPC7.Messages        = self.Config.NPC7.Messages or "true"
+	self.Config.NPC7.Cooldown        = self.Config.NPC7.Cooldown or 86400
+	self.Config.NPC7.MustInteract    = self.Config.NPC7.MustInteract or "true"
+	self.Config.NPC7.Enabled         = self.Config.NPC7.Enabled or "false"
+        self.Config.NPC7.UsePermissions  = self.Config.NPC7.UsePermissions or "true"
+        self.Config.NPC7.PlayerNPCTPName = self.Config.NPC7.PlayerNPCTPName or "Whoever123456"
+        self.Config.NPC7.DailyLimit      = self.Config.NPC7.DailyLimit or 0
+        self.Config.NPC7.ServerCommand   = self.Config.NPC7.ServerCommand or "inv.giveplayer"
+        self.Config.NPC7.CommandOnPlayer = self.Config.NPC7.CommandOnPlayer or "true"
+        self.Config.NPC7.Option          = self.Config.NPC7.Option or "lmg.m249"
 	self:SaveConfig()
 	if self.Config.CustomPermissions then
 		for current, data in pairs(self.Config.CustomPermissions) do
@@ -427,7 +462,7 @@ end
 
 function PLUGIN:OnUseNPC(npc, player)
 local npc = tostring(npc):match("([^%[]*)%[([^%]]*)")
-	if npc and player and npc:lower() == self.Config.NPC.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC2.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC3.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC4.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC5.PlayerNPCTPName:lower() then
+	if npc and player and npc:lower() == self.Config.NPC.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC2.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC3.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC4.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC5.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC6.PlayerNPCTPName:lower() or npc:lower() == self.Config.NPC7.PlayerNPCTPName:lower() then
                 local playerSteamID = rust.UserIDFromPlayer(player)
                 local timestamp   = time.GetUnixTimestamp()
                 local currentDate = tostring( time.GetCurrentTime():ToString("d") )
@@ -436,12 +471,16 @@ local npc = tostring(npc):match("([^%[]*)%[([^%]]*)")
                 local DailyLimit3 = self.Config.NPC3.DailyLimit
                 local DailyLimit4 = self.Config.NPC4.DailyLimit
                 local DailyLimit5 = self.Config.NPC5.DailyLimit
+                local DailyLimit6 = self.Config.NPC6.DailyLimit
+                local DailyLimit7 = self.Config.NPC7.DailyLimit
+
                 local Cooldown    = self.Config.NPC.Cooldown or 0
                 local Cooldown2   = self.Config.NPC2.Cooldown or 0
                 local Cooldown3   = self.Config.NPC3.Cooldown or 0
                 local Cooldown4   = self.Config.NPC4.Cooldown or 0
                 local Cooldown5   = self.Config.NPC5.Cooldown or 0
-
+                local Cooldown6   = self.Config.NPC6.Cooldown or 0
+                local Cooldown7   = self.Config.NPC7.Cooldown or 0
 
                 -- Grab the user his/her Save data.
                 SaveData.NPCData[playerSteamID] = SaveData.NPCData[playerSteamID] or {}
@@ -469,6 +508,16 @@ local npc = tostring(npc):match("([^%[]*)%[([^%]]*)")
                 SaveData.NPCData[playerSteamID].Saves5.amount = SaveData.NPCData[playerSteamID].Saves5.amount or 0
                 SaveData.NPCData[playerSteamID].Saves5.date = currentDate
                 SaveData.NPCData[playerSteamID].Saves5.timestamp = SaveData.NPCData[playerSteamID].Saves5.timestamp or 0
+
+                SaveData.NPCData[playerSteamID].Saves6 = SaveData.NPCData[playerSteamID].Saves6 or {}
+                SaveData.NPCData[playerSteamID].Saves6.amount = SaveData.NPCData[playerSteamID].Saves6.amount or 0
+                SaveData.NPCData[playerSteamID].Saves6.date = currentDate
+                SaveData.NPCData[playerSteamID].Saves6.timestamp = SaveData.NPCData[playerSteamID].Saves6.timestamp or 0
+
+                SaveData.NPCData[playerSteamID].Saves7 = SaveData.NPCData[playerSteamID].Saves7 or {}
+                SaveData.NPCData[playerSteamID].Saves7.amount = SaveData.NPCData[playerSteamID].Saves7.amount or 0
+                SaveData.NPCData[playerSteamID].Saves7.date = currentDate
+                SaveData.NPCData[playerSteamID].Saves7.timestamp = SaveData.NPCData[playerSteamID].Saves7.timestamp or 0
 
 
 
@@ -509,6 +558,17 @@ local npc = tostring(npc):match("([^%[]*)%[([^%]]*)")
          end
          end
 
+              if Cooldown6 == 0 and SaveData.NPCData[playerSteamID].Saves6.timestamp then
+                    if SaveData.NPCData[playerSteamID].Saves6.timestamp + 86400 <= timestamp then
+                        SaveData.NPCData[playerSteamID].Saves6.amount = 0
+         end
+         end
+
+              if Cooldown7 == 0 and SaveData.NPCData[playerSteamID].Saves7.timestamp then
+                    if SaveData.NPCData[playerSteamID].Saves7.timestamp + 86400 <= timestamp then
+                        SaveData.NPCData[playerSteamID].Saves7.amount = 0
+         end
+         end
                
 -- CoolDown reset Player Cooldown
 
@@ -548,40 +608,67 @@ local npc = tostring(npc):match("([^%[]*)%[([^%]]*)")
 
                   return
                 end
+
+                if npc:lower() == self.Config.NPC6.PlayerNPCTPName:lower() and self.Config.NPC6.Cooldown > 0 and ( timestamp - SaveData.NPCData[playerSteamID].Saves6.timestamp ) < self.Config.NPC6.Cooldown then
+                    local remainingTime6 = self:ParseRemainingTime( self.Config.NPC6.Cooldown - ( timestamp - SaveData.NPCData[playerSteamID].Saves6.timestamp ) )
+          	rust.SendChatMessage(player, self.Config.Messages.NPCTPCooldownReached, "[ " .. remainingTime6 .. "]" )
+
+                  return
+                end
+
+                if npc:lower() == self.Config.NPC7.PlayerNPCTPName:lower() and self.Config.NPC7.Cooldown > 0 and ( timestamp - SaveData.NPCData[playerSteamID].Saves7.timestamp ) < self.Config.NPC7.Cooldown then
+                    local remainingTime7 = self:ParseRemainingTime( self.Config.NPC7.Cooldown - ( timestamp - SaveData.NPCData[playerSteamID].Saves7.timestamp ) )
+          	rust.SendChatMessage(player, self.Config.Messages.NPCTPCooldownReached, "[ " .. remainingTime7 .. "]" )
+
+                  return
+                end
             
 -- Permissions can or cant use
 
                 if npc:lower() == self.Config.NPC.PlayerNPCTPName:lower() and self.Config.NPC.UsePermissions == "true" and not permission.UserHasPermission(playerSteamID, "npctp.use") then
-          	rust.SendChatMessage(player, self.Config.Messages.YouLackPerms)
+          	rust.SendChatMessage(player, self.Config.Messages.YouLackPermsNPC)
 
                   return
                 end
               
 
                 if npc:lower() == self.Config.NPC2.PlayerNPCTPName:lower() and self.Config.NPC2.UsePermissions == "true" and not permission.UserHasPermission(playerSteamID, "npctp.use2") then
-          	rust.SendChatMessage(player, self.Config.Messages.YouLackPerms)
+          	rust.SendChatMessage(player, self.Config.Messages.YouLackPermsNPC2)
 
                   return
                 end
 
                 if npc:lower() == self.Config.NPC3.PlayerNPCTPName:lower() and self.Config.NPC3.UsePermissions == "true" and not permission.UserHasPermission(playerSteamID, "npctp.use3") then
-          	rust.SendChatMessage(player, self.Config.Messages.YouLackPerms)
+          	rust.SendChatMessage(player, self.Config.Messages.YouLackPermsNPC3)
 
                   return
                 end
 
                 if npc:lower() == self.Config.NPC4.PlayerNPCTPName:lower() and self.Config.NPC4.UsePermissions == "true" and not permission.UserHasPermission(playerSteamID, "npctp.use4") then
-          	rust.SendChatMessage(player, self.Config.Messages.YouLackPerms)
+          	rust.SendChatMessage(player, self.Config.Messages.YouLackPermsNPC4)
 
                   return
                 end
 
                 if npc:lower() == self.Config.NPC5.PlayerNPCTPName:lower() and self.Config.NPC5.UsePermissions == "true" and not permission.UserHasPermission(playerSteamID, "npctp.use5") then
-          	rust.SendChatMessage(player, self.Config.Messages.YouLackPerms)
+          	rust.SendChatMessage(player, self.Config.Messages.YouLackPermsNPC5)
 
                   return
                 end		
 
+                if npc:lower() == self.Config.NPC6.PlayerNPCTPName:lower() and self.Config.NPC6.UsePermissions == "true" and not permission.UserHasPermission(playerSteamID, "npctp.use6") then
+          	rust.SendChatMessage(player, self.Config.Messages.YouLackPermsNPC6)
+
+                  return
+                end
+
+                if npc:lower() == self.Config.NPC7.PlayerNPCTPName:lower() and self.Config.NPC7.UsePermissions == "true" and not permission.UserHasPermission(playerSteamID, "npctp.use7") then
+          	rust.SendChatMessage(player, self.Config.Messages.YouLackPermsNPC7)
+
+                  return
+                end
+
+----END Config Perm
 
 
                if npc:lower() == self.Config.NPC.PlayerNPCTPName:lower() and DailyLimit > 0 and SaveData.NPCData[playerSteamID].Saves.amount >= DailyLimit and currentDate >= SaveData.NPCData[playerSteamID].Saves.date then
@@ -729,6 +816,8 @@ local npc = tostring(npc):match("([^%[]*)%[([^%]]*)")
                             SaveData.NPCData[playerSteamID].Saves5.timestamp = timestamp
                             SaveData.NPCData[playerSteamID].Saves5.amount = SaveData.NPCData[playerSteamID].Saves5.amount + 1
                             self:SaveData()
+			if self.Config.NPC5.Messages ~= "true" then return end
+                            player:ChatMessage(self.Config.Messages.NpcUSE5)
 			        return
                 end
 
@@ -739,8 +828,56 @@ local npc = tostring(npc):match("([^%[]*)%[([^%]]*)")
                             SaveData.NPCData[playerSteamID].Saves5.timestamp = timestamp
                             SaveData.NPCData[playerSteamID].Saves5.amount = SaveData.NPCData[playerSteamID].Saves5.amount + 1
                             self:SaveData()
+			if self.Config.NPC5.Messages ~= "true" then return end
+                            player:ChatMessage(self.Config.Messages.NpcUSE5)
 			        return
-		        end                  
+		        end 
+
+		    if npc:lower() == self.Config.NPC6.PlayerNPCTPName:lower() and self.Config.NPC6.CommandOnPlayer ~= "true" then
+			if self.Config.NPC6.Enabled ~= "true" then return end
+		        	    rust.RunServerCommand("" .. self.Config.NPC6.ServerCommand .. " " .. self.Config.NPC6.Option .. " ")
+                            SaveData.NPCData[playerSteamID].Saves6.timestamp = timestamp
+                            SaveData.NPCData[playerSteamID].Saves6.amount = SaveData.NPCData[playerSteamID].Saves6.amount + 1
+                            self:SaveData()
+			if self.Config.NPC6.Messages ~= "true" then return end
+                            player:ChatMessage(self.Config.Messages.NpcUSE6)
+			        return
+                end
+
+	   
+                    if npc:lower() == self.Config.NPC6.PlayerNPCTPName:lower() and self.Config.NPC6.CommandOnPlayer ~= "false" then
+			if self.Config.NPC6.Enabled ~= "true" then return end
+		        	    rust.RunServerCommand("" .. self.Config.NPC6.ServerCommand .. " " .. playerSteamID .. " " .. self.Config.NPC6.Option .. " ")
+                            SaveData.NPCData[playerSteamID].Saves6.timestamp = timestamp
+                            SaveData.NPCData[playerSteamID].Saves6.amount = SaveData.NPCData[playerSteamID].Saves6.amount + 1
+                            self:SaveData()
+			if self.Config.NPC6.Messages ~= "true" then return end
+                            player:ChatMessage(self.Config.Messages.NpcUSE6)
+			        return
+		        end     
+
+		    if npc:lower() == self.Config.NPC7.PlayerNPCTPName:lower() and self.Config.NPC7.CommandOnPlayer ~= "true" then
+			if self.Config.NPC7.Enabled ~= "true" then return end
+		        	    rust.RunServerCommand("" .. self.Config.NPC7.ServerCommand .. " " .. self.Config.NPC7.Option .. " ")
+                            SaveData.NPCData[playerSteamID].Saves7.timestamp = timestamp
+                            SaveData.NPCData[playerSteamID].Saves7.amount = SaveData.NPCData[playerSteamID].Saves7.amount + 1
+                            self:SaveData()
+			if self.Config.NPC7.Messages ~= "true" then return end
+                            player:ChatMessage(self.Config.Messages.NpcUSE7)
+			        return
+                end
+
+	   
+                    if npc:lower() == self.Config.NPC7.PlayerNPCTPName:lower() and self.Config.NPC7.CommandOnPlayer ~= "false" then
+			if self.Config.NPC7.Enabled ~= "true" then return end
+		        	    rust.RunServerCommand("" .. self.Config.NPC7.ServerCommand .. " " .. playerSteamID .. " " .. self.Config.NPC7.Option .. " ")
+                            SaveData.NPCData[playerSteamID].Saves7.timestamp = timestamp
+                            SaveData.NPCData[playerSteamID].Saves7.amount = SaveData.NPCData[playerSteamID].Saves7.amount + 1
+                            self:SaveData()
+			if self.Config.NPC7.Messages ~= "true" then return end
+                            player:ChatMessage(self.Config.Messages.NpcUSE7)
+			        return
+		        end                      
             end
   end
 

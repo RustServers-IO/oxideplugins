@@ -2,7 +2,7 @@
     "name": "AbsolutMarket",
     "description": "Global Trade Menu. Any player can buy and sell items. Simply list it!",
     "author": "{Midgard}Altimus Maximus",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "configuration": true,
     "require": {
         "ImageLibrary": "*"

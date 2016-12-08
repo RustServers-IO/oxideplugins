@@ -10,7 +10,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut", "1.3.0", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut", "1.3.2", ResourceId = 2193)]
 
     class ImageLibrary : RustPlugin
     {
@@ -50,6 +50,7 @@ namespace Oxide.Plugins
             images.SetDataDir(this);
             LoadData();
             GetLocalImages();
+            RefreshImages();
         }
 
         #endregion
@@ -190,6 +191,7 @@ namespace Oxide.Plugins
             timer.Once(10, () =>
             {
                 SaveData();
+                Puts("All Images Refreshed - Plugins requiring ImageLibrary should be reloaded!");
             });
         }
 
@@ -254,7 +256,7 @@ namespace Oxide.Plugins
                     Parent = panel,
                     Components =
                     {
-                        new CuiRawImageComponent {Png = png },
+                        new CuiRawImageComponent {Png = png , Sprite = "assets/content/generic textures/fulltransparent.tga"},
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                 });
@@ -368,6 +370,44 @@ namespace Oxide.Plugins
             {
                 SaveData();
             });
+        }
+
+        [ConsoleCommand("RefreshImages")]
+        private void cmdRefreshImages(ConsoleSystem.Arg arg)
+        {
+            RefreshImages();
+        }
+
+
+        private void RefreshImages()
+        {
+            if (imageData.Images == null || imageData.Images.Count < 1)
+            {
+                Puts("No Images found. Loading new default File");
+                imageData = new ImageData();
+                RefreshAllImages();
+            }
+            Dictionary<string, List<ulong>> existing = new Dictionary<string, List<ulong>>();
+            foreach (var entry in ItemImages)
+                if (imageData.Images.ContainsKey(entry.Key))
+                {
+                    if (!existing.ContainsKey(entry.Key))
+                        existing.Add(entry.Key, new List<ulong>());
+                    foreach (var item in entry.Value)
+                        if (imageData.Images[entry.Key].ContainsKey(item.Key))
+                            if (!existing.ContainsKey(entry.Key))
+                                existing.Add(entry.Key, new List<ulong> { item.Key });
+                            else existing[entry.Key].Add(item.Key);
+                }
+            foreach (var entry in existing)
+                foreach (var item in entry.Value)
+                    imageData.Images[entry.Key].Remove(item);
+            foreach (var entry in ItemImages)
+                foreach (var item in entry.Value)
+                    images.Add(item.Value, entry.Key, item.Key);
+            Puts($"{existing.Count.ToString()} images refreshed");
+            existing.Clear();
+            SaveData();
         }
 
         private Dictionary<string, Dictionary<ulong, string>> ItemImages = new Dictionary<string, Dictionary<ulong, string>>
@@ -1917,89 +1957,109 @@ namespace Oxide.Plugins
             },
             {"bleach", new Dictionary<ulong, string>
             {
-                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/a/ac/Bleach_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045849" },
+                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/a/ac/Bleach_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045849" },
             }
             },
             {"ducttape", new Dictionary<ulong, string>
             {
-                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/f/f8/Duct_Tape_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045924" },
+                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/f/f8/Duct_Tape_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045924" },
             }
             },
             {"propanetank", new Dictionary<ulong, string>
             {
-                {0, "http://vignette4.wikia.nocookie.net/play-rust/images/a/a8/Empty_Propane_Tank_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045920" },
+                {0, "http://vignette4.wikia.nocookie.net/play-rust/images/a/a8/Empty_Propane_Tank_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045920" },
             }
             },
             {"gears", new Dictionary<ulong, string>
             {
-                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/7/72/Gears_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045908" },
+                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/7/72/Gears_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045908" },
             }
             },
             {"glue", new Dictionary<ulong, string>
             {
-                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/6/66/Glue_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045933" },
+                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/6/66/Glue_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045933" },
             }
             },
             {"metalblade", new Dictionary<ulong, string>
             {
-                {0, "http://vignette4.wikia.nocookie.net/play-rust/images/9/9b/Metal_Blade_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045912" },
+                {0, "http://vignette4.wikia.nocookie.net/play-rust/images/9/9b/Metal_Blade_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045912" },
             }
             },
             {"metalpipe", new Dictionary<ulong, string>
             {
-                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/4/4a/Metal_Pipe_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045929" },
+                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/4/4a/Metal_Pipe_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045929" },
             }
             },
             {"metalspring", new Dictionary<ulong, string>
             {
-                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/3/3d/Metal_Spring_icon.png/revision/latest/scale-to-width-down/50?cb=20161101151803" },
+                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/3/3d/Metal_Spring_icon.png/revision/latest/scale-to-width-down/100?cb=20161101151803" },
             }
             },
             {"riflebody", new Dictionary<ulong, string>
             {
-                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/0/08/Rifle_Body_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045853" },
+                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/0/08/Rifle_Body_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045853" },
             }
             },
             {"roadsigns", new Dictionary<ulong, string>
             {
-                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/a/a5/Road_Signs_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045904" },
+                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/a/a5/Road_Signs_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045904" },
             }
             },
             {"rope", new Dictionary<ulong, string>
             {
-                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/1/15/Rope_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045939" },
+                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/1/15/Rope_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045939" },
             }
             },
             {"sewingkit", new Dictionary<ulong, string>
             {
-                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/2/29/Sewing_Kit_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045952" },
+                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/2/29/Sewing_Kit_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045952" },
             }
             },
             {"sheetmetal", new Dictionary<ulong, string>
             {
-                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/3/39/Sheet_Metal_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045901" },
+                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/3/39/Sheet_Metal_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045901" },
             }
             },
             {"smgbody", new Dictionary<ulong, string>
             {
-                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/d/d8/SMG_Body_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045947" },
+                {0, "http://vignette3.wikia.nocookie.net/play-rust/images/d/d8/SMG_Body_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045947" },
             }
             },
             {"sticks", new Dictionary<ulong, string>
             {
-                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/d/d5/Sticks_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045943" },
+                {0, "http://vignette1.wikia.nocookie.net/play-rust/images/d/d5/Sticks_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045943" },
             }
             },
             {"tarp", new Dictionary<ulong, string>
             {
-                {0, "http://vignette4.wikia.nocookie.net/play-rust/images/1/12/Tarp_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045916" },
+                {0, "http://vignette4.wikia.nocookie.net/play-rust/images/1/12/Tarp_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045916" },
             }
             },
             {"techparts", new Dictionary<ulong, string>
             {
-                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/e/eb/Tech_Trash_icon.png/revision/latest/scale-to-width-down/50?cb=20161109045841" },
+                {0, "http://vignette2.wikia.nocookie.net/play-rust/images/e/eb/Tech_Trash_icon.png/revision/latest/scale-to-width-down/100?cb=20161109045841" },
             }
             },
+            {"hazmatsuit", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/3/36/Hazmat_Suit_icon.png/revision/latest/scale-to-width-down/100?cb=20161110200726" }
+            }
+            },
+            {"pistol.m92", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/4/43/M92_Pistol_icon.png/revision/latest/scale-to-width-down/100?cb=20161202144022" }
+            }
+            },
+            {"semibody", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/a/ac/Semi_Automatic_Body_icon.png/revision/latest/scale-to-width-down/100?cb=20161113040709" }
+            }
+            },
+            {"blueprintbase", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette3.wikia.nocookie.net/play-rust/images/8/83/Blueprint_icon.png/revision/latest/scale-to-width-down/100?cb=20160819063752" }
+            }
+            },                   
 };
 
         #endregion
@@ -2026,7 +2086,6 @@ namespace Oxide.Plugins
             }
             catch
             {
-
                 Puts("Couldn't load Image Data, creating new datafile and refreshing Images");
                 imageData = new ImageData();
                 RefreshAllImages();

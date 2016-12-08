@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("TurboGather", "redBDGR", "1.0.4", ResourceId = 2221)]
+    [Info("TurboGather", "redBDGR", "1.0.7", ResourceId = 2221)]
     [Description("Lets players activate a resouce gather boost for a certain amount of time")]
 
     class TurboGather : RustPlugin
@@ -160,7 +160,7 @@ namespace Oxide.Plugins
             if (activateTurboOnHostileAnimalKill == true)
                 Animals.Add("bear"); Animals.Add("wolf");
         }
-        
+
 
         void OnServerSave()
         {
@@ -187,47 +187,34 @@ namespace Oxide.Plugins
             return null;
         }
 
-        void OnEntityDeath (BaseCombatEntity entity, HitInfo info)
+        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
-            if (entity == null) return;
-            if (!info.InitiatorPlayer) return;
+            if (entity == null || info == null || info.Initiator == null || !(info.Initiator is BasePlayer || !entity.isActiveAndEnabled)) return;
             if (permission.UserHasPermission(info.InitiatorPlayer.UserIDString, permissionNameANIMAL))
             {
-                if (entity.ShortPrefabName == "player")
+                if (cacheDictionary.ContainsKey(info.InitiatorPlayer.UserIDString))
                 {
-                    if (Animals.Contains(entity.ShortPrefabName))
+                    if (entity.ShortPrefabName == "player" || entity.ShortPrefabName == "boar" || entity.ShortPrefabName == "stag" || entity.ShortPrefabName == "horse" || entity.ShortPrefabName == "chicken" || entity.ShortPrefabName == "bear" || entity.ShortPrefabName == "wolf")
                     {
-                        BasePlayer player = info.InitiatorPlayer;
-                        if (permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP))
+                        if (Animals.Contains(entity.ShortPrefabName))
+                        {
+                            BasePlayer player = info.InitiatorPlayer;
                             StartAnimalTurbo(player);
+                        }
                     }
-                    else return;
                 }
-
-                else if (entity.ShortPrefabName == "boar" || entity.ShortPrefabName == "stag" || entity.ShortPrefabName == "horse" || entity.ShortPrefabName == "chicken")
+                else
                 {
-                    if (Animals.Contains(entity.ShortPrefabName))
+                    if (entity.ShortPrefabName == "player" || entity.ShortPrefabName == "boar" || entity.ShortPrefabName == "stag" || entity.ShortPrefabName == "horse" || entity.ShortPrefabName == "chicken" || entity.ShortPrefabName == "bear" || entity.ShortPrefabName == "wolf")
                     {
-                        BasePlayer player = info.InitiatorPlayer;
-                        if (permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP))
-                            StartAnimalTurbo(player);
+                        if (Animals.Contains(entity.ShortPrefabName))
+                        {
+                            cacheDictionary.Add(info.InitiatorPlayer.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
+                            StartAnimalTurbo(info.InitiatorPlayer);
+                        }
                     }
-                    else return;
-                }
-
-                else if (entity.ShortPrefabName == "bear" || entity.ShortPrefabName == "wolf")
-                {
-                    if (Animals.Contains(entity.ShortPrefabName))
-                    {
-                        BasePlayer player = info.InitiatorPlayer;
-                        if (permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP))
-                            StartAnimalTurbo(player);
-                    }
-                    else return;
                 }
             }
-            else return;
-
         }
 
         #region Dispenser & Pickups
@@ -298,20 +285,24 @@ namespace Oxide.Plugins
         #region Command
         void StartAnimalTurbo(BasePlayer player)
         {
-            endTime = GrabCurrentTime() + activeTimeANIMAL;
-
-            cacheDictionary[player.UserIDString].turboEnabled = true;
-            cacheDictionary[player.UserIDString].activeAgain = endTime;
-            cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + activeTimeANIMAL;
-
-            SendReply(player, string.Format(msg("BoostStart", player.UserIDString), boostMultiplierANIMAL, activeTimeANIMAL));
-
-            timer.Once(activeTimeANIMAL, () =>
+            if (cacheDictionary.ContainsKey(player.UserIDString))
             {
-                if (player == null) return;
-                cacheDictionary[player.UserIDString].turboEnabled = false;
-                SendReply(player, string.Format(msg("AnimalBoostEnd", player.UserIDString)));
-            });
+                endTime = GrabCurrentTime() + activeTimeANIMAL;
+
+                cacheDictionary[player.UserIDString].turboEnabled = true;
+                cacheDictionary[player.UserIDString].activeAgain = endTime;
+                cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + activeTimeANIMAL;
+
+                SendReply(player, string.Format(msg("BoostStart", player.UserIDString), boostMultiplierANIMAL, activeTimeANIMAL));
+
+                timer.Once(activeTimeANIMAL, () =>
+                {
+                    if (player == null) return;
+                    cacheDictionary[player.UserIDString].turboEnabled = false;
+                    SendReply(player, string.Format(msg("AnimalBoostEnd", player.UserIDString)));
+                });
+            }
+            else return;
         }
 
         void StartTurbo(BasePlayer player)
