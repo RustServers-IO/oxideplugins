@@ -4,12 +4,10 @@
     "author": "",
     "version": "2.0.0",
     "configuration": true,
-    "suggest": {
-        "Spawns": "*"
-    },
     "require": {
         "HumanNPC": "*",
-        "NTeleportation": "*"
+        "NTeleportation": "*",
+        "Spawns": "*"
     },
     "language": "lua",
     "url": "http:\/\/oxidemod.org\/plugins\/npctp.2229",

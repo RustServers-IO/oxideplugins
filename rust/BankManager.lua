@@ -1,7 +1,7 @@
 PLUGIN.Title        = "Bank Manager"
 PLUGIN.Description  = "Allows players to deposit and withdraw items from a bank."
 PLUGIN.Author       = "InSaNe8472"
-PLUGIN.Version      = V(1,1,8)
+PLUGIN.Version      = V(1,1,9)
 PLUGIN.ResourceId   = 1331
 
 local ClanPlugin = "Clans"
@@ -51,6 +51,7 @@ function PLUGIN:LoadDefaultConfig()
 	self.Config.NPC = self.Config.NPC or {}
 	self.Config.Defaults = self.Config.Defaults or {}
 	self.Config.Items = self.Config.Items or {}
+	self.Config.MoneyBank = self.Config.MoneyBank or {}
 	self.Config.Settings.PerformItemCheck = self.Config.Settings.PerformItemCheck or "true"
 	self.Config.Settings.UsePermissions = self.Config.Settings.UsePermissions or "true"
 	self.Config.Settings.GlobalAdminMessage = self.Config.Settings.GlobalAdminMessage or "true"
@@ -90,9 +91,16 @@ function PLUGIN:LoadDefaultConfig()
 	self.Config.NPC.MustInteract = self.Config.NPC.MustInteract or "true"
 	self.Config.NPC.PlayerBankName = self.Config.NPC.PlayerBankName or "Player Bank"
 	self.Config.NPC.ClanBankName = self.Config.NPC.ClanBankName or "Clan Bank"
-	self.Config.NPC.CheckBuildingBlock = self.Config.NPC.CheckBuild or "false"
-	self.Config.NPC.CheckOnGround = self.Config.NPC.CheckGround or "false"
-	self.Config.NPC.CheckRadius = self.Config.NPC.CheckRadius or "false"
+	self.Config.NPC.BuildingBlocked = self.Config.NPC.BuildingBlocked or "false"
+	self.Config.NPC.Ground = self.Config.NPC.Ground or "false"
+	self.Config.NPC.Radius = self.Config.NPC.Radius or "false"
+	self.Config.MoneyBank.Enabled = self.Config.MoneyBank.Enabled or "false"
+	self.Config.MoneyBank.NPCProximity = self.Config.MoneyBank.NPCProximity or "false"
+	self.Config.MoneyBank.PlayerMaxDeposit = self.Config.MoneyBank.PlayerMaxDeposit or "5000"
+	self.Config.MoneyBank.PlayerWithdrawPercent = self.Config.MoneyBank.PlayerWithdrawPercent or "1"
+	self.Config.MoneyBank.ClanMaxDeposit = self.Config.MoneyBank.ClanMaxDeposit or "10000"
+	self.Config.MoneyBank.ClanMemberBank = self.Config.MoneyBank.ClanMemberBank or "false"
+	self.Config.MoneyBank.ClanWithdrawPercent = self.Config.MoneyBank.ClanWithdrawPercent or "1"
 	self.Config.Defaults.ForceUpdate = self.Config.Defaults.ForceUpdate or "false"
 	self.Config.Defaults.Items = self.Config.Defaults.Items or {
 		"Ammunition:0:2:1000:0:2:1000",
@@ -117,7 +125,9 @@ function PLUGIN:LoadDefaultConfig()
 			["PlayerSlotCost"] = "500",
 			["PlayerPercentSlotCost"] = "5",
 			["MaxShare"] = "15",
-			["Items"] = "wood:1:3:2000"
+			["Items"] = "wood:1:3:2000",
+			["PlayerMaxDeposit"] = "8000",
+			["PlayerWithdrawPercent"] = "0"
 		}
 	}
 	if not tonumber(self.Config.Settings.MessageSize) or tonumber(self.Config.Settings.MessageSize) < 1 then self.Config.Settings.MessageSize = "12" end
@@ -142,6 +152,10 @@ function PLUGIN:LoadDefaultConfig()
 	if not tonumber(self.Config.Economics.ClanPercentOpenCost) or tonumber(self.Config.Economics.ClanPercentOpenCost) < 0 then self.Config.Economics.ClanPercentOpenCost = "5" end
 	if not tonumber(self.Config.Economics.ClanSlotCost) or tonumber(self.Config.Economics.ClanSlotCost) < 0 then self.Config.Economics.ClanSlotCost = "2000" end
 	if not tonumber(self.Config.Economics.ClanPercentSlotCost) or tonumber(self.Config.Economics.ClanPercentSlotCost) < 0 then self.Config.Economics.ClanPercentSlotCost = "15" end
+	if not tonumber(self.Config.MoneyBank.PlayerMaxDeposit) or tonumber(self.Config.MoneyBank.PlayerMaxDeposit) < 1 then self.Config.MoneyBank.PlayerMaxDeposit = "5000" end
+	if not tonumber(self.Config.MoneyBank.PlayerWithdrawPercent) or tonumber(self.Config.MoneyBank.PlayerWithdrawPercent) < 0 then self.Config.MoneyBank.PlayerWithdrawPercent = "1" end
+	if not tonumber(self.Config.MoneyBank.ClanMaxDeposit) or tonumber(self.Config.MoneyBank.ClanMaxDeposit) < 1 then self.Config.MoneyBank.ClanMaxDeposit = "10000" end
+	if not tonumber(self.Config.MoneyBank.ClanWithdrawPercent) or tonumber(self.Config.MoneyBank.ClanWithdrawPercent) < 0 then self.Config.MoneyBank.ClanWithdrawPercent = "1" end
 	self:SaveConfig()
 	if self.Config.CustomPermissions then
 		for current, data in pairs(self.Config.CustomPermissions) do
@@ -152,10 +166,11 @@ end
 
 function PLUGIN:LoadDefaultLang()
 	lang.RegisterMessages(util.TableToLangDict({
-		["AdminMenu"] = "\n	<color=#ffd479>/bank toggle <bank | clan | share | npc | economics></color> - Enable or disable bank system\n"..
-		"	<color=#ffd479>/bank admin <bank | clan> <player | clan></color> - Open player or clan bank\n"..
-		"	<color=#ffd479>/bank view <bank | clan> <player | clan></color> - View current player or clan bank slots\n"..
-		"	<color=#ffd479>/bank set <bank | clan> <player | * | clan> <# slots | -/+ #></color> - Set player or clan bank slots",
+		["AdminMenu"] = "\n	<color=#ffd479>/bank toggle <bank | clan | share | npc | economics | money></color> - Enable or disable bank system\n"..
+		"	<color=#ffd479>/bank admin <bank | clan> <player | clan></color> - Open a bank\n"..
+		"	<color=#ffd479>/bank view <bank | clan | money> <player | clan></color> - View bank slots\n"..
+		"	<color=#ffd479>/bank set <bank | clan> <player | * | clan> <# slots | -/+ #></color> - Set bank slots\n"..
+		"	<color=#ffd479>/bank money <balance | set> <bank | clan> <player | clan | [*]> [# amount | -/+ #]</color> - View or set bank balance",
 		["AllClans"] = "All clans",
 		["AllPlayers"] = "All players",
 		["BankBox"] = "This box is a bank owned by another player and cannot be opened or destroyed.",
@@ -175,6 +190,7 @@ function PLUGIN:LoadDefaultLang()
 		["ClanBankOpenedCost"] = "Bank opened for clan <color=#cd422b>{clan}</color>.  Your open cost of <color=#cd422b>${cost}</color> was withdrawn.",
 		["ClanError"] = "An error occured while retrieving your clan information.",
 		["ClanMaxSlots"] = "Clan <color=#ffd479>{clan}</color> already has the maximum or exceed bank slots of <color=#ffd479>{maxslots}</color>.",
+		["ClanMemberBank"] = "Only the clan owner and moderators may access the money bank for your clan.",
 		["ClanMemberBuy"] = "Only the clan owner and moderators may purchase additional bank slots for your clan.",
 		["ClanNoPermission"] = "You do not have permission to access <color=#cd422b>{clan}'s</color> bank.",
 		["ClanOccupied"] = "Clan <color=#cd422b>{clan}'s</color> bank is currently occupied by <color=#cd422b>{player}</color> ({id}).",
@@ -189,6 +205,7 @@ function PLUGIN:LoadDefaultLang()
 		["ForcedClose"] = "Forced close completed successfully.  If an open bank was found, your items have been saved and containers removed.",
 		["GroupClan"] = "clan",
 		["GroupEconomics"] = "economics",
+		["GroupMoney"] = "money bank",
 		["GroupPlayer"] = "player",
 		["GroupShare"] = "sharing",
 		["GroupNPC"] = "npc",
@@ -240,23 +257,42 @@ function PLUGIN:LoadDefaultLang()
 		"	Your Additional Slot Cost: <color=#ffd479>${l8}</color>\n"..
 		"	Your Percentage Cost (new slot): <color=#ffd479>{l9}%</color>\n\n"..
 		"	<color=#cd422b>Clan Bank</color>\n"..
-		"	Initial Bank Slots: <color=#ffd479>{l10}</color>\n"..
-		"	Maximum Bank Slots: <color=#ffd479>{l11}</color>\n"..
-		"	Open Cost: <color=#ffd479>${l12}</color>\n"..
-		"	Percentage Cost (opening): <color=#ffd479>{l13}%</color>\n"..
-		"	Additional Slot Cost: <color=#ffd479>${l14}</color>\n"..
-		"	Percentage Cost (new slot): <color=#ffd479>{l15}%</color>",
+		"	Member Restriction: <color=#ffd479>{l10}</color>\n"..
+		"	Initial Bank Slots: <color=#ffd479>{l11}</color>\n"..
+		"	Maximum Bank Slots: <color=#ffd479>{l12}</color>\n"..
+		"	Open Cost: <color=#ffd479>${l13}</color>\n"..
+		"	Percentage Cost (opening): <color=#ffd479>{l14}%</color>\n"..
+		"	Additional Slot Cost: <color=#ffd479>${l15}</color>\n"..
+		"	Percentage Cost (new slot): <color=#ffd479>{l16}%</color>",
+		["LimitsMoney"] = "\n	Money Bank Enabled: <color=#ffd479>{l1}</color>\n"..
+		"	Bank NPC Proximity: <color=#ffd479>{l2}</color>\n\n"..
+		"	<color=#cd422b>Player Bank</color>\n"..
+		"	Your Maximum Deposit: <color=#ffd479>${l3}</color>\n"..
+		"	Your Percentage Withdraw Cost: <color=#ffd479>{l4}%</color>\n\n"..
+		"	<color=#cd422b>Clan Bank</color>\n"..
+		"	Member Restriction: <color=#ffd479>{l5}</color>\n"..
+		"	Maximum Deposit: <color=#ffd479>${l6}</color>\n"..
+		"	Withdraw Percentage Cost: <color=#ffd479>{l7}%</color>",
+		["LimitsNPC"] = "\n	NPC Enabled: <color=#ffd479>{l1}</color>\n"..
+		"	Must Interact: <color=#ffd479>{l2}</color>\n"..
+		"	Player Bank Name: <color=#ffd479>{l3}</color>\n"..
+		"	Clan Bank Name: <color=#ffd479>{l4}</color>\n"..
+		"	Ground Check: <color=#ffd479>{l5}</color>\n"..
+		"	Building Block: <color=#ffd479>{l6}</color>\n"..
+		"	Player Radius Check: <color=#ffd479>{l7}</color>",
 		["LimitsSystem"] = "\n	Radius Check: <color=#ffd479>{l1}m</color>\n"..
 		"	Ground Check: <color=#ffd479>{l2}</color>\n"..
 		"	Foundation Tier: <color=#ffd479>{l3}</color>\n"..
 		"	Building Block: <color=#ffd479>{l4}</color>",
 		["MaxShare"] = "You may only share your bank with <color=#cd422b>{limit} player(s)</color> at one time.",
-		["Menu"] = "\n	<color=#ffd479>/bank limits <system | bank | clan | economics></color> - View bank limits and configuration\n"..
+		["Menu"] = "\n	<color=#ffd479>/bank limits <system | bank | clan | npc | economics | money></color> - View bank limits and configuration\n"..
 		"	<color=#ffd479>/bank info <item | clan></color> - View item information (first inventory slot) or clan information\n"..
 		"	<color=#ffd479>/bank buy <bank | clan> [# slots]</color> - Buy additional bank slots\n"..
 		"	<color=#ffd479>/bank <bank | clan></color> - Open personal or clan bank\n"..
 		"	<color=#ffd479>/bank close</color> - Manually force bank to close\n"..
-		"	<color=#ffd479>/bank share <player></color> - Open bank of shared player\n"..
+		"	<color=#ffd479>/bank <deposit | withdraw> <bank | clan> <amount></color> - Deposit or withdraw money\n"..
+		"	<color=#ffd479>/bank balance <bank | clan></color> - View money bank balance",
+		["Menu2"] = "\n	<color=#ffd479>/bank share <player></color> - Open bank of shared player\n"..
 		"	<color=#ffd479>/bank add <player></color> - Share your bank with player\n"..
 		"	<color=#ffd479>/bank remove <player></color> - Unshare your bank with player\n"..
 		"	<color=#ffd479>/bank removeall</color> - Unshare your bank with all players\n"..
@@ -265,7 +301,16 @@ function PLUGIN:LoadDefaultLang()
 		["MinClanMembers"] = "Your clan, <color=#cd422b>{clan}</color>, currently has <color=#ffd479>{members} member(s)</color>. You must have minimum <color=#cd422b>{required} members</color> to use clan bank.",
 		["ModGlobalAlert"] = "Administrator has {modify} all {bank} banks by <color=#cd422b>{slots}</color> slot(s).  Does not apply if already at maximum or minimum slots.",
 		["ModPlayerAlert"] = "Administrator has {modify} your bank by <color=#cd422b>{slots}</color> slot(s).  Does not apply if already at maximum or minimum slots.",
+		["ModGlobalAlertBank"] = "Administrator has {modify} all {bank} bank balances by <color=#cd422b>${amount}</color>.",
+		["ModPlayerAlertBank"] = "Administrator has {modify} your bank balance by <color=#cd422b>${amount}</color>.",
+		["ModPlayerBank"] = "{bank} <color=#cd422b>{player}</color> bank balance {modify} by <color=#cd422b>${amount}</color>.",
 		["ModPlayerSlots"] = "{bank} <color=#cd422b>{player}</color> bank slots {modify} by <color=#cd422b>{slots}</color> slot(s).",
+		["MoneyBalance"] = "{bank} <color=#cd422b>{player}</color> currently has <color=#cd422b>${amount}</color> deposited.",
+		["MoneyDeposit"] = "<color=#cd422b>${amount}</color> deposited into bank.",
+		["MoneyMaxDeposit"] = "{bank} <color=#cd422b>{player}</color> has reached maximum deposit of <color=#cd422b>${amount}</color>.",
+		["MoneyInsufficient"] = "You have insufficient money.",
+		["MoneyNumber"] = "You must provide a valid number.",
+		["MoneyWithdraw"] = "<color=#cd422b>${amount}</color> withdrawn from bank.  A <color=#cd422b>{percent}%</color> (${fee}) fee was withdrawn from your main bank or bank storage if insufficient money was available.",
 		["MustInteract"] = "You must interact with a Banking NPC to access your bank.",
 		["NoClan"] = "You do not belong to a clan.",
 		["NoClanExists"] = "Clan <color=#cd422b>{clan}</color> does not exist.",
@@ -297,6 +342,9 @@ function PLUGIN:LoadDefaultLang()
 		["SetGlobalAlert"] = "Administrator has set all {bank} banks to <color=#cd422b>{slots}</color> slot(s).",
 		["SetPlayerAlert"] = "Administrator has set your bank to <color=#cd422b>{slots}</color> slot(s).",
 		["SetPlayerSlots"] = "{bank} <color=#cd422b>{player}</color> bank slots set to <color=#cd422b>{slots}</color>.",
+		["SetGlobalAlertBank"] = "Administrator has set all {bank} bank balances to <color=#cd422b>${amount}</color>.",
+		["SetPlayerAlertBank"] = "Administrator has set your bank balance to <color=#cd422b>${amount}</color>",
+		["SetPlayerBank"] = "{bank} <color=#cd422b>{player}</color> bank balance set to <color=#cd422b>${amount}</color>.",
 		["ShareList"] = "Bank shared with <color=#cd422b>{count} player(s)</color>:\n{players}",
 		["ViewClanSlots"] = "Clan <color=#cd422b>{clan}</color> currently has <color=#cd422b>{slots}</color> bank slot(s).",
 		["ViewPlayerSlots"] = "<color=#cd422b>{player}</color> currently has <color=#cd422b>{slots}</color> bank slot(s).",
@@ -485,6 +533,7 @@ function PLUGIN:GetPlayerData_PS(playerSteamID, addNewEntry)
 	if not playerData and addNewEntry then
 		playerData = {}
 		playerData.Slots = self:GetInitialSlots(1)
+		playerData.Bank = 0
 		playerData.Shared = {}
 		Data_PS[playerSteamID] = playerData
 		self:SaveDataFile(2)
@@ -511,6 +560,7 @@ function PLUGIN:GetPlayerData_CC(clan, addNewEntry)
 		playerData.Config["moderator"] = "true"
 		playerData.Config["member"] = "false"
 		playerData.Slots = self:GetInitialSlots(2)
+		playerData.Bank = 0
 		Data_CC[clan] = playerData
 		self:SaveDataFile(4)
 	end
@@ -526,7 +576,6 @@ function PLUGIN:OnPlayerDisconnected(player)
 		ProximityClan[playerSteamID] = nil
 	end
 	self:ResetPlayerConfig(player)
-	self:ClosePlayerContainers(player)
 end
 
 function PLUGIN:cmdBank(player, cmd, args)
@@ -542,10 +591,11 @@ function PLUGIN:cmdBank(player, cmd, args)
 			self:RustMessage(player, self:Lang(player, "AdminMenu"))
 		end
 		self:RustMessage(player, self:Lang(player, "Menu"))
+		if self:Lang(player, "Menu2") ~= nil then self:RustMessage(player, self:Lang(player, "Menu2")) end
 		return
 		elseif args.Length > 0 then
 		local func = args[0]
-		if func ~= "toggle" and func ~= "admin" and func ~= "view" and func ~= "set" and func ~= "limits" and func ~= "info" and func ~= "buy" and func ~= "confirm" and func ~= "bank" and func ~= "close" and func ~= "clan" and func ~= "share" and func ~= "add" and func ~= "remove" and func ~= "removeall" and func ~= "list" then
+		if func ~= "toggle" and func ~= "admin" and func ~= "view" and func ~= "set" and func ~= "money" and func ~= "limits" and func ~= "info" and func ~= "buy" and func ~= "confirm" and func ~= "bank" and func ~= "close" and func ~= "deposit" and func ~= "withdraw" and func ~= "balance" and func ~= "clan" and func ~= "share" and func ~= "add" and func ~= "remove" and func ~= "removeall" and func ~= "list" then
 			self:RustMessage(player, self:Lang(player, "WrongArgs"))
 			return
 		end
@@ -559,7 +609,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 				return
 			end
 			local sfunc = args[1]
-			if sfunc ~= "bank" and sfunc ~= "clan" and sfunc ~= "share" and sfunc ~= "npc" and sfunc ~= "economics" then
+			if sfunc ~= "bank" and sfunc ~= "clan" and sfunc ~= "share" and sfunc ~= "npc" and sfunc ~= "economics" and sfunc ~= "money" then
 				self:RustMessage(player, self:Lang(player, "WrongArgs"))
 				return
 			end
@@ -624,6 +674,16 @@ function PLUGIN:cmdBank(player, cmd, args)
 					message = FormatMessage(self:Lang(player, "ChangedFeature"), { group = self:Lang(player, "GroupEconomics"), status = self:Lang(player, "Enabled") })
 				end
 			end
+			if sfunc == "money" then
+				if not self:CheckPlugin(player, "economics", 1) then return end
+				if self.Config.MoneyBank.Enabled == "true" then
+					self.Config.MoneyBank.Enabled = "false"
+					message = FormatMessage(self:Lang(player, "ChangedFeature"), { group = self:Lang(player, "GroupMoney"), status = self:Lang(player, "Disabled") })
+					else
+					self.Config.MoneyBank.Enabled = "true"
+					message = FormatMessage(self:Lang(player, "ChangedFeature"), { group = self:Lang(player, "GroupMoney"), status = self:Lang(player, "Enabled") })
+				end
+			end
 			if self.Config.Player.Enabled == "false" and self.Config.Clan.Enabled == "false" then
 				if LocPosTimer then LocPosTimer:Destroy() end
 				else
@@ -638,7 +698,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 				self:RustMessage(player, self:Lang(player, "NoPermission"))
 				return
 			end
-			if args.Length < 2 then
+			if args.Length < 3 then
 				self:RustMessage(player, self:Lang(player, "WrongArgs"))
 				return
 			end
@@ -658,14 +718,15 @@ function PLUGIN:cmdBank(player, cmd, args)
 				if not self:CheckPlugin(player, "clans", 1) then return end
 				if not self:CheckGround(player) then return end
 				if self:CheckRadius(player) then return end
+				local Clan = args[2]
 				local ClanList = clans:Call("GetAllClans")
 				for line in string.gmatch(tostring(ClanList),"\"[^\r\n]+") do
-					if line:gsub("\"", "") == args[2] then
-						self:OpenClanBank(player, 0, 0, args[2])
+					if line:gsub("\"", "") == Clan then
+						self:OpenClanBank(player, 0, 0, Clan)
 						return
 					end
 				end
-				local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = args[2] })
+				local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = Clan })
 				self:RustMessage(player, message)
 			end
 			return
@@ -701,10 +762,11 @@ function PLUGIN:cmdBank(player, cmd, args)
 			end
 			if sfunc == "clan" then
 				if not self:CheckPlugin(player, "clans", 1) then return end
+				local Clan = args[2]
 				local ClanList = clans:Call("GetAllClans")
 				for line in string.gmatch(tostring(ClanList),"\"[^\r\n]+") do
-					if line:gsub("\"", "") == args[2] then
-						local playerData = self:GetPlayerData_CC(args[2], true)
+					if line:gsub("\"", "") == Clan then
+						local playerData = self:GetPlayerData_CC(Clan, true)
 						if playerData.Slots == nil or not playerData.Slots then
 							playerData.Slots = self:GetInitialSlots(2)
 							self:SaveDataFile(4)
@@ -712,12 +774,12 @@ function PLUGIN:cmdBank(player, cmd, args)
 							else
 							PlayerSlots = playerData.Slots
 						end
-						local message = FormatMessage(self:Lang(player, "ViewClanSlots"), { clan = args[2], slots = PlayerSlots })
+						local message = FormatMessage(self:Lang(player, "ViewClanSlots"), { clan = Clan, slots = PlayerSlots })
 						self:RustMessage(player, message)
 						return
 					end
 				end
-				local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = args[2] })
+				local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = Clan })
 				self:RustMessage(player, message)
 			end
 			return
@@ -902,7 +964,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 								return
 							end
 						end
-						local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = args[2] })
+						local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = TargetPlayer })
 						self:RustMessage(player, message)
 					end
 					else
@@ -937,8 +999,260 @@ function PLUGIN:cmdBank(player, cmd, args)
 								return
 							end
 						end
-						local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = args[2] })
+						local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = TargetPlayer })
 						self:RustMessage(player, message)
+					end
+				end
+			end
+			return
+		end
+		if func == "money" then
+			if not permission.UserHasPermission(playerSteamID, "bankmanager.admin") then
+				self:RustMessage(player, self:Lang(player, "NoPermission"))
+				return
+			end
+			if args.Length < 4 then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			local sfunc = args[1]
+			if sfunc ~= "balance" and sfunc ~= "set" then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			local _sfunc = args[2]
+			if _sfunc ~= "bank" and _sfunc ~= "clan" then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			if sfunc == "balance" then
+				if _sfunc == "bank" then
+					local found, targetplayer, targetname, targetid = self:CheckPlayer(player, args[3], "true")
+					if not found then return end
+					local playerData = self:GetPlayerData_PS(targetid, true)
+					if playerData.Bank == nil or not playerData.Bank then
+						playerData.Bank = 0
+						self:SaveDataFile(2)
+					end
+					local message = FormatMessage(self:Lang(player, "MoneyBalance"), { bank = "", player = targetname, amount = comma(tonumber(playerData.Bank)) })
+					self:RustMessage(player, message)
+				end
+				if _sfunc == "clan" then
+					if not self:CheckPlugin(player, "clans", 1) then return end
+					local Clan = args[3]
+					local ClanList = clans:Call("GetAllClans")
+					for line in string.gmatch(tostring(ClanList),"\"[^\r\n]+") do
+						if line:gsub("\"", "") == Clan then
+							local playerData = self:GetPlayerData_CC(Clan, true)
+							if playerData.Bank == nil or not playerData.Bank then
+								playerData.Bank = 0
+								self:SaveDataFile(4)
+							end
+							local message = FormatMessage(self:Lang(player, "MoneyBalance"), { bank = self:Lang(player, "GroupClan"):gsub("^%l", string.upper), player = Clan, amount = comma(tonumber(playerData.Bank)) })
+							self:RustMessage(player, message)
+							return
+						end
+					end
+					local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = Clan })
+					self:RustMessage(player, message)
+				end
+			end
+			if sfunc == "set" then
+				if args.Length < 5 then
+					self:RustMessage(player, self:Lang(player, "WrongArgs"))
+					return
+				end
+				if _sfunc == "bank" then
+					local BankMoney, AddSub, ModBank, Modify = args[4], "1", string.sub(args[4], 1, 1), self:Lang(player, "Decreased")
+					if ModBank == "-" or ModBank == "+" then
+						if ModBank == "+" then
+							AddSub = "2"
+							Modify = self:Lang(player, "Increased")
+						end
+						BankMoney = tonumber(string.sub(BankMoney, 2))
+						if not tonumber(BankMoney) or BankMoney < 1 then
+							self:RustMessage(player, self:Lang(player, "MoneyNumber"))
+							return
+						end
+						local TargetPlayer, NewBankMoney, CurData = args[3]
+						if TargetPlayer == "*" then
+							for current, data in pairs(Data_PS) do
+								if data.Bank then
+									CurData = data.Bank
+									else
+									CurData = 0
+								end
+								if AddSub == "1" then
+									NewBankMoney = CurData - BankMoney
+									else
+									NewBankMoney = CurData + BankMoney
+								end
+								data.Bank = NewBankMoney
+							end
+							self:SaveDataFile(2)
+							if self.Config.Settings.GlobalAdminMessage == "true" then
+								local message = FormatMessage(self:Lang(nil, "ModGlobalAlertBank"), { modify = Modify, bank = self:Lang(nil, "GroupPlayer"), amount = comma(tonumber(BankMoney)) })
+								self:RustBroadcast(message)
+								else
+								local message = FormatMessage(self:Lang(player, "ModPlayerBank"), { bank = "", player = self:Lang(player, "AllPlayers"), modify = Modify, amount = comma(tonumber(BankMoney)) })
+								self:RustMessage(player, message)
+							end
+							else
+							local found, targetplayer, targetname, targetid = self:CheckPlayer(player, TargetPlayer, "true")
+							if not found then return end
+							local playerData = self:GetPlayerData_PS(targetid, true)
+							if playerData.Bank == nil or not playerData.Bank then
+								playerData.Bank = 0
+								self:SaveDataFile(2)
+								CurData = 0
+								else
+								CurData = playerData.Bank
+							end
+							if AddSub == "1" then
+								NewBankMoney = CurData - BankMoney
+								else
+								NewBankMoney = CurData + BankMoney
+							end
+							playerData.Bank = NewBankMoney
+							self:SaveDataFile(2)
+							local message = FormatMessage(self:Lang(player, "ModPlayerBank"), { bank = self:Lang(player, "GroupPlayer"):gsub("^%l", string.upper), player = targetname, modify = Modify, amount = comma(tonumber(BankMoney)) })
+							self:RustMessage(player, message)
+							if targetplayer:IsConnected() then
+								local message = FormatMessage(self:Lang(targetplayer, "ModPlayerAlertBank"), { modify = Modify, amount = comma(tonumber(BankMoney)) })
+								self:RustMessage(targetplayer, message)
+							end
+						end
+						else
+						BankMoney = tonumber(args[4])
+						if not tonumber(BankMoney) or BankMoney < 1 then
+							self:RustMessage(player, self:Lang(player, "MoneyNumber"))
+							return
+						end
+						local TargetPlayer = args[3]
+						if TargetPlayer == "*" then
+							for current, data in pairs(Data_PS) do
+								data.Bank = BankMoney
+							end
+							self:SaveDataFile(2)
+							if self.Config.Settings.GlobalAdminMessage == "true" then
+								local message = FormatMessage(self:Lang(nil, "SetGlobalAlertBank"), { bank = self:Lang(nil, "GroupPlayer"), amount = comma(tonumber(BankMoney)) })
+								self:RustBroadcast(message)
+								else
+								local message = FormatMessage(self:Lang(player, "SetPlayerBank"), { bank = "", player = self:Lang(player, "AllPlayers"), amount = comma(tonumber(BankMoney)) })
+								self:RustMessage(player, message)
+							end
+							else
+							local found, targetplayer, targetname, targetid = self:CheckPlayer(player, TargetPlayer, "true")
+							if not found then return end
+							local playerData = self:GetPlayerData_PS(targetid, true)
+							playerData.Bank = BankMoney
+							self:SaveDataFile(2)
+							local message = FormatMessage(self:Lang(player, "SetPlayerBank"), { bank = self:Lang(player, "GroupPlayer"):gsub("^%l", string.upper), player = targetname, amount = comma(tonumber(BankMoney)) })
+							self:RustMessage(player, message)
+							if targetplayer:IsConnected() then
+								local message = FormatMessage(self:Lang(targetplayer, "SetPlayerAlertBank"), { amount = comma(tonumber(BankMoney)) })
+								self:RustMessage(targetplayer, message)
+							end
+						end
+					end
+				end
+				if _sfunc == "clan" then
+					if not self:CheckPlugin(player, "clans", 1) then return end
+					local BankMoney, AddSub, ModSlots, Modify = args[4], "1", string.sub(args[4], 1, 1), self:Lang(player, "Decreased")
+					if ModSlots == "-" or ModSlots == "+" then
+						if ModSlots == "+" then
+							AddSub = "2"
+							Modify = self:Lang(player, "Increased")
+						end
+						BankMoney = tonumber(string.sub(BankMoney, 2))
+						if not tonumber(BankMoney) or BankMoney < 1 then
+							self:RustMessage(player, self:Lang(player, "MoneyNumber"))
+							return
+						end
+						local TargetPlayer, NewBankMoney, CurData = args[3]
+						if TargetPlayer == "*" then
+							for current, data in pairs(Data_CC) do
+								if data.Bank then
+									CurData = data.Bank
+									else
+									CurData = 0
+								end
+								if AddSub == "1" then
+									NewBankMoney = CurData - BankMoney
+									else
+									NewBankMoney = CurData + BankMoney
+								end
+								data.Bank = NewBankMoney
+							end
+							self:SaveDataFile(4)
+							if self.Config.Settings.GlobalAdminMessage == "true" then
+								local message = FormatMessage(self:Lang(nil, "ModGlobalAlertBank"), { modify = Modify, bank = self:Lang(nil, "GroupClan"), amount = comma(tonumber(BankMoney)) })
+								self:RustBroadcast(message)
+								else
+								local message = FormatMessage(self:Lang(player, "ModPlayerBank"), { bank = "", player = self:Lang(player, "AllClans"), modify = Modify, amount = comma(tonumber(BankMoney)) })
+								self:RustMessage(player, message)
+							end
+							else
+							local ClanList = clans:Call("GetAllClans")
+							for line in string.gmatch(tostring(ClanList),"\"[^\r\n]+") do
+								if line:gsub("\"", "") == TargetPlayer then
+									local playerData = self:GetPlayerData_CC(TargetPlayer, true)
+									if playerData.Bank == nil or not playerData.Bank then
+										playerData.Bank = 0
+										self:SaveDataFile(4)
+										CurData = 0
+										else
+										CurData = playerData.Bank
+									end
+									if AddSub == "1" then
+										NewBankMoney = CurData - BankMoney
+										else
+										NewBankMoney = CurData + BankMoney
+									end
+									playerData.Bank = NewBankMoney
+									self:SaveDataFile(4)
+									local message = FormatMessage(self:Lang(player, "ModPlayerBank"), { bank = self:Lang(player, "GroupClan"):gsub("^%l", string.upper), player = TargetPlayer, modify = Modify, amount = comma(tonumber(BankMoney)) })
+									self:RustMessage(player, message)
+									return
+								end
+							end
+							local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = TargetPlayer })
+							self:RustMessage(player, message)
+						end
+						else
+						BankMoney = tonumber(args[4])
+						if not tonumber(BankMoney) or BankMoney < 1 then
+							self:RustMessage(player, self:Lang(player, "MoneyNumber"))
+							return
+						end
+						local TargetPlayer = args[3]
+						if TargetPlayer == "*" then
+							for current, data in pairs(Data_CC) do
+								data.Bank = BankMoney
+							end
+							self:SaveDataFile(4)
+							if self.Config.Settings.GlobalAdminMessage == "true" then
+								local message = FormatMessage(self:Lang(nil, "SetGlobalAlertBank"), { bank = self:Lang(nil, "GroupClan"), amount = comma(tonumber(BankMoney)) })
+								self:RustBroadcast(message)
+								else
+								local message = FormatMessage(self:Lang(player, "SetPlayerBank"), { bank = "", player = self:Lang(player, "AllClans"), amount = comma(tonumber(BankMoney)) })
+								self:RustMessage(player, message)
+							end
+							else
+							local ClanList = clans:Call("GetAllClans")
+							for line in string.gmatch(tostring(ClanList),"\"[^\r\n]+") do
+								if line:gsub("\"", "") == TargetPlayer then
+									local playerData = self:GetPlayerData_CC(TargetPlayer, true)
+									playerData.Bank = BankMoney
+									self:SaveDataFile(4)
+									local message = FormatMessage(self:Lang(player, "SetPlayerBank"), { bank = self:Lang(player, "GroupClan"):gsub("^%l", string.upper), player = TargetPlayer, amount = comma(tonumber(BankMoney)) })
+									self:RustMessage(player, message)
+									return
+								end
+							end
+							local message = FormatMessage(self:Lang(player, "NoClanExists"), { clan = TargetPlayer })
+							self:RustMessage(player, message)
+						end
 					end
 				end
 			end
@@ -950,7 +1264,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 				return
 			end
 			local sfunc = args[1]
-			if sfunc ~= "system" and sfunc ~= "bank" and sfunc ~= "clan" and sfunc ~= "economics" then
+			if sfunc ~= "system" and sfunc ~= "bank" and sfunc ~= "clan" and sfunc ~= "npc" and sfunc ~= "economics" and sfunc ~= "money" then
 				self:RustMessage(player, self:Lang(player, "WrongArgs"))
 				return
 			end
@@ -960,13 +1274,17 @@ function PLUGIN:cmdBank(player, cmd, args)
 			end
 			if sfunc == "bank" then
 				local MaxShare = self.Config.Player.MaxShare
-				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(playerSteamID)
+				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
 				if found then MaxShare = CustomMaxShare end
 				local message = FormatMessage(self:Lang(player, "LimitsBank"), { l1 = self.Config.Player.Enabled, l2 = self.Config.Player.ShareEnabled, l3 = self.Config.Player.DefaultSlots, l4 = MaxShare, l5 = self.Config.Player.KeepDurability, l6 = self.Config.Player.Cooldown })
 				self:RustMessage(player, message)
 			end
 			if sfunc == "clan" then
 				local message = FormatMessage(self:Lang(player, "LimitsClan"), { l1 = self.Config.Clan.Enabled, l2 = self.Config.Clan.DefaultSlots, l3 = self.Config.Clan.MinMembers, l4 = self.Config.Clan.KeepDurability, l5 = self.Config.Clan.Cooldown })
+				self:RustMessage(player, message)
+			end
+			if sfunc == "npc" then
+				local message = FormatMessage(self:Lang(player, "LimitsNPC"), { l1 = self.Config.NPC.Enabled, l2 = self.Config.NPC.MustInteract, l3 = self.Config.NPC.PlayerBankName, l4 = self.Config.NPC.ClanBankName, l5 = self.Config.NPC.Ground, l6 = self.Config.NPC.BuildingBlocked, l7 = self.Config.NPC.Radius })
 				self:RustMessage(player, message)
 			end
 			if sfunc == "economics" then
@@ -976,7 +1294,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 				local PlayerPercentOpenCost = self.Config.Economics.PlayerPercentOpenCost
 				local PlayerSlotCost = self.Config.Economics.PlayerSlotCost
 				local PlayerPercentSlotCost = self.Config.Economics.PlayerPercentSlotCost
-				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(playerSteamID)
+				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
 				if found then
 					PlayerMaxSlots = CustomPlayerMaxSlots
 					PlayerOpenCost = CustomPlayerOpenCost
@@ -984,7 +1302,18 @@ function PLUGIN:cmdBank(player, cmd, args)
 					PlayerSlotCost = CustomPlayerSlotCost
 					PlayerPercentSlotCost = CustomPlayerPercentSlotCost
 				end
-				local message = FormatMessage(self:Lang(player, "LimitsEconomics"), { l1 = self.Config.Economics.Enabled, l2 = self.Config.Economics.Confirmation, l3 = self.Config.Economics.ConfirmExpire, l4 = self.Config.Economics.PlayerInitialSlots, l5 = PlayerMaxSlots, l6 = comma(tonumber(PlayerOpenCost)), l7 = comma(tonumber(PlayerPercentOpenCost)), l8 = PlayerSlotCost, l9 = PlayerPercentSlotCost, l10 = self.Config.Economics.ClanInitialSlots, l11 = self.Config.Economics.ClanMaxSlots, l12 = comma(tonumber(self.Config.Economics.ClanOpenCost)), l13 = comma(tonumber(self.Config.Economics.ClanPercentOpenCost)), l14 = self.Config.Economics.ClanSlotCost, l15 = self.Config.Economics.ClanPercentSlotCost })
+				local message = FormatMessage(self:Lang(player, "LimitsEconomics"), { l1 = self.Config.Economics.Enabled, l2 = self.Config.Economics.Confirmation, l3 = self.Config.Economics.ConfirmExpire, l4 = self.Config.Economics.PlayerInitialSlots, l5 = PlayerMaxSlots, l6 = comma(tonumber(PlayerOpenCost)), l7 = comma(tonumber(PlayerPercentOpenCost)), l8 = PlayerSlotCost, l9 = PlayerPercentSlotCost, l10 = self.Config.Economics.ClanMemberBuy, l11 = self.Config.Economics.ClanInitialSlots, l12 = self.Config.Economics.ClanMaxSlots, l13 = comma(tonumber(self.Config.Economics.ClanOpenCost)), l14 = comma(tonumber(self.Config.Economics.ClanPercentOpenCost)), l15 = self.Config.Economics.ClanSlotCost, l16 = self.Config.Economics.ClanPercentSlotCost })
+				self:RustMessage(player, message)
+			end
+			if sfunc == "money" then
+				local PlayerMaxDeposit = self.Config.MoneyBank.PlayerMaxDeposit
+				local PlayerWithdrawPercent = self.Config.MoneyBank.PlayerWithdrawPercent
+				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
+				if found then
+					PlayerMaxDeposit = CustomPlayerMaxDeposit
+					PlayerWithdrawPercent = CustomPlayerWithdrawPercent
+				end
+				local message = FormatMessage(self:Lang(player, "LimitsMoney"), { l1 = self.Config.MoneyBank.Enabled, l2 = self.Config.MoneyBank.NPCProximity, l3 = comma(tonumber(PlayerMaxDeposit)), l4 = PlayerWithdrawPercent, l5 = self.Config.MoneyBank.ClanMemberBank, l6 = comma(tonumber(self.Config.MoneyBank.ClanMaxDeposit)), l7 = self.Config.MoneyBank.ClanWithdrawPercent })
 				self:RustMessage(player, message)
 			end
 			return
@@ -1001,20 +1330,13 @@ function PLUGIN:cmdBank(player, cmd, args)
 			end
 			if sfunc == "item" then
 				local FindItemInfo
-				local mainInv = player.inventory.containerMain
-				local mainItems = mainInv.itemList:GetEnumerator()
-				while mainItems:MoveNext() do
-					if mainItems.Current.position == 0 then
-						FindItemInfo = mainItems.Current.info.shortname
-						break
-					end
-				end
+				if player.inventory.containerMain:GetSlot(0) then FindItemInfo = player.inventory.containerMain:GetSlot(0).info.shortname end
 				if not FindItemInfo then
 					self:RustMessage(player, self:Lang(player, "NoItem"))
 					return
 				end
 				local FindItem = true
-				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(playerSteamID)
+				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
 				local id, bnk, maxd, maxs, id_, bnk_, maxd_, maxs_, _bnk, _maxd, _maxs
 				if found and CustomItems[1] then
 					local i = 1
@@ -1099,7 +1421,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 				end
 				local Cost = tonumber(self.Config.Economics.PlayerSlotCost)
 				local UpCost = tonumber(self.Config.Economics.PlayerPercentSlotCost)
-				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(playerSteamID)
+				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
 				if found then
 					Cost = tonumber(CustomPlayerSlotCost)
 					UpCost = tonumber(CustomPlayerPercentSlotCost)
@@ -1348,6 +1670,238 @@ function PLUGIN:cmdBank(player, cmd, args)
 			self:RustMessage(player, self:Lang(player, "ForcedClose"))
 			return
 		end
+		if func == "deposit" then
+			if not self:CheckPlugin(player, "economics", 1) then return end
+			if self.Config.MoneyBank.Enabled ~= "true" then
+				local message = FormatMessage(self:Lang(player, "NotEnabled"), { group = self:Lang(player, "GroupMoney") })
+				self:RustMessage(player, message)
+				return
+			end
+			if args.Length < 3 then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			local sfunc = args[1]
+			if sfunc ~= "bank" and sfunc ~= "clan" then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			if self.Config.MoneyBank.NPCProximity == "true" then
+				if sfunc == "bank" then
+					if not self:CheckProximity(player, 1) then
+						return
+					end
+				end
+				if sfunc == "clan" then
+					if not self:CheckProximity(player, 2) then
+						return
+					end
+				end
+			end
+			local Amount = args[2]
+			if not tonumber(Amount) or tonumber(Amount) <= 0 then
+				self:RustMessage(player, self:Lang(player, "MoneyNumber"))
+				return
+			end
+			local playerData, MaxDep, found, playerClan, playerGroup, count
+			if sfunc == "bank" then
+				playerData = self:GetPlayerData_PS(playerSteamID, true)
+				if playerData.Bank == nil or not playerData.Bank then
+					playerData.Bank = 0
+					self:SaveDataFile(2)
+				end
+				MaxDep = tonumber(self.Config.MoneyBank.PlayerMaxDeposit)
+				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
+				if found then MaxDep = CustomPlayerMaxDeposit end
+			end
+			if sfunc == "clan" then
+				found, playerClan, playerGroup, count = self:GetClanMember(player)
+				if not found then return end
+				if self.Config.MoneyBank.ClanMemberBank ~= "true" then
+					if playerGroup ~= "owner" and playerGroup ~= "moderator" then
+						self:RustMessage(player, self:Lang(player, "ClanMemberBank"))
+						return
+					end
+				end
+				playerData = self:GetPlayerData_CC(playerClan, true)
+				if playerData.Bank == nil or not playerData.Bank then
+					playerData.Bank = 0
+					self:SaveDataFile(4)
+				end
+				MaxDep = tonumber(self.Config.MoneyBank.ClanMaxDeposit)
+			end
+			if tonumber(playerData.Bank) >= tonumber(MaxDep) then
+				local message
+				if sfunc == "bank" then message = FormatMessage(self:Lang(player, "MoneyMaxDeposit"), { bank = "", player = player.displayName, amount = comma(tonumber(MaxDep)) }) end
+				if sfunc == "clan" then message = FormatMessage(self:Lang(player, "MoneyMaxDeposit"), { bank = self:Lang(player, "GroupClan"):gsub("^%l", string.upper), player = playerClan, amount = comma(tonumber(MaxDep)) }) end
+				self:RustMessage(player, message)
+				return
+			end
+			local Money = self:EconomicsMoney(player)
+			if tonumber(Money) == 0 then
+				self:RustMessage(player, self:Lang(player, "MoneyInsufficient"))
+				return
+			end
+			if tonumber(Amount) > tonumber(Money) then
+				Amount = Money
+			end
+			local MaxNum = tonumber(playerData.Bank) + tonumber(Amount)
+			if tonumber(MaxNum) > tonumber(MaxDep) then
+				Amount = tonumber(MaxDep) - tonumber(playerData.Bank)
+			end
+			self:EconomicsWithdraw(player, tonumber(Amount))
+			playerData.Bank = tonumber(playerData.Bank) + tonumber(Amount)
+			if sfunc == "bank" then self:SaveDataFile(2) end
+			if sfunc == "clan" then self:SaveDataFile(4) end
+			local message = FormatMessage(self:Lang(player, "MoneyDeposit"), { amount = comma(tonumber(Amount)) })
+			self:RustMessage(player, message)
+			return
+		end
+		if func == "withdraw" then
+			if not self:CheckPlugin(player, "economics", 1) then return end
+			if self.Config.MoneyBank.Enabled ~= "true" then
+				local message = FormatMessage(self:Lang(player, "NotEnabled"), { group = self:Lang(player, "GroupMoney") })
+				self:RustMessage(player, message)
+				return
+			end
+			if args.Length < 3 then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			local sfunc = args[1]
+			if sfunc ~= "bank" and sfunc ~= "clan" then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			if self.Config.MoneyBank.NPCProximity == "true" then
+				if sfunc == "bank" then
+					if not self:CheckProximity(player, 1) then
+						return
+					end
+				end
+				if sfunc == "clan" then
+					if not self:CheckProximity(player, 2) then
+						return
+					end
+				end
+			end
+			local Amount = args[2]
+			if not tonumber(Amount) or tonumber(Amount) <= 0 then
+				self:RustMessage(player, self:Lang(player, "MoneyNumber"))
+				return
+			end
+			local playerData
+			if sfunc == "bank" then
+				playerData = self:GetPlayerData_PS(playerSteamID, true)
+				if playerData.Bank == nil or not playerData.Bank then
+					playerData.Bank = 0
+					self:SaveDataFile(2)
+				end
+			end
+			if sfunc == "clan" then
+				local found, playerClan, playerGroup, count = self:GetClanMember(player)
+				if not found then return end
+				if self.Config.MoneyBank.ClanMemberBank ~= "true" then
+					if playerGroup ~= "owner" and playerGroup ~= "moderator" then
+						self:RustMessage(player, self:Lang(player, "ClanMemberBank"))
+						return
+					end
+				end
+				playerData = self:GetPlayerData_CC(playerClan, true)
+				if playerData.Bank == nil or not playerData.Bank then
+					playerData.Bank = 0
+					self:SaveDataFile(4)
+				end
+			end
+			if tonumber(playerData.Bank) == 0 then
+				self:RustMessage(player, self:Lang(player, "MoneyInsufficient"))
+				return
+			end
+			if tonumber(Amount) > tonumber(playerData.Bank) then
+				Amount = playerData.Bank
+			end
+			local WithdrawFee = 0
+			if not permission.UserHasPermission(playerSteamID, "bankmanager.admin") then
+				if sfunc == "bank" then
+					local Fee = tonumber(self.Config.MoneyBank.PlayerWithdrawPercent)
+					local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
+					if found then Fee = CustomPlayerWithdrawPercent end
+					if tonumber(Fee) > 0 then
+						WithdrawFee = tonumber(Amount) / 100 * tonumber(Fee)
+					end
+				end
+				if sfunc == "clan" then
+					if tonumber(self.Config.MoneyBank.ClanWithdrawPercent) > 0 then
+						WithdrawFee = tonumber(Amount) / 100 * tonumber(self.Config.MoneyBank.ClanWithdrawPercent)
+					end
+				end
+				if WithdrawFee > 0 then
+					if sfunc == "bank" then
+						local Money = self:EconomicsMoney(player)
+						if tonumber(Money) >= tonumber(WithdrawFee) then
+							self:EconomicsWithdraw(player, tonumber(WithdrawFee))
+							else
+							playerData.Bank = tonumber(playerData.Bank) - tonumber(WithdrawFee)
+						end
+					end
+					if sfunc == "clan" then
+						playerData.Bank = tonumber(playerData.Bank) - tonumber(WithdrawFee)
+					end
+				end
+			end
+			self:EconomicsDeposit(player, tonumber(Amount))
+			playerData.Bank = tonumber(playerData.Bank) - tonumber(Amount)
+			local FeeType = 0
+			if sfunc == "bank" then
+				if not permission.UserHasPermission(playerSteamID, "bankmanager.admin") then
+					FeeType = self.Config.MoneyBank.PlayerWithdrawPercent
+					local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
+					if found then FeeType = CustomPlayerWithdrawPercent end
+				end
+				self:SaveDataFile(2)
+			end
+			if sfunc == "clan" then
+				if not permission.UserHasPermission(playerSteamID, "bankmanager.admin") then
+					FeeType = self.Config.MoneyBank.ClanWithdrawPercent
+				end
+				self:SaveDataFile(4)
+			end
+			local message = FormatMessage(self:Lang(player, "MoneyWithdraw"), { amount = comma(tonumber(Amount)), percent = FeeType, fee = WithdrawFee })
+			self:RustMessage(player, message)
+			return
+		end
+		if func == "balance" then
+			if args.Length < 2 then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			local sfunc = args[1]
+			if sfunc ~= "bank" and sfunc ~= "clan" then
+				self:RustMessage(player, self:Lang(player, "WrongArgs"))
+				return
+			end
+			if sfunc == "bank" then
+				local playerData = self:GetPlayerData_PS(playerSteamID, true)
+				if playerData.Bank == nil or not playerData.Bank then
+					playerData.Bank = 0
+					self:SaveDataFile(2)
+				end
+				local message = FormatMessage(self:Lang(player, "MoneyBalance"), { bank = "", player = player.displayName, amount = comma(tonumber(playerData.Bank)) })
+				self:RustMessage(player, message)
+			end
+			if sfunc == "clan" then
+				local found, playerClan, playerGroup, count = self:GetClanMember(player)
+				if not found then return end
+				local playerData = self:GetPlayerData_CC(playerClan, true)
+				if playerData.Bank == nil or not playerData.Bank then
+					playerData.Bank = 0
+					self:SaveDataFile(4)
+				end
+				local message = FormatMessage(self:Lang(player, "MoneyBalance"), { bank = self:Lang(player, "GroupClan"):gsub("^%l", string.upper), player = playerClan, amount = comma(tonumber(playerData.Bank)) })
+				self:RustMessage(player, message)
+			end
+			return
+		end
 		if func == "share" then
 			if self.Config.Player.ShareEnabled ~= "true" then
 				self:RustMessage(player, self:Lang(player, "NotShareEnabled"))
@@ -1391,7 +1945,7 @@ function PLUGIN:cmdBank(player, cmd, args)
 			local playerData = self:GetPlayerData_PS(playerSteamID, true)
 			if not permission.UserHasPermission(playerSteamID, "bankmanager.admin") then
 				local MaxShare = self.Config.Player.MaxShare
-				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(playerSteamID)
+				local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
 				if found then MaxShare = CustomMaxShare end
 				if tonumber(#playerData.Shared) >= tonumber(MaxShare) then
 					local message = FormatMessage(self:Lang(player, "MaxShare"), { limit = MaxShare })
@@ -1503,7 +2057,7 @@ function PLUGIN:OpenPlayerBank(player, target)
 		if not permission.UserHasPermission(playerSteamID, "bankmanager.admin") then
 			Cost = tonumber(self.Config.Economics.PlayerOpenCost)
 			local UpCost = tonumber(self.Config.Economics.PlayerPercentOpenCost)
-			local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(playerSteamID)
+			local found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(playerSteamID)
 			if found then
 				Cost = tonumber(CustomPlayerOpenCost)
 				UpCost = tonumber(CustomPlayerPercentOpenCost)
@@ -1574,8 +2128,7 @@ function PLUGIN:OpenPlayerBank(player, target)
 				end
 			end
 		end
-		local loot = box:GetComponent("StorageContainer")
-		loot:PlayerOpenLoot(player)
+		box:PlayerOpenLoot(player)
 		local message
 		if self.Config.Economics.Enabled == "true" and self:CheckPlugin(player, "economics", 0) then
 			message = FormatMessage(self:Lang(player, "BankOpenedCost"), { player = target.displayName, cost = comma(tonumber(Cost)) })
@@ -1688,8 +2241,7 @@ function PLUGIN:OpenClanBank(player, clan, group, call)
 				item:MoveToContainer(loot, data.pos)
 			end
 		end
-		local loot = box:GetComponent("StorageContainer")
-		loot:PlayerOpenLoot(player)
+		box:PlayerOpenLoot(player)
 		local message
 		if self.Config.Economics.Enabled == "true" and self:CheckPlugin(player, "economics", 0) then
 			message = FormatMessage(self:Lang(player, "ClanBankOpenedCost"), { clan = playerClan, cost = comma(tonumber(Cost)) })
@@ -1708,16 +2260,16 @@ function PLUGIN:SaveBank(player, call, destroyed)
 		local TargetName, SteamID = "", playerSteamID
 		if Shared[playerSteamID] then
 			TargetName, SteamID = tostring(Shared[playerSteamID]):match("([^:]+):([^:]+)")
-			found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(SteamID)
+			found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(SteamID)
 			else
-			found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems = self:CheckCustomPermission(SteamID)
+			found, CustomPlayerMaxSlots, CustomPlayerOpenCost, CustomPlayerPercentOpenCost, CustomPlayerSlotCost, CustomPlayerPercentSlotCost, CustomMaxShare, CustomItems, CustomPlayerMaxDeposit, CustomPlayerWithdrawPercent = self:CheckCustomPermission(SteamID)
 		end
 		playerData = self:GetPlayerData_PB(SteamID, true)
-		box = Bank[playerSteamID]:GetComponent("StorageContainer")
+		box = Bank[playerSteamID]
 		else
 		playerClan = ClanName[playerSteamID]
 		playerData = self:GetPlayerData_CB(playerClan, true)
-		box = ClanBank[playerSteamID]:GetComponent("StorageContainer")
+		box = ClanBank[playerSteamID]
 	end
 	if #playerData.Bank > 0 then playerData.Bank = {} end
 	local loot = box.inventory.itemList:GetEnumerator()
@@ -1788,7 +2340,7 @@ function PLUGIN:SaveBank(player, call, destroyed)
 				local Stack = loot.Current.amount
 				if not permission.UserHasPermission(playerSteamID, "bankmanager.admin") then
 					if tonumber(loot.Current.amount) > tonumber(MaxStk) then
-						if not string.match(Returned, "5") then Returned = Returned.."4" end
+						if not string.match(Returned, "4") then Returned = Returned.."4" end
 						Stack = tonumber(MaxStk)
 						local item = self:SpawnItem(loot.Current.info.itemid, (loot.Current.amount - tonumber(MaxStk)))
 						if not item:MoveToContainer(player.inventory.containerMain, -1) then
@@ -1940,10 +2492,10 @@ function PLUGIN:OnEntityDeath(entity, info)
 			local playerSteamID = rust.UserIDFromPlayer(players.Current)
 			if playerSteamID == SteamID then
 				if Bank[SteamID] or ClanBank[SteamID] then
-				if Bank[SteamID] then self:SaveBank(players.Current, 1, "true") end
-				if ClanBank[SteamID] then self:SaveBank(players.Current, 2, "true") end
-				else
-				self:ResetPlayerConfig(players.Current)
+					if Bank[SteamID] then self:SaveBank(players.Current, 1, "true") end
+					if ClanBank[SteamID] then self:SaveBank(players.Current, 2, "true") end
+					else
+					self:ResetPlayerConfig(players.Current)
 				end
 				entity.inventory.itemList:Clear()
 				return
@@ -2035,7 +2587,7 @@ function PLUGIN:CheckPlayer(player, target, admin)
 	local targetSteamID = rust.UserIDFromPlayer(target)
 	local playerSteamID = rust.UserIDFromPlayer(player)
 	if playerSteamID == targetSteamID then
-		self:RustMessage(player, self:Lang(player, "Self"))
+		self:RustMessage(player, self:Lang(player, "Self")) --
 		return false
 	end
 	if admin == "false" then
@@ -2053,6 +2605,7 @@ function PLUGIN:SpawnItem(ItemID, SpawnAmt)
 end
 
 function PLUGIN:GetClanMember(player)
+	if not self:CheckPlugin(player, "clans", 0) then return false end
 	local playerSteamID = rust.UserIDFromPlayer(player)
 	local playerClan = clans:Call("GetClanOf", playerSteamID)
 	if playerClan then
@@ -2086,7 +2639,7 @@ function PLUGIN:CheckCustomPermission(playerSteamID)
 	if self.Config.CustomPermissions then
 		for current, data in pairs(self.Config.CustomPermissions) do
 			if permission.UserHasPermission(playerSteamID, data.Permission) then
-				return true, data.PlayerMaxSlots, data.PlayerOpenCost, data.PlayerPercentOpenCost, data.PlayerSlotCost, data.PlayerPercentSlotCost, data.MaxShare, data.Items
+				return true, data.PlayerMaxSlots, data.PlayerOpenCost, data.PlayerPercentOpenCost, data.PlayerSlotCost, data.PlayerPercentSlotCost, data.MaxShare, data.Items, data.PlayerMaxDeposit, data.PlayerWithdrawPercent
 			end
 		end
 	end
@@ -2204,6 +2757,10 @@ function PLUGIN:CheckPlugin(player, plugin, call)
 				self.Config.Economics.Enabled = "false"
 				self:SaveConfig()
 			end
+			if self.Config.MoneyBank.Enabled == "true" then
+				self.Config.MoneyBank.Enabled = "false"
+				self:SaveConfig()
+			end
 			if call == 1 then
 				local message = FormatMessage(self:Lang(player, "NoPlugin"), { plugin = EconomicsPlugin })
 				self:RustMessage(player, message)
@@ -2236,6 +2793,12 @@ function PLUGIN:EconomicsMoney(player)
 	if not self:CheckPlugin(player, "economics", 1) then return end
 	local playerSteamID = rust.UserIDFromPlayer(player)
 	return economics:Call("GetPlayerMoney", playerSteamID)
+end
+
+function PLUGIN:EconomicsDeposit(player, cost)
+	if not self:CheckPlugin(player, "economics", 1) then return end
+	local playerSteamID = rust.UserIDFromPlayer(player)
+	economics:Call("DepositS", playerSteamID, cost)
 end
 
 function PLUGIN:EconomicsWithdraw(player, cost)
@@ -2290,13 +2853,13 @@ function PLUGIN:OnUseNPC(npc, player)
 				return
 			end
 			if not self:CheckCooldown(player, 1) then return end
-			if self.Config.NPC.CheckBuildingBlock == "true" then
+			if self.Config.NPC.BuildingBlocked == "true" then
 				if self:CheckBuildingBlock(player) then return end
 			end
-			if self.Config.NPC.CheckOnGround == "true" then
+			if self.Config.NPC.Ground == "true" then
 				if not self:CheckGround(player) then return end
 			end
-			if self.Config.NPC.CheckRadius == "true" then
+			if self.Config.NPC.Radius == "true" then
 				if self:CheckRadius(player) then return end
 			end
 			self:OpenPlayerBank(player, player)
@@ -2311,13 +2874,13 @@ function PLUGIN:OnUseNPC(npc, player)
 				return
 			end
 			if not self:CheckCooldown(player, 2) then return end
-			if self.Config.NPC.CheckBuildingBlock == "true" then
+			if self.Config.NPC.BuildingBlocked == "true" then
 				if self:CheckBuildingBlock(player) then return end
 			end
-			if self.Config.NPC.CheckOnGround == "true" then
+			if self.Config.NPC.Ground == "true" then
 				if not self:CheckGround(player) then return end
 			end
-			if self.Config.NPC.CheckRadius == "true" then
+			if self.Config.NPC.Radius == "true" then
 				if self:CheckRadius(player) then return end
 			end
 			local found, playerClan, playerGroup, count = self:GetClanMember(player)

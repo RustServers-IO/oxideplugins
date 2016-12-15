@@ -2,7 +2,7 @@
     "name": "TruePVE",
     "description": "Better PVE implementation",
     "author": "ignignokt84",
-    "version": "0.4.8",
+    "version": "0.4.9",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/truepve.1789",

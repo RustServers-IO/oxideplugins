@@ -1,0 +1,16 @@
+{
+    "name": "HooksExtended",
+    "description": "Over 100 new hooks to reduce boiler-plate and save time",
+    "author": "Calytic",
+    "version": "0.0.11",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hooksextended.2239",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

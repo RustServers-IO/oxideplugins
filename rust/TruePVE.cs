@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.4.8", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.4.9", ResourceId = 1789)]
 	class TruePVE : RustPlugin
 	{
 		private TruePVEData data = new TruePVEData();
@@ -59,6 +59,7 @@ namespace Oxide.Plugins
 				{"Error_NoSuicide", "You are not allowed to commit suicide"},
 				{"Error_NoLootCorpse", "You are not allowed to loot another player's corpse"},
 				{"Error_NoLootSleeper", "You are not allowed to loot sleeping players"},
+				{"Error_NoEntityFound", "No entity found"},
 				
 				{"Notify_Version", "TruePVE v. {0}"},
 				{"Notify_AvailOptions", "Available Options: {0}"},
@@ -147,7 +148,7 @@ namespace Oxide.Plugins
 						showUsage(arg);
 						return;
 				}
-				SendMessage(arg, "Error_InvalidParamForCmd");
+				SendMessage(arg, "Error_InvalidParamForCmd", new object[] {cmd});
 			}
 			showUsage(arg);
 		}
@@ -366,10 +367,13 @@ namespace Oxide.Plugins
 			data.data.Clear();
 			CreateDefaultGlobal();
 			
-			Hurtable napalm = data.CreateHurtable("napalm");
-			napalm.description = "Heli Napalm";
-			napalm.prefabs.Add("napalm");
-			napalm.links[global.name] = true; // napalm hurts anything
+			Hurtable dispenser = data.CreateHurtable("dispenser");
+			dispenser.description = "Entities with ResourceDispenser";
+			dispenser.types.Add(typeof(TreeEntity).Name);
+			dispenser.types.Add(typeof(BaseResource).Name);
+			dispenser.types.Add(typeof(BaseCorpse).Name);
+			dispenser.types.Add(typeof(HelicopterDebris).Name);
+			global.links[dispenser.name] = true; // anything hurts dispensers
 			
 			Hurtable player = data.CreateHurtable("player");
 			player.description = "Players";
@@ -377,20 +381,13 @@ namespace Oxide.Plugins
 			player.links[player.name] = false; // no player-vs-player damage
 			global.links[player.name] = true; // anything hurts player
 			
-			//Hurtable fire = data.CreateHurtable("fire");
-			//fire.type = typeof(FireBall).Name;
-			//fire.prefabs.Add("campfire");
-			//fire.links[global.name] = false; // no fire damage
-			
 			Hurtable traps = data.CreateHurtable("traps");
 			traps.description = "Traps, landmines, and spikes";
 			traps.types.Add(typeof(AutoTurret).Name);
 			traps.types.Add(typeof(BearTrap).Name);
 			traps.types.Add(typeof(Landmine).Name);
 			traps.prefabs.Add("spikes.floor");
-			//traps.prefabs.Add("beartrap");
-			//traps.prefabs.Add("landmine");
-			player.links[traps.name] = true; // players can damage traps
+			global.links[traps.name] = true; // anything can damage traps
 			traps.links[player.name] = false; // traps don't damage players
 			
 			Hurtable barricades = data.CreateHurtable("barricades");
@@ -446,10 +443,6 @@ namespace Oxide.Plugins
 				return true;
 			
 			if (entity == null || hitinfo == null) return true;
-			
-			// allow resource gathering
-			if(entity.GetComponent<ResourceDispenser>() != null)
-				return true;
 			
 			// allow decay
 			if(hitinfo.damageTypes.Get(DamageType.Decay) > 0)
@@ -638,12 +631,23 @@ namespace Oxide.Plugins
             return authed;
 		}
 		
+		// handle player attacking an entity - specifically, checks resource dispensers
+		// to determine whether to prevent gathering, based on rules
+		private void OnPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
+		{
+			if(hitinfo.HitEntity?.GetComponent<ResourceDispenser>() == null)
+				return;
+			if(!AllowDamage(hitinfo.HitEntity as BaseCombatEntity, hitinfo))
+            	CancelDamage(hitinfo);
+        }
+		
 		// cancel damage
 		private static void CancelDamage(HitInfo hitinfo)
 		{
 			hitinfo.damageTypes = new DamageTypeList();
             hitinfo.DoHitEffects = false;
 			hitinfo.HitMaterial = 0;
+			hitinfo.HitEntity = null;
 		}
 		
 		// handle looting - if another mod must override TruePVE looting behavior,

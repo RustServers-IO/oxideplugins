@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("RustNotifications", "seanbyrne88", "0.8.1")]
+    [Info("RustNotifications", "seanbyrne88", "0.8.2")]
     [Description("Configurable Notifications for Rust Events")]
     class RustNotifications : RustPlugin
     {
@@ -159,7 +159,6 @@ namespace Oxide.Plugins
                 DateTime LastNotificationTime = UserLastNotified.Find(x => x.NotificationType == NotificationType && x.PlayerID == UserID).LastNotifiedAt;
                 if ((DateTime.Now - LastNotificationTime).TotalSeconds > CooldownInSeconds)
                 {
-                    //SlackUserLastNotified[UserID] = DateTime.Now;
                     UserLastNotified.Find(x => x.NotificationType == NotificationType && x.PlayerID == UserID).LastNotifiedAt = DateTime.Now;
                     return true;
                 }
@@ -236,7 +235,11 @@ namespace Oxide.Plugins
                 //First check if the HitEntity is owned by a player.
                 if (info.HitEntity.OwnerID != 0)
                 {
-                    string MessageText = lang.GetMessage("BaseAttackedMessageTemplate", this, player.UserIDString).Replace("{Attacker}", player.displayName).Replace("{Owner}", GetDisplayNameByID(info.HitEntity.OwnerID).Replace("{Damage}", info.damageTypes.Total().ToString()));
+                    string MessageText = lang.GetMessage("BaseAttackedMessageTemplate", this, player.UserIDString)
+                                                            .Replace("{Attacker}", player.displayName)
+                                                            .Replace("{Owner}", GetDisplayNameByID(info.HitEntity.OwnerID))
+                                                            .Replace("{Weapon}", info.Weapon.ShortPrefabName.Replace(".entity", ""))
+                                                            .Replace("{Damage}", info.damageTypes.Total().ToString());
 
                     //get structure's percentage health remaining for check against threshold..
                     int PercentHealthRemaining = (int)((info.HitEntity.Health() / info.HitEntity.MaxHealth()) * 100);

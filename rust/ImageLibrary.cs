@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿//Reference: Rust.Workshop
+using System.Collections.Generic;
 using UnityEngine;
 using Oxide.Core.Configuration;
 using Oxide.Core;
@@ -6,11 +7,13 @@ using System.IO;
 using System.Collections;
 using Oxide.Core.Plugins;
 using System.Reflection;
-using Oxide.Game.Rust.Cui;
+using Rust;
+using System.Linq;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut", "1.3.2", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut", "1.5.1", ResourceId = 2193)]
 
     class ImageLibrary : RustPlugin
     {
@@ -21,13 +24,21 @@ namespace Oxide.Plugins
 
         public class ImageData
         {
+            public uint CommID;
             public Dictionary<string, Dictionary<ulong, uint>> Images = new Dictionary<string, Dictionary<ulong, uint>>();
             public Dictionary<string, Dictionary<ulong, string>> ImageURLs = new Dictionary<string, Dictionary<ulong, string>>();
         }
+        private Dictionary<string, List<ulong>> TriedToAdd = new Dictionary<string, List<ulong>>();
 
         static GameObject webObject;
         static Images images;
         static MethodInfo getFileData = typeof(FileStorage).GetMethod("StorageGet", (BindingFlags.Instance | BindingFlags.NonPublic));
+        Dictionary<string, int> ItemLists = new Dictionary<string, int>();
+        public class TestingData
+        {
+            public Dictionary<string, List<ulong>> SkinIndex = new Dictionary<string, List<ulong>>();
+            public List<string> SkinList = new List<string>();
+        }
 
         #endregion
 
@@ -48,9 +59,18 @@ namespace Oxide.Plugins
             webObject = new GameObject("WebObject");
             images = webObject.AddComponent<Images>();
             images.SetDataDir(this);
+            LoadVariables();
             LoadData();
-            GetLocalImages();
+            InitializeItemList();
+            RelocateImages();
             RefreshImages();
+        }
+
+        string GetPluginName(ulong resourceId)
+        {
+            foreach (var entry in plugins.GetAll().Where(k => k.ResourceId == (int)resourceId))
+                return entry.Name;
+            return "";
         }
 
         #endregion
@@ -69,11 +89,66 @@ namespace Oxide.Plugins
         [HookMethod("GetImage")]
         public string GetImage(string shortname, ulong skin = 0)
         {
-            if (!imageData.Images.ContainsKey(shortname)) return imageData.Images["NONE"][0].ToString();
-            if (!imageData.Images[shortname].ContainsKey(skin))
+            if (!imageData.Images.ContainsKey(shortname))
+            {
+                if (!TriedToAdd.ContainsKey(shortname))
+                {
+                    if (GetPluginName(skin) != "")
+                    {
+                        var pluginfolder = GetPluginName(skin);
+                        Puts(pluginfolder);
+                        string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
+                        images.Add(path + shortname + ".png", shortname, skin);
+                        SaveData();
+                        TriedToAdd.Add(shortname, new List<ulong> { skin });
+                        try
+                        {
+                            return imageData.Images[shortname][skin].ToString();
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
                 return imageData.Images["NONE"][0].ToString();
+            }
+            if (!imageData.Images[shortname].ContainsKey(skin))
+            {
+                if (!TriedToAdd.ContainsKey(shortname) || !TriedToAdd[shortname].Contains(skin))
+                {
+                    if (GetPluginName(skin) != "")
+                    {
+                        var pluginfolder = GetPluginName(skin);
+                        string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
+                        images.Add(path + shortname + ".png", shortname, skin);
+                        SaveData();
+                        if (!TriedToAdd.ContainsKey(shortname))
+                            TriedToAdd.Add(shortname, new List<ulong> { skin });
+                        else TriedToAdd[shortname].Add(skin);
+                        try
+                        {
+                            return imageData.Images[shortname][skin].ToString();
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+                return imageData.Images["NONE"][0].ToString();
+            }
             return imageData.Images[shortname][skin].ToString();
         }
+
+        [HookMethod("GetImageList")]
+        public List<ulong> GetImageList(string shortname)
+        {
+            if (!imageData.Images.ContainsKey(shortname)) return null;
+            List<ulong> images = new List<ulong>();
+            foreach (var entry in imageData.Images[shortname])
+                images.Add(entry.Key);
+            return images;
+        }
+
 
         [HookMethod("HasImage")]
         public bool HasImage(string shortname, ulong skin = 0)
@@ -128,10 +203,14 @@ namespace Oxide.Plugins
             public void SetDataDir(ImageLibrary fc) => filehandler = fc;
             public void Add(string url, string name, ulong skin)
             {
-                if (!filehandler.imageData.ImageURLs.ContainsKey(name))
-                    filehandler.imageData.ImageURLs.Add(name, new Dictionary<ulong, string>());
-                if (!filehandler.imageData.ImageURLs[name].ContainsKey(skin))
-                    filehandler.imageData.ImageURLs[name].Add(skin, url);
+                if (url.Contains("http"))
+                {
+                    if (!filehandler.imageData.ImageURLs.ContainsKey(name))
+                        filehandler.imageData.ImageURLs.Add(name, new Dictionary<ulong, string>());
+                    if (!filehandler.imageData.ImageURLs[name].ContainsKey(skin))
+                        filehandler.imageData.ImageURLs[name].Add(skin, url);
+                    else filehandler.imageData.ImageURLs[name][skin] = url;
+                }
                 QueueList.Add(new QueueImages(url, name, skin));
                 if (activeLoads < MaxActiveLoads) Next();
             }
@@ -154,24 +233,28 @@ namespace Oxide.Plugins
             IEnumerator WaitForRequest(WWW www, QueueImages info)
             {
                 yield return www;
-
-                if (www.error == null)
+                if (www.error != null)
+                {
+                    print(string.Format("Image loading fail! Error: {0}", www.error));
+                }
+                else
                 {
                     if (!filehandler.imageData.Images.ContainsKey(info.name))
                         filehandler.imageData.Images.Add(info.name, new Dictionary<ulong, uint>());
                     if (!filehandler.imageData.Images[info.name].ContainsKey(info.skin))
+                        filehandler.imageData.Images[info.name].Add(info.skin, 0);
                     {
                         ClearStream();
                         stream.Write(www.bytes, 0, www.bytes.Length);
                         //uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
                         uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                         ClearStream();
-                        filehandler.imageData.Images[info.name].Add(info.skin, textureID);
+                        if (filehandler.imageData.Images[info.name][info.skin] != textureID)
+                            filehandler.imageData.Images[info.name][info.skin] = textureID;
                     }
                 }
                 activeLoads--;
                 if (QueueList.Count > 0) Next();
-                else filehandler.SaveData();
             }
         }
 
@@ -183,188 +266,17 @@ namespace Oxide.Plugins
 
         private void RefreshAllImages()
         {
+            InitializeItemList();
             imageData.Images.Clear();
-            images.Add("http://www.hngu.net/Images/College_Logo/28/b894b451_c203_4c08_922c_ebc95077c157.png", "NONE", 0);
-            foreach (var entry in ItemImages)
-                foreach (var item in entry.Value)
-                    images.Add(item.Value, entry.Key, item.Key);
-            timer.Once(10, () =>
-            {
-                SaveData();
-                Puts("All Images Refreshed - Plugins requiring ImageLibrary should be reloaded!");
-            });
+            Puts("All Images Wiped!");
+            RefreshImages();
         }
-
-        //TESTING
-        #region UI Creation
-        private string tester = "tester";
-
-        public class UI
-        {
-            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
-            {
-                var NewElement = new CuiElementContainer()
-            {
-                {
-                    new CuiPanel
-                    {
-                        Image = {Color = color},
-                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
-                        CursorEnabled = cursor
-                    },
-                    new CuiElement().Parent,
-                    panelName
-                }
-            };
-                return NewElement;
-            }
-            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
-            {
-                container.Add(new CuiPanel
-                {
-                    Image = { Color = color },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
-                    CursorEnabled = cursor
-                },
-                panel);
-            }
-            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
-            {
-                container.Add(new CuiLabel
-                {
-                    Text = { Color = color, FontSize = size, Align = align, FadeIn = 1.0f, Text = text },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
-                },
-                panel);
-            }
-
-            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
-            {
-                container.Add(new CuiButton
-                {
-                    Button = { Color = color, Command = command, FadeIn = 1.0f },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
-                    Text = { Text = text, FontSize = size, Align = align }
-                },
-                panel);
-            }
-
-            static public void LoadImage(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
-            {
-                container.Add(new CuiElement
-                {
-                    Parent = panel,
-                    Components =
-                    {
-                        new CuiRawImageComponent {Png = png , Sprite = "assets/content/generic textures/fulltransparent.tga"},
-                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
-                    }
-                });
-            }
-
-            static public void CreateTextOverlay(ref CuiElementContainer container, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
-            {
-                //if (configdata.DisableUI_FadeIn)
-                //    fadein = 0;
-                container.Add(new CuiLabel
-                {
-                    Text = { Color = color, FontSize = size, Align = align, FadeIn = fadein, Text = text },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
-                },
-                panel);
-            }
-            static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string DistanceA, string DistanceB, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
-            {
-                element.Add(new CuiElement
-                {
-                    Parent = panel,
-                    Components =
-                    {
-                        new CuiTextComponent{Color = colorText, FontSize = size, Align = align, Text = text },
-                        new CuiOutlineComponent {Distance = DistanceA + " " + DistanceB, Color = colorOutline},
-                        new CuiRectTransformComponent {AnchorMax = aMax, AnchorMin = aMin }
-                    }
-                });
-            }
-        }
-
-        private Dictionary<string, string> UIColors = new Dictionary<string, string>
-        {
-            {"black", "0 0 0 1.0" },
-            {"dark", "0.1 0.1 0.1 0.98" },
-            {"header", "1 1 1 0.3" },
-            {"light", ".564 .564 .564 1.0" },
-            {"grey1", "0.6 0.6 0.6 1.0" },
-            {"brown", "0.3 0.16 0.0 1.0" },
-            {"yellow", "0.9 0.9 0.0 1.0" },
-            {"orange", "1.0 0.65 0.0 1.0" },
-            {"blue", "0.2 0.6 1.0 1.0" },
-            {"red", "1.0 0.1 0.1 1.0" },
-            {"white", "1 1 1 1" },
-            {"limegreen", "0.42 1.0 0 1.0" },
-            {"green", "0.28 0.82 0.28 1.0" },
-            {"grey", "0.85 0.85 0.85 1.0" },
-            {"lightblue", "0.6 0.86 1.0 1.0" },
-            {"buttonbg", "0.2 0.2 0.2 0.7" },
-            {"buttongreen", "0.133 0.965 0.133 0.9" },
-            {"buttonred", "0.964 0.133 0.133 0.9" },
-            {"buttongrey", "0.8 0.8 0.8 0.9" },
-            {"customblue", "0.454 0.77 1.0 1.0" },
-            {"CSorange", "1.0 0.64 0.10 1.0" }
-        };
-        #endregion 
-
-
-        [ConsoleCommand("testimage")]
-        private void cmdtestimage(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            var image = arg.Args[0];
-            ImageTester(player, image);
-        }
-
-        [ConsoleCommand("destroy")]
-        private void cmddestroy(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            CuiHelper.DestroyUi(player, tester);
-        }
-
-        void ImageTester(BasePlayer player, string image)
-        {
-            CuiHelper.DestroyUi(player, tester);
-            var element = UI.CreateElementContainer(tester, UIColors["dark"], "0.15 0.5", "0.25 0.8", true);
-            UI.LoadImage(ref element, tester, GetImage(image), "0 0", "1 1");
-            CuiHelper.AddUi(player, element);
-        }
-
-
-
-        private void GetLocalImages()
-        {
-            //string dir = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "ImageLibrary" + Path.DirectorySeparatorChar;
-            //DirectoryInfo rdir = new DirectoryInfo(dir);
-            //FileInfo[] info = rdir.GetFiles("*.*");
-            //Puts("TRYING");
-            //foreach (FileInfo f in info)
-            //    if (!imageData.Images.ContainsKey(f.Name))
-            //    {
-            //        Puts($"Imagepath: {f.FullName}... Name: {Name}");
-            //        images.Add(f.FullName, f.Name, 0);
-            //    }
-        }
-
 
         private void CheckNewImages()
         {
             images.Add("http://www.hngu.net/Images/College_Logo/28/b894b451_c203_4c08_922c_ebc95077c157.png", "NONE", 0);
             foreach (var entry in ItemImages)
                 foreach (var item in entry.Value)
-                    if (!imageData.Images[entry.Key].ContainsKey(item.Key))
                         images.Add(item.Value, entry.Key, item.Key);
             timer.Once(10, () =>
             {
@@ -378,6 +290,42 @@ namespace Oxide.Plugins
             RefreshImages();
         }
 
+        void InitializeItemList()
+        {
+            if (!configData.GetMarketImages) return;
+            ItemLists.Clear();
+            foreach (var item in ItemManager.itemList)
+            {
+                ItemLists.Add(item.displayName.english.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", ""), item.itemid);
+                item.skins2 = new Facepunch.Steamworks.Inventory.Definition[0];
+            }
+            ItemLists.Add("longtshirt", ItemManager.FindItemDefinition("tshirt.long").itemid);
+            ItemLists.Add("cap", ItemManager.FindItemDefinition("hat.cap").itemid);
+            ItemLists.Add("beenie", ItemManager.FindItemDefinition("hat.beenie").itemid);
+            ItemLists.Add("boonie", ItemManager.FindItemDefinition("hat.boonie").itemid);
+            ItemLists.Add("balaclava", ItemManager.FindItemDefinition("mask.balaclava").itemid);
+            ItemLists.Add("pipeshotgun", ItemManager.FindItemDefinition("shotgun.waterpipe").itemid);
+            ItemLists.Add("woodstorage", ItemManager.FindItemDefinition("box.wooden").itemid);
+            ItemLists.Add("ak47", ItemManager.FindItemDefinition("rifle.ak").itemid);
+            ItemLists.Add("boltrifle", ItemManager.FindItemDefinition("rifle.bolt").itemid);
+            ItemLists.Add("bandana", ItemManager.FindItemDefinition("mask.bandana").itemid);
+            ItemLists.Add("snowjacket", ItemManager.FindItemDefinition("jacket.snow").itemid);
+            ItemLists.Add("buckethat", ItemManager.FindItemDefinition("bucket.helmet").itemid);
+            ItemLists.Add("semiautopistol", ItemManager.FindItemDefinition("pistol.semiauto").itemid);
+            ItemLists.Add("burlapgloves", ItemManager.FindItemDefinition("burlap.gloves").itemid);
+            ItemLists.Add("roadsignvest", ItemManager.FindItemDefinition("roadsign.jacket").itemid);
+            ItemLists.Add("roadsignpants", ItemManager.FindItemDefinition("roadsign.kilt").itemid);
+            ItemLists.Add("burlappants", ItemManager.FindItemDefinition("burlap.trousers").itemid);
+            ItemLists.Add("collaredshirt", ItemManager.FindItemDefinition("shirt.collared").itemid);
+            ItemLists.Add("mp5", ItemManager.FindItemDefinition("smg.mp5").itemid);
+            ItemLists.Add("sword", ItemManager.FindItemDefinition("longsword").itemid);
+            ItemLists.Add("workboots", ItemManager.FindItemDefinition("shoes.boots").itemid);
+            ItemLists.Add("vagabondjacket", ItemManager.FindItemDefinition("jacket").itemid);
+            ItemLists.Add("hideshoes", ItemManager.FindItemDefinition("shoes.boots").itemid);
+            ItemLists.Add("deerskullmask", ItemManager.FindItemDefinition("deer.skull.mask").itemid);
+            ItemLists.Add("minerhat", ItemManager.FindItemDefinition("hat.miner").itemid);
+            ItemLists.Add("hideshirt", ItemManager.FindItemDefinition("shirt.tanktop").itemid);
+        }
 
         private void RefreshImages()
         {
@@ -385,31 +333,112 @@ namespace Oxide.Plugins
             {
                 Puts("No Images found. Loading new default File");
                 imageData = new ImageData();
-                RefreshAllImages();
             }
-            Dictionary<string, List<ulong>> existing = new Dictionary<string, List<ulong>>();
-            foreach (var entry in ItemImages)
-                if (imageData.Images.ContainsKey(entry.Key))
+            images.Add("http://www.hngu.net/Images/College_Logo/28/b894b451_c203_4c08_922c_ebc95077c157.png", "NONE", 0);
+            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", (code, response) =>
+            {
+                if (!(response == null && code == 200))
                 {
-                    if (!existing.ContainsKey(entry.Key))
-                        existing.Add(entry.Key, new List<ulong>());
-                    foreach (var item in entry.Value)
-                        if (imageData.Images[entry.Key].ContainsKey(item.Key))
-                            if (!existing.ContainsKey(entry.Key))
-                                existing.Add(entry.Key, new List<ulong> { item.Key });
-                            else existing[entry.Key].Add(item.Key);
+                    var schm = JsonConvert.DeserializeObject<Rust.Workshop.ItemSchema>(response);
+                    var items = schm.items;
+                    var defs = new List<Facepunch.Steamworks.Inventory.Definition>();
+                    foreach (var item in items)
+                    {
+                        if (!string.IsNullOrEmpty(item.itemshortname) && !string.IsNullOrEmpty(item.icon_url))
+                                images.Add(item.icon_url, item.itemshortname, item.itemdefid);
+                    }
                 }
-            foreach (var entry in existing)
-                foreach (var item in entry.Value)
-                    imageData.Images[entry.Key].Remove(item);
+            }, this);
             foreach (var entry in ItemImages)
-                foreach (var item in entry.Value)
-                    images.Add(item.Value, entry.Key, item.Key);
-            Puts($"{existing.Count.ToString()} images refreshed");
-            existing.Clear();
-            SaveData();
+                foreach (var item in entry.Value.Where(k => k.Key == 0))
+                        images.Add(item.Value, entry.Key, item.Key);
+            if (!configData.GetMarketImages)
+            {
+                timer.Once(20, () => { SaveData(); Puts("Images loaded!"); });
+                return;
+            }
+            ServerMgr.Instance.StartCoroutine(GetWorkshopSkins());
+            Puts("Waiting for images to load....");
         }
 
+        public IEnumerator GetWorkshopSkins()
+        {
+            var workshopQuery = Global.SteamServer.Workshop.CreateQuery();
+            workshopQuery.Page = 1;
+            workshopQuery.PerPage = 50000;
+            workshopQuery.RequireTags.Add("Version3");
+            workshopQuery.Run();
+
+            yield return new WaitWhile(new System.Func<bool>(() => workshopQuery.IsRunning));
+
+            var InventoryDefinitions = new List<Facepunch.Steamworks.Inventory.Definition>();
+            bool flag = false;
+            foreach (var item in workshopQuery.Items)
+            {
+                int targetId = -1;
+                flag = false;
+                foreach (var tag in item.Tags)
+                {
+                    string removeskin = tag.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", "");
+                    if (ItemLists.ContainsKey(removeskin))
+                    {
+                        targetId = ItemLists[removeskin];
+                        flag = true;
+                    }
+                }
+                if (!flag)
+                {
+                    continue;
+                }
+                ItemDefinition targetItem = ItemManager.FindItemDefinition(targetId);
+                if (targetItem != null)
+                {
+                    images.Add(item.PreviewImageUrl.ToString(), targetItem.shortname, item.Id);
+                }
+            }
+            workshopQuery.Dispose();
+            timer.Once(120, () => { SaveData(); Puts("Images loaded!"); });
+        }
+
+        private void RelocateImages()
+        {
+            if (imageData.CommID == CommunityEntity.ServerInstance.net.ID) return;
+            PrintWarning("Attempting to re-locate images, please wait!");
+            MemoryStream stream = new MemoryStream();
+            var keys = new List<uint>();
+            foreach (var entry in imageData.Images)
+                foreach (var key in entry.Value)
+                    keys.Add(key.Value);
+            var totalimages = keys.Count();
+            for (int i = 0; i < totalimages; i++)
+            {
+                var image = keys[i];
+
+                byte[] bytes = FileStorage.server.Get(image, FileStorage.Type.png, imageData.CommID);
+                if (bytes != null)
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+
+                    //if (i == totalimages - 1) // Dodgey work-around to remove old files
+                    //    FileStorage.server.Remove(image, FileStorage.Type.png, imageData.CommID);
+
+                    var imageId = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
+
+                    stream.Position = 0;
+                    stream.SetLength(0);
+
+                    //if (storedImages.data[keys[i]] != imageId)
+                    //    storedImages.data[keys[i]] = imageId;
+                }
+            }
+            imageData.CommID = CommunityEntity.ServerInstance.net.ID;
+            SaveData();
+            PrintWarning("All images successfully re-located!");
+        }
+
+        #endregion
+
+        #region Image Urls
         private Dictionary<string, Dictionary<ulong, string>> ItemImages = new Dictionary<string, Dictionary<ulong, string>>
         {
                 { "tshirt", new Dictionary<ulong, string>
@@ -2059,8 +2088,9 @@ namespace Oxide.Plugins
             {
                 { 0, "http://vignette3.wikia.nocookie.net/play-rust/images/8/83/Blueprint_icon.png/revision/latest/scale-to-width-down/100?cb=20160819063752" }
             }
-            },                   
+            },
 };
+
 
         #endregion
 
@@ -2079,7 +2109,7 @@ namespace Oxide.Plugins
                 if (imageData == null)
                 {
                     imageData = new ImageData();
-                    RefreshAllImages();
+                    RefreshImages();
                 }
                 else
                 CheckNewImages();
@@ -2088,9 +2118,34 @@ namespace Oxide.Plugins
             {
                 Puts("Couldn't load Image Data, creating new datafile and refreshing Images");
                 imageData = new ImageData();
-                RefreshAllImages();
+                RefreshImages();
             }
         }
         #endregion
+
+        #region Config        
+        private ConfigData configData;
+        class ConfigData
+        {
+            public bool GetMarketImages { get; set; }
+        }
+        private void LoadVariables()
+        {
+            LoadConfigVariables();
+            SaveConfig();
+        }
+        protected override void LoadDefaultConfig()
+        {
+            var config = new ConfigData
+            {
+                GetMarketImages = false,
+            };
+            SaveConfig(config);
+        }
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
+
+
     }
 }

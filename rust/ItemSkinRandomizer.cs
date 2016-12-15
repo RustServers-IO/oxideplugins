@@ -10,7 +10,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Skin Randomizer", "Mughisi", "1.2.1", ResourceId = 1328)]
+    [Info("Item Skin Randomizer", "Mughisi", "1.2.2", ResourceId = 1328)]
     [Description("Simple plugin that will select a random skin for an item when crafting.")]
     class ItemSkinRandomizer : RustPlugin
     {
@@ -27,7 +27,7 @@ namespace Oxide.Plugins
                     var defs = new List<Inventory.Definition>();
                     foreach (var item in schema.items)
                     {
-                        if (item.itemshortname == string.Empty) continue;
+                        if (item.itemshortname == string.Empty || item.workshopid == null) continue;
                         var steamItem = Global.SteamServer.Inventory.CreateDefinition((int) item.itemdefid);
                         steamItem.Name = item.name;
                         steamItem.SetProperty("itemshortname", item.itemshortname);

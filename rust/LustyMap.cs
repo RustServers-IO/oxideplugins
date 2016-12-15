@@ -13,10 +13,11 @@ using System.Globalization;
 using System.IO;
 using System.Collections;
 using System.Drawing;
+using ConVar;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.65", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.71", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -356,32 +357,35 @@ namespace Oxide.Plugins
 
                 marker = new MapMarker { name = RemoveSpecialCharacters(player.displayName), r = GetDirection(player?.eyes?.rotation.eulerAngles.y ?? 0), x = GetPosition(transform.position.x), z = GetPosition(transform.position.z) };
 
-                if (lastX == currentX && lastZ == currentZ)
-                    ++lastMoveTime;
-                else
+                if (instance.configData.MapOptions.EnableAFKTracking)
                 {
-                    lastX = currentX;
-                    lastZ = currentZ;
-                    lastMoveTime = 0;
-                    if (afkDisabled)
+                    if (lastX == currentX && lastZ == currentZ)
+                        ++lastMoveTime;
+                    else
                     {
-                        afkDisabled = false;
-                        EnableUser();
-                    }                    
-                }
+                        lastX = currentX;
+                        lastZ = currentZ;
+                        lastMoveTime = 0;
+                        if (afkDisabled)
+                        {
+                            afkDisabled = false;
+                            EnableUser();
+                        }
+                    }
 
-                if (lastMoveTime == 90)
-                {
-                    afkDisabled = true;
-                    DisableUser();
-                }                
+                    if (lastMoveTime == 90)
+                    {
+                        afkDisabled = true;
+                        DisableUser();
+                    }
+                }              
             }
             public MapMarker GetMarker() => marker;
             
             public void ToggleMain()
             {
                 if (HasMapOpen())
-                {                    
+                {
                     ToggleMapType(lastMode);
                 }
                 else
@@ -394,18 +398,16 @@ namespace Oxide.Plugins
             public void DisableUser()
             {
                 if (!mapOpen) return;
-                lastMode = mode;
                 CancelInvoke("UpdateMap");
                 CuiHelper.DestroyUi(player, LustyUI.Buttons);
                 if (mode != MapMode.None)
                     LustyUI.DestroyUI(player);
-                mode = MapMode.None;
                 mapOpen = false;
             }
             public void EnableUser()
             {
-                if (mapOpen) return;
-                ToggleMapType(lastMode);
+                if (mapOpen) return;                
+                ToggleMapType(mode);
             }
             public void EnterEvent() => inEvent = true;
             public void ExitEvent() => inEvent = false;
@@ -660,10 +662,10 @@ namespace Oxide.Plugins
                     player.Command("bind " + configData.MapOptions.MapKeybind + " \"\"");
             }
             if (mapUsers.ContainsKey(player.UserIDString))
+            {
+                UnityEngine.Object.Destroy(mapUsers[player.UserIDString]);
                 mapUsers.Remove(player.UserIDString);
-
-            if (player.GetComponent<MapUser>())
-                UnityEngine.Object.Destroy(player.GetComponent<MapUser>());
+            }
 
             LustyUI.DestroyUI(player);
         }
@@ -802,73 +804,7 @@ namespace Oxide.Plugins
                 if (!OpenUI.ContainsKey(player.userID)) return;
                 foreach (var piece in OpenUI[player.userID])
                     CuiHelper.DestroyUi(player, piece);
-            }
-            /* public static void DestroyUI(BasePlayer player, MapMode type)
-             {
-                 CuiHelper.DestroyUi(player, Buttons);
-                 CuiElementContainer element = null;
-
-                 switch (type)
-                 {
-                     case MapMode.Main:
-                         element = StaticMain;
-                         CuiHelper.DestroyUi(player, Main);
-                         CuiHelper.DestroyUi(player, MainOverlay);
-                         break;
-                     case MapMode.Minimap:
-                         element = StaticMini;
-                         CuiHelper.DestroyUi(player, Mini);
-                         CuiHelper.DestroyUi(player, MiniOverlay);
-                         break;
-                     case MapMode.Complex:
-                         {
-                             var user = instance.GetUser(player);
-                             if (user != null)
-                             {
-                                 int index = user.Zoom();
-                                 int row = user.Position(false);
-                                 int column = user.Position(true);
-                                 foreach (var e in StaticComplex[index][column, row])
-                                     CuiHelper.DestroyUi(player, e.Name);
-                             }
-                             CuiHelper.DestroyUi(player, Complex);
-                             CuiHelper.DestroyUi(player, ComplexOverlay);
-                         }
-                         return;
-                     case MapMode.None:
-                         return;
-                 }
-
-                 if (element != null)
-                     foreach (var piece in element)
-                         CuiHelper.DestroyUi(player, piece.Name);
-             }     
-             public static void DestroyAllUI(BasePlayer player) // Avoid if possible
-             {
-                 if (player == null) return;
-
-                 if (StaticMain != null)
-                     foreach (var piece in StaticMain)
-                         CuiHelper.DestroyUi(player, piece.Name);
-
-                 if (StaticMini != null)
-                     foreach (var piece in StaticMini)
-                         CuiHelper.DestroyUi(player, piece.Name);
-
-                 if (StaticComplex != null)
-                     foreach (var piece in StaticComplex)
-                         foreach(var e in piece.Value)
-                             foreach (var c in e)
-                                 CuiHelper.DestroyUi(player, c.Name);
-
-                 CuiHelper.DestroyUi(player, Buttons);
-                 CuiHelper.DestroyUi(player, Main);
-                 CuiHelper.DestroyUi(player, MainOverlay);               
-                 CuiHelper.DestroyUi(player, Mini);
-                 CuiHelper.DestroyUi(player, MiniOverlay);                
-                 CuiHelper.DestroyUi(player, Complex);
-                 CuiHelper.DestroyUi(player, ComplexOverlay);
-             }            */
+            }         
             public static string Color(string hexColor, float alpha)
             {
                 int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
@@ -1921,6 +1857,7 @@ namespace Oxide.Plugins
         }
         class MapOptions
         {
+            public bool EnableAFKTracking { get; set; }
             public bool HideEventPlayers { get; set; }
             public string MapKeybind { get; set; }
             public bool StartOpen { get; set; }
@@ -1995,7 +1932,8 @@ namespace Oxide.Plugins
                     ShowSupplyDrops = true
                 },
                 MapOptions = new MapOptions
-                {                    
+                {           
+                    EnableAFKTracking = true,         
                     HideEventPlayers = true,
                     MapKeybind = "m",
                     ShowCompass = true,
@@ -2073,6 +2011,7 @@ namespace Oxide.Plugins
         class ImageStore
         {
             public Dictionary<string, uint> data = new Dictionary<string, uint>();
+            public uint instanceId;
         }
         class MarkerData
         {
@@ -2133,7 +2072,7 @@ namespace Oxide.Plugins
                     {
                         ClearStream();
                         stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);                        
+                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);                        
                         ClearStream();
                         if (!filehandler.storedImages.data.ContainsKey(info.name))
                             filehandler.storedImages.data.Add(info.name, textureID);
@@ -2163,8 +2102,54 @@ namespace Oxide.Plugins
                 LoadImages();
             else
             {
-                PrintWarning("Images and icons found in server storage");
+                PrintWarning("Exisiting images and icons found in server storage.");
+                if (storedImages.instanceId != CommunityEntity.ServerInstance.net.ID)
+                {                    
+                    RelocateImages();
+                    return;
+                }
             }
+            if (string.IsNullOrEmpty(GetImage("mapimage")))
+            {
+                LoadMapImage();
+            }
+            else GenerateMaps(true, MapSettings.minimap, MapSettings.complexmap);
+        }
+                
+        private void RelocateImages()
+        {
+            PrintWarning("Attempting to re-locate images, please wait!");
+
+            MemoryStream stream = new MemoryStream();
+
+            var keys = storedImages.data.Keys.ToList();
+            for (int i = 0; i < storedImages.data.Count; i++)
+            {                
+                var image = storedImages.data[keys[i]];
+                
+                byte[] bytes = FileStorage.server.Get(image, FileStorage.Type.png, storedImages.instanceId);
+                if (bytes != null)
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+
+                    //if(i == storedImages.data.Count - 1) 
+                        //FileStorage.server.Remove(image, FileStorage.Type.png, storedImages.instanceId);
+
+                    var imageId = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
+
+                    stream.Position = 0;
+                    stream.SetLength(0);                    
+
+                    if (storedImages.data[keys[i]] != imageId)
+                        storedImages.data[keys[i]] = imageId;
+                }
+            }
+                       
+            storedImages.instanceId = CommunityEntity.ServerInstance.net.ID;
+            SaveData();
+
+            PrintWarning("All images successfully re-located!");
+
             if (string.IsNullOrEmpty(GetImage("mapimage")))
             {
                 LoadMapImage();
@@ -2174,6 +2159,9 @@ namespace Oxide.Plugins
         private void LoadImages()
         {
             PrintWarning("Icon images have not been found. Uploading images to file storage");
+
+            storedImages.instanceId = CommunityEntity.ServerInstance.net.ID;
+            storedImages.data.Clear();
 
             string[] files = new string[] { "self", "friend", "other", "heli", "plane" };
             string path = $"{dataDirectory}icons{Path.DirectorySeparatorChar}";
@@ -2199,7 +2187,7 @@ namespace Oxide.Plugins
             {
                 if (image.Value.icon != "special")                    
                     assets.Add(image.Value.icon, dataDirectory + "custom" + Path.DirectorySeparatorChar + image.Value.icon);
-            }          
+            }                 
         } 
         private void LoadMapImage()
         {
@@ -2395,7 +2383,7 @@ namespace Oxide.Plugins
             }            
             private System.Drawing.Image ImageFromStorage(uint imageId)
             {
-                byte[] imageData = FileStorage.server.Get(imageId, FileStorage.Type.png, 0U);
+                byte[] imageData = FileStorage.server.Get(imageId, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                 System.Drawing.Image img = null;
                 try
                 {
@@ -2442,7 +2430,7 @@ namespace Oxide.Plugins
                 {
                     ClearStream();
                     stream.Write(info.bmp, 0, info.bmp.Length);
-                    uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
+                    uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                     ClearStream();
 
                     if (!filehandler.storedImages.data.ContainsKey(info.name))

@@ -6,16 +6,19 @@ using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core.Configuration;
 using Oxide.Core.Libraries.Covalence;
+using Newtonsoft.Json;
+using Rust;
 using UnityEngine;
 using System.Collections;
 using System.Reflection;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using Facepunch.Steamworks;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.3.7", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.3.8", ResourceId = 1751)]
     public class ServerRewards : RustPlugin
     {
         #region Fields
@@ -32,6 +35,9 @@ namespace Oxide.Plugins
         RewardDataStorage rewardData;
         private DynamicConfigFile RewardData;
 
+        ImageFileStorage imageData;
+        private DynamicConfigFile ImageData;
+
         SaleDataStorage saleData;
         private DynamicConfigFile SaleData;
 
@@ -41,7 +47,6 @@ namespace Oxide.Plugins
 
         static GameObject webObject;
         static UnityWeb uWeb;
-        static MethodInfo getFileData = typeof(FileStorage).GetMethod("StorageGet", (BindingFlags.Instance | BindingFlags.NonPublic));
 
         static ServerRewards instance;
         ConfigData configData;
@@ -64,12 +69,16 @@ namespace Oxide.Plugins
         #endregion
 
         #region Reward data
+        class ImageFileStorage
+        {
+            public Dictionary<string, Dictionary<ulong, uint>> storedImages = new Dictionary<string, Dictionary<ulong, uint>>();
+            public uint instanceId;
+        }
         class RewardDataStorage
         {
             public Dictionary<string, KitInfo> RewardKits = new Dictionary<string, KitInfo>();
             public Dictionary<int, ItemInfo> RewardItems = new Dictionary<int, ItemInfo>();
-            public Dictionary<string, CommandInfo> RewardCommands = new Dictionary<string, CommandInfo>();
-            public Dictionary<string, Dictionary<ulong, uint>> storedImages = new Dictionary<string, Dictionary<ulong, uint>>();
+            public Dictionary<string, CommandInfo> RewardCommands = new Dictionary<string, CommandInfo>();            
         }
         class SaleDataStorage
         {
@@ -442,6 +451,12 @@ namespace Oxide.Plugins
         }
         void InitializeAllElements()
         {
+            if (imageData.storedImages.Count > 0 && imageData.instanceId != CommunityEntity.ServerInstance.net.ID)
+            {
+                RelocateImages();
+                return;
+            }
+
             PrintWarning("Creating and storing all UI elements to cache");
             CreateNavUI();
             CreateKitsUI();
@@ -450,7 +465,46 @@ namespace Oxide.Plugins
             CreateExchangeUI();
             CreateAllNPCs();
         }
+        private void RelocateImages()
+        {
+            Puts($"{imageData.instanceId} {CommunityEntity.ServerInstance.net.ID}");
+            PrintWarning("Restart Detected! Attempting to re-locate images, please wait!");
 
+            MemoryStream stream = new MemoryStream();
+
+            var keys = imageData.storedImages.Keys.ToList();  
+                      
+            for(int i = 0; i < imageData.storedImages.Count; i++)
+            {
+                var skins = imageData.storedImages[keys[i]].Keys.ToList();
+
+                for (int j = 0; j < imageData.storedImages[keys[i]].Count; j++)
+                {                    
+                    var image = imageData.storedImages[keys[i]][skins[j]];
+
+                    byte[] bytes = FileStorage.server.Get(image, FileStorage.Type.png, imageData.instanceId);
+                    if (bytes != null)
+                    {
+                        stream.Write(bytes, 0, bytes.Length);
+                                                
+                        var imageId = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
+
+                        if (imageId != image)                        
+                            imageData.storedImages[keys[i]][skins[j]] = imageId;                        
+
+                        stream.Position = 0;
+                        stream.SetLength(0);
+                    }
+                }                    
+            }
+
+            imageData.instanceId = CommunityEntity.ServerInstance.net.ID;
+            SaveImages();
+
+            PrintWarning("All images successfully re-located!");
+            InitializeAllElements();
+        }
+       
         #region Standard Elements
         private void CreateNavUI()
         {
@@ -899,13 +953,23 @@ namespace Oxide.Plugins
             float price = saleData.Prices[itemId][skinId].SalePrice;
             int salePrice = (int)Math.Floor(price * amount);
 
-            TakeResources(player, itemId, skinId, amount);
-            AddPoints(player.userID, salePrice);
+            if (TakeResources(player, itemId, skinId, amount))
+            {
+                AddPoints(player.userID, salePrice);
 
-            CreateSaleElement(player);
-            PopupMessage(player, string.Format(msg("saleSuccess"), amount, name, salePrice, msg("storeRP")));
+                if (configData.Options.LogRPTransactions)
+                {
+                    var message = $"{player.displayName} sold {amount}x {itemId} for {salePrice}";
+                    var dateTime = DateTime.Now.ToString("yyyy-MM-dd");
+                    ConVar.Server.Log($"oxide/logs/ServerRewards - SoldItems_{dateTime}.txt", message);
+                }
+
+                CreateSaleElement(player);
+                PopupMessage(player, string.Format(msg("saleSuccess"), amount, name, salePrice, msg("storeRP")));
+            }
         }
         #endregion
+
         #region Functions
         private float[] CalcPosInv(int number)
         {
@@ -945,13 +1009,16 @@ namespace Oxide.Plugins
             }
             return num;
         }
-        private void TakeResources(BasePlayer player, int itemid, ulong skinId, int iAmount)
+        private bool TakeResources(BasePlayer player, int itemid, ulong skinId, int iAmount)
         {
             int num = TakeResourcesFrom(player, player.inventory.containerMain.itemList, itemid, skinId, iAmount);
             if (num < iAmount)
                 num += TakeResourcesFrom(player, player.inventory.containerBelt.itemList, itemid, skinId, iAmount);
             if (num < iAmount)
                 num += TakeResourcesFrom(player, player.inventory.containerWear.itemList, itemid, skinId, iAmount);
+            if (num >= iAmount)
+                return true;
+            return false;
         }
         private int TakeResourcesFrom(BasePlayer player, List<Item> container, int itemid, ulong skinId, int iAmount)
         {
@@ -1151,9 +1218,9 @@ namespace Oxide.Plugins
                 command = $"SRUI_BuyKit {name}";
                 if (!string.IsNullOrEmpty(rewardData.RewardKits[name].URL))
                 {
-                    string fileLocation = rewardData.storedImages[999999999.ToString()][0].ToString();
-                    if (rewardData.storedImages.ContainsKey(rewardData.RewardKits[name].KitName))
-                        fileLocation = rewardData.storedImages[rewardData.RewardKits[name].KitName][0].ToString();
+                    string fileLocation = imageData.storedImages[999999999.ToString()][0].ToString();
+                    if (imageData.storedImages.ContainsKey(rewardData.RewardKits[name].KitName))
+                        fileLocation = imageData.storedImages[rewardData.RewardKits[name].KitName][0].ToString();
 
                     SR_UI.LoadImage(ref container, panelName, fileLocation, $"{posMin.x} {posMin.y}", $"{posMin.x + 0.05} {posMax.y}");
                 }
@@ -1212,11 +1279,11 @@ namespace Oxide.Plugins
                 Vector2 posMin = origin + offset;
                 Vector2 posMax = posMin + dimensions;
 
-                string fileLocation = rewardData.storedImages[999999999.ToString()][0].ToString();
-                if (rewardData.storedImages.ContainsKey(item.ID.ToString()))
+                string fileLocation = imageData.storedImages[999999999.ToString()][0].ToString();
+                if (imageData.storedImages.ContainsKey(item.ID.ToString()))
                 {
-                    if (rewardData.storedImages[item.ID.ToString()].ContainsKey(item.Skin))
-                        fileLocation = rewardData.storedImages[item.ID.ToString()][item.Skin].ToString();
+                    if (imageData.storedImages[item.ID.ToString()].ContainsKey(item.Skin))
+                        fileLocation = imageData.storedImages[item.ID.ToString()][item.Skin].ToString();
                 }
 
                 SR_UI.LoadImage(ref container, panelName, fileLocation, $"{posMin.x + 0.02} {posMin.y + 0.08}", $"{posMax.x - 0.02} {posMax.y}");
@@ -1335,7 +1402,7 @@ namespace Oxide.Plugins
                         if (TakePoints(player.userID, command.Cost, "Command") != null)
                         {
                             foreach (var cmd in command.Command)
-                                ConsoleSystem.Run.Server.Normal(cmd.Replace("$player.id", player.UserIDString).Replace("$player.name", player.displayName).Replace("$player.x", player.transform.position.x.ToString()).Replace("$player.y", player.transform.position.y.ToString()).Replace("$player.z", player.transform.position.z.ToString()));
+                                rust.RunServerCommand(cmd.Replace("$player.id", player.UserIDString).Replace("$player.name", player.displayName).Replace("$player.x", player.transform.position.x.ToString()).Replace("$player.y", player.transform.position.y.ToString()).Replace("$player.z", player.transform.position.z.ToString()));
 
                             PopupMessage(player, string.Format(msg("buyCommand", player.UserIDString), commandname));
                             return;
@@ -1520,6 +1587,7 @@ namespace Oxide.Plugins
 
             PlayerData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_players");
             RewardData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_rewards");
+            ImageData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_images");
             NPC_Dealers = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_npcids");
             SaleData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_saleprices");
 
@@ -1539,6 +1607,7 @@ namespace Oxide.Plugins
 
             LoadData();
             LoadVariables();
+            LoadIcons();
 
             instance = this;
 
@@ -1625,6 +1694,34 @@ namespace Oxide.Plugins
             var mins = dateDifference.Minutes;
             var secs = dateDifference.Seconds;
             return string.Format("{0:00}:{1:00}:{2:00}", hours, mins, secs);
+        }
+        private void LoadIcons()
+        {
+            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", (code, response) =>
+            {
+                if (!(response == null && code == 200))
+                {
+                    var schema = JsonConvert.DeserializeObject<Rust.Workshop.ItemSchema>(response);
+                    var defs = new List<Inventory.Definition>();
+                    foreach (var item in schema.items)
+                    {
+                        if (item.itemshortname == string.Empty || item.workshopid == null) continue;
+                        var steamItem = Global.SteamServer.Inventory.CreateDefinition((int)item.itemdefid);
+                        steamItem.Name = item.name;
+                        steamItem.SetProperty("itemshortname", item.itemshortname);
+                        steamItem.SetProperty("workshopid", item.workshopid.ToString());
+                        steamItem.SetProperty("workshopdownload", item.workshopdownload);
+                        defs.Add(steamItem);
+                    }
+
+                    Global.SteamServer.Inventory.Definitions = defs.ToArray();
+
+                    foreach (var item in ItemManager.itemList)
+                    {
+                        item.skins2 = Global.SteamServer.Inventory.Definitions.Where(x => (x.GetStringProperty("itemshortname") == item.shortname) && !string.IsNullOrEmpty(x.GetStringProperty("workshopdownload"))).ToArray();
+                    }
+                }               
+            }, this);
         }
         private void GiveItem(BasePlayer player, int itemkey)
         {
@@ -2766,6 +2863,11 @@ namespace Oxide.Plugins
             RewardData.WriteObject(rewardData);
             Puts("Saved reward data");
         }
+        void SaveImages()
+        {
+            ImageData.WriteObject(imageData);
+            Puts("Saved image data");
+        }
         void SaveNPC()
         {
             NPC_Dealers.WriteObject(npcDealers);
@@ -2794,7 +2896,16 @@ namespace Oxide.Plugins
             {
                 Puts("Couldn't load reward data, creating new datafile");
                 rewardData = new RewardDataStorage();
-            } 
+            }
+            try
+            {
+                imageData = ImageData.ReadObject<ImageFileStorage>();
+            }
+            catch
+            {
+                Puts("Couldn't load image data, creating new datafile");
+                imageData = new ImageFileStorage();
+            }
             try
             {
                 npcDealers = NPC_Dealers.ReadObject<NPCDealers>();
@@ -2970,20 +3081,20 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        if (!filehandler.rewardData.storedImages.ContainsKey(info.itemid.ToString()))
-                            filehandler.rewardData.storedImages.Add(info.itemid.ToString(), new Dictionary<ulong, uint>());
-                        if (!filehandler.rewardData.storedImages[info.itemid.ToString()].ContainsKey(info.skinid))
+                        if (!filehandler.imageData.storedImages.ContainsKey(info.itemid.ToString()))
+                            filehandler.imageData.storedImages.Add(info.itemid.ToString(), new Dictionary<ulong, uint>());
+                        if (!filehandler.imageData.storedImages[info.itemid.ToString()].ContainsKey(info.skinid))
                         {
                             ClearStream();
                             stream.Write(www.bytes, 0, www.bytes.Length);
-                            uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
+                            uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                             ClearStream();
-                            filehandler.rewardData.storedImages[info.itemid.ToString()].Add(info.skinid, textureID);
+                            filehandler.imageData.storedImages[info.itemid.ToString()].Add(info.skinid, textureID);
                         }
                     }
                     activeLoads--;
                     if (QueueList.Count > 0) Next();
-                    else if (QueueList.Count <= 0) filehandler.SaveRewards();
+                    else if (QueueList.Count <= 0) filehandler.SaveImages();
                 }
             }
         }
@@ -2993,36 +3104,22 @@ namespace Oxide.Plugins
         {
             if (arg.connection == null)
             {
-                LoadImages(false);
+                LoadImages();
             }
         }
-        [ConsoleCommand("loadlocalimages")]
-        private void cmdLoadLocalImages(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                LoadImages(true);
-            }
-        }
-        private void LoadImages(bool isLocal)
+       
+        private void LoadImages()
         {
             string dir = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "ServerRewards" + Path.DirectorySeparatorChar + "Icons" + Path.DirectorySeparatorChar;
-
-            foreach(var entry in rewardData.storedImages)
-            {                
-                foreach(var image in entry.Value)
-                {
-                    FileStorage.server.Remove(image.Value, FileStorage.Type.png, uint.MaxValue);
-                }
-            }
-            rewardData.storedImages.Clear();
+                        
+            imageData.storedImages.Clear();
             uWeb.Add("http://i.imgur.com/zq9zuKw.jpg", "999999999", 0);
             foreach (var entry in rewardData.RewardItems)
             {               
                 if (!string.IsNullOrEmpty(entry.Value.URL))
                 {
                     var url = entry.Value.URL;
-                    if (isLocal)
+                    if (!url.StartsWith("http") && !url.StartsWith("www."))
                         url = dir + url;
                     uWeb.Add(url, entry.Value.ID.ToString(), entry.Value.Skin);
                 }
@@ -3033,7 +3130,7 @@ namespace Oxide.Plugins
                 if (!string.IsNullOrEmpty(entry.Value.URL))
                 {
                     var url = entry.Value.URL;
-                    if (isLocal)
+                    if (!url.StartsWith("http") && !url.StartsWith("www."))
                         url = dir + url;
                     uWeb.Add(url, entry.Value.KitName, 0);
                 }

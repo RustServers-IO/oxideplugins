@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FireArrows", "Colon Blow", "1.2.4")]
+    [Info("FireArrows", "Colon Blow", "1.2.5")]
     class FireArrows : RustPlugin
     {
 
@@ -175,10 +175,14 @@ namespace Oxide.Plugins
 
 	void OnPlayerAttack(BasePlayer player, HitInfo hitInfo)
 	{
+		
            	if (usingCorrectWeapon(player))
 		{
-
-				ArrowFX(player, hitInfo);
+				if (Cooldown.ContainsKey(player.userID)) return;
+				if ((FireArrowOn.ContainsKey(player.userID)) || (FireBallOn.ContainsKey(player.userID)) || (FireBombOn.ContainsKey(player.userID)))
+				{
+					ArrowFX(player, hitInfo);
+				}
 				return;
 		}
 	}
@@ -213,6 +217,7 @@ namespace Oxide.Plugins
 		if (UsageCooldown <= 0f) return;
 		if (UsageCooldown >= 1f)
 			{
+				
 				Cooldown.Add(player.userID, new FireArrowCooldown { player = player, });
 				timer.Once(UsageCooldown, () => Cooldown.Remove(player.userID));
 			}
@@ -227,7 +232,7 @@ namespace Oxide.Plugins
 
 	void FireArrowFX(BasePlayer player, HitInfo hitInfo)
 	{
-		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); return; }
+		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); NormalArrowToggle(player); return; }
 		applyBlastDamage(player, DamageFireArrow, Rust.DamageType.Heat, hitInfo);
 
 		Effect.server.Run("assets/bundled/prefabs/fx/impacts/additive/fire.prefab", hitInfo.HitPositionWorld);
@@ -241,7 +246,7 @@ namespace Oxide.Plugins
 	void FireBallFX(BasePlayer player, HitInfo hitInfo)
 	{
 		if (!notZoneRestricted(player)) { tellRestricted(player); return; }
-		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); return; }
+		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); NormalArrowToggle(player); return; }
 
 		applyBlastDamage(player, DamageFireBall, Rust.DamageType.Heat, hitInfo);
 		timer.Once(1, () => applyBlastDamage(player, DamageFireBall, Rust.DamageType.Heat, hitInfo));
@@ -259,7 +264,7 @@ namespace Oxide.Plugins
 	void FireBombFX(BasePlayer player, HitInfo hitInfo)
 	{
 		if (!notZoneRestricted(player)) { tellRestricted(player); return; }
-		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); return; }
+		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); NormalArrowToggle(player); return; }
 
 		applyBlastDamage(player, DamageFireBomb, Rust.DamageType.Explosion, hitInfo);
 
@@ -268,6 +273,7 @@ namespace Oxide.Plugins
 		FireBombArrow?.Spawn();
 		timer.Once(DurationFireBombArrow, () => FireBombArrow.Kill());
 		ArrowCooldownToggle(player);
+		
 		return;
 	}
 
