@@ -1,0 +1,16 @@
+{
+    "name": "Survival Essentials",
+    "description": "Advanced, All-in-one survival server essentials",
+    "author": "Jonty",
+    "version": "2.2.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/survival-essentials.1224",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

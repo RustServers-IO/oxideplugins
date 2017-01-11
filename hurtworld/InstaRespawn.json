@@ -1,0 +1,16 @@
+{
+    "name": "InstaRespawn",
+    "description": "You will instantly respawn with no cooldown",
+    "author": "{RTR}Jojolepro",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/instarespawn.2234",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

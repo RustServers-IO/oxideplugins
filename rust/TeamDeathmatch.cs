@@ -1,13 +1,13 @@
 ﻿// Requires: EventManager
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Oxide.Core.Plugins;
-using Oxide.Game.Rust.Cui;
 using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Team Deathmatch", "k1lly0u", "0.2.21", ResourceId = 1484)]
+    [Info("TeamDeathmatch", "k1lly0u", "0.3.2", ResourceId = 1484)]
     class TeamDeathmatch : RustPlugin
     {
         #region Fields        
@@ -19,12 +19,16 @@ namespace Oxide.Plugins
 
         private bool UseTDM;
         private bool Started;
-        private bool Changed;
+        private bool GameEnding;
 
         public string Kit;
+        public string TeamASpawns;
+        public string TeamBSpawns;
 
         public int TeamAKills;
         public int TeamBKills;
+
+        public int ScoreLimit;
 
         private List<TDMPlayer> TDMPlayers = new List<TDMPlayer>();
         private ConfigData configData;
@@ -38,18 +42,51 @@ namespace Oxide.Plugins
             Started = false;
         }
         void OnServerInitialized()
-        {
-            if (EventManager == null)
-            {
-                Puts("Event plugin doesn't exist");
-                return;
-            }
+        {            
             LoadVariables();
-            RegisterGame();
+            TeamASpawns = configData.TeamA.Spawnfile;
+            TeamBSpawns = configData.TeamB.Spawnfile;
+            ScoreLimit = configData.GameSettings.ScoreLimit;
+            //RegisterGame();
         }
         void RegisterGame()
         {
-            var success = EventManager.RegisterEventGame(configData.EventName);
+            EventManager.Events eventData = new EventManager.Events
+            {
+                CloseOnStart = false,
+                DisableItemPickup = false,
+                EnemiesToSpawn = 0,
+                EventType = Title,
+                GameMode = EventManager.GameMode.Normal,
+                GameRounds = 0,
+                Kit = configData.EventSettings.DefaultKit,
+                MaximumPlayers = 0,
+                MinimumPlayers = 2,
+                ScoreLimit = configData.GameSettings.ScoreLimit,
+                Spawnfile = configData.TeamA.Spawnfile,
+                Spawnfile2 = configData.TeamB.Spawnfile,
+                SpawnType = EventManager.SpawnType.Consecutive,                
+                RespawnType = EventManager.RespawnType.Timer,
+                RespawnTimer = 5,
+                UseClassSelector = false,
+                WeaponSet = null,
+                ZoneID = configData.EventSettings.DefaultZoneID
+            };
+            EventManager.EventSetting eventSettings = new EventManager.EventSetting
+            {
+                CanChooseRespawn = true,
+                CanUseClassSelector = true,
+                CanPlayBattlefield = true,
+                ForceCloseOnStart = false,
+                IsRoundBased = false,
+                LockClothing = true,                
+                RequiresKit = true,
+                RequiresMultipleSpawns = true,
+                RequiresSpawns = true,
+                ScoreType = "Kills",
+                SpawnsEnemies = false
+            };
+            var success = EventManager.RegisterEventGame(Title, eventSettings, eventData);
             if (success == null)
             {
                 Puts("Event plugin doesn't exist");
@@ -58,7 +95,6 @@ namespace Oxide.Plugins
         }        
         void Unload()
         {
-            foreach (var player in BasePlayer.activePlayerList) DestroyUI(player);
             if (UseTDM && Started)            
                 EventManager.EndEvent();
 
@@ -79,13 +115,13 @@ namespace Oxide.Plugins
                     {
                         if (victim.team == attacker.team)
                         {
-                            if (configData.FF_Damage_Modifier <= 0)
+                            if (configData.GameSettings.FFDamageModifier <= 0)
                             {
                                 hitinfo.damageTypes = new DamageTypeList();
                                 hitinfo.DoHitEffects = false;
                             }
                             else
-                                hitinfo.damageTypes.ScaleAll(configData.FF_Damage_Modifier);
+                                hitinfo.damageTypes.ScaleAll(configData.GameSettings.FFDamageModifier);
                             SendReply(attacker.player, TitleM() + lang.GetMessage("ff", this, attacker.player.UserIDString));
                         }
                     }
@@ -97,12 +133,11 @@ namespace Oxide.Plugins
         #region EventManager Hooks       
         void OnSelectEventGamePost(string name)
         {
-            if (configData.EventName.Equals(name))
+            if (Title == name)
             {
-                if (!string.IsNullOrEmpty(configData.TeamA_Spawnfile) && !string.IsNullOrEmpty(configData.TeamB_Spawnfile))
+                if (!string.IsNullOrEmpty(TeamASpawns) && !string.IsNullOrEmpty(TeamBSpawns))
                 {
                     UseTDM = true;
-                    EventManager.SelectSpawnfile(configData.TeamA_Spawnfile);
                 }
                 else Puts("Check your config for valid spawn entries");
             }
@@ -111,125 +146,87 @@ namespace Oxide.Plugins
         }
         void OnEventPlayerSpawn(BasePlayer player)
         {
-            if (UseTDM && Started)
+            if (UseTDM && Started && !GameEnding)
             {
-                if (player.IsSleeping()) player.EndSleeping();
-                timer.Once(3, () =>
-                {                    
-                    if (!player.GetComponent<TDMPlayer>()) return;
-                    GiveTeamGear(player);
-                    CreateScoreboard(player);
-                });
+                if (player.IsSleeping())
+                {
+                    player.EndSleeping();
+                    timer.In(1, () => OnEventPlayerSpawn(player));
+                    return;
+                }
+                if (!player.GetComponent<TDMPlayer>()) return;
+                GiveTeamGear(player);
+                EventManager.CreateScoreboard(player);
             }
         }
         private void GiveTeamGear(BasePlayer player)
         {
-            player.health = configData.StartingHealth;
-            EventManager.GivePlayerKit(player, Kit);
-            if (!EventManager.UseClassSelection)
-                GiveTeamShirts(player);
+            if (!GameEnding)
+            {
+                player.health = configData.GameSettings.StartHealth;
+                EventManager.GivePlayerKit(player, Kit);
+                if (!EventManager._Event.UseClassSelector)
+                    GiveTeamShirts(player);
+            }
         }
         private void GiveTeamShirts(BasePlayer player)
-        {
+        {            
             if (player.GetComponent<TDMPlayer>().team == Team.A)
             {
-                Item shirt = ItemManager.CreateByPartialName(configData.TeamA_Shirt);
-                shirt.skin = configData.TeamA_SkinID;
+                Item shirt = ItemManager.CreateByPartialName(configData.TeamA.Shirt);
+                shirt.skin = configData.TeamA.SkinID;
                 shirt.MoveToContainer(player.inventory.containerWear);
             }
             else if (player.GetComponent<TDMPlayer>().team == Team.B)
             {
-                Item shirt = ItemManager.CreateByPartialName(configData.TeamB_Shirt);
-                shirt.skin = configData.TeamB_SkinID;
+                Item shirt = ItemManager.CreateByPartialName(configData.TeamB.Shirt);
+                shirt.skin = configData.TeamB.SkinID;
                 shirt.MoveToContainer(player.inventory.containerWear);
             }
-        }
-        object OnSelectSpawnFile(string name)
-        {
-            if (UseTDM)
-            {
-                if (name.EndsWith("_a"))
-                {
-                    configData.TeamA_Spawnfile = name;
-                    configData.TeamB_Spawnfile = name.Replace("_a", "_b");
-                    return true;
-                }
-            }
-            return null;
-        }        
-        private object CanEventOpen()
-        {
-            if (UseTDM)
-            {
-                if (!CheckSpawnfiles()) return "error";
-                return true;
-            }
-            return null;
-        }
-        private bool CheckSpawnfiles()
-        {
-            object success = Spawns.Call("GetSpawnsCount", configData.TeamA_Spawnfile);
-            if (success is string)
-            {                
-                Puts("Error finding the Team A spawn file");
-                return false;
-            }
-            success = Spawns.Call("GetSpawnsCount", configData.TeamB_Spawnfile);
-            if (success is string)
-            {
-                Puts("Error finding the Team B spawn file");
-                return false;
-            }
-            return true;
-        }
-        object CanEventStart()
-        {
-            return null;
-        }
+        }       
+                
         object OnEventOpenPost()
         {
-            if (!UseTDM) return null;
-            PrintToChat(TitleM() + lang.GetMessage("OpenMsg", this));
+            if (UseTDM)
+                PrintToChat(TitleM() + lang.GetMessage("OpenMsg", this));
             return null;
-        }
-        object OnEventClosePost()
-        {
-            return null;
-        }
+        }        
         object OnEventEndPre()
         {
-            if (!UseTDM) return null;
-            CheckScores(true);
-            foreach (TDMPlayer p in TDMPlayers)
+            if (UseTDM && Started)
             {
-                p.team = Team.NONE;
-                DestroyUI(p.player);
-                UnityEngine.Object.Destroy(p);
+                CheckScores(true); 
             }
-
-            Started = false;
-            TDMPlayers.Clear();
-            TeamAKills = 0;
-            TeamBKills = 0;
             return null;
         }
         void OnPlayerSelectClass(BasePlayer player)
         {
-            if (UseTDM && Started)
+            if (UseTDM && Started && !GameEnding)
                 GiveTeamShirts(player);
         }
         object OnEventCancel()
         {
-            CheckScores(true);
+            if (UseTDM && Started)
+                CheckScores(true);
             return null;
         }
 
         object OnEventEndPost()
         {
-            var objects = UnityEngine.Object.FindObjectsOfType<TDMPlayer>();
-            if (objects != null)
-                foreach (var gameObj in objects)
-                    UnityEngine.Object.Destroy(gameObj);
+            if (UseTDM)
+            {
+                Started = false;
+                foreach (TDMPlayer tdmPlayer in TDMPlayers)
+                {
+                    tdmPlayer.team = Team.NONE;
+                    UnityEngine.Object.Destroy(tdmPlayer);
+                }
+                TDMPlayers.Clear();
+                TeamAKills = 0;
+                TeamBKills = 0;
+
+                TDMPlayers.Clear();
+            }
             return null;
         }
         object OnEventStartPre()
@@ -237,18 +234,21 @@ namespace Oxide.Plugins
             if (UseTDM)
             {
                 Started = true;
+                GameEnding = false;
             }
             return null;
         }
         object OnEventStartPost()
         {
-            RefreshSB();
+            if (UseTDM)            
+                UpdateScores();
             return null;
         }
         object CanEventJoin(BasePlayer player)
         {
-            if (player.GetComponent<TDMPlayer>())
-                player.GetComponent<TDMPlayer>().team = Team.NONE;
+            if (UseTDM)
+                if (player.GetComponent<TDMPlayer>())
+                    player.GetComponent<TDMPlayer>().team = Team.NONE;
             return null;
         }
         object OnSelectKit(string kitname)
@@ -267,11 +267,8 @@ namespace Oxide.Plugins
                 if (player.GetComponent<TDMPlayer>())
                     UnityEngine.Object.Destroy(player.GetComponent<TDMPlayer>());
                 TDMPlayers.Add(player.gameObject.AddComponent<TDMPlayer>());
-                if (Started)
-                {
-                    TeamAssign(player);
-                    //OnEventPlayerSpawn(player);
-                }
+                if (Started)                
+                    TeamAssign(player);                
             }
             return null;
         }
@@ -279,16 +276,14 @@ namespace Oxide.Plugins
         {
             if (UseTDM)
             {
-                DestroyUI(player);
                 var tDMPlayer = player.GetComponent<TDMPlayer>();
                 if (tDMPlayer)
                 {                    
                     TDMPlayers.Remove(tDMPlayer);
                     UnityEngine.Object.Destroy(tDMPlayer);
-                    if (Started)
-                        CheckScores();
+                    CheckScores();                    
                 }
-            }
+            }            
             return null;
         }
         void OnEventPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
@@ -311,13 +306,13 @@ namespace Oxide.Plugins
                     if (vic.GetComponent<TDMPlayer>())
                     {
                         var victim = vic.GetComponent<TDMPlayer>();
-                        DestroyUI(vic);
                         if (hitinfo.Initiator is BasePlayer)
                         {
 
                             var attacker = hitinfo.Initiator.GetComponent<TDMPlayer>();
                             if ((victim.player.userID != attacker.player.userID) && (attacker.team != victim.team))
                             {
+                                attacker.kills++;
                                 AddKill(attacker.player, victim.player);
                             }
                         }
@@ -325,12 +320,8 @@ namespace Oxide.Plugins
                 }
             }
             return;
-        }
-        private void RefreshSB()
-        {
-            foreach (TDMPlayer p in TDMPlayers)            
-                CreateScoreboard(p.player);            
-        }
+        }      
+        
         object EventChooseSpawn(BasePlayer player, Vector3 destination)
         {
             if (UseTDM)
@@ -341,9 +332,8 @@ namespace Oxide.Plugins
                     return false;
                 }
                 Team team = player.GetComponent<TDMPlayer>().team;
-                object newpos = null;
-                if (team == Team.A) newpos = Spawns.Call("GetRandomSpawn", configData.TeamA_Spawnfile);
-                else if (team == Team.B) newpos = Spawns.Call("GetRandomSpawn", configData.TeamB_Spawnfile);
+                object newpos = EventManager.SpawnCount.GetSpawnPoint(team == Team.A ? TeamASpawns : TeamBSpawns, team == Team.A); 
+                               
                 if (!(newpos is Vector3))
                 {
                     Puts("Error finding a spawn point, spawnfile corrupt or invalid");
@@ -352,14 +342,14 @@ namespace Oxide.Plugins
                 return (Vector3)newpos;
             }
             return null;
-        }  
-        object OnRequestZoneName()
-        {
-            if (UseTDM)
-                if (!string.IsNullOrEmpty(configData.ZoneName))
-                    return configData.ZoneName;
-            return null;
         }
+        void SetSpawnfile(bool isTeamA, string spawnfile)
+        {
+            if (isTeamA)
+                TeamASpawns = spawnfile;
+            else TeamBSpawns = spawnfile;
+        }
+        void SetScoreLimit(int scoreLimit) => ScoreLimit = scoreLimit;
         #endregion
 
         #region team funtions
@@ -379,15 +369,15 @@ namespace Oxide.Plugins
         }
         private void TeamAssign(BasePlayer player)
         {
-            if (UseTDM && Started)
+            if (UseTDM && Started && !GameEnding)
             {
                 Team team = CountForBalance();
                 if (player.GetComponent<TDMPlayer>().team == Team.NONE)
                 {
                     player.GetComponent<TDMPlayer>().team = team;
                     string color = string.Empty;
-                    if (team == Team.A) color = configData.TeamA_Color;
-                    else if (team == Team.B) color = configData.TeamB_Color;
+                    if (team == Team.A) color = configData.TeamA.Color;
+                    else if (team == Team.B) color = configData.TeamB.Color;
                     SendReply(player, string.Format(lang.GetMessage("AssignTeam", this, player.UserIDString), GetTeamName(team, player), color));
                     Puts("Player " + player.displayName + " assigned to Team " + team);
                     player.Respawn();                    
@@ -429,34 +419,25 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region UI Scoreboard
-
-        private void CreateScoreboard(BasePlayer player)
-        {
-            string GUIMin = $"{configData.GUIPosX} {configData.GUIPosY}";
-            string GUIMax = $"{configData.GUIPosX + configData.GUIDimX} {configData.GUIPosY + configData.GUIDimY}";
-            DestroyUI(player);
-            var panelName = "TDMScoreboard";
-            var element = EventManager.UI.CreateElementContainer(panelName, "0.3 0.3 0.3 0.7", GUIMin, GUIMax, false);
-            EventManager.UI.CreateLabel(ref element, panelName, "", $"<color={configData.TeamA_Color}>{TeamAKills} : Team A</color>   ||   Limit : {configData.KillLimit}   ||   <color={configData.TeamB_Color}>Team B : {TeamBKills}</color>", configData.GUI_TextSize, "0 0", "1 1");           
-            CuiHelper.AddUi(player, element);
-        }
-        #endregion
-
-        #region Functions
-        private void DestroyUI(BasePlayer player) => CuiHelper.DestroyUi(player, "TDMScoreboard");
-        private void MessagePlayers(string msg)
+        #region Scoreboard        
+        private void UpdateScores()
         {
             if (UseTDM && Started)
             {
-                foreach (var p in TDMPlayers)
+                var sortedList = TDMPlayers.OrderByDescending(pair => pair.kills).ToList();
+                var scoreList = new Dictionary<ulong, EventManager.Scoreboard>();
+                foreach (var entry in sortedList)
                 {
-                    SendReply(p.player, msg);
+                    if (scoreList.ContainsKey(entry.player.userID)) continue;
+                    scoreList.Add(entry.player.userID, new EventManager.Scoreboard { Name = entry.player.displayName, Position = sortedList.IndexOf(entry), Score = entry.kills });
                 }
+                var scoreString = $"{GetTeamName(Team.A)} kills : <color={configData.TeamA.Color}>{TeamAKills}</color>   ||   {GetTeamName(Team.B)} Kills : <color={configData.TeamB.Color}>{TeamBKills}</color>";
+                EventManager.UpdateScoreboard(new EventManager.ScoreData { Additional = scoreString, ScoreType = "Kills", Scores = scoreList });
             }
         }
-       
+        #endregion
 
+        #region Functions        
         List<TDMPlayer> FindPlayer(string arg)
         {
             var foundPlayers = new List<TDMPlayer>();
@@ -484,67 +465,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Commands
-        [ConsoleCommand("tdm.spawns.a")]
-        void ccmdSpawnsA(ConsoleSystem.Arg arg)
-        {
-            if (!isAuth(arg)) return;
-            if (arg.Args == null || arg.Args.Length == 0)
-            {
-                SendReply(arg, "tdm.spawns.a \"filename\"");
-                return;
-            }
-            object success = Spawns.Call("GetSpawnsCount", arg.Args[0]);
-            if (success is string)
-            {
-                SendReply(arg, (string)success);
-                return;
-            }
-            configData.TeamA_Spawnfile = arg.Args[0];
-            SaveConfig();
-            SendReply(arg, string.Format("Team A spawnfile is now {0} .", configData.TeamA_Spawnfile));
-        }
-
-        [ConsoleCommand("tdm.spawns.b")]
-        void ccmdSpawnsB(ConsoleSystem.Arg arg)
-        {
-            if (!isAuth(arg)) return;
-            if (arg.Args == null || arg.Args.Length == 0)
-            {
-                SendReply(arg, "tdm.spawns.b \"filename\"");
-                return;
-            }
-            object success = Spawns.Call("GetSpawnsCount", arg.Args[0]);
-            if (success is string)
-            {
-                SendReply(arg, (string)success);
-                return;
-            }
-            configData.TeamB_Spawnfile = arg.Args[0];
-            SaveConfig();
-            SendReply(arg, string.Format("Team B spawnfile is now {0} .", configData.TeamB_Spawnfile));
-        }
-
-        [ConsoleCommand("tdm.kills")]
-        void ccmdKills(ConsoleSystem.Arg arg)
-        {
-            if (!isAuth(arg)) return;
-            if (arg.Args == null || arg.Args.Length == 0)
-            {
-                SendReply(arg, "tdm.kills XX ");
-                return;
-            }
-            int KillLimit;
-            if (!int.TryParse(arg.Args[0], out KillLimit))
-            {
-                SendReply(arg, "The kill count needs to be a number");
-                return;
-            }
-            configData.KillLimit = KillLimit;
-            SaveConfig();
-            SendReply(arg, string.Format("Kill count to win event is now {0} .", configData.KillLimit));
-        }
-
+        #region Commands 
         [ConsoleCommand("tdm.team")]
         private void cmdTeam(ConsoleSystem.Arg arg)
         {
@@ -592,8 +513,8 @@ namespace Oxide.Plugins
             p.player.Hurt(300, DamageType.Bullet, null, true);
 
             string color = string.Empty;
-            if (p.team == Team.A) color = configData.TeamA_Color;
-            else if (p.team == Team.B) color = configData.TeamB_Color;
+            if (p.team == Team.A) color = configData.TeamA.Color;
+            else if (p.team == Team.B) color = configData.TeamB.Color;
 
             SendReply(p.player, string.Format(TitleM() + "You have been moved to <color=" + color + ">Team {0}</color>", newTeam.ToString().ToUpper()));
             SendReply(arg, string.Format("{0} has been moved to Team {1}", p.player.displayName, newTeam.ToString().ToUpper()));
@@ -607,10 +528,10 @@ namespace Oxide.Plugins
             }
             return true;
         }
-        #endregion
+        #endregion      
 
         #region Scoring
-        
+
         void AddKill(BasePlayer player, BasePlayer victim)
         {
             var p = player.GetComponent<TDMPlayer>();
@@ -618,48 +539,60 @@ namespace Oxide.Plugins
 
             if (p.team == Team.A) TeamAKills++;
             else if (p.team == Team.B) TeamBKills++;
-            RefreshSB();
+            UpdateScores();
 
-            EventManager.AddTokens(player.UserIDString, configData.Tokens_Kill);
+            EventManager.AddTokens(player.userID, configData.EventSettings.TokensOnKill);
             string color = string.Empty;
-            if (p.team == Team.A) color = configData.TeamA_Color;
-            else if (p.team == Team.B) color = configData.TeamB_Color;
-            MessagePlayers(string.Format(TitleM() + "<color=" + color + ">" + lang.GetMessage("KillMsg", this) + "</color>", player.displayName, victim.displayName));
+            if (p.team == Team.A) color = configData.TeamA.Color;
+            else if (p.team == Team.B) color = configData.TeamB.Color;
+            EventManager.PopupMessage(string.Format(lang.GetMessage("KillMsg", this), player.displayName, victim.displayName));
             CheckScores();
         }
-        void CheckScores(bool timelimitreached = false)
+        void CheckScores(bool timelimit = false)
         {
-            if (TDMPlayers.Count <= 1)
+            if (GameEnding) return;
+            if (TDMPlayers.Count == 0)
             {
-                MessagePlayers(TitleM() + lang.GetMessage("NoPlayers", this));
+                GameEnding = true;
+                EventManager.BroadcastToChat(lang.GetMessage("NoPlayers", this));
                 EventManager.CloseEvent();
                 EventManager.EndEvent();
                 return;
             }
-            Team winner = Team.NONE;
-            if (EventManager.EventMode == EventManager.GameMode.Normal)
+
+            if (TDMPlayers.Count == 1)
             {
-                if (TeamAKills >= configData.KillLimit) winner = Team.A;
-                else if (TeamBKills >= configData.KillLimit) winner = Team.B;
+                Winner(TDMPlayers[0].team);
+                return;
             }
-            if (timelimitreached)
+            if (timelimit)
             {
-                if (TeamAKills > TeamBKills) winner = Team.A;
-                else if (TeamBKills > TeamAKills) winner = Team.B;                
+                if (TeamAKills > TeamBKills) Winner(Team.A);
+                if (TeamBKills > TeamAKills) Winner(Team.B);
+                if (TeamAKills == TeamBKills) Winner(Team.NONE);
+                return;
             }
-            if (winner != Team.NONE)
-                Winner(winner);
+            if (EventManager._Event.GameMode == EventManager.GameMode.Battlefield)
+                return;
+
+            if (ScoreLimit > 0)
+            {
+                if (TeamAKills >= ScoreLimit) Winner(Team.A);
+                if (TeamBKills >= ScoreLimit) Winner(Team.B);
+            }        
         }
-        void Winner(Team winner)
+        void Winner(Team team)
         {
-            foreach (TDMPlayer p in TDMPlayers)
-            {
-                if (p.team == winner)
-                    EventManager.AddTokens(p.player.UserIDString, configData.Tokens_Win);                    
-            }
-            MessagePlayers(string.Format(TitleM() + lang.GetMessage("WinMsg", this), GetTeamName(winner)));
+            GameEnding = true;
+            foreach (var member in TDMPlayers)
+                if (member.team == team)
+                    EventManager.AddTokens(member.player.userID, configData.EventSettings.TokensOnWin, true);
+
+            if (team == Team.NONE)
+                EventManager.BroadcastToChat("It's a draw! No winners today");
+            else EventManager.BroadcastToChat(string.Format("{0} has won the event!", GetTeamName(team)));
             EventManager.CloseEvent();
-            timer.Once(2, () => EventManager.EndEvent());
+            EventManager.EndEvent();
         }
         #endregion
 
@@ -667,42 +600,53 @@ namespace Oxide.Plugins
         class TDMPlayer : MonoBehaviour
         {
             public BasePlayer player;
-            public Team team;            
+            public Team team;  
+            public int kills;          
 
             void Awake()
             {
                 player = GetComponent<BasePlayer>();
                 enabled = false;
                 team = Team.NONE;
+                kills = 0;
             }
         }
 
         #endregion
 
-        #region Config     
-        class ConfigData
+        #region Config  
+        class EventSettings
         {
             public string DefaultKit { get; set; }
-            public string EventName { get; set; }
-            public string TeamA_Spawnfile { get; set; }
-            public string TeamB_Spawnfile { get; set; }
-            public string TeamA_Color { get; set; }
-            public string TeamB_Color { get; set; }
-            public string TeamA_Shirt { get; set; }
-            public string TeamB_Shirt { get; set; }
-            public int TeamA_SkinID { get; set; }
-            public int TeamB_SkinID { get; set; }
-            public float GUIPosX { get; set; }
-            public float GUIPosY { get; set; }
-            public float GUIDimX { get; set; }
-            public float GUIDimY { get; set; }
-            public int GUI_TextSize { get; set; }
-            public float FF_Damage_Modifier { get; set; }
-            public float StartingHealth { get; set; }
-            public int KillLimit { get; set; }
-            public int Tokens_Kill { get; set; }
-            public int Tokens_Win { get; set; }
-            public string ZoneName { get; set; }
+            public string DefaultZoneID { get; set; }
+            public int TokensOnKill { get; set; }
+            public int TokensOnWin { get; set; }
+        }
+        class GameSettings
+        {
+            public float StartHealth { get; set; }
+            public float FFDamageModifier { get; set; }
+            public int ScoreLimit { get; set; }
+        }
+        class TeamSettings
+        {
+            public string Shirt { get; set; }
+            public ulong SkinID { get; set; }
+            public string Color { get; set; }
+            public string Spawnfile { get; set; }
+        }
+        class Messaging
+        {
+            public string MainColor { get; set; }
+            public string MSGColor { get; set; }
+        }
+        class ConfigData
+        {
+            public EventSettings EventSettings { get; set; }
+            public GameSettings GameSettings { get; set; }
+            public TeamSettings TeamA { get; set; }
+            public TeamSettings TeamB { get; set; }
+            public Messaging Messaging { get; set; }            
         }  
         private void LoadVariables()
         {
@@ -719,27 +663,38 @@ namespace Oxide.Plugins
             Puts("Creating a new config file");
             var config = new ConfigData
             {
-                DefaultKit = "tdm_kit",
-                EventName = "TeamDeathmatch",
-                TeamA_Spawnfile = "tdmspawns_a",
-                TeamB_Spawnfile = "tdmspawns_b",
-                TeamA_Color = "#33CC33",
-                TeamB_Color = "#003366",
-                TeamA_Shirt = "tshirt",
-                TeamA_SkinID = 0,
-                TeamB_Shirt = "tshirt",
-                TeamB_SkinID = 14177,
-                GUIPosX = 0.3f,
-                GUIPosY = 0.92f,
-                GUIDimX = 0.4f,
-                GUIDimY = 0.06f,
-                GUI_TextSize = 20,
-                KillLimit = 10,
-                FF_Damage_Modifier = 0,
-                StartingHealth = 100,
-                Tokens_Kill = 1,
-                Tokens_Win = 5,
-                ZoneName = ""
+                EventSettings = new EventSettings
+                {
+                    DefaultKit = "tdmkit",
+                    DefaultZoneID = "tdmzone",
+                    TokensOnKill = 1,
+                    TokensOnWin = 5
+                },
+                GameSettings = new GameSettings
+                {
+                    FFDamageModifier = 0,
+                    ScoreLimit = 10,
+                    StartHealth = 100
+                },
+                TeamA = new TeamSettings
+                {
+                    Color = "#33CC33",
+                    Shirt = "tshirt",
+                    SkinID = 0,
+                    Spawnfile = "tdmspawnsa"
+                },
+                TeamB = new TeamSettings
+                {
+                    Color = "#003366",
+                    Shirt = "tshirt",
+                    SkinID = 14177,
+                    Spawnfile = "tdmspawnsb"
+                },
+                Messaging = new Messaging
+                {
+                    MainColor = "<color=orange>",
+                    MSGColor = "<color=#939393>"
+                }                
             };
             SaveConfig(config);
         }
@@ -767,7 +722,8 @@ namespace Oxide.Plugins
             {"AssignTeam", "You have been assigned to <color={1}>Team {0}</color>"},
             {"TeamA", "A" },
             {"TeamB", "B" },
-            {"TeamNone", "None" }
+            {"TeamNone", "None" },
+            {"Draw", "The game ended in a draw!" }
         };
         #endregion
     }

@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Oxide.Plugins
 {
-    [Info("MineAnywhere", "Calytic @ RustServers.IO", "0.0.2", ResourceId = 2240)]
+    [Info("MineAnywhere", "Calytic @ RustServers.IO", "0.0.3", ResourceId = 2240)]
     [Description("Mine all the rocks, all the wood, all the junk, even the ground")]
     class MineAnywhere : RustPlugin
     {
@@ -35,6 +35,16 @@ namespace Oxide.Plugins
 
             public Dictionary<ResourceType, Dictionary<string, float>> nodeResources;
             public List<string> nodeDeployables;
+
+            public List<int> miningImplements = new List<int>()
+            {
+                -578028723,
+                -1440143841,
+                789892804,
+                790921853,
+                -1289478934,
+                698310895
+            };
 
             public string VERSION;
         }
@@ -92,6 +102,17 @@ namespace Oxide.Plugins
         void LoadConfig()
         {
             settings = Config.ReadObject<PluginSettings>();
+
+            if (Config["VERSION"] == null)
+            {
+                // FOR COMPATIBILITY WITH INITIAL VERSIONS WITHOUT VERSIONED CONFIG
+                ReloadConfig();
+            }
+            else if (settings.VERSION != Version.ToString())
+            {
+                // ADDS NEW, IF ANY, CONFIGURATION OPTIONS
+                ReloadConfig();
+            }
         }
 
         void LoadDefaultConfig()
@@ -103,6 +124,17 @@ namespace Oxide.Plugins
         void SaveConfig()
         {
             Config.WriteObject<PluginSettings>(settings, true);
+        }
+
+        protected void ReloadConfig()
+        {
+            settings.VERSION = Version.ToString();
+
+            // NEW CONFIGURATION OPTIONS HERE
+            // END NEW CONFIGURATION OPTIONS
+
+            PrintWarning("Upgrading configuration file");
+            SaveConfig();
         }
 
         PluginSettings DefaultConfig()
@@ -200,6 +232,17 @@ namespace Oxide.Plugins
 
         void TriggerHit(BasePlayer player, ResourceType type, BaseEntity hitEntity = null)
         {
+            Item activeItem = player.GetActiveItem();
+            if (activeItem == null)
+            {
+                return;
+            }
+
+            if (!settings.miningImplements.Contains(activeItem.info.itemid))
+            {
+                return;
+            }
+
             if (hitEntity != null && settings.canMineDeployables)
             {
                 foreach (string name in settings.nodeDeployables)

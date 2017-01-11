@@ -1,0 +1,19 @@
+{
+    "name": "Level System",
+    "description": "A simple plugin to add XP and levels in the game",
+    "author": "D-Kay",
+    "version": "0.5.4",
+    "configuration": true,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/level-system.1822",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

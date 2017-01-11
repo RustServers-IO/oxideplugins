@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Building Grades", "bawNg / Nogrod", "0.3.6", ResourceId = 865)]
+    [Info("Building Grades", "bawNg / Nogrod", "0.3.7", ResourceId = 865)]
     class BuildingGrades : RustPlugin
     {
         private readonly FieldInfo serverInputField = typeof(BasePlayer).GetField("serverInput", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -345,7 +345,7 @@ namespace Oxide.Plugins
 
         static bool CanUpgrade(BuildingBlock block, BuildingGrade.Enum grade)
         {
-            if (block.isDestroyed || grade == block.grade)
+            if (block.IsDestroyed || grade == block.grade)
                 return false;
             if ((int) grade > block.blockDefinition.grades.Length)
                 return false;

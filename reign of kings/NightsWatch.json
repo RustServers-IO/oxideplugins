@@ -1,0 +1,16 @@
+{
+    "name": "NightsWatch",
+    "description": "A Plugin that either immediatly reports trespassers or saves a Watchreport for later",
+    "author": "juk3b0x",
+    "version": "1.3.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nightswatch.2075",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

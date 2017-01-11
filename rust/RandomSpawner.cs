@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Random Spawner", "LaserHydra", "1.0.0", ResourceId = 0)]
+    [Info("Random Spawner", "LaserHydra", "1.0.1", ResourceId = 1456)]
     [Description("Randomly Spawn a specific amount of an entity on the map")]
     class RandomSpawner : RustPlugin
     {
@@ -102,7 +102,7 @@ namespace Oxide.Plugins
 
             if (entity != null)
             {
-                entity.Spawn(true);
+                entity.Spawn();
             }
         }
 

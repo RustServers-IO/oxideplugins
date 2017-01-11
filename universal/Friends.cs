@@ -44,14 +44,14 @@ interface IBattleLinkFriends // BattleLink integration interface for reference
 
 namespace Oxide.Plugins
 {
-    [Info("Friends", "dcode", "2.5.0", ResourceId = 2120)]
+    [Info("Friends", "dcode", "2.5.2", ResourceId = 2120)]
     [Description("Universal friends plugin.")]
     public class Friends : CovalencePlugin, IBattleLinkFriends
     {
         #region Config
 
         class ConfigData
-        {// Do not edit! These are the defaults. Edit oxide/config/Friends.json instead!
+        {// Do not edit! These are the defaults. Edit oxide/config/Friends.json instead.
 
             public int  MaxFriends = 30;
             public bool DisableFriendlyFire = false;
@@ -249,6 +249,7 @@ namespace Oxide.Plugins
         IPlayer findPlayer(string nameOrId, out bool multipleMatches)
         {
             multipleMatches = false;
+            List<IPlayer> currentPlayers = covalence.Players.All.ToList();
 
             // First pass: Check for unique player id
             {
@@ -259,7 +260,7 @@ namespace Oxide.Plugins
 
             // Second pass: Check for exact name
             IPlayer found = null;
-            foreach (var player in covalence.Players.All)
+            foreach (var player in currentPlayers)
             {
                 if (player.Name == nameOrId)
                 {
@@ -274,10 +275,40 @@ namespace Oxide.Plugins
             if (found != null)
                 return found;
 
-            // Third pass: Check for partial name
-            foreach (var player in covalence.Players.All)
+            // Third pass: Check for exact name case insensitive
+            foreach (var player in currentPlayers)
+            {
+                if (player.Name.Equals(nameOrId, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (found != null)
+                    {
+                        multipleMatches = true;
+                        return found;
+                    }
+                    found = player;
+                }
+            }
+            if (found != null)
+                return found;
+
+            // Fourth pass: Check for partial name
+            foreach (var player in currentPlayers)
             {
                 if (player.Name.Contains(nameOrId))
+                {
+                    if (found != null)
+                    {
+                        multipleMatches = true;
+                        return found;
+                    }
+                    found = player;
+                }
+            }
+
+            // Fifth pass: Check for partial name case insensitive
+            foreach (var player in currentPlayers)
+            {
+                if (player.Name.IndexOf(nameOrId, StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     if (found != null)
                     {
@@ -717,7 +748,7 @@ namespace Oxide.Plugins
         }
 
         // Allows door usage if ShareCodeLocks is enabled and player is a friend of the door's owner.
-        object CanUseDoor(BasePlayer player, BaseLock codeLock)
+        object CanUseLock(BasePlayer player, BaseLock codeLock)
         {
             ulong ownerId;
             return configData.Rust.ShareCodeLocks

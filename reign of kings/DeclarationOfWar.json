@@ -1,0 +1,16 @@
+{
+    "name": "DeclarationOfWar",
+    "description": "Disables cube damage with siege when no war has been declared",
+    "author": "juk3b0x",
+    "version": "1.2.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/declarationofwar.2080",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

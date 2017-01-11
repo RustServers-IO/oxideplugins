@@ -1,0 +1,17 @@
+{
+    "name": "No Friendly Fire",
+    "description": "Prevents guild members from doing damage to each other",
+    "author": "D-Kay",
+    "version": "1.1",
+    "configuration": true,
+    "suggest": {},
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/no-friendly-fire.1091",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

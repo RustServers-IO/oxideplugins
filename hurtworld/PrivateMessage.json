@@ -1,0 +1,16 @@
+{
+    "name": "Private Message",
+    "description": "A simple private messaging plugin for players.",
+    "author": "SouZa",
+    "version": "1.2.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/private-message.1541",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

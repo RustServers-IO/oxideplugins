@@ -13,7 +13,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut", "1.5.1", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut", "1.6.0", ResourceId = 2193)]
 
     class ImageLibrary : RustPlugin
     {
@@ -21,19 +21,19 @@ namespace Oxide.Plugins
 
         ImageData imageData;
         private DynamicConfigFile ImageLibraryData;
-
+        bool WorkshopDone;
+        bool BasicDone;
         public class ImageData
         {
             public uint CommID;
             public Dictionary<string, Dictionary<ulong, uint>> Images = new Dictionary<string, Dictionary<ulong, uint>>();
             public Dictionary<string, Dictionary<ulong, string>> ImageURLs = new Dictionary<string, Dictionary<ulong, string>>();
         }
-        private Dictionary<string, List<ulong>> TriedToAdd = new Dictionary<string, List<ulong>>();
 
         static GameObject webObject;
         static Images images;
         static MethodInfo getFileData = typeof(FileStorage).GetMethod("StorageGet", (BindingFlags.Instance | BindingFlags.NonPublic));
-        Dictionary<string, int> ItemLists = new Dictionary<string, int>();
+        Dictionary<string, string> ItemLists = new Dictionary<string, string>();
         public class TestingData
         {
             public Dictionary<string, List<ulong>> SkinIndex = new Dictionary<string, List<ulong>>();
@@ -47,6 +47,8 @@ namespace Oxide.Plugins
         void Loaded()
         {
             ImageLibraryData = Interface.Oxide.DataFileSystem.GetFile("ImageLibrary_Data");
+            WorkshopDone = false;
+            BasicDone = false;
         }
 
         void Unload()
@@ -77,6 +79,14 @@ namespace Oxide.Plugins
 
         #region External Calls
 
+        [HookMethod("isReady")]
+        public bool isReady()
+        {
+            if (WorkshopDone && BasicDone) return true;
+            else return false;
+        }
+
+
         [HookMethod("GetImageURL")]
         public string GetImageURL(string shortname, ulong skin = 0)
         {
@@ -91,52 +101,39 @@ namespace Oxide.Plugins
         {
             if (!imageData.Images.ContainsKey(shortname))
             {
-                if (!TriedToAdd.ContainsKey(shortname))
+                if (GetPluginName(skin) != "")
                 {
-                    if (GetPluginName(skin) != "")
-                    {
-                        var pluginfolder = GetPluginName(skin);
-                        Puts(pluginfolder);
-                        string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
-                        images.Add(path + shortname + ".png", shortname, skin);
-                        SaveData();
-                        TriedToAdd.Add(shortname, new List<ulong> { skin });
-                        try
-                        {
-                            return imageData.Images[shortname][skin].ToString();
-                        }
-                        catch
-                        {
-                        }
-                    }
+                    var pluginfolder = GetPluginName(skin);
+                    string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
+                    images.Add(path + shortname + ".png", shortname, skin);
+                }
+                try
+                {
+                    return imageData.Images[shortname][skin].ToString();
+                }
+                catch
+                {
                 }
                 return imageData.Images["NONE"][0].ToString();
             }
-            if (!imageData.Images[shortname].ContainsKey(skin))
+            else if (!imageData.Images[shortname].ContainsKey(skin))
             {
-                if (!TriedToAdd.ContainsKey(shortname) || !TriedToAdd[shortname].Contains(skin))
+                if (GetPluginName(skin) != "")
                 {
-                    if (GetPluginName(skin) != "")
+                    var pluginfolder = GetPluginName(skin);
+                    string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
+                    images.Add(path + shortname + ".png", shortname, skin);
+                    try
                     {
-                        var pluginfolder = GetPluginName(skin);
-                        string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
-                        images.Add(path + shortname + ".png", shortname, skin);
-                        SaveData();
-                        if (!TriedToAdd.ContainsKey(shortname))
-                            TriedToAdd.Add(shortname, new List<ulong> { skin });
-                        else TriedToAdd[shortname].Add(skin);
-                        try
-                        {
-                            return imageData.Images[shortname][skin].ToString();
-                        }
-                        catch
-                        {
-                        }
+                        return imageData.Images[shortname][skin].ToString();
+                    }
+                    catch
+                    {
                     }
                 }
                 return imageData.Images["NONE"][0].ToString();
             }
-            return imageData.Images[shortname][skin].ToString();
+            else return imageData.Images[shortname][skin].ToString();
         }
 
         [HookMethod("GetImageList")]
@@ -195,9 +192,15 @@ namespace Oxide.Plugins
         class Images : MonoBehaviour
         {
             ImageLibrary filehandler;
-            const ulong MaxActiveLoads = 3;
+            const ulong MaxActiveLoads = 100;
             static readonly List<QueueImages> QueueList = new List<QueueImages>();
             static byte activeLoads;
+            private void Awake() => filehandler = (ImageLibrary)Interface.Oxide.RootPluginManager.GetPlugin(nameof(ImageLibrary));
+            private void OnDestroy()
+            {
+                QueueList.Clear();
+                filehandler = null;
+            }
             private MemoryStream stream = new MemoryStream();
 
             public void SetDataDir(ImageLibrary fc) => filehandler = fc;
@@ -239,6 +242,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
+                    //filehandler.Puts(info.name);
                     if (!filehandler.imageData.Images.ContainsKey(info.name))
                         filehandler.imageData.Images.Add(info.name, new Dictionary<ulong, uint>());
                     if (!filehandler.imageData.Images[info.name].ContainsKey(info.skin))
@@ -249,12 +253,28 @@ namespace Oxide.Plugins
                         //uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
                         uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                         ClearStream();
+                        //filehandler.Puts($"NEW: {textureID.ToString()}");
+                        //filehandler.Puts($"OLD: {filehandler.imageData.Images[info.name][info.skin]}");
                         if (filehandler.imageData.Images[info.name][info.skin] != textureID)
                             filehandler.imageData.Images[info.name][info.skin] = textureID;
                     }
                 }
                 activeLoads--;
                 if (QueueList.Count > 0) Next();
+                else
+                {
+                    if (!filehandler.WorkshopDone && filehandler.BasicDone)
+                    {
+                        filehandler.WorkshopDone = true;
+                        filehandler.timer.Once(10, () => { filehandler.Puts("Workshop Images Loaded"); filehandler.SaveData(); });
+                    }
+                    else if (!filehandler.BasicDone)
+                    {
+                        filehandler.BasicDone = true;
+                        filehandler.timer.Once(10, () => { filehandler.Puts("Basic Images Loaded"); filehandler.SaveData();});
+                    }                   
+                    else filehandler.SaveData();
+                }
             }
         }
 
@@ -266,22 +286,20 @@ namespace Oxide.Plugins
 
         private void RefreshAllImages()
         {
+            BasicDone = false;
+            WorkshopDone = false;
             InitializeItemList();
             imageData.Images.Clear();
             Puts("All Images Wiped!");
             RefreshImages();
         }
 
-        private void CheckNewImages()
+        [ConsoleCommand("WorkshopImages")]
+        private void cmdWorkshopImages(ConsoleSystem.Arg arg)
         {
-            images.Add("http://www.hngu.net/Images/College_Logo/28/b894b451_c203_4c08_922c_ebc95077c157.png", "NONE", 0);
-            foreach (var entry in ItemImages)
-                foreach (var item in entry.Value)
-                        images.Add(item.Value, entry.Key, item.Key);
-            timer.Once(10, () =>
-            {
-                SaveData();
-            });
+            WorkshopDone = false;
+            ServerMgr.Instance.StartCoroutine(GetWorkshopSkins());
+            Puts("Loading Workshop Images");
         }
 
         [ConsoleCommand("RefreshImages")]
@@ -292,48 +310,45 @@ namespace Oxide.Plugins
 
         void InitializeItemList()
         {
-            if (!configData.GetMarketImages) return;
             ItemLists.Clear();
             foreach (var item in ItemManager.itemList)
             {
-                ItemLists.Add(item.displayName.english.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", ""), item.itemid);
-                item.skins2 = new Facepunch.Steamworks.Inventory.Definition[0];
+                ItemLists.Add(item.displayName.english.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", ""), item.shortname);
+                //item.skins2 = new Facepunch.Steamworks.Inventory.Definition[0];
             }
-            ItemLists.Add("longtshirt", ItemManager.FindItemDefinition("tshirt.long").itemid);
-            ItemLists.Add("cap", ItemManager.FindItemDefinition("hat.cap").itemid);
-            ItemLists.Add("beenie", ItemManager.FindItemDefinition("hat.beenie").itemid);
-            ItemLists.Add("boonie", ItemManager.FindItemDefinition("hat.boonie").itemid);
-            ItemLists.Add("balaclava", ItemManager.FindItemDefinition("mask.balaclava").itemid);
-            ItemLists.Add("pipeshotgun", ItemManager.FindItemDefinition("shotgun.waterpipe").itemid);
-            ItemLists.Add("woodstorage", ItemManager.FindItemDefinition("box.wooden").itemid);
-            ItemLists.Add("ak47", ItemManager.FindItemDefinition("rifle.ak").itemid);
-            ItemLists.Add("boltrifle", ItemManager.FindItemDefinition("rifle.bolt").itemid);
-            ItemLists.Add("bandana", ItemManager.FindItemDefinition("mask.bandana").itemid);
-            ItemLists.Add("snowjacket", ItemManager.FindItemDefinition("jacket.snow").itemid);
-            ItemLists.Add("buckethat", ItemManager.FindItemDefinition("bucket.helmet").itemid);
-            ItemLists.Add("semiautopistol", ItemManager.FindItemDefinition("pistol.semiauto").itemid);
-            ItemLists.Add("burlapgloves", ItemManager.FindItemDefinition("burlap.gloves").itemid);
-            ItemLists.Add("roadsignvest", ItemManager.FindItemDefinition("roadsign.jacket").itemid);
-            ItemLists.Add("roadsignpants", ItemManager.FindItemDefinition("roadsign.kilt").itemid);
-            ItemLists.Add("burlappants", ItemManager.FindItemDefinition("burlap.trousers").itemid);
-            ItemLists.Add("collaredshirt", ItemManager.FindItemDefinition("shirt.collared").itemid);
-            ItemLists.Add("mp5", ItemManager.FindItemDefinition("smg.mp5").itemid);
-            ItemLists.Add("sword", ItemManager.FindItemDefinition("longsword").itemid);
-            ItemLists.Add("workboots", ItemManager.FindItemDefinition("shoes.boots").itemid);
-            ItemLists.Add("vagabondjacket", ItemManager.FindItemDefinition("jacket").itemid);
-            ItemLists.Add("hideshoes", ItemManager.FindItemDefinition("shoes.boots").itemid);
-            ItemLists.Add("deerskullmask", ItemManager.FindItemDefinition("deer.skull.mask").itemid);
-            ItemLists.Add("minerhat", ItemManager.FindItemDefinition("hat.miner").itemid);
-            ItemLists.Add("hideshirt", ItemManager.FindItemDefinition("shirt.tanktop").itemid);
+            ItemLists.Add("longtshirt", ItemManager.FindItemDefinition("tshirt.long").shortname);
+            ItemLists.Add("cap", ItemManager.FindItemDefinition("hat.cap").shortname);
+            ItemLists.Add("beenie", ItemManager.FindItemDefinition("hat.beenie").shortname);
+            ItemLists.Add("boonie", ItemManager.FindItemDefinition("hat.boonie").shortname);
+            ItemLists.Add("balaclava", ItemManager.FindItemDefinition("mask.balaclava").shortname);
+            ItemLists.Add("pipeshotgun", ItemManager.FindItemDefinition("shotgun.waterpipe").shortname);
+            ItemLists.Add("woodstorage", ItemManager.FindItemDefinition("box.wooden").shortname);
+            ItemLists.Add("ak47", ItemManager.FindItemDefinition("rifle.ak").shortname);
+            ItemLists.Add("boltrifle", ItemManager.FindItemDefinition("rifle.bolt").shortname);
+            ItemLists.Add("bandana", ItemManager.FindItemDefinition("mask.bandana").shortname);
+            ItemLists.Add("snowjacket", ItemManager.FindItemDefinition("jacket.snow").shortname);
+            ItemLists.Add("buckethat", ItemManager.FindItemDefinition("bucket.helmet").shortname);
+            ItemLists.Add("semiautopistol", ItemManager.FindItemDefinition("pistol.semiauto").shortname);
+            ItemLists.Add("burlapgloves", ItemManager.FindItemDefinition("burlap.gloves").shortname);
+            ItemLists.Add("roadsignvest", ItemManager.FindItemDefinition("roadsign.jacket").shortname);
+            ItemLists.Add("roadsignpants", ItemManager.FindItemDefinition("roadsign.kilt").shortname);
+            ItemLists.Add("burlappants", ItemManager.FindItemDefinition("burlap.trousers").shortname);
+            ItemLists.Add("collaredshirt", ItemManager.FindItemDefinition("shirt.collared").shortname);
+            ItemLists.Add("mp5", ItemManager.FindItemDefinition("smg.mp5").shortname);
+            ItemLists.Add("sword", ItemManager.FindItemDefinition("longsword").shortname);
+            ItemLists.Add("workboots", ItemManager.FindItemDefinition("shoes.boots").shortname);
+            ItemLists.Add("vagabondjacket", ItemManager.FindItemDefinition("jacket").shortname);
+            ItemLists.Add("hideshoes", ItemManager.FindItemDefinition("shoes.boots").shortname);
+            ItemLists.Add("deerskullmask", ItemManager.FindItemDefinition("deer.skull.mask").shortname);
+            ItemLists.Add("minerhat", ItemManager.FindItemDefinition("hat.miner").shortname);
+            ItemLists.Add("hideshirt", ItemManager.FindItemDefinition("shirt.tanktop").shortname);
         }
 
         private void RefreshImages()
         {
-            if (imageData.Images == null || imageData.Images.Count < 1)
-            {
-                Puts("No Images found. Loading new default File");
-                imageData = new ImageData();
-            }
+            Puts("Loading Basic Images");
+            if (imageData.CommID != CommunityEntity.ServerInstance.net.ID)
+                imageData.CommID = CommunityEntity.ServerInstance.net.ID;
             images.Add("http://www.hngu.net/Images/College_Logo/28/b894b451_c203_4c08_922c_ebc95077c157.png", "NONE", 0);
             webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", (code, response) =>
             {
@@ -354,11 +369,11 @@ namespace Oxide.Plugins
                         images.Add(item.Value, entry.Key, item.Key);
             if (!configData.GetMarketImages)
             {
-                timer.Once(20, () => { SaveData(); Puts("Images loaded!"); });
+                WorkshopDone = true;
                 return;
             }
             ServerMgr.Instance.StartCoroutine(GetWorkshopSkins());
-            Puts("Waiting for images to load....");
+            Puts("Loading Workshop Images");
         }
 
         public IEnumerator GetWorkshopSkins()
@@ -370,34 +385,28 @@ namespace Oxide.Plugins
             workshopQuery.Run();
 
             yield return new WaitWhile(new System.Func<bool>(() => workshopQuery.IsRunning));
-
-            var InventoryDefinitions = new List<Facepunch.Steamworks.Inventory.Definition>();
             bool flag = false;
             foreach (var item in workshopQuery.Items)
             {
-                int targetId = -1;
+                string itemshortname = null;
                 flag = false;
                 foreach (var tag in item.Tags)
                 {
                     string removeskin = tag.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", "");
                     if (ItemLists.ContainsKey(removeskin))
                     {
-                        targetId = ItemLists[removeskin];
+                        itemshortname = ItemLists[removeskin];
                         flag = true;
+                        break;
                     }
                 }
                 if (!flag)
                 {
                     continue;
                 }
-                ItemDefinition targetItem = ItemManager.FindItemDefinition(targetId);
-                if (targetItem != null)
-                {
-                    images.Add(item.PreviewImageUrl.ToString(), targetItem.shortname, item.Id);
-                }
+                images.Add(item.PreviewImageUrl.ToString(),itemshortname, item.Id);
             }
             workshopQuery.Dispose();
-            timer.Once(120, () => { SaveData(); Puts("Images loaded!"); });
         }
 
         private void RelocateImages()
@@ -2106,13 +2115,12 @@ namespace Oxide.Plugins
             try
             {
                 imageData = ImageLibraryData.ReadObject<ImageData>();
-                if (imageData == null)
+                if (imageData == null || imageData.Images == null)
                 {
+                    Puts("Image Data File appears corrupt. Creating a new file, loading images...");
                     imageData = new ImageData();
                     RefreshImages();
                 }
-                else
-                CheckNewImages();
             }
             catch
             {

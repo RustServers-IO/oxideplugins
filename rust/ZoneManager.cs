@@ -20,7 +20,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneManager", "Reneb / Nogrod", "2.4.7", ResourceId = 739)]
+    [Info("ZoneManager", "Reneb / Nogrod", "2.4.8", ResourceId = 739)]
     public class ZoneManager : RustPlugin
     {
         private const string PermZone = "zonemanager.zone";
@@ -979,7 +979,7 @@ namespace Oxide.Plugins
                 timer.Once(2f, () =>
                 {
                     HashSet<Zone> zones;
-                    if (entity.isDestroyed || !resourceZones.TryGetValue(entity.GetComponent<ResourceDispenser>(), out zones)) return;
+                    if (entity.IsDestroyed || !resourceZones.TryGetValue(entity.GetComponent<ResourceDispenser>(), out zones)) return;
                     foreach (var zone in zones)
                     {
                         if (HasZoneFlag(zone, ZoneFlags.NoCorpse))
@@ -1714,7 +1714,7 @@ namespace Oxide.Plugins
                 if (HasZoneFlag(zone, ZoneFlags.NoDrop))
                     timer.Once(2f, () =>
                     {
-                        if (worldItem.isDestroyed) return;
+                        if (worldItem.IsDestroyed) return;
                         worldItem.KillMessage();
                     });
                 else if (HasZoneFlag(zone, ZoneFlags.NoPickup))
@@ -1779,7 +1779,7 @@ namespace Oxide.Plugins
             {
                 if (!otherZones.TryGetValue(key, out zones))
                 {
-                    Puts("Zone: {0} Entity: {1} ({2}) {3}", zone.Info.Id, key.GetType(), key.net?.ID, key.isDestroyed);
+                    Puts("Zone: {0} Entity: {1} ({2}) {3}", zone.Info.Id, key.GetType(), key.net?.ID, key.IsDestroyed);
                     continue;
                 }
                 if (zones.Contains(zone))

@@ -1,0 +1,16 @@
+{
+    "name": "HelpText",
+    "description": "Allows people to use \/help to get help info from plugins",
+    "author": "Mughisi",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/helptext.1055",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

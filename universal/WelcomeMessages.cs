@@ -1,9 +1,10 @@
 ﻿using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("WelcomeMessages", "Ankawi", "1.0.0", ResourceId = 0)]
+    [Info("WelcomeMessages", "Ankawi", "1.0.1", ResourceId = 0)]
     [Description("Sends players welcome messages")]
 
     class WelcomeMessages : CovalencePlugin
@@ -28,7 +29,7 @@ namespace Oxide.Plugins
 
         void OnUserConnected(IPlayer player)
         {
-            player.Reply(covalence.FormatText(string.Format(lang.GetMessage("Welcome", this, player.Id), player.Name)));
+            player.Reply(covalence.FormatText(string.Format(lang.GetMessage("Welcome", this, player.Id), player.Name.Sanitize())));
         }
     }
 }

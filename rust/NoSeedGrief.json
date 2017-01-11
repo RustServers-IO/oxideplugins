@@ -1,0 +1,16 @@
+{
+    "name": "NoSeedGrief",
+    "description": "Blocks seed from being planted if Building Blocked. Seeds are refunded.",
+    "author": "mvrb",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/noseedgrief.2260",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

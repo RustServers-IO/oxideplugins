@@ -1,12 +1,15 @@
 ﻿using System;
+using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("PillsHere", "Wulf/lukespragg", "3.0.1", ResourceId = 1723)]
+    [Info("PillsHere", "Wulf/lukespragg", "3.0.2", ResourceId = 1723)]
     [Description("Recovers health, hunger, and thirst by set amounts when using rad pills")]
 
-    class PillsHere : RustPlugin
+    class PillsHere : CovalencePlugin
     {
+        #region Initialization
+
         const string permUse = "pillshere.use";
 
         float healAmount;
@@ -20,11 +23,6 @@ namespace Oxide.Plugins
             Config["Hunger Amount"] = hungerAmount = GetConfig("Hunger Amount", 0f);
             Config["Thirst Amount"] = thirstAmount = GetConfig("Thirst Amount", 0f);
 
-            // Cleanup
-            Config.Remove("HealthAmount");
-            Config.Remove("HungerAmount");
-            Config.Remove("ThirstAmount");
-
             SaveConfig();
         }
 
@@ -34,6 +32,12 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permUse, this);
         }
 
+        #endregion
+
+        #region Healing
+
+        readonly FieldInfo lastValue = typeof(MetabolismAttribute).GetField("lastValue", BindingFlags.Instance | BindingFlags.NonPublic);
+
         void OnConsumableUse(Item item)
         {
             var player = item.GetOwnerPlayer();
@@ -42,9 +46,17 @@ namespace Oxide.Plugins
 
             player.Heal(healAmount);
             player.metabolism.calories.value += hungerAmount;
-            player.metabolism.hydration.value += 50 + thirstAmount;
+
+            var oldHydration = (float)lastValue.GetValue(player.metabolism.hydration);
+            player.metabolism.hydration.value = oldHydration + thirstAmount;
         }
 
+        #endregion
+
+        #region Helpers
+
         T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
+
+        #endregion
     }
 }

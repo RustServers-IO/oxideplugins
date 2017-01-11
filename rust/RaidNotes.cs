@@ -14,10 +14,11 @@ using Rust;
 
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("RaidNotes", "Calytic", "0.0.3")]
+    [Info("RaidNotes", "Calytic", "0.0.5")]
     [Description("Broadcasts raid activity to chat")]
     public class RaidNotes : RustPlugin
     {
@@ -38,6 +39,7 @@ namespace Oxide.Plugins
 
         private bool announceGlobal = true;
         private bool announceClan = false;
+        private bool announceToVictims = false;
         private bool printToLog = true;
 
         private bool useClans = false;
@@ -79,7 +81,8 @@ namespace Oxide.Plugins
             public ulong attacker;
             public uint weapon;
 
-            public AttackVector(ulong attacker, uint weapon, Vector3 vector) {
+            public AttackVector(ulong attacker, uint weapon, Vector3 vector)
+            {
                 this.attacker = attacker;
                 this.vector = vector;
                 this.weapon = weapon;
@@ -89,8 +92,12 @@ namespace Oxide.Plugins
         public class Raid
         {
             RaidNotes plugin;
+            [JsonConverter(typeof(IsoDateTimeConverter))]
             public DateTime start = DateTime.Now;
+
+            [JsonConverter(typeof(IsoDateTimeConverter))]
             public DateTime end;
+
             public Vector3 firstDamage;
             public Vector3 lastDamage;
             public ulong initiator;
@@ -151,8 +158,8 @@ namespace Oxide.Plugins
             {
                 var obj = new JObject();
 
-                obj["start"] = start;
-                obj["end"] = end;
+                obj["start"] = start.ToString();
+                obj["end"] = end.ToString();
                 var explosions = new JObject();
                 explosions.Add("first", Vector2JObject(firstDamage));
                 explosions.Add("last", Vector2JObject(lastDamage));
@@ -202,7 +209,7 @@ namespace Oxide.Plugins
                 return obj;
             }
 
-            internal void OnEnded() 
+            internal void OnEnded()
             {
                 Interface.CallHook("OnRaidEnded", ToJObject());
             }
@@ -243,6 +250,7 @@ namespace Oxide.Plugins
 
             Config["announceGlobal"] = false;
             Config["announceClan"] = true;
+            Config["announceToVictims"] = true;
             Config["printToLog"] = true;
 
             Config["announceIcon"] = 0;
@@ -274,6 +282,7 @@ namespace Oxide.Plugins
 
             announceGlobal = GetConfig("announceGlobal", false);
             announceClan = GetConfig("announceClan", true);
+            announceToVictims = GetConfig("announceToVictims", true);
             printToLog = GetConfig("printToLog", true);
 
             announceRaidEnd = GetConfig("announceRaidEnd", false);
@@ -294,17 +303,20 @@ namespace Oxide.Plugins
             announceClanColor = GetConfig("announceClanColor", "#00eaff");
             announceWeaponColor = GetConfig("announceWeaponColor", "#666666");
 
-            foreach (ItemDefinition def in ItemManager.itemList)
+            foreach (ItemDefinition def in ItemManager.GetItemDefinitions())
             {
                 var modEntity = def.GetComponent<ItemModEntity>();
                 if (modEntity != null && modEntity.entityPrefab != null)
                 {
                     var prefab = modEntity.entityPrefab.Get();
-                    var thrownWeapon = prefab.GetComponent<ThrownWeapon>();
-
-                    if (thrownWeapon != null && !reverseItems.ContainsKey(thrownWeapon.prefabToThrow.resourcePath))
+                    if (prefab != null)
                     {
-                        reverseItems.Add(thrownWeapon.prefabToThrow.resourcePath, def.itemid);
+                        var thrownWeapon = prefab.GetComponent<ThrownWeapon>();
+
+                        if (thrownWeapon != null && thrownWeapon.prefabToThrow != null && thrownWeapon.prefabToThrow.resourcePath != null && !reverseItems.ContainsKey(thrownWeapon.prefabToThrow.resourcePath))
+                        {
+                            reverseItems.Add(thrownWeapon.prefabToThrow.resourcePath, def.itemid);
+                        }
                     }
                 }
             }
@@ -339,6 +351,7 @@ namespace Oxide.Plugins
             Config["VERSION"] = Version.ToString();
 
             // NEW CONFIGURATION OPTIONS HERE
+            announceToVictims = GetConfig("announceToVictims", true);
             // END NEW CONFIGURATION OPTIONS
 
             PrintToConsole("Upgrading configuration file");
@@ -371,14 +384,14 @@ namespace Oxide.Plugins
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
             if (!checkEntityDamage) return;
-            if (hitInfo == null || 
+            if (hitInfo == null ||
                 hitInfo.Initiator == null ||
                 hitInfo.WeaponPrefab == null ||
-                !IsEntityRaidable(entity)) 
+                !IsEntityRaidable(entity))
                 return;
 
             DamageType majorityDamageType = hitInfo.damageTypes.GetMajorityDamageType();
-            
+
             string prefabName = hitInfo.WeaponPrefab.PrefabName;
             if (reverseItems.ContainsKey(prefabName))
             {
@@ -395,7 +408,8 @@ namespace Oxide.Plugins
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo hitInfo)
         {
             if (!checkEntityDeath) return;
-            if (hitInfo == null) {
+            if (hitInfo == null)
+            {
                 return;
             }
 
@@ -403,7 +417,8 @@ namespace Oxide.Plugins
             {
                 BasePlayer initiator = hitInfo.Initiator.ToPlayer();
 
-                if(initiator is BasePlayer) {
+                if (initiator is BasePlayer)
+                {
                     if (IsEntityRaidable(entity))
                     {
                         DamageType majorityDamageType = hitInfo.damageTypes.GetMajorityDamageType();
@@ -556,7 +571,8 @@ namespace Oxide.Plugins
                     RaidBehavior behavior = nearbyTarget.GetComponent<RaidBehavior>();
                     if (behavior != null && behavior.raid != null)
                     {
-                        if(!existingRaids.Contains(behavior.raid)) {
+                        if (!existingRaids.Contains(behavior.raid))
+                        {
                             existingRaids.Add(behavior.raid);
                         }
                     }
@@ -660,7 +676,7 @@ namespace Oxide.Plugins
 
             raid.end = DateTime.Now;
             raid.OnEnded();
-            
+
         }
 
         void AddToRaid(BasePlayer player, Raid raid)
@@ -684,7 +700,8 @@ namespace Oxide.Plugins
             string initiatorClanMatesText = "1";
             string victimClanMatesText = "1";
 
-            if(useClans) {
+            if (useClans)
+            {
 
                 initiatorClanTag = Clans.Call<string>("GetClanOf", raid.initiator);
                 victimClanTag = Clans.Call<string>("GetClanOf", raid.victim);
@@ -700,7 +717,7 @@ namespace Oxide.Plugins
                     victimClanText = string.Format("<color={0}>{1}</color>", announceClanColor, victimClanTag);
                     victimClanMatesText = GetClanMembers(victimClanTag).Count.ToString();
                 }
-            } 
+            }
 
             initiatorText = string.Format("<color={0}>{1}</color>", announceNameColor, initiatorText);
             victimText = string.Format("<color={0}>{1}</color>", announceNameColor, victimText);
@@ -760,7 +777,7 @@ namespace Oxide.Plugins
                     BroadcastGlobal(announcePrefix, message);
                 }
             }
-            else if(announceClan)
+            else if (announceClan)
             {
                 if (raid.victim > 0)
                 {
@@ -778,6 +795,13 @@ namespace Oxide.Plugins
                             }
                         }
                     }
+                }
+            }
+            else if (announceToVictims)
+            {
+                foreach (ulong owner in raid.blockOwners)
+                {
+                    BroadcastToPlayer(announcePrefix, owner.ToString(), message);
                 }
             }
         }

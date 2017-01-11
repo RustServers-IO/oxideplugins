@@ -1,46 +1,39 @@
 ﻿// Requires: EventManager
-
+using Oxide.Core;
+using Oxide.Core.Configuration;
+using Rust;
 using System.Collections.Generic;
 using System.Linq;
-using Oxide.Game.Rust.Cui;
 using UnityEngine;
-
-using Rust;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Gun Game", "k1lly0u", "0.3.52", ResourceId = 1485)]
+    [Info("GunGame", "k1lly0u", "0.4.11", ResourceId = 1485)]
     class GunGame : RustPlugin
     {
-        [PluginReference]
-        EventManager EventManager;
+        #region Fields
+        [PluginReference] EventManager EventManager;
 
-        private bool useThisEventGG;
-        private bool GGStarted;
+        ClassData classData;
+        private DynamicConfigFile data;
 
-        private List<GunGamePlayer> GunGamePlayers = new List<GunGamePlayer>();
-        private ConfigData configData;
-        private Dictionary<string, ItemDefinition> _itemsDict;
+        private List<GunGamePlayer> GunGamePlayers;
+        private Dictionary<string, ItemDefinition> itemDefs;
+        private Dictionary<ulong, SetCreator> setCreator;
 
-        class ConfigData
-        {
-            public string EventName { get; set; }
-            public string SpawnFile { get; set; }
-            public string ZoneName { get; set; }
-            public string ArmourType { get; set; }
-            public float StartHealth { get; set; }
-            public bool UseMachete { get; set; }
-            public bool UseArmour { get; set; }
-            public bool UseMeds { get; set; }
-            public bool CloseEventAtStart { get; set; }
-            public int RankLimit { get; set; }
-            public int TokensPerKill { get; set; }
-            public int TokensOnWin { get; set; }
-            public Gear DowngradeWeapon { get; set; }
-            public List<Gear> Meds { get; set; }
-            public List<Gear> PlayerGear { get; set; }
-            public Dictionary<int, RankItem> Weapons { get; set; }
-        }
+        private string currentSet;
+        private WeaponSet weaponSet;
+        private bool usingGG;
+        private bool hasStarted;
+        private bool gameEnding;
+        private bool downgradeDisabled;
+
+        private Timer dgwDisableTimer;
+
+        #endregion
+
+        #region Classes
         class GunGamePlayer : MonoBehaviour
         {
             public BasePlayer player;
@@ -55,147 +48,682 @@ namespace Oxide.Plugins
                 level = 1;
             }
         }
-
+        class WeaponSet
+        {
+            public Dictionary<int, RankItem> Weapons = new Dictionary<int, RankItem>();
+            public List<RankItem> PlayerGear = new List<RankItem>();
+        }
         internal class RankItem
         {
             public string name;
             public string shortname;
-            public int skin;
+            public ulong skin;
             public string container;
             public int amount;
             public int ammo;
             public string ammoType;
             public string[] contents = new string[0];
-        }
-        class Gear
+        }  
+        class SetCreator
         {
             public string name;
-            public string shortname;
-            public int skin;
-            public int amount;
-            public string container;
-        }
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Oxide Hooks ///////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
+            public WeaponSet set;
+        }      
+        #endregion
 
+        #region Oxide Hooks
+        void Loaded()
+        {
+            data = Interface.Oxide.DataFileSystem.GetFile("EventManager/GG_WeaponSets");
+        }
         void OnServerInitialized()
         {
-            useThisEventGG = false;
-            GGStarted = false;
-            if (EventManager == null)
-            {
-                Puts("Event plugin doesn't exist");
-                return;
-            }
             LoadVariables();
-            RegisterGame();
+            LoadData();
+            GunGamePlayers = new List<GunGamePlayer>();
+            setCreator = new Dictionary<ulong, SetCreator>();
+            itemDefs = ItemManager.itemList.ToDictionary(x => x.shortname);
+            usingGG = false;
+            hasStarted = false;
+            CheckValidSet();
+            //timer.Once(3, ()=> RegisterGame());
         }
+        void Unload()
+        {            
+            if (usingGG && hasStarted)
+                EventManager.EndEvent();
+            DestroyEvent();
+
+            var objects = UnityEngine.Object.FindObjectsOfType<GunGamePlayer>();
+            if (objects != null)
+                foreach (var gameObj in objects)
+                    UnityEngine.Object.Destroy(gameObj);
+        }
+        #endregion
+
+        #region Scoreboard
+        private void UpdateScores()
+        {
+            if (usingGG && hasStarted)
+            {
+                var sortedList = GunGamePlayers.OrderByDescending(pair => pair.level).ToList();
+                var scoreList = new Dictionary<ulong, EventManager.Scoreboard>();
+                foreach (var entry in sortedList)
+                {
+                    if (scoreList.ContainsKey(entry.player.userID)) continue;
+                    scoreList.Add(entry.player.userID, new EventManager.Scoreboard { Name = entry.player.displayName, Position = sortedList.IndexOf(entry), Score = entry.level });
+                }
+                EventManager.UpdateScoreboard(new EventManager.ScoreData { Additional = null, Scores = scoreList, ScoreType = "Level" });
+            }
+        }
+        #endregion
+
+        #region Functions
+        void CheckValidSet()
+        {
+            if (classData.WeaponConfigs.Count < 1)
+                CreateDefaultConfig();
+            if (!classData.WeaponConfigs.ContainsKey(configData.EventSettings.DefaultWeaponSet))
+            {
+                PrintError($"Unable to find the weapon set: {configData.EventSettings.DefaultWeaponSet}, using the default set");
+
+                if (!classData.WeaponConfigs.ContainsKey("default"))
+                    CreateDefaultConfig();
+                weaponSet = classData.WeaponConfigs["default"];
+                currentSet = "default";              
+            }
+            else
+            {
+                currentSet = configData.EventSettings.DefaultWeaponSet;
+                weaponSet = classData.WeaponConfigs[currentSet];
+            }
+        }
+       
+        private void DestroyEvent()
+        {
+            hasStarted = false;
+
+            if (dgwDisableTimer != null)
+                dgwDisableTimer.Destroy();
+        }
+        #endregion
+
+        #region EventManager Hooks
         void RegisterGame()
         {
-            var success = EventManager.RegisterEventGame(configData.EventName);
+            EventManager.Events eventData = new EventManager.Events
+            {
+                CloseOnStart = false,
+                DisableItemPickup = true,
+                EnemiesToSpawn = 0,
+                EventType = Title,
+                GameMode = EventManager.GameMode.Normal,
+                GameRounds = 0,
+                Kit = null,
+                MaximumPlayers = 0,
+                MinimumPlayers = 2,
+                ScoreLimit = 0,
+                Spawnfile = configData.EventSettings.DefaultSpawnfile,
+                Spawnfile2 = null,
+                SpawnType = EventManager.SpawnType.Consecutive,
+                RespawnType = EventManager.RespawnType.None,
+                RespawnTimer = 10,
+                UseClassSelector = false,
+                WeaponSet = currentSet,
+                ZoneID = configData.EventSettings.DefaultZoneID
+                
+            };
+            EventManager.EventSetting eventSettings = new EventManager.EventSetting
+            {
+                CanChooseRespawn = true,
+                CanUseClassSelector = false,
+                CanPlayBattlefield = false,
+                ForceCloseOnStart = false,
+                IsRoundBased = false,
+                RequiresKit = false,
+                RequiresMultipleSpawns = false,
+                RequiresSpawns = true,
+                ScoreType = null,
+                SpawnsEnemies = false,
+                LockClothing = false
+            };
+            var success = EventManager.RegisterEventGame(Title, eventSettings, eventData);
             if (success == null)
             {
                 Puts("Event plugin doesn't exist");
                 return;
             }
         }
-
-        protected override void LoadDefaultConfig()
+        void OnSelectEventGamePost(string name)
         {
-            Puts("Event GunGame: Creating a new config file");
-            var config = new ConfigData
+            if (Title == name)            
+                usingGG = true;  
+            else usingGG = false;
+        }
+        void OnEventPlayerSpawn(BasePlayer player)
+        {
+            if (usingGG && hasStarted && !gameEnding)
             {
-                EventName = "GunGame",
-                ZoneName = "GunGame",
-                SpawnFile = "ggspawnfile",
-                ArmourType = "metal.plate.torso",
-                StartHealth = 100,
-                UseMachete = true,
-                UseArmour = true,
-                UseMeds = true,
-                CloseEventAtStart = true,
-                RankLimit = 15,
-                TokensPerKill = 1,
-                TokensOnWin = 5,
-                DowngradeWeapon = new Gear
+                if (!player.GetComponent<GunGamePlayer>()) return;
+                if (player.IsSleeping())
                 {
-                    name = "Machete",
-                    shortname = "machete",
-                    amount = 1,
-                    container = "belt",
-                    skin = 0
-                },
-                Meds = new List<Gear>
+                    player.EndSleeping();
+                    timer.In(1, () => OnEventPlayerSpawn(player));
+                    return;
+                }
+                player.health = configData.GameSettings.StartHealth;
+                GiveGear(player);
+            }
+        } 
+        object CanEventOpen()
+        {
+            if (usingGG)
+            {
+                if (weaponSet == null)
+                    return "Invalid weapon set selected";
+            }
+            return null;
+        }        
+        object OnEventOpenPost()
+        {
+            if (usingGG)
+            {
+                EventManager.BroadcastToChat(EventMessageOpenBroadcast);
+                EventManager._Event.UseClassSelector = false;                
+            }
+            return null;
+        }
+        object OnEventCancel()
+        {
+            if (usingGG && hasStarted)            
+                CheckScores(null, false, true);
+            return null;
+        }        
+        object OnEventEndPre()
+        {
+            if (usingGG)
+            {
+                if (usingGG && hasStarted)
+                    CheckScores(null, false, true);                
+            }
+            return null;
+        }
+        object OnEventEndPost()
+        {
+            DestroyEvent();
+            var objPlayers = UnityEngine.Object.FindObjectsOfType<GunGamePlayer>();
+            if (objPlayers != null)
+                foreach (var gameObj in objPlayers)
+                    UnityEngine.Object.Destroy(gameObj);
+            GunGamePlayers.Clear();
+            return null;
+        }
+        object OnEventStartPre()
+        {
+            if (usingGG)
+            {
+                hasStarted = true;
+                gameEnding = false;
+            }
+            return null;
+        }
+        object OnEventStartPost()
+        {
+            if (usingGG && hasStarted)
+            {
+                if (configData.GameSettings.UseDowngradeWeapon)
                 {
-                    {
-                        new Gear
+                    downgradeDisabled = false;
+                    if (configData.GameSettings.DisableDowngradeWeaponTimer != 0)
+                        dgwDisableTimer = timer.Once(configData.GameSettings.DisableDowngradeWeaponTimer * 60, () =>
                         {
-                            name = "Medical Syringe",
-                            shortname = "syringe.medical",
-                            amount = 2,
-                            container = "belt"
-                        }
-                    },
+                            downgradeDisabled = true;
+                            EventManager.BroadcastEvent("The downgrade weapon has been disabled!");
+                        });
+                }
+                UpdateScores();
+            }
+            return null;
+        }
+        object OnSelectKit(string kitname)
+        {
+            if (usingGG)
+            {
+                Puts("No Kits required for this gamemode!");
+            }
+            return null;
+        }
+        object OnEventJoinPost(BasePlayer player)
+        {
+            if (usingGG)
+            {
+                if (player.GetComponent<GunGamePlayer>())
+                    UnityEngine.Object.Destroy(player.GetComponent<GunGamePlayer>());
+                GunGamePlayers.Add(player.gameObject.AddComponent<GunGamePlayer>());
+                player.GetComponent<GunGamePlayer>().level = 1;
+                if (configData.GameSettings.DowngradeNotification)
+                    MacheteNotification(player);
+                EventManager.CreateScoreboard(player);
+            }
+            return null;
+        }
+        object OnEventLeavePost(BasePlayer player)
+        {
+            if (usingGG)
+            {
+                var gunGamePlayer = player.GetComponent<GunGamePlayer>();
+                if (gunGamePlayer)
+                {
+                    GunGamePlayers.Remove(gunGamePlayer);
+                    UnityEngine.Object.Destroy(gunGamePlayer);
+                    CheckScores();
+                }
+            }
+            return null;
+        }
+        void OnEventPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
+        {
+            if (usingGG && !(hitinfo.HitEntity is BasePlayer))
+            {
+                hitinfo.damageTypes = new DamageTypeList();
+                hitinfo.DoHitEffects = false;
+            }
+        }
+        void OnEventPlayerDeath(BasePlayer victim, HitInfo hitinfo)
+        {
+            if ((usingGG) && (hasStarted))
+            {
+                BasePlayer attacker = hitinfo?.Initiator?.ToPlayer();
+                if (attacker != null && attacker != victim)
+                {
+                    if (!downgradeDisabled)
                     {
-                        new Gear
+                        if (hitinfo.WeaponPrefab != null && hitinfo.WeaponPrefab.name.Contains(configData.GameSettings.DowngradeWeapon.shortname))
                         {
-                            name = "Bandage",
-                            shortname = "bandage",
-                            amount = 1,
-                            container = "belt"
+                            var vicplayerLevel = victim.GetComponent<GunGamePlayer>().level;
+                            if (vicplayerLevel == 1)
+                            {
+                                SendReply(attacker, string.Format("You killed <color=orange>{0}</color> with a <color=orange>{1}</color> but they were already the lowest rank.", victim.displayName, configData.GameSettings.DowngradeWeapon.name));
+                                return;
+                            }
+                            if (vicplayerLevel >= 2)
+                            {
+                                victim.GetComponent<GunGamePlayer>().level = (vicplayerLevel - 1);
+                                SendReply(attacker, string.Format("You killed <color=orange>{0}</color> with a <color=orange>{1}</color> and they have lost a rank!", victim.displayName, configData.GameSettings.DowngradeWeapon.name));
+                                SendReply(victim, string.Format("You were killed with a <color=orange>{0}</color> and have lost a rank!", configData.GameSettings.DowngradeWeapon.name));
+                                return;
+                            }
                         }
                     }
-                },
-                PlayerGear = new List<Gear>
-                {
+                    AddKill(attacker, victim, GetWeapon(hitinfo));
+                    return;
+                }
+                if (attacker == null || attacker == victim)
+                {                    
+                    if (victim.GetComponent<GunGamePlayer>().level > 1)
                     {
-                        new Gear
+                        victim.GetComponent<GunGamePlayer>().level--;
+                        SendReply(victim, "Suicide is not a option so you have lost a rank!");                        
+                    }
+                }
+            }
+        } 
+        #endregion
+
+        #region GG Functions
+        private void MacheteNotification(BasePlayer player)
+        {
+            if (!hasStarted) return;
+            if (downgradeDisabled) return;
+            if (player.GetComponent<GunGamePlayer>())
+            {
+                SendReply(player, string.Format("The downgrade weapon is enabled. Kills with a <color=orange>{0}</color> will lower the victims rank!", configData.GameSettings.DowngradeWeapon.name));
+                timer.Once(120, () => MacheteNotification(player));
+            }
+        }
+        private void GiveGear(BasePlayer player)
+        {
+            if (gameEnding) return;
+            player.inventory.Strip();
+            GiveRankKit(player, player.GetComponent<GunGamePlayer>().level);
+            if (!downgradeDisabled)            
+                GiveItem(player, configData.GameSettings.DowngradeWeapon);            
+            foreach (var entry in weaponSet.PlayerGear)
+                GiveItem(player, entry);
+        }
+        public void GiveRankKit(BasePlayer player, int rank)
+        {
+            RankItem rankItem;
+            if (weaponSet.Weapons.TryGetValue(rank, out rankItem))
+            {
+                for (var i = 0; i < rankItem.amount; i++)
+                    GiveItem(player, rankItem);
+                SendReply(player, string.Format("You are Rank <color=orange>{0}</color> ({1})", rank, rankItem.name));
+                return;
+            }
+            PrintError($"Weapon not found for rank: {rank}, Check your weapon set for errors!");
+        }
+        #endregion
+
+        #region Item Creation
+        private Item BuildItem(string shortname)
+        {
+            var definition = itemDefs[shortname];
+            if (definition != null)
+            {
+                var item = ItemManager.Create(definition);
+                if (item != null)
+                    return item;
+            }
+            Puts($"Error building item: {shortname}: Invalid item shortname!");
+            return null;
+        }
+        public void GiveItem(BasePlayer player, RankItem rankItem)
+        {
+            if (itemDefs.ContainsKey(rankItem.shortname))
+            {
+                var definition = itemDefs[rankItem.shortname];
+                if (definition != null)
+                {
+                    var stack = definition.stackable;
+                    if (stack < 1) stack = 1;
+                    for (var i = rankItem.amount; i > 0; i = i - stack)
+                    {
+                        var giveamount = i >= stack ? stack : i;
+                        if (giveamount < 1) return;
+                        var item = ItemManager.Create(definition, giveamount, rankItem.skin);
+                        if (item != null)
                         {
-                            name = "Boots",
+                            var weapon = item.GetHeldEntity() as BaseProjectile;
+                            if (weapon != null)
+                            {
+                                if (!string.IsNullOrEmpty(rankItem.ammoType))
+                                {
+                                    var ammoType = itemDefs[rankItem.ammoType];
+                                    if (ammoType != null)
+                                        weapon.primaryMagazine.ammoType = ammoType;
+                                }
+                                var ammo = rankItem.ammo - weapon.primaryMagazine.capacity;
+                                if (ammo <= 0)
+                                    weapon.primaryMagazine.contents = rankItem.ammo;
+                                else
+                                {
+                                    weapon.primaryMagazine.contents = weapon.primaryMagazine.capacity;
+                                    GiveItem(player, new RankItem { shortname = weapon.primaryMagazine.ammoType.shortname, container = "main", amount = ammo });
+                                }
+                            }
+                            if (rankItem.contents != null)
+                                foreach (var content in rankItem.contents)
+                                    BuildItem(content)?.MoveToContainer(item.contents);
+                            ItemContainer cont;
+                            switch (rankItem.container)
+                            {
+                                case "wear":
+                                    cont = player.inventory.containerWear;
+                                    break;
+                                case "belt":
+                                    cont = player.inventory.containerBelt;
+                                    break;
+                                default:
+                                    cont = player.inventory.containerMain;
+                                    break;
+                            }
+                            item.MoveToContainer(cont);
+                            return;
+                        }
+                    }
+                }
+            }
+            Puts("Error making item: " + rankItem.shortname);
+        }        
+        private string GetWeapon(HitInfo hitInfo, string def = "")
+        {
+            var item = hitInfo.Weapon?.GetItem();
+            if (item == null && hitInfo.WeaponPrefab == null) return def;
+            var shortname = item?.info.shortname ?? hitInfo.WeaponPrefab.name;
+            if (shortname == "survey.charge" || shortname == "survey_charge.deployed") return "surveycharge";
+            shortname = shortname.Replace(".prefab", string.Empty);
+            shortname = shortname.Replace(".deployed", string.Empty);
+            shortname = shortname.Replace(".entity", "");
+            shortname = shortname.Replace("_", ".");            
+            switch (shortname)
+            {
+                case "rocket.basic":
+                case "rocket.fire":
+                case "rocket.hv":
+                case "rocket.smoke":
+                    shortname = "rocket.launcher";
+                    break;
+            }
+            return shortname;
+        }
+        #endregion
+
+        #region Scoring
+        void AddKill(BasePlayer player, BasePlayer victim, string shortname)
+        {
+            if (gameEnding) return;
+            var gunGamePlayer = player.GetComponent<GunGamePlayer>();
+            if (gunGamePlayer == null)
+                return;
+
+            var leveled = false;
+            gunGamePlayer.kills++;
+            RankItem rankItem;
+            if (weaponSet.Weapons.TryGetValue(gunGamePlayer.level, out rankItem) && rankItem.shortname.Equals(shortname))
+            {
+                leveled = true;
+                gunGamePlayer.level++;               
+            }
+            EventManager.AddTokens(player.userID, configData.EventSettings.TokensOnKill);
+            EventManager.PopupMessage(string.Format(GGMessageKill, player.displayName, gunGamePlayer.kills, gunGamePlayer.level, victim.displayName));
+            UpdateScores();
+            CheckScores(player, leveled);            
+        }
+        void CheckScores(BasePlayer player = null, bool leveled = false, bool timelimit = false)
+        {
+            if (gameEnding) return;
+            if (GunGamePlayers.Count == 0)
+            {
+                gameEnding = true;
+                EventManager.BroadcastToChat(EventMessageNoMorePlayers);
+                EventManager.CloseEvent();
+                EventManager.EndEvent();
+                return;
+            }
+            if (GunGamePlayers.Count == 1)
+            {
+                Winner(new List<BasePlayer> { GunGamePlayers[0].player });
+                return;
+            }
+
+            if (player != null)
+            {
+                var ggPlayer = player.GetComponent<GunGamePlayer>();
+                if (ggPlayer != null)
+                {
+                    if (ggPlayer.level >= weaponSet.Weapons.Count + 1)
+                    {
+                        Winner(new List<BasePlayer> { ggPlayer.player });
+                        return;
+                    }
+                }
+            }
+
+            if (timelimit)
+            {
+                List<BasePlayer> winners = new List<BasePlayer>();
+                int score = 0;
+                foreach (var ggPlayer in GunGamePlayers)
+                {
+                    if (ggPlayer.level > score)
+                    {
+                        winners.Clear();
+                        winners.Add(ggPlayer.player);
+                        score = ggPlayer.level;
+                    }
+                    else if (ggPlayer.level == score)
+                        winners.Add(ggPlayer.player);                    
+                }                
+                Winner(winners);
+            } 
+
+            if (player != null)
+                GiveGear(player);
+        }
+        void Winner(List<BasePlayer> winners)
+        {
+            gameEnding = true;
+            string winnerNames = "";
+            for (int i = 0; i < winners.Count; i++)
+            {
+                EventManager.AddTokens(winners[i].userID, configData.EventSettings.TokensOnWin, true);
+                winnerNames += winners[i].displayName;
+                if (winners.Count > i + 1)
+                    winnerNames += ", ";
+            } 
+            EventManager.BroadcastToChat(string.Format(EventMessageWon, winnerNames));
+            EventManager.CloseEvent();
+            EventManager.EndEvent();
+        }
+        #endregion
+
+        #region API
+        [HookMethod("GetWeaponSets")]
+        public string[] GetWeaponSets() => classData.WeaponConfigs.Keys.ToArray();
+
+        [HookMethod("ChangeWeaponSet")]
+        private object ChangeWeaponSet(string name)
+        {
+            if (classData.WeaponConfigs.ContainsKey(name))
+            {
+                weaponSet = classData.WeaponConfigs[name];
+                currentSet = name;
+                return true;
+            }
+            return "Invalid weapon set";
+        }
+        #endregion
+
+        #region Config        
+        private ConfigData configData;
+        class EventSettings
+        {
+            public string DefaultSpawnfile { get; set; }
+            public string DefaultZoneID { get; set; }
+            public string DefaultWeaponSet { get; set; }
+            public int TokensOnKill { get; set; }
+            public int TokensOnWin { get; set; }
+            
+        }
+        class GameSettings
+        {
+            public RankItem DowngradeWeapon { get; set; }
+            public bool UseDowngradeWeapon { get; set; }
+            public bool DowngradeNotification { get; set; }
+            public int DisableDowngradeWeaponTimer { get; set; }
+            public float StartHealth { get; set; }
+            public bool CloseEventOnStart { get; set; }
+        }
+        
+        class ConfigData
+        {
+            public EventSettings EventSettings { get; set; }
+            public GameSettings GameSettings { get; set; }
+        }
+        private void LoadVariables()
+        {
+            LoadConfigVariables();
+            SaveConfig();
+        }
+        protected override void LoadDefaultConfig()
+        {
+            var config = new ConfigData
+            {
+                GameSettings = new GameSettings
+                {
+                    CloseEventOnStart = true,
+                    DisableDowngradeWeaponTimer = 5,
+                    DowngradeNotification = true,
+                    DowngradeWeapon = new RankItem
+                    {
+                        amount = 1,
+                        container = "belt",
+                        shortname = "machete",
+                        name = "Machete"
+                    },
+                    UseDowngradeWeapon = true,
+                    StartHealth = 100
+                },
+                EventSettings = new EventSettings
+                {
+                    DefaultSpawnfile = "ggspawns",
+                    DefaultWeaponSet = "default",
+                    DefaultZoneID = "ggzone",
+                    TokensOnKill = 1,
+                    TokensOnWin = 5                   
+                }
+            };
+            SaveConfig(config);
+        }
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
+
+        #region Data Management
+        void SaveData() => data.WriteObject(classData);
+        void LoadData()
+        {
+            try
+            {
+                classData = data.ReadObject<ClassData>();                
+            }
+            catch
+            {
+                classData = new ClassData();
+            }            
+        }
+        class ClassData
+        {
+            public Dictionary<string, WeaponSet> WeaponConfigs = new Dictionary<string, WeaponSet>();
+        }        
+        #endregion
+
+        #region Default Configs
+        void CreateDefaultConfig()
+        {
+            var DefaultConfig = new WeaponSet
+            {
+                PlayerGear = new List<RankItem>
+                {
+                    new RankItem
+                        {
                             shortname = "shoes.boots",
                             container = "wear",
                             skin = 0,
                             amount = 1
-                        }
-                    },
-                    {
-                        new Gear
+                        },
+                    new RankItem
                         {
-                            name = "Hide Pants",
                             shortname = "attire.hide.pants",
                             container = "wear",
                             skin = 0,
                             amount = 1
-                        }
-                    },
-                    {
-                        new Gear
+                        },                    
+                    new RankItem
                         {
-                            name = "Bone Armour Pants",
-                            shortname = "bone.armor.pants",
-                            container = "wear",
-                            skin = 0,
-                            amount = 1
-                        }
-                    },
-                    {
-                        new Gear
-                        {
-                            name = "Riot Helmet",
                             shortname = "riot.helmet",
                             container = "wear",
                             skin = 0,
                             amount = 1
                         }
-                    }
                 },
                 Weapons = new Dictionary<int, RankItem>
                 {
-                    {
+                     {
                         1, new RankItem
                         {
-                            name = "AssaultRifle",
+                            name = "Assault Rifle (holosight)",
                             shortname = "rifle.ak",
                             container = "belt",
                             ammoType = "ammo.rifle",
@@ -207,7 +735,7 @@ namespace Oxide.Plugins
                     {
                         2, new RankItem
                         {
-                            name = "Thompson",
+                            name = "Thompson (holosight)",
                             shortname = "smg.thompson",
                             container = "belt",
                             ammoType = "ammo.pistol",
@@ -219,7 +747,7 @@ namespace Oxide.Plugins
                     {
                         3, new RankItem
                         {
-                            name = "PumpShotgun",
+                            name = "Pump Shotgun (holosight)",
                             shortname = "shotgun.pump",
                             container = "belt",
                             ammoType = "ammo.shotgun",
@@ -231,7 +759,7 @@ namespace Oxide.Plugins
                     {
                         4, new RankItem
                         {
-                            name = "SMG",
+                            name = "SMG (holosight)",
                             shortname = "smg.2",
                             container = "belt",
                             ammoType = "ammo.pistol",
@@ -243,7 +771,7 @@ namespace Oxide.Plugins
                     {
                         5, new RankItem
                         {
-                            name = "BoltAction",
+                            name = "Bolt Action Rifle (holosight)",
                             shortname = "rifle.bolt",
                             container = "belt",
                             amount = 1,
@@ -255,7 +783,7 @@ namespace Oxide.Plugins
                     {
                         6, new RankItem
                         {
-                            name = "SemiAutoRifle",
+                            name = "Semi-Auto Rifle (holosight)",
                             shortname = "rifle.semiauto",
                             container = "belt",
                             ammoType = "ammo.rifle",
@@ -267,7 +795,7 @@ namespace Oxide.Plugins
                     {
                         7, new RankItem
                         {
-                            name = "SemiAutoPistol",
+                            name = "Semi-Auto Pistol (holosight)",
                             shortname = "pistol.semiauto",
                             container = "belt",
                             ammoType = "ammo.pistol",
@@ -279,7 +807,7 @@ namespace Oxide.Plugins
                     {
                         8, new RankItem
                         {
-                            name = "Revolver",
+                            name = "Revolver (holosight)",
                             shortname = "pistol.revolver",
                             container = "belt",
                             amount = 1,
@@ -291,7 +819,7 @@ namespace Oxide.Plugins
                     {
                         9, new RankItem
                         {
-                            name = "WaterpipeShotgun",
+                            name = "Waterpipe Shotgun (holosight)",
                             shortname = "shotgun.waterpipe",
                             container = "belt",
                             amount = 1,
@@ -303,7 +831,7 @@ namespace Oxide.Plugins
                     {
                         10, new RankItem
                         {
-                            name = "HuntingBow",
+                            name = "Hunting Bow",
                             shortname = "bow.hunting",
                             container = "belt",
                             amount = 1,
@@ -314,7 +842,7 @@ namespace Oxide.Plugins
                     {
                         11, new RankItem
                         {
-                            name = "EokaPistol",
+                            name = "Eoka Pistol",
                             shortname = "pistol.eoka",
                             container = "belt",
                             amount = 1,
@@ -325,7 +853,7 @@ namespace Oxide.Plugins
                     {
                         12, new RankItem
                         {
-                            name = "StoneSpear",
+                            name = "Stone Spear",
                             shortname = "spear.stone",
                             container = "belt",
                             amount = 2
@@ -334,7 +862,7 @@ namespace Oxide.Plugins
                     {
                         13, new RankItem
                         {
-                            name = "SalvagedCleaver",
+                            name = "Salvaged Cleaver",
                             shortname = "salvaged.cleaver",
                             container = "belt",
                             amount = 2
@@ -352,7 +880,7 @@ namespace Oxide.Plugins
                     {
                         15, new RankItem
                         {
-                            name = "BoneClub",
+                            name = "Bone Club",
                             shortname = "bone.club",
                             container = "belt",
                             amount = 2
@@ -361,7 +889,7 @@ namespace Oxide.Plugins
                     {
                         16, new RankItem
                         {
-                            name = "BoneKnife",
+                            name = "Bone Knife",
                             shortname = "knife.bone",
                             container = "belt",
                             amount = 1
@@ -370,7 +898,7 @@ namespace Oxide.Plugins
                     {
                         17, new RankItem
                         {
-                            name = "LongSword",
+                            name = "Longsword",
                             shortname = "longsword",
                             container = "belt",
                             amount = 1
@@ -379,7 +907,7 @@ namespace Oxide.Plugins
                     {
                         18, new RankItem
                         {
-                            name = "SalvagedSword",
+                            name = "Salvaged Sword",
                             shortname = "salvaged.sword",
                             container = "belt",
                             amount = 1
@@ -388,7 +916,7 @@ namespace Oxide.Plugins
                     {
                         19, new RankItem
                         {
-                            name = "SalvagedIcepick",
+                            name = "Icepick",
                             shortname = "icepick.salvaged",
                             container = "belt",
                             amount = 1
@@ -397,7 +925,7 @@ namespace Oxide.Plugins
                     {
                         20, new RankItem
                         {
-                            name = "SalvagedAxe",
+                            name = "Salvaged Axe",
                             shortname = "axe.salvaged",
                             container = "belt",
                             amount = 1
@@ -454,7 +982,7 @@ namespace Oxide.Plugins
                     {
                         26, new RankItem
                         {
-                            name = "M249",
+                            name = "LMG",
                             shortname = "lmg.m249",
                             container = "belt",
                             amount = 1,
@@ -466,7 +994,7 @@ namespace Oxide.Plugins
                     {
                         27, new RankItem
                         {
-                            name = "TimedExplosive",
+                            name = "Timed Explosive",
                             shortname = "explosive.timed",
                             container = "belt",
                             amount = 20
@@ -475,7 +1003,7 @@ namespace Oxide.Plugins
                     {
                         28, new RankItem
                         {
-                            name = "SurveyCharge",
+                            name = "Survey Charge",
                             shortname = "surveycharge",
                             container = "belt",
                             amount = 20
@@ -484,7 +1012,7 @@ namespace Oxide.Plugins
                     {
                         29, new RankItem
                         {
-                            name = "F1Grenade",
+                            name = "Grenade",
                             shortname = "grenade.f1",
                             container = "belt",
                             amount = 20
@@ -493,7 +1021,7 @@ namespace Oxide.Plugins
                     {
                         30, new RankItem
                         {
-                            name = "RocketLauncher",
+                            name = "Rocket Launcher",
                             shortname = "rocket.launcher",
                             container = "belt",
                             amount = 1,
@@ -503,623 +1031,122 @@ namespace Oxide.Plugins
                     }
                 }
             };
-            SaveConfig(config);
+            classData.WeaponConfigs.Add("default", DefaultConfig);
+            SaveData();
         }
-        void SaveConfig(ConfigData config)
-        {
-            Config.WriteObject(config, true);
-        }
-        void Unload()
-        {           
-            foreach (var player in BasePlayer.activePlayerList) DestroyUI(player);               
-            if (useThisEventGG && GGStarted)            
-                EventManager.EndEvent();
-            DestroyEvent();              
-            
-            var objects = UnityEngine.Object.FindObjectsOfType<GunGamePlayer>();
-            if (objects != null)
-                foreach (var gameObj in objects)
-                    UnityEngine.Object.Destroy(gameObj);
-        }
-        private void DestroyEvent()
-        {
-            GGStarted = false;
-            foreach (var player in GunGamePlayers)            
-                UnityEngine.Object.Destroy(player);            
-            GunGamePlayers.Clear();
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Configuration /////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        Dictionary<string, object> EventZoneConfig;
-
-        string EventMessageWon = "<color=orange>Gungame</color> : {0} WON THE GUNGAME";
-        string EventMessageNoMorePlayers = "<color=orange>Gungame</color> : The Gun Game Arena has no more players, auto-closing.";
-        string GGMessageKill = "<color=orange>Gungame</color> : {3} was killed by {0}, who is now rank {2} with {1} kill(s)";
-        string EventMessageOpenBroadcast = "<color=orange>Gungame</color> : In GunGame, every player you kill will advance you 1 rank, each rank has a new weapon. But beware, if you are killed by a downgrade weapon you will lose a rank!";
-
-        private void LoadVariables()
-        {
-            _itemsDict = ItemManager.itemList.ToDictionary(i => i.shortname);
-            LoadConfigVariables();
-            SaveConfig();
-        }
-        private void LoadConfigVariables()
-        {
-            configData = Config.ReadObject<ConfigData>();
-        }
-       
-        class LeaderBoard
-        {
-            public string Name;
-            public int Kills;
-        }
-        #region UI Scoreboard
-        private List<GunGamePlayer> SortScores()
-        {
-            List<GunGamePlayer> sortedScores;
-
-            if (EventManager.EventMode == EventManager.GameMode.Battlefield)
-                sortedScores = GunGamePlayers.OrderByDescending(pair => pair.kills).ToList();
-            else sortedScores = GunGamePlayers.OrderByDescending(pair => pair.level).ToList();               
-            
-            return sortedScores;
-        }
-        private string PlayerMsg(int key, GunGamePlayer player)
-        {
-            var score = player.level;
-            if (EventManager.EventMode == EventManager.GameMode.Battlefield)
-                score = player.kills;
-
-            return $"|  <color=#FF8C00>{key}</color>.  <color=#FF8C00>{player.player.displayName}</color> <color=#939393>--</color> <color=#FF8C00>{score}</color>  |";
-        }
-        private CuiElementContainer CreateScoreboard(BasePlayer player)
-        {
-            DestroyUI(player);
-            string panelName = "GGScoreBoard";
-            var element = EventManager.UI.CreateElementContainer(panelName, "0.3 0.3 0.3 0.6", "0.1 0.95", "0.9 1", false);
-
-            var scores = SortScores();
-            var index = scores.FindIndex(a => a.player == player);
-
-            var scoreMessage = PlayerMsg(index + 1, scores[index]);
-            int amount = 3;
-            for (int i = 0; i < amount; i++)
-            {
-                if (scores.Count >= i + 1)
-                {
-                    if (scores[i].player == player)
-                    {
-                        amount++;
-                        continue;
-                    }
-                    scoreMessage = scoreMessage + PlayerMsg(i + 1, scores[i]);
-                }
-            }
-            EventManager.UI.CreateLabel(ref element, panelName, "", scoreMessage, 18, "0 0", "1 1");
-            return element;
-        }
-        private void RefreshSB()
-        {
-            foreach (var entry in GunGamePlayers)
-            {
-                DestroyUI(entry.player);
-                AddUI(entry.player);
-            }
-        }
-        private void AddUI(BasePlayer player) => CuiHelper.AddUi(player, CreateScoreboard(player));
-        private void DestroyUI(BasePlayer player) => CuiHelper.DestroyUi(player, "GGScoreBoard");
         #endregion
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Event Manager Hooks ///////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
 
-        void OnSelectEventGamePost(string name)
-        {
-            if (configData.EventName == name)
-            {
-                useThisEventGG = true;
-                if (!string.IsNullOrEmpty(configData.SpawnFile))
-                    EventManager.SelectSpawnfile(configData.SpawnFile);                
-            }
-            else
-                useThisEventGG = false;
-        }
-        void OnEventPlayerSpawn(BasePlayer player)
-        {
-            if (useThisEventGG && GGStarted)
-            {
-                player.health = configData.StartHealth;
-                if (!player.GetComponent<GunGamePlayer>()) GunGamePlayers.Add(player.gameObject.AddComponent<GunGamePlayer>());
-                stripGive(player);
-                AddUI(player);
-            }
-        }
-        object OnSelectSpawnFile(string name)
-        {
-            if (useThisEventGG)
-            {
-                configData.SpawnFile = name;
-                return true;
-            }
-            return null;
-        }
-        void OnSelectEventZone(MonoBehaviour monoplayer, string radius)
-        {
-            if (useThisEventGG)
-            {
-                return;
-            }
-        }
-        void OnPostZoneCreate(string name)
-        {
-            if (name == configData.EventName)
-            {
-                return;
-            }
-        }
-        object CanEventOpen()
-        {
-            if (useThisEventGG)
-            {
+        #region Messaging
+        string EventMessageWon = "{0} has won the event";
+        string EventMessageNoMorePlayers = "The Gun Game Arena has no more players, auto-closing.";
+        string GGMessageKill = "{3} was killed by {0}, who is now rank {2} with {1} kill(s)";
+        string EventMessageOpenBroadcast = "Gungame : In GunGame, every player you kill will advance you 1 rank, each rank has a new weapon. But beware, if you are killed by a downgrade weapon you will lose a rank!";
 
-            }
-            return null;
-        }
-        object CanEventStart()
-        {
-            return null;
-        }
-        object OnEventOpenPost()
-        {
-            if (useThisEventGG)
-            {
-                EventManager.BroadcastEvent(EventMessageOpenBroadcast);
-                EventManager.UseClassSelection = false;
-                if (configData.RankLimit > configData.Weapons.Count)
-                {
-                    configData.RankLimit = configData.Weapons.Count;
-                    SaveConfig(configData);
-                }
-            }
-            return null;
-        }
-        object OnEventCancel()
-        {
-            if (useThisEventGG && GGStarted)
-                CheckScores(null, false, true);
-            return null;
-        }
-        object OnEventClosePost()
-        {
-            return null;
-        }
-        object OnEventEndPre()
-        {
-            if (useThisEventGG)
-            {
-                //CheckScores(null, false, true);
-                DestroyEvent();
-            }
-            return null;
-        }
-        object OnEventEndPost()
-        {
-            var objPlayers = UnityEngine.Object.FindObjectsOfType<GunGamePlayer>();
-            if (objPlayers != null)
-                foreach (var gameObj in objPlayers)
-                    UnityEngine.Object.Destroy(gameObj);
-            return null;
-        }
-        object OnEventStartPre()
-        {
-            if (useThisEventGG)
-            {
-                GGStarted = true;
-                if (configData.CloseEventAtStart)
-                    EventManager.CloseEvent();
-            }
-            return null;
-        }
-        object OnEventStartPost()
-        {
-            return null;
-        }
-        object CanEventJoin()
-        {
-            return null;
-        }
-        object OnSelectKit(string kitname)
-        {
-            if (useThisEventGG)
-            {
-                Puts("No Kits required for this gamemode!");
-            }
-            return null;
-        }
-        object OnEventJoinPost(BasePlayer player)
-        {
-            if (useThisEventGG)
-            {
-                if (player.GetComponent<GunGamePlayer>())
-                    UnityEngine.Object.Destroy(player.GetComponent<GunGamePlayer>());
-                GunGamePlayers.Add(player.gameObject.AddComponent<GunGamePlayer>());
-                player.GetComponent<GunGamePlayer>().level = 1;
-                if (GGStarted) AddUI(player);
-                
-            }
-            return null;
-        }
-        object OnEventLeavePost(BasePlayer player)
-        {
-            if (useThisEventGG)
-            {
-                var gunGamePlayer = player.GetComponent<GunGamePlayer>();
-                if (gunGamePlayer)
-                {
-                    GunGamePlayers.Remove(gunGamePlayer);
-                    UnityEngine.Object.Destroy(gunGamePlayer);
-                    //CheckScores(null);
-                }
-            }
-            return null;
-        }
-        void OnEventPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
-        {
-            if (useThisEventGG && !(hitinfo.HitEntity is BasePlayer))
-            {
-                hitinfo.damageTypes = new DamageTypeList();
-                hitinfo.DoHitEffects = false;
-            }
-        }
+        #endregion
 
-        void OnEventPlayerDeath(BasePlayer victim, HitInfo hitinfo)
-        {
-            if ((useThisEventGG) && (GGStarted))
-            {
-                DestroyUI(victim);
-                BasePlayer attacker = hitinfo?.Initiator?.ToPlayer();
-                if (attacker != null && attacker != victim)
-                {
-                    if (configData.UseMachete)
-                    {
-                        if (hitinfo.WeaponPrefab != null && hitinfo.WeaponPrefab.name.Contains(configData.DowngradeWeapon.shortname))
-                        {
-                            var vicplayerLevel = victim.GetComponent<GunGamePlayer>().level;
-                            if (vicplayerLevel == 1)
-                            {
-                                SendReply(attacker, string.Format("You killed <color=orange>{0}</color> with a <color=orange>{1}</color> but they were already the lowest rank.", victim.displayName, configData.DowngradeWeapon.name));
-                                return;
-                            }
-                            if (vicplayerLevel >= 2)
-                            {
-                                victim.GetComponent<GunGamePlayer>().level = (vicplayerLevel - 1);
-                                SendReply(attacker, string.Format("You killed <color=orange>{0}</color> with a <color=orange>{1}</color> and they have lost a rank!", victim.displayName, configData.DowngradeWeapon.name));
-                                SendReply(victim, string.Format("You were killed with a <color=orange>{0}</color> and have lost a rank!", configData.DowngradeWeapon.name));
-                                return;
-                            }
-                        }
-                    }
-                    AddKill(attacker, victim, GetWeapon(hitinfo));
-                }
-            }
-            return;
-        }
-        object EventChooseSpawn(BasePlayer player, Vector3 destination)
-        {
-            return null;
-        }
-        object OnRequestZoneName()
-        {
-            if (useThisEventGG)
-                if (!string.IsNullOrEmpty(configData.ZoneName))
-                    return configData.ZoneName;            
-            return null;
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Gungame ///////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        private void notifyMachete(BasePlayer player)
-        {
-            if (!GGStarted) return;
-            if (player.GetComponent<GunGamePlayer>())
-            {
-                SendReply(player, string.Format("The downgrade weapon is enabled. Kills with a <color=orange>{0}</color> will lower the victims rank!", configData.DowngradeWeapon.name));
-                timer.Once(120, () => notifyMachete(player));
-            }
-        }
-        private void stripGive(BasePlayer player)
-        {
-            player.inventory.Strip();
-            GiveRankKit(player, player.GetComponent<GunGamePlayer>().level);
-            if (configData.UseMachete)
-                GiveItem(player, configData.DowngradeWeapon.shortname, "belt");
-            if (configData.UseMeds)
-                foreach (var entry in configData.Meds)
-                    GiveItem(player, entry.shortname, entry.container, entry.amount);
-            if (configData.UseArmour)
-                GiveItem(player, configData.ArmourType, "wear");
-            foreach (var entry in configData.PlayerGear)
-                GiveItem(player, entry.shortname, entry.container, entry.amount, entry.skin);
-        }
-        public void GiveRankKit(BasePlayer player, int rank)
-        {
-            RankItem rankItem;
-            if (configData.Weapons.TryGetValue(rank, out rankItem))
-            {
-                for (var i = 0; i < rankItem.amount; i++)
-                    GiveItem(player, rankItem);
-                SendReply(player, string.Format("You are Rank <color=orange>{0}</color> ({1})", rank, rankItem.name));
-                return;
-            }
-            Puts("Kit not found, Check your config for errors!");
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Give //////////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        private ItemDefinition FindItemDefinition(string shortname)
-        {
-            ItemDefinition itemDefinition;
-            return _itemsDict.TryGetValue(shortname, out itemDefinition) ? itemDefinition : null;
-        }
-
-        private Item BuildItem(string shortname)
-        {
-            var definition = FindItemDefinition(shortname);
-            if (definition != null)
-            {
-                var item = ItemManager.Create(definition);
-                if (item != null)
-                    return item;
-            }
-            Puts("Error making item: " + shortname);
-            return null;
-        }
-
-        public void GiveItem(BasePlayer player, RankItem rankItem)
-        {
-            var definition = FindItemDefinition(rankItem.shortname);
-            if (definition == null)
-            {
-                Puts("Error making item: " + rankItem.shortname);
-                return;
-            }
-            var stack = definition.stackable;
-            if (stack < 1) stack = 1;
-            for (var i = rankItem.amount; i > 0; i = i - stack)
-            {
-                var giveamount = i >= stack ? stack : i;
-                if (giveamount < 1) return;
-                var item = ItemManager.Create(definition, giveamount, rankItem.skin);
-                if (item == null)
-                {
-                    Puts("Error making item: " + rankItem.shortname);
-                    return;
-                }
-                var weapon = item.GetHeldEntity() as BaseProjectile;
-                if (weapon != null)
-                {
-                    if (!string.IsNullOrEmpty(rankItem.ammoType))
-                    {
-                        var ammoType = FindItemDefinition(rankItem.ammoType);
-                        if (ammoType != null)
-                            weapon.primaryMagazine.ammoType = ammoType;
-                    }
-                    var ammo = rankItem.ammo - weapon.primaryMagazine.capacity;
-                    if (ammo <= 0)
-                        weapon.primaryMagazine.contents = rankItem.ammo;
-                    else
-                    {
-                        weapon.primaryMagazine.contents = weapon.primaryMagazine.capacity;
-                        GiveItem(player, weapon.primaryMagazine.ammoType.shortname, "main", ammo);
-                    }
-                }
-                if (rankItem.contents != null)
-                    foreach (var content in rankItem.contents)
-                        BuildItem(content)?.MoveToContainer(item.contents);
-                ItemContainer cont;
-                switch (rankItem.container)
-                {
-                    case "wear":
-                        cont = player.inventory.containerWear;
-                        break;
-                    case "belt":
-                        cont = player.inventory.containerBelt;
-                        break;
-                    default:
-                        cont = player.inventory.containerMain;
-                        break;
-                }
-                player.inventory.GiveItem(item, cont);
-            }
-        }
-
-        public void GiveItem(BasePlayer player, string shortname, string container, int amount = 1, int skin = 0)
-        {
-            var definition = FindItemDefinition(shortname);
-            if (definition == null)
-            {
-                Puts("Error making item: " + shortname);
-                return;
-            }
-            var stack = definition.stackable;
-            if (stack < 1) stack = 1;
-            for (var i = amount; i > 0; i = i - stack)
-            {
-                var giveamount = i >= stack ? stack : i;
-                if (giveamount < 1) return;
-                var item = ItemManager.Create(definition, giveamount, skin);
-                if (item == null)
-                {
-                    Puts("Error making item: " + shortname);
-                    return;
-                }
-                ItemContainer cont;
-                switch (container)
-                {
-                    case "wear":
-                        cont = player.inventory.containerWear;
-                        break;
-                    case "belt":
-                        cont = player.inventory.containerBelt;
-                        break;
-                    default:
-                        cont = player.inventory.containerMain;
-                        break;
-                }
-                player.inventory.GiveItem(item, cont);
-            }
-        }
-
-        private string GetWeapon(HitInfo hitInfo, string def = "")
-        {
-            var item = hitInfo.Weapon?.GetItem();
-            if (item == null && hitInfo.WeaponPrefab == null) return def;
-            var shortname = item?.info.shortname ?? hitInfo.WeaponPrefab.name;
-            shortname = shortname.Replace(".prefab", string.Empty);
-            shortname = shortname.Replace(".entity", string.Empty);
-            shortname = shortname.Replace("_", ".");
-            switch (shortname)
-            {
-                case "rocket.basic":
-                case "rocket.fire":
-                case "rocket.hv":
-                case "rocket.smoke":
-                    shortname = "rocket.launcher";
-                    break;
-            }
-            return shortname;
-        }
-
-        ////////////////////////////////////////////////////////////
-        // Scoring /////////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////
-
-        void AddKill(BasePlayer player, BasePlayer victim, string shortname)
-        {
-            var gunGamePlayer = player.GetComponent<GunGamePlayer>();
-            if (gunGamePlayer == null)
-                return;
-
-            var leveled = false;
-            gunGamePlayer.kills++;
-            RankItem rankItem;
-            if (configData.Weapons.TryGetValue(gunGamePlayer.level, out rankItem) && rankItem.shortname.Equals(shortname))
-            {
-                leveled = true;
-                gunGamePlayer.level++;
-                if (EventManager.EventMode == EventManager.GameMode.Battlefield)
-                {
-                    if (gunGamePlayer.level >= (configData.RankLimit + 1))
-                        gunGamePlayer.level = 1;
-                }
-            }
-            EventManager.AddTokens(player.UserIDString, configData.TokensPerKill);
-            EventManager.BroadcastEvent(string.Format(GGMessageKill, player.displayName, gunGamePlayer.kills, gunGamePlayer.level, victim.displayName));
-			CheckScores(player, leveled);
-            RefreshSB();
-        }
-        void CheckScores(BasePlayer player, bool leveled = false, bool timelimitreached = false)
-        {
-            if (GunGamePlayers.Count <= 1)
-            {
-                EventManager.BroadcastEvent(EventMessageNoMorePlayers);
-                EventManager.CloseEvent();
-                EventManager.EndEvent();
-                return;
-            }
-            BasePlayer winner = null;
-            int topscore = 0;
-            bool finished = false;            
-            foreach (GunGamePlayer gungameplayer in GunGamePlayers)
-            {
-                if (gungameplayer == null) continue;
-                if (EventManager.EventMode == EventManager.GameMode.Normal)
-                {
-                    if (gungameplayer.level >= (configData.RankLimit + 1))
-                    {
-                        winner = gungameplayer.player;
-                        finished = true;
-                        break;
-                    }
-                }
-                if (timelimitreached)
-                {                    
-                    if (gungameplayer.kills > topscore)
-                    {
-                        winner = gungameplayer.player;
-                        topscore = gungameplayer.kills;
-                        finished = true;
-                    }
-                }
-            }
-           
-            if (winner != null)
-            {
-                Winner(winner);
-                return;
-            }
-
-            if (player != null && !finished && leveled)
-                stripGive(player);
-        }
-        void Winner(BasePlayer player)
-        {
-            EventManager.AddTokens(player.UserIDString, configData.TokensOnWin);
-            EventManager.BroadcastEvent(string.Format(EventMessageWon, player.displayName));
-            EventManager.CloseEvent();
-            EventManager.EndEvent();
-        }
-
-        ////////////////////////////////////////////////////////////
-        // Rank Setup //////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////
+        #region WeaponSet Creator
         [ChatCommand("gg")]
         private void cmdGunGame(BasePlayer player, string command, string[] args)
         {
             if (!isAuth(player)) return;
             if (args == null || args.Length == 0)
             {
-                SendReply(player, "<color=orange>Gungame rank setup:</color>");
-                SendReply(player, "To add a weapon to a Gungame rank, you must first put the weapon in your hands");
-                SendReply(player, "Then type <color=orange>'/gg rank <rank##> <opt:ammo>'</color>");
-                SendReply(player, "<color=orange><rank##></color> is the rank you want to assign the weapon");
-                SendReply(player, "<color=orange><opt:ammo></color> is the amount of ammo you want to supply with the weapon");
-                SendReply(player, "To add a new kit you must set your inventory");
-                SendReply(player, "Then type <color=orange>'/gg kit'</color> and it will copy your inventory");
-                SendReply(player, "You can only add clothing and medical items to the kit");
+                if (!setCreator.ContainsKey(player.userID))
+                {
+                    SendReply(player, "<color=orange>Gungame weapon set creator</color>");
+                    SendReply(player, "You can create new weapon sets by following these instructions;");
+                    SendReply(player, "First type <color=orange>\"/gg newset <name>\"</color> replacing <name> with the name of your new weapon set");
+                }
+                else
+                {
+                    SendReply(player, "Weapon sets consist of 2 parts. First is the weapons for each rank, and the second is the gear the players will receive");
+                    SendReply(player, "For help adding weapons type <color=orange>\"/gg rank\"</color>");
+                    SendReply(player, "For help adding player gear type <color=orange>\"/gg gear\"</color>");                    
+                }                
                 return;
             }
             switch (args[0].ToLower())
             {
-                case "rank":
+                case "newset":
+                    if (args.Length >= 2)
                     {
-                        if (args.Length >= 2)
+                        if (classData.WeaponConfigs.ContainsKey(args[1]))
                         {
-                            int rank;
-                            int.TryParse(args[1], out rank);
-                            if (rank >= 1)
-                            {
-                                int ammo = 1;
-                                if (args.Length == 3) int.TryParse(args[2], out ammo);
-                                SaveWeapon(player, rank, ammo);
-                                return;
-                            }
-                            SendReply(player, "<color=orange>You must enter a rank number</color>");
+                            SendReply(player, $"You already have a weapon set called <color=orange>{args[1]}</color>");
                             return;
                         }
-                        else SendReply(player, "<color=orange>/gg rank <rank##> <opt:ammo></color> - You must select a rank number");
+                        if (!setCreator.ContainsKey(player.userID))
+                            setCreator.Add(player.userID, new SetCreator());
+                        setCreator[player.userID] = new SetCreator
+                        {
+                            name = args[1],
+                            set = new WeaponSet()
+                        };
+                        SendReply(player, $"You are now creating a new weapon set called <color=orange>{args[1]}</color>");
+                        SendReply(player, "You can now type <color=orange>\"/gg\"</color> to view your options");
+                        SendReply(player, "Once you have finished type <color=orange>\"/gg save\"</color> to save your weapon set");                      
                     }
                     return;
-                case "kit":
-                    SetPlayerKit(player);
+                case "rank":
+                    {
+                        if (!setCreator.ContainsKey(player.userID))
+                        {
+                            SendReply(player, "<color=orange>You must start a new set before adding weapons</color>");
+                            return;
+                        }
+                        if (args.Length >= 2 && args[1].ToLower() == "add")
+                        {
+                            int amount = 1;
+                            if (args.Length == 3)
+                                int.TryParse(args[2], out amount);
+                            SaveWeapon(player, amount);
+                            return;
+                        }
+                        else
+                        {
+                            SendReply(player, "To add a new weapon to your set, spawn the weapon you wish to use along with any attachments it will have. If the weapon has ammo fill the clip with your desired ammo type");
+                            SendReply(player, "Once that is done place the weapon in your hands and type <color=orange>\"/gg rank add <opt:amount>\"</color> if the weapon takes ammo replace <opt:amount> with the amount of ammo you wish to supply. Ranks will be added in succession (ie rank 1 then rank 2 etc)");
+                        }
+                    }
                     return;
+                case "gear":
+                    if (!setCreator.ContainsKey(player.userID))
+                    {
+                        SendReply(player, "You must start a new set before adding weapons");
+                        return;
+                    }
+                    if (args.Length == 2 && args[1].ToLower() == "set")
+                    {
+                        SetPlayerKit(player);
+                    }
+                    else
+                    {
+                        SendReply(player, "To add gear for your players set yourself up with attire, meds, armour and whatever else you want to players to have");
+                        SendReply(player, "Once you are setup type <color=orange>\"/gg gear set\"</color> to set the player gear. Note that you can add meds and attire to this kit");
+                    }                    
+                    return;
+                case "save":
+                    if (setCreator.ContainsKey(player.userID))
+                    {
+                        if (setCreator[player.userID].set.Weapons.Count < 1)
+                        {
+                            SendReply(player, "<color=orange>You have not set any weapons yet</color>");
+                            return;
+                        }
+                        if (setCreator[player.userID].set.PlayerGear.Count < 1)
+                        {
+                            SendReply(player, "<color=orange>You have not set the players gear yet</color>");
+                            return;
+                        }
+                        classData.WeaponConfigs.Add(setCreator[player.userID].name, setCreator[player.userID].set);
+                        SaveData();
+                        SendReply(player, $"You have successfully saved a new weapon set called <color=orange>{setCreator[player.userID].name}</color>");
+                        setCreator.Remove(player.userID);                        
+                        return;
+                    }
+                    return;
+                default:
+                    break;
             }
         }
         private bool isAuth(BasePlayer player)
@@ -1127,12 +1154,14 @@ namespace Oxide.Plugins
             if (player.net.connection.authLevel >= 1) return true;
             return false;
         }
-        private void SaveWeapon(BasePlayer player, int rank, int ammo = 1)
-        {
+        private void SaveWeapon(BasePlayer player, int ammo = 1)
+        {            
+            var rank = setCreator[player.userID].set.Weapons.Count + 1;
+
             RankItem weaponEntry = new RankItem();
             Item item = player.GetActiveItem();
             if (item != null)
-                if (item.info.category.ToString() == "Weapon")
+                if (item.info.category == ItemCategory.Weapon)
                 {
                     BaseProjectile weapon = item.GetHeldEntity() as BaseProjectile;
                     if (weapon != null)
@@ -1154,11 +1183,7 @@ namespace Oxide.Plugins
                     weaponEntry.shortname = item.info.shortname;
                     weaponEntry.skin = item.skin;
 
-                    if (rank > configData.Weapons.Count) rank = configData.Weapons.Count + 1;
-                    if (!configData.Weapons.ContainsKey(rank))
-                        configData.Weapons.Add(rank, weaponEntry);
-                    else configData.Weapons[rank] = weaponEntry;
-                    SaveConfig(configData);
+                    setCreator[player.userID].set.Weapons.Add(rank, weaponEntry);
                     SendReply(player, string.Format("You have successfully added <color=orange>{0}</color> as the weapon for Rank <color=orange>{1}</color>", weaponEntry.name, rank));
                     return;
                 }
@@ -1166,36 +1191,31 @@ namespace Oxide.Plugins
         }
         private void SetPlayerKit(BasePlayer player)
         {
-            configData.PlayerGear.Clear();
-            configData.Meds.Clear();
+            setCreator[player.userID].set.PlayerGear.Clear();
 
             foreach (var item in player.inventory.containerWear.itemList)
-                SaveItem(item, "wear", true);
+                SaveItem(player, item, "wear");
 
             foreach (var item in player.inventory.containerMain.itemList)
             {
-                if (item.info.category.ToString() == "Medical")
-                    SaveItem(item, "main", false);
-                else if (item.info.category.ToString() == "Attire")
-                    SaveItem(item, "main", true);
-                else SendReply(player, string.Format("Did not save <color=orange>{0}</color>, you may only save clothing and meds to the gungame kit", item.info.displayName.translated));
+                if (item.info.category == ItemCategory.Medical || item.info.category == ItemCategory.Attire)
+                    SaveItem(player, item, "main");                
+                else SendReply(player, string.Format("Did not save <color=orange>{0}</color>, you may only save clothing and meds for player gear", item.info.displayName.translated));
             }
 
             foreach (var item in player.inventory.containerBelt.itemList)
             {
-                if (item.info.category.ToString() == "Medical")
-                    SaveItem(item, "belt", false);
-                else if (item.info.category.ToString() == "Attire")
-                    SaveItem(item, "belt", true);
-                else SendReply(player, string.Format("Did not save <color=orange>{0}</color>, you may only save clothing and meds to the gungame kit", item.info.displayName.translated));
+                if (item.info.category == ItemCategory.Medical || item.info.category == ItemCategory.Attire)
+                    SaveItem(player, item, "belt");                
+                else SendReply(player, string.Format("Did not save <color=orange>{0}</color>, you may only save clothing and meds for player gear", item.info.displayName.translated));
             }
 
             SaveConfig(configData);
             SendReply(player, "<color=orange>You have successfully saved a new player kit for Gungame</color>");
         }
-        private void SaveItem(Item item, string cont, bool data)
+        private void SaveItem(BasePlayer player, Item item, string cont)
         {
-            Gear gear = new Gear
+            RankItem gear = new RankItem
             {
                 name = item.info.displayName.english,
                 amount = item.amount,
@@ -1203,9 +1223,8 @@ namespace Oxide.Plugins
                 shortname = item.info.shortname,
                 skin = item.skin
             };
-            if (data) configData.PlayerGear.Add(gear);
-            else configData.Meds.Add(gear);
+            setCreator[player.userID].set.PlayerGear.Add(gear);
         }
+        #endregion
     }
 }
-

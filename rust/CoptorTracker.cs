@@ -3,12 +3,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Chopper Tracker", "Smoosher", "1.6.5")]
-    [Description("Tracking Of The Coptor")]
+    [Info("Chopper Tracker", "Smoosher", "1.6.6", ResourceId = 1468)]
+    [Description("Spawns helicopters based on a timer, sets a lifetime, and announcements")]
 
     class CoptorTracker : RustPlugin
     {
-
         DateTime TimerStart;
         int ChopperSpawnTime;
         float ChopperLifeTimeOriginal;
@@ -18,6 +17,7 @@ namespace Oxide.Plugins
         bool SpawnedHeli = false;
 
         #region Config
+
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file.");
@@ -26,14 +26,13 @@ namespace Oxide.Plugins
             Config["CoptorLifetimeInMins"] = 7.5;
         }
 
-        private void SetConfig()
+        void SetConfig()
         {
             ChopperSpawnTime = Convert.ToInt32(Config["CoptorRespawnTimeInSeconds"]);
             ChopperLifeTimeOriginal = Convert.ToInt32(Config["CoptorLifetimeInMins"]);
         }
 
-
-        private bool TrueorFalse(string input)
+        bool TrueorFalse(string input)
         {
             bool output;
             input = input.ToLower();
@@ -42,22 +41,22 @@ namespace Oxide.Plugins
                 case "true":
                     output = true;
                     return output;
-                    
+
 
                 case "false":
                     output = false;
                     return output;
-                    
 
                 default:
                     output = false;
                     return output;
-                    
             }
         }
+
         #endregion
 
         #region OnLoad
+
         void Loaded()
         {
             SetConfig();
@@ -65,21 +64,18 @@ namespace Oxide.Plugins
             SetChopperLifetimeMins();
             StartChopperSpawnFreq();
         }
+
         #endregion
 
         #region ChatCommands
 
         [ChatCommand("Nextheli")]
-        private void NextCoptor(BasePlayer player, string command, string[] args)
+        void NextCoptor(BasePlayer player, string command, string[] args)
         {
             var TimeNow = DateTime.Now;
-
             TimeSpan t = TimerSpawn.Subtract(TimeNow);
 
-            string TimeLeft = string.Format(string.Format("{0:D2}h:{1:D2}m:{2:D2}s",
-        t.Hours,
-                    t.Minutes,
-                    t.Seconds));
+            string TimeLeft = string.Format(string.Format("{0:D2}h:{1:D2}m:{2:D2}s", t.Hours, t.Minutes, t.Seconds));
 
             SendReply(player, "Next Helicoptor will spawn in " + TimeLeft + "", "");
             int count = 0;
@@ -103,16 +99,13 @@ namespace Oxide.Plugins
                 var ChopLT = -ChopperLifeTimeCurrent;
                 DateTime Duration = ChopperSpawned.AddMinutes(-ChopLT);
                 TimeSpan l = Duration.Subtract(TimeNow);
-                string DurationLeft = string.Format(string.Format("{0:D2}h:{1:D2}m:{2:D2}s",
-l.Hours,
-        l.Minutes,
-        l.Seconds));
+                string DurationLeft = string.Format(string.Format("{0:D2}h:{1:D2}m:{2:D2}s", l.Hours, l.Minutes, l.Seconds));
                 SendReply(player, "The Helicoptor Will Leave In " + DurationLeft + "", "");
             }
         }
 
         [ChatCommand("KillAllHelis")]
-        private void KillHelis(BasePlayer player, string command, string[] args)
+        void KillHelis(BasePlayer player, string command, string[] args)
         {
             var perm = new Oxide.Core.Libraries.Permission();
             if (perm.UserHasPermission(player.userID.ToString(), "coptortracker.use"))
@@ -123,11 +116,10 @@ l.Hours,
             {
                 SendReply(player, "You Dont Have Permissions To Do This, Attempt Has Been Logged", "");
             }
-
         }
 
         [ChatCommand("SpawnHeli")]
-        private void SpawnHeli(BasePlayer player, string command, string[] args)
+        void SpawnHeli(BasePlayer player, string command, string[] args)
         {
             var perm = new Oxide.Core.Libraries.Permission();
             if (perm.UserHasPermission(player.userID.ToString(), "coptortracker.use"))
@@ -143,25 +135,21 @@ l.Hours,
 
         #endregion
 
-        #region ConsoleCommands
+        #region Functions
 
-        #endregion
-
-        #region functions
-
-        private void StartChopperSpawnFreq()
+        void StartChopperSpawnFreq()
         {
             TimerStart = DateTime.Now;
             TimerSpawn = TimerStart.AddSeconds(ChopperSpawnTime);
             timer.In(ChopperSpawnTime, () => SpawnChopper());
         }
 
-        private void SetChopperLifetimeMins()
+        void SetChopperLifetimeMins()
         {
             ConsoleSystem.Run.Server.Normal("heli.lifetimeminutes", new String[] { ChopperLifeTimeOriginal.ToString() });
         }
 
-        private void SpawnChopper()
+        void SpawnChopper()
         {
             SpawnedHeli = true;
             SetChopperLifetimeMins();
@@ -171,7 +159,7 @@ l.Hours,
                 return;
 
             ChopperSpawned = DateTime.Now;
-            entity.Spawn(true);
+            entity.Spawn();
 
             StartChopperSpawnFreq();
         }
@@ -197,9 +185,7 @@ l.Hours,
                         }
                         break;
                 }
-
             }
-
         }
 
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
@@ -226,13 +212,13 @@ l.Hours,
             }
         }
 
-        private void KillCoptor(BaseNetworkable entity)
+        void KillCoptor(BaseNetworkable entity)
         {
             //ConsoleSystem.Broadcast("chat.add", 0, "<color=Red> [Coptor Tracker]</color>  Patrol Coptor Has been removed due to lack of something", 1);
             entity.Kill();
         }
 
-        private void KillCoptor()
+        void KillCoptor()
         {
             int coptors = 0;
             BaseHelicopter[] allHelicopters = UnityEngine.Object.FindObjectsOfType<BaseHelicopter>();
@@ -247,8 +233,8 @@ l.Hours,
                 PrintToChat("<color=Red> [Coptor Tracker]</color>  "+coptors.ToString()+" Helicopters Have Been Removed");
             }
         }
-    }
-        #endregion
 
+        #endregion
     }
+}
 

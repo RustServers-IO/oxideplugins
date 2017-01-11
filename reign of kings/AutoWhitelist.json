@@ -1,0 +1,19 @@
+{
+    "name": "AutoWhitelist",
+    "description": "Reloads Whitelist Automatically every X seconds. Now with MySql Integration.",
+    "author": "SweetLouHD",
+    "version": "2.2.0",
+    "configuration": true,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/autowhitelist.1128",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

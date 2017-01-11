@@ -1,0 +1,19 @@
+{
+    "name": "Hulk",
+    "description": "Easily break down hacker bases, abandoned builds, and repair damages.",
+    "author": "SweetLouHD",
+    "version": "1.0.2",
+    "configuration": false,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hulk.1463",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

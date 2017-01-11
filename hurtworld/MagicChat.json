@@ -1,0 +1,16 @@
+{
+    "name": "Magic Chat",
+    "description": "An alternative chat system",
+    "author": "Wulf",
+    "version": "0.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/magic-chat.1595",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

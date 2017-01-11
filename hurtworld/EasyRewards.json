@@ -1,0 +1,16 @@
+{
+    "name": "Easy Rewards",
+    "description": "Give players rewards for votes.",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/easy-rewards.1835",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

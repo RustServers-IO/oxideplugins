@@ -1,9 +1,12 @@
 {
     "name": "UniversalUI",
     "description": "This is a fully Customizable UI for Info and Buttons!",
-    "author": "{Midgard}Altimus Maximus",
-    "version": "2.0.0",
+    "author": "Absolut",
+    "version": "2.1.0",
     "configuration": true,
+    "suggest": {
+        "Kits": "*"
+    },
     "require": {
         "ImageLibrary": "*"
     },

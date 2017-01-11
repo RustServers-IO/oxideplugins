@@ -1,0 +1,16 @@
+{
+    "name": "RestartAnnouncer",
+    "description": "Adds a timed restart and shutdown option with announcements",
+    "author": "D-Kay",
+    "version": "1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/restartannouncer.1680",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

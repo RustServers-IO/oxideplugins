@@ -1,0 +1,16 @@
+{
+    "name": "Shop",
+    "description": "Simple shop and reward system",
+    "author": "OpenFunRus",
+    "version": "1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/shop.1888",
+    "games": [
+        "7 days to die"
+    ],
+    "keywords": [
+        "oxide",
+        "7 days to die"
+    ]
+}

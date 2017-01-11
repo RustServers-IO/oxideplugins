@@ -18,7 +18,7 @@ using Facepunch.Steamworks;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.3.8", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.3.9", ResourceId = 1751)]
     public class ServerRewards : RustPlugin
     {
         #region Fields
@@ -57,6 +57,8 @@ namespace Oxide.Plugins
         private Dictionary<string, string> ItemNames;
         private Dictionary<ulong, int> PointCache;
         private Dictionary<ulong, NPCInfos> NPCCreator;
+
+        private readonly FieldInfo skins2 = typeof(ItemDefinition).GetField("_skins2", BindingFlags.NonPublic | BindingFlags.Instance);
         #endregion
 
         #region Classes
@@ -1716,10 +1718,8 @@ namespace Oxide.Plugins
 
                     Global.SteamServer.Inventory.Definitions = defs.ToArray();
 
-                    foreach (var item in ItemManager.itemList)
-                    {
-                        item.skins2 = Global.SteamServer.Inventory.Definitions.Where(x => (x.GetStringProperty("itemshortname") == item.shortname) && !string.IsNullOrEmpty(x.GetStringProperty("workshopdownload"))).ToArray();
-                    }
+                    foreach (var item in ItemManager.itemList)                    
+                        skins2.SetValue(item, Global.SteamServer.Inventory.Definitions.Where(x => (x.GetStringProperty("itemshortname") == item.shortname) && !string.IsNullOrEmpty(x.GetStringProperty("workshopdownload"))).ToArray());                    
                 }               
             }, this);
         }

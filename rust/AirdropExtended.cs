@@ -21,9 +21,7 @@ using Oxide.Core.Configuration;
 using Oxide.Core.Libraries;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Libraries;
-
 using Rust;
-
 using UnityEngine;
 using Constants = AirdropExtended.Constants;
 using LogType = Oxide.Core.Logging.LogType;
@@ -33,7 +31,7 @@ using Timer = Oxide.Core.Libraries.Timer;
 
 namespace Oxide.Plugins
 {
-    [Info(Constants.PluginName, "baton", "1.1.0", ResourceId = 1210)]
+    [Info(Constants.PluginName, "baton", "1.1.1", ResourceId = 1210)]
     [Description("Customizable airdrop")]
     public class AirdropExtended : RustPlugin
     {
@@ -764,13 +762,13 @@ namespace AirdropExtended.Diagnostics
 
         public static void MessageToPlayer(BasePlayer player, string message, params object[] args)
         {
-            player.SendConsoleCommand("chat.add", new object[] { 0, string.Format(Format, Color, Prefix) + string.Format(message, args), 1f });
+            player.SendConsoleCommand("chat.add", 0, string.Format(Format, Color, Prefix) + string.Format(message, args), 1f);
         }
 
         public static void MessageToAll(string message, params object[] args)
         {
             var msg = string.Format(Format, Color, Prefix) + string.Format(message, args);
-            ConsoleNetwork.BroadcastToAllClients("chat.add \"SERVER\" " + msg.Quote() + " 1.0", new object[0]);
+            ConsoleNetwork.BroadcastToAllClients("chat.add \"SERVER\" " + msg.Quote() + " 1.0");
         }
 
         public static void MessageToServer(string message, params object[] args)
@@ -811,7 +809,7 @@ namespace AirdropExtended.Permissions
             if (commands == null) throw new ArgumentNullException("commands");
 
             foreach (var permissionName in commands.Select(c => c.PermissionName))
-                Permission.RegisterPermission("airdropextended." + permissionName, owner);
+                Permission.RegisterPermission(permissionName, owner);
         }
     }
 }

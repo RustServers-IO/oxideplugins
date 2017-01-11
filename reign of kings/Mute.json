@@ -1,0 +1,16 @@
+{
+    "name": "Mute",
+    "description": "Gives admins a \/mute and \/unmute for players in chat",
+    "author": "DumbleDora",
+    "version": "0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/mute.1106",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

@@ -1,4 +1,4 @@
-/*
+﻿/*
 TODO:
 - Add "banlist" command support
 - Add "banlistex" command support
@@ -7,6 +7,7 @@ TODO:
 - Add "mutechat" command support
 - Add "revoke" command support
 - Add "unmutechat" command support
+- Add messages if banned/unbanned already
 */
 
 using System;
@@ -16,7 +17,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("SecureAdmin", "Wulf/lukespragg", "1.0.0", ResourceId = 1449)]
+    [Info("SecureAdmin", "Wulf/lukespragg", "1.0.2", ResourceId = 1449)]
     [Description("Restricts the basic admin commands to players with permission")]
 
     class SecureAdmin : CovalencePlugin
@@ -33,7 +34,6 @@ namespace Oxide.Plugins
 
         protected override void LoadDefaultConfig()
         {
-            // Settings
             Config["Protect Admin (true/false)"] = protectAdmin = GetConfig("Protect Admin (true/false)", true);
 
             SaveConfig();
@@ -90,7 +90,19 @@ namespace Oxide.Plugins
             // Russian
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                // TODO
+                ["NotAllowed"] = "Вы не можете использовать команду '{0}'",
+                ["NotFound"] = "Игрока с таким никнеймом или ID не найдено",
+                ["PlayerAdmin"] = "Игрок {0} является администратором и его нельзя кикать и банит",
+                ["PlayerAuthed"] = "{0} получил привилегию на {1}",
+                ["PlayerBanned"] = "{0} был забанен of {1}",
+                ["PlayerKicked"] = "{0} был кикнут за {1}",
+                ["PlayerUnbanned"] = "{0} был разбанен",
+                ["ReasonUnknown"] = "Неизвестно",
+                ["UsageAuth"] = "Используй: {0} <никнейм или ID> <привилегия>",
+                ["UsageBan"] = "Используй: {0} <никнейм или ID> <причина>",
+                ["UsageKick"] = "Используй: {0} <никнейм или ID> <причина>",
+                ["UsageSay"] = "Используй: {0} <сообщение>",
+                ["UsageUnban"] = "Используй: {0} <никнейм или ID>",
             }, this, "ru");
 
             // Spanish
@@ -120,7 +132,7 @@ namespace Oxide.Plugins
             }
 
             var target = players.FindPlayer(args[0]);
-            if (target == null || !target.IsConnected)
+            if (target == null)
             {
                 player.Reply(Lang("NotFound", player.Id, args[0]));
                 return;
@@ -150,7 +162,7 @@ namespace Oxide.Plugins
             }
 
             var target = players.FindPlayer(args[0]);
-            if (target == null || !target.IsConnected)
+            if (target == null)
             {
                 player.Reply(Lang("NotFound", player.Id, args[0]));
                 return;
@@ -162,7 +174,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var reason = args[1] != null ? string.Join(" ", args.Skip(1).Select(v => v.ToString()).ToArray()) : Lang("ReasonUnknown", target.Id);
+            var reason = args.Length < 2 ? string.Join(" ", args.Skip(1).Select(v => v.ToString()).ToArray()) : Lang("ReasonUnknown", target.Id);
             target.Ban(reason);
             player.Reply(Lang("PlayerBanned", player.Id, player.Name, reason));
         }
@@ -199,7 +211,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var reason = args[1] != null ? string.Join(" ", args.Skip(1).Select(v => v.ToString()).ToArray()) : Lang("ReasonUnknown", target.Id);
+            var reason = args.Length < 2 ? string.Join(" ", args.Skip(1).Select(v => v.ToString()).ToArray()) : Lang("ReasonUnknown", target.Id);
             target.Kick(reason);
             player.Reply(Lang("PlayerKicked", player.Id, target.Name, reason));
         }
@@ -247,7 +259,7 @@ namespace Oxide.Plugins
             }
 
             var target = players.FindPlayer(args[0]);
-            if (target == null || !target.IsConnected)
+            if (target == null)
             {
                 player.Reply(Lang("NotFound", player.Id, args[0]));
                 return;

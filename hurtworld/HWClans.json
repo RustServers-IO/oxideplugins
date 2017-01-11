@@ -1,0 +1,16 @@
+{
+    "name": "HW Clans",
+    "description": "Create\/join clans and write on clan chat",
+    "author": "SouZa",
+    "version": "1.3.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/hw-clans.1704",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

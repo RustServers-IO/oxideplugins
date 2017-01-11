@@ -1,0 +1,16 @@
+{
+    "name": "PersonalWelcome",
+    "description": "Send a personal welcome message to each person as they login",
+    "author": "SweetLouHD",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/personalwelcome.1130",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
@@ -11,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lottery", "Sami37", "1.0.4", ResourceId = 2145)]
+    [Info("Lottery", "Sami37", "1.0.6", ResourceId = 2145)]
     internal class Lottery : RustPlugin
     {
         #region Economy Support
@@ -21,7 +22,6 @@ namespace Oxide.Plugins
 
         #endregion
 
-
         #region serverreward
 
         [PluginReference("ServerRewards")]
@@ -29,6 +29,16 @@ namespace Oxide.Plugins
 
 
         #endregion
+
+        #region humanNPC
+
+        [PluginReference("HumanNPC")]
+        Plugin HumanNPC;
+
+
+        #endregion
+
+        #region generalClass/function
         internal class playerinfo
         {
             public int multiplicator { get; set; } = 1;
@@ -49,40 +59,72 @@ namespace Oxide.Plugins
             return listOfInts.ToArray();
         }
 
+        private object DoRay(Vector3 Pos, Vector3 Aim)
+        {
+            var hits = Physics.RaycastAll(Pos, Aim);
+            float distance = 3f;
+            object target = false;
+            foreach (var hit in hits)
+            {
+                if (hit.distance < distance)
+                {
+                    distance = hit.distance;
+                    target = hit.GetEntity();
+                }
+            }
+            return target;
+        }
+        #endregion
+
         #region general_variable
-        private bool newConfig, UseSR;
+        private bool newConfig, UseSR, UseNPC;
         public Dictionary<ulong, playerinfo> Currentbet = new Dictionary<ulong, playerinfo>();
-        private string container, containerwin;
+        private string container, containerwin, BackgroundUrl, BackgroundColor, WinBackgroundUrl, WinBackgroundColor;
         private DynamicConfigFile data;
+        private List<object> NPCID;
         private double jackpot, SRMinBet, SRjackpot, MinBetjackpot;
         private int JackpotNumber, SRJackpotNumber, DefaultMaxRange, DefaultMinRange;
-        public Dictionary<string, int> IndividualRates { get; private set; }
+        public Dictionary<string, object> IndividualRates { get; private set; }
         public Dictionary<string, int> SRRates { get; private set; }
         private Dictionary<string, object> DefaultWinRates = null;
-        private Dictionary<string, int> SRWinRates = null;
-        private List<string> DefaultBasePoint = null;
+        private Dictionary<string, object> SRWinRates = null;
+        private List<object> DefaultBasePoint = null;
+		private FieldInfo serverinput;
+        private Vector3 eyesAdjust;
         #endregion
 
         #region config
-		object GetConfig(string menu, string datavalue, object defaultValue)
-		{
-			var data = Config[menu] as Dictionary<string, object>;
-			if (data == null)
-			{
-				data = new Dictionary<string, object>();
-				Config[menu] = data;
-				newConfig = true;
-			}
-			object value;
-			if (!data.TryGetValue(datavalue, out value))
-			{
-				value = defaultValue;
-				data[datavalue] = value;
-				newConfig = true;
-			}
-			return value;
-		}
-		protected override void LoadDefaultConfig()
+        private T GetConfigValue<T>(string category, string setting, T defaultValue)
+        {
+            var data = Config[category] as Dictionary<string, object>;
+            object value;
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[category] = data;
+                newConfig = true;
+            }
+            if (data.TryGetValue(setting, out value)) return (T)Convert.ChangeType(value, typeof(T));
+            value = defaultValue;
+            data[setting] = value;
+            newConfig = true;
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+
+        private void SetConfigValue<T>(string category, string setting, T newValue)
+        {
+            var data = Config[category] as Dictionary<string, object>;
+            object value;
+            if (data != null && data.TryGetValue(setting, out value))
+            {
+                value = newValue;
+                data[setting] = value;
+                newConfig = true;
+            }
+            SaveConfig();
+        }
+
+        protected override void LoadDefaultConfig()
 		{
 			Config.Clear();
 			LoadConfig();
@@ -90,22 +132,33 @@ namespace Oxide.Plugins
 
         void LoadConfig()
         {
-            jackpot = Convert.ToDouble(GetConfig("Global", "Jackpot", 50000));
-            DefaultWinRates = (Dictionary<string, object>)GetConfig("Global", "WinRate", DefaultPay());
-            DefaultBasePoint = GetConfig("ServerRewards", "Match", DefaultSRPay()) as List<string>;
-            SRWinRates = GetConfig("ServerRewards", "WinPoint", DefautSRWinPay()) as Dictionary<string,int>;
-            SRjackpot = Convert.ToDouble(GetConfig("ServerRewards", "Jackpot", 10));
-            SRMinBet = Convert.ToDouble(GetConfig("ServerRewards", "MinBet", 1000));
-            MinBetjackpot = Convert.ToDouble(GetConfig("ServerRewards", "MinBetJackpot", 100000));
-            SRJackpotNumber = Convert.ToInt32(GetConfig("ServerRewards", "JackpotMatch", 1869));
-            JackpotNumber = Convert.ToInt32(GetConfig("Global", "JackpotMatch", 1058));
-            DefaultMinRange = Convert.ToInt32(GetConfig("Global", "RollMinRange", 1000));
-            DefaultMaxRange = Convert.ToInt32(GetConfig("Global", "RollMaxRange", 9999));
-            UseSR = Convert.ToBoolean(GetConfig("ServerRewards", "Enabled", false));
+            jackpot = GetConfigValue("Global", "Jackpot", 50000);
+            DefaultWinRates = GetConfigValue("Global", "WinRate", DefaultPay());
+            DefaultBasePoint = GetConfigValue("ServerRewards", "Match", DefaultSRPay());
+            SRWinRates = GetConfigValue("ServerRewards", "WinPoint", DefautSRWinPay());
+            SRjackpot = GetConfigValue("ServerRewards", "Jackpot", 10);
+            SRMinBet = GetConfigValue("ServerRewards", "MinBet", 1000);
+            MinBetjackpot = GetConfigValue("ServerRewards", "MinBetJackpot", 100000);
+            SRJackpotNumber = GetConfigValue("ServerRewards", "JackpotMatch", 1869);
+            JackpotNumber = GetConfigValue("Global", "JackpotMatch", 1058);
+            DefaultMinRange = GetConfigValue("Global", "RollMinRange", 1000);
+            DefaultMaxRange = GetConfigValue("Global", "RollMaxRange", 9999);
+            UseSR = GetConfigValue("ServerRewards", "Enabled", false);
+            UseNPC = GetConfigValue("HumanNPC", "Enabled", false);
+            NPCID = GetConfigValue("HumanNPC", "npcID", new List<object>());
+            BackgroundUrl = GetConfigValue("UI", "BackgroundMainURL",
+                "http://wac.450f.edgecastcdn.net/80450F/kool1079.com/files/2016/05/RS2397_126989085.jpg");
+            BackgroundColor = GetConfigValue("UI", "BackgroundMainColor",
+                "0.1 0.1 0.1 1");
+            WinBackgroundUrl = GetConfigValue("UI", "BackgroundWinURL",
+                "http://wac.450f.edgecastcdn.net/80450F/kool1079.com/files/2016/05/RS2397_126989085.jpg");
+            WinBackgroundColor = GetConfigValue("UI", "BackgroundWinColor",
+                "0.1 0.1 0.1 1");
 		    if (!newConfig) return;
 		    SaveConfig();
 		    newConfig = false;
         }
+
         static Dictionary<string, object> DefaultPay()
         {
             var d = new Dictionary<string, object>
@@ -128,9 +181,9 @@ namespace Oxide.Plugins
             return d;
         }
 
-        static List<string> DefaultSRPay()
+        static List<object> DefaultSRPay()
         {
-            var d = new List<string>
+            var d = new List<object>
             {
                 "111x",
                 "222x",
@@ -150,9 +203,9 @@ namespace Oxide.Plugins
             return d;
         }
 
-        static Dictionary<string, int> DefautSRWinPay()
+        static Dictionary<string, object> DefautSRWinPay()
         {
-            var d = new Dictionary<string, int>
+            var d = new Dictionary<string, object>
             {
                 { "Match1Number", 1 },
                 { "Match2Number", 2 },
@@ -172,18 +225,25 @@ namespace Oxide.Plugins
             {
                 {"NoPerm", "You don't have permission to do it."},
                 {"NoWin", "You roll {0} but don't win anything."},
+                {"NoPoint", "You don't have any point to use."},
                 {"NoEconomy", "Economics isn't installed."},
+                {"NoServerRewards", "Server Rewards isn't installed."},
                 {"NotEnoughMoney", "You don't have enough money."},
+                {"AddedNPC", "You successfully added the npc to the usable list."},
                 {"Win", "You roll {0} and won {1}$"},
                 {"WinPoints", "You roll {0} and won {1} point(s)"},
                 {"NoBet", "You must bet before."},
+                {"NPCOnly", "You must find the NPC to use the lottery."},
                 {"Balance", "Your current balance is {0}$"},
+                {"BalanceSR", "Your current balance is {0} point(s)"},
                 {"CurrentBet", "Your current bet is {0}$"},
+                {"CurrentBetSR", "Your current bet is {0} point(s)"},
                 {"Roll", "Roll {0} to win \nthe current jackpot:\n {1}$"},
                 {"Jackpot", "You roll {0} and won the jackpot : {1}$ !!!!!!"},
                 {"MiniSRBet", "You need to bet more to place bet. (Min: {0})"},
                 {"BetMore", "If you had bet more you could win the jackpot. (Min: {0})"},
-                {"MinimumSRBet", "Minimum bet of {0} to win the current jackpot: {1} point(s)"}
+                {"MinimumSRBet", "Minimum bet of {0} to win the current jackpot: {1} point(s)"},
+                {"CantOpen", "You must have Economics or ServerRewards installed and loaded."}
             };
             lang.RegisterMessages(messages, this);
             Puts("Messages loaded...");
@@ -193,40 +253,45 @@ namespace Oxide.Plugins
             LoadConfig();
 			LoadDefaultMessages();
             permission.RegisterPermission("Lottery.canuse", this);
+            permission.RegisterPermission("Lottery.canconfig", this);
 		    if (DefaultWinRates != null)
 		    {
-		        IndividualRates = new Dictionary<string, int>();
+		        IndividualRates = new Dictionary<string, object>();
 		        foreach (var entry in DefaultWinRates)
 		        {
 		            int rate;
 		            if (!int.TryParse(entry.Value.ToString(), out rate)) continue;
 		            IndividualRates.Add(entry.Key, rate);
 		        }
-
-                var ServerRewardsDict = SRWinRates;
-                SRRates = new Dictionary<string, int>();
-		        if (ServerRewardsDict != null)
-		        {
-                    foreach (var entry in ServerRewardsDict)
-                    {
-                        int rate;
-                        if (!int.TryParse(entry.Value.ToString(), out rate)) continue;
-                        SRRates.Add(entry.Key, rate);
-                    }
-		        }
-
-                data = Interface.Oxide.DataFileSystem.GetFile(Name);
-                try
-                {
-                    Currentbet = data.ReadObject<Dictionary<ulong, playerinfo>>();
-                }
-                catch (Exception e)
-                {
-                    Currentbet = new Dictionary<ulong, playerinfo>();
-                    Puts(e.Message);
-                }
-                data.WriteObject(Currentbet);
 		    }
+		    if (SRWinRates != null)
+		    {
+		        var serverRewardsDict = SRWinRates;
+		        SRRates = new Dictionary<string, int>();
+		        if (serverRewardsDict != null)
+		        {
+		            foreach (var entry in serverRewardsDict)
+		            {
+		                int rate;
+		                if (!int.TryParse(entry.Value.ToString(), out rate)) continue;
+		                SRRates.Add(entry.Key, rate);
+		            }
+		        }
+		    }
+
+		    data = Interface.Oxide.DataFileSystem.GetFile(Name);
+		    try
+		    {
+		        Currentbet = data.ReadObject<Dictionary<ulong, playerinfo>>();
+		    }
+		    catch (Exception e)
+		    {
+		        Currentbet = new Dictionary<ulong, playerinfo>();
+		        Puts(e.Message);
+		    }
+		    data.WriteObject(Currentbet);
+            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+            eyesAdjust = new Vector3(0f, 1.5f, 0f);
 		}
 
         void Unload()
@@ -250,12 +315,37 @@ namespace Oxide.Plugins
         #endregion
 
         #region Lotery
+
+        private CuiElement CreateImage(string panelName, bool win = false)
+        {
+            var element = new CuiElement();
+            var url = !win ? BackgroundUrl : WinBackgroundUrl;
+            var color = !win ? BackgroundColor : WinBackgroundColor;
+            var image = new CuiRawImageComponent
+            {
+                Url = url,
+                Color = color
+            };
+
+            var rectTransform = new CuiRectTransformComponent
+            {
+                AnchorMin = "0 0",
+                AnchorMax = "1 1"
+            };
+            element.Components.Add(image);
+            element.Components.Add(rectTransform);
+            element.Name = CuiHelper.GetGuid();
+            element.Parent = panelName;
+
+            return element;
+        }
+
         void GUIDestroy(BasePlayer player)
         {
-            CuiHelper.DestroyUi(player, "container");
-            CuiHelper.DestroyUi(player, "containerwin");
-            CuiHelper.DestroyUi(player, "ButtonBack");
-            CuiHelper.DestroyUi(player, "ButtonForward");
+            CuiHelper.DestroyUi(player, "containerLotery");
+            CuiHelper.DestroyUi(player, "containerwinLotery");
+            CuiHelper.DestroyUi(player, "ButtonBackLotery");
+            CuiHelper.DestroyUi(player, "ButtonForwardLotery");
         }
         
         void ShowLotery(BasePlayer player, string[] args)
@@ -265,11 +355,9 @@ namespace Oxide.Plugins
                 SendReply(player, lang.GetMessage("NoEconomy", this, player.UserIDString));
                 return;
             }
-            int multiplier = 1;
-            int bet = 0;
             int from = 0;
             double currentBalance = (double)Economy?.Call("GetPlayerMoney", player.userID.ToString());
-            playerinfo playerbet = new playerinfo();
+            playerinfo playerbet;
             if (Currentbet.ContainsKey(player.userID))
             {
                 Currentbet.TryGetValue(player.userID, out playerbet);
@@ -287,18 +375,20 @@ namespace Oxide.Plugins
                     {
                         if (currentBalance >= playerbet.currentbet*(playerbet.multiplicator + 1))
                         {
+                            var multiplier = 1;
                             int.TryParse(args[1], out multiplier);
                             playerbet.multiplicator += multiplier;                            
                         }
                     }
                     if (args[0].Contains("less"))
                     {
-                        if (playerbet.multiplicator > 1)
+                        if (playerbet != null && playerbet.multiplicator > 1)
                             playerbet.multiplicator -= 1;
                     }
                 }
                 if (args[0].Contains("bet"))
                 {
+                    var bet = 0;
                     int.TryParse(args[1], out bet);
                     if(currentBalance < (playerbet.currentbet+bet)*playerbet.multiplicator)
                         SendReply(player, lang.GetMessage("NotEnoughMoney", this, player.UserIDString));
@@ -318,7 +408,7 @@ namespace Oxide.Plugins
             {
                 Image =
                 {
-                    Color = "0.1 0.1 0.1 1"
+                    Color = WinBackgroundColor
                 },
                 RectTransform =
                 {
@@ -326,7 +416,7 @@ namespace Oxide.Plugins
                     AnchorMax = "1 0.8"
                 },
                 CursorEnabled = true
-            }, "Hud", "containerwin");
+            }, "Hud", "containerwinLotery");
             win.Add(new CuiLabel
             {
                 Text =
@@ -341,17 +431,19 @@ namespace Oxide.Plugins
                     AnchorMax = "0.9 1"
                 }
             }, containerwin);
-            if (UseSR && ServerRewards.IsLoaded)
+            var backgroundImageWin = CreateImage("containerwinLotery", true);
+            win.Add(backgroundImageWin);
+            foreach (var elem in IndividualRates)
             {
-                foreach (var elem in SRRates)
+                if (i == 0)
                 {
-                    var pos = 0.86 - (i - from)/10.0;
-                    var pos2 = 0.91 - (i - from)/20.0;
+                    var pos = 0.81 - (i - from)/10.0;
+                    var pos2 = 0.86 - (i - from)/20.0;
                     win.Add(new CuiLabel
                     {
                         Text =
                         {
-                            Text = elem.Key + ": " + elem.Value + " point(s)",
+                            Text = elem.Key + ": " + elem.Value + " %",
                             FontSize = 18,
                             Align = TextAnchor.MiddleCenter
                         },
@@ -361,65 +453,39 @@ namespace Oxide.Plugins
                             AnchorMax = $"{0.9} {pos2}"
                         }
                     }, containerwin);
-                    i++;
                 }
-            }
-            else
-            {
-                foreach (var elem in IndividualRates)
+                else if (i >= from && i < from + 9)
                 {
-                    if (i == 0)
+                    var pos = 0.81 - (i - from)/10.0;
+                    var pos2 = 0.86 - (i - from)/20.0;
+                    win.Add(new CuiLabel
                     {
-                        var pos = 0.81 - (i - from)/10.0;
-                        var pos2 = 0.86 - (i - from)/20.0;
-                        win.Add(new CuiLabel
+                        Text =
                         {
-                            Text =
-                            {
-                                Text = elem.Key + ": " + elem.Value + " %",
-                                FontSize = 18,
-                                Align = TextAnchor.MiddleCenter
-                            },
-                            RectTransform =
-                            {
-                                AnchorMin = $"{0.1} {pos}",
-                                AnchorMax = $"{0.9} {pos2}"
-                            }
-                        }, containerwin);
-                    }
-                    else if (i >= from && i < from + 9)
-                    {
-                        var pos = 0.81 - (i - from)/10.0;
-                        var pos2 = 0.86 - (i - from)/20.0;
-                        win.Add(new CuiLabel
+                            Text = elem.Key + ": " + elem.Value + " %",
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
                         {
-                            Text =
-                            {
-                                Text = elem.Key + ": " + elem.Value + " %",
-                                FontSize = 18,
-                                Align = TextAnchor.MiddleCenter
-                            },
-                            RectTransform =
-                            {
-                                AnchorMin = $"{0.1} {pos}",
-                                AnchorMax = $"{0.9} {pos2}"
-                            }
-                        }, containerwin);
-                    }
-                    i++;
+                            AnchorMin = $"{0.1} {pos}",
+                            AnchorMax = $"{0.9} {pos2}"
+                        }
+                    }, containerwin);
                 }
-                var minfrom = from <= 10 ? 0 : from - 10;
-                var maxfrom = from + 10 >= i ? from : from + 10;
-                win.AddRange(ChangeBonusPage(minfrom, maxfrom));
+                i++;
             }
+            var minfrom = from <= 10 ? 0 : from - 10;
+            var maxfrom = from + 10 >= i ? from : from + 10;
+            win.AddRange(ChangeBonusPage(minfrom, maxfrom));
 
             var elements = new CuiElementContainer();
-#region background
+        #region background
             var container = elements.Add(new CuiPanel
             {
                 Image =
                 {
-                    Color = "0.1 0.1 0.1 1"
+                    Color = BackgroundColor
                 },
                 RectTransform =
                 {
@@ -427,9 +493,12 @@ namespace Oxide.Plugins
                     AnchorMax = "0.8 0.8"
                 },
                 CursorEnabled = true
-            }, "Hud", "container");
-#endregion
-#region closebutton
+            }, "Hud", "containerLotery");
+            var backgroundImage = CreateImage("containerLotery");
+
+            elements.Add(backgroundImage);
+        #endregion
+        #region closebutton
             var closeButton = new CuiButton
             {
                 Button =
@@ -451,8 +520,8 @@ namespace Oxide.Plugins
                 }
             };
             elements.Add(closeButton, container);
-#endregion
-#region currency
+        #endregion
+        #region currency
             elements.Add(new CuiLabel
             {
                 Text =
@@ -467,255 +536,237 @@ namespace Oxide.Plugins
                     AnchorMax = "0.9 0.98"
                 }
             }, container);
-#endregion
-#region multiplier
-            elements.Add(new CuiLabel
-            {
-                Text =
-                {
-                    Text = "Multiplier : x" + playerbet.multiplicator,
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.05 0.81",
-                    AnchorMax = "0.15 0.88"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdLess",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "-",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.2 0.81",
-                    AnchorMax = "0.3 0.88"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdPlus",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "+",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.31 0.81",
-                    AnchorMax = "0.41 0.88"
-                }
-            }, container);
-#endregion
-#region bet
-            elements.Add(new CuiLabel
-            {
-                Text =
-                {
-                    Text = "Bet modifiers :",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.05 0.61",
-                    AnchorMax = "0.15 0.68"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdBet 1",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "+1",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.05 0.51",
-                    AnchorMax = "0.15 0.58"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdBet 5",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "+5",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.155 0.51",
-                    AnchorMax = "0.255 0.58"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdBet 10",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "+10",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.26 0.51",
-                    AnchorMax = "0.36 0.58"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdBet 100",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "+100",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.365 0.51",
-                    AnchorMax = "0.485 0.58"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdBet 1000",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "+1000",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.05 0.41",
-                    AnchorMax = "0.15 0.48"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdBet 10000",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "+10000",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.155 0.41",
-                    AnchorMax = "0.255 0.48"
-                }
-            }, container);
-            elements.Add(new CuiButton
-            {
-                Button =
-                {
-                    Command = "cmdPlaceBet",
-                    Close = container,
-                    Color = "0.8 0.8 0.8 0.2"
-                },
-                Text =
-                {
-                    Text = "Place Bet",
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.05 0.31",
-                    AnchorMax = "0.255 0.38"
-                }
-            }, container);
-#endregion
-#region winpart
-            elements.Add(new CuiLabel
-            {
-                Text =
-                {
-                    Text = string.Format(lang.GetMessage("CurrentBet", this, player.UserIDString), playerbet.currentbet*playerbet.multiplicator),
-                    FontSize = 18,
-                    Align = TextAnchor.MiddleCenter
-                },
-                RectTransform =
-                {
-                    AnchorMin = "0.71 0.71",
-                    AnchorMax = "0.99 0.81"
-                }
-            }, container);
+        #endregion
+        #region multiplier
 
-            if (UseSR && ServerRewards.IsLoaded)
+            if (playerbet != null)
             {
-                var mini = string.Format(lang.GetMessage("MinimumSRBet", this, player.UserIDString), MinBetjackpot, SRjackpot);
                 elements.Add(new CuiLabel
                 {
                     Text =
                     {
-                        Text = mini,
+                        Text = "Multiplier : x" + playerbet.multiplicator,
                         FontSize = 18,
                         Align = TextAnchor.MiddleCenter
                     },
                     RectTransform =
                     {
-                        AnchorMin = "0.71 0.39",
-                        AnchorMax = "0.99 0.59"
+                        AnchorMin = "0.05 0.81",
+                        AnchorMax = "0.15 0.88"
                     }
                 }, container);
-            }
-            else
-            {
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdLess Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "-",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.2 0.81",
+                        AnchorMax = "0.3 0.88"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdPlus Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.31 0.81",
+                        AnchorMax = "0.41 0.88"
+                    }
+                }, container);
+                #endregion
+        #region bet
+                elements.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = "Bet modifiers :",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.61",
+                        AnchorMax = "0.15 0.68"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 1 Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+1",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.51",
+                        AnchorMax = "0.15 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 5 Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+5",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.155 0.51",
+                        AnchorMax = "0.255 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 10 Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+10",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.26 0.51",
+                        AnchorMax = "0.36 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 100 Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+100",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.365 0.51",
+                        AnchorMax = "0.485 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 1000 Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+1000",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.41",
+                        AnchorMax = "0.15 0.48"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 10000 Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+10000",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.155 0.41",
+                        AnchorMax = "0.255 0.48"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdPlaceBet Eco",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "Place Bet",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.31",
+                        AnchorMax = "0.255 0.38"
+                    }
+                }, container);
+            #endregion
+        #region winpart
+                elements.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = string.Format(lang.GetMessage("CurrentBet", this, player.UserIDString), playerbet.currentbet*playerbet.multiplicator),
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.71 0.71",
+                        AnchorMax = "0.99 0.81"
+                    }
+                }, container);
                 elements.Add(new CuiLabel
                 {
                     Text =
@@ -731,11 +782,451 @@ namespace Oxide.Plugins
                     }
                 }, container);
             }
-#endregion
+            #endregion
             CuiHelper.AddUi(player, elements);
             CuiHelper.AddUi(player, win);
             Currentbet.Remove(player.userID);
             Currentbet.Add(player.userID, playerbet);
+            SaveData(Currentbet);
+        }
+        
+        void ShowSrLotery(BasePlayer player, string[] args)
+        {
+            if (!ServerRewards.IsLoaded)
+            {
+                SendReply(player, lang.GetMessage("NoServerRewards", this, player.UserIDString));
+                return;
+            }
+            int from = 0;
+            var currentBalance = ServerRewards.Call("CheckPoints", player.userID);
+            if (currentBalance != null)
+            {
+                playerinfo playerbet;
+                if (Currentbet.ContainsKey(player.userID))
+                {
+                    Currentbet.TryGetValue(player.userID, out playerbet);
+                }
+                else
+                {
+                    Currentbet.Add(player.userID, new playerinfo());
+                    Currentbet.TryGetValue(player.userID, out playerbet);
+                }
+                if (args != null && args.Length > 0)
+                {
+                    if (playerbet != null)
+                    {
+                        if (args[0].Contains("less") || args[0].Contains("plus"))
+                        {
+                            if (args[0].Contains("plus"))
+                            {
+                                if ((int) currentBalance >= playerbet.currentbet*(playerbet.multiplicator + 1))
+                                {
+                                    var multiplier = 1;
+                                    int.TryParse(args[1], out multiplier);
+                                    playerbet.multiplicator += multiplier;
+                                }
+                            }
+                            if (args[0].Contains("less"))
+                            {
+                                if (playerbet.multiplicator > 1)
+                                    playerbet.multiplicator -= 1;
+                            }
+                        }
+                        if (args[0].Contains("bet"))
+                        {
+                            var bet = 0;
+                            int.TryParse(args[1], out bet);
+                            if ((int) currentBalance < (playerbet.currentbet + bet)*playerbet.multiplicator)
+                                SendReply(player, lang.GetMessage("NotEnoughMoney", this, player.UserIDString));
+                            else playerbet.currentbet += bet;
+                        }
+                        if (args[0].Contains("page"))
+                        {
+                            int.TryParse(args[1], out @from);
+                        }
+                    }
+                }
+                int i = 0;
+                double jackpots = Math.Round(Currentbet.Sum(v => v.Value.totalbet));
+                jackpots += jackpot;
+                var win = new CuiElementContainer();
+                var containerwin = win.Add(new CuiPanel
+                {
+                    Image =
+                    {
+                        Color = WinBackgroundColor
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.8 0.2",
+                        AnchorMax = "1 0.8"
+                    },
+                    CursorEnabled = true
+                }, "Hud", "containerwinLotery");
+                win.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = "Win Rate",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.1 0.85",
+                        AnchorMax = "0.9 1"
+                    }
+                }, containerwin);
+                var backgroundImageWin = CreateImage("containerwinLotery", true);
+                win.Add(backgroundImageWin);
+                foreach (var elem in SRRates)
+                {
+                    var pos = 0.86 - (i - @from)/10.0;
+                    var pos2 = 0.91 - (i - @from)/20.0;
+                    win.Add(new CuiLabel
+                    {
+                        Text =
+                        {
+                            Text = elem.Key + ": " + elem.Value + " point(s)",
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
+                        {
+                            AnchorMin = $"{0.1} {pos}",
+                            AnchorMax = $"{0.9} {pos2}"
+                        }
+                    }, containerwin);
+                    i++;
+                }
+                var elements = new CuiElementContainer();
+                #region background
+                var container = elements.Add(new CuiPanel
+                {
+                    Image =
+                    {
+                        Color = BackgroundColor
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0 0.2",
+                        AnchorMax = "0.8 0.8"
+                    },
+                    CursorEnabled = true
+                }, "Hud", "containerLotery");
+                var backgroundImage = CreateImage("containerLotery");
+                elements.Add(backgroundImage);
+                #endregion
+                #region closebutton
+                var closeButton = new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdDestroyUI",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.86 0.92",
+                        AnchorMax = "0.97 0.98"
+                    },
+                    Text =
+                    {
+                        Text = "X",
+                        FontSize = 22,
+                        Align = TextAnchor.MiddleCenter
+                    }
+                };
+                elements.Add(closeButton, container);
+                #endregion
+                #region currency
+                elements.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = string.Format(lang.GetMessage("BalanceSR", this, player.UserIDString), currentBalance),
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.1 0.91",
+                        AnchorMax = "0.9 0.98"
+                    }
+                }, container);
+                #endregion
+                #region multiplier
+                elements.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = "Multiplier : x" + playerbet.multiplicator,
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleLeft
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.81",
+                        AnchorMax = "0.30 0.88"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdLess",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "-",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.2 0.81",
+                        AnchorMax = "0.3 0.88"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdPlus",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.31 0.81",
+                        AnchorMax = "0.41 0.88"
+                    }
+                }, container);
+                #endregion
+                #region bet
+                elements.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = "Bet modifiers :",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.61",
+                        AnchorMax = "0.15 0.68"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 1",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+1",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.51",
+                        AnchorMax = "0.15 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 5",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+5",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.155 0.51",
+                        AnchorMax = "0.255 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 10",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+10",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.26 0.51",
+                        AnchorMax = "0.36 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 100",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+100",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.365 0.51",
+                        AnchorMax = "0.485 0.58"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 1000",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+1000",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.41",
+                        AnchorMax = "0.15 0.48"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdBet 10000",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "+10000",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.155 0.41",
+                        AnchorMax = "0.255 0.48"
+                    }
+                }, container);
+                elements.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Command = "cmdPlaceBet",
+                        Close = container,
+                        Color = "0.8 0.8 0.8 0.2"
+                    },
+                    Text =
+                    {
+                        Text = "Place Bet",
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.05 0.31",
+                        AnchorMax = "0.255 0.38"
+                    }
+                }, container);
+                #endregion
+                #region winpart
+                elements.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = string.Format(lang.GetMessage("CurrentBetSR", this, player.UserIDString), playerbet.currentbet*playerbet.multiplicator),
+                        FontSize = 18,
+                        Align = TextAnchor.MiddleCenter
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.71 0.71",
+                        AnchorMax = "0.99 0.81"
+                    }
+                }, container);
+
+                if (UseSR && ServerRewards.IsLoaded)
+                {
+                    var mini = string.Format(lang.GetMessage("MinimumSRBet", this, player.UserIDString), MinBetjackpot, SRjackpot);
+                    elements.Add(new CuiLabel
+                    {
+                        Text =
+                        {
+                            Text = mini,
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
+                        {
+                            AnchorMin = "0.71 0.39",
+                            AnchorMax = "0.99 0.59"
+                        }
+                    }, container);
+                }
+                else
+                {
+                    elements.Add(new CuiLabel
+                    {
+                        Text =
+                        {
+                            Text = string.Format(lang.GetMessage("Roll", this, player.UserIDString), JackpotNumber, jackpots),
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
+                        {
+                            AnchorMin = "0.71 0.39",
+                            AnchorMax = "0.99 0.59"
+                        }
+                    }, container);
+                }
+                #endregion
+                CuiHelper.AddUi(player, elements);
+                CuiHelper.AddUi(player, win);
+                Currentbet.Remove(player.userID);
+                Currentbet.Add(player.userID, playerbet);
+            }
+            else
+                SendReply(player, lang.GetMessage("NoPoint", this, player.UserIDString));
             SaveData(Currentbet);
         }
         
@@ -751,7 +1242,7 @@ namespace Oxide.Plugins
                         Text = {Text = "<<", FontSize = 20, Align = TextAnchor.MiddleCenter}
                     },
                     "Hud",
-                    "ButtonBack"
+                    "ButtonBackLotery"
                 },
                 {
                     new CuiButton
@@ -761,17 +1252,18 @@ namespace Oxide.Plugins
                         Text = {Text = ">>", FontSize = 20, Align = TextAnchor.MiddleCenter}
                     },
                     "Hud",
-                    "ButtonForward"
+                    "ButtonForwardLotery"
                 }
             };
         }
         #endregion
 
         #region reward
-        public double FindReward(BasePlayer player, int bet, int reference, int multiplicator = 1)
+
+        private object FindReward(BasePlayer player, int bet, int reference, int multiplicator = 1)
         {
-            int findReward = 0;
-            float reward = 0;
+            object findReward = 0;
+            int reward = 0;
             int[] number = GetIntArray(reference);
             string newreference;
             if (UseSR && ServerRewards.IsLoaded)
@@ -782,8 +1274,8 @@ namespace Oxide.Plugins
                 {
                     if (bet*multiplicator >= MinBetjackpot)
                     {
-                        findReward = findReward*multiplicator + (int) SRjackpot;
-                        return findReward;
+                        findReward = (int)findReward*bet*multiplicator + (int) SRjackpot;
+                        return (int)findReward;
                     }
                     else
                     {
@@ -794,11 +1286,11 @@ namespace Oxide.Plugins
                 #endregion
 
                 #region full_match
-                    if (DefaultBasePoint.Contains(reference.ToString()))
-                    {
-                        SRWinRates.TryGetValue("Match4Number", out findReward);
-                        return findReward*multiplicator;
-                    }
+                if (DefaultBasePoint.Contains(reference.ToString()))
+                {
+                    SRWinRates.TryGetValue("Match4Number", out findReward);
+                    return (int)findReward*bet*multiplicator;
+                }
 
                 #endregion
 
@@ -808,25 +1300,25 @@ namespace Oxide.Plugins
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match3Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = number[0].ToString() + number[1].ToString() + "x" + number[3].ToString();
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match4Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = number[0].ToString() + "x" + number[2].ToString() + number[3].ToString();
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match4Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = "x" + number[1].ToString() + number[2].ToString() + number[3].ToString();
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match4Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
 
                 #endregion
@@ -837,37 +1329,37 @@ namespace Oxide.Plugins
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match2Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = number[0].ToString() + "x" + "x" + number[3].ToString();
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match2Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = "x" + "x" + number[2].ToString() + number[3].ToString();
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match2Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = number[0].ToString() + "x" + number[2].ToString() + "x";
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match2Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = "x" + number[1].ToString() + "x" + number[3].ToString();
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match2Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = "x" + number[1].ToString() + number[2].ToString() + "x";
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match2Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
 
                 #endregion
@@ -878,74 +1370,81 @@ namespace Oxide.Plugins
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match1Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = "x" + number[1].ToString() + "x" + "x";
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match1Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = "x" + "x" + number[2].ToString() + "x";
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match1Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
                 newreference = "x" + "x" + "x" + number[3].ToString();
                 if (DefaultBasePoint.Contains(newreference))
                 {
                     SRWinRates.TryGetValue("Match1Number", out findReward);
-                    return findReward*multiplicator;
+                    return (int)findReward*bet*multiplicator;
                 }
 
                 #endregion
 
+                return findReward;
             }
-            else
+            if(!UseSR && Economy.IsLoaded)
             {
+                object rws = 0;
                 #region jackpot
                 if (reference == JackpotNumber)
                 {
                     int jackpots = (int) Math.Round(Currentbet.Sum(v => v.Value.totalbet));
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator + jackpots + jackpot;
+                    return bet * multiplicator + jackpots + jackpot;
                 }
                 #endregion
 
                 #region full_match
+
                 if (IndividualRates.ContainsKey(reference.ToString()))
                 {
-                    IndividualRates.TryGetValue(number.ToString(), out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(number.ToString(), out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
+
                 #endregion
 
                 #region three_match
                 newreference = number[0].ToString() + number[1].ToString() + number[2].ToString() + "x";
-                IndividualRates.TryGetValue(newreference, out findReward);
-
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference = number[0].ToString() + number[1].ToString() + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference = number[0].ToString() + "x" + number[2].ToString() + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference =  "x" + number[1].ToString() + number[2].ToString() + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 #endregion
 
@@ -953,70 +1452,82 @@ namespace Oxide.Plugins
                 newreference = number[0].ToString() + number[1].ToString() + "x" + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference = number[0].ToString() + "x" + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference =  "x" + "x" + number[2].ToString() + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference = number[0].ToString() + "x" + number[2].ToString() + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference = "x" + number[1].ToString() + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference =  "x" + number[1].ToString() + number[2].ToString() + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
-               #endregion
+
+                #endregion
 
                 #region one_match
                 newreference = number[0].ToString() + "x" + "x" + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference =  "x" + number[1].ToString() + "x" + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference =  "x" + "x" + number[2].ToString() + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
                 newreference = "x" + "x" + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
-                    IndividualRates.TryGetValue(newreference, out findReward);
-                    return bet*(Math.Round((double)findReward/100, 2)) * multiplicator;
+                    IndividualRates.TryGetValue(newreference, out rws);
+                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    return reward;
                 }
-    #endregion
-            }
 
-            return findReward;
+                #endregion
+                return rws;
+            }
+            return null;
         }
         #endregion
 
@@ -1029,9 +1540,59 @@ namespace Oxide.Plugins
                 SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString)));
                 return;
             }
-            ShowLotery(player, null);
+            if (args.Length != 0)
+            {
+                if (args[0].ToLower() == "add")
+                {
+                    if (!permission.UserHasPermission(player.UserIDString, "Lottery.canconfig"))
+                    {
+                        SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString)));
+                        return;
+                    }
+                    var input = serverinput.GetValue(player) as InputState;
+                    var currentRot = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
+                    var target = DoRay(player.transform.position + eyesAdjust, currentRot);
+                    if (!(target is bool) && target is BasePlayer)
+                    {
+                        var bases = target as BasePlayer;
+                        NPCID.Add(bases.UserIDString);
+                        SetConfigValue("HumanNPC", "npcID", NPCID);
+                        SendReply(player, lang.GetMessage("AddedNPC", this, player.UserIDString));
+                        return;
+                    }
+                }
+            }
+            if (UseNPC)
+            {
+                SendReply(player, string.Format(lang.GetMessage("NPCOnly", this, player.UserIDString)));
+                return;
+            }
+            if (Economy != null && Economy.IsLoaded && !UseSR)
+            {
+                ShowLotery(player, null);
+            }
+            else if (ServerRewards != null && ServerRewards.IsLoaded)
+            {
+                ShowSrLotery(player, null);
+            }
+            else
+            {
+                SendReply(player, lang.GetMessage("CantOpen", this, player.UserIDString));
+            }
         }
 
+        void OnUseNPC(BasePlayer npc, BasePlayer player, Vector3 destination)
+        {
+            if (NPCID.Contains(npc.UserIDString))
+            {
+                if(Economy.IsLoaded && !UseSR)
+                    ShowLotery(player, null);
+                else if(ServerRewards.IsLoaded)
+                    ShowSrLotery(player, null);
+                else
+                    SendReply(player, lang.GetMessage("CantOpen", this, player.UserIDString));
+            }
+        }
         [ConsoleCommand("cmdDestroyUI")]
         void cmdDestroyUI(ConsoleSystem.Arg arg)
         {
@@ -1044,7 +1605,10 @@ namespace Oxide.Plugins
         {
             if (arg.Player() == null) return;
             GUIDestroy(arg.Player());
+            if(arg.Args != null && arg.Args.Length > 0)
             ShowLotery(arg.Player(), new[] {"less", "-1"});
+            else
+            ShowSrLotery(arg.Player(), new[] {"less", "-1"});
         }
 
         [ConsoleCommand("cmdBet")]
@@ -1052,7 +1616,10 @@ namespace Oxide.Plugins
         {
             if (arg.Player() == null) return;
             GUIDestroy(arg.Player());
+            if(arg.Args != null && arg.Args.Length > 1)
             ShowLotery(arg.Player(), new[] {"bet", arg.Args[0]});
+            else
+            ShowSrLotery(arg.Player(), new[] {"bet", arg.Args[0]});
         }
 
         [ConsoleCommand("cmdPlus")]
@@ -1060,7 +1627,10 @@ namespace Oxide.Plugins
         {
             if (arg.Player() == null) return;
             GUIDestroy(arg.Player());
+            if(arg.Args != null && arg.Args.Length > 0)
             ShowLotery(arg.Player(), new[] {"plus", "1"});
+            else
+            ShowSrLotery(arg.Player(), new[] {"plus", "1"});
         }
 
         [ConsoleCommand("cmdPage")]
@@ -1068,7 +1638,10 @@ namespace Oxide.Plugins
         {
             if (arg.Player() == null) return;
             GUIDestroy(arg.Player());
+            if(arg.Args != null && arg.Args.Length > 1)
             ShowLotery(arg.Player(), new[] {"page", arg.Args[1]});
+            else
+            ShowSrLotery(arg.Player(), new[] {"page", arg.Args[1]});
         }
 
         [ConsoleCommand("cmdPlaceBet")]
@@ -1087,19 +1660,80 @@ namespace Oxide.Plugins
             {
                 Currentbet.TryGetValue(arg.Player().userID, out playerbet);
             }
-            if (playerbet.currentbet == 0)
+            if (playerbet != null && Math.Abs(playerbet.currentbet) < 0.0000001)
             {
                 SendReply(arg.Player(), lang.GetMessage("NoBet", this, arg.Player().UserIDString));
                 return;
             }
             int random = UnityEngine.Random.Range(DefaultMinRange, DefaultMaxRange);
+            int rwd;
             if (UseSR && ServerRewards.IsLoaded)
             {
-                if (SRMinBet <= playerbet.currentbet*playerbet.multiplicator)
+                if (playerbet != null && SRMinBet <= playerbet.currentbet*playerbet.multiplicator)
                 {
-                    double reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
-                    if(playerbet.currentbet*playerbet.multiplicator >= MinBetjackpot)
-                        if (random == SRJackpotNumber)
+                    var reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
+                    if (reward != (object) 0)
+                    {
+                        rwd = (int)reward;
+                        if (playerbet.currentbet*playerbet.multiplicator >= MinBetjackpot)
+                            if (random == SRJackpotNumber)
+                            {
+                                foreach (var resetbet in Currentbet)
+                                {
+                                    resetbet.Value.totalbet = 0;
+                                    resetbet.Value.multiplicator = 1;
+                                    playerinfos.Add(resetbet.Key, resetbet.Value);
+                                }
+                                Currentbet.Clear();
+                                Currentbet = playerinfos;
+                                ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
+                                SendReply(arg.Player(),
+                                    string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random,
+                                        rwd));
+                                return;
+                            }
+                        if (Math.Abs(rwd) > 0 && random != SRJackpotNumber)
+                        {
+                            Currentbet.Remove(arg.Player().userID);
+                            Currentbet.Add(arg.Player().userID, playerbet);
+                            ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
+                            SendReply(arg.Player(),
+                                string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random,
+                                    rwd));
+                        }
+                        else
+                        {
+                            ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
+                            SendReply(arg.Player(),
+                                string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random,
+                                    rwd));
+                        }
+
+                        playerbet.totalbet += playerbet.currentbet*(10/100.0);
+                        ServerRewards?.Call("TakePoints",
+                            new object[] {arg.Player().userID, playerbet.currentbet*playerbet.multiplicator});
+                        playerbet.currentbet = 0;
+                        playerbet.multiplicator = 1;
+                    }
+                    else
+                    {
+                        SendReply(arg.Player(), string.Format(lang.GetMessage("NoWin", this, arg.Player().UserIDString), random));
+                    }
+                }
+                else
+                {
+                    SendReply(arg.Player(), string.Format(lang.GetMessage("MiniSRBet", this, arg.Player().UserIDString), SRMinBet));
+                }
+            }
+            else if(!UseSR && Economy.IsLoaded)
+            {
+                if (playerbet != null)
+                {
+                    var reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
+                    if (reward != null && reward != (object) 0)
+                    {
+                        rwd = (int) reward;
+                        if (random == JackpotNumber)
                         {
                             foreach (var resetbet in Currentbet)
                             {
@@ -1109,74 +1743,36 @@ namespace Oxide.Plugins
                             }
                             Currentbet.Clear();
                             Currentbet = playerinfos;
-                            ServerRewards?.Call("AddPoints", new object[] { arg.Player().userID, reward });
-                            SendReply(arg.Player(), string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random, reward));
-                            return;
+                            Economy?.CallHook("Deposit", arg.Player().userID, rwd);
+                            SendReply(arg.Player(),
+                                string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random,
+                                    rwd));
                         }
-                    if (reward != 0 && random != SRJackpotNumber)
-                    {
-                        Currentbet.Remove(arg.Player().userID);
-                        Currentbet.Add(arg.Player().userID, playerbet);
-                        ServerRewards?.Call("AddPoints", new object[] { arg.Player().userID, reward });
-                        SendReply(arg.Player(), string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random, reward));
-                    }
-                    else if (reward == 0)
-                    {
-                        SendReply(arg.Player(), string.Format(lang.GetMessage("NoWin", this, arg.Player().UserIDString), random));
+                        else if (Math.Abs(rwd) > 0 && random != JackpotNumber)
+                        {
+                            Currentbet.Remove(arg.Player().userID);
+                            Currentbet.Add(arg.Player().userID, playerbet);
+                            Economy?.CallHook("Deposit", arg.Player().userID, rwd);
+                            SendReply(arg.Player(),
+                                string.Format(lang.GetMessage("Win", this, arg.Player().UserIDString), random, rwd));
+                        }
+                        else
+                        {
+                            Economy?.CallHook("Deposit", arg.Player().userID, rwd);
+                            SendReply(arg.Player(),
+                                string.Format(lang.GetMessage("Win", this, arg.Player().UserIDString), random, rwd));
+                        }
+                        playerbet.totalbet += playerbet.currentbet*(10/100.0);
+                        Economy?.CallHook("Withdraw", arg.Player().userID, playerbet.currentbet*playerbet.multiplicator);
+                        playerbet.currentbet = 0;
+                        playerbet.multiplicator = 1;
                     }
                     else
                     {
-                        ServerRewards?.Call("AddPoints", new object[] { arg.Player().userID, reward });
-                        SendReply(arg.Player(), string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random, reward));
+                        SendReply(arg.Player(),
+                            string.Format(lang.GetMessage("NoWin", this, arg.Player().UserIDString), random));
                     }
-
-                    playerbet.totalbet += playerbet.currentbet*(10/100.0);
-                    Economy?.CallHook("Withdraw", arg.Player().userID, playerbet.currentbet*playerbet.multiplicator);
-                    playerbet.currentbet = 0;
-                    playerbet.multiplicator = 1;
                 }
-                else
-                {
-                    SendReply(arg.Player(), string.Format(lang.GetMessage("MiniSRBet", this, arg.Player().UserIDString), SRMinBet));
-                }
-            }
-            else
-            {
-                double reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
-                if (random == JackpotNumber)
-                {
-                    foreach (var resetbet in Currentbet)
-                    {
-                        resetbet.Value.totalbet = 0;
-                        resetbet.Value.multiplicator = 1;
-                        playerinfos.Add(resetbet.Key, resetbet.Value);
-                    }
-                    Currentbet.Clear();
-                    Currentbet = playerinfos;
-                    Economy?.CallHook("Deposit", arg.Player().userID, reward);
-                    SendReply(arg.Player(), string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random, reward));
-                }
-                else if (reward != 0 && random != JackpotNumber)
-                {
-                    Currentbet.Remove(arg.Player().userID);
-                    Currentbet.Add(arg.Player().userID, playerbet);
-                    Economy?.CallHook("Deposit", arg.Player().userID, reward);
-                    SendReply(arg.Player(), string.Format(lang.GetMessage("Win", this, arg.Player().UserIDString), random, reward));
-                }
-                else if (reward == 0)
-                {
-                    SendReply(arg.Player(), string.Format(lang.GetMessage("NoWin", this, arg.Player().UserIDString), random));
-                }
-                else
-                {
-                    Economy?.CallHook("Deposit", arg.Player().userID, reward);
-                    SendReply(arg.Player(), string.Format(lang.GetMessage("Win", this, arg.Player().UserIDString), random, reward));
-                }
-
-                playerbet.totalbet += playerbet.currentbet*(10/100.0);
-                Economy?.CallHook("Withdraw", arg.Player().userID, playerbet.currentbet*playerbet.multiplicator);
-                playerbet.currentbet = 0;
-                playerbet.multiplicator = 1;
             }
             SaveData(Currentbet);
         }

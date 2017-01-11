@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.4.9", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.5.0", ResourceId = 1789)]
 	class TruePVE : RustPlugin
 	{
 		private TruePVEData data = new TruePVEData();
@@ -27,9 +27,9 @@ namespace Oxide.Plugins
 		// valid commands
 		private enum Command { usage, set, get, list, version, def };
 		// valid options
-		public enum Option { allowSuicide, authDamage, corpseLooting, handleDamage, handleLooting, heliDamage, heliDamageLocked, heliDamagePlayer, humanNPCDamage, immortalLocks, sleeperAdminDamage, sleeperLooting };
+		public enum Option { allowSuicide, authDamage, corpseLooting, handleDamage, handleLooting, heliDamage, heliDamageLocked, heliDamagePlayer, humanNPCDamage, immortalLocks, sleeperAdminDamage, sleeperLooting, sleeperProtection };
 		// default values array
-		private bool[] def = { true, false, false, true, true, true, false, true, true, true, false, false };
+		private bool[] def = { true, false, false, true, true, true, false, true, true, true, false, false, false };
 		// layer mask for finding authorization
         private readonly int triggerMask = LayerMask.GetMask("Trigger");
         
@@ -461,8 +461,16 @@ namespace Oxide.Plugins
 			if(hitinfo.Initiator == null)
 				return true;
 			
-			// allow NPC damage
-			if (entity is BaseNPC || hitinfo.Initiator is BaseNPC)
+			// allow NPCs to take damage
+			if (entity is BaseNPC)
+				return true;
+			
+			// check for sleeper protection - return false if sleeper protection is on (true)
+			if(data.config[Option.sleeperProtection] && hitinfo.Initiator is BaseNPC && entity is BasePlayer && (entity as BasePlayer).IsSleeping())
+				return false;
+			
+			// allow NPC damage to other entities if sleeper protection is off
+			if(hitinfo.Initiator is BaseNPC)
 				return true;
 			
 			// allow damage to door barricades and covers
@@ -778,7 +786,7 @@ namespace Oxide.Plugins
         // is player a HumanNPC
         private bool isHumanNPC(BasePlayer player)
         {
-        	return player.userID < 76560000000000000L && player.userID > 0L && !player.isDestroyed;
+        	return player.userID < 76560000000000000L && player.userID > 0L && !player.IsDestroyed;
         }
 		
 		// configuration and data storage container

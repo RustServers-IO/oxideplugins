@@ -1,0 +1,16 @@
+{
+    "name": "Check Inventory",
+    "description": "Allows admin to check the inventory of a player",
+    "author": "Pr0n3",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/check-inventory.1082",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

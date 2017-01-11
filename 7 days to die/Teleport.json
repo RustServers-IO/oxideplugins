@@ -1,0 +1,16 @@
+{
+    "name": "Teleport",
+    "description": "Simple teleportation system",
+    "author": "OpenFunRus",
+    "version": "1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/teleport.1849",
+    "games": [
+        "7 days to die"
+    ],
+    "keywords": [
+        "oxide",
+        "7 days to die"
+    ]
+}

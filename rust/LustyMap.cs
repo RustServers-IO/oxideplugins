@@ -13,11 +13,10 @@ using System.Globalization;
 using System.IO;
 using System.Collections;
 using System.Drawing;
-using ConVar;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.71", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.81", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -121,26 +120,26 @@ namespace Oxide.Plugins
                 {
                     FillFriendList();
                 }
-                if (MapSettings.forcedzoom && MapSettings.complexmap)
+                if (MapSettings.forcedzoom)
+                    mapZoom = MapSettings.zoomlevel;
+
+                if (!instance.configData.MapOptions.StartOpen)
                 {
-                    if (!instance.configData.MapOptions.StartOpen)
-                        ToggleMapType(MapMode.None);
-                    else
-                    {
-                        mapZoom = MapSettings.zoomlevel;
-                        ToggleMapType(MapMode.Complex);
-                    }
+                    ToggleMapType(MapMode.None);
+                    return;
                 }
+
+                if (MapSettings.complexmap)
+                {
+                    mapZoom = 1;
+                    ToggleMapType(MapMode.Complex);
+                }
+
                 else if (MapSettings.minimap)
                 {
-                    if (!instance.configData.MapOptions.StartOpen)
-                        ToggleMapType(MapMode.None);
-                    else
-                    {
-                        mode = MapMode.Minimap;
-                        ToggleMapType(mode);
-                    }
-                }                
+                    mode = MapMode.Minimap;
+                    ToggleMapType(mode);
+                }               
             }
 
             #region Friends
@@ -757,32 +756,41 @@ namespace Oxide.Plugins
             }
             public static void AddBaseUI(BasePlayer player, MapMode type)
             {
-                var user = instance.GetUser(player);
-                if (user == null) return;
+                try {
+                    var user = instance.GetUser(player);
+                    if (user == null) return;
 
-                DestroyUI(player);
-                CuiElementContainer element = null;
-                switch (type)
+                    DestroyUI(player);
+                    CuiElementContainer element = null;
+                    switch (type)
+                    {
+                        case MapMode.None:
+                            return;
+                        case MapMode.Main:
+                            element = StaticMain;
+                            CuiHelper.AddUi(player, StaticMain);
+                            AddElementIds(player, ref element);
+                            return;
+                        case MapMode.Complex:
+                            element = StaticComplex[(MapSettings.forcedzoom ? MapSettings.zoomlevel : user.Zoom())][user.Current(true), user.Current(false)];
+                            instance.AddMapButtons(player);
+                            CuiHelper.AddUi(player, element);
+                            AddElementIds(player, ref element);
+                            return;
+                        case MapMode.Minimap:
+                            element = StaticMini;
+                            instance.AddMapButtons(player);
+                            CuiHelper.AddUi(player, element);
+                            AddElementIds(player, ref element);
+                            return;
+                    }
+                }
+                catch
                 {
-                    case MapMode.None:
-                        return;
-                    case MapMode.Main:
-                        element = StaticMain;
-                        CuiHelper.AddUi(player, StaticMain);
-                        AddElementIds(player, ref element);
-                        return;
-                    case MapMode.Complex:
-                        element = StaticComplex[user.Zoom()][user.Current(true), user.Current(false)];
-                        instance.AddMapButtons(player);
-                        CuiHelper.AddUi(player, element);
-                        AddElementIds(player, ref element);
-                        return;
-                    case MapMode.Minimap:
-                        element = StaticMini;
-                        instance.AddMapButtons(player);
-                        CuiHelper.AddUi(player, element);
-                        AddElementIds(player, ref element);
-                        return;                    
+                    
+                    //var user = instance.GetUser(player);
+                    //if (user == null) return;
+                    //instance.PrintError($"Error adding base map UI to {player.displayName}. Type: {type}, Zoom: {user.Zoom()}, X: {user.Current(true)}, Z: {user.Current(false)}");
                 }
             }
             private static void AddElementIds(BasePlayer player, ref CuiElementContainer container)
@@ -1485,6 +1493,7 @@ namespace Oxide.Plugins
                         staticMarkers.Add(mon);
                         continue;
                     }
+                    
                     if (monument.name.Contains("powerplant_1"))
                     {
                         mon.name = msg("powerplant");
@@ -1492,7 +1501,20 @@ namespace Oxide.Plugins
                         staticMarkers.Add(mon);
                         continue;
                     }
-
+                    if(monument.name.Contains("harbor_1"))
+                    {
+                        mon.name = msg("big harbor");
+                        mon.icon = "harbor";
+                        staticMarkers.Add(mon);
+                        continue;
+                    }
+                    if (monument.name.Contains("harbor_2"))
+                    {
+                        mon.name = msg("small harbor");
+                        mon.icon = "harbor";
+                        staticMarkers.Add(mon);
+                        continue;
+                    }
                     if (monument.name.Contains("military_tunnel_1"))
                     {
                         mon.name = msg("militarytunnel");
@@ -2144,7 +2166,7 @@ namespace Oxide.Plugins
                         storedImages.data[keys[i]] = imageId;
                 }
             }
-                       
+
             storedImages.instanceId = CommunityEntity.ServerInstance.net.ID;
             SaveData();
 
@@ -2179,6 +2201,7 @@ namespace Oxide.Plugins
             assets.Add("warehouse", $"{path}warehouse.png");
             assets.Add("dish", $"{path}dish.png");
             assets.Add("spheretank", $"{path}spheretank.png");
+            assets.Add("harbor", $"{path}harbor.png");
             assets.Add("special", $"{path}special.png");
             assets.Add("supply", $"{path}supply.png");
             assets.Add("debris", $"{path}debris.png");
@@ -2465,6 +2488,8 @@ namespace Oxide.Plugins
             {"lighthouse", "lighthouse" },
             {"radtown", "radtown" },
             {"spheretank", "spheretank" },
+            {"big harbor", "big harbor" },
+            {"small harbor", "small harbor" },
             {"dish","dish" },
             {"warehouse","warehouse" },
             {"waterplant", "waterplant" },

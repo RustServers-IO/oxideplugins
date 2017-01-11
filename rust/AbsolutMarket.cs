@@ -11,7 +11,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutMarket", "Absolut", "1.5.0", ResourceId = 2118)]
+    [Info("AbsolutMarket", "Absolut", "1.6.0", ResourceId = 2118)]
 
     class AbsolutMarket : RustPlugin
     {
@@ -42,7 +42,6 @@ namespace Oxide.Plugins
         private Dictionary<ulong, List<AMItem>> PlayerBoxContents = new Dictionary<ulong, List<AMItem>>();
         private Dictionary<ulong, AMItem> SalesItemPrep = new Dictionary<ulong, AMItem>();
         private Dictionary<ulong, List<Item>> PlayerInventory = new Dictionary<ulong, List<Item>>();
-        private Dictionary<ulong, List<Item>> TransferableItems = new Dictionary<ulong, List<Item>>();
         private Dictionary<ulong, List<Item>> ItemsToTransfer = new Dictionary<ulong, List<Item>>();
         private Dictionary<ulong, bool> PlayerPurchaseApproval = new Dictionary<ulong, bool>();
         private Dictionary<ulong, AMItem> SaleProcessing = new Dictionary<ulong, AMItem>();
@@ -266,23 +265,34 @@ namespace Oxide.Plugins
         {
             if (player == null) return false;
             ulong seller = player.userID;
+            bool EcoAllowed = false;
+            if (Economics && configData.Economics && !mData.Blacklist.Contains("ECO")) EcoAllowed = true;
+            bool SRAllowed = false;
+            if (ServerRewards && configData.ServerRewards && !mData.Blacklist.Contains("SR")) SRAllowed = true;
             if (GetTradeBox(seller) != null)
             {
                 StorageContainer box = GetTradeBox(seller);
                 if (GetItems(box.inventory).Count() == 0)
                 {
-                    if (!ServerRewards || !configData.ServerRewards || mData.Blacklist.Contains("SR"))
+                    if (!SRAllowed && !EcoAllowed)
                     {
                         GetSendMSG(player, "TradeBoxEmpty");
                         return false;
                     }
                     else
-                        if (CheckPoints(player.userID) is int)
-                        if ((int)CheckPoints(player.userID) < 1)
+                    {
+                        var amount = 0;
+                        if (SRAllowed)
+                            if (CheckPoints(player.userID) is int)
+                                amount += (int)CheckPoints(player.userID);
+                        if(EcoAllowed)
+                            amount += CheckEco(player.userID);
+                        if (amount == 0)
                         {
                             GetSendMSG(player, "TradeBoxEmptyNoSR");
                             return false;
                         }
+                    }
                 }
                 if (PlayerBoxContents.ContainsKey(seller)) PlayerBoxContents.Remove(seller);
                 PlayerBoxContents.Add(seller, new List<AMItem>());
@@ -305,33 +315,57 @@ namespace Oxide.Plugins
                 }
                 if (bl == c)
                 {
-                    if (!ServerRewards || !configData.ServerRewards || mData.Blacklist.Contains("SR"))
-                    {
-                        GetSendMSG(player, "AllItemsAreBL");
-                        return false;
-                    }
-                    else
-                    if (CheckPoints(player.userID) is int)
-                        if ((int)CheckPoints(player.userID) < 1)
+                        var amount = 0;
+                        var msg = "";
+                        if (SRAllowed)
                         {
-                            GetSendMSG(player, "AllItemsAreBLNoSR");
+                            msg = msg + GetLang("SRInclusion");
+                            if (CheckPoints(player.userID) is int)
+                                amount += (int)CheckPoints(player.userID);
+                        }
+                        if (EcoAllowed)
+                        {
+                            msg = msg + GetLang("ECOInclusion");
+                            amount += CheckEco(player.userID);
+                        }
+                        if (amount <= 0)
+                        {
+                            GetSendMSG(player, "AllItemsAreBL", msg);
                             return false;
                         }
                 }
                 if (c == listed)
                 {
-                    if (!ServerRewards || !configData.ServerRewards || mData.Blacklist.Contains("SR"))
+                    bool alllisted = true;
+                    var msg = "";
+                    if (SRAllowed)
                     {
-                        GetSendMSG(player, "AllItemsAreListed");
+                        msg = msg + GetLang("SRInclusionListed");
+                        if (CheckPoints(player.userID) is int)
+                        {
+                            var total = (int)CheckPoints(player.userID);
+                            var totalListed = 0;
+                            foreach (var entry in mData.MarketListings.Where(kvp => kvp.Value.seller == player.userID && kvp.Value.shortname == "SR"))
+                                totalListed += entry.Value.amount;
+                            if (totalListed < total)
+                                alllisted = false;
+                        }
+                    }
+                    if (EcoAllowed && alllisted)
+                    {
+                       msg = msg + GetLang("ECOInclusionListed");
+                        var total = CheckEco(player.userID);
+                        var totalListed = 0;
+                        foreach (var entry in mData.MarketListings.Where(kvp => kvp.Value.seller == player.userID && kvp.Value.shortname == "ECO"))
+                            totalListed += entry.Value.amount;
+                        if (totalListed < total)
+                            alllisted = false;
+                    }
+                    if (alllisted)
+                    {
+                        GetSendMSG(player, "AllItemsAreListed", msg);
                         return false;
                     }
-                    else
-                    if (CheckPoints(player.userID) is int)
-                        if ((int)CheckPoints(player.userID) < 1)
-                        {
-                            GetSendMSG(player, "AllItemsAreListedNoSR");
-                            return false;
-                        }
                 }
                 return true;
             }
@@ -432,44 +466,33 @@ namespace Oxide.Plugins
             //item.MoveToContainer(to);
         }
 
-        private void XferCost(Item item, BasePlayer player, uint Listing)
+        private void XferCost(uint item, BasePlayer player, uint Listing)
         {
-            //Puts("Starting");
-            ItemContainer from = player.inventory.containerMain;
-            if (player.inventory.containerBelt.itemList.Contains(item))
-            {
-                from = player.inventory.containerBelt;
-                //Puts($"{from} belt");
-            }
-            else if (player.inventory.containerWear.itemList.Contains(item))
-            {
-                from = player.inventory.containerWear;
-                //Puts($"{from} wear");
-            }
-            else
-                //Puts($"{from} main");
+            List<ItemContainer> containers = new List<ItemContainer> { player.inventory.containerMain, player.inventory.containerBelt, player.inventory.containerWear };
             if (mData.MarketListings[Listing].priceAmount > 0)
             {
                 //Puts("TRying");
-                foreach (Item item1 in from.itemList.Where(kvp => kvp == item))
-                {
-                    //Puts("Item found)");
-                    if (mData.MarketListings[Listing].priceAmount >= item1.amount)
+                foreach (var container in containers)
+                    foreach (Item item1 in container.itemList.Where(k => k.uid == item))
                     {
-                        //Puts("1");
-                        ItemsToTransfer[player.userID].Add(item1);
-                        mData.MarketListings[Listing].priceAmount -= item1.amount;
-                        //Puts($"{item1} moved... price amount: {mData.MarketListings[Listing].priceAmount} item amount:{item1.amount}");
+                        //Puts("Item found)");
+                        if (mData.MarketListings[Listing].priceAmount == 0) return;
+                        if (mData.MarketListings[Listing].priceAmount >= item1.amount)
+                        {
+                            //Puts("1");
+                            ItemsToTransfer[player.userID].Add(item1);
+                            mData.MarketListings[Listing].priceAmount -= item1.amount;
+                            //Puts($"{item1} moved... price amount: {mData.MarketListings[Listing].priceAmount} item amount:{item1.amount}");
+                        }
+                        else
+                        {
+                            Item item2 = item1.SplitItem(mData.MarketListings[Listing].priceAmount);
+                            ItemsToTransfer[player.userID].Add(item2);
+                            mData.MarketListings[Listing].priceAmount = 0;
+                            //Puts($"SPLITTING: {item2} moved... price amount: {mData.MarketListings[Listing].priceAmount} item amount:{item2.amount}");
+                        }
+                        break;
                     }
-                    else
-                    {
-                        Item item2 = item1.SplitItem(mData.MarketListings[Listing].priceAmount);
-                        ItemsToTransfer[player.userID].Add(item2);
-                        mData.MarketListings[Listing].priceAmount = 0;
-                        //Puts($"SPLITTING: {item2} moved... price amount: {mData.MarketListings[Listing].priceAmount} item amount:{item2.amount}");
-                    }
-                    break;
-                }
             }
         }
 
@@ -530,6 +553,16 @@ namespace Oxide.Plugins
         }
 
         private object CheckPoints(ulong ID) => ServerRewards?.Call("CheckPoints", ID);
+
+        private void ECOAction(ulong ID, int amount, string action)
+        {
+            if (action == "ADD")
+                Economics.Call("DepositS", ID.ToString(), amount);
+            if (action == "REMOVE")
+                Economics.Call("WithdrawS", ID.ToString(), amount);
+        }
+
+        private int CheckEco(ulong ID) => (int)Economics.CallHook("GetPlayerMoney", ID);
 
         private void NumberPad(BasePlayer player, string cmd)
         {
@@ -616,7 +649,7 @@ namespace Oxide.Plugins
         bool isAuth(BasePlayer player)
         {
             if (player.net.connection != null)
-                if (player.net.connection.authLevel < 1 && !permission.UserHasPermission(player.UserIDString, "AbsolutMarket.admin"))
+                if (player.net.connection.authLevel < 2 && !permission.UserHasPermission(player.UserIDString, "AbsolutMarket.admin"))
                     return false;
             return true;
         }
@@ -984,6 +1017,11 @@ namespace Oxide.Plugins
                 name = "SR Points";
                 item.skin = (ulong)ResourceId;
             }
+            else if (item.shortname == "ECO")
+            {
+                name = "Economics";
+                item.skin = (ulong)ResourceId;
+            }
             UI.CreatePanel(ref container, panelName, UIColors["header"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
 
             //SALE ITEM
@@ -1018,6 +1056,11 @@ namespace Oxide.Plugins
             if (item.priceItemshortname == "SR")
             {
                 name = "SR Points";
+                UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+            }
+            else if (item.priceItemshortname == "ECO")
+            {
+                name = "Economics";
                 UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
             }
             else
@@ -1055,6 +1098,11 @@ namespace Oxide.Plugins
                 name = "SR Points";
                 item.skin = (ulong)ResourceId;
             }
+            else if (item.shortname == "ECO")
+            {
+                name = "Economics";
+                item.skin = (ulong)ResourceId;
+            }
             UI.CreatePanel(ref container, panelName, UIColors["white"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
 
             //SALE ITEM
@@ -1086,6 +1134,11 @@ namespace Oxide.Plugins
             if (item.priceItemshortname == "SR")
             {
                 name = "SR Points";
+                UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
+            }
+            else if (item.priceItemshortname == "ECO")
+            {
+                name = "Economics";
                 UI.LoadImage(ref container, panelName, TryForImage(item.priceItemshortname), $"{pos[2] - 0.125f} {pos[1] + 0.01f}", $"{pos[2] - 0.005f} {pos[1] + 0.125f}");
             }
             else
@@ -1146,20 +1199,22 @@ namespace Oxide.Plugins
                     UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectSalesItem {item.ID}"); i++;
                 }
             }
-            if (configData.ServerRewards && ServerRewards)
-            {
-                if (!mData.Blacklist.Contains("SR"))
-                {
-                    if (CheckPoints(player.userID) is int)
-                        if ((int)CheckPoints(player.userID) > 0)
+            if (configData.ServerRewards && ServerRewards && !mData.Blacklist.Contains("SR"))
+                    if (CheckPoints(player.userID) is int && (int)CheckPoints(player.userID) > 0)
                         {
                             pos = CalcButtonPos(i);
                             UI.CreatePanel(ref element, PanelMarket, "1 1 1 1", $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.LoadImage(ref element, PanelMarket, TryForImage("SR"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectSR"); i++;
+                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectMoney SR"); i++;
                         }
-                }
-            }
+            if (configData.Economics && Economics && !mData.Blacklist.Contains("ECO"))
+                    if (CheckEco(player.userID) > 0)
+                        {
+                            pos = CalcButtonPos(i);
+                            UI.CreatePanel(ref element, PanelMarket, "1 1 1 1", $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("ECO"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectMoney ECO"); i++;
+                        }
             UI.CreateButton(ref element, PanelMarket, UIColors["buttonred"], GetLang("Back"), 16, "0.03 0.02", "0.13 0.075", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), Category.All)}");
             CuiHelper.AddUi(player, element);
         }
@@ -1221,10 +1276,17 @@ namespace Oxide.Plugins
                     double shownentries = page * entriesallowed;
                     if (page == 0)
                     {
-                        if (configData.ServerRewards == true && ServerRewards)
+                        if (configData.ServerRewards && ServerRewards)
                         {
                             UI.LoadImage(ref element, PanelMarket, TryForImage("SR"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                             UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectpriceItemshortname SR");
+                            n++;
+                            i++;
+                        }
+                        if (configData.Economics && Economics)
+                        {
+                            UI.LoadImage(ref element, PanelMarket, TryForImage("ECO"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectpriceItemshortname ECO");
                             n++;
                             i++;
                         }
@@ -1282,6 +1344,11 @@ namespace Oxide.Plugins
                 name = "SR Points";
                 purchaseitem.skin = (ulong)ResourceId;
             }
+            else if (purchaseitem.shortname == "ECO")
+            {
+                name = "Economics";
+                purchaseitem.skin = (ulong)ResourceId;
+            }
             if (TryForImage(purchaseitem.shortname, purchaseitem.skin) == TryForImage("BLAHBLAH")) UI.CreateLabel(ref element, PanelPurchase, UIColors["limegreen"], purchaseitem.shortname, 14, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", TextAnchor.MiddleCenter);
             UI.LoadImage(ref element, PanelPurchase, TryForImage(purchaseitem.shortname, purchaseitem.skin), $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}");
             if (purchaseitem.amount > 1)
@@ -1300,10 +1367,9 @@ namespace Oxide.Plugins
                     UI.CreatePanel(ref element, PanelPurchase, UIColors["green"], $"0.1 {ymin}", $"{xMax} {ymax}");
                     UI.CreateLabel(ref element, PanelPurchase, "1 1 1 1", GetMSG("ItemCondition", Math.Round(percent * 100).ToString()), 20, $"0.1 {ymin}", $"0.9 {ymax}", TextAnchor.MiddleLeft);
                 }
-
-                UI.CreateButton(ref element, PanelPurchase, UIColors["buttongreen"], GetLang("Yes"), 14, "0.25 0.05", "0.45 0.2", $"UI_ProcessItem {index}");
             }
-            else UI.CreateButton(ref element, PanelPurchase, UIColors["buttongreen"], GetLang("Yes"), 14, "0.25 0.05", "0.45 0.2", $"UI_ProcessMoney {index}");
+            UI.CreateButton(ref element, PanelPurchase, UIColors["buttongreen"], GetLang("Yes"), 14, "0.25 0.05", "0.45 0.2", $"UI_ProcessItem {index}");
+            //else UI.CreateButton(ref element, PanelPurchase, UIColors["buttongreen"], GetLang("Yes"), 14, "0.25 0.05", "0.45 0.2", $"UI_ProcessMoney {index}");
             UI.CreateButton(ref element, PanelPurchase, UIColors["buttonred"], GetLang("No"), 14, "0.55 0.05", "0.75 0.2", $"UI_DestroyPurchaseScreen");
             CuiHelper.AddUi(player, element);
         }
@@ -1716,8 +1782,8 @@ namespace Oxide.Plugins
                 SellItems(player, 1);
         }
 
-        [ConsoleCommand("UI_SelectSR")]
-        private void cmdUI_SelectSR(ConsoleSystem.Arg arg)
+        [ConsoleCommand("UI_SelectMoney")]
+        private void cmdUI_SelectMoney(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
@@ -1728,12 +1794,22 @@ namespace Oxide.Plugins
             SalesItemPrep.Add(player.userID, new AMItem());
             PlayerBoxContents.Remove(player.userID);
             SalesItemPrep[player.userID].cat = Category.Money;
-            SalesItemPrep[player.userID].shortname = "SR";
             SalesItemPrep[player.userID].skin = 0;
             SalesItemPrep[player.userID].ID = GetRandomNumber();
             SalesItemPrep[player.userID].seller = player.userID;
             SalesItemPrep[player.userID].stepNum = 0;
-            NumberPad(player, "UI_SRAmount");
+            if (arg.Args[0] == "SR")
+            {
+                SalesItemPrep[player.userID].shortname = "SR";
+                NumberPad(player, "UI_SRAmount");
+                return;
+            }
+            if (arg.Args[0] == "ECO")
+            {
+                SalesItemPrep[player.userID].shortname = "ECO";
+                NumberPad(player, "UI_ECOAmount");
+                return;
+            }
         }
 
         [ConsoleCommand("UI_SRAmount")]
@@ -1767,6 +1843,38 @@ namespace Oxide.Plugins
                 }
             GetSendMSG(player, "NotEnoughSRPoints");
         }
+
+        [ConsoleCommand("UI_ECOAmount")]
+        private void cmdUI_ECOAmount(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            int amount = Convert.ToInt32(arg.Args[0]);
+            var ECOListedAmount = 0;
+            if (CheckEco(player.userID) >= amount)
+                {
+                    foreach (var entry in mData.MarketListings.Where(kvp => kvp.Value.seller == player.userID && kvp.Value.shortname == "ECO"))
+                    ECOListedAmount += entry.Value.amount;
+                    if (CheckEco(player.userID) - ECOListedAmount >= amount)
+                    {
+                        SalesItemPrep[player.userID].amount = amount;
+                        DestroyMarketPanel(player);
+                        if (configData.UseUniqueNames)
+                        {
+                            SellItems(player);
+                            return;
+                        }
+                        else
+                        {
+                            SellItems(player, 1);
+                            return;
+                        }
+                    }
+                }
+            GetSendMSG(player, "NotEnoughECOPoints");
+        }
+
 
 
         [ConsoleCommand("UI_SelectpriceItemshortname")]
@@ -1849,6 +1957,8 @@ namespace Oxide.Plugins
                 mData.MarketListings.Add(SalesItemPrep[player.userID].ID, SalesItemPrep[player.userID]);
                 if (SalesItemPrep[player.userID].shortname == "SR")
                     money = "Server Rewards Points";
+                else if (SalesItemPrep[player.userID].shortname == "ECO")
+                    money = "Economics";
                 GetSendMSG(player, "NewMoneyListed", money, SalesItemPrep[player.userID].amount.ToString());
                 if (SalesItemPrep.ContainsKey(player.userID))
                     SalesItemPrep.Remove(player.userID);
@@ -2034,6 +2144,13 @@ namespace Oxide.Plugins
                                 MarketMainScreen(player);
                                 return;
                             }
+                        else if (purchaseitem.shortname == "ECO")
+                            if (CheckEco(purchaseitem.seller) < purchaseitem.amount)
+                            {
+                                RemoveListing(seller, name, purchaseitem.ID, "NotEnoughECOPoints");
+                                MarketMainScreen(player);
+                                return;
+                            }
                     }
                     if (mData.MarketListings[ID].pricecat != Category.Money)
                     {
@@ -2066,6 +2183,18 @@ namespace Oxide.Plugins
                                 GetSendMSG(player, "NotEnoughPurchaseItem", purchaseitem.priceItemshortname, purchaseitem.priceAmount.ToString());
                                 return;
                             }
+                        else if (purchaseitem.priceItemshortname == "ECO")
+                            if (CheckEco(player.userID) >= purchaseitem.priceAmount)
+                            {
+                                PurchaseConfirmation(player, ID);
+                                return;
+                            }
+                            else
+                            {
+                                GetSendMSG(player, "NotEnoughPurchaseItem", purchaseitem.priceItemshortname, purchaseitem.priceAmount.ToString());
+                                return;
+                            }
+
                     }
                 }
                 else
@@ -2109,11 +2238,9 @@ namespace Oxide.Plugins
             ulong seller = mData.MarketListings[ID].seller;
             if (PlayerInventory.ContainsKey(buyer))
                 PlayerInventory.Remove(buyer);
-            if (TransferableItems.ContainsKey(buyer))
-                TransferableItems.Remove(buyer);
             if (PlayerPurchaseApproval.ContainsKey(buyer))
                 PlayerPurchaseApproval.Remove(buyer);
-            TransferableItems.Add(buyer, new List<Item>());
+            List<uint> TransferableItems = new List<uint>();
             PlayerInventory.Add(buyer, new List<Item>());
             PlayerPurchaseApproval.Add(buyer, false);
             if (GetTradeBox(seller) != null && GetTradeBox(buyer) != null)
@@ -2131,7 +2258,7 @@ namespace Oxide.Plugins
                         foreach (var entry in PlayerInventory[buyer].Where(kvp => kvp.info.shortname == purchaseitem.priceItemshortname))
                         {
                             amount += entry.amount;
-                            TransferableItems[buyer].Add(entry);
+                            TransferableItems.Add(entry.uid);
                             if (amount >= purchaseitem.priceAmount)
                             {
                                 PlayerPurchaseApproval[buyer] = true;
@@ -2147,6 +2274,11 @@ namespace Oxide.Plugins
                             {
                                 PlayerPurchaseApproval[buyer] = true;
                             }
+                        else if (purchaseitem.priceItemshortname == "ECO")
+                            if (CheckEco(player.userID) >= purchaseitem.priceAmount)
+                            {
+                                PlayerPurchaseApproval[buyer] = true;
+                            }
                     }
                     if (PlayerPurchaseApproval[buyer] == true)
                     {
@@ -2155,16 +2287,26 @@ namespace Oxide.Plugins
                         ItemsToTransfer.Add(buyer, new List<Item>());
                         if (purchaseitem.pricecat != Category.Money)
                         {
-                            foreach (var entry in TransferableItems[buyer])
-                                XferCost(entry, player, ID);
+
+                            while (mData.MarketListings[ID].priceAmount > 0)
+                                foreach (var entry in TransferableItems)
+                                    XferCost(entry, player, ID);
                             foreach (Item item in ItemsToTransfer[buyer])
                                 item.MoveToContainer(sellerbox.inventory);
                             ItemsToTransfer[buyer].Clear();
                         }
                         else
                         {
-                            SRAction(buyer, purchaseitem.priceAmount, "REMOVE");
-                            SRAction(seller, purchaseitem.priceAmount, "ADD");
+                            if (purchaseitem.priceItemshortname == "SR")
+                            {
+                                SRAction(buyer, purchaseitem.priceAmount, "REMOVE");
+                                SRAction(seller, purchaseitem.priceAmount, "ADD");
+                            }
+                            else if (purchaseitem.priceItemshortname == "ECO")
+                            {
+                                ECOAction(buyer, purchaseitem.priceAmount, "REMOVE");
+                                ECOAction(seller, purchaseitem.priceAmount, "ADD");
+                            }
                         }
                         if (purchaseitem.cat != Category.Money)
                         {
@@ -2172,8 +2314,16 @@ namespace Oxide.Plugins
                         }
                         else
                         {
-                            SRAction(seller, purchaseitem.amount, "REMOVE");
-                            SRAction(buyer, purchaseitem.amount, "ADD");
+                            if (purchaseitem.shortname == "SR")
+                            {
+                                SRAction(seller, purchaseitem.amount, "REMOVE");
+                                SRAction(buyer, purchaseitem.amount, "ADD");
+                            }
+                            else if (purchaseitem.shortname == "ECO")
+                            {
+                                ECOAction(buyer, purchaseitem.amount, "REMOVE");
+                                ECOAction(seller, purchaseitem.amount, "ADD");
+                            }
                         }
                         GetSendMSG(player, "NewPurchase", purchaseitem.shortname, purchaseitem.amount.ToString());
                         AddMessages(seller, "NewSale", purchaseitem.shortname, purchaseitem.amount.ToString());
@@ -2380,7 +2530,7 @@ namespace Oxide.Plugins
 
         private Dictionary<string, string> UIElements = new Dictionary<string, string>
         {
-            { "ARROW", "http://www.freeiconspng.com/uploads/red-arrow-curved-5.png" },
+            {"ARROW", "http://www.freeiconspng.com/uploads/red-arrow-curved-5.png" },
             {"FIRST", "http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/simple-black-square-icons-arrows/126517-simple-black-square-icon-arrows-double-arrowhead-left.png" },
             {"BACK", "https://image.freepik.com/free-icon/back-left-arrow-in-square-button_318-76403.png" },
             {"NEXT", "https://image.freepik.com/free-icon/right-arrow-square-button-outline_318-76302.png"},
@@ -2875,6 +3025,7 @@ namespace Oxide.Plugins
             {"SelectTheme", "Select a Theme" },
             {"Amount", "Amount: {0}" },
             {"Name", "Name: {0}" },
+            {"NotEnoughECOPoints", "You do not have enough Economics!" },
             {"NotEnoughSRPoints", "You do not have enough ServerReward Points!" },
             {"ImgReload", "Images have been wiped and reloaded!" },
             {"ImgRefresh", "Images have been refreshed !" },
@@ -2882,10 +3033,12 @@ namespace Oxide.Plugins
             {"Seller", "         Seller\n{0}" },
             {"InExchange", "In Exchange\nFor" },
             {"SellerRemoval", "you removed it." },
-            {"AllItemsAreBL", "All the items in your box are BlackListed!" },
-            {"AllItemsAreBLNoSR", "All the items in your box are BlackListed and you have 0 Server Rewards Points!" },
-            {"AllItemsAreListed", "All the items in your box are already listed! Add more and try again." },
-            {"AllItemsAreListedNoSR", "All the items in your box are already listed and you have 0 Server Rewards Points!" },
+            {"AllItemsAreBL", "All the items in your box are BlackListed{0}{1}" },
+            {"SRInclusion", " and you have 0 Server Rewards Points" },
+            {"ECOInclusion", " and you have 0 Economics" },
+            {"AllItemsAreListed", "All the items in your box are already listed.{0}{1} Add more and try again." },
+            {"SRInclusionListed", " You also have 0 Server Rewards Points or they are all listed." },
+            {"ECOInclusionListed", " You also have 0 Economics or they are all listed." },
             {"ChangeMode", "Change Mode" },
             {"MarketCleared", "Market Cleared of {0} listings" }
         };

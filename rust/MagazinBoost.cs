@@ -3,31 +3,50 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using UnityEngine;
+
+using System;
+using System.Collections.Generic;
+using System.Collections;
+using System.Linq;
+using System.Reflection;
+using Oxide.Core;
+using Oxide.Core.Plugins;
+using UnityEngine;
+using ProtoBuf;
+using Network;
+using System.Net;
+using Facepunch.Steamworks;
+using Rust;
+using Facepunch;
 
 namespace Oxide.Plugins
 {
-    [Info("MagazinBoost", "Fujikura", "1.5.0", ResourceId = 1962)]
+    [Info("MagazinBoost", "Fujikura", "1.5.1", ResourceId = 1962)]
     [Description("Can change magazines, ammo and conditon for most projectile weapons")]
     public class MagazinBoost : RustPlugin
     {	
-		private bool Changed;
+		bool Changed;
 		
 		Dictionary <string, object> weaponContainer = new Dictionary <string, object>();
 		
-		private FieldInfo _itemCondition = typeof(Item).GetField("_condition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-		private FieldInfo _itemMaxCondition = typeof(Item).GetField("_maxCondition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+		FieldInfo _itemCondition = typeof(Item).GetField("_condition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+		FieldInfo _itemMaxCondition = typeof(Item).GetField("_maxCondition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
 
+		FieldInfo _guidToPath = typeof(GameManifest).GetField("guidToPath", (BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+		Dictionary<string, string> guidToPathCopy = new Dictionary<string, string>();
+		
 		#region Config
 		
-		private string permissionAll;
-		private string permissionMaxAmmo;
-		private string permissionPreLoad;
-		private string permissionMaxCondition;
-		private string permissionAmmoType;
-		private bool checkPermission;
-		private bool removeSkinIfNoRights;		
+		string permissionAll;
+		string permissionMaxAmmo;
+		string permissionPreLoad;
+		string permissionMaxCondition;
+		string permissionAmmoType;
+		bool checkPermission;
+		bool removeSkinIfNoRights;		
 		
-		private object GetConfig(string menu, string datavalue, object defaultValue)
+		object GetConfig(string menu, string datavalue, object defaultValue)
         {
             var data = Config[menu] as Dictionary<string, object>;
             if (data == null)
@@ -73,14 +92,19 @@ namespace Oxide.Plugins
 		void GetWeapons()
 		{
 			weaponContainer = (Dictionary <string, object>)Config["Weapons", "Data"];
-			var weapons = ItemManager.itemList.Where(p => p.category == ItemCategory.Weapon && p.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>() != null);
+			var weapons = ItemManager.GetItemDefinitions().Where(p => p.category == ItemCategory.Weapon && p.GetComponent<ItemModEntity>() != null);
+		
 			if (weaponContainer != null && weaponContainer.Count() > 0)
 			{
 				int countLoadedServerStats = 0;
 				foreach (var weapon in weapons)
 				{
+					if (!guidToPathCopy.ContainsKey(weapon.GetComponent<ItemModEntity>().entityPrefab.guid)) continue;
+					if (weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>() == null) continue;
+					
 					if (weaponContainer.ContainsKey(weapon.shortname)) 
 					{
+						if (!guidToPathCopy.ContainsKey(weapon.GetComponent<ItemModEntity>().entityPrefab.guid)) continue;
 						Dictionary <string, object> serverDefaults = weaponContainer[weapon.shortname] as Dictionary <string, object>;
 						if ((bool)serverDefaults["serveractive"])
 						{
@@ -122,6 +146,9 @@ namespace Oxide.Plugins
 				int counter = 0;
 				foreach (var weapon in weapons)
 				{
+					if (!guidToPathCopy.ContainsKey(weapon.GetComponent<ItemModEntity>().entityPrefab.guid)) continue;
+					if (weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>() == null) continue;
+					
 					Dictionary <string, object> weaponStats = new Dictionary <string, object>();
 					weaponStats.Add("displayname", weapon.displayName.english);
 					weaponStats.Add("maxammo", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize);
@@ -185,6 +212,7 @@ namespace Oxide.Plugins
 		void OnServerInitialized()
         {
 			LoadVariables();
+			guidToPathCopy = (Dictionary<string, string>)_guidToPath.GetValue(GameManifest.Get());
 			GetWeapons();
 			if (!permission.PermissionExists(permissionAll)) permission.RegisterPermission(permissionAll, this);
 			if (!permission.PermissionExists(permissionMaxAmmo)) permission.RegisterPermission(permissionMaxAmmo, this);

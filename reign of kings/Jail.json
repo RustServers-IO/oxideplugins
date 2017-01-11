@@ -1,0 +1,19 @@
+{
+    "name": "Jail",
+    "description": "Very early Jail Plugin. Based off of Rust Jail... Well Kind of.",
+    "author": "SweetLouHD",
+    "version": "0.1.1",
+    "configuration": true,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/jail.1177",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

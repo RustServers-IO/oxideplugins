@@ -12,7 +12,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("BetterLoot", "Fujikura/dcode", "2.11.2", ResourceId = 828)]
+	[Info("BetterLoot", "Fujikura/dcode", "2.11.4", ResourceId = 828)]
 	[Description("A complete re-implementation of the drop system")]
 	public class BetterLoot : RustPlugin
 	{
@@ -215,7 +215,7 @@ namespace Oxide.Plugins
 			refreshList.Clear();
 			foreach (var ctr in all) {
 				if (ctr.time < now) {
-					if (ctr.container.isDestroyed)
+					if (ctr.container.IsDestroyed)
 					{
 						++m;
 						continue;
@@ -491,7 +491,7 @@ namespace Oxide.Plugins
 						return;
 					}
 
-					if (distance < 2)
+					if (distance < 0.25f)
 					{
 						spawns.RemoveAt(next);
 						count--;
@@ -796,13 +796,28 @@ namespace Oxide.Plugins
 
 			var sb = new StringBuilder();
 			var items = new List<Item>();
+			var itemNames = new List<string>();
+			var maxRetry = 20;
 			bool hasAmmo = false;
-			for (int i = 0; i < n; ++i) {
+			for (int i = 0; i < n; ++i)
+			{
+				if (maxRetry == 0) break;
 				var item = MightyRNG(type);
-				if (item == null) {
-					PrintError("Failed to obtain item: Is the plugin initialized yet?");
-					return;
+				if (item == null)
+				{
+					--maxRetry;
+                    --i;
+					continue;
 				}
+				if (itemNames.Contains(item.info.shortname))
+                {
+					item.Remove(0f);
+                    --maxRetry;
+                    --i;
+                    continue;
+                }
+                else
+                    itemNames.Add(item.info.shortname);
 				items.Add(item);
 				if (sb.Length > 0)
 					sb.Append(", ");

@@ -1,19 +1,16 @@
 // Reference: RustBuild
-using System.Collections.Generic;
-using System;
-using System.Reflection;
-using UnityEngine;
-using Oxide.Core;
-using Oxide.Core.Plugins;
-using Oxide.Game.Rust.Libraries.Covalence;
 
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Oxide.Core.Plugins;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Prod", "Reneb", "2.2.5", ResourceId = 683)]
+    [Info("Prod", "Reneb", "2.2.8", ResourceId = 683)]
     class Prod : RustPlugin
-    { 
-
+    {
         private int prodAuth;
         private string helpProd;
         private string noAccess;
@@ -27,23 +24,16 @@ namespace Oxide.Plugins
         private string boxCode;
 
         private FieldInfo serverinput;
-        private FieldInfo codelockwhitelist; 
+        private FieldInfo codelockwhitelist;
         private FieldInfo codenum;
         private FieldInfo npcnextTick;
         private FieldInfo meshinstances;
-
 
         private Vector3 eyesAdjust;
         private bool Changed;
 
         [PluginReference]
-        Plugin BuildingOwners;
-
-        [PluginReference]
-        Plugin DeadPlayersList;
-
-        [PluginReference]
-        Plugin PlayerDatabase;
+        Plugin BuildingOwners, DeadPlayersList, PlayerDatabase;
 
         void Loaded()
         {
@@ -92,7 +82,7 @@ namespace Oxide.Plugins
             codeLockList = Convert.ToString(GetConfig("Messages", "codeLockList", "CodeLock whitelist:"));
             boxNeedsCode = Convert.ToString(GetConfig("Messages", "boxNeedsCode", "Can't find owners of an item without a Code Lock"));
             boxCode = Convert.ToString(GetConfig("Messages", "Code", "Code is: {0}"));
-            
+
             if (Changed)
             {
                 SaveConfig();
@@ -135,9 +125,9 @@ namespace Oxide.Plugins
                 Dump(target);
             }
 
-            if(target.OwnerID != 0L)
+            if (target.OwnerID != 0L)
             {
-                SendReply(player, string.Format("Entity Owner (Builder): {0} {1}", FindPlayerName(target.OwnerID), target.OwnerID.ToString()));
+                SendReply(player, string.Format("Entity Owner (Builder): {0} {1}", FindPlayerName(target.OwnerID), target.OwnerID));
             }
 
             var block = target.GetComponentInParent<BuildingBlock>();
@@ -153,7 +143,7 @@ namespace Oxide.Plugins
                 GetToolCupboardUsers(player, priv);
                 return;
             }
-            
+
             var bag = target.GetComponentInParent<SleepingBag>();
             if (bag)
             {
@@ -161,46 +151,40 @@ namespace Oxide.Plugins
                 return;
             }
 
+            if (target.HasSlot(BaseEntity.Slot.Lock))
             {
                 GetDeployableCode(player, target);
+                return;
             }
-            
         }
         private void GetDeployableCode(BasePlayer player, BaseEntity block)
         {
-            if (block.HasSlot(BaseEntity.Slot.Lock))
+            BaseEntity slotent = block.GetSlot(BaseEntity.Slot.Lock);
+            CodeLock codelock = slotent?.GetComponent<CodeLock>();
+            if (codelock != null)
             {
-                BaseEntity slotent = block.GetSlot(BaseEntity.Slot.Lock);
-                if (slotent != null)
+                List<ulong> whitelisted = codelockwhitelist.GetValue(codelock) as List<ulong>;
+                string codevalue = codenum.GetValue(codelock) as string;
+                SendReply(player, string.Format(boxCode, codevalue));
+                SendReply(player, codeLockList);
+                if (whitelisted.Count == 0)
                 {
-                    CodeLock codelock = slotent.GetComponent<CodeLock>();
-                    if (codelock != null)
-                    {
-                        List<ulong> whitelisted = codelockwhitelist.GetValue(codelock) as List<ulong>;
-                        string codevalue = codenum.GetValue(codelock) as string;
-                        SendReply(player, string.Format(boxCode, codevalue));
-                        SendReply(player, codeLockList);
-                        if (whitelisted.Count == 0)
-                        {
-                            SendReply(player, noCodeAccess);
-                            return;
-                        }
-                        foreach (ulong userid in whitelisted)
-                        {
-                            SendBasePlayerFind(player, userid);
-                        }
-                    }
+                    SendReply(player, noCodeAccess);
+                    return;
+                }
+                foreach (ulong userid in whitelisted)
+                {
+                    SendBasePlayerFind(player, userid);
                 }
             }
         }
         private void GetDeployedItemOwner(BasePlayer player, SleepingBag ditem)
         {
-            SendReply(player, string.Format("Sleeping Bag '{0}': {1} - {2}", ditem.niceName.ToString(), FindPlayerName(ditem.deployerUserID), ditem.deployerUserID.ToString()));
+            SendReply(player, string.Format("Sleeping Bag '{0}': {1} - {2}", ditem.niceName, FindPlayerName(ditem.deployerUserID), ditem.deployerUserID));
         }
         private object FindOwnerBlock(BuildingBlock block)
         {
             object returnhook = BuildingOwners?.Call("FindBlockData", block);
-
             if (returnhook != null)
             {
                 if (!(returnhook is bool))
@@ -232,43 +216,40 @@ namespace Oxide.Plugins
                 return name + " (Dead)";
 
             var name2 = PlayerDatabase?.Call("GetPlayerData", userId.ToString(), "default");
-            if(name2 is Dictionary<string, object>)
-                return ((name2 as Dictionary <string, object>)["name"] as string) + " (Dead)";
+            if (name2 is Dictionary<string, object>)
+                return ((name2 as Dictionary<string, object>)["name"] as string) + " (Dead)";
 
             return "Unknown player";
         }
         private void SendBasePlayerFind(BasePlayer player, ulong ownerid)
         {
-            SendReply(player, string.Format("{0} {1}", FindPlayerName(ownerid), ownerid.ToString()));
+            SendReply(player, string.Format("{0} {1}", FindPlayerName(ownerid), ownerid));
         }
         private void GetBuildingblockOwner(BasePlayer player, BuildingBlock block)
         {
-            if(block.GetComponent<Door>() != null)
+            if (block.GetComponent<Door>() != null)
             {
-                if(block.HasSlot(BaseEntity.Slot.Lock))
+                if (block.HasSlot(BaseEntity.Slot.Lock))
                 {
                     BaseEntity slotent = block.GetSlot(BaseEntity.Slot.Lock);
-                    if(slotent != null)
+                    CodeLock codelock = slotent?.GetComponent<CodeLock>();
+                    if (codelock != null)
                     {
-                        CodeLock codelock = slotent.GetComponent<CodeLock>();
-                        if(codelock != null)
+                        List<ulong> whitelisted = codelockwhitelist.GetValue(codelock) as List<ulong>;
+                        string codevalue = codenum.GetValue(codelock) as string;
+                        SendReply(player, string.Format(boxCode, codevalue));
+                        SendReply(player, codeLockList);
+                        if (whitelisted.Count == 0)
                         {
-                            List<ulong> whitelisted = codelockwhitelist.GetValue(codelock) as List<ulong>;
-                            string codevalue = codenum.GetValue(codelock) as string;
-                            SendReply(player, string.Format(boxCode, codevalue));
-                            SendReply(player, codeLockList);
-                            if (whitelisted.Count == 0)
-                            {
-                                SendReply(player, noCodeAccess);
-                                return;
-                            }
-                            foreach (ulong userid in whitelisted)
-                            {
-                                SendReply(player, string.Format("{0} {1}", FindPlayerName(userid), userid.ToString()));
-                            }
+                            SendReply(player, noCodeAccess);
+                            return;
+                        }
+                        foreach (ulong userid in whitelisted)
+                        {
+                            SendReply(player, string.Format("{0} {1}", FindPlayerName(userid), userid));
                         }
                     }
-                }
+                }
             }
 
             object findownerblock = FindOwnerBlock(block);
@@ -277,13 +258,13 @@ namespace Oxide.Plugins
                 SendReply(player, noBlockOwnerfound);
                 return;
             }
-            ulong ownerid = (UInt64)findownerblock;
-            SendReply(player, string.Format("Building Owner: {0} {1}", FindPlayerName(ownerid), ownerid.ToString()));
+            ulong ownerid = (ulong)findownerblock;
+            SendReply(player, string.Format("Building Owner: {0} {1}", FindPlayerName(ownerid), ownerid));
             SendBasePlayerFind(player, ownerid);
         }
         private void GetToolCupboardUsers(BasePlayer player, BuildingPrivlidge cupboard)
         {
-            SendReply(player, string.Format("{0} - {1} {2} {3}", Toolcupboard, Math.Round(cupboard.transform.position.x).ToString(), Math.Round(cupboard.transform.position.y).ToString(), Math.Round(cupboard.transform.position.z).ToString()));
+            SendReply(player, string.Format("{0} - {1} {2} {3}", Toolcupboard, Math.Round(cupboard.transform.position.x), Math.Round(cupboard.transform.position.y), Math.Round(cupboard.transform.position.z)));
             if (cupboard.authorizedPlayers.Count == 0)
             {
                 SendReply(player, noCupboardPlayers);
@@ -291,33 +272,33 @@ namespace Oxide.Plugins
             }
             foreach (ProtoBuf.PlayerNameID pnid in cupboard.authorizedPlayers)
             {
-                SendReply(player, string.Format("{0} - {1}", pnid.username.ToString(), pnid.userid.ToString()));
+                SendReply(player, string.Format("{0} - {1}", pnid.username, pnid.userid));
             }
         }
         private void Dump(BaseEntity col)
         {
             Debug.Log(col.GetComponent<StabilityEntity>().ToString());
             Debug.Log("==================================================");
-            Debug.Log(col.ToString() + " " + LayerMask.LayerToName(col.gameObject.layer).ToString());
+            Debug.Log(col + " " + LayerMask.LayerToName(col.gameObject.layer));
             Debug.Log("========= NORMAL ===========");
-            foreach(UnityEngine.Component com in col.GetComponents(typeof(UnityEngine.Component)) )
+            foreach (Component com in col.GetComponents(typeof(Component)))
             {
-                Debug.Log(com.GetType().ToString() + " " + com.ToString());
+                Debug.Log(com.GetType() + " " + com);
             }
             Debug.Log("========= PARENT ===========");
-            foreach (UnityEngine.Component com in col.GetComponentsInParent(typeof(UnityEngine.Component)))
+            foreach (Component com in col.GetComponentsInParent(typeof(Component)))
             {
-                Debug.Log(com.GetType().ToString() + " " + com.ToString());
+                Debug.Log(com.GetType() + " " + com);
             }
             Debug.Log("========= CHILDREN ===========");
-            foreach (UnityEngine.Component com in col.GetComponentsInChildren(typeof(UnityEngine.Component)))
+            foreach (Component com in col.GetComponentsInChildren(typeof(Component)))
             {
-                Debug.Log(com.GetType().ToString() + " " + com.ToString());
+                Debug.Log(com.GetType() + " " + com);
             }
         }
         private BaseEntity DoRay(Vector3 Pos, Vector3 Aim)
         {
-            var hits = UnityEngine.Physics.RaycastAll(Pos, Aim);
+            var hits = Physics.RaycastAll(Pos, Aim);
             float distance = 100000f;
             BaseEntity target = null;
             foreach (var hit in hits)
@@ -335,8 +316,7 @@ namespace Oxide.Plugins
 
         void SendHelpText(BasePlayer player)
         {
-            if (hasAccess(player))
-                SendReply(player, helpProd);
+            if (hasAccess(player)) SendReply(player, helpProd);
         }
     }
 }

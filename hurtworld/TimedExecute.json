@@ -1,0 +1,16 @@
+{
+    "name": "TimedExecute",
+    "description": "Execute commands every (x) seconds.",
+    "author": "PaiN",
+    "version": "0.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/timedexecute.1502",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

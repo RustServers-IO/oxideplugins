@@ -1,0 +1,17 @@
+{
+    "name": "Prod",
+    "description": "Get informations of who owns buildings",
+    "author": "Reneb",
+    "version": "1.0.0",
+    "configuration": false,
+    "suggest": {},
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/prod.1893",
+    "games": [
+        "hide & hold out"
+    ],
+    "keywords": [
+        "oxide",
+        "hide & hold out"
+    ]
+}

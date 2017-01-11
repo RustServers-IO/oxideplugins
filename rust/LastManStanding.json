@@ -1,14 +1,11 @@
 {
     "name": "Last Man Standing Event",
-    "description": "Last player alive in the event wins",
+    "description": "Fight to the death event for EventManager",
     "author": "k1lly0u",
-    "version": "1.1.3",
+    "version": "2.0.1",
     "configuration": true,
     "require": {
-        "EventManager": "*",
-        "ZoneManager": "*",
-        "Kits": "*",
-        "Spawns": "*"
+        "EventManager": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/last-man-standing-event.1663",

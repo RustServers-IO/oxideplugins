@@ -1,0 +1,16 @@
+{
+    "name": "MOTD",
+    "description": "Shows a message to players when joining",
+    "author": "Wulf",
+    "version": "1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/motd.1508",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

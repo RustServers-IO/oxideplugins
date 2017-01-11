@@ -1,0 +1,16 @@
+{
+    "name": "Teleportation",
+    "description": "Advanced teleportation and homes",
+    "author": "LaserHydra",
+    "version": "1.4.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/teleportation.1519",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

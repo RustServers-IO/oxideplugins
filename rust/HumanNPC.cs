@@ -21,7 +21,7 @@ using Convert = System.Convert;
 
 namespace Oxide.Plugins
 {
-    [Info("HumanNPC", "Reneb/Nogrod/Calytic", "0.3.9", ResourceId = 856)]
+    [Info("HumanNPC", "Reneb/Nogrod/Calytic", "0.3.11", ResourceId = 856)]
     public class HumanNPC : RustPlugin
     {
         //////////////////////////////////////////////////////
@@ -656,7 +656,7 @@ namespace Oxide.Plugins
             {
                 if (npc == null) return;
                 var weapon = firstWeapon as BaseProjectile;
-                if (firstWeapon == null || (firstWeapon != null && (firstWeapon.isDestroyed || weapon != null && weapon.primaryMagazine.contents == 0))) {
+                if (firstWeapon == null || (firstWeapon != null && (firstWeapon.IsDestroyed || weapon != null && weapon.primaryMagazine.contents == 0))) {
                     firstWeapon = npc.EquipFirstWeapon();
                     weapon = firstWeapon as BaseProjectile;
                     npc.SetActive(0);
@@ -1216,7 +1216,7 @@ namespace Oxide.Plugins
         {
             foreach (BasePlayer player in Resources.FindObjectsOfTypeAll<BasePlayer>())
             {
-                if (player.userID >= 76560000000000000L || player.userID <= 0L || player.isDestroyed) continue;
+                if (player.userID >= 76560000000000000L || player.userID <= 0L || player.IsDestroyed) continue;
                 player.KillMessage();
             }
             var npcEditors = UnityEngine.Object.FindObjectsOfType<NPCEditor>();
@@ -1302,7 +1302,7 @@ namespace Oxide.Plugins
 
             foreach (var info in ItemManager.itemList)
             {
-                var baseProjectile = info.GetComponent<ItemModEntity>()?.entityPrefab.Get().GetComponent<BaseProjectile>();
+                var baseProjectile = info.GetComponent<ItemModEntity>()?.entityPrefab?.Get()?.GetComponent<BaseProjectile>();
                 if (baseProjectile == null) continue;
                 weaponProjectile.Add(info.shortname, baseProjectile);
 
@@ -1484,7 +1484,7 @@ namespace Oxide.Plugins
             }
             foreach (BasePlayer player in Resources.FindObjectsOfTypeAll<BasePlayer>())
             {
-                if (player.userID >= 76560000000000000L || player.userID <= 0L || npcspawned.Contains(player.userID) || player.isDestroyed) continue;
+                if (player.userID >= 76560000000000000L || player.userID <= 0L || npcspawned.Contains(player.userID) || player.IsDestroyed) continue;
                 player.KillMessage();
                 PrintWarning($"Detected a HumanNPC with no data or disabled, deleting him: {player.userID} {player.displayName}");
             }
@@ -1494,7 +1494,7 @@ namespace Oxide.Plugins
         {
             BasePlayer findplayer = FindPlayerByID(userid);
 
-            if (findplayer == null || findplayer.isDestroyed)
+            if (findplayer == null || findplayer.IsDestroyed)
             {
                 cache.Remove(userid);
                 SpawnNPC(userid, false);
@@ -1542,7 +1542,7 @@ namespace Oxide.Plugins
 
         void KillNpc(BasePlayer player)
         {
-            if (player.userID >= 76560000000000000L || player.userID <= 0L || player.isDestroyed) return;
+            if (player.userID >= 76560000000000000L || player.userID <= 0L || player.IsDestroyed) return;
             cache.Remove(player.userID);
             player.KillMessage();
         }
@@ -1613,7 +1613,7 @@ namespace Oxide.Plugins
             }
             cache.Remove(npcid);
             var npc = FindHumanPlayerByID(npcid);
-            if (npc?.player != null && !npc.player.isDestroyed)
+            if (npc?.player != null && !npc.player.IsDestroyed)
                 npc.player.KillMessage();
         }
 

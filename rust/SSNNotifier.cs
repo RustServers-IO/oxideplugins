@@ -6,10 +6,12 @@ using Oxide.Core.Plugins;
 using Oxide.Core.Libraries;
 using System.Security.Cryptography;
 using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("SSNNotifier", "Umlaut", "0.0.5")]
+    [Info("SSNNotifier", "Umlaut", "0.0.6")]
     class SSNNotifier : RustPlugin
     {
         // Types defenition
@@ -21,6 +23,123 @@ namespace Oxide.Plugins
             Week = 2,
             Month = 3,
             Year = 4
+        }
+
+        public class JsonPlayer
+        {
+            [JsonProperty("steamid")]
+            public ulong steamid { get; set; }
+
+            [JsonProperty("display_name")]
+            public string displayName { get; set; }
+
+            public JsonPlayer(ulong _steamid, string _displayName)
+            {
+                steamid = _steamid;
+                displayName = _displayName;
+            }
+        }
+
+        public class JsonPlayerConnected
+        {
+            [JsonProperty("player")]
+            public JsonPlayer player { get; set; }
+
+            [JsonProperty("ip_address")]
+            public string ipAddress { get; set; }
+
+            public JsonPlayerConnected(BasePlayer _player)
+            {
+                player = new JsonPlayer(_player.userID, _player.displayName);
+                ipAddress = _player.net.connection.ipaddress.Split(':')[0];
+            }
+        }
+
+        public class JsonPlayerBan
+        {
+            [JsonProperty("player")]
+            public JsonPlayer player { get; set; }
+
+            [JsonProperty("reason")]
+            public string reason { get; set; }
+
+            public JsonPlayerBan(ulong _steamid, string _displayName, string _reason)
+            {
+                player = new JsonPlayer(_steamid, _displayName);
+                reason = _reason;
+            }
+        }
+
+        public class JsonPlayerMute
+        {
+            [JsonProperty("player")]
+            public JsonPlayer player { get; set; }
+
+            [JsonProperty("reason")]
+            public string reason { get; set; }
+
+            public JsonPlayerMute(ulong _steamid, string _displayName, string _reason)
+            {
+                player = new JsonPlayer(_steamid, _displayName);
+                reason = _reason;
+            }
+        }
+
+        public class JsonPlayerChatMessage
+        {
+            [JsonProperty("player")]
+            public JsonPlayer player { get; set; }
+
+            [JsonProperty("message")]
+            public string message { get; set; }
+
+            public JsonPlayerChatMessage(BasePlayer _player, string _message)
+            {
+                player = new JsonPlayer(_player.userID, _player.displayName);
+                message = _message;
+            }
+        }
+
+        public class JsonItemDefinition
+        {
+            [JsonProperty("itemid")]
+            public int itemid { get; set; }
+
+            [JsonProperty("display_name")]
+            public string displayName { get; set; }
+
+            public JsonItemDefinition(ItemDefinition itemDefinition)
+            {
+                itemid = itemDefinition.itemid;
+                displayName = ItemManager.CreateByItemID(itemid).info.displayName.english;
+            }
+        }
+
+        public class JsonServerOn
+        {
+            [JsonProperty("players")]
+            public JsonPlayer[] players { get; set; }
+        }
+
+        public class JsonMurder
+        {
+            [JsonProperty("victim_player")]
+            public JsonPlayer victimPlayer { get; set; }
+
+            [JsonProperty("killer_player")]
+            public JsonPlayer killerPlayer { get; set; }
+
+            [JsonProperty("weapon_item_definition")]
+            public JsonItemDefinition weaponItemDefinition { get; set; }
+
+            [JsonProperty("distance")]
+            public double distance { get; set; }
+
+            [JsonProperty("is_headshot")]
+            public bool isHeadshot { get; set; }
+
+            [JsonProperty("is_sleeping")]
+            public bool isSleeping { get; set; }
         }
 
         class BanItem
@@ -70,6 +189,7 @@ namespace Oxide.Plugins
 
             public Dictionary<ulong, BanItem> BannedPlayers = new Dictionary<ulong, BanItem>();
             public Dictionary<ulong, MuteItem> MutedPlayers = new Dictionary<ulong, MuteItem>();
+            public HashSet<string> PlayersSyncAllowedServers = new HashSet<string>();
         }
 
         // Object vars
@@ -78,7 +198,7 @@ namespace Oxide.Plugins
         WebRequests m_webRequests = Interface.GetMod().GetLibrary<WebRequests>("WebRequests");
 
         public string m_host = "survival-servers-network.com";
-        public string m_port = "1024";
+        public string m_port = "80";
 
         Dictionary<ulong, string> m_playersNames;
         Dictionary<ulong, List<ulong>> m_contextPlayers = new Dictionary<ulong, List<ulong>>();
@@ -90,7 +210,20 @@ namespace Oxide.Plugins
             try
             {
                 m_configData = Config.ReadObject<ConfigData>();
+                if (m_configData.BannedPlayers == null)
+                {
+                    m_configData.BannedPlayers = new Dictionary<ulong, BanItem>();
+                }
+                if (m_configData.MutedPlayers == null)
+                {
+                    m_configData.MutedPlayers = new Dictionary<ulong, MuteItem>();
+                }
+                if (m_configData.PlayersSyncAllowedServers == null)
+                {
+                    m_configData.PlayersSyncAllowedServers = new HashSet<string>();
+                }
                 InsertDefaultMessages();
+                SaveConfig();
             }
             catch
             {
@@ -108,6 +241,10 @@ namespace Oxide.Plugins
             try
             {
                 m_playersNames = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, string>>("PlayersNames");
+                if (m_playersNames == null)
+                {
+                    m_playersNames = new Dictionary<ulong, string>();
+                }
             }
             catch
             {
@@ -137,6 +274,7 @@ namespace Oxide.Plugins
             InsertDefaultMessage("wellcome", "");
 
             InsertDefaultMessage("invalid_arguments", "Invalid arguments.");
+            InsertDefaultMessage("have_not_permission", "You have not permission.");
             InsertDefaultMessage("player_not_found", "Player not found.");
 
             InsertDefaultMessage("player_was_not_banned", "Player <color=cyan>%player_name</color>(<color=cyan>%player_steamid</color>) was not banned.");
@@ -148,20 +286,13 @@ namespace Oxide.Plugins
             InsertDefaultMessage("player_is_muted_already", "Player <color=cyan>%player_name</color>(<color=cyan>%player_steamid</color>) is muted already by reason \"<color=cyan>%reason</color> until <color=cyan>%until_datetime</color>(for <color=cyan>%level</color>)");
             InsertDefaultMessage("player_was_muted", "Player <color=cyan>%player_name</color>(<color=cyan>%player_steamid</color>) was muted by reason \"<color=cyan>%reason</color>\" until <color=cyan>%until_datetime</color>(for <color=cyan>%level</color>)");
             InsertDefaultMessage("player_was_unmuted", "Player <color=cyan>%player_name</color>(<color=cyan>%player_steamid</color>) was unmuted.");
+            InsertDefaultMessage("player_save_unspent_xp_less_zero", "You can save your profile when unspent xp is greater or equal 1.");
+            InsertDefaultMessage("player_save_server_now_allowed", "This server is not allowed for syncronization.");
 
             foreach (var timeRange in Enum.GetValues(typeof(TimeRange)))
             {
                 InsertDefaultMessage(timeRange.ToString(), timeRange.ToString());
             }
-
-            /*
-            InsertDefaultMessage(TimeRange.Hour.ToString(), TimeRange.Hour.ToString());
-            InsertDefaultMessage(TimeRange.Day.ToString(), TimeRange.Day.ToString());
-            InsertDefaultMessage(TimeRange.Week.ToString(), TimeRange.Week.ToString());
-            InsertDefaultMessage(TimeRange.Month.ToString(), TimeRange.Month.ToString());
-            InsertDefaultMessage(TimeRange.Year.ToString(), TimeRange.Year.ToString());
-            */
-
         }
 
         // Hooks
@@ -174,7 +305,7 @@ namespace Oxide.Plugins
             NotifyServerOn();
 
             timer.Repeat(60, 0, () => SaveDynamic());
-            timer.Repeat(60*5, 0, () => NotifyServerOn());
+            timer.Repeat(60, 0, () => NotifyServerOn());
 
             checkPermission("SSNNotifier.mute");
             checkPermission("SSNNotifier.unmute");
@@ -225,7 +356,7 @@ namespace Oxide.Plugins
 
         void OnPlayerInit(BasePlayer player)
         {
-            NotifyPlayerConnected(player.userID, player.displayName, player.net.connection.ipaddress.Split(':')[0]);
+            NotifyPlayerConnected(player);
 
             m_playersNames[player.userID] = player.displayName;
             if (m_configData.Messages["wellcome"].Length != 0)
@@ -234,7 +365,7 @@ namespace Oxide.Plugins
 
         void OnPlayerDisconnected(BasePlayer player)
         {
-            NotifyPlayerDisconnected(player.userID, player.displayName);
+            NotifyPlayerDisconnected(player);
         }
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo hitInfo)
@@ -257,7 +388,7 @@ namespace Oxide.Plugins
                 Math.Pow(playerVictim.transform.position.y - playerKiller.transform.position.y, 2) +
                 Math.Pow(playerVictim.transform.position.z - playerKiller.transform.position.z, 2));
 
-            NotifyMurder(playerVictim.userID, playerVictim.displayName, playerKiller.userID, playerKiller.displayName, hitInfo.Weapon.GetItem().info.itemid, distance, hitInfo.isHeadshot, playerVictim.IsSleeping());
+            NotifyMurder(playerVictim, playerKiller, hitInfo.Weapon.GetItem().info, distance, hitInfo.isHeadshot, playerVictim.IsSleeping());
         }
 
         object OnPlayerChat(ConsoleSystem.Arg arg)
@@ -291,7 +422,7 @@ namespace Oxide.Plugins
 
             if (message != "" && message[0] != '/')
             {
-                NotifyPlayerChatMessage(player.userID, player.displayName, message);
+                NotifyPlayerChatMessage(player, message);
             }
 
             return null;
@@ -393,8 +524,9 @@ namespace Oxide.Plugins
         [ChatCommand("ban")]
         void cmdBan(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNBans.ban"))
+            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNNotifier.ban"))
             {
+                player.ChatMessage(m_configData.Messages["have_not_permission"]);
                 return;
             }
 
@@ -405,14 +537,15 @@ namespace Oxide.Plugins
             }
 
             ulong userId = UserIdByAlias(player.userID, args[0]);
+
             if (userId == 0)
             {
                 player.ChatMessage(m_configData.Messages["player_not_found"]);
                 return;
             }
-
+            Puts("8");
             string playerName = PlayerName(userId);
-
+            Puts("9");
             string reason = "";
             for (int i = 1; i < args.Length; ++i)
             {
@@ -422,10 +555,10 @@ namespace Oxide.Plugins
                     reason += " ";
                 }
             }
-
+            Puts("10");
             if (m_configData.BannedPlayers.ContainsKey(userId))
             {
-
+                Puts("11");
                 BanItem banItem = m_configData.BannedPlayers[userId];
                 string message = m_configData.Messages["player_is_banned_already"];
                 message = message.Replace("%player_name", playerName);
@@ -435,21 +568,22 @@ namespace Oxide.Plugins
             }
             else
             {
+                Puts("12");
                 BanItem banItem = new BanItem();
                 banItem.reason = reason;
                 banItem.timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 m_configData.BannedPlayers[userId] = banItem;
-
+                Puts("13");
                 ConsoleSystem.Run.Server.Quiet(string.Format("banid {0} \"{1}\" \"{2}\"", userId.ToString(), playerName, reason).ToString(), true);
                 ConsoleSystem.Run.Server.Quiet("server.writecfg", true);
-
+                Puts("14");
                 SaveConfig();
 
                 string message = m_configData.Messages["player_was_banned"];
                 message = message.Replace("%player_name", playerName);
                 message = message.Replace("%player_steamid", userId.ToString());
                 message = message.Replace("%reason", banItem.reason);
-                ConsoleSystem.Broadcast("chat.add", 0, message, 1.0);
+                PrintToChat(message);
 
                 BasePlayer targetPlayer = BasePlayer.FindByID(userId);
                 if (targetPlayer != null)
@@ -464,8 +598,9 @@ namespace Oxide.Plugins
         [ChatCommand("unban")]
         void cmdUnban(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNBans.unban"))
+            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNNotifier.unban"))
             {
+                player.ChatMessage(m_configData.Messages["have_not_permission"]);
                 return;
             }
 
@@ -495,7 +630,7 @@ namespace Oxide.Plugins
                 string message = m_configData.Messages["player_was_unbanned"];
                 message = message.Replace("%player_name", playerName);
                 message = message.Replace("%player_steamid", userID.ToString());
-                ConsoleSystem.Broadcast("chat.add", 0, message, 1.0);
+                PrintToChat(message);
             }
             else
             {
@@ -541,8 +676,9 @@ namespace Oxide.Plugins
         void cmdChatMute(BasePlayer player, string command, string[] args)
         {
             string message;
-            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNMutes.mute"))
+            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNNotifier.mute"))
             {
+                player.ChatMessage(m_configData.Messages["have_not_permission"]);
                 return;
             }
 
@@ -612,16 +748,17 @@ namespace Oxide.Plugins
             message = message.Replace("%until_datetime", muteItem.untilDatetime().ToString("yyyy-MM-dd HH:mm:ss"));
             message = message.Replace("%level", m_configData.Messages[muteItem.level.ToString()]);
 
-            ConsoleSystem.Broadcast("chat.add", 0, message, 1.0);
-            
+            PrintToChat(message);
+
             NotifyPlayerMute(userID, playerName, reason);
         }
 
         [ChatCommand("unmute")]
         void cmdChatUnnute(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNMutes.unmute"))
+            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNNotifier.unmute"))
             {
+                player.ChatMessage(m_configData.Messages["have_not_permission"]);
                 return;
             }
 
@@ -657,7 +794,7 @@ namespace Oxide.Plugins
                 message = message.Replace("%player_name", playerName);
                 message = message.Replace("%player_steamid", userID.ToString());
 
-                ConsoleSystem.Broadcast("chat.add", 0, message, 1.0);
+                PrintToChat(message);
             }
             else
             {
@@ -732,6 +869,14 @@ namespace Oxide.Plugins
 
         private string PlayerName(ulong userID)
         {
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
+            {
+                if (player.userID == userID)
+                {
+                    return player.displayName;
+                }
+            }
+
             if (m_playersNames.ContainsKey(userID))
             {
                 return m_playersNames[userID];
@@ -742,21 +887,18 @@ namespace Oxide.Plugins
             }
         }
 
+        private string GetServerName()
+        {
+            return m_configData.server_name;
+        }
+
         // Web request/response
 
-        private void SendWebRequest(string subUrl, List<string> values)
+        private void SendWebRequest(string subUrl, string body, Action<int, string> callback)
         {
-            string requestUrl = "http://%host:%port/%suburl".Replace("%host", m_host).Replace("%port", m_port).Replace("%suburl", subUrl);
+            string requestUrl = "http://%host:%port/api/%server_name/%suburl".Replace("%host", m_host).Replace("%port", m_port).Replace("%suburl", subUrl).Replace("%server_name", m_configData.server_name);
 
             Dictionary<string, string> headers = new Dictionary<string, string>();
-            headers.Add("server_name", m_configData.server_name);
-
-            string body = "";
-            foreach (string line in values)
-            {
-                body += line;
-                body += "\n";
-            }
 
             byte[] data = MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(body + m_configData.server_password));
             StringBuilder sBuilder = new StringBuilder();
@@ -766,7 +908,7 @@ namespace Oxide.Plugins
             }
 
             headers.Add("salt", sBuilder.ToString());
-            m_webRequests.EnqueuePost(requestUrl, body, (code, response) => ReceiveWebResponse(code, response), this, headers);
+            m_webRequests.EnqueuePost(requestUrl, body, callback, this, headers);
         }
 
         private void ReceiveWebResponse(int code, string response)
@@ -789,81 +931,58 @@ namespace Oxide.Plugins
 
         // Notifiers
 
-        private void NotifyMurder(ulong victimSteamId, string victimDisplayName, ulong killerSteamId, string killerDisplayName, int weaponRustItemId, double distance, bool isHeadshot, bool isSleeping)
+        private void NotifyMurder(BasePlayer victimPlayer, BasePlayer killerPlayer, ItemDefinition itemDefinition, double distance, bool isHeadshot, bool isSleeping)
         {
-            List<string> values = new List<string>();
-            values.Add(victimSteamId.ToString());
-            values.Add(victimDisplayName);
-            values.Add(killerSteamId.ToString());
-            values.Add(killerDisplayName);
-            values.Add(weaponRustItemId.ToString());
-            values.Add(ItemManager.CreateByItemID(weaponRustItemId).info.displayName.english);
-            values.Add(distance.ToString());
-            values.Add(isHeadshot ? "true" : "false");
-            values.Add(isSleeping ? "true" : "false");
-
-            SendWebRequest("murder/create", values);
+            JsonMurder jsonMurder = new JsonMurder();
+            jsonMurder.victimPlayer = new JsonPlayer(victimPlayer.userID, victimPlayer.displayName);
+            jsonMurder.killerPlayer = new JsonPlayer(killerPlayer.userID, killerPlayer.displayName);
+            jsonMurder.weaponItemDefinition = new JsonItemDefinition(itemDefinition);
+            jsonMurder.distance = distance;
+            jsonMurder.isHeadshot = isHeadshot;
+            jsonMurder.isSleeping = isSleeping;
+            SendWebRequest("murder/create", JsonConvert.SerializeObject(jsonMurder), (code, response) => ReceiveWebResponse(code, response));
         }
 
-        private void NotifyPlayerConnected(ulong steamid, string displayName, string ipAddress)
+        private void NotifyPlayerConnected(BasePlayer player)
         {
-            List<string> values = new List<string>();
-            values.Add(steamid.ToString());
-            values.Add(displayName);
-            values.Add(ipAddress);
-
-            SendWebRequest("player/connect", values);
+            JsonPlayerConnected jsonPlayerConnected = new JsonPlayerConnected(player);
+            SendWebRequest("player/connect", JsonConvert.SerializeObject(jsonPlayerConnected), (code, response) => ReceiveWebResponse(code, response));
         }
 
-        private void NotifyPlayerDisconnected(ulong steamid, string displayName)
+        private void NotifyPlayerDisconnected(BasePlayer player)
         {
-            List<string> values = new List<string>();
-            values.Add(steamid.ToString());
-            values.Add(displayName);
-            SendWebRequest("player/disconnect", values);
+            SendWebRequest("player/disconnect", JsonConvert.SerializeObject(new JsonPlayer(player.userID, player.displayName)), (code, response) => ReceiveWebResponse(code, response));
         }
 
-        private void NotifyPlayerChatMessage(ulong steamid, string displayName, string messageText)
+        private void NotifyPlayerChatMessage(BasePlayer player, string messageText)
         {
-            List<string> values = new List<string>();
-            values.Add(steamid.ToString());
-            values.Add(displayName);
-            values.Add(messageText);
-
-            SendWebRequest("player/chat_message", values);
+            SendWebRequest("player/chat_message", JsonConvert.SerializeObject(new JsonPlayerChatMessage(player, messageText)), (code, response) => ReceiveWebResponse(code, response));
         }
 
         private void NotifyPlayerBan(ulong steamid, string displayName, string reason)
         {
-            List<string> values = new List<string>();
-            values.Add(steamid.ToString());
-            values.Add(displayName);
-            values.Add(reason);
-            SendWebRequest("player/ban", values);
+            SendWebRequest("player/ban", JsonConvert.SerializeObject(new JsonPlayerBan(steamid, displayName, reason)), (code, response) => ReceiveWebResponse(code, response));
         }
 
         private void NotifyPlayerMute(ulong steamid, string displayName, string reason)
         {
-            List<string> values = new List<string>();
-            values.Add(steamid.ToString());
-            values.Add(displayName);
-            values.Add(reason);
-            SendWebRequest("player/mute", values);
+            SendWebRequest("player/mute", JsonConvert.SerializeObject(new JsonPlayerMute(steamid, displayName, reason)), (code, response) => ReceiveWebResponse(code, response));
         }
 
         private void NotifyServerOn()
         {
-            List<string> values = new List<string>();
-            foreach (BasePlayer player in BasePlayer.activePlayerList)
+            JsonServerOn jsonServerOn = new JsonServerOn();
+            jsonServerOn.players = new JsonPlayer[BasePlayer.activePlayerList.Count];
+            for (int i = 0; i < BasePlayer.activePlayerList.Count; ++i)
             {
-                values.Add(player.userID.ToString());
+                jsonServerOn.players[i] = new JsonPlayer(BasePlayer.activePlayerList[i].userID, BasePlayer.activePlayerList[i].displayName);
             }
-            SendWebRequest("server/on", values);
+            SendWebRequest("server/on", JsonConvert.SerializeObject(jsonServerOn), (code, response) => ReceiveWebResponse(code, response));
         }
 
         private void NotifyServerOff()
         {
-            SendWebRequest("server/off", new List<string>());
+            SendWebRequest("server/off", null, (code, response) => ReceiveWebResponse(code, response));
         }
     }
 }

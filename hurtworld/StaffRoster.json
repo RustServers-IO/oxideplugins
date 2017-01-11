@@ -1,0 +1,16 @@
+{
+    "name": "StaffRoster",
+    "description": "Shows the staff roster and availability",
+    "author": "Noviets",
+    "version": "1.0.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/staffroster.2048",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

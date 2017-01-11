@@ -5,16 +5,13 @@ using Oxide.Core.Configuration;
 using System.Globalization;
 using UnityEngine;
 
-
 namespace Oxide.Plugins
 {
-    [Info("TurboGather", "redBDGR", "1.0.7", ResourceId = 2221)]
+    [Info("TurboGather", "redBDGR", "1.1.1", ResourceId = 2221)]
     [Description("Lets players activate a resouce gather boost for a certain amount of time")]
 
     class TurboGather : RustPlugin
     {
-        #region Init / Config / Data
-
         #region Data
 
         //
@@ -25,7 +22,22 @@ namespace Oxide.Plugins
         StoredData storedData;
 
         Dictionary<string, Information> cacheDictionary = new Dictionary<string, Information>();
-        List<string> Animals = new List<string>();
+
+        static List<object> Animals()
+        {
+            var al = new List<object>();
+            al.Add("player");
+            al.Add("boar");
+            al.Add("horse");
+            al.Add("stag");
+            al.Add("chicken");
+            al.Add("wolf");
+            al.Add("bear");
+            return al;
+        }
+        List<object> TurboAnimals;
+
+        List<string> turboweapons = new List<string>();
 
         class StoredData
         {
@@ -39,6 +51,18 @@ namespace Oxide.Plugins
             public double turboEndTime;
             public bool adminTurboGiven;
             public double adminMultiplierGiven;
+        }
+
+        List<string> orenodes = new List<string>();
+
+        void Unload()
+        {
+            SaveData();
+        }
+
+        void OnServerSave()
+        {
+            SaveData();
         }
 
         void SaveData()
@@ -62,32 +86,11 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        protected override void LoadDefaultConfig()
-        {
-            Config["boostMultiplier"] = boostMultiplier = GetConfig("boostMultiplier", 1.0);
-            Config["activeTime"] = activeTime = GetConfig("activeTime", 30.0f);
-            Config["cooldownTime"] = cooldownTime = GetConfig("cooldownTime", 600.0);
+        #region Config / Lang
 
-            Config["boostMultiplierVIP"] = boostMultiplierVIP = GetConfig("boostMultiplierVIP", 1.0);
-            Config["activeTimeVIP"] = activeTimeVIP = GetConfig("activeTimeVIP", 30.0f);
-            Config["cooldownTimeVIP"] = cooldownTimeVIP = GetConfig("cooldownTimeVIP", 600.0);
+        bool Changed = false;
 
-            Config["boostMultiplierANIMAL"] = boostMultiplierANIMAL = GetConfig("boostMultiplierVIP", 1.0);
-            Config["activeTimeANIMAL"] = activeTimeANIMAL = GetConfig("activeTimeVIP", 30.0f);
-
-            Config["dispenserEnabled"] = dispenserEnabled = GetConfig("dispenserEnabled", true);
-            Config["pickupEnabled"] = pickupEnabled = GetConfig("pickupEnabled", true);
-            Config["quarryEnabled"] = quarryEnabled = GetConfig("quarryEnabled", true);
-
-            Config["activateTurboOnPlayerKill"] = activateTurboOnPlayerKill = GetConfig("activateTurboOnPlayerKill", false);
-            Config["activateTurboOnFriendlyAnimalKill"] = activateTurboOnFriendlyAnimalKill = GetConfig("activateTurboOnFriendlyAnimalKill", false);
-            Config["activateTurboOnHostileAnimalKill"] = activateTurboOnHostileAnimalKill = GetConfig("activateTurboOnHostileAnimalKill", false);
-
-            Config.Save();
-        }
-
-        double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
-
+        // default
         public float activeTime = 30.0f;
         public double cooldownTime = 600.0;
         public double boostMultiplier = 1.0;
@@ -99,13 +102,21 @@ namespace Oxide.Plugins
         public const string permissionNameANIMAL = "turbogather.animal";
         public const string permissionNameADMIN = "turbogather.admin";
 
+        // vip
         public float activeTimeVIP = 30.0f;
         public double cooldownTimeVIP = 600.0;
         public double boostMultiplierVIP = 1.0;
 
+        // global
+        public bool globalBoostEnabled = false;
+        public float activeTimeGLOBAL;
+        public double boostMultiplierGLOBAL;
+
+        // animal
         public float activeTimeANIMAL = 30.0f;
         public double boostMultiplierANIMAL = 1.0;
 
+        // gather modes
         public bool dispenserEnabled = true;
         public bool pickupEnabled = true;
         public bool quarryEnabled = true;
@@ -114,13 +125,58 @@ namespace Oxide.Plugins
         public bool activateTurboOnFriendlyAnimalKill = false;
         public bool activateTurboOnHostileAnimalKill = false;
 
+        public string PrefixName = "[<color=#0080ff>TurboGather</color>]";
+
+        public bool effectEnabled = true;
+
+        public const string effect = "assets/prefabs/locks/keypad/effects/lock.code.shock.prefab";
+
+        protected override void LoadDefaultConfig()
+        {
+            Config.Clear();
+            LoadVariables();
+        }
+
+        //
+        // Shoutouts to fujikura
+        //
+
+        void LoadVariables()
+        {
+            boostMultiplier = Convert.ToSingle(GetConfig("Options", "Boost multiplier", 1.0f));
+            activeTime = Convert.ToSingle(GetConfig("Options", "Active time", 30.0f));
+            cooldownTime = Convert.ToSingle(GetConfig("Options", "Cooldown time", 600.0f));
+
+            boostMultiplierVIP = Convert.ToSingle(GetConfig("Options", "Boost multiplier VIP", 1.0f));
+            activeTimeVIP = Convert.ToSingle(GetConfig("Options", "Active time VIP", 30.0f));
+            cooldownTimeVIP = Convert.ToSingle(GetConfig("Options", "Cooldown time VIP", 600.0f));
+
+            boostMultiplierANIMAL = Convert.ToSingle(GetConfig("Options", "Boost multiplier ANIMAL", 1.0f));
+            activeTimeANIMAL = Convert.ToSingle(GetConfig("Options", "Active time ANIMAL", 30.0f));
+
+            dispenserEnabled = Convert.ToBoolean(GetConfig("Settings", "Dispensers enabled", true));
+            pickupEnabled = Convert.ToBoolean(GetConfig("Settings", "Pickups enabled", true));
+            quarryEnabled = Convert.ToBoolean(GetConfig("Settings", "Quarries enabled", true));
+
+            PrefixName = Convert.ToString(GetConfig("Settings", "Prefix Name", "[<color=#0080ff>TurboGather</color>]"));
+
+            effectEnabled = Convert.ToBoolean(GetConfig("Settings", "Effect Enabled", true));
+
+            TurboAnimals = (List<object>)GetConfig("Settings", "Enabled animals", Animals());
+
+            if (!Changed) return;
+            SaveConfig();
+            Changed = false;
+        }
+
         void Loaded()
         {
             // English
             lang.RegisterMessages(new Dictionary<string, string>
             {
+                //chat
                 ["BoostStart"] = "<color=#00FFFF>Engaging turbo gather! (x{0} resources for {1}s) </color>",
-                ["BoostEnd"] = "<color=#00FFFF>Your TurboBoost has ended! (available again in {0}s) </color>",
+                ["BoostEnd"] = "<color=#00FFFF>Your ability has ended! (available again in {0}s) </color>",
                 ["NoPermissions"] = "<color=#B20000>You do not have the required permissions to use this command! </color>",
                 ["AlreadyInUse"] = "<color=#B20000>Your ability is already in use!</color>",
                 ["OnCooldown"] = "<color=#B20000>You are currently on cooldown! ({0}s remaining) </color>",
@@ -128,43 +184,32 @@ namespace Oxide.Plugins
                 ["AdminInvalidSyntax"] = "<color=#B20000>Invalid syntax! /giveturbo <playername> <length> <multiplier> </color>",
                 ["PlayerOffline"] = "<color=#B20000>The playername / ID you entered is not online or invalid! </color>",
                 ["PlayerGivenTurbo"] = "<color=#00FFFF>{0}'s TurboGather has been activated! (x{1} for {2}s) </color>",
-                ["AdminBoostEnd"] = "<color=#00FFFF>Your admin applied TurboBoost has ended! </color>",
+                ["AdminBoostEnd"] = "<color=#00FFFF>Your admin applied ability has ended! </color>",
                 ["AdminBoostStart"] = "<color=#00FFFF>An admin has given you turbo gather! (x{0} resources for {1}s) </color>",
-                ["AnimalBoostEnd"] = "<color=#00FFFF>Your turbo gather has ended!</color>",
+                ["AnimalBoostEnd"] = "<color=#00FFFF>Your ability has ended!</color>",
+                ["InvalidSyntaxGlobal"] = "<color=#B20000>Invalid syntax! /globalturbo <length> <multiplier> </color>",
+                ["GlobalTurboInvoke"] = "<color=#00FFFF>An admin has started a global turbogather! (x{0} resources for {1}s!)</color>",
+                ["GlobalTurboEnd"] = "<color=#00FFFF>Global turbogather has ended!</color>",
 
             }, this);
 
             turboGatherData = Interface.Oxide.DataFileSystem.GetFile("TurboGather");
         }
 
-        void Unload()
-        {
-            SaveData();
-        }
+        #endregion
+
+        #region Init
 
         void Init()
         {
-            LoadDefaultConfig();
+            LoadVariables();
             permission.RegisterPermission(permissionName, this);
             permission.RegisterPermission(permissionNameVIP, this);
             permission.RegisterPermission(permissionNameADMIN, this);
             permission.RegisterPermission(permissionNameANIMAL, this);
             LoadData();
+            AddWeapons();
 
-            // adding animals to the animals list depending on what options are set in the config
-            // this is the best method until i get time to sort out something better (sorry)
-            if (activateTurboOnPlayerKill == true)
-                Animals.Add("player");
-            if (activateTurboOnFriendlyAnimalKill == true)
-                Animals.Add("boar"); Animals.Add("stag"); Animals.Add("chicken"); Animals.Add("horse");
-            if (activateTurboOnHostileAnimalKill == true)
-                Animals.Add("bear"); Animals.Add("wolf");
-        }
-
-
-        void OnServerSave()
-        {
-            SaveData();
         }
 
         #endregion
@@ -187,31 +232,44 @@ namespace Oxide.Plugins
             return null;
         }
 
+        // checking if a players turbo still has time and making sure it is turned on at server restart (also cleans up a bit)
+        void OnTerrainInitialized()
+        {
+            foreach (string key in cacheDictionary.Keys)
+            {
+                if (cacheDictionary[key].turboEndTime < GrabCurrentTime())
+                {
+                    var player = FindPlayer(key);
+                    if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN) || permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP) || permission.UserHasPermission(player.UserIDString, permissionNameANIMAL))
+                        cacheDictionary[key].turboEnabled = false;
+                    else
+                        cacheDictionary.Remove(key);
+                }
+                else
+                    cacheDictionary[key].turboEnabled = true;
+            }
+        }
+
+        // handling animal / player killing
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
-            if (entity == null || info == null || info.Initiator == null || !(info.Initiator is BasePlayer || !entity.isActiveAndEnabled)) return;
+            if (entity == null || info == null || info.Initiator == null || !(info.Initiator is BasePlayer) || !(entity.isActiveAndEnabled)) return;
             if (permission.UserHasPermission(info.InitiatorPlayer.UserIDString, permissionNameANIMAL))
             {
                 if (cacheDictionary.ContainsKey(info.InitiatorPlayer.UserIDString))
                 {
-                    if (entity.ShortPrefabName == "player" || entity.ShortPrefabName == "boar" || entity.ShortPrefabName == "stag" || entity.ShortPrefabName == "horse" || entity.ShortPrefabName == "chicken" || entity.ShortPrefabName == "bear" || entity.ShortPrefabName == "wolf")
+                    if (TurboAnimals.Contains(entity.ShortPrefabName))
                     {
-                        if (Animals.Contains(entity.ShortPrefabName))
-                        {
-                            BasePlayer player = info.InitiatorPlayer;
-                            StartAnimalTurbo(player);
-                        }
+                        BasePlayer player = info.InitiatorPlayer;
+                        StartAnimalTurbo(player);
                     }
                 }
                 else
                 {
-                    if (entity.ShortPrefabName == "player" || entity.ShortPrefabName == "boar" || entity.ShortPrefabName == "stag" || entity.ShortPrefabName == "horse" || entity.ShortPrefabName == "chicken" || entity.ShortPrefabName == "bear" || entity.ShortPrefabName == "wolf")
+                    if (TurboAnimals.Contains(entity.ShortPrefabName))
                     {
-                        if (Animals.Contains(entity.ShortPrefabName))
-                        {
-                            cacheDictionary.Add(info.InitiatorPlayer.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
-                            StartAnimalTurbo(info.InitiatorPlayer);
-                        }
+                        cacheDictionary.Add(info.InitiatorPlayer.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
+                        StartAnimalTurbo(info.InitiatorPlayer);
                     }
                 }
             }
@@ -219,70 +277,128 @@ namespace Oxide.Plugins
 
         #region Dispenser & Pickups
 
-        void DoGather(BasePlayer player, Item item)
+        void DoGather(BasePlayer player, Item item, ResourceDispenser dispenser)
         {
-            if (player == null)
-                return;
-            if (cacheDictionary.ContainsKey(player.UserIDString))
+            if (player == null) return;
+            if (!globalBoostEnabled)
             {
-                if (cacheDictionary[player.UserIDString].adminTurboGiven == true)
+                if (cacheDictionary.ContainsKey(player.UserIDString))
                 {
-                    if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
-                        item.amount = (int)(item.amount * cacheDictionary[player.UserIDString].adminMultiplierGiven);
-                    else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
-                        cacheDictionary[player.UserIDString].adminTurboGiven = false;
-                }
-                else
-                {
-                    if (permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP))
+                    if (cacheDictionary[player.UserIDString].adminTurboGiven == true)
                     {
-                        if (cacheDictionary[player.UserIDString].turboEnabled == true)
+                        if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
+                            item.amount = (int)(item.amount * cacheDictionary[player.UserIDString].adminMultiplierGiven);
+                        else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
+                            cacheDictionary[player.UserIDString].adminTurboGiven = false;
+                    }
+                    else
+                    {
+                        if (permission.UserHasPermission(player.UserIDString, permissionName))
                         {
-                            if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
+                            if (cacheDictionary[player.UserIDString].turboEnabled == true)
                             {
-                                if (permission.UserHasPermission(player.UserIDString, permissionName))
+                                if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
+                                {
+                                    if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
+                                    {
+                                        item.amount = (int)(item.amount * boostMultiplierVIP);
+                                        return;
+                                    }
                                     item.amount = (int)(item.amount * boostMultiplier);
-                                else if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
-                                    item.amount = (int)(item.amount * boostMultiplierVIP);
+                                }
+                                else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
+                                    cacheDictionary[player.UserIDString].turboEnabled = false;
                             }
-                            else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
-                                cacheDictionary[player.UserIDString].turboEnabled = false;
                         }
+                        else if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
+                        {
+                            if (cacheDictionary[player.UserIDString].turboEnabled == true)
+                            {
+                                if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
+                                    item.amount = (int)(item.amount * boostMultiplierVIP);
+                                else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
+                                    cacheDictionary[player.UserIDString].turboEnabled = false;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+                item.amount = (int)(item.amount * boostMultiplierGLOBAL);
+        }
+
+        void OnPlayerAttack(BasePlayer attacker, HitInfo info)
+        {
+            if (info.HitEntity == null || info == null) return;
+            if (!effectEnabled) return;
+            if (!turboweapons.Contains(info.Weapon.ShortPrefabName)) return;
+            if (permission.UserHasPermission(attacker.UserIDString, permissionName) || permission.UserHasPermission(attacker.UserIDString, permissionNameVIP) || permission.UserHasPermission(attacker.UserIDString, permissionNameANIMAL))
+            {
+                if (cacheDictionary.ContainsKey(attacker.UserIDString))
+                {
+                    if (cacheDictionary[attacker.UserIDString].turboEnabled)
+                    {
+                        Vector3 pos = info.HitPositionWorld;
+                        Effect.server.Run(effect, pos);
                     }
                 }
             }
         }
 
-
-
+        // Dispensers
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
-            if (dispenserEnabled == true)
+            if (dispenser == null) return;
+            if (entity == null) return;
+            if (dispenserEnabled)
             {
                 BasePlayer player = entity.ToPlayer();
-                string userIdentity = player.UserIDString;
-                DoGather(entity.ToPlayer(), item);
+                if (permission.UserHasPermission(player.UserIDString, permissionName) || (permission.UserHasPermission(player.UserIDString, permissionNameVIP)))
+                {
+                    DoGather(entity.ToPlayer(), item, dispenser);
+                }
             }
         }
 
+        Vector3 GetPos (BasePlayer player, ResourceDispenser dispenser)
+        {
+            Vector3 hitpos = new Vector3((player.transform.position.x + dispenser.transform.position.x) / 2, (player.transform.position.y + dispenser.transform.position.y) / 2 + 1.1f, ((player.transform.position.z + dispenser.transform.position.z) / 2));
+            return hitpos;
+        }
+
+        void AddWeapons()
+        {
+            turboweapons.Add("rock.entity");
+            turboweapons.Add("hatchet.entity");
+            turboweapons.Add("pickaxe.entity");
+            turboweapons.Add("stone_pickaxe.entity");
+            turboweapons.Add("stonehatchet.entity");
+            turboweapons.Add("icepick_salvaged.entity");
+            turboweapons.Add("axe_salvaged.entity");
+            turboweapons.Add("hammer_salvaged.entity");
+        }
+
+        // collectables / pickups
         void OnCollectiblePickup(Item item, BasePlayer player)
         {
             if (pickupEnabled == true)
-                DoGather(player, item);
+                DoGather(player, item, null);
         }
 
+        // quarries
         void OnQuarryGather(MiningQuarry quarry, Item item)
         {
             if (quarryEnabled == true)
             {
                 BasePlayer player = BasePlayer.FindByID(quarry.OwnerID) ?? BasePlayer.FindSleeping(quarry.OwnerID);
-                DoGather(player, item);
+                DoGather(player, item, null);
             }
         }
-
         #endregion
 
         #region Command
+
+        // if (OnEntityDeath = animal / player)
         void StartAnimalTurbo(BasePlayer player)
         {
             if (cacheDictionary.ContainsKey(player.UserIDString))
@@ -293,67 +409,69 @@ namespace Oxide.Plugins
                 cacheDictionary[player.UserIDString].activeAgain = endTime;
                 cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + activeTimeANIMAL;
 
-                SendReply(player, string.Format(msg("BoostStart", player.UserIDString), boostMultiplierANIMAL, activeTimeANIMAL));
+                SendReply(player, PrefixName + " " + string.Format(msg("BoostStart", player.UserIDString), boostMultiplierANIMAL, activeTimeANIMAL));
 
                 timer.Once(activeTimeANIMAL, () =>
                 {
                     if (player == null) return;
                     cacheDictionary[player.UserIDString].turboEnabled = false;
-                    SendReply(player, string.Format(msg("AnimalBoostEnd", player.UserIDString)));
+                    SendReply(player, PrefixName + " " + string.Format(msg("AnimalBoostEnd", player.UserIDString)));
                 });
             }
             else return;
         }
 
+        // if player executes the chat command
         void StartTurbo(BasePlayer player)
         {
             if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
                 endTime = GrabCurrentTime() + cooldownTimeVIP + activeTimeVIP;
             else
                 endTime = GrabCurrentTime() + cooldownTime + activeTime;
-
             cacheDictionary[player.UserIDString].turboEnabled = true;
             cacheDictionary[player.UserIDString].activeAgain = endTime;
             cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + activeTime;
 
             if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
             {
-                SendReply(player, string.Format(msg("BoostStart", player.UserIDString), boostMultiplierVIP, activeTimeVIP));
+                SendReply(player, PrefixName + " " + string.Format(msg("BoostStart", player.UserIDString), boostMultiplierVIP, activeTimeVIP));
 
                 timer.Once(activeTimeVIP, () =>
                 {
                     if (player == null) return;
                     cacheDictionary[player.UserIDString].turboEnabled = false;
-                    SendReply(player, string.Format(msg("BoostEnd", player.UserIDString), cooldownTimeVIP));
+                    SendReply(player, PrefixName + " " + string.Format(msg("BoostEnd", player.UserIDString), cooldownTimeVIP));
                     float cooldownFloat = Convert.ToSingle(cooldownTimeVIP);
 
                     timer.Once(cooldownFloat, () =>
                     {
                         if (player == null) return;
-                        SendReply(player, string.Format(msg("CooldownEnded", player.UserIDString)));
+                        SendReply(player, PrefixName + " " + string.Format(msg("CooldownEnded", player.UserIDString)));
                     });
                 });
             }
             else
             {
-                SendReply(player, string.Format(msg("BoostStart", player.UserIDString), boostMultiplier, activeTime));
+                SendReply(player, PrefixName + " " + string.Format(msg("BoostStart", player.UserIDString), boostMultiplier, activeTime));
 
                 timer.Once(activeTime, () =>
                 {
                     if (player == null) return;
                     cacheDictionary[player.UserIDString].turboEnabled = false;
-                    SendReply(player, string.Format(msg("BoostEnd", player.UserIDString), cooldownTime));
+                    SendReply(player, PrefixName + " " + string.Format(msg("BoostEnd", player.UserIDString), cooldownTime));
                     float cooldownFloat = Convert.ToSingle(cooldownTime);
 
                     timer.Once(cooldownFloat, () =>
                     {
                         if (player == null) return;
-                        SendReply(player, string.Format(msg("CooldownEnded", player.UserIDString)));
+                        SendReply(player, PrefixName + " " + string.Format(msg("CooldownEnded", player.UserIDString)));
                     });
                 });
             }
+            return;
         }
 
+        // chat command /turbo
         [ChatCommand("turbo")]
         void turboCommand(BasePlayer player, string command, string[] args)
         {
@@ -381,11 +499,11 @@ namespace Oxide.Plugins
                     }
                 }
                 else if (cacheDictionary[player.UserIDString].turboEnabled == true)
-                    SendReply(player, string.Format(msg("AlreadyInUse", player.UserIDString)));
+                    SendReply(player, PrefixName + " " + string.Format(msg("AlreadyInUse", player.UserIDString)));
                 else
                 {
                     double cooldownTimeLeft = cacheDictionary[player.UserIDString].activeAgain - GrabCurrentTime();
-                    SendReply(player, string.Format(msg("OnCooldown", player.UserIDString), (int)cooldownTimeLeft));
+                    SendReply(player, PrefixName + " " + string.Format(msg("OnCooldown", player.UserIDString), (int)cooldownTimeLeft));
                 }
             }
             else if (!cacheDictionary.ContainsKey(player.UserIDString))
@@ -393,8 +511,10 @@ namespace Oxide.Plugins
                 cacheDictionary.Add(player.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
                 StartTurbo(player);
             }
+            return;
         }
 
+        //chat command /giveturbo
         [ChatCommand("giveturbo")]
         void giveturboCommand(BasePlayer player, string command, string[] args)
         {
@@ -415,12 +535,162 @@ namespace Oxide.Plugins
                 if (playerNameID != null)
                 {
                     if (!cacheDictionary.ContainsKey(dictionaryPlayerName))
-                        cacheDictionary.Add(player.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0, adminTurboGiven = false, adminMultiplierGiven = 0 });
+                        cacheDictionary.Add(playerNameID.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0, adminTurboGiven = false, adminMultiplierGiven = 0 });
 
                     cacheDictionary[dictionaryPlayerName].turboEndTime = GrabCurrentTime() + playerActiveLengthInput;
                     cacheDictionary[dictionaryPlayerName].adminTurboGiven = true;
                     cacheDictionary[dictionaryPlayerName].adminMultiplierGiven = playerMultiplierInput;
-                    SendReply(player, string.Format(msg("PlayerGivenTurbo", player.UserIDString), dictionaryPlayerName, playerMultiplierInput, playerActiveLengthInput));
+                    SendReply(player, PrefixName + " " + string.Format(msg("PlayerGivenTurbo", player.UserIDString), dictionaryPlayerName, playerMultiplierInput, playerActiveLengthInput));
+                    playerNameID.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostStart", playerNameInput), playerMultiplierInput, playerActiveLengthInput));
+
+                    timer.Once(playerActiveLengthInput, () =>
+                    {
+                        if (playerNameID == null) return;
+                        playerNameID.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostEnd", playerNameInput)));
+                    });
+                }
+                else
+                {
+                    SendReply(player, PrefixName + " " + string.Format(msg("PlayerOffline", player.UserIDString)));
+                    return;
+                }
+            }
+            else
+                SendReply(player, PrefixName + " " + string.Format(msg("AdminInvalidSyntax")));
+            return;
+        }
+
+        // chat command /global turbo
+        [ChatCommand("globalturbo")]
+        void globalturboCMD(BasePlayer player, string command, string[] args)
+        {
+            if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+            {
+                if (globalBoostEnabled)
+                {
+                    SendReply(player, "Global turbo is already enabled!");
+                    return;
+                }
+                if (args.Length == 2)
+                {
+                    activeTimeGLOBAL = Convert.ToSingle(args[0]);
+                    boostMultiplierGLOBAL = Convert.ToDouble(args[1]);
+                    globalBoostEnabled = true;
+                    PrintToChat(PrefixName + " " + string.Format(msg("GlobalTurboInvoke"), boostMultiplierGLOBAL, activeTimeGLOBAL));
+                    timer.Once(activeTimeGLOBAL, () =>
+                    {
+                        if (globalBoostEnabled)
+                        {
+                            PrintToChat(PrefixName + " " + string.Format(msg("GlobalTurboEnd")));
+                            globalBoostEnabled = false;
+                        }
+                    });
+                }
+                else
+                    SendReply(player, PrefixName + " " + string.Format(msg("InvalidSyntaxGlobal")));
+            }
+            else
+                SendReply(player, PrefixName + " " + string.Format(msg("NoPermissions", player.UserIDString)));
+            return;
+        }
+
+        // console command for starting / stopping global turbogather
+        [ConsoleCommand("globalturbo")]
+        void globalturboconsoleCMD(ConsoleSystem.Arg arg)
+        {
+            if (arg.connection != null) return;
+            //start
+            if (arg.Args != null && arg.Args[0] == "start")
+            {
+                if (arg.Args.Length == 3)
+                {
+                    if (globalBoostEnabled)
+                        Puts("Global turbo is already enabled!");
+                    else
+                    {
+                        globalBoostEnabled = true;
+                        activeTimeGLOBAL = Convert.ToSingle(arg.Args[1]);
+                        boostMultiplierGLOBAL = Convert.ToDouble(arg.Args[2]);
+                        PrintToChat(string.Format(msg("GlobalTurboInvoke"), boostMultiplierGLOBAL, activeTimeGLOBAL));
+                        Puts("Global Turbo has been activated! ( " + boostMultiplierGLOBAL + "x for " + activeTimeGLOBAL + "s )");
+                        timer.Once(activeTimeGLOBAL, () =>
+                        {
+                            if (globalBoostEnabled)
+                            {
+                                PrintToChat(string.Format(msg("GlobalTurboEnd")));
+                                globalBoostEnabled = false;
+                            }
+                        });
+                    }
+                }
+                else Puts("Invalid syntax! /globalturbo start <length> <multiplier>");
+            }
+            //end
+            else if (arg.Args != null && arg.Args[0] == "end")
+            {
+                if (globalBoostEnabled)
+                {
+                    globalBoostEnabled = false;
+                    PrintToChat(string.Format(msg("GlobalTurboEnd")));
+                }
+                else
+                    Puts("Global turbo is already disabled!");
+            }
+            else if (arg.Args == null || arg.Args.Length == 0)
+            {
+                Puts("Invalid syntax! /globalturbo <start/end>");
+            }
+        }
+
+        // cancelling globalturbo (emergency?)
+        [ChatCommand("cancelglobalturbo")]
+        void cancelglobalturboCMD(BasePlayer player, string command, string[] args)
+        {
+            if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+            {
+                if (args == null || args.Length <= 0)
+                {
+                    if (globalBoostEnabled)
+                    {
+                        globalBoostEnabled = false;
+                        PrintToChat(PrefixName + " " + string.Format(msg("GlobalTurboEnd")));
+                    }
+                    else
+                        SendReply(player, "Global turbo is already disabled!");
+                }
+                return;
+            }
+            else
+                SendReply(player, PrefixName + " " + string.Format(msg("NoPermissions", player.UserIDString)));
+        }
+
+        // console command giveturbo
+        [ConsoleCommand("giveturbo")]
+        void giveturboconsoleCMD(ConsoleSystem.Arg arg)
+        {
+            if (arg.connection != null) return;
+            if (arg.Args == null || arg.Args.Length != 3)
+            {
+                Puts("Invalid syntax! giveturbo <playername> <length> <multiplier>");
+                return;
+            }
+            else
+            {
+                string playerNameInput = arg.Args[0];
+                var playerNameID = FindPlayer(playerNameInput);
+                string dictionaryPlayerName = playerNameID.UserIDString;
+                float playerActiveLengthInput = float.Parse(arg.Args[1]);
+                double playerMultiplierInput = Convert.ToDouble(arg.Args[2]);
+
+                if (playerNameID != null)
+                {
+                    if (!cacheDictionary.ContainsKey(dictionaryPlayerName))
+                        cacheDictionary.Add(playerNameID.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0, adminTurboGiven = false, adminMultiplierGiven = 0 });
+
+                    cacheDictionary[dictionaryPlayerName].turboEndTime = GrabCurrentTime() + playerActiveLengthInput;
+                    cacheDictionary[dictionaryPlayerName].adminTurboGiven = true;
+                    cacheDictionary[dictionaryPlayerName].adminMultiplierGiven = playerMultiplierInput;
+                    Puts(string.Format(msg("PlayerGivenTurbo"), dictionaryPlayerName, playerMultiplierInput, playerActiveLengthInput));
                     playerNameID.ChatMessage(string.Format(msg("AdminBoostStart", playerNameInput), playerMultiplierInput, playerActiveLengthInput));
 
                     timer.Once(playerActiveLengthInput, () =>
@@ -431,17 +701,35 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    SendReply(player, string.Format(msg("PlayerOffline", player.UserIDString)));
+                    Puts("The playername / ID you entered is not online or invalid!");
                     return;
                 }
             }
-            else
-                SendReply(player, string.Format(msg("AdminInvalidSyntax")));
+            return;
         }
 
         #endregion
 
-        T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
+        object GetConfig(string menu, string datavalue, object defaultValue)
+        {
+            var data = Config[menu] as Dictionary<string, object>;
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[menu] = data;
+                Changed = true;
+            }
+            object value;
+            if (!data.TryGetValue(datavalue, out value))
+            {
+                value = defaultValue;
+                data[datavalue] = value;
+                Changed = true;
+            }
+            return value;
+        }
+
+        double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
         string msg(string key, string id = null) => lang.GetMessage(key, this, id);
     }
 }

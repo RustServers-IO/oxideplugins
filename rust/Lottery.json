@@ -1,14 +1,13 @@
 {
     "name": "Lottery",
-    "description": "Allow players to roll number to win more money",
+    "description": "Allow players to roll number to win more money or points",
     "author": "sami37",
-    "version": "1.0.4",
+    "version": "1.0.6",
     "configuration": true,
     "suggest": {
-        "ServerRewards": "*"
-    },
-    "require": {
-        "Economics": "*"
+        "ServerRewards": "*",
+        "Economics": "*",
+        "HumanNPC": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/lottery.2145",

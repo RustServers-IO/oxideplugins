@@ -1,0 +1,16 @@
+{
+    "name": "Out Of Character chat",
+    "description": "Adds an Out Of Character chat to the game -> For roleplay servers!",
+    "author": "D-Kay",
+    "version": "1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/out-of-character-chat.1078",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

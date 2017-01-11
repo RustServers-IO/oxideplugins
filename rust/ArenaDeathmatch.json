@@ -1,15 +1,15 @@
 {
-    "name": "Event - Deathmatch",
-    "description": "Arena Mod Deathmatch",
+    "name": "Deathmatch",
+    "description": "Deathmatch event for EventManager",
     "author": "k1lly0u",
-    "version": "1.1.6",
+    "version": "1.2.1",
     "configuration": true,
     "require": {
         "EventManager": "*",
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/event-deathmatch.741",
+    "url": "http:\/\/oxidemod.org\/plugins\/deathmatch.741",
     "games": [
         "rust"
     ],

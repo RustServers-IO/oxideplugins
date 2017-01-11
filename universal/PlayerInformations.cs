@@ -8,153 +8,24 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerInformations", "Reneb", "1.2.7")]
+    [Info("PlayerInformations", "Reneb", "1.2.8", ResourceId = 1940)]
     [Description("Logs players informations.")]
     public class PlayerInformations : CovalencePlugin
     {
         [PluginReference]
         Plugin PlayerDatabase;
 
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Configs
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        private static bool IPuse = true;
-        private static string IPpermission = "playerinformations.ips";
-        private static int IPauthlevel = 1;
-        private static int IPmaxLogs = 5;
-
-        private static bool NAMESuse = true;
-        private static string NAMESpermission = "playerinformations.names";
-        private static int NAMESauthlevel = 1;
-        private static int NAMESmaxLogs = 5;
-
-        private static bool FCuse = true;
-        private static string FCpermission = "playerinformations.firstconnection";
-        private static int FCauthlevel = 1;
-
-        private static bool LSuse = true;
-        private static string LSpermission = "playerinformations.lastseen";
-        private static int LSauthlevel = 1;
-
-        private static bool LPuse = true;
-        private static string LPpermission = "playerinformations.lastposition";
-        private static int LPauthlevel = 1;
-
-        private static bool TPuse = true;
-        private static string TPpermission = "playerinformations.timeplayed";
-        private static int TPauthlevel = 0;
+        #region Fields
 
         static DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0);
 
-        void Loaded()
-        {
-            permission.RegisterPermission(IPpermission, this);
-            permission.RegisterPermission(NAMESpermission, this);
-            permission.RegisterPermission(FCpermission, this);
-            permission.RegisterPermission(LSpermission, this);
-            permission.RegisterPermission(LPpermission, this);
+        #endregion
 
-            lang.RegisterMessages(new Dictionary<string, string>
-            {
-                {"You don't have permission to use this command.", "You don't have permission to use this command."},
-                {"IPs aren't recorded.","IPs aren't recorded."},
-                {"/lastips STEAMID/NAME", "/lastips STEAMID/NAME"},
-                {"Couldn't find a player that matches this name.", "Couldn't find a player that matches this name."},
-                {"No logs for this player.", "No logs for this player."},
-                {"/ipowners XX.XX.XX.XX", "/ipowners XX.XX.XX.XX"},
-                {"Couldn't get the list of players", "Couldn't get the list of players"},
-                {"This command has been deactivated.", "This command has been deactivated."},
-                {"/lastseen STEAMID/NAME", "/lastseen STEAMID/NAME"},
-                { "This player is connected!",  "This player is connected!"},
-                {"/firstconnection STEAMID/NAME", "/firstconnection STEAMID/NAME"},
-                { "/lastnames STEAMID/NAME",  "/lastnames STEAMID/NAME"},
-                {"/played STEAMID/NAME", "/played STEAMID/NAME"},
-                {"/lastposition STEAMID/NAME","/lastposition STEAMID/NAME"}
-            }, this);
-        }
+        #region Methods
 
-        protected override void LoadDefaultConfig() { }
+        string GetMsg(string key, object steamid = null) => lang.GetMessage(key, this, steamid.ToString());
 
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-
-        void Init()
-        {
-            CheckCfg<bool>("IP Logs - activated", ref IPuse);
-            CheckCfg<string>("IP Logs - Permission - oxide permission", ref IPpermission);
-            CheckCfg<int>("IP Logs - Permission - authlevel - Rust ONLY", ref IPauthlevel);
-            CheckCfg<int>("IP Logs - Max Logs per player", ref IPmaxLogs);
-
-            CheckCfg<bool>("Names Logs - activated", ref NAMESuse);
-            CheckCfg<string>("Names Logs - Permission - oxide permission", ref NAMESpermission);
-            CheckCfg<int>("Names Logs - Permission - authlevel - Rust ONLY", ref NAMESauthlevel);
-            CheckCfg<int>("Names Logs - Max Logs per player", ref NAMESmaxLogs);
-
-            CheckCfg<bool>("First Connection - activated", ref FCuse);
-            CheckCfg<string>("First Connection - Permission - oxide permission", ref FCpermission);
-            CheckCfg<int>("First Connection - Permission - authlevel - Rust ONLY", ref FCauthlevel);
-
-            CheckCfg<bool>("Last Seen - activated", ref LSuse);
-            CheckCfg<string>("Last Seen - Permission - oxide permission", ref LSpermission);
-            CheckCfg<int>("Last Seen - Permission - authlevel - Rust ONLY", ref LSauthlevel);
-
-            CheckCfg<bool>("Last Position - activated", ref LPuse);
-            CheckCfg<string>("Last Position - Permission - oxide permission", ref LPpermission);
-            CheckCfg<int>("Last Position - Permission - authlevel - Rust ONLY", ref LPauthlevel);
-
-            CheckCfg<bool>("Time Played - activated", ref TPuse);
-            CheckCfg<string>("Time Played - Permission - oxide permission", ref TPpermission);
-            CheckCfg<int>("Time Played - Permission - authlevel - Rust ONLY", ref TPauthlevel);
-
-            SaveConfig();
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Oxide Hooks
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        void OnServerInitialized()
-        {
-            if (PlayerDatabase == null)
-            {
-                timer.Once(0.01f, () => Interface.Oxide.UnloadPlugin("PlayerInformations"));
-                return;
-            }
-            if (TPuse)
-            {
-                StartRecordTimeAll();
-            }
-        }
-
-
-        void Unload()
-        {
-            if (TPuse)
-            {
-                EndRecordTimeAll();
-            }
-        }
-
-        string GetMsg(string key, object steamid = null)
-        {
-            return lang.GetMessage(key, this, steamid.ToString());
-        }
-
-        void OnUserConnected(IPlayer player) { OnPlayerJoined(player.Id, player.Name, NormalizeIP(player.Address)); }
-        void OnUserDisconnected(IPlayer player) { OnPlayerLeave(player); }
-
-        void StartRecordTimeAll()
-        {
-            foreach (IPlayer player in players.Connected)
-            {
-                StartRecordTime(player.Id);
-            }
-        }
+        bool IsConnected(string steamid) => players.Connected.Where(x => x.Id == steamid).Count() > 0;
 
         string NormalizeIP(string ip)
         {
@@ -162,116 +33,7 @@ namespace Oxide.Plugins
             return ip.Substring(0, ip.LastIndexOf(":"));
         }
 
-        void EndRecordTimeAll()
-        {
-            foreach (IPlayer player in players.Connected)
-            {
-                EndRecordTime(player.Id);
-            }
-        }
-
-        bool IsConnected(string steamid) { return players.Connected.Where(x => x.Id == steamid).Count() > 0; }
-
-        UnityEngine.Vector3 FindPosition(string steamid)
-        {
-            var player = players.FindPlayer(steamid);
-            if (player == null) return default(UnityEngine.Vector3);
-            return new UnityEngine.Vector3(player.Position().X, player.Position().Y, player.Position().Z);
-        }
-
-        [Command("lastips")]
-        void cmdChatLastIps(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_lastIps(player.Id, args);
-            player.Reply(answer);
-        }
-        [Command("player.lastips")]
-        void ccmdLastIps(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_lastIps(player.Id, args);
-            player.Reply(answer);
-        }
-
-        [Command("ipowners")]
-        void cmdChatIpOwners(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatIps(player.Id, args);
-            player.Reply(answer);
-        }
-        [Command("player.ipowners")]
-        void ccmdIpOwners(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatIps(player.Id, args);
-            player.Reply(answer);
-        }
-
-        [Command("lastseen")]
-        void cmdChatLastseen(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatLastseen(player.Id, args);
-            player.Reply(answer);
-        }
-        [Command("player.lastseen")]
-        void ccmdLastseen(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatLastseen(player.Id, args);
-            player.Reply(answer);
-        }
-
-        [Command("firstconnection")]
-        void cmdChatFirstconnection(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatFirstconnection(player.Id, args);
-            player.Reply(answer);
-        }
-        [Command("player.firstconnection")]
-        void ccmdFirstconnection(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatFirstconnection(player.Id, args);
-            player.Reply(answer);
-        }
-
-        [Command("lastnames")]
-        void cmdChatLastname(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatLastname(player.Id, args);
-            player.Reply(answer);
-        }
-        [Command("player.lastnames")]
-        void ccmdLastname(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatLastname(player.Id, args);
-            player.Reply(answer);
-        }
-
-        [Command("played")]
-        void cmdChatPlayed(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatPlayed(player.Id, args);
-            player.Reply(answer);
-        }
-        [Command("player.played")]
-        void ccmdPlayed(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatPlayed(player.Id, args);
-            player.Reply(answer);
-        }
-
-        [Command("lastposition")]
-        void cmdChatLastPosition(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatLastPosition(player.Id, args);
-            player.Reply(answer);
-        }
-        [Command("player.lastposition")]
-        void ccmdLastPosition(IPlayer player, string command, string[] args)
-        {
-            string answer = CMD_chatLastPosition(player.Id, args);
-            player.Reply(answer);
-        }
-
         void SendHelpText(IPlayer player) { player.Reply(HelpText(player.Id)); }
-
         string HelpText(string steamid)
         {
             string msg = string.Empty;
@@ -287,6 +49,27 @@ namespace Oxide.Plugins
             }
             return msg;
         }
+
+        bool hasPermission(string steamid, string permissionName, int authLevel)
+        {
+            if (steamid == "server_console") return true;
+
+            var player = players.FindPlayer(steamid);
+            if (player != null && player.IsConnected)
+            {
+                if (player.IsAdmin) return true;
+#if RUST
+                var baseplayer = (BasePlayer)(player?.Object);
+                if(baseplayer != null)
+                {
+                    if (baseplayer.net.connection.authLevel >= authLevel) return true;
+                }
+#endif
+            }
+
+            return permission.UserHasPermission(steamid, permissionName);
+        }
+
         void OnPlayerJoined(string steamid, string name, string ip)
         {
             if (IPuse)
@@ -308,12 +91,8 @@ namespace Oxide.Plugins
             if (TPuse)
                 EndRecordTime(steamid);
             if (LPuse)
-                RecordPosition(steamid, player.IsConnected ? player.Position().X.ToString() : "0", player.IsConnected ? player.Position().Y.ToString() : "0", player.IsConnected ? player.Position().Z.ToString() : "0");
+                RecordPosition(steamid, player.IsConnected ? player.Position().X : 0f, player.IsConnected ? player.Position().Y : 0f, player.IsConnected ? player.Position().Z : 0f);
         }
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// General Functions
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         static double LogTime() { return DateTime.UtcNow.Subtract(epoch).TotalSeconds; }
 
@@ -348,33 +127,367 @@ namespace Oxide.Plugins
                 return success;
         }
 
+        #endregion
+
+        #region Configs
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Permission
+        /// Configs
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        bool hasPermission(string steamid, string permissionName, int authLevel)
+        private static bool IPuse = true;
+        private static string IPpermission = "playerinformations.ips";
+        private static int IPauthlevel = 1;
+        private static int IPmaxLogs = 5;
+
+        private static bool NAMESuse = true;
+        private static string NAMESpermission = "playerinformations.names";
+        private static int NAMESauthlevel = 1;
+        private static int NAMESmaxLogs = 5;
+
+        private static bool FCuse = true;
+        private static string FCpermission = "playerinformations.firstconnection";
+        private static int FCauthlevel = 1;
+
+        private static bool LSuse = true;
+        private static string LSpermission = "playerinformations.lastseen";
+        private static int LSauthlevel = 1;
+
+        private static bool LPuse = true;
+        private static string LPpermission = "playerinformations.lastposition";
+        private static int LPauthlevel = 1;
+
+        private static bool TPuse = true;
+        private static string TPpermission = "playerinformations.timeplayed";
+        private static int TPauthlevel = 0;
+
+        
+
+        void Loaded()
         {
-            if (steamid == "server_console") return true;
+            permission.RegisterPermission(IPpermission, this);
+            permission.RegisterPermission(NAMESpermission, this);
+            permission.RegisterPermission(FCpermission, this);
+            permission.RegisterPermission(LSpermission, this);
+            permission.RegisterPermission(LPpermission, this);
 
-            var player = players.FindPlayer(steamid);
-            if (player != null && player.IsConnected)
+            lang.RegisterMessages(new Dictionary<string, string>
             {
-                if (player.IsAdmin) return true;
-#if RUST
-                var baseplayer = (BasePlayer)(player?.Object);
-                if(baseplayer != null)
-                {
-                    if (baseplayer.net.connection.authLevel >= authLevel) return true;
-                }
-#endif
-            }
-
-            return permission.UserHasPermission(steamid, permissionName);
+                {"You don't have permission to use this command.", "You don't have permission to use this command."},
+                {"IPs aren't recorded.","IPs aren't recorded."},
+                {"/lastips STEAMID/NAME", "/lastips STEAMID/NAME"},
+                {"Couldn't find a player that matches this name.", "Couldn't find a player that matches this name."},
+                {"No logs for this player.", "No logs for this player."},
+                {"/ipowners XX.XX.XX.XX", "/ipowners XX.XX.XX.XX"},
+                {"Couldn't get the list of players", "Couldn't get the list of players"},
+                {"This command has been deactivated.", "This command has been deactivated."},
+                {"/lastseen STEAMID/NAME", "/lastseen STEAMID/NAME"},
+                { "This player is connected!",  "This player is connected!"},
+                {"/firstconnection STEAMID/NAME", "/firstconnection STEAMID/NAME"},
+                { "/lastnames STEAMID/NAME",  "/lastnames STEAMID/NAME"},
+                {"/played STEAMID/NAME", "/played STEAMID/NAME"},
+                {"/lastposition STEAMID/NAME","/lastposition STEAMID/NAME"},
+                {"{0} - {1} last known position is: {2} {3} {4}","{0} - {1} last known position is: {2} {3} {4}"},
+                {"{0} - {1} was last seen: {2}","{0} - {1} was last seen: {2}" },
+                {"{0} - {1} played: {2}","{0} - {1} played: {2}" }
+            }, this);
         }
 
+        protected override void LoadDefaultConfig() { }
+
+        private void CheckCfg<T>(string Key, ref T var)
+        {
+            if (Config[Key] is T)
+                var = (T)Config[Key];
+            else
+                Config[Key] = var;
+        }
+        #endregion
+
+        void Init()
+        {
+            CheckCfg<bool>("IP Logs - activated", ref IPuse);
+            CheckCfg<string>("IP Logs - Permission - oxide permission", ref IPpermission);
+            CheckCfg<int>("IP Logs - Permission - authlevel - Rust ONLY", ref IPauthlevel);
+            CheckCfg<int>("IP Logs - Max Logs per player", ref IPmaxLogs);
+
+            CheckCfg<bool>("Names Logs - activated", ref NAMESuse);
+            CheckCfg<string>("Names Logs - Permission - oxide permission", ref NAMESpermission);
+            CheckCfg<int>("Names Logs - Permission - authlevel - Rust ONLY", ref NAMESauthlevel);
+            CheckCfg<int>("Names Logs - Max Logs per player", ref NAMESmaxLogs);
+
+            CheckCfg<bool>("First Connection - activated", ref FCuse);
+            CheckCfg<string>("First Connection - Permission - oxide permission", ref FCpermission);
+            CheckCfg<int>("First Connection - Permission - authlevel - Rust ONLY", ref FCauthlevel);
+
+            CheckCfg<bool>("Last Seen - activated", ref LSuse);
+            CheckCfg<string>("Last Seen - Permission - oxide permission", ref LSpermission);
+            CheckCfg<int>("Last Seen - Permission - authlevel - Rust ONLY", ref LSauthlevel);
+
+            CheckCfg<bool>("Last Position - activated", ref LPuse);
+            CheckCfg<string>("Last Position - Permission - oxide permission", ref LPpermission);
+            CheckCfg<int>("Last Position - Permission - authlevel - Rust ONLY", ref LPauthlevel);
+
+            CheckCfg<bool>("Time Played - activated", ref TPuse);
+            CheckCfg<string>("Time Played - Permission - oxide permission", ref TPpermission);
+            CheckCfg<int>("Time Played - Permission - authlevel - Rust ONLY", ref TPauthlevel);
+
+            SaveConfig();
+        }
+
+        #region OxideHooks
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Record IP Related
+        /// Oxide Hooks
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        void OnServerInitialized()
+        {
+            if (PlayerDatabase == null)
+            {
+                timer.Once(0.01f, () => Interface.Oxide.UnloadPlugin("PlayerInformations"));
+                return;
+            }
+            if (TPuse)
+            {
+                StartRecordTimeAll();
+            }
+        }
+
+
+        void Unload()
+        {
+            if (TPuse)
+            {
+                EndRecordTimeAll();
+            }
+        }
+
+        
+        void OnUserConnected(IPlayer player) { OnPlayerJoined(player.Id, player.Name, NormalizeIP(player.Address)); }
+        void OnUserDisconnected(IPlayer player) { OnPlayerLeave(player); }
+
+        #endregion
+
+        #region Played
+
+        Dictionary<string, double> recordPlayTime = new Dictionary<string, double>();
+
+        [Command("played")]
+        void cmdChatPlayed(IPlayer player, string command, string[] args)
+        {
+            string answer = CMD_chatPlayed(player.Id, args);
+            player.Reply(answer);
+        }
+
+        string CMD_chatPlayed(string steamid, string[] args)
+        {
+            if (!hasPermission(steamid, TPpermission, TPauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
+            if (!IPuse) { return GetMsg("This command has been deactivated.", steamid); }
+            if (args.Length == 0)
+            {
+                return GetMsg("/played STEAMID/NAME", steamid);
+            }
+            var findplayer = FindPlayer(args[0]);
+            if (!(findplayer is ulong))
+            {
+                return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
+            }
+
+            var name = (string)PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "name") ?? "Unknown";
+            var totaltime = TimePlayed(findplayer.ToString());
+
+            return string.Format(GetMsg("{0} - {1} played: {2}",steamid), name, findplayer.ToString(), SecondsToString(totaltime.ToString()));
+        }
+
+        void StartRecordTimeAll()
+        {
+            foreach (IPlayer player in players.Connected)
+            {
+                StartRecordTime(player.Id);
+            }
+        }
+        void EndRecordTimeAll()
+        {
+            foreach (IPlayer player in players.Connected)
+            {
+                EndRecordTime(player.Id);
+            }
+        }
+
+        double LastRecordTime(string steamid)
+        {
+            var success = PlayerDatabase.Call("GetPlayerData", steamid, "Time Played");
+            if(success is string)
+            {
+                return double.Parse((string)success);
+            }
+            return 0.0;
+        }
+        double SessionRecordTime(string steamid)
+        {
+            if (recordPlayTime.ContainsKey(steamid))
+            {
+                return LogTime() - recordPlayTime[steamid];
+            }
+            else return 0.0;
+        }
+        double TimePlayed(string steamid)
+        {
+            return SessionRecordTime(steamid) + LastRecordTime(steamid);
+        }
+
+        void StartRecordTime(string steamid)
+        {
+            if (recordPlayTime.ContainsKey(steamid))
+                recordPlayTime.Remove(steamid);
+            recordPlayTime.Add(steamid, LogTime());
+        }
+        void EndRecordTime(string steamid)
+        {
+            if (!recordPlayTime.ContainsKey(steamid)) return;
+
+            var totaltime = TimePlayed(steamid);
+
+            PlayerDatabase.Call("SetPlayerData", steamid, "Time Played", totaltime.ToString());
+        }
+
+        #endregion
+
+        #region Position
+
+        [Command("lastposition")]
+        void cmdChatLastPosition(IPlayer player, string command, string[] args)
+        {
+            string answer = CMD_chatLastPosition(player.Id, args);
+            player.Reply(answer);
+        }
+
+        GenericPosition FindPosition(string steamid)
+        {
+            GenericPosition position = FindCurrentPosition(steamid);
+            if(position == default(GenericPosition))
+            {
+                position = FindLastPosition(steamid);
+            }
+            return position;
+        }
+
+        GenericPosition FindCurrentPosition(string steamid)
+        {
+            var player = players.FindPlayer(steamid);
+            if (player == null) return default(GenericPosition);
+            return player.Position();
+        }
+        GenericPosition FindLastPosition(string steamid)
+        {
+            GenericPosition LastPos = default(GenericPosition);
+            var success = PlayerDatabase.Call("GetPlayerDataRaw", steamid, "Last Position");
+            if (success is string)
+            {
+                LastPos = JsonConvert.DeserializeObject<GenericPosition>((string)success);
+            }
+            return LastPos;
+        }
+
+        void RecordPosition(string steamid, float x, float y, float z)
+        {
+            var LastPos = new GenericPosition(x, y, z);
+            PlayerDatabase.Call("SetPlayerData", steamid, "Last Position", LastPos);
+        }
+
+        string CMD_chatLastPosition(string steamid, string[] args)
+        {
+            if (!hasPermission(steamid, LSpermission, LSauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
+            if (!IPuse) { return GetMsg("This command has been deactivated.", steamid); }
+            if (args.Length == 0) { return GetMsg("/lastposition STEAMID/NAME", steamid); }
+
+            var findplayer = FindPlayer(args[0]);
+            if (!(findplayer is ulong))
+            {
+                return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
+            }
+
+            var name = (string)PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "name") ?? "Unknown";
+
+            var lastKnownPosition = FindPosition(findplayer.ToString());
+            if(lastKnownPosition == default(GenericPosition))
+            {
+                return GetMsg("No logs for this player.", steamid);
+            }
+
+            return string.Format(GetMsg("{0} - {1} last known position is: {2} {3} {4}",steamid), findplayer.ToString(), name, lastKnownPosition.X.ToString(), lastKnownPosition.Y.ToString(), lastKnownPosition.Z.ToString());
+        }
+
+        #endregion
+
+        #region Lastseen
+        [Command("lastseen")]
+        void cmdChatLastseen(IPlayer player, string command, string[] args)
+        {
+            string answer = CMD_chatLastseen(player.Id, args);
+            player.Reply(answer);
+        }
+        void RecordLastSeen(string steamid)
+        {
+            PlayerDatabase.Call("SetPlayerData", steamid, "Last Seen", LogTime().ToString());
+        }
+        float LastSeen(string steamid)
+        {
+            if (IsConnected(steamid))
+            {
+                return -1f;
+            }
+            var success = PlayerDatabase.Call("GetPlayerData", steamid, "Last Seen");
+            if (!(success is string))
+            {
+                return 0f;
+            }
+            return float.Parse((string)success);
+        }
+        string CMD_chatLastseen(string steamid, string[] args)
+        {
+            if (!hasPermission(steamid, LSpermission, LSauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
+            if (!IPuse) { return GetMsg("This command has been deactivated.", steamid); }
+
+            if (args.Length == 0)
+            {
+                return GetMsg("/lastseen STEAMID/NAME", steamid);
+            }
+
+            var findplayer = FindPlayer(args[0]);
+            if (!(findplayer is ulong))
+            {
+                return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
+            }
+
+            float lastSeen = LastSeen(findplayer.ToString());
+            if(lastSeen == -1f)
+            {
+                return GetMsg("This player is connected!", steamid);
+            }
+            if(lastSeen == 0f)
+            {
+                return GetMsg("No logs for this player.", steamid);
+            }
+            var name = (string)PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "name") ?? "Unknown";
+            return string.Format(GetMsg("{0} - {1} was last seen: {2}",steamid), name, findplayer.ToString(), TimeMinToString(lastSeen.ToString()));
+        }
+
+        #endregion
+
+        #region IPS
+
+        [Command("lastips")]
+        void cmdChatLastIps(IPlayer player, string command, string[] args)
+        {
+            string answer = CMD_lastIps(player.Id, args);
+            player.Reply(answer);
+        }
+
+        [Command("ipowners")]
+        void cmdChatIpOwners(IPlayer player, string command, string[] args)
+        {
+            string answer = CMD_chatIps(player.Id, args);
+            player.Reply(answer);
+        }
 
         void RecordIP(string steamid, string playerip)
         {
@@ -471,54 +584,33 @@ namespace Oxide.Plugins
             return replystring;
         }
 
+        #endregion
 
+        #region FirstConnection
 
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Last Seen Related
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        void RecordLastSeen(string steamid)
+        [Command("firstconnection")]
+        void cmdChatFirstconnection(IPlayer player, string command, string[] args)
         {
-            PlayerDatabase.Call("SetPlayerData", steamid, "Last Seen", LogTime().ToString());
+            string answer = CMD_chatFirstconnection(player.Id, args);
+            player.Reply(answer);
         }
-        string CMD_chatLastseen(string steamid, string[] args)
-        {
-            if (!hasPermission(steamid, LSpermission, LSauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
-            if (!IPuse) { return GetMsg("This command has been deactivated.", steamid); }
-            if (args.Length == 0)
-            {
-                return GetMsg("/lastseen STEAMID/NAME", steamid);
-            }
-            var findplayer = FindPlayer(args[0]);
-            if (!(findplayer is ulong))
-            {
-                return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
-            }
-            if (IsConnected(findplayer.ToString()))
-            {
-                return GetMsg("This player is connected!", steamid);
-            }
-            var success = PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "Last Seen");
-            if (!(success is string))
-            {
-                return GetMsg("No logs for this player.", steamid);
-            }
-            var name = (string)PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "name") ?? "Unknown";
-            return string.Format("{0} - {1} was last seen: {2}", name, findplayer.ToString(), TimeMinToString((string)success));
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// First Connection
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        void RecordFirstConnection(string steamid)
+        float FirstConnection(string steamid)
         {
             var success = PlayerDatabase.Call("GetPlayerData", steamid, "First Connection");
             if (success is string)
-                return;
-
-            var FirstConnectionTable = LogTime().ToString();
-            PlayerDatabase.Call("SetPlayerData", steamid, "First Connection", FirstConnectionTable);
+            {
+                return float.Parse((string)success);
+            }
+            return 0f;
+        }
+        void RecordFirstConnection(string steamid)
+        {
+            var firstConnection = FirstConnection(steamid);
+            if (firstConnection == 0f)
+            {
+                var FirstConnectionTable = LogTime().ToString();
+                PlayerDatabase.Call("SetPlayerData", steamid, "First Connection", FirstConnectionTable);
+            }
         }
         string CMD_chatFirstconnection(string steamid, string[] args)
         {
@@ -533,32 +625,44 @@ namespace Oxide.Plugins
             {
                 return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
             }
-            var FC = new Dictionary<string, object>();
-            var success = PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "First Connection");
-            if (!(success is string))
+            var firstConnection = FirstConnection(findplayer.ToString());
+            if(firstConnection == 0f)
             {
                 return GetMsg("No logs for this player.", steamid);
             }
 
             var name = (string)PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "name") ?? "Unknown";
-            return string.Format("{0} - {1} first connected: {2}", name, findplayer.ToString(), TimeMinToString((string)success));
+            return string.Format("{0} - {1} first connected: {2}", name, findplayer.ToString(), TimeMinToString(firstConnection.ToString()));
         }
 
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Record Names
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        void RecordName(string steamid, string playername)
+        #endregion
+
+        #region Names
+        [Command("lastnames")]
+        void cmdChatLastname(IPlayer player, string command, string[] args)
         {
-            var NameList = new List<string>();
+            string answer = CMD_chatLastname(player.Id, args);
+            player.Reply(answer);
+        }
 
+        List<string> LastNames(string steamid)
+        {
+            List<string> returnList = new List<string>();
             var success = PlayerDatabase.Call("GetPlayerDataRaw", steamid, "Names");
             if (success is string)
             {
-                NameList = JsonConvert.DeserializeObject<List<string>>((string)success);
+                returnList = JsonConvert.DeserializeObject<List<string>>((string)success);
             }
+            return returnList;
+        }
+
+        void RecordName(string steamid, string playername)
+        {
+            var NameList = LastNames(steamid);
 
             if (NameList.Contains(playername)) return;
+
             if (NameList.Count >= NAMESmaxLogs)
             {
                 for (int i = 0; i < (NameList.Count - NAMESmaxLogs + 1); i++)
@@ -566,7 +670,9 @@ namespace Oxide.Plugins
                     NameList.RemoveAt(0);
                 }
             }
+
             NameList.Add(playername);
+
             PlayerDatabase.Call("SetPlayerData", steamid, "Names", NameList);
         }
         string CMD_chatLastname(string steamid, string[] args)
@@ -582,12 +688,7 @@ namespace Oxide.Plugins
             {
                 return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
             }
-            var NameList = new List<string>();
-            var success = PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "Names");
-            if (success is string)
-            {
-                NameList = JsonConvert.DeserializeObject<List<string>>((string)success);
-            }
+            var NameList = LastNames(findplayer.ToString());
             if (NameList.Count == 0)
             {
                 return GetMsg("No logs for this player.", steamid);
@@ -601,97 +702,8 @@ namespace Oxide.Plugins
             return replyanswer;
         }
 
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Record Time Played
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        Dictionary<string, double> recordPlayTime = new Dictionary<string, double>();
-        void StartRecordTime(string steamid)
-        {
-            if (recordPlayTime.ContainsKey(steamid))
-                recordPlayTime.Remove(steamid);
-            recordPlayTime.Add(steamid, LogTime());
-        }
-        void EndRecordTime(string steamid)
-        {
-            if (!recordPlayTime.ContainsKey(steamid)) return;
-
-            var success = PlayerDatabase.Call("GetPlayerData", steamid, "Time Played");
 
 
-            double totaltime = LogTime() - recordPlayTime[steamid];
-            if (success is string)
-                totaltime += double.Parse((string)success);
-
-            PlayerDatabase.Call("SetPlayerData", steamid, "Time Played", totaltime.ToString());
-        }
-        string CMD_chatPlayed(string steamid, string[] args)
-        {
-            if (!hasPermission(steamid, TPpermission, TPauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
-            if (!IPuse) { return GetMsg("This command has been deactivated.", steamid); }
-            if (args.Length == 0)
-            {
-                return GetMsg("/played STEAMID/NAME", steamid);
-            }
-            var findplayer = FindPlayer(args[0]);
-            if (!(findplayer is ulong))
-            {
-                return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
-            }
-            var success = PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "Time Played");
-            var name = (string)PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "name") ?? "Unknown";
-            double tplayed = success is string ? double.Parse((string)success) : 0.0;
-            if (recordPlayTime.ContainsKey(steamid))
-                tplayed += LogTime() - recordPlayTime[steamid];
-            return string.Format("{0} - {1} played: {2}", name, findplayer.ToString(), SecondsToString(tplayed.ToString()));
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Position Related
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        void RecordPosition(string steamid, string x, string y, string z)
-        {
-            var LastPos = new Dictionary<string, object>
-                    {
-                        {"x", x },
-                        {"y", y },
-                        {"z", z }
-                    };
-            PlayerDatabase.Call("SetPlayerData", steamid, "Last Position", LastPos);
-        }
-
-        string CMD_chatLastPosition(string steamid, string[] args)
-        {
-            if (!hasPermission(steamid, LSpermission, LSauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
-            if (!IPuse) { return GetMsg("This command has been deactivated.", steamid); }
-            if (args.Length == 0)
-            {
-                return GetMsg("/lastposition STEAMID/NAME", steamid);
-            }
-            var findplayer = FindPlayer(args[0]);
-            if (!(findplayer is ulong))
-            {
-                return findplayer is string ? (string)findplayer : GetMsg("Couldn't find a player that matches this name.", steamid);
-            }
-            if (IsConnected(findplayer.ToString()))
-            {
-                return GetMsg("This player is connected!", steamid);
-            }
-            var name = (string)PlayerDatabase.Call("GetPlayerData", findplayer.ToString(), "name") ?? "Unknown";
-
-            var knownPos = FindPosition(findplayer.ToString());
-            if (knownPos != default(UnityEngine.Vector3))
-            {
-                return string.Format("{0} - {1} current position is: {2} {3} {4}", findplayer.ToString(), name, knownPos.x.ToString(), knownPos.y.ToString(), knownPos.z.ToString());
-            }
-            var LastPos = new Dictionary<string, object>();
-            var success = PlayerDatabase.Call("GetPlayerDataRaw", findplayer.ToString(), "Last Position");
-            if (!(success is string))
-            {
-                return GetMsg("No logs for this player.", steamid);
-            }
-            LastPos = JsonConvert.DeserializeObject<Dictionary<string, object>>((string)success);
-            return string.Format("{0} - {1} last position was: {2} {3} {4}", findplayer.ToString(), name, LastPos["x"].ToString(), LastPos["y"].ToString(), LastPos["z"].ToString());
-        }
+        #endregion
     }
 }

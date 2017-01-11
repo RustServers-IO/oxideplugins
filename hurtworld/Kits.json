@@ -1,0 +1,16 @@
+{
+    "name": "Kits",
+    "description": "Create kits of items for players to use",
+    "author": "Reneb",
+    "version": "1.0.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/kits.1494",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

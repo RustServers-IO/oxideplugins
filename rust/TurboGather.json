@@ -1,8 +1,8 @@
 {
     "name": "TurboGather",
     "description": "Give a short gather rate boost with a cooldown afterwards",
-    "author": "",
-    "version": "1.0.7",
+    "author": "redBDGR ~",
+    "version": "1.1.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/turbogather.2221",

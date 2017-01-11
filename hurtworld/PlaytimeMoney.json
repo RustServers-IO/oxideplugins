@@ -1,0 +1,19 @@
+{
+    "name": "Playtime Money",
+    "description": "Gives money to players for time on the server",
+    "author": "LaserHydra",
+    "version": "1.0.0",
+    "configuration": true,
+    "require": {
+        "Economy": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/playtime-money.1610",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

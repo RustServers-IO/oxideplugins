@@ -1,0 +1,19 @@
+{
+    "name": "Vote Checker & Rewarder",
+    "description": "Give rewards to users for voting on game-servers.top & hurtworld-servers.net",
+    "author": "Pho3niX90",
+    "version": "2.2.2",
+    "configuration": true,
+    "suggest": {
+        "EconomyBanks": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/vote-checker-rewarder.1640",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

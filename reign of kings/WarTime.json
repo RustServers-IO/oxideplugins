@@ -1,0 +1,19 @@
+{
+    "name": "WarTime",
+    "description": "Allows admins to set a dedicated time for the use of siege weapons",
+    "author": "D-Kay",
+    "version": "1.1.2",
+    "configuration": true,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/wartime.1012",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

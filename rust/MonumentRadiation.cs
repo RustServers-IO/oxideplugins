@@ -5,12 +5,11 @@ using UnityEngine;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Reflection;
-using Rust;
 using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("MonumentRadiation", "k1lly0u", "0.2.2", ResourceId = 1562)]
+    [Info("MonumentRadiation", "k1lly0u", "0.2.3", ResourceId = 1562)]
     class MonumentRadiation : RustPlugin
     {
         private bool RadsOn;
@@ -87,6 +86,20 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Tunnels.Activate)
                             CreateZone(configData.Zones.Tunnels, pos);
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("harbor_1"))
+                    {
+                        if (configData.Zones.LargeHarbor.Activate)
+                            CreateZone(configData.Zones.LargeHarbor, pos);
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("harbor_2"))
+                    {
+                        if (configData.Zones.SmallHarbor.Activate)
+                            CreateZone(configData.Zones.SmallHarbor, pos);
                         continue;
                     }
 
@@ -464,9 +477,11 @@ namespace Oxide.Plugins
             public MonumentSettings Airfield { get; set; }
             public MonumentSettings Dome { get; set; }
             public MonumentSettings Lighthouse { get; set; }
+            public MonumentSettings LargeHarbor { get; set; }
             public MonumentSettings Powerplant { get; set; }
             public MonumentSettings Radtown { get; set; }
             public MonumentSettings Satellite { get; set; }
+            public MonumentSettings SmallHarbor { get; set; }
             public MonumentSettings Trainyard { get; set; }
             public MonumentSettings Tunnels { get; set; }
             public MonumentSettings Warehouse { get; set; }
@@ -539,6 +554,13 @@ namespace Oxide.Plugins
                        Radiation = 10,
                        Radius = 50
                    },
+                   LargeHarbor = new MonumentSettings
+                   {
+                       Activate = false,
+                       Name = "Large Harbor",
+                       Radiation = 10,
+                       Radius = 120
+                   },
                    Lighthouse = new MonumentSettings
                    {
                        Activate = false,
@@ -566,6 +588,13 @@ namespace Oxide.Plugins
                        Name = "Satellite",
                        Radiation = 10,
                        Radius = 60
+                   },
+                   SmallHarbor = new MonumentSettings
+                   {
+                       Activate = true,
+                       Name = "Small Harbor",
+                       Radiation = 10,
+                       Radius = 85
                    },
                    Trainyard = new MonumentSettings
                    {

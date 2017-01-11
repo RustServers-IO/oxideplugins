@@ -2,7 +2,7 @@
     "name": "MineAnywhere",
     "description": "Mine all the rocks, all the wood, all the junk, even the ground",
     "author": "Calytic",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "configuration": true,
     "require": {
         "HooksExtended": "*"

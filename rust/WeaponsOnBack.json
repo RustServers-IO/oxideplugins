@@ -2,7 +2,7 @@
     "name": "Weapons On Back",
     "description": "Renders the player's best weapon on their back, and best sidearm on their hip",
     "author": "Jake Rich",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/weapons-on-back.2188",

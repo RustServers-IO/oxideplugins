@@ -1,0 +1,16 @@
+{
+    "name": "Economy",
+    "description": "Adds an economy system to the game",
+    "author": "LaserHydra",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/economy.1602",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

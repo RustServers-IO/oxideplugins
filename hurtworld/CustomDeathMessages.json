@@ -1,0 +1,16 @@
+{
+    "name": "Custom Death Messages",
+    "description": "Just displays custom death messages",
+    "author": "",
+    "version": "1.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/custom-death-messages.1544",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

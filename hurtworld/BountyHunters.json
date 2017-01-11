@@ -1,0 +1,19 @@
+{
+    "name": "Bounty Hunter",
+    "description": "Gives the ability to add bounties on players",
+    "author": "Pho3niX90",
+    "version": "1.1.5",
+    "configuration": false,
+    "require": {
+        "EconomyBanks": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/bounty-hunter.1656",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

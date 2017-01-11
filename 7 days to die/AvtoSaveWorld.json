@@ -1,0 +1,16 @@
+{
+    "name": "Auto Save World",
+    "description": "Automatically saves the world every X seconds",
+    "author": "OpenFunRus",
+    "version": "0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/auto-save-world.1886",
+    "games": [
+        "7 days to die"
+    ],
+    "keywords": [
+        "oxide",
+        "7 days to die"
+    ]
+}

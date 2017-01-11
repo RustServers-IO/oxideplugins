@@ -1,0 +1,16 @@
+{
+    "name": "LootConfig",
+    "description": "Adjust loot list",
+    "author": "Nogrod",
+    "version": "1.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/lootconfig.1550",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

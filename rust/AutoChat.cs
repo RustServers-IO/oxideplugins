@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.2.0", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.2.1", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
@@ -15,8 +15,10 @@ namespace Oxide.Plugins
         Plugin Friends;
         [PluginReference]
         Plugin Clans;
+        [PluginReference]
+        Plugin BetterChat;
 
-        bool BetterChat = true;
+        bool BC = true;
         const string PermAdmin = "autochat.admin";
         const string PermUse = "autochat.use";
         List<string> ChatType = new List<string>();
@@ -140,7 +142,13 @@ namespace Oxide.Plugins
                 PrintWarning("AutoChat was disabled because weren't found supported plugins.");
             }
 
-            if (!plugins.Exists("BetterChat")) BetterChat = false;
+            if (plugins.Exists("BetterChat"))
+            {
+                var v = Convert.ToInt32(BetterChat.Version.ToString().Split('.')[0]);
+                if (v >= 5) BC = false;
+            }
+            else
+                BC = false;
 
             LoadDefaultMessages();
             permission.RegisterPermission(PermAdmin, this);
@@ -361,7 +369,7 @@ namespace Oxide.Plugins
 
             rust.RunClientCommand(player, "chat.say", $"/{chatData.Command} {message}");
 
-            if (BetterChat)
+            if (BC)
                 return null;
             else
                 return false;

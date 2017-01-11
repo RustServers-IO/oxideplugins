@@ -1,0 +1,16 @@
+{
+    "name": "AreaNuke",
+    "description": "Removes everything within a set range from you",
+    "author": "Noviets",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/areanuke.1689",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

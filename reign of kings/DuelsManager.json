@@ -1,0 +1,16 @@
+{
+    "name": "DuelsManager",
+    "description": "Duel system preventing death",
+    "author": "PierreA",
+    "version": "0.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/duelsmanager.1802",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

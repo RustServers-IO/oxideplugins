@@ -1,0 +1,16 @@
+{
+    "name": "Custom Kick\/Ban",
+    "description": "Kicking and banning with permissions",
+    "author": "",
+    "version": "0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/custom-kick-ban.1575",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

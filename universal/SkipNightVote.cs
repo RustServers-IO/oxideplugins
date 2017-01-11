@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("SkipNightVote", "k1lly0u", "0.1.1", ResourceId = 2058)]
+    [Info("SkipNightVote", "k1lly0u", "0.1.2", ResourceId = 2058)]
     class SkipNightVote : CovalencePlugin
     {
         #region Fields
@@ -20,11 +20,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Oxide Hooks
-        void Loaded()
-        {
-            permission.RegisterPermission("skipnightvote.admin", this);
-            lang.RegisterMessages(Messages, this);
-        }
+        void Loaded() => lang.RegisterMessages(Messages, this);
         void OnServerInitialized() {
             LoadVariables();
             ReceivedVotes = new List<string>();

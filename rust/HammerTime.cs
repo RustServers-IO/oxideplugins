@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Hammer Time", "Shady", "1.0.12", ResourceId = 1711)]
+    [Info("Hammer Time", "Shady", "1.0.13", ResourceId = 1711)]
     [Description("Tweak settings for building blocks like demolish time, and rotate time.")]
     class HammerTime : RustPlugin
     {
@@ -85,7 +85,7 @@ namespace Oxide.Plugins
         #region InvokeBlocks
         void DoInvokes(BuildingBlock block, bool demo, bool rotate, bool justCreated)
         {
-            if (block == null || (block?.isDestroyed ?? true)) return;
+            if (block == null || (block?.IsDestroyed ?? true)) return;
             if (demo)
             {
                 if (DemolishTime < 0)

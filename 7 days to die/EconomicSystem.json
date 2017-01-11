@@ -1,0 +1,16 @@
+{
+    "name": "Economic System",
+    "description": "New shop system and teleport system",
+    "author": "OpenFunRus",
+    "version": "1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/economic-system.2104",
+    "games": [
+        "7 days to die"
+    ],
+    "keywords": [
+        "oxide",
+        "7 days to die"
+    ]
+}

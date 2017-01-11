@@ -1,0 +1,19 @@
+{
+    "name": "MoneyTime",
+    "description": "Gives money to players for time, for Banks Plugin",
+    "author": "RD156",
+    "version": "1.0.0",
+    "configuration": true,
+    "require": {
+        "Banks": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/moneytime.1642",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

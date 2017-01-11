@@ -1,0 +1,16 @@
+{
+    "name": "ForceEmote",
+    "description": "Force another player to do an emote",
+    "author": "Wulf",
+    "version": "0.2.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/forceemote.1684",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

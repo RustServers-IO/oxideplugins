@@ -2,7 +2,7 @@
     "name": "PillsHere",
     "description": "Recovers health, hunger, and thirst by set amounts when using rad pills",
     "author": "Wulf",
-    "version": "3.0.1",
+    "version": "3.0.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/pillshere.1723",

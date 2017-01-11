@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("KDRGui", "Ankawi/LaserHydra", "1.0.4")]
+    [Info("KDRGui", "Ankawi/LaserHydra", "1.0.5")]
     [Description("GUI that portrays kills, deaths, player name, and K/D Ratio")]
     class KDRGui : RustPlugin
     {
@@ -351,8 +351,8 @@ namespace Oxide.Plugins
         void DrawKDRWindow(BasePlayer player)
         {
             UIObject ui = new UIObject();
-            string panel = ui.AddPanel("panel1", 0.0132382892057026, 0.0285714285714286, 0.958248472505092, 0.874285714285714, new UIColor(0.501960784313725, 0.501960784313725, 0.501960784313725, 1), true, "Overlay");
-            ui.AddText("list", 0.0626992561105207, 0.250544662309368, 0.83740701381509, 0.697167755991285, new UIColor(0, 1, 1, 1), GetTopList(), 20, panel, 7);
+            string panel = ui.AddPanel("panel1", 0.0132382892057026, 0.0285714285714286, 0.958248472505092, 0.874285714285714, new UIColor(0.85, 0.85, 0.85, 0.6), true, "Overlay");
+            ui.AddText("list", 0.0626992561105207, 0.250544662309368, 0.83740701381509, 0.697167755991285, new UIColor(0, 0, 1, 1), GetTopList(), 20, panel, 7);
             ui.AddText("label4", 0.390148777895855, 0.163398692810458, 0.18384697130712, 0.0610021786492375, new UIColor(0, 0, 0, 1), "K/D Ratio", 24, panel, 7);
             ui.AddText("label3", 0.223358129649309, 0.163398692810458, 0.188097768331562, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Deaths", 24, panel, 7);
             ui.AddText("label2", 0.0541976620616366, 0.163398692810458, 0.16365568544102, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Kills", 24, panel, 7);
@@ -384,6 +384,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
+        //add a new command to delete data, use WriteObject(null)
         #region Commands
         [ChatCommand("top")]
         void cmdTop(BasePlayer player, string command, string[] args)

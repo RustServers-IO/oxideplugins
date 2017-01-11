@@ -2,7 +2,7 @@
     "name": "Hammer Time",
     "description": "Tweak \"Demolish\" and \"Rotate\" time when using the hammer",
     "author": "Shady757",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/hammer-time.1711",

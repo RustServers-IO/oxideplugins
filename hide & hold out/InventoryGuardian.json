@@ -1,0 +1,16 @@
+{
+    "name": "Inventory Guardian",
+    "description": "Save and restore player inventory's at any time, even after wipes",
+    "author": "k1lly0u",
+    "version": "0.1.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/inventory-guardian.1878",
+    "games": [
+        "hide & hold out"
+    ],
+    "keywords": [
+        "oxide",
+        "hide & hold out"
+    ]
+}

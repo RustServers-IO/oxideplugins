@@ -1,0 +1,16 @@
+{
+    "name": "Roll The Dice",
+    "description": "Randomized item giving with possible negative outcomes",
+    "author": "Wulf",
+    "version": "1.0.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/roll-the-dice.1682",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using Oxide.Core;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("NameManager", "Ankawi", "1.0.0")]
+    [Info("NameManager", "Ankawi", "1.0.1")]
     [Description("Manage names on your server")]
     class NameManager : CovalencePlugin
     {
@@ -12,10 +13,10 @@ namespace Oxide.Plugins
         new void LoadConfig()
         {
             SetConfig("Characters Required", 2);
-            SetConfig("Enable Restricted Characters", true);
-            SetConfig("Enable Restricted Names", true);
-            SetConfig("Enable Character Requirement", true);
-            SetConfig("Restricted Characters", new List<object> { '$', "#", '!', '+' });
+            SetConfig("Enable Restricted Characters", false);
+            SetConfig("Enable Restricted Names", false);
+            SetConfig("Enable Character Requirement", false);
+            SetConfig("Restricted Characters", new List<object> { '$', '!', '+' });
             SetConfig("Restricted Names", new List<object> { "Oxide", "Admin", "Owner", "Moderator" });
 
             SaveConfig();
@@ -55,9 +56,12 @@ namespace Oxide.Plugins
             }
             if ((bool)Config["Enable Restricted Characters"])
             {
-                if (RestrictedCharacters.Contains(name))
+                foreach(var bannedChar in RestrictedCharacters)
                 {
-                    return (GetMsg("Restricted Character", id));
+                    if (name.Contains(bannedChar.ToString()))
+                    {
+                        return (GetMsg("Restricted Character", id));
+                    }
                 }
             }
             return null;

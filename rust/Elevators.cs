@@ -1,18 +1,14 @@
-
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
-using System.Data;
-using UnityEngine;
 using Oxide.Core;
-using Oxide.Core.Configuration;
-using Oxide.Core.Logging;
 using Oxide.Core.Plugins;
 using Rust;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Elevators", "Reneb", "1.0.1")]
+    [Info("Elevators", "Reneb", "1.0.2", ResourceId = 983)]
     class Elevators : RustPlugin
     {
         [PluginReference]
@@ -25,7 +21,6 @@ namespace Oxide.Plugins
         static List<Elevator> spawnedElevators = new List<Elevator>();
         static List<BaseCombatEntity> protectedBlock = new List<BaseCombatEntity>();
         public DamageTypeList emptyDamageType;
-        // CACHED
         object closestEnt;
         Vector3 closestHitpoint;
         Quaternion currentRot;
@@ -78,12 +73,12 @@ namespace Oxide.Plugins
                 rz = block.transform.rotation.z.ToString();
                 rw = block.transform.rotation.w.ToString();
                 Grade = GradeToNum(block.grade).ToString();
-                this.Name = name;
-                this.WaypointsName = waypoints;
-                this.PrefabName = block.blockDefinition.fullName;
+                Name = name;
+                WaypointsName = waypoints;
+                PrefabName = block.blockDefinition.fullName;
             }
         }
-        ////////////////////////////////////////////////////// 
+        //////////////////////////////////////////////////////
         ///  class WaypointInfo
         ///  Waypoint information, position & speed
         ///  public => will be saved in the data file
@@ -129,11 +124,11 @@ namespace Oxide.Plugins
         {
             if (lvl == 0)
                 return BuildingGrade.Enum.Twigs;
-            else if (lvl == 1)
+            if (lvl == 1)
                 return BuildingGrade.Enum.Wood;
-            else if (lvl == 2)
+            if (lvl == 2)
                 return BuildingGrade.Enum.Stone;
-            else if (lvl == 3)
+            if (lvl == 3)
                 return BuildingGrade.Enum.Metal;
             return BuildingGrade.Enum.TopTier;
         }
@@ -141,11 +136,11 @@ namespace Oxide.Plugins
         {
             if (lvl == BuildingGrade.Enum.Twigs)
                 return 0;
-            else if (lvl == BuildingGrade.Enum.Wood)
+            if (lvl == BuildingGrade.Enum.Wood)
                 return 1;
-            else if (lvl == BuildingGrade.Enum.Stone)
+            if (lvl == BuildingGrade.Enum.Stone)
                 return 2;
-            else if (lvl == BuildingGrade.Enum.Metal)
+            if (lvl == BuildingGrade.Enum.Metal)
                 return 3;
             return 4;
         }
@@ -156,80 +151,78 @@ namespace Oxide.Plugins
             public List<WaypointInfo> waypoints;
             public TriggerBase trigger;
             public BuildingBlock block;
-            public UnityEngine.Quaternion rotation;
+            public Quaternion rotation;
 
 
             public Vector3 StartPos = new Vector3(0f, 0f, 0f);
             public Vector3 EndPos = new Vector3(0f, 0f, 0f);
             public Vector3 nextPos = new Vector3(0f, 0f, 0f);
-            public float waypointDone = 0f;
-            public float secondsTaken = 0f;
-            public float secondsToTake = 0f;
+            public float waypointDone;
+            public float secondsTaken;
+            public float secondsToTake;
             public float speed = 4f;
-            public int currentWaypoint = 0;
+            public int currentWaypoint;
 
             public List<BaseEntity> collidingPlayers = new List<BaseEntity>();
 
             public Elevator()
             {
-
             }
 
             public void SetInfo(ElevatorInfo info)
             {
-               
                 this.info = info;
                 var cwaypoints = Interface.CallHook("GetWaypointsList", this.info.WaypointsName);
                 if (cwaypoints == null)
                 {
                     Debug.Log(string.Format("{0} was destroyed, informations are invalid. Did you set waypoints? or a PrefabName?", info.Name));
-                    GameObject.Destroy(this);
+                    Destroy(this);
                     return;
                 }
-                this.waypoints = new List<WaypointInfo>();
+                waypoints = new List<WaypointInfo>();
                 foreach (var cwaypoint in (List<object>)cwaypoints)
                 {
-                    foreach (KeyValuePair<Vector3, float> pair in (Dictionary<Vector3,float>)cwaypoint)
+                    foreach (KeyValuePair<Vector3, float> pair in (Dictionary<Vector3, float>)cwaypoint)
                     {
-                        this.waypoints.Add(new WaypointInfo(pair.Key, pair.Value));
+                        waypoints.Add(new WaypointInfo(pair.Key, pair.Value));
                     }
                 }
-                if (this.waypoints.Count < 2)
+                if (waypoints.Count < 2)
                 {
-                    Debug.Log(string.Format("{0} waypoints were detected for {1}. Needs at least 2 waypoints. Destroying.", this.waypoints.Count.ToString(), info.Name));
-                    GameObject.Destroy(this);
+                    Debug.Log(string.Format("{0} waypoints were detected for {1}. Needs at least 2 waypoints. Destroying.", waypoints.Count, info.Name));
+                    Destroy(this);
                     return;
                 }
-                this.rotation = new UnityEngine.Quaternion(Convert.ToSingle(info.rx), Convert.ToSingle(info.ry), Convert.ToSingle(info.rz), Convert.ToSingle(info.rw));
-                this.block = CreateBuildingBlock(this.info.PrefabName, this.waypoints[0].GetPosition(), this.rotation, Convert.ToInt32(this.info.Grade));
-                if(this.block == null)
+                rotation = new Quaternion(Convert.ToSingle(info.rx), Convert.ToSingle(info.ry), Convert.ToSingle(info.rz), Convert.ToSingle(info.rw));
+                block = CreateBuildingBlock(this.info.PrefabName, waypoints[0].GetPosition(), rotation, Convert.ToInt32(this.info.Grade));
+                if (block == null)
                 {
                     Debug.Log(string.Format("Something went wrong, couldn't create the BuildingBlock for {0}", info.Name));
-                    GameObject.Destroy(this);
+                    Destroy(this);
                     return;
                 }
-                protectedBlock.Add(this.block.GetComponent<BaseCombatEntity>());
+                protectedBlock.Add(block.GetComponent<BaseCombatEntity>());
                 trigger = block.GetComponentInChildren<MeshCollider>().gameObject.AddComponent<TriggerBase>();
                 trigger.gameObject.name = "Elevator";
-                var newlayermask = new UnityEngine.LayerMask();
-                newlayermask.value = 133120;   
+                var newlayermask = new LayerMask();
+                newlayermask.value = 133120;
                 trigger.interestLayers = newlayermask;
-                trigger.gameObject.layer = UnityEngine.LayerMask.NameToLayer("Trigger");
+                trigger.gameObject.layer = LayerMask.NameToLayer("Trigger");
                 spawnedElevators.Add(this);
             }
             void Awake()
             {
                 enabled = false;
-            } 
+            }
             void OnDestroy()
             {
-                if (this.block != null)
+                if (block != null)
                 {
-                    protectedBlock.Remove(this.block.GetComponent<BaseCombatEntity>());
-                    this.block.KillMessage();
+                    protectedBlock.Remove(block.GetComponent<BaseCombatEntity>());
+                    block.KillMessage();
                 }
-                if (this.trigger != null) GameObject.Destroy(this.trigger);
-            } 
+                if (trigger != null) Destroy(trigger);
+            }
             void FixedUpdate()
             {
                 if (secondsTaken == 0f) GetNextPath();
@@ -250,31 +243,31 @@ namespace Oxide.Plugins
                 if (currentWaypoint + 1 >= waypoints.Count)
                     currentWaypoint = -1;
                 currentWaypoint++;
-                if(currentWaypoint == 1 && collidingPlayers.Count==0)
+                if (currentWaypoint == 1 && collidingPlayers.Count == 0)
                 {
                     currentWaypoint = 0;
                     enabled = false;
                     return;
                 }
                 SetMovementPoint(block.transform.position, waypoints[currentWaypoint].GetPosition(), waypoints[currentWaypoint].GetSpeed());
-                if (block.transform.position == waypoints[currentWaypoint].GetPosition()) { DeactivateMovement(); Invoke("ActivateMovement", waypoints[currentWaypoint].GetSpeed()); return; }
+                if (block.transform.position == waypoints[currentWaypoint].GetPosition()) { DeactivateMovement(); Invoke("ActivateMovement", waypoints[currentWaypoint].GetSpeed()); }
             }
             public void SetMovementPoint(Vector3 startpos, Vector3 endpos, float s)
-            { 
+            {
                 StartPos = startpos;
                 EndPos = endpos;
                 if (StartPos != EndPos)
                     secondsToTake = Vector3.Distance(EndPos, StartPos) / s;
                 secondsTaken = 0f;
                 waypointDone = 0f;
-            }  
+            }
             public void ActivateMovement()
             {
                 enabled = true;
             }
             public void DeactivateMovement()
             {
-               enabled = false;
+                enabled = false;
             }
         }
         void OnEntityEnter(TriggerBase triggerbase, BaseEntity entity)
@@ -288,7 +281,7 @@ namespace Oxide.Plugins
                     if (!ele.collidingPlayers.Contains(entity))
                         ele.collidingPlayers.Add(entity);
                     ele.ActivateMovement();
-                } 
+                }
             }
         }
         void OnEntityLeave(TriggerBase triggerbase, BaseEntity entity)
@@ -306,16 +299,16 @@ namespace Oxide.Plugins
         }
         void NewElevator(ElevatorInfo info)
         {
-            var objects = GameObject.FindObjectsOfType(typeof(Elevator));
+            var objects = UnityEngine.Object.FindObjectsOfType(typeof(Elevator));
             if (objects != null)
                 foreach (Elevator gameObj in objects)
                 {
-                    if(gameObj.info.Name == info.Name)
+                    if (gameObj.info.Name == info.Name)
                     {
-                        GameObject.Destroy(gameObj);
+                        UnityEngine.Object.Destroy(gameObj);
                     }
                 }
-            GameObject gameobject = new UnityEngine.GameObject();
+            GameObject gameobject = new GameObject();
             gameobject.AddComponent<Elevator>();
             gameobject.GetComponent<Elevator>().SetInfo(info);
         }
@@ -324,20 +317,20 @@ namespace Oxide.Plugins
             emptyDamageType = new DamageTypeList();
             serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             LoadData();
-        } 
-        void Unload() 
+        }
+        void Unload()
         {
-            var objects = GameObject.FindObjectsOfType(typeof(Elevator));
+            var objects = UnityEngine.Object.FindObjectsOfType(typeof(Elevator));
             if (objects != null)
                 foreach (Elevator gameObj in objects)
                 {
-                    GameObject.Destroy(gameObj);
-                } 
+                    UnityEngine.Object.Destroy(gameObj);
+                }
             foreach (Elevator ele in spawnedElevators)
             {
-                if(ele != null) 
-                    GameObject.Destroy(ele.gameObject);
-            }                    
+                if (ele != null)
+                    UnityEngine.Object.Destroy(ele.gameObject);
+            }
         }
         void OnServerInitialized()
         {
@@ -348,9 +341,9 @@ namespace Oxide.Plugins
         }
         static BuildingBlock CreateBuildingBlock(string prefabname, Vector3 position, Quaternion rotation, int grade)
         {
-            UnityEngine.GameObject prefab = GameManager.server.FindPrefab(prefabname);
+            GameObject prefab = GameManager.server.FindPrefab(prefabname);
             if (prefab == null) return null;
-            UnityEngine.GameObject build = UnityEngine.Object.Instantiate(prefab);
+            GameObject build = UnityEngine.Object.Instantiate(prefab);
             if (build == null) return null;
             BuildingBlock block = build.GetComponent<BuildingBlock>();
             if (block == null) return null;
@@ -358,15 +351,15 @@ namespace Oxide.Plugins
             block.transform.rotation = rotation;
             block.gameObject.SetActive(true);
             block.blockDefinition = PrefabAttribute.server.Find<Construction>(block.prefabID);
-            block.Spawn(true); 
+            block.Spawn();
             block.SetGrade(NumToGrade(grade));
             block.health = block.MaxHealth();
-            block.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+            block.SendNetworkUpdate();
             return block;
         }
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            if(protectedBlock.Contains(entity))
+            if (protectedBlock.Contains(entity))
             {
                 CancelDamage(info);
             }
@@ -401,9 +394,9 @@ namespace Oxide.Plugins
         bool TryGetClosestRayPoint(Vector3 sourcePos, Quaternion sourceDir, out object closestEnt, out Vector3 closestHitpoint)
         {
             Vector3 sourceEye = sourcePos + new Vector3(0f, 1.5f, 0f);
-            UnityEngine.Ray ray = new UnityEngine.Ray(sourceEye, sourceDir * Vector3.forward);
+            Ray ray = new Ray(sourceEye, sourceDir * Vector3.forward);
 
-            var hits = UnityEngine.Physics.RaycastAll(ray);
+            var hits = Physics.RaycastAll(ray);
             float closestdist = 999999f;
             closestHitpoint = sourcePos;
             closestEnt = false;
@@ -414,7 +407,7 @@ namespace Oxide.Plugins
                     if (hit.distance < closestdist)
                     {
                         closestdist = hit.distance;
-                        closestEnt = hit.collider;
+                        closestEnt = hit.GetCollider();
                         closestHitpoint = hit.point;
                     }
                 }
@@ -428,17 +421,17 @@ namespace Oxide.Plugins
         {
             if (!hasPermission(player)) { SendReply(player, "You don't have access to this command"); return; }
             if (args.Length < 2)
-            { 
+            {
                 SendReply(player, "/elevator_add NAME WAYPOINTS");
                 return;
-            } 
+            }
             var waypoints = Waypoints.Call("GetWaypointsList", args[1]);
-            if(waypoints == null)
+            if (waypoints == null)
             {
                 SendReply(player, "No waypoints with this name exist");
                 return;
             }
-            if( ((List<object>)waypoints).Count < 2)
+            if (((List<object>)waypoints).Count < 2)
             {
                 SendReply(player, "To create an elevator you need at least 2 waypoints");
                 return;
@@ -447,7 +440,7 @@ namespace Oxide.Plugins
             if (!TryGetClosestRayPoint(player.transform.position, currentRot, out closestEnt, out closestHitpoint)) return;
             Debug.Log(closestEnt.ToString());
             BuildingBlock block = ((Collider)closestEnt).GetComponentInParent<BuildingBlock>();
-            if (block == null) 
+            if (block == null)
             {
                 SendReply(player, "What you are looking at is not a building block");
                 return;
@@ -456,7 +449,7 @@ namespace Oxide.Plugins
             if (elevators[newelevatorinfo.Name] != null) storedData.Elevators.Remove(elevators[newelevatorinfo.Name]);
             elevators[newelevatorinfo.Name] = newelevatorinfo;
             storedData.Elevators.Add(elevators[newelevatorinfo.Name]);
-            SaveData(); 
+            SaveData();
             SendReply(player, "You've successfully created a new elevator");
             NewElevator(elevators[newelevatorinfo.Name]);
         }
@@ -480,22 +473,22 @@ namespace Oxide.Plugins
         void cmdChatElevatorRemove(BasePlayer player, string command, string[] args)
         {
             if (!hasPermission(player)) { SendReply(player, "You don't have access to this command"); return; }
-            if(args.Length == 0)
+            if (args.Length == 0)
             {
                 SendReply(player, "/elevator_remove NAME"); return;
             }
-            if(elevators[args[0]] == null)
+            if (elevators[args[0]] == null)
             {
                 SendReply(player, "This elevator doesn't exist"); return;
             }
             foreach (Elevator ele in spawnedElevators)
             {
                 if (ele.info.Name == elevators[args[0]].Name)
-                    GameObject.Destroy(ele.gameObject);
+                    UnityEngine.Object.Destroy(ele.gameObject);
             }
             storedData.Elevators.Remove(elevators[args[0]]);
             elevators[args[0]] = null;
-            SendReply(player, string.Format("Elevator named {0} was deleted",args[0]));
+            SendReply(player, string.Format("Elevator named {0} was deleted", args[0]));
             SaveData();
         }
 
@@ -503,7 +496,7 @@ namespace Oxide.Plugins
         void cmdChatElevatorList(BasePlayer player, string command, string[] args)
         {
             if (!hasPermission(player)) { SendReply(player, "You don't have access to this command"); return; }
-            if(elevators.Count == 0)
+            if (elevators.Count == 0)
             {
                 SendReply(player, "You don't have any elevators");
                 return;

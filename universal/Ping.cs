@@ -4,14 +4,15 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Ping", "Wulf/lukespragg", "1.7.0", ResourceId = 1921)]
-    [Description("Ping command and automatic kicking of players with high pings")]
+    [Info("Ping", "Wulf/lukespragg", "1.8.0", ResourceId = 1921)]
+    [Description("Ping chekcing on command and automatic kicking of players with high pings")]
 
     class Ping : CovalencePlugin
     {
         #region Initialization
 
         const string permBypass = "ping.bypass";
+        const string permCheck = "ping.check";
 
         bool highPingKick;
         bool kickNotices;
@@ -33,14 +34,6 @@ namespace Oxide.Plugins
             Config["High Ping Limit (Milliseconds)"] = highPingLimit = GetConfig("High Ping Limit (Milliseconds)", 200);
             Config["Kick Grace Period (Seconds)"] = kickGracePeriod = GetConfig("Kick Grace Period (Seconds)", 30);
 
-            // Cleanup
-            Config.Remove("AdminExcluded");
-            Config.Remove("HighPingKick");
-            Config.Remove("KickNotices");
-            Config.Remove("PingLimit");
-            Config.Remove("RepeatCheck");
-            Config.Remove("WarnBeforeKick");
-
             SaveConfig();
         }
 
@@ -49,46 +42,57 @@ namespace Oxide.Plugins
             // English
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Kicked"] = "{0} kicked for high ping ({1}ms)",
                 ["KickWarning"] = "You will be kicked in {0} seconds if your ping is not lowered",
-                ["Ping"] = "You have a ping of {0}ms",
-                ["PingTooHigh"] = "Ping is too high: {0}ms"
+                ["NotAllowed"] = "You are not allowed to use the '{0}' command",
+                ["PingTooHigh"] = "Ping is too high: {0}ms",
+                ["PlayerKicked"] = "{0} kicked for high ping ({1}ms)",
+                ["PlayerNotFound"] = "Player '{0}' was not found",
+                ["PlayerPing"] = "{0} has a ping of {1}ms",
+                ["YourPing"] = "You have a ping of {0}ms"
             }, this);
 
             // French
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Kicked"] = "{0} expulsé pour ping élevé ({1} ms)",
                 ["KickWarning"] = "Vous sera lancé dans {0} secondes si votre ping n’est pas abaissé",
-                ["Ping"] = "Vous avez un ping de {0} ms",
-                ["PingTooHigh"] = "Ping est trop élevée : {0} ms"
+                ["NotAllowed"] = "Vous n’êtes pas autorisé à utiliser la commande « {0} »",
+                ["PingTooHigh"] = "Ping est trop élevée : {0} ms",
+                ["PlayerKicked"] = "{0} expulsé pour ping élevé ({1} ms)",
+                ["PlayerNotFound"] = "Player « {0} » n’a pas été trouvée",
+                ["YourPing"] = "Vous avez un ping de {0} ms"
             }, this, "fr");
 
             // German
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Kicked"] = "{0} gekickt für hohen Ping ({1} ms)",
                 ["KickWarning"] = "Sie werden in {0} Sekunden gekickt wenn Ihr Ping nicht gesenkt wird",
-                ["Ping"] = "Sie haben einen Ping von {0} ms",
-                ["PingTooHigh"] = "Ping ist zu hoch: {0} ms"
+                ["NotAllowed"] = "Sie sind nicht berechtigt, verwenden Sie den Befehl '{0}'",
+                ["PingTooHigh"] = "Ping ist zu hoch: {0} ms",
+                ["PlayerKicked"] = "{0} gekickt für hohen Ping ({1} ms)",
+                ["PlayerNotFound"] = "Player '{0}' wurde nicht gefunden",
+                ["YourPing"] = "Sie haben einen Ping von {0} ms"
             }, this, "de");
 
             // Russian
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Kicked"] = "{0} ногами высокий пинг ({1} ms)",
                 ["KickWarning"] = "Вам будет ногами в {0} секунд если пинг не опустил",
-                ["Ping"] = "У вас пинг {0} ms",
-                ["PingTooHigh"] = "Пинг слишком высока: {0} ms"
+                ["NotAllowed"] = "Нельзя использовать команду «{0}»",
+                ["PingTooHigh"] = "Пинг слишком высока: {0} ms",
+                ["PlayerKicked"] = "{0} ногами высокий пинг ({1} ms)",
+                ["PlayerNotFound"] = "Игрок «{0}» не найден",
+                ["YourPing"] = "У вас пинг {0} ms"
             }, this, "ru");
 
             // Spanish
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Kicked"] = "{0} expulsado por ping alto ({1} ms)",
                 ["KickWarning"] = "Usted va ser pateado en {0} segundos si el ping no baja",
-                ["Ping"] = "Tienes un ping de {0} ms",
-                ["PingTooHigh"] = "Ping es demasiado alto: {0} ms"
+                ["NotAllowed"] = "No se permite utilizar el comando '{0}'",
+                ["PingTooHigh"] = "Ping es demasiado alto: {0} ms",
+                ["PlayerKicked"] = "{0} expulsado por ping alto ({1} ms)",
+                ["PlayerNotFound"] = "Jugador '{0}' no se encontró",
+                ["YourPing"] = "Tienes un ping de {0} ms"
             }, this, "es");
         }
 
@@ -97,6 +101,7 @@ namespace Oxide.Plugins
             LoadDefaultConfig();
             LoadDefaultMessages();
             permission.RegisterPermission(permBypass, this);
+            permission.RegisterPermission(permCheck, this);
         }
 
         #endregion
@@ -105,16 +110,12 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            // Loop through all players and run ping check
             foreach (var player in players.Connected) timer.Once(5f, () => PingCheck(player));
         }
 
         void OnServerSave()
         {
-            // Check if repeating checking is enabled
             if (!repeatChecking) return;
-
-            // Loop through all player sand run ping check
             foreach (var player in players.Connected) timer.Once(5f, () => PingCheck(player));
         }
 
@@ -126,39 +127,56 @@ namespace Oxide.Plugins
 
         void PingCheck(IPlayer player, bool warned = false)
         {
-            // Check if player is connected or has permission to bypass
             if (!player.IsConnected || player.HasPermission(permBypass)) return;
 
             var ping = player.Ping;
             if (ping < highPingLimit || !highPingKick) return;
 
-            // Check if warning should be given
             if (warnBeforeKick && !warned)
             {
-                // Warn player with grace period
                 player.Message(Lang("KickWarning", player.Id, kickGracePeriod));
                 timer.Once(kickGracePeriod, () => PingCheck(player, true));
             }
             else
-                // Kick player
                 PingKick(player, ping.ToString());
         }
 
         void PingKick(IPlayer player, string ping)
         {
-            // Kick player and show reason
             player.Kick(Lang("PingTooHigh", player.Id, ping));
 
-            // Check if kick notices are enabled
             if (!kickNotices) return;
-
-            // Show kick notice in console/log and chat
-            Puts(Lang("Kicked", null, player.Name, ping));
-            server.Broadcast(Lang("Kicked", null, player.Name, ping));
+            Puts(Lang("PlayerKicked", null, player.Name, ping));
+            server.Broadcast(Lang("PlayerKicked", null, player.Name, ping));
         }
 
+        #endregion
+
+        #region Commands
+
         [Command("ping", "pong")]
-        void PingCommand(IPlayer player, string command, string[] args) => player.Reply(Lang("Ping", player.Id, player.Ping));
+        void PingCommand(IPlayer player, string command, string[] args)
+        {
+            if (args.Length == 0)
+            {
+                player.Reply(Lang("YourPing", player.Id, player.Ping));
+                return;
+            }
+
+            if (player.HasPermission(permCheck))
+            {
+                var target = players.FindPlayer(args[0]);
+                if (target == null || !target.IsConnected)
+                {
+                    player.Reply(Lang("PlayerNotFound", player.Id, args[0]));
+                    return;
+                }
+
+                player.Reply(Lang("PlayerPing", player.Id, target.Name, target.Ping));
+            }
+            else
+                player.Reply(Lang("NotAllowed", player.Id, command));
+        }
 
         #endregion
 

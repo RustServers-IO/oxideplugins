@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.0.3", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.0.4", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -210,7 +210,7 @@ namespace Oxide.Plugins
 			if (!permission.PermissionExists("smoothrestart.canrestart"))
 				permission.RegisterPermission("smoothrestart.canrestart", this);
 				CheckDevBlog(6);
-				CheckOxideCommits(168);
+				CheckOxideCommits(336);
 			if (enableAutoChecks)
 				_blogTimer = timer.Every(checkIntervalMinutes*60, () => CheckDevBlog(6));
 		}
@@ -285,7 +285,7 @@ namespace Oxide.Plugins
 			Dictionary<string, string> userAgent  = new Dictionary<string, string>();
 			userAgent.Add("User-Agent", "OxideMod");
 			try { webrequest.EnqueueGet(url, (code, response) => APIResponse(code, response, "oxide", hoursBack), this, userAgent); }
-			catch { timer.Once(60f, () => CheckOxideCommits(168));}
+			catch { timer.Once(60f, () => CheckOxideCommits(336));}
 		}
 
 		void APIResponse(int code, string response, string apiType, int numberCheck)
@@ -331,7 +331,7 @@ namespace Oxide.Plugins
 								return;
 							_blogTimer.Destroy();
 							_blogTimer = null;
-							_oxideTimer = timer.Every(60f, () => CheckOxideCommits(168));
+							_oxideTimer = timer.Every(60f, () => CheckOxideCommits(336));
 						}
 						break;
 					}

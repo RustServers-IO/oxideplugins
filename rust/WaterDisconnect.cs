@@ -4,7 +4,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("WaterDisconnect", "Wulf/lukespragg", "2.2.0", ResourceId = 2122)]
+    [Info("WaterDisconnect", "Wulf/lukespragg", "2.2.1", ResourceId = 2122)]
     [Description("Hurts or kills players that log out underwater")]
 
     class WaterDisconnect : CovalencePlugin
@@ -83,7 +83,17 @@ namespace Oxide.Plugins
             foreach (var sleeper in BasePlayer.sleepingPlayerList) HandleDisconnect(sleeper);
         }
 
+        void OnPlayerConnected(Network.Message packet)
+        {
+            if (timers.ContainsKey(packet.connection.userid)) timers[packet.connection.userid].Destroy();
+        }
+
         void OnPlayerDisconnected(BasePlayer player) => HandleDisconnect(player);
+
+        void OnPlayerSleepEnded(BasePlayer player)
+        {
+            if (timers.ContainsKey(player.userID)) timers[player.userID].Destroy();
+        }
 
         #endregion
 

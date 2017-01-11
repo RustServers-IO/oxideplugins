@@ -1,0 +1,16 @@
+{
+    "name": "Warp System",
+    "description": "Create warp points for players.",
+    "author": "PaiN",
+    "version": "0.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/warp-system.1398",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

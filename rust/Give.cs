@@ -1,13 +1,10 @@
-// Reference: Oxide.Ext.Rust
-
 using System;
 using System.Collections.Generic;
-
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Give", "Reneb", "2.1.2", ResourceId = 666)]
+    [Info("Give", "Reneb", "2.1.3", ResourceId = 666)]
     class Give : RustPlugin
     {
         private bool Changed;
@@ -22,12 +19,12 @@ namespace Oxide.Plugins
         private bool logAdmins;
         private bool Stackable;
 
-        private Dictionary<string,string> displaynameToShortname;
+        private Dictionary<string, string> displaynameToShortname;
 
         [PluginReference]
         Plugin Kits;
-        
-        void Loaded() 
+
+        void Loaded()
         {
             LoadVariables();
             displaynameToShortname = new Dictionary<string, string>();
@@ -37,11 +34,13 @@ namespace Oxide.Plugins
             InitializeTable();
         }
 
-        private void InitializeTable () {
-            displaynameToShortname.Clear ();
-            List<ItemDefinition> ItemsDefinition = ItemManager.GetItemDefinitions () ;
-            foreach (ItemDefinition itemdef in ItemsDefinition) {
-                displaynameToShortname.Add (itemdef.displayName.english.ToString ().ToLower (), itemdef.shortname.ToString ());
+        private void InitializeTable()
+        {
+            displaynameToShortname.Clear();
+            List<ItemDefinition> ItemsDefinition = ItemManager.GetItemDefinitions();
+            foreach (ItemDefinition itemdef in ItemsDefinition)
+            {
+                displaynameToShortname.Add(itemdef.displayName.english.ToLower(), itemdef.shortname);
             }
         }
         private object GetConfig(string menu, string datavalue, object defaultValue)
@@ -95,7 +94,8 @@ namespace Oxide.Plugins
                 return true;
             return false;
         }
-        private object FindPlayerByID(ulong steamid) {
+        private object FindPlayerByID(ulong steamid)
+        {
             BasePlayer targetplayer = BasePlayer.FindByID(steamid);
             if (targetplayer != null)
             {
@@ -113,7 +113,7 @@ namespace Oxide.Plugins
             if (tofind.Length == 17)
             {
                 ulong steamid;
-                if (ulong.TryParse(tofind.ToString(), out steamid))
+                if (ulong.TryParse(tofind, out steamid))
                 {
                     return FindPlayerByID(steamid);
                 }
@@ -123,9 +123,9 @@ namespace Oxide.Plugins
             foreach (BasePlayer player in onlineplayers.ToArray())
             {
 
-                if (player.displayName.ToString() == tofind)
+                if (player.displayName == tofind)
                     return player;
-                else if (player.displayName.ToString().Contains(tofind))
+                else if (player.displayName.Contains(tofind))
                 {
                     if (targetplayer == null)
                         targetplayer = player;
@@ -139,9 +139,9 @@ namespace Oxide.Plugins
             foreach (BasePlayer player in offlineplayers.ToArray())
             {
 
-                if (player.displayName.ToString() == tofind)
+                if (player.displayName == tofind)
                     return player;
-                else if (player.displayName.ToString().Contains(tofind))
+                else if (player.displayName.Contains(tofind))
                 {
                     if (targetplayer == null)
                         targetplayer = player;
@@ -168,10 +168,10 @@ namespace Oxide.Plugins
                 itemname = displaynameToShortname[itemname];
             var definition = ItemManager.FindItemDefinition(itemname);
             if (definition == null)
-                return string.Format("{0} {1}",itemNotFound,itemname);
-            description = definition.displayName.english.ToString();
+                return string.Format("{0} {1}", itemNotFound, itemname);
+            description = definition.displayName.english;
             int giveamount = 0;
-            int stack = (int)definition.stackable;
+            int stack = definition.stackable;
             if (stack < 1) stack = 1;
             if (isBP)
             {
@@ -180,8 +180,8 @@ namespace Oxide.Plugins
             }
             if (Stackable && !isBP)
             {
-                player.inventory.GiveItem(ItemManager.CreateByItemID((int)definition.itemid, amount, isBP), pref);
-                SendReply(player, string.Format("You've received {0} x {1}", description, amount.ToString()));
+                player.inventory.GiveItem(ItemManager.CreateByItemID(definition.itemid, amount), pref);
+                SendReply(player, string.Format("You've received {0} x {1}", description, amount));
             }
             else
             {
@@ -192,8 +192,8 @@ namespace Oxide.Plugins
                     else
                         giveamount = i;
                     if (giveamount < 1) return true;
-                    player.inventory.GiveItem(ItemManager.CreateByItemID((int)definition.itemid, giveamount, isBP), pref);
-                    SendReply(player, string.Format("You've received {0} x {1}", description, giveamount.ToString()));
+                    player.inventory.GiveItem(ItemManager.CreateByItemID(definition.itemid, giveamount), pref);
+                    SendReply(player, string.Format("You've received {0} x {1}", description, giveamount));
                 }
             }
             return true;
@@ -208,7 +208,7 @@ namespace Oxide.Plugins
                 return true;
             return false;
         }
-       
+
         void GiveKit(object source, string[] Args, string ttype)
         {
             if (source is BasePlayer)
@@ -219,7 +219,7 @@ namespace Oxide.Plugins
                     return;
                 }
             }
-            if(Kits == null)
+            if (Kits == null)
             {
                 SendTheReply(source, "You must have the Kits plugin to use this command");
                 return;
@@ -227,7 +227,7 @@ namespace Oxide.Plugins
             if ((ttype == "all" && Args.Length <= 1) || (ttype == "self" && Args.Length <= 1) || (ttype == "player" && Args.Length <= 2))
             {
                 SendTheReply(source, "===== Available kits to give =====");
-                Kits?.Call ("SendList", source);
+                Kits?.Call("SendList", source);
                 return;
             }
             object target = false;
@@ -238,8 +238,9 @@ namespace Oxide.Plugins
             else if (ttype == "all")
                 target = true;
 
-            if (target == null) {
-                SendTheReply (source, "Couldn't find a player with the steam id " + Args [0].ToString ());
+            if (target == null)
+            {
+                SendTheReply(source, "Couldn't find a player with the steam id " + Args[0]);
                 return;
             }
             if (target is string)
@@ -248,10 +249,12 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (Args [Args.Length - 1].ToLower () == "online") {
+            if (Args[Args.Length - 1].ToLower() == "online")
+            {
                 var targetPlayer = target as BasePlayer;
-                if (!targetPlayer.IsConnected ()) {
-                    SendTheReply (source, "Player needs to be online to receive the item!");
+                if (!targetPlayer.IsConnected())
+                {
+                    SendTheReply(source, "Player needs to be online to receive the item!");
                     return;
                 }
             }
@@ -276,13 +279,13 @@ namespace Oxide.Plugins
                     }
                     sentkits++;
                 }
-                SendTheReply(source, string.Format("Kit {0} was given to {1} players",targetkit,sentkits.ToString()));
+                SendTheReply(source, string.Format("Kit {0} was given to {1} players", targetkit, sentkits));
                 if (logAdmins)
                     Puts(string.Format("GIVE: /giveall {0} was used", string.Join(" ", Args)));
             }
             else
             {
-                object trytogivekit = Kits?.Call ("GiveKit", target, targetkit);
+                object trytogivekit = Kits?.Call("GiveKit", target, targetkit);
                 if (trytogivekit == null || (trytogivekit is bool && (!(bool)trytogivekit)))
                 {
                     SendTheReply(source, "Couldn't give the kit, does it really exist?");
@@ -294,7 +297,7 @@ namespace Oxide.Plugins
         }
         void SendTheReply(object source, string message)
         {
-            if(source is ConsoleSystem.Arg)
+            if (source is ConsoleSystem.Arg)
                 SendReply((ConsoleSystem.Arg)source, message);
             else
                 SendReply((BasePlayer)source, message);
@@ -308,14 +311,15 @@ namespace Oxide.Plugins
             }
             int amount = 1;
             if (Args.Length > 2)
-                int.TryParse(Args[2].ToString(), out amount);
+                int.TryParse(Args[2], out amount);
 
             if (amount == 0)
                 amount = 1;
 
-            var target = FindPlayer(Args[0].ToString());
-            if (target == null) {
-                SendTheReply (source, "Couldn't find a player with the steam id " + Args [0].ToString ());
+            var target = FindPlayer(Args[0]);
+            if (target == null)
+            {
+                SendTheReply(source, "Couldn't find a player with the steam id " + Args[0]);
                 return;
             }
             if (target is string)
@@ -324,37 +328,39 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (Args [Args.Length - 1].ToLower() == "online") {
+            if (Args[Args.Length - 1].ToLower() == "online")
+            {
                 var targetPlayer = target as BasePlayer;
-                if (!targetPlayer.IsConnected()) {
-                    SendTheReply (source, "Player needs to be online to receive the item!");
+                if (!targetPlayer.IsConnected())
+                {
+                    SendTheReply(source, "Player needs to be online to receive the item!");
                     return;
                 }
             }
 
             string description = Args[1];
-            object error = GiveItem((BasePlayer)target, Args[1], amount, (ItemContainer)((BasePlayer)target).inventory.containerMain, out description);
+            object error = GiveItem((BasePlayer)target, Args[1], amount, ((BasePlayer)target).inventory.containerMain, out description);
             if (!(error is bool))
             {
                 SendTheReply(source, error.ToString());
                 return;
             }
-            SendTheReply(source, string.Format("Gave {0} x {1} to {2}", description, amount.ToString(), ((BasePlayer)target).displayName.ToString()));
+            SendTheReply(source, string.Format("Gave {0} x {1} to {2}", description, amount, ((BasePlayer)target).displayName));
         }
         void GiveSelf(object source, BasePlayer player, string[] Args)
         {
             int amount = 1;
             if (Args.Length > 1)
-                int.TryParse(Args[1].ToString(), out amount);
+                int.TryParse(Args[1], out amount);
 
             string description = Args[0];
-            object error = GiveItem(player, Args[0], amount, (ItemContainer)player.inventory.containerMain, out description);
+            object error = GiveItem(player, Args[0], amount, player.inventory.containerMain, out description);
             if (!(error is bool))
             {
                 SendTheReply(source, error.ToString());
                 return;
             }
-            SendTheReply(source, string.Format("Gave {0} x {1} to {2}", description, amount.ToString(), player.displayName.ToString()));
+            SendTheReply(source, string.Format("Gave {0} x {1} to {2}", description, amount, player.displayName));
         }
         private void GiveToAll(ConsoleSystem.Arg arg)
         {
@@ -362,22 +368,22 @@ namespace Oxide.Plugins
             int amount = 1;
             if (arg.Args.Length > 1)
             {
-                int.TryParse(arg.Args[1].ToString(), out amount);
+                int.TryParse(arg.Args[1], out amount);
             }
             List<BasePlayer> onlineplayers = BasePlayer.activePlayerList as List<BasePlayer>;
             object error = false;
-            string description = arg.Args[0].ToString();
+            string description = arg.Args[0];
             foreach (BasePlayer player in onlineplayers.ToArray())
             {
                 playersSent++;
-                error = GiveItem(player, arg.Args[0], amount, (ItemContainer)player.inventory.containerMain, out description);
+                error = GiveItem(player, arg.Args[0], amount, player.inventory.containerMain, out description);
             }
             if (!(error is bool))
             {
                 SendTheReply(arg, error.ToString());
                 return;
             }
-            SendTheReply(arg, string.Format("Gave {0} x {1} to {2} inventories", description, amount.ToString(), playersSent.ToString()));
+            SendTheReply(arg, string.Format("Gave {0} x {1} to {2} inventories", description, amount, playersSent));
         }
         [ChatCommand("give")]
         void cmdChatGivePlayer(BasePlayer player, string command, string[] args)
@@ -398,7 +404,7 @@ namespace Oxide.Plugins
                 return;
             }
             if (logAdmins)
-                Puts(string.Format("GIVE: {0} used /give {1}", player.displayName.ToString(), string.Join(" ", args)));
+                Puts(string.Format("GIVE: {0} used /give {1}", player.displayName, string.Join(" ", args)));
             GivePlayer(player, args);
         }
         [ChatCommand("giveme")]
@@ -420,7 +426,7 @@ namespace Oxide.Plugins
                 return;
             }
             if (logAdmins)
-                Puts(string.Format("GIVE: {0} used /giveme {1}", player.displayName.ToString(), string.Join(" ", args)));
+                Puts(string.Format("GIVE: {0} used /giveme {1}", player.displayName, string.Join(" ", args)));
             GiveSelf(player, player, args);
         }
         [ConsoleCommand("inv.giveplayer")]
@@ -431,9 +437,9 @@ namespace Oxide.Plugins
                 SendReply(arg, "inv.giveplayer \"Name/SteamID\" \"Item/Kit\" \"Amount\"");
                 return;
             }
-            if (hasKit(arg.ArgsStr.ToString()))
+            if (hasKit(arg.ArgsStr))
             {
-                GiveKit(arg, (string[])arg.Args, "player");
+                GiveKit(arg, arg.Args, "player");
                 return;
             }
             if (arg.connection != null)
@@ -444,11 +450,11 @@ namespace Oxide.Plugins
                     return;
                 }
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", ((BasePlayer)arg.connection.player).displayName.ToString(), arg.ArgsStr.ToString()));
+                    Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", ((BasePlayer)arg.connection.player).displayName, arg.ArgsStr));
             }
             else
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", "CONSOLE", arg.ArgsStr.ToString()));
+                Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", "CONSOLE", arg.ArgsStr));
             GivePlayer(arg, arg.Args);
         }
         [ConsoleCommand("inv.give")]
@@ -464,9 +470,9 @@ namespace Oxide.Plugins
                 SendReply(arg, "inv.give \"Item/Kit\" \"Amount\"");
                 return;
             }
-            if (hasKit(arg.ArgsStr.ToString()))
+            if (hasKit(arg.ArgsStr))
             {
-                GiveKit(arg, (string[])arg.Args, "self");
+                GiveKit(arg, arg.Args, "self");
                 return;
             }
             if (arg.connection != null)
@@ -477,9 +483,9 @@ namespace Oxide.Plugins
                     return;
                 }
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.give {1}", ((BasePlayer)arg.connection.player).displayName.ToString(), arg.ArgsStr.ToString()));
+                    Puts(string.Format("GIVE: {0} used inv.give {1}", ((BasePlayer)arg.connection.player).displayName, arg.ArgsStr));
             }
-            GiveSelf(arg, (BasePlayer)arg.connection.player, (string[])arg.Args);
+            GiveSelf(arg, (BasePlayer)arg.connection.player, arg.Args);
         }
         [ConsoleCommand("inv.giveall")]
         void cmdConsoleGiveAll(ConsoleSystem.Arg arg)
@@ -489,9 +495,9 @@ namespace Oxide.Plugins
                 SendReply(arg, "inv.giveall \"Item/Kit\" \"Amount\"");
                 return;
             }
-            if (hasKit(arg.ArgsStr.ToString()))
+            if (hasKit(arg.ArgsStr))
             {
-                GiveKit(arg, (string[])arg.Args, "all");
+                GiveKit(arg, arg.Args, "all");
                 return;
             }
             if (arg.connection != null)
@@ -502,11 +508,11 @@ namespace Oxide.Plugins
                     return;
                 }
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.giveall {1}", ((BasePlayer)arg.connection.player).displayName.ToString(), arg.ArgsStr.ToString()));
+                    Puts(string.Format("GIVE: {0} used inv.giveall {1}", ((BasePlayer)arg.connection.player).displayName, arg.ArgsStr));
             }
             else
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.giveall {1}", "CONSOLE", arg.ArgsStr.ToString()));
+                Puts(string.Format("GIVE: {0} used inv.giveall {1}", "CONSOLE", arg.ArgsStr));
             GiveToAll(arg);
         }
     }

@@ -1,0 +1,16 @@
+{
+    "name": "Player Damage",
+    "description": "Turn ON\/OFF the player damage.",
+    "author": "PaiN",
+    "version": "0.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/player-damage.1401",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

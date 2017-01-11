@@ -1,75 +1,107 @@
 ﻿using System.Collections.Generic;
-using Oxide.Core;
-using System.Linq;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core.Plugins;
+using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ProximityAlert", "k1lly0u", "0.1.22", ResourceId = 1801)]
+    [Info("ProximityAlert", "k1lly0u", "0.2.1", ResourceId = 1801)]
     class ProximityAlert : RustPlugin
     {
         #region Fields
-        [PluginReference]
-        Plugin Clans;
-        [PluginReference]
-        Plugin Friends;
-        [PluginReference]
-        Plugin EventManager;
+        [PluginReference] Plugin Clans;
+        [PluginReference] Plugin Friends;
+        [PluginReference] Plugin EventManager;
 
-        private static int playerLayer = UnityEngine.LayerMask.GetMask("Player (Server)");
-        List<ProximityPlayer> playerList = new List<ProximityPlayer>();
-        private Vector2 guiPos;
-        private Vector2 guiDim;
+        static ProximityAlert ins;
+        const string proxUI = "ProximityAlertUI";
         #endregion
 
         #region Functions
-        void OnServerInitialized() => InitializePlugin();
-        void Unload()
+        void OnServerInitialized()
         {
-            var objects = UnityEngine.Object.FindObjectsOfType(typeof(ProximityPlayer));
-            if (objects != null)
-                foreach (var gameObj in objects)
-                    UnityEngine.Object.Destroy(gameObj);
-            playerList.Clear();
-        }
-        void OnPlayerInit(BasePlayer player) => InitializePlayer(player);
-        void OnPlayerDisconnected(BasePlayer player)
-        {
-            if (player.GetComponent<ProximityPlayer>())
-                DestroyPlayer(player);
-        }
-        private void DestroyPlayer(BasePlayer player)
-        {
-            playerList.Remove(player.GetComponent<ProximityPlayer>());
-            UnityEngine.Object.Destroy(player.GetComponent<ProximityPlayer>());
-        }
-        private void InitializePlugin()
-        {
-            RegisterMessages();
-            permission.RegisterPermission("proximityalert.use", this);
+            ins = this;
+            lang.RegisterMessages(messages, this);            
             LoadVariables();
-            guiPos = new Vector2(configData.GUI_X_Pos, configData.GUI_Y_Pos);
-            guiDim = new Vector2(configData.GUI_X_Dim, configData.GUI_Y_Dim);
+            RegisterPermissions();
+            CheckDependencies();
+
             foreach (var player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);
         }
-        private void InitializePlayer(BasePlayer player)
+        void Unload()
+        {
+            var objects = UnityEngine.Object.FindObjectsOfType<ProximityPlayer>();
+            if (objects != null)
+                foreach (var gameObj in objects)
+                    UnityEngine.Object.Destroy(gameObj);
+
+            foreach (var player in BasePlayer.activePlayerList)
+                CuiHelper.DestroyUi(player, proxUI);
+        }
+        void OnPlayerInit(BasePlayer player)
         {
             if (!permission.UserHasPermission(player.UserIDString, "proximityalert.use")) return;
-            if (player.GetComponent<ProximityPlayer>())
-                DestroyPlayer(player);            
-            GetPlayer(player);
+            if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+            {
+                timer.In(2, () => OnPlayerInit(player));
+                return;
+            }
+            var proxPlayer = player.GetComponent<ProximityPlayer>();
+            if (proxPlayer != null)                            
+                UnityEngine.Object.DestroyImmediate(proxPlayer);
+
+            NextTick(()=> player.gameObject.AddComponent<ProximityPlayer>());
+        }
+        void OnPlayerDisconnected(BasePlayer player)
+        {
+            CuiHelper.DestroyUi(player, proxUI);
+            var proxPlayer = player.GetComponent<ProximityPlayer>();
+            if (proxPlayer != null)                            
+                UnityEngine.Object.Destroy(proxPlayer);            
+        }
+        
+        private void RegisterPermissions()
+        {
+            permission.RegisterPermission("proximityalert.use", this);
+            if (configData.UseCustomPermissions)
+            {
+                foreach(var perm in configData.CustomPermissions)
+                {
+                    permission.RegisterPermission(perm.Key, this);
+                }
+            }
         }
         private void CheckDependencies()
         {
-            if (Friends == null) PrintWarning($"FriendsAPI could not be found! Disabling friends feature");
-            if (Clans == null) PrintWarning($"Clans could not be found! Disabling clans feature");
+            if (!Friends) PrintWarning($"FriendsAPI could not be found! Unable to use friends feature");
+            if (!Clans) PrintWarning($"Clans could not be found! Unable to use clans feature");
         }
-        private void ProxCollisionEnter(BasePlayer player) => SendUI(player, lang.GetMessage("warning", this, player.UserIDString));
-        private void ProxCollisionLeave(BasePlayer player) => SendUI(player, lang.GetMessage("clear", this, player.UserIDString));
-        private bool PA_IsClanmate(ulong playerId, ulong friendId)
+        private void ProxCollisionEnter(BasePlayer player)
+        {
+            var UI = CreateUI(lang.GetMessage("warning", this, player.UserIDString));
+            CuiHelper.DestroyUi(player, proxUI);
+            CuiHelper.AddUi(player, UI);
+        }
+        private void ProxCollisionLeave(BasePlayer player)
+        {
+            var UI = CreateUI(lang.GetMessage("clear", this, player.UserIDString));
+            CuiHelper.DestroyUi(player, proxUI);
+            CuiHelper.AddUi(player, UI);            
+        }
+        private float GetPlayerRadius(BasePlayer player)
+        {
+            foreach(var perm in configData.CustomPermissions)
+            {
+                if (permission.UserHasPermission(player.UserIDString, perm.Key))
+                    return perm.Value;
+            }
+            if (permission.UserHasPermission(player.UserIDString, "proximityalert.use"))
+                return configData.TriggerRadius;
+            return 0;
+        }
+        private bool IsClanmate(ulong playerId, ulong friendId)
         {
             if (!Clans) return false;
             object playerTag = Clans?.Call("GetClanOf", playerId);
@@ -78,13 +110,13 @@ namespace Oxide.Plugins
                 if (playerTag == friendTag) return true;
             return false;
         }
-        private bool PA_IsFriend(ulong playerID, ulong friendID)
+        private bool IsFriend(ulong playerID, ulong friendID)
         {
             if (!Friends) return false;
             bool isFriend = (bool)Friends?.Call("IsFriend", playerID, friendID);
             return isFriend;
         }
-        private bool PA_IsPlaying(BasePlayer player)
+        private bool IsPlaying(BasePlayer player)
         {
             if (EventManager)
             {
@@ -95,23 +127,53 @@ namespace Oxide.Plugins
                 }
             }
             return false;
-        }
-        private void SendUI(BasePlayer player, string msg)
+        }        
+        private void JoinedEvent(BasePlayer player)
         {
-            if (!GetPlayer(player).GUIDestroyed)
-                timer.Once(3, () => SendUI(player, msg));
-            else GetPlayer(player).UseUI(msg, guiPos, guiDim);
-        }
-        private ProximityPlayer GetPlayer(BasePlayer player)
-        {
-            if (!player.GetComponent<ProximityPlayer>())
+            var proxPlayer = player.GetComponent<ProximityPlayer>();
+            if (proxPlayer != null)
             {
-                playerList.Add(player.gameObject.AddComponent<ProximityPlayer>());
-                player.GetComponent<ProximityPlayer>().SetRadius(configData.TriggerRadius);
-                player.GetComponent<ProximityPlayer>().Instance = this;
+                CuiHelper.DestroyUi(player, proxUI);
+                proxPlayer.isEnabled = false;
             }
-            return player.GetComponent<ProximityPlayer>();
         }
+        private void LeftEvent(BasePlayer player)
+        {
+            var proxPlayer = player.GetComponent<ProximityPlayer>();
+            if (proxPlayer != null)
+            {
+                CuiHelper.DestroyUi(player, proxUI);
+                proxPlayer.isEnabled = true;
+            }
+        }
+        #endregion
+
+        #region UI
+        public CuiElementContainer CreateUI(string text)
+        {
+            var container = new CuiElementContainer()
+                {
+                    {
+                        new CuiPanel
+                        {
+                            Image = {Color = "0 0 0 0"},
+                            RectTransform = {AnchorMin = $"{ins.configData.GUI_X_Pos} {ins.configData.GUI_Y_Pos}", AnchorMax = $"{ins.configData.GUI_X_Pos + ins.configData.GUI_X_Dim} {ins.configData.GUI_Y_Pos + ins.configData.GUI_Y_Dim}"},
+                            CursorEnabled = false
+                        },
+                        new CuiElement().Parent = "Hud",
+                        proxUI
+                    }
+                };
+            container.Add(new CuiLabel
+            {
+                Text = { FontSize = ins.configData.FontSize, Align = TextAnchor.MiddleCenter, Text = text },
+                RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" }
+
+            },
+            proxUI,
+            CuiHelper.GetGuid());
+            return container;
+        }        
         #endregion
 
         #region Chat Command
@@ -119,17 +181,21 @@ namespace Oxide.Plugins
         private void cmdProx(BasePlayer player, string command, string[] args)
         {
             if (!permission.UserHasPermission(player.UserIDString, "proximityalert.use")) return;
-            if (GetPlayer(player).Activated)
+            var proxPlayer = player.GetComponent<ProximityPlayer>();
+            if (proxPlayer != null)
             {
-                GetPlayer(player).Activated = false;
-                SendReply(player, lang.GetMessage("deactive", this, player.UserIDString));
-                return;
-            }
-            else
-            {
-                GetPlayer(player).Activated = true;
-                SendReply(player, lang.GetMessage("active", this, player.UserIDString));                
-            }
+                CuiHelper.DestroyUi(player, proxUI);
+                if (proxPlayer.isEnabled)
+                {                   
+                    proxPlayer.isEnabled = false;
+                    SendReply(player, lang.GetMessage("deactive", this, player.UserIDString));
+                }
+                else
+                {
+                    proxPlayer.isEnabled = true;
+                    SendReply(player, lang.GetMessage("active", this, player.UserIDString));
+                }
+            }           
         }
         #endregion
 
@@ -137,114 +203,51 @@ namespace Oxide.Plugins
         class ProximityPlayer : MonoBehaviour
         {
             private BasePlayer player;
+            private Timer destroyTimer;
             private List<ulong> inProximity = new List<ulong>();
-            private float collisionRadius;
-            public ProximityAlert Instance;
-            public bool GUIDestroyed = true;
-            public bool Activated = true;
+            public bool isEnabled;          
 
             private void Awake()
             {
                 player = GetComponent<BasePlayer>();
-                InvokeRepeating("UpdateTrigger", 2f, 2f);
+                gameObject.layer = (int)Layer.Reserved1;
+                
+                var collider = gameObject.AddComponent<SphereCollider>();
+                collider.radius = ins.GetPlayerRadius(player);
+                collider.isTrigger = true;
+
+                isEnabled = true;
             }
-            public void SetRadius(float radius) => collisionRadius = radius;
-            private void OnDestroy() => CancelInvoke("UpdateTrigger");
-            private void UpdateTrigger()
+            void OnTriggerEnter(Collider col)
             {
-                if (!Activated) return;
-                if (IsPlaying(player)) return;
-                var colliderArray = Physics.OverlapSphere(player.transform.position, collisionRadius, playerLayer);
-                var collidePlayers = new List<ulong>();
-                var outProximity = new List<ulong>();
-
-                var existingCount = inProximity.Count();
-
-                foreach (Collider collider in colliderArray)
+                var enemy = col.GetComponentInParent<BasePlayer>();
+                if (enemy != null && enemy != player)
                 {
-                    var col = collider.GetComponentInParent<BasePlayer>();
-                    if (col != null && col != player && !IsClanmate(col) && !IsFriend(col) && !col.IsSleeping() && !col.IsAdmin() && col.IsAlive())
-                        collidePlayers.Add(col.userID);
+                    if (ins.IsFriend(player.userID, enemy.userID)) return;
+                    if (ins.IsClanmate(player.userID, enemy.userID)) return;
+                    if (ins.IsPlaying(enemy)) return;
 
-                    if (!inProximity.Contains(col.userID))
-                        inProximity.Add(col.userID);
-                }
-
-                if (inProximity.Count > existingCount)
-                    EnterTrigger();
-
-                foreach (var entry in inProximity)
-                    if (!collidePlayers.Contains(entry))
-                        outProximity.Add(entry);
-
-                foreach (var entry in outProximity)
-                {
-                    inProximity.Remove(entry);
-                    if (inProximity.Count == 0)
-                        LeaveTrigger();
-                }
-            }
-            private bool IsClanmate(BasePlayer target)
-            {
-                if (Instance.PA_IsClanmate(player.userID, target.userID))               
-                        return true;
-                return false;
-            }
-            private bool IsFriend(BasePlayer target)
-            {
-                if (Instance.PA_IsFriend(player.userID, target.userID))                
-                        return true;
-                return false;
-            }
-            private bool IsPlaying(BasePlayer player)
-            {
-                if (Instance.PA_IsPlaying(player))               
-                        return true;
-                return false;
-            }
-            void EnterTrigger() => Instance.ProxCollisionEnter(player);
-            void LeaveTrigger() => Instance.ProxCollisionLeave(player);            
-            public void UseUI(string msg, Vector2 pos, Vector2 dim, int size = 20)
-            {                
-                GUIDestroyed = false;        
-                Vector2 posMin = pos;
-                Vector2 posMax = posMin + dim;
-
-                var elements = new CuiElementContainer();
-                CuiElement textElement = new CuiElement
-                {
-                    Name = "ProxWarn",
-                    Parent = "Overlay",
-                    FadeOut = 0.3f,
-                    Components =
+                    if (inProximity.Count == 0 && isEnabled)
                     {
-                        new CuiTextComponent
-                        {
-                            Text = msg,
-                            FontSize = size,
-                            Align = TextAnchor.MiddleCenter,
-                            FadeIn = 0.3f
-                        },
-                        new CuiOutlineComponent
-                        {
-                            Distance = "1.0 1.0",
-                            Color = "0.0 0.0 0.0 1.0"
-                        },
-                        new CuiRectTransformComponent
-                        {
-                            AnchorMin = posMin.x + " " + posMin.y,
-                            AnchorMax = posMax.x + " " + posMax.y
-                        }
+                        if (destroyTimer != null)
+                            destroyTimer.Destroy();
+                        ins.ProxCollisionEnter(player);
                     }
-                };
-                elements.Add(textElement);
-                CuiHelper.AddUi(player, elements);
-                Invoke("DestroyNotification", 4f);
+                    inProximity.Add(enemy.userID);
+                }
             }
-            private void DestroyNotification()
+            void OnTriggerExit(Collider col)
             {
-                CuiHelper.DestroyUi(player, "ProxWarn");
-                GUIDestroyed = true;
+                var enemy = col.GetComponentInParent<BasePlayer>();
+                if (enemy != null && enemy != player && inProximity.Contains(enemy.userID))
+                {
+                    inProximity.Remove(enemy.userID);
+                    if (inProximity.Count == 0 && isEnabled)
+                    {
+                        ins.ProxCollisionLeave(player);
+                        destroyTimer = ins.timer.In(5, () => CuiHelper.DestroyUi(player, proxUI));
+                    }             
+                }
             }
         }
         #endregion
@@ -257,7 +260,10 @@ namespace Oxide.Plugins
             public float GUI_X_Dim { get; set; }
             public float GUI_Y_Pos { get; set; }
             public float GUI_Y_Dim { get; set; }
-            public float TriggerRadius { get; set; }          
+            public int FontSize { get; set; }
+            public float TriggerRadius { get; set; }    
+            public Dictionary<string, float> CustomPermissions { get; set; } 
+            public bool UseCustomPermissions { get; set; }     
         }
         private void LoadVariables()
         {
@@ -268,17 +274,23 @@ namespace Oxide.Plugins
         {
             var config = new ConfigData
             {
+                CustomPermissions = new Dictionary<string, float>
+                {
+                    { "proximityalert.vip1", 50 },
+                    { "proximityalert.vip2", 75 },
+                },
+                FontSize = 18,
                 GUI_X_Pos = 0.2f,
                 GUI_X_Dim = 0.6f,
                 GUI_Y_Pos = 0.1f,
-                GUI_Y_Dim = 0.2f,
-                TriggerRadius = 50f
+                GUI_Y_Dim = 0.16f,
+                TriggerRadius = 25f,
+                UseCustomPermissions = true
             };
             SaveConfig(config);
         }
         private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
         private void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
-        private void RegisterMessages() => lang.RegisterMessages(messages, this);
         #endregion
 
         #region Localization

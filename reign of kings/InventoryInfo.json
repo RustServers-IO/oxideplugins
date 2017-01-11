@@ -1,0 +1,16 @@
+{
+    "name": "InventoryInfo",
+    "description": "Saves player inventory info to file",
+    "author": "",
+    "version": "1.0.8",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/inventoryinfo.2153",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

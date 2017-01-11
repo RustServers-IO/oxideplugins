@@ -11,7 +11,7 @@ using IEnumerator = System.Collections.IEnumerator;
 
 namespace Oxide.Plugins
 {
-    [Info("TrapFloors", "Cheeze", "1.2", ResourceId = 2038)]
+    [Info("TrapFloors", "Cheeze", "1.2.1", ResourceId = 2038)]
     [Description("Allows players to make trap floors that collapse on non cupboard authorised players")]
 
     class TrapFloors : RustPlugin
@@ -133,7 +133,7 @@ namespace Oxide.Plugins
             {
                 yield return new WaitForSeconds(0.4f);
 
-                if (!ent.isDestroyed)
+                if (!ent.IsDestroyed)
                     ent.Kill(BaseNetworkable.DestroyMode.Gib);
             }
         }

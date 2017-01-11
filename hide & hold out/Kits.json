@@ -1,0 +1,16 @@
+{
+    "name": "Kits",
+    "description": "Create and give kits",
+    "author": "k1lly0u",
+    "version": "0.1.11",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/kits.1872",
+    "games": [
+        "hide & hold out"
+    ],
+    "keywords": [
+        "oxide",
+        "hide & hold out"
+    ]
+}

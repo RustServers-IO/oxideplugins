@@ -1,27 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Text;
-using Oxide.Core;
+using Rust;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("TwigsDecay", "Wulf/lukespragg/Nogrod", "2.0.1", ResourceId = 857)]
+    [Info("TwigsDecay", "Nogrod", "2.0.2", ResourceId = 857)]
+    [Description("Steadily decays buildings made of twigs. Works for other tiers, too, if configured to do so")]
+
     class TwigsDecay : RustPlugin
     {
-        private readonly FieldInfo entityListField = typeof(BaseNetworkable.EntityRealm).GetField("entityList", BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly FieldInfo decayTimer = typeof(DecayEntity).GetField("decayTimer", BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly FieldInfo decayDelayTime = typeof(DecayEntity).GetField("decayDelayTime", BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly Dictionary<string, float> damage = new Dictionary<string, float>();
-        private readonly Dictionary<BuildingGrade.Enum, float> damageGrade = new Dictionary<BuildingGrade.Enum, float>();
+        Dictionary<string, int> damage = new Dictionary<string, int>();
         int timespan;
-        bool ignoreAlivePlayers;
-        bool ignoreDecayTimer;
-        private readonly HashSet<string> blocks = new HashSet<string>();
-        private readonly HashSet<ulong> activePlayers = new HashSet<ulong>();
+        DateTime lastUpdate = DateTime.Now;
+        List<string> blocks = new List<string>();
+        bool initialized = false;
 
         // A list of all translateable texts
-        private readonly List<string> texts = new List<string>()
+        List<string> texts = new List<string>()
         {
             "Gate",
             "Twigs",
@@ -34,30 +31,23 @@ namespace Oxide.Plugins
             "%GRADE% buildings decay by %DAMAGE% HP per %TIMESPAN% minutes.",
             "%GRADE% buildings do not decay."
         };
-
-        private readonly Dictionary<string, string> messages = new Dictionary<string, string>();
+        Dictionary<string, string> messages = new Dictionary<string, string>();
 
         protected override void LoadDefaultConfig()
         {
             var damage = new Dictionary<string, object>() {
                 {"Gate"     , 0}, // health: 2000
-                {"Wall"     , 0}, // health: 2000
-                {"Twigs"    , 1}, // health: 5
-                {"Wood"     , 0}, // health: 250
+                {"Twigs"    , 1}, // health: 10
+                {"Wood"     , 1}, // health: 250
                 {"Stone"    , 0}, // health: 500
                 {"Metal"    , 0}, // health: 200
                 {"TopTier"  , 0}, // health: 1000
                 {"Barricade", 0}, // health: 350, 400, 500
-                {"Ladder"   , 0}  // health: 50
+                {"Ladder"   , 0} // health: 100
             };
-            Config["ignoreAlivePlayers"] = true;
-            Config["ignoreDecayTimer"] = false;
             Config["damage"] = damage;
-            Config["timespan"] = 288;
-            var blocks = new List<object>
-            {
-                //"block.halfheight",
-                //"block.halfheight.slanted",
+            Config["timespan"] = 15;
+            var blocks = new List<object>() {
                 "block.stair.lshape",
                 "block.stair.ushape",
                 "floor",
@@ -69,9 +59,9 @@ namespace Oxide.Plugins
                 "roof",
                 "wall",
                 "wall.doorway",
-                //"door.hinged",
                 "wall.external.high.wood",
                 "wall.external.high.stone",
+				"wall.external.high",
                 "wall.low",
                 "wall.window",
                 "wall.window.bars"
@@ -103,32 +93,20 @@ namespace Oxide.Plugins
             try
             {
                 var damageConfig = (Dictionary<string, object>)Config["damage"];
+                int val;
                 foreach (var cfg in damageConfig)
-                {
-                    float val = (val = Convert.ToSingle(cfg.Value)) >= 0 ? val : 0;
-                    try
-                    {
-                        var grade = (BuildingGrade.Enum)Enum.Parse(typeof (BuildingGrade.Enum), cfg.Key, false);
-                        damageGrade.Add(grade, val);
-                    }
-                    catch (Exception)
-                    {
-                        damage.Add(cfg.Key, val);
-                    }
-                }
+                    damage.Add(cfg.Key, (val = Convert.ToInt32(cfg.Value)) >= 0 ? val : 0);
                 timespan = Convert.ToInt32(Config["timespan"]);
                 if (timespan < 0)
                     timespan = 15;
-                ignoreAlivePlayers = Convert.ToBoolean(Config["ignoreAlivePlayers"]);
-                ignoreDecayTimer = Convert.ToBoolean(Config["ignoreDecayTimer"]);
                 var blocksConfig = (List<object>)Config["blocks"];
                 foreach (var cfg in blocksConfig)
                     blocks.Add(Convert.ToString(cfg));
+                initialized = true;
                 var customMessages = (Dictionary<string, object>)Config["messages"];
                 if (customMessages != null)
                     foreach (var pair in customMessages)
                         messages[pair.Key] = Convert.ToString(pair.Value);
-                timer.Every(timespan*60, OnTimer);
             }
             catch (Exception ex)
             {
@@ -136,104 +114,94 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnTimer()
+        void OnTick()
         {
-            var started = Interface.Oxide.Now;
+            if (!initialized)
+                return;
+            var now = DateTime.Now;
+            if (lastUpdate > now.AddMinutes(-timespan))
+                return;
+            lastUpdate = now;
             int blocksDecayed = 0;
             int blocksDestroyed = 0;
+            
+
+            var allBlocks = UnityEngine.Object.FindObjectsOfType<BuildingBlock>();
+            int amount;
+            foreach (var block in allBlocks)
+            {
+                try
+                {
+                    string name = block.ShortPrefabName;
+                    if (!blocks.Contains(name))
+                        continue;
+
+                    string grade = block.grade.ToString();
+                    if (damage.TryGetValue(grade, out amount) && amount > 0)
+                    {
+                        ++blocksDecayed;
+                        if (!decay(block, amount))
+                            ++blocksDestroyed;
+                    }
+                        
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+            
             int barricadesDecayed = 0;
             int barricadesDestroyed = 0;
+            if (damage.TryGetValue("Barricade", out amount) && amount > 0)
+            {
+                var allBarricades = UnityEngine.Object.FindObjectsOfType<Barricade>();
+                foreach (var barricade in allBarricades)
+                {
+                    if (barricade.IsDestroyed)
+                        continue;
+                    ++barricadesDecayed;
+                    if (!decay(barricade, amount))
+                        ++barricadesDestroyed;
+                }
+            }
+
             int laddersDecayed = 0;
             int laddersDestroyed = 0;
+            if (damage.TryGetValue("Ladder", out amount) && amount > 0)
+            {
+                var allLadders = UnityEngine.Object.FindObjectsOfType<BaseCombatEntity>();
+                foreach (var ladder in allLadders)
+                {
+                    if (ladder.IsDestroyed || !ladder.ShortPrefabName.StartsWith("ladder"))
+                        continue;
+                    ++laddersDecayed;
+                    if (!decay(ladder, amount))
+                        ++laddersDestroyed;
+                }
+            }
+
             int gatesDecayed = 0;
             int gatesDestroyed = 0;
-            int wallDecayed = 0;
-            int wallDestroyed = 0;
-
-            float barricadeAmount;
-            damage.TryGetValue("Barricade", out barricadeAmount);
-            float ladderAmount;
-            damage.TryGetValue("Ladder", out ladderAmount);
-            float gateAmount;
-            damage.TryGetValue("Gate", out gateAmount);
-            float wallAmount;
-            damage.TryGetValue("Wall", out wallAmount);
-
-            if (ignoreAlivePlayers)
+            if (damage.TryGetValue("Gate", out amount) && amount > 0)
             {
-                activePlayers.Clear();
-                foreach (var player in BasePlayer.activePlayerList)
-                    activePlayers.Add(player.userID);
-                foreach (var player in BasePlayer.sleepingPlayerList)
-                    activePlayers.Add(player.userID);
-            }
-
-            var entities = ((ListDictionary<uint, BaseNetworkable>)entityListField.GetValue(BaseNetworkable.serverEntities)).Values;
-            var kill = new List<BaseNetworkable>();
-            foreach (var entity in entities)
-            {
-                if (entity.isDestroyed) continue;
-                if (entity is BuildingBlock)
+                var allGates = UnityEngine.Object.FindObjectsOfType<BaseCombatEntity>();
+                foreach (var gate in allGates)
                 {
-                    var block = (BuildingBlock) entity;
-                    if (!blocks.Contains(Utility.GetFileNameWithoutExtension(block.PrefabName)))
+                    if (gate.IsDestroyed || !gate.ShortPrefabName.StartsWith("gates"))
                         continue;
-                    float amount;
-                    if (!damageGrade.TryGetValue(block.grade, out amount) || amount <= 0) continue;
-                    ++blocksDecayed;
-                    if (!decay(block, amount))
-                    {
-                        kill.Add(entity);
-                        ++blocksDestroyed;
-                    }
-                } else if (entity is Barricade)
-                {
-                    if (barricadeAmount <= 0) continue;
-                    ++barricadesDecayed;
-                    if (!decay((Barricade) entity, barricadeAmount))
-                    {
-                        kill.Add(entity);
-                        ++barricadesDestroyed;
-                    }
-                }
-                else if (entity is BaseCombatEntity)
-                {
-                    var combat = (BaseCombatEntity)entity;
-                    var prefab = Utility.GetFileNameWithoutExtension(combat.PrefabName);
-                    if (ladderAmount > 0 && prefab.StartsWith("ladder"))
-                    {
-                        ++laddersDecayed;
-                        if (!decay(combat, ladderAmount))
-                        {
-                            kill.Add(entity);
-                            ++laddersDestroyed;
-                        }
-                    }
-                    else if (gateAmount > 0 && prefab.StartsWith("gates.external"))
-                    {
-                        ++gatesDecayed;
-                        if (!decay(combat, gateAmount))
-                        {
-                            kill.Add(entity);
-                            ++gatesDestroyed;
-                        }
-                    }
-                    else if (wallAmount > 0 && prefab.StartsWith("wall.external"))
-                    {
-                        ++wallDecayed;
-                        if (!decay(combat, wallAmount))
-                        {
-                            kill.Add(entity);
-                            ++wallDestroyed;
-                        }
-                    }
+                    ++gatesDecayed;
+                    if (!decay(gate, amount))
+                        ++gatesDestroyed;
                 }
             }
-            foreach (var networkable in kill)
-                networkable.KillMessage();
 
-            Puts($"Decayed {blocksDecayed} blocks ({blocksDestroyed} destroyed), {barricadesDecayed} barricades ({barricadesDestroyed} destroyed) and {gatesDecayed} gates ({gatesDestroyed} destroyed) and {wallDecayed} walls ({wallDestroyed} destroyed) and {laddersDecayed} ladders ({laddersDestroyed} destroyed)");
-            Puts("Took: {0}", Interface.Oxide.Now - started);
+            Puts("{0}: {1}", Title, "Decayed " +
+                blocksDecayed + " blocks (" + blocksDestroyed + " destroyed), " +
+                barricadesDecayed + " barricades (" + barricadesDestroyed + " destroyed) and " +
+                gatesDecayed + " gates (" + gatesDestroyed + " destroyed) and " +
+                laddersDecayed + " ladders (" + laddersDestroyed + " destroyed)"
+            );
         }
 
         void SendHelpText(BasePlayer player)
@@ -267,16 +235,15 @@ namespace Oxide.Plugins
         }
 
         // Decays an entity, returns false if destroyed
-        private bool decay(BaseCombatEntity entity, float amount)
+        static bool decay(BaseCombatEntity entity, float amount)
         {
-            var decay = entity as DecayEntity;
-            if (!ignoreDecayTimer && decay != null && (float)decayTimer.GetValue(decay) < (float)decayDelayTime.GetValue(decay)) return true;
-            if (entity.OwnerID == 0 || ignoreAlivePlayers && activePlayers.Contains(entity.OwnerID)) return true;
-            //if (decay != null && !decay.enabled) return true;
             entity.health -= amount;
-            if (entity.health <= 0f)
-                return false;
             entity.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+            if (entity.health <= 0f)
+            {
+                entity.Die();
+                return false;
+            }
             return true;
         }
     }

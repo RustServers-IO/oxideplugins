@@ -1,0 +1,16 @@
+{
+    "name": "KickBan",
+    "description": "Kick or ban players through chat",
+    "author": "k1lly0u",
+    "version": "0.1.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/kickban.1867",
+    "games": [
+        "hide & hold out"
+    ],
+    "keywords": [
+        "oxide",
+        "hide & hold out"
+    ]
+}

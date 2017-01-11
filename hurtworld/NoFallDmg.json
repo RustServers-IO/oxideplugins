@@ -1,0 +1,16 @@
+{
+    "name": "No Fall Damage",
+    "description": "Disables damage when falling",
+    "author": "Noviets",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/no-fall-damage.1821",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

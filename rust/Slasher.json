@@ -2,7 +2,7 @@
     "name": "Slasher",
     "description": "GTA 5 Slasher event arena game mode",
     "author": "k1lly0u",
-    "version": "0.1.32",
+    "version": "0.2.1",
     "configuration": true,
     "require": {
         "EventManager": "*",

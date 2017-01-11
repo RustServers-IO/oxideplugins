@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿//Reference: Rust.Workshop
+using System.Collections.Generic;
 using System;
 using System.Linq;
 using UnityEngine;
@@ -6,15 +7,11 @@ using Oxide.Core.Plugins;
 using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core;
-using System.Collections;
-using System.IO;
-using System.Text;
 using Oxide.Core.Libraries.Covalence;
-using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutCombat", "Absolut", "2.2.2", ResourceId = 2103)]
+    [Info("AbsolutCombat", "Absolut", "2.3.0", ResourceId = 2103)]
 
     class AbsolutCombat : RustPlugin
     {
@@ -22,6 +19,9 @@ namespace Oxide.Plugins
 
         [PluginReference]
         Plugin EventManager;
+
+        [PluginReference]
+        Plugin AbsolutWar;
 
         [PluginReference]
         Plugin ServerRewards;
@@ -38,20 +38,18 @@ namespace Oxide.Plugins
         Gear_Weapon_Data gwData;
         private DynamicConfigFile GWData;
 
-        SavedPlayers playerData;
+        SavedPlayer playerData;
         private DynamicConfigFile PlayerData;
 
         string TitleColor = "<color=orange>";
         string MsgColor = "<color=#A9A9A9>";
-        bool localimages = true;
 
         private Dictionary<ulong, Timer> PlayerGearSetTimer = new Dictionary<ulong, Timer>();
         private Dictionary<ulong, Timer> PlayerWeaponSetTimer = new Dictionary<ulong, Timer>();
         private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
         private Dictionary<ulong, PurchaseItem> PendingPurchase = new Dictionary<ulong, PurchaseItem>();
         private Dictionary<ulong, PurchaseItem> SetSelection = new Dictionary<ulong, PurchaseItem>();
-        private Dictionary<ulong, Dictionary<string, Dictionary<string, List<string>>>> WeaponSelection = new Dictionary<ulong, Dictionary<string, Dictionary<string, List<string>>>>();
-        private List<ACPlayer> ACPlayers = new List<ACPlayer>();
+        Dictionary<string, List<ulong>> ItemSkins = new Dictionary<string, List<ulong>>();
 
         private Dictionary<ulong, GearCollectionCreation> NewGearCollection = new Dictionary<ulong, GearCollectionCreation>();
         private Dictionary<ulong, WeaponCollectionCreation> NewWeaponCollection = new Dictionary<ulong, WeaponCollectionCreation>();
@@ -63,13 +61,14 @@ namespace Oxide.Plugins
         {
             public bool open;
             public bool admin;
+            public bool weapon;
+            public bool gear;
             public string GearSet;
             public string WeaponSet;
             public int GearIndex;
             public int WeaponIndex;
+            public int page;
         }
-
-
 
         //corpses///
         private readonly string corpsePrefab = "assets/prefabs/player/player_corpse.prefab";
@@ -87,21 +86,26 @@ namespace Oxide.Plugins
         void Unload()
         {
             foreach (var player in BasePlayer.activePlayerList)
-            {
-                if (GetACPlayer(player))
-                    DestroyACPlayer(GetACPlayer(player));
-            }
+                    DestroyACPlayer(player);
             foreach (var timer in timers)
                 timer.Value.Destroy();
             timers.Clear();
             SaveData();
-            ACPlayers.Clear();
         }
 
         void OnServerInitialized()
         {
+            try
+            {
+                ImageLibrary.Call("isLoaded", null);
+            }
+            catch (Exception)
+            {
+                PrintWarning("No Image Library.. load ImageLibrary to use this Plugin", Name);
+                Interface.Oxide.UnloadPlugin(Name);
+                return;
+            }
             LoadVariables();
-            LoadData();
             if (configData.UseServerRewards)
             {
                 try
@@ -134,6 +138,10 @@ namespace Oxide.Plugins
                     return;
                 }
             }
+            LoadData();
+            AddImage("http://i.imgur.com/OjuRPqa.png", "down", (ulong)ResourceId);
+            AddImage("http://i.imgur.com/Eu9QHKr.png", "up", (ulong)ResourceId);
+            InitializeSkins();
             foreach (BasePlayer p in BasePlayer.activePlayerList)
             {
                 OnPlayerInit(p);
@@ -141,6 +149,27 @@ namespace Oxide.Plugins
             timers.Add("info", timer.Once(900, () => InfoLoop()));
             timers.Add("save", timer.Once(600, () => SaveLoop()));
             timers.Add("cond", timer.Once(120, () => CondLoop()));
+        }
+
+
+        private void InitializeSkins()
+        {
+            foreach (var itemDef in ItemManager.GetItemDefinitions())
+            {
+                List<ulong> skins;
+                skins = new List<ulong> { 0 };
+                skins.AddRange(ItemSkinDirectory.ForItem(itemDef).Select(skin => Convert.ToUInt64(skin.id)));
+                List<ulong> templist = GetImageList(itemDef.shortname);
+                if (templist != null && templist.Count >= 1)
+                    foreach (var entry in templist.Where(k => !skins.Contains(k)))
+                        skins.Add(entry);
+                ItemSkins.Add(itemDef.shortname, skins);
+            }
+            foreach (var shopskin in Rust.Workshop.Approved.All.Where(skin => skin.ItemType.ItemName != null && skin.ItemType.ItemName != ""))
+            {
+                if (!ItemSkins[shopskin.ItemType.ItemName].Contains(shopskin.WorkshopdId))
+                    ItemSkins[shopskin.ItemType.ItemName].Add(shopskin.WorkshopdId);
+            }
         }
 
         private void OnPlayerInit(BasePlayer player)
@@ -163,17 +192,25 @@ namespace Oxide.Plugins
                         return;
             }
             DestroyUI(player);
-            if (GetACPlayer(player).PlayerGearSets.Count() < 1)
+            if (!playerData.players.ContainsKey(player.userID))
             {
-                //UnityEngine.Object.Destroy(player);
-                ACPlayers.Remove(GetACPlayer(player));
                 InitializeACPlayer(player);
+                return;
             }
-            player.inventory.Strip();
-            GiveSet(player);
-            GiveWeapon(player);
+            CheckCollections(player);
+            if (!AbsolutWar)
+            {
+                GiveGearCollection(player);
+                GiveWeaponCollection(player);
+            }
             player.health = 100f;
-            PlayerHUD(player);
+        }
+
+        private bool DataCheck (BasePlayer player)
+        {
+            if (!playerData.players.ContainsKey(player.userID))
+                return false;
+            return true;
         }
 
         private void OnEntityDeath(BaseEntity entity, HitInfo hitInfo)
@@ -185,7 +222,7 @@ namespace Oxide.Plugins
                 if (entity is BasePlayer && hitInfo.Initiator is BasePlayer)
                 {
                     if (entity as BasePlayer == null || hitInfo == null) return;
-                    if (!GetACPlayer(attacker) || !GetACPlayer(victim)) return;
+                    if (!DataCheck(attacker) || !DataCheck(victim)) return;
                     if (victim.userID != attacker.userID)
                     {
                         if (EventManager)
@@ -195,16 +232,18 @@ namespace Oxide.Plugins
                                 if ((bool)isPlaying)
                                     return;
                         }
-                        GetACPlayer(attacker).kills += 1;
-                        GetACPlayer(victim).deaths += 1;
+                        playerData.players[attacker.userID].kills += 1;
+                        playerData.players[attacker.userID].TotalKills += 1;
+                        playerData.players[victim.userID].deaths += 1;
+                        playerData.players[victim.userID].TotalDeaths += 1;
                         if (configData.UseServerRewards)
                             SRAction(attacker.userID, configData.KillReward, "ADD");
                         else if (configData.UseEconomics)
                                 ECOAction(attacker.userID, configData.KillReward, "ADD");
                             else
-                            GetACPlayer(attacker).money += configData.KillReward;
-                        GetACPlayer(attacker).GearSetKills[GetACPlayer(attacker).currentGearSet] += 1;
-                        GetACPlayer(attacker).WeaponSetKills[GetACPlayer(attacker).currentWeaponSet] += 1;
+                            playerData.players[attacker.userID].money += configData.KillReward;
+                        playerData.players[attacker.userID].GearCollectionKills[playerData.players[attacker.userID].Gear.collectionname] += 1;
+                        playerData.players[attacker.userID].WeaponCollectionKills[playerData.players[attacker.userID].Weapons.collectionname] += 1;
                         SendDeathNote(attacker, victim);
                         PlayerHUD(attacker);
                     }
@@ -273,247 +312,234 @@ namespace Oxide.Plugins
             SaveCollect(player);
         }
 
-        void OnEntitySpawned(BaseNetworkable entity)
-        {
-            if (entity != null)
-            {
-                corpsePrefabId = StringPool.Get(corpsePrefab);
-                if (configData.UseEnviroControl)
-                {
-                    if (entity.prefabID == corpsePrefabId)
-                    {
-                        entity.Kill();
-                    }
-                    var collectible = entity as CollectibleEntity;
-                    if (collectible != null)
-                    {
-                        collectible.itemList = null;
-                    }
-                    var worldItem = entity as WorldItem;
-                    if (worldItem != null)
-                    {
-                        worldItem.allowPickup = false;
-                    }
-                    var Heli = entity as BaseHelicopter;
-                    if (Heli != null)
-                    {
-                        Heli.Kill();
-                    }
-                    var Plane = entity as CargoPlane;
-                    if (Plane != null)
-                    {
-                        Plane.Kill();
-                    }
-                }
-            }
-        }
+        //void OnEntitySpawned(BaseNetworkable entity)
+        //{
+        //    if (entity != null)
+        //    {
+        //        corpsePrefabId = StringPool.Get(corpsePrefab);
+        //        if (configData.UseEnviroControl)
+        //        {
+        //            if (entity.prefabID == corpsePrefabId)
+        //            {
+        //                entity.Kill();
+        //            }
+        //            var collectible = entity as CollectibleEntity;
+        //            if (collectible != null)
+        //            {
+        //                collectible.itemList = null;
+        //            }
+        //            var worldItem = entity as WorldItem;
+        //            if (worldItem != null)
+        //            {
+        //                worldItem.allowPickup = false;
+        //            }
+        //            var Heli = entity as BaseHelicopter;
+        //            if (Heli != null)
+        //            {
+        //                Heli.Kill();
+        //            }
+        //            var Plane = entity as CargoPlane;
+        //            if (Plane != null)
+        //            {
+        //                Plane.Kill();
+        //            }
+        //        }
+        //    }
+        //}
 
-        private void OnLootEntity(BasePlayer looter, BaseEntity target)
-        {
-            if (configData.UseEnviroControl && !isAuth(looter))
-            {
-                if ((target as StorageContainer)?.transform.position == Vector3.zero) return;
-                timer.Once(0.01f, looter.EndLooting);
-            }
-        }
+        //private void OnLootEntity(BasePlayer looter, BaseEntity target)
+        //{
+        //    if (configData.UseEnviroControl && !isAuth(looter))
+        //    {
+        //        if ((target as StorageContainer)?.transform.position == Vector3.zero) return;
+        //        timer.Once(0.01f, looter.EndLooting);
+        //    }
+        //}
 
-        void OnPlantGather(PlantEntity Plant, Item item, BasePlayer player)
-        {
-            if (configData.UseEnviroControl && !isAuth(player))
-            {
-                item.amount = 0;
-            }
-        }
+        //void OnPlantGather(PlantEntity Plant, Item item, BasePlayer player)
+        //{
+        //    if (configData.UseEnviroControl && !isAuth(player))
+        //    {
+        //        item.amount = 0;
+        //    }
+        //}
 
 
-        void OnCollectiblePickup(Item item, BasePlayer player)
-        {
-            if (configData.UseEnviroControl && !isAuth(player))
-            {
-                item.amount = 0;
-            }
-        }
-        void OnDispenserGather(ResourceDispenser Dispenser, BaseEntity entity, Item item)
-        {
-            BasePlayer player = entity.ToPlayer();
-            if (configData.UseEnviroControl && !isAuth(player))
-            {
-                item.amount = 0;
-            }
-        }
+        //void OnCollectiblePickup(Item item, BasePlayer player)
+        //{
+        //    if (configData.UseEnviroControl && !isAuth(player))
+        //    {
+        //        item.amount = 0;
+        //    }
+        //}
+        //void OnDispenserGather(ResourceDispenser Dispenser, BaseEntity entity, Item item)
+        //{
+        //    BasePlayer player = entity.ToPlayer();
+        //    if (configData.UseEnviroControl && !isAuth(player))
+        //    {
+        //        item.amount = 0;
+        //    }
+        //}
 
-        object OnItemCraft(ItemCraftTask task, BasePlayer crafter)
-        {
-            if (configData.UseEnviroControl && !isAuth(crafter))
-            {
-                task.cancelled = true;
-            }
-            return null;
-        }
+        //object OnItemCraft(ItemCraftTask task, BasePlayer crafter)
+        //{
+        //    if (configData.UseEnviroControl && !isAuth(crafter))
+        //    {
+        //        task.cancelled = true;
+        //    }
+        //    return null;
+        //}
         #endregion
 
         #region Functions
-
-        private string TryForImage(string shortname, ulong skin = 0)
+        private string TryForImage(string shortname, ulong skin = 99, bool localimage = true)
         {
-            if (localimages)
-                return GetImage(shortname, skin);
-            return GetImageURL(shortname, skin);
+            if (localimage)
+                if (skin == 99)
+                    return GetImage(shortname, (ulong)ResourceId);
+                else return GetImage(shortname, skin);
+            else if (skin == 99)
+                return GetImageURL(shortname, (ulong)ResourceId);
+            else return GetImageURL(shortname, skin);
         }
 
         public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
         public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
         public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname);
+
 
         private void InitializeACPlayer(BasePlayer player)
         {
-            if (!player.GetComponent<ACPlayer>())
+            if (!playerData.players.ContainsKey(player.userID))
+                playerData.players.Add(player.userID, new Player { deaths = 0, kills = 0, TotalDeaths = 0, TotalKills = 0, money = 0, GearCollectionKills = new Dictionary<string, int>(), WeaponSelection = new Dictionary<string, Dictionary<string, List<string>>>(), Gear = new CurrentGear(), Weapons = new CurrentWeapons(), GearCollections = new Dictionary<string, List<string>>(), WeaponCollections = new Dictionary<string, Dictionary<string, List<string>>>(), WeaponCollectionKills = new Dictionary<string, int>() });
+            else
             {
-                if (playerData.players.ContainsKey(player.userID))
-                {
-                    //if (playerData.priorSave.ContainsKey(player.userID))
-                    //{
-                    //    if (playerData.players[player.userID].PlayerGearSets.Count() < 1 && playerData.priorSave[player.userID].PlayerGearSets.Count() > 0)
-                    //    {
-                    //        playerData.players[player.userID] = playerData.priorSave[player.userID];
-                    //    }
-                    //}
-                    //if (playerData.players[player.userID].PlayerGearSets.Count() < 1 && playerData.priorSave[player.userID].PlayerGearSets.Count() < 1)
-                    //{
-                    //    playerData.players.Remove(player.userID);
-                    //    playerData.priorSave.Remove(player.userID);
-                    //    InitializeACPlayer(player);
-                    //    return;
-                    //}
-                    ACPlayers.Add(player.gameObject.AddComponent<ACPlayer>());
-                    ACPlayer ac = GetACPlayer(player);
-                    var d = playerData.players[player.userID];
-                    ac.deaths = d.deaths;
-                    ac.kills = d.kills;
-                    ac.money = d.money;
-                    ac.PlayerGearSets = d.PlayerGearSets;
-                    ac.PlayerWeaponSets = d.PlayerWeaponSets;
-                    ac.GearSetKills = d.GearSetKills;
-                    ac.WeaponSetKills = d.WeaponSetKills;
-                    ac.currentGearSet = d.lastgearSet;
-                    ac.currentWeaponSet = d.lastweaponSet;
-                    ac.CurrentWeapons = d.lastWeapons;
-                }
-                else
-                {
-                    ACPlayers.Add(player.gameObject.AddComponent<ACPlayer>());
-                    ACPlayer ac = GetACPlayer(player);
-                    ac.currentGearSet = null;
-                    ac.kills = 0;
-                    ac.deaths = 0;
-                    ac.money = 0;
-                }
+                playerData.players[player.userID].kills = 0;
+                playerData.players[player.userID].deaths = 0;
             }
-            CheckSets(GetACPlayer(player));
+            CheckCollections(player);
         }
 
-        void CheckSets(ACPlayer player)
+        void CheckCollections(BasePlayer player)
         {
+            if (!playerData.players.ContainsKey(player.userID)) { InitializeACPlayer(player); return; }
+            //if (gwData.GearSets != null || gwData.GearSets.Count() == 0)
             foreach (var entry in gwData.GearSets.Where(kvp => kvp.Value.cost == 0))
-                if (!player.PlayerGearSets.ContainsKey(entry.Key))
-                {
-                    player.PlayerGearSets.Add(entry.Key, new List<string>());
-                    player.GearSetKills.Add(entry.Key, 0);
-                    foreach (var gear in gwData.GearSets[entry.Key].set.Where(kvp => kvp.free == true))
-                        player.PlayerGearSets[entry.Key].Add(gear.shortname);
-                }
-            foreach (var entry in gwData.WeaponSets.Where(kvp => kvp.Value.cost == 0))
-                if (!player.PlayerWeaponSets.ContainsKey(entry.Key))
-                {
-                    player.PlayerWeaponSets.Add(entry.Key, new Dictionary<string, List<string>>());
-                    player.WeaponSetKills.Add(entry.Key, 0);
+                    if (!playerData.players[player.userID].GearCollections.ContainsKey(entry.Key))
+                    {
+                        playerData.players[player.userID].GearCollections.Add(entry.Key, new List<string>());
+                        playerData.players[player.userID].GearCollectionKills.Add(entry.Key, 0);
+                        foreach (var gear in gwData.GearSets[entry.Key].set.Where(kvp => kvp.free == true))
+                            playerData.players[player.userID].GearCollections[entry.Key].Add(gear.shortname);
+                    }
+            //if (gwData.WeaponSets != null || gwData.WeaponSets.Count() == 0)
+                foreach (var entry in gwData.WeaponSets.Where(kvp => kvp.Value.cost == 0))
+                    if (!playerData.players[player.userID].WeaponCollections.ContainsKey(entry.Key))
+                    {
+                        playerData.players[player.userID].WeaponCollections.Add(entry.Key, new Dictionary<string, List<string>>());
+                        playerData.players[player.userID].WeaponCollectionKills.Add(entry.Key, 0);
                     foreach (var weapons in gwData.WeaponSets[entry.Key].set.Where(kvp => kvp.free == true))
-                        player.PlayerWeaponSets[entry.Key].Add(weapons.shortname, new List<string>());
+                    {
+                        playerData.players[player.userID].WeaponCollections[entry.Key].Add(weapons.shortname, new List<string>());
+                        foreach (var attachment in weapons.attachments.Where(kvp=>kvp.Value.free == true))
+                            playerData.players[player.userID].WeaponCollections[entry.Key][weapons.shortname].Add(attachment.Value.shortname);
+                    }
                 }
             List<string> gearset = new List<string>();
             List<string> weaponset = new List<string>();
-            foreach (var entry in player.PlayerGearSets)
+            //Puts("1");
+            foreach (var entry in playerData.players[player.userID].GearCollections)
                 if (!gwData.GearSets.ContainsKey(entry.Key))
                 {
                     gearset.Add(entry.Key);
-                    if (player.currentGearSet == entry.Key)
+                    if (playerData.players[player.userID].Gear.collectionname == entry.Key)
                     {
-                        player.currentGearSet = null;
+                        StripGear(player);
+                        playerData.players[player.userID].Gear = null;
                     }
                 }
-            foreach (var entry in player.PlayerWeaponSets)
+            //Puts("2");
+            foreach (var entry in playerData.players[player.userID].WeaponCollections)
                 if (!gwData.WeaponSets.ContainsKey(entry.Key))
                 {
                     weaponset.Add(entry.Key);
-                    if (GetACPlayer(player.player).currentWeaponSet == entry.Key)
+                    if (playerData.players[player.userID].Weapons.collectionname == entry.Key)
                     {
-                        player.CurrentWeapons.Clear();
-                        player.currentWeaponSet = null;
+                        StripWeapons(player);
+                        playerData.players[player.userID].Weapons = null;
                     }
                 }
+            //Puts("3");
             if (gearset != null)
                 foreach (var entry in gearset)
                 {
-                    player.PlayerGearSets.Remove(entry);
-                    player.GearSetKills.Remove(entry);
+                    playerData.players[player.userID].GearCollections.Remove(entry);
+                    playerData.players[player.userID].GearCollectionKills.Remove(entry);
                 }
+            //Puts("4");
             if (weaponset != null)
                 foreach (var entry in weaponset)
                 {
-                    player.PlayerWeaponSets.Remove(entry);
-                    player.WeaponSetKills.Remove(entry);
+                    playerData.players[player.userID].WeaponCollections.Remove(entry);
+                    playerData.players[player.userID].WeaponCollectionKills.Remove(entry);
                 }
-            if (!gwData.GearSets.ContainsKey(player.currentGearSet)) player.currentGearSet = null;
-            if (!gwData.WeaponSets.ContainsKey(player.currentWeaponSet)) player.currentWeaponSet = null;
-            if (string.IsNullOrEmpty(player.currentGearSet) && player.PlayerGearSets.Count() > 0)
-                player.currentGearSet = player.PlayerGearSets.First().Key;
-
-            if (string.IsNullOrEmpty(player.currentWeaponSet) && player.PlayerWeaponSets.Count() > 0 || player.CurrentWeapons == null && player.PlayerWeaponSets.Count() > 0)
+            //Puts("5");
+            if (playerData.players[player.userID].Gear != null)
             {
-                Puts("TRYING");
-                player.currentWeaponSet = player.PlayerWeaponSets.First().Key;
-                if (player.CurrentWeapons == null)
-                    player.CurrentWeapons = new Dictionary<string, List<string>>();
-                else player.CurrentWeapons.Clear();
-                foreach (var wp in player.PlayerWeaponSets[player.currentWeaponSet])
+                if (string.IsNullOrEmpty(playerData.players[player.userID].Gear.collectionname)) playerData.players[player.userID].Gear.gear = null;
+                else if (!gwData.GearSets.ContainsKey(playerData.players[player.userID].Gear.collectionname))
                 {
-                    Puts($"ADDING:{wp.Key}");
-                    player.CurrentWeapons.Add(wp.Key, new List<string>());
-                    Puts("Items done");
+                    playerData.players[player.userID].Gear.collectionname = null;
+                    playerData.players[player.userID].Gear.gear = null;
+                }
+                if (string.IsNullOrEmpty(playerData.players[player.userID].Gear.collectionname) && playerData.players[player.userID].GearCollections.Count() > 0)
+                {
+                    playerData.players[player.userID].Gear.collectionname = playerData.players[player.userID].GearCollections.First().Key;
+                    GiveGearCollection(player);
                 }
             }
-            player.player.inventory.Strip();
-            GiveSet(player.player);
-            GiveWeapon(player.player);
-            PlayerHUD(player.player);
+            //Puts("6");
+            if (playerData.players[player.userID].Weapons != null)
+            {
+                if (string.IsNullOrEmpty(playerData.players[player.userID].Weapons.collectionname)) playerData.players[player.userID].Weapons.weapons = null;
+                else if (!gwData.WeaponSets.ContainsKey(playerData.players[player.userID].Weapons.collectionname))
+                {
+                    playerData.players[player.userID].Weapons.collectionname = null;
+                    playerData.players[player.userID].Weapons.weapons = null;
+                }
+                if (string.IsNullOrEmpty(playerData.players[player.userID].Weapons.collectionname) && playerData.players[player.userID].WeaponCollections.Count() > 0 || playerData.players[player.userID].Weapons.weapons == null && playerData.players[player.userID].WeaponCollections.Count() > 0)
+                {
+                    if (playerData.players[player.userID].WeaponSelection.ContainsKey(playerData.players[player.userID].WeaponCollections.First().Key))
+                    {
+                        playerData.players[player.userID].Weapons.collectionname = playerData.players[player.userID].WeaponCollections.First().Key;
+                        GiveWeaponCollection(player);
+                    }
+                }
+            }
+            //Puts("7");
+            PlayerHUD(player);
         }
 
         private object CheckPoints(ulong ID) => ServerRewards?.Call("CheckPoints", ID);
 
-        void DestroyACPlayer(ACPlayer player)
+        void DestroyACPlayer(BasePlayer player)
         {
-            if (player.player == null) return;
+            if (player == null) return;
             {
-                SaveACPlayer(player);
-                DestroyUI(player.player);
-                player.player.Command($"bind {configData.MenuKeyBinding} \"\"");
-                player.player.Command($"bind tab \"inventory.toggle\"");
-                if (ACPlayers.Contains(player))
-                {
-                    UnityEngine.Object.Destroy(player);
-                    ACPlayers.Remove(player);
-                }
-                ACUIInfo.Remove(player.player.userID);
+                DestroyUI(player);
+                player.Command($"bind {configData.MenuKeyBinding} \"\"");
+                player.Command($"bind tab \"inventory.toggle\"");
+                ACUIInfo.Remove(player.userID);
             }
         }
 
-        ACPlayer GetACPlayer(BasePlayer player)
-        {
-            if (!player.GetComponent<ACPlayer>())
-                return null;
-            else return player.GetComponent<ACPlayer>();
-        }
 
+        private void OnPlayerDisconnected(BasePlayer player)
+        {
+            DestroyACPlayer(player);
+            SaveData();
+        }
 
         private string GetLang(string msg)
         {
@@ -582,12 +608,14 @@ namespace Oxide.Plugins
         private void OpenACUI(BasePlayer player)
         {
             if (!ACUIInfo.ContainsKey(player.userID))
-                ACUIInfo.Add(player.userID, new screen { admin = false, open = true, GearIndex = 0, GearSet = "", WeaponIndex = 0, WeaponSet = "" });
+                ACUIInfo.Add(player.userID, new screen { admin = false, open = true, GearIndex = 0, GearSet = "", WeaponIndex = 0, WeaponSet = "", page = 0});
             ACPanel(player);
             GearListPanel(player);
             WeaponListPanel(player);
-            GearPanel(player);
-            WeaponPanel(player);
+            if (ACUIInfo[player.userID].weapon)
+                WeaponPanel(player);
+            else if (ACUIInfo[player.userID].gear)
+                GearPanel(player);
         }
 
 
@@ -597,6 +625,16 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, PanelOnScreen);
             CuiHelper.DestroyUi(player, PanelPurchaseConfirmation);
             CuiHelper.DestroyUi(player, PanelStats);
+        }
+
+
+        [ConsoleCommand("UI_DestroyACPanel")]
+        private void cmdUI_DestroyACPanel(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            DestroyACPanel(player);
         }
 
         public void DestroyACPanel(BasePlayer player)
@@ -633,12 +671,22 @@ namespace Oxide.Plugins
             if (!SavingCollection.ContainsKey(player.userID)) return;
             var index = 0;
             var name = "";
+            bool used = true;
             var type = SavingCollection[player.userID];
             if (type == "gear")
             {
                 if (gwData.GearSets.Count == 0)
                     index = 0;
-                else index = gwData.GearSets.Max(kvp => kvp.Value.index) + 1;
+                else
+                {
+                    List<int> AllIndexes = new List<int>();
+                    foreach (var entry in gwData.GearSets) AllIndexes.Add(entry.Value.index);
+                        while (used == true)
+                    {
+                        if (AllIndexes.Contains(index)) index++;
+                        else used = false;
+                    }
+                }
                 List<Gear> gearlist = new List<Gear>();
                 foreach (var entry in NewGearCollection[player.userID].collection.set)
                     gearlist.Add(entry.Value);
@@ -651,7 +699,16 @@ namespace Oxide.Plugins
             {
                 if (gwData.WeaponSets.Count == 0)
                     index = 0;
-                else index = gwData.WeaponSets.Max(kvp => kvp.Value.index) + 1;
+                else
+                {
+                    List<int> AllIndexes = new List<int>();
+                    foreach (var entry in gwData.WeaponSets) AllIndexes.Add(entry.Value.index);
+                    while (used == true)
+                    {
+                        if (AllIndexes.Contains(index)) index++;
+                        else used = false;
+                    }
+                }
                 List<Weapon> gearlist = new List<Weapon>();
                 foreach (var entry in NewWeaponCollection[player.userID].collection.set)
                     gearlist.Add(entry.Value);
@@ -664,6 +721,8 @@ namespace Oxide.Plugins
             GetSendMSG(player, "NewCollectionCreated", type.ToUpper(), name);
             DestroyACPanel(player);
             SaveData();
+            foreach (var p in BasePlayer.activePlayerList)
+                CheckCollections(p);
         }
 
 
@@ -876,12 +935,12 @@ namespace Oxide.Plugins
                         requestor = player.userID;
                     if (type == "weapon")
                     {
-                        if (gwData.WeaponSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].PlayerWeaponSets.ContainsKey(collection))
+                        if (gwData.WeaponSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].WeaponCollections.ContainsKey(collection))
                             AddKills(foundPlayers[0].userID, amount, type, collection, requestor);
                         }
                     else if (type == "gear")
                     {
-                            if (gwData.GearSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].PlayerGearSets.ContainsKey(collection))
+                            if (gwData.GearSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].GearCollections.ContainsKey(collection))
                                 AddKills(foundPlayers[0].userID, amount, type, collection, requestor);
                         }
                     PlayerHUD(foundPlayers[0]);
@@ -945,12 +1004,12 @@ namespace Oxide.Plugins
                         requestor = player.userID;
                     if (type == "weapon")
                     {
-                        if (gwData.WeaponSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].PlayerWeaponSets.ContainsKey(collection))
+                        if (gwData.WeaponSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].WeaponCollections.ContainsKey(collection))
                             TakeKills(foundPlayers[0].userID, amount, type, collection, requestor);
                     }
                     else if (type == "gear")
                     {
-                        if (gwData.GearSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].PlayerGearSets.ContainsKey(collection))
+                        if (gwData.GearSets.ContainsKey(collection) && playerData.players[foundPlayers[0].userID].GearCollections.ContainsKey(collection))
                             TakeKills(foundPlayers[0].userID, amount, type, collection, requestor);
                     }
                     PlayerHUD(foundPlayers[0]);
@@ -1039,7 +1098,6 @@ namespace Oxide.Plugins
 
         public class UI
         {
-            static bool localimage = true;
             static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
@@ -1090,14 +1148,14 @@ namespace Oxide.Plugins
 
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (UI.localimage)
+                if (img.Contains("http"))
                 {
                     container.Add(new CuiElement
                     {
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Png = img },
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -1108,7 +1166,7 @@ namespace Oxide.Plugins
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Url = img },
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -1244,7 +1302,7 @@ namespace Oxide.Plugins
         void GearListPanel(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, GLPanel);
-            var element = UI.CreateElementContainer(GLPanel, UIColors["dark"], "0.05 0.5", "0.15 0.8",true);
+            var element = UI.CreateElementContainer(GLPanel, UIColors["dark"], "0.15 0.5", "0.25 0.8",true);
             UI.CreatePanel(ref element, GLPanel, UIColors["light"], $"0.05 0.03", $".95 .97");
             UI.CreateTextOutline(ref element, GLPanel, UIColors["white"], UIColors["black"], GetLang("GearCollection"), 14, "1", "1", "0.1 0.85", "0.9 0.94", TextAnchor.MiddleCenter);
             if (gwData.GearSets.Count() >= 1)
@@ -1265,7 +1323,7 @@ namespace Oxide.Plugins
                     if (entry.Value.index > ACUIInfo[player.userID].GearIndex + 6) continue;
                     var pos = CalcSetButtons(entry.Value.index - ACUIInfo[player.userID].GearIndex);
                     if (ACUIInfo[player.userID].GearSet == entry.Key) UI.CreatePanel(ref element, GLPanel, UIColors["yellow"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    else if (GetACPlayer(player).PlayerGearSets.ContainsKey(entry.Key)) UI.CreatePanel(ref element, GLPanel, UIColors["green"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    else if (playerData.players[player.userID].GearCollections.ContainsKey(entry.Key)) UI.CreatePanel(ref element, GLPanel, UIColors["green"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
                     else UI.CreatePanel(ref element, GLPanel, UIColors["red"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
                     UI.CreateButton(ref element, GLPanel, "0 0 0 0", entry.Key, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_ChangeGearSet {entry.Key}", TextAnchor.MiddleCenter);
                 }
@@ -1273,13 +1331,15 @@ namespace Oxide.Plugins
             if (ACUIInfo[player.userID].admin)
                 if (!NewGearCollection.ContainsKey(player.userID))
                     UI.CreateButton(ref element, GLPanel, UIColors["blue"], GetLang("CreateCollection"), 10, "0.1 -0.11", "0.9 -0.01", $"UI_CreateGearSet");
+            else
+                    UI.CreateButton(ref element, GLPanel, UIColors["red"], GetLang("CancelCollection"), 10,"0.1 -0.11", "0.9 -0.01", $"UI_CancelGearSet");
             CuiHelper.AddUi(player, element);
         }
 
         void WeaponListPanel(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, WLPanel);
-            var element = UI.CreateElementContainer(WLPanel, UIColors["dark"], "0.75 0.51", "0.85 0.8", true);
+            var element = UI.CreateElementContainer(WLPanel, UIColors["dark"], "0.25 0.5", "0.35 0.8", true);
             UI.CreatePanel(ref element, WLPanel, UIColors["light"], $"0.05 0.03", $".95 .97");
             UI.CreateTextOutline(ref element, WLPanel, UIColors["white"], UIColors["black"], GetLang("WeaponCollection"), 14, "1", "1","0.1 0.85", "0.9 0.94", TextAnchor.MiddleCenter);
             if (gwData.WeaponSets.Count() >= 1)
@@ -1300,7 +1360,7 @@ namespace Oxide.Plugins
                     if (entry.Value.index > ACUIInfo[player.userID].WeaponIndex + 6) continue;
                     var pos = CalcSetButtons(entry.Value.index - ACUIInfo[player.userID].WeaponIndex);
                     if (ACUIInfo[player.userID].WeaponSet == entry.Key) UI.CreatePanel(ref element, WLPanel, UIColors["yellow"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    else if (GetACPlayer(player).PlayerWeaponSets.ContainsKey(entry.Key)) UI.CreatePanel(ref element, WLPanel, UIColors["green"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    else if (playerData.players[player.userID].WeaponCollections.ContainsKey(entry.Key)) UI.CreatePanel(ref element, WLPanel, UIColors["green"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
                     else UI.CreatePanel(ref element, WLPanel, UIColors["red"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
                     UI.CreateButton(ref element, WLPanel, "0 0 0 0", entry.Key, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_ChangeWeaponSet {entry.Key}", TextAnchor.MiddleCenter);
                 }
@@ -1310,6 +1370,8 @@ namespace Oxide.Plugins
             if (ACUIInfo[player.userID].admin)
                 if (!NewWeaponCollection.ContainsKey(player.userID))
                     UI.CreateButton(ref element, WLPanel, UIColors["blue"], GetLang("CreateCollection"), 10, "0.1 -0.11", "0.9 -0.01", $"UI_CreateWeaponSet");
+            else
+                    UI.CreateButton(ref element, WLPanel, UIColors["red"], GetLang("CancelCollection"), 10, "0.1 -0.11", "0.9 -0.01", $"UI_CancelWeaponSet");
             CuiHelper.AddUi(player, element);
         }
 
@@ -1332,7 +1394,7 @@ namespace Oxide.Plugins
         void GearPanel(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, GPanel);
-            var element = UI.CreateElementContainer(GPanel, "0 0 0 0", "0.15 0.2", "0.45 0.8", true);
+            var element = UI.CreateElementContainer(GPanel, "0 0 0 0", "0.35 0.2", "0.75 0.8", true);
             if (NewGearCollection.ContainsKey(player.userID) && ACUIInfo[player.userID].admin)
             {
                 Vector2 min = new Vector2(0f, 0f);
@@ -1442,15 +1504,6 @@ namespace Oxide.Plugins
                     else UI.CreateTextOutline(ref element, GPanel, UIColors["black"], UIColors["white"], GetMSG("CollectionFull"), 12, "1", "1", $"{min.x} {min.y}", $"{max.x} {max.y}");
                 }
 
-                /////////////////
-                if (configData.UseAccessories)
-                {
-
-                }
-
-
-
-                UI.CreateButton(ref element, GPanel, UIColors["red"], GetLang("CancelCollection"), 14, "0.35 -.02", "0.65 0.02", $"UI_CancelGearSet");
                 UI.CreateButton(ref element, GPanel, UIColors["green"], GetMSG("SaveCollection"), 18, "0.1 0.86", "0.9 0.91", $"UI_SaveCollect gear");
             }
             else
@@ -1460,12 +1513,12 @@ namespace Oxide.Plugins
                     PendingPurchase.Add(player.userID, new PurchaseItem { });
                 else
                     PendingPurchase[player.userID].gear.Clear();
-                var money = GetACPlayer(player).money;
+                var money = playerData.players[player.userID].money;
                 if (configData.UseServerRewards)
                     if (CheckPoints(player.userID) is int)
                         money = (int)CheckPoints(player.userID);
                 else if (configData.UseEconomics)
-                        money = (int)Economics.CallHook("GetPlayerMoney", player.userID);
+                    money = Convert.ToInt32(Economics.CallHook("GetPlayerMoney", player.userID));
                 if (set == "") return;
                 UI.CreateTextOutline(ref element, GPanel, UIColors["black"], UIColors["white"], GetMSG("BuySubMenu", set.ToUpper()), 20, "1", "1", "0.1 0.94", "0.9 0.99");
                 foreach (var entry in gwData.GearSets.Where(kvp => kvp.Key == set))
@@ -1509,9 +1562,9 @@ namespace Oxide.Plugins
                         Vector2 altmax = altmin + dimension;
 
 
-                        if (GetACPlayer(player).PlayerGearSets.ContainsKey(set))
+                        if (playerData.players[player.userID].GearCollections.ContainsKey(set))
                         {
-                            if (GetACPlayer(player).currentGearSet == set)
+                            if (playerData.players[player.userID].Gear.collectionname == set)
                             {
                                 UI.CreateButton(ref element, GPanel, UIColors["green"], GetMSG("CurrentlyEquipped"), 18, "0.1 0.86", "0.9 0.91", $"UI_ProcessSelection set {set}");
                             }
@@ -1519,10 +1572,10 @@ namespace Oxide.Plugins
                             {
                                 UI.CreateButton(ref element, GPanel, UIColors["green"], GetMSG("SelectCollection", set.ToUpper()), 18, "0.1 0.86", "0.9 0.91", $"UI_ProcessSelection set {set}");
                             }
-                            UI.CreateTextOutline(ref element, GPanel, UIColors["white"], UIColors["green"], GetMSG("CurrentGearKills", GetACPlayer(player).GearSetKills[set].ToString()), 16, "1", "1", "0.1 0.81", "0.9 0.86");
+                            UI.CreateTextOutline(ref element, GPanel, UIColors["white"], UIColors["green"], GetMSG("CurrentGearKills", playerData.players[player.userID].GearCollectionKills[set].ToString()), 16, "1", "1", "0.1 0.81", "0.9 0.86");
 
-                            var RequiredKills = GetACPlayer(player).GearSetKills[set];
-                            if (GetACPlayer(player).PlayerGearSets[set].Contains(item.shortname))
+                            var RequiredKills = playerData.players[player.userID].GearCollectionKills[set];
+                            if (playerData.players[player.userID].GearCollections[set].Contains(item.shortname))
                             {
                                 UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, GPanel, UIColors["green"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
@@ -1552,15 +1605,15 @@ namespace Oxide.Plugins
                             info = GetMSG("ItemGearCost", item.price.ToString(), item.killsrequired.ToString());
                             UI.CreateLabel(ref element, GPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
 
-                            if (money >= gwData.GearSets[set].cost && GetACPlayer(player).kills >= gwData.GearSets[set].killsrequired)
+                            if (money >= gwData.GearSets[set].cost && playerData.players[player.userID].kills >= gwData.GearSets[set].killsrequired)
                             {
                                 UI.CreateButton(ref element, GPanel, UIColors["blue"], GetMSG("UnlockCollection", gwData.GearSets[set].cost.ToString()), 16, "0.1 0.86", "0.9 0.91", $"UI_PurchasingPanel gear {set}", TextAnchor.MiddleCenter);
                             }
                             else
                             {
-                                if (GetACPlayer(player).kills != 0)
+                                if (playerData.players[player.userID].kills != 0)
                                 {
-                                    var percent = System.Convert.ToDouble(gwData.WeaponSets[set].killsrequired / GetACPlayer(player).kills);
+                                    var percent = System.Convert.ToDouble(gwData.WeaponSets[set].killsrequired / playerData.players[player.userID].kills);
                                     if (percent * 100 > 75)
                                         UI.CreateTextOutline(ref element, GPanel, UIColors["white"], UIColors["yellow"], GetMSG("CostOfGC", gwData.GearSets[set].cost.ToString(), gwData.GearSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
                                     else if (percent * 100 > 25 && percent * 100 < 76)
@@ -1583,7 +1636,8 @@ namespace Oxide.Plugins
         void WeaponPanel(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, WPanel);
-            var element = UI.CreateElementContainer(WPanel, "0 0 0 0", "0.45 0.2", "0.75 0.8", true);
+            var element = UI.CreateElementContainer(WPanel, "0 0 0 0", "0.35 0.2", "0.75 0.8", true);
+            //Puts("STARTING - Weapons");
             if (NewWeaponCollection.ContainsKey(player.userID) && ACUIInfo[player.userID].admin)
             {
                 Vector2 min = new Vector2(0f, 0f);
@@ -1644,23 +1698,23 @@ namespace Oxide.Plugins
             }
             else
             {
+                //Puts("NON CREATION");
                 var set = ACUIInfo[player.userID].WeaponSet;
                 if (!PendingPurchase.ContainsKey(player.userID))
                     PendingPurchase.Add(player.userID, new PurchaseItem { });
                 else
                     PendingPurchase[player.userID].weapon.Clear();
-                if (!WeaponSelection.ContainsKey(player.userID))
-                    WeaponSelection.Add(player.userID, new Dictionary<string, Dictionary<string, List<string>>>());
-
-                var money = GetACPlayer(player).money;
+                //Puts("1");
+                var money = playerData.players[player.userID].money;
                 if (configData.UseServerRewards)
                 {
                     if (CheckPoints(player.userID) is int)
                         money = (int)CheckPoints(player.userID);
                 }
                 else if (configData.UseEconomics)
-                    money = (int)Economics.CallHook("GetPlayerMoney", player.userID); if (set == "") return;
+                    money = Convert.ToInt32(Economics.CallHook("GetPlayerMoney", player.userID)); if (set == "") return;
                 UI.CreateTextOutline(ref element, WPanel, UIColors["black"], UIColors["white"], GetMSG("BuySubMenu", set.ToUpper()), 20, "1", "1", "0.1 0.94", "0.9 0.99");
+                //Puts("2");
                 foreach (var block in WeaponSlotPos)
                 {
                     var min = block.Value;
@@ -1668,15 +1722,20 @@ namespace Oxide.Plugins
                     UI.CreatePanel(ref element, WPanel, UIColors["black"], $"{min.x} {min.y}", $"{max.x} {max.y}");
                     UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{min.x + 0.002f} {min.y + 0.003f}", $"{max.x - 0.002f} {max.y - 0.003f}");
                 }
+                //Puts("3");
                 foreach (var entry in gwData.WeaponSets.Where(kvp => kvp.Key == set))
                 {
-                    if (!WeaponSelection[player.userID].ContainsKey(set))
+                    if (playerData.players[player.userID].WeaponSelection == null)
+                        playerData.players[player.userID].WeaponSelection.Add(entry.Key, new Dictionary<string, List<string>>());
+                    else if (!playerData.players[player.userID].WeaponSelection.ContainsKey(set))
                     {
-                        WeaponSelection[player.userID].Clear();
-                        WeaponSelection[player.userID].Add(entry.Key, new Dictionary<string, List<string>>());
+                        playerData.players[player.userID].WeaponSelection.Clear();
+                        playerData.players[player.userID].WeaponSelection.Add(entry.Key, new Dictionary<string, List<string>>());
                     }
+                    //Puts("4");
                     foreach (var item in entry.Value.set)
                     {
+                        //Puts("5");
                         string info = "";
                         PendingPurchase[player.userID].weapon.Add(item.shortname, item);
                         Vector2 min = new Vector2(0f, 0f);
@@ -1690,78 +1749,89 @@ namespace Oxide.Plugins
                         Vector2 max = min + dimension;
                         Vector2 altmin = min + offset2;
                         Vector2 altmax = altmin + dimension;
-                        if (GetACPlayer(player).PlayerWeaponSets.ContainsKey(set))
+                        if (playerData.players[player.userID].WeaponCollections != null)
                         {
-                            if (GetACPlayer(player).PlayerWeaponSets[set].ContainsKey(item.shortname))
-                                if (!WeaponSelection[player.userID][entry.Key].ContainsKey(item.shortname))
+                            //Puts("6");
+                            if (playerData.players[player.userID].WeaponCollections.ContainsKey(set))
+                            {
+                                //Puts("7");
+                                if (playerData.players[player.userID].WeaponCollections[set].ContainsKey(item.shortname))
                                 {
-                                    WeaponSelection[player.userID][entry.Key].Add(item.shortname, new List<string>());
+                                    //Puts("8");
+                                    if (!playerData.players[player.userID].WeaponSelection[entry.Key].ContainsKey(item.shortname))
+                                    {
+                                        //Puts("9");
+                                        playerData.players[player.userID].WeaponSelection[entry.Key].Add(item.shortname, new List<string>());
+                                    }
                                 }
-
-                            if (GetACPlayer(player).currentWeaponSet == set)
-                            {
-                                UI.CreateButton(ref element, WPanel, UIColors["green"], GetMSG("CurrentlyEquipped"), 18, "0.1 0.86", "0.9 0.91", $"UI_ProcessSelection weapon {set}");
+                                if (playerData.players[player.userID].Weapons != null)
+                                    if (playerData.players[player.userID].Weapons.collectionname == set)
+                                    {
+                                        UI.CreateButton(ref element, WPanel, UIColors["green"], GetMSG("CurrentlyEquipped"), 18, "0.1 0.86", "0.9 0.91", $"UI_ProcessSelection weapon {set}");
+                                    }
+                                    else
+                                    {
+                                        UI.CreateButton(ref element, WPanel, UIColors["green"], GetMSG("SelectCollection", set.ToUpper()), 18, "0.1 0.86", "0.9 0.91", $"UI_ProcessSelection weapon {set}");
+                                    }
+                                UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["green"], GetMSG("CurrentWeaponKills", playerData.players[player.userID].WeaponCollectionKills[set].ToString()), 16, "1", "1", "0.1 0.81", "0.9 0.86");
+                                var RequiredKills = playerData.players[player.userID].WeaponCollectionKills[set];
+                                if (playerData.players[player.userID].WeaponCollections[set].ContainsKey(item.shortname))
+                                {
+                                    UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.CreatePanel(ref element, WPanel, UIColors["green"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
+                                    info = GetLang("Owned");
+                                    UI.CreateLabel(ref element, WPanel, UIColors["white"], info, 16, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
+                                }
+                                else if (money >= item.price && RequiredKills >= item.killsrequired)
+                                {
+                                    UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.CreatePanel(ref element, WPanel, UIColors["red"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
+                                    info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
+                                    UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["green"], info, 16, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
+                                    UI.CreateButton(ref element, WPanel, "0 0 0 0", "", 12, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_PrepPurchase {item.shortname} weapon", TextAnchor.MiddleCenter);
+                                }
+                                else
+                                {
+                                    UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
+                                    info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
+                                    UI.CreateLabel(ref element, WPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
+                                }
                             }
                             else
                             {
-                                UI.CreateButton(ref element, WPanel, UIColors["green"], GetMSG("SelectCollection", set.ToUpper()), 18, "0.1 0.86", "0.9 0.91", $"UI_ProcessSelection weapon {set}");
-                            }
-                            UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["green"], GetMSG("CurrentWeaponKills", GetACPlayer(player).WeaponSetKills[set].ToString()), 16, "1", "1", "0.1 0.81", "0.9 0.86");
-                            var RequiredKills = GetACPlayer(player).WeaponSetKills[set];
-                            if (GetACPlayer(player).PlayerWeaponSets[set].ContainsKey(item.shortname))
-                            {
-                                UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
-                                UI.CreatePanel(ref element, WPanel, UIColors["green"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
-                                info = GetLang("Owned");
-                                UI.CreateLabel(ref element, WPanel, UIColors["white"], info, 16, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
-                            }
-                            else if (money >= item.price && RequiredKills >= item.killsrequired)
-                            {
-                                UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
-                                UI.CreatePanel(ref element, WPanel, UIColors["red"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
-                                info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
-                                UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["green"], info, 16, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
-                                UI.CreateButton(ref element, WPanel, "0 0 0 0", "", 12, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_PrepPurchase {item.shortname} weapon", TextAnchor.MiddleCenter);
-                            }
-                            else
-                            {
+                                //Puts("10");
                                 UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                 UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateLabel(ref element, WPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
-                            }
-                        }
-                        else
-                        {
-                            UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
-                            UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
-                            info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
-                            UI.CreateLabel(ref element, WPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
 
-                            if (money >= gwData.WeaponSets[set].cost && GetACPlayer(player).kills >= gwData.WeaponSets[set].killsrequired)
-                            {
-                                UI.CreateButton(ref element, WPanel, UIColors["blue"], GetMSG("UnlockCollection", gwData.WeaponSets[set].cost.ToString()), 16, "0.1 0.86", "0.9 0.91", $"UI_PurchasingPanel weapon {set}", TextAnchor.MiddleCenter);
-
-                            }
-                            else
-                            {
-                                if (GetACPlayer(player).kills != 0)
+                                if (money >= gwData.WeaponSets[set].cost && playerData.players[player.userID].kills >= gwData.WeaponSets[set].killsrequired)
                                 {
-                                    var percent = System.Convert.ToDouble(gwData.WeaponSets[set].killsrequired / GetACPlayer(player).kills);
-                                    if (percent * 100 > 75)
-                                        UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["yellow"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
-                                    else if (percent * 100 > 25 && percent * 100 < 76)
-                                        UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["orange"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
-                                    else if (percent * 100 > 0 && percent * 100 < 26)
-                                        UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["red"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
+                                    UI.CreateButton(ref element, WPanel, UIColors["blue"], GetMSG("UnlockCollection", gwData.WeaponSets[set].cost.ToString()), 16, "0.1 0.86", "0.9 0.91", $"UI_PurchasingPanel weapon {set}", TextAnchor.MiddleCenter);
+
                                 }
-                                else UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["red"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
+                                else
+                                {
+                                    if (playerData.players[player.userID].kills != 0)
+                                    {
+                                        var percent = System.Convert.ToDouble(gwData.WeaponSets[set].killsrequired / playerData.players[player.userID].kills);
+                                        if (percent * 100 > 75)
+                                            UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["yellow"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
+                                        else if (percent * 100 > 25 && percent * 100 < 76)
+                                            UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["orange"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
+                                        else if (percent * 100 > 0 && percent * 100 < 26)
+                                            UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["red"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
+                                    }
+                                    else UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["red"], GetMSG("CostOfWC", gwData.WeaponSets[set].cost.ToString(), gwData.WeaponSets[set].killsrequired.ToString()), 16, "1", "1", "0.1 0.86", "0.9 0.91");
+                                }
                             }
 
                         }
                     }
                 }
             }
+            //Puts("DONE");
             CuiHelper.AddUi(player, element);
             AttachmentPanel(player);
         }
@@ -1769,7 +1839,7 @@ namespace Oxide.Plugins
         private void AttachmentPanel(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, APanel);
-            var element = UI.CreateElementContainer(APanel, "0 0 0 0", "0.45 0.2", "0.75 0.45", true);
+            var element = UI.CreateElementContainer(APanel, "0 0 0 0", "0.35 0.2", "0.75 0.45", true);
             if (NewWeaponCollection.ContainsKey(player.userID) && ACUIInfo[player.userID].admin)
             {
                 Vector2 min = new Vector2(0f, 0f);
@@ -1935,7 +2005,6 @@ namespace Oxide.Plugins
                         UI.CreateButton(ref element, APanel, "0 0 0 0", "", 16, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_SelectCollectionItem {Enum.GetName(typeof(Slot), Slot.ammunitionMain)} ammo {UsedWeaponSlots[Slot.secondary]}", TextAnchor.MiddleCenter);
                     }
                 }
-                UI.CreateButton(ref element, APanel, UIColors["red"], GetLang("CancelCollection"), 14, "0.3 -.05", "0.6 0.05", $"UI_CancelWeaponSet");
             }
             else
             {
@@ -1945,14 +2014,14 @@ namespace Oxide.Plugins
                 else
                     PendingPurchase[player.userID].attachment.Clear();
                 if (set == "") return;
-                var money = GetACPlayer(player).money;
+                var money = playerData.players[player.userID].money;
                 if (configData.UseServerRewards)
                 {
                     if (CheckPoints(player.userID) is int)
                         money = (int)CheckPoints(player.userID);
                 }
                 else if (configData.UseEconomics)
-                    money = (int)Economics.CallHook("GetPlayerMoney", player.userID); foreach (var entry in gwData.WeaponSets.Where(kvp => kvp.Key == set))
+                    money = Convert.ToInt32(Economics.CallHook("GetPlayerMoney", player.userID)); foreach (var entry in gwData.WeaponSets.Where(kvp => kvp.Key == set))
                 {
                     foreach (var item in entry.Value.set)
                     {
@@ -1965,7 +2034,7 @@ namespace Oxide.Plugins
                                 Vector2 pos = AmmunitionSlotsPos[Slot.ammunitionMain];
                                 UI.CreatePanel(ref element, APanel, UIColors["black"], $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{pos.x + offset.x} {pos.y + offset.y}", $"{pos.x + dimension.x - offset.x} {pos.y + dimension.y - offset.y}");
-                                UI.LoadImage(ref element, APanel, TryForImage(item.ammoType), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
+                                UI.LoadImage(ref element, APanel, TryForImage(item.ammoType, 0), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                             }
 
                         if (item.slot == Slot.secondary)
@@ -1976,7 +2045,7 @@ namespace Oxide.Plugins
                                 Vector2 pos = AmmunitionSlotsPos[Slot.ammunitionSecondary];
                                 UI.CreatePanel(ref element, APanel, UIColors["black"], $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{pos.x + offset.x} {pos.y + offset.y}", $"{pos.x + dimension.x - offset.x} {pos.y + dimension.y - offset.y}");
-                                UI.LoadImage(ref element, APanel, TryForImage(item.ammoType), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
+                                UI.LoadImage(ref element, APanel, TryForImage(item.ammoType, 0), $"{pos.x} {pos.y}", $"{pos.x + dimension.x} {pos.y + dimension.y}");
                             }
 
                         if (item.attachments.Count() > 0)
@@ -2026,31 +2095,31 @@ namespace Oxide.Plugins
                                 Vector2 dimension1 = new Vector2(.15f, .3f);
                                 max = min + dimension;
                                 altmax = altmin + dimension1;
-                                if (GetACPlayer(player).PlayerWeaponSets.ContainsKey(set))
+                                if (playerData.players[player.userID].WeaponCollections.ContainsKey(set))
                                 {
                                     var weapon = ItemManager.Create(ItemManager.FindItemDefinition(item.shortname), 1, 0);
-                                    if (GetACPlayer(player).PlayerWeaponSets[set].ContainsKey(item.shortname))
+                                    if (playerData.players[player.userID].WeaponCollections[set].ContainsKey(item.shortname))
                                     {
-                                        if (GetACPlayer(player).PlayerWeaponSets[set][item.shortname].Contains(attachment.Value.shortname))
+                                        if (playerData.players[player.userID].WeaponCollections[set][item.shortname].Contains(attachment.Value.shortname))
                                         {
-                                            if (!WeaponSelection[player.userID][entry.Key][item.shortname].Contains(attachment.Value.shortname))
+                                            if (!playerData.players[player.userID].WeaponSelection[entry.Key][item.shortname].Contains(attachment.Value.shortname))
                                             {
-                                                if (WeaponSelection[player.userID][entry.Key][item.shortname].Count < weapon.contents.capacity)
+                                                if (playerData.players[player.userID].WeaponSelection[entry.Key][item.shortname].Count < weapon.contents.capacity)
                                                 {
-                                                    if (WeaponSelection[player.userID][entry.Key][item.shortname].Count == 0)
+                                                    if (playerData.players[player.userID].WeaponSelection[entry.Key][item.shortname].Count == 0)
                                                     {
-                                                        UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                        UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname,0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                         info = GetLang("Unequipped");
                                                         UI.CreatePanel(ref element, APanel, UIColors["white"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                         UI.CreateTextOutline(ref element, APanel, UIColors["red"], UIColors["black"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
                                                         UI.CreateButton(ref element, APanel, "0 0 0 0", "", 14, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_ProcessAttachment add {item.shortname} {attachment.Value.shortname} {set}", TextAnchor.MiddleCenter);
                                                     }
                                                     else
-                                                        foreach (var a in WeaponSelection[player.userID][entry.Key][item.shortname])
+                                                        foreach (var a in playerData.players[player.userID].WeaponSelection[entry.Key][item.shortname])
                                                         {
                                                             if (DefaultAttachments[a].location != DefaultAttachments[attachment.Value.shortname].location)
                                                             {
-                                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                                 info = GetLang("Unequipped");
                                                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                                 UI.CreateTextOutline(ref element, APanel, UIColors["red"], UIColors["black"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2058,7 +2127,7 @@ namespace Oxide.Plugins
                                                             }
                                                             else if (DefaultAttachments[a].location == DefaultAttachments[attachment.Value.shortname].location)
                                                             {
-                                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                                 info = GetLang("PositionFull");
                                                                 UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                                 UI.CreateTextOutline(ref element, APanel, UIColors["black"], UIColors["red"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2067,7 +2136,7 @@ namespace Oxide.Plugins
                                                 }
                                                 else
                                                 {
-                                                    UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                    UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                     info = GetLang("GunFull");
                                                     UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                     UI.CreateTextOutline(ref element, APanel, UIColors["white"], UIColors["red"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2075,16 +2144,16 @@ namespace Oxide.Plugins
                                             }
                                             else
                                             {
-                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                                UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                                 info = GetLang("Equipped");
                                                 UI.CreatePanel(ref element, APanel, UIColors["green"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                                 UI.CreateTextOutline(ref element, APanel, UIColors["green"], UIColors["black"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
                                                 UI.CreateButton(ref element, APanel, "0 0 0 0", "", 14, $"{min.x} {min.y}", $"{max.x} {max.y}", $"UI_ProcessAttachment remove {item.shortname} {attachment.Value.shortname} {set}", TextAnchor.MiddleCenter);
                                             }
                                         }
-                                        else if (money >= attachment.Value.cost && GetACPlayer(player).WeaponSetKills[set] >= attachment.Value.killsrequired)
+                                        else if (money >= attachment.Value.cost && playerData.players[player.userID].WeaponCollectionKills[set] >= attachment.Value.killsrequired)
                                         {
-                                            UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                            UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                             UI.CreatePanel(ref element, APanel, UIColors["red"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                             info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                             UI.CreateTextOutline(ref element, APanel, UIColors["black"], UIColors["white"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2092,7 +2161,7 @@ namespace Oxide.Plugins
                                         }
                                         else
                                         {
-                                            UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                            UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                             UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                             info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                             UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2100,7 +2169,7 @@ namespace Oxide.Plugins
                                     }
                                     else
                                     {
-                                        UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                        UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                         UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                         info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                         UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2108,7 +2177,7 @@ namespace Oxide.Plugins
                                 }
                                 else
                                 {
-                                    UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
                                     UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                     info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                     UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2128,6 +2197,7 @@ namespace Oxide.Plugins
             var pending = PendingPurchase[player.userID];
             var itemname = item;
             var itemshortname = item;
+            ulong itemskin = 0;
             var currentGearSet = item;
             var itemprice = pending.setprice.ToString();
             if (pending.gearpurchase == true)
@@ -2138,6 +2208,7 @@ namespace Oxide.Plugins
                     itemshortname = pending.gear[item].shortname;
                     itemprice = pending.gear[item].price.ToString();
                     currentGearSet = pending.setname;
+                    itemskin = pending.gear[item].skin;
                 }
             }
             else if (pending.weaponpurchase == true)
@@ -2157,6 +2228,7 @@ namespace Oxide.Plugins
                         itemshortname = pending.weapon[item].shortname;
                         itemprice = pending.weapon[item].price.ToString();
                         currentGearSet = pending.setname;
+                        itemskin = pending.weapon[item].skin;
                     }
                 }
             }
@@ -2166,7 +2238,7 @@ namespace Oxide.Plugins
             if (pending.set == false)
             {
                 UI.CreateTextOutline(ref element, PanelPurchaseConfirmation, UIColors["white"], UIColors["black"], GetMSG("PurchaseInfo", itemname, itemprice), 18, "1", "1", "0.1 0.6", "0.9 0.95");
-                UI.LoadImage(ref element, PanelPurchaseConfirmation, TryForImage(itemshortname), "0.35 0.275", "0.65 0.575");
+                UI.LoadImage(ref element, PanelPurchaseConfirmation, TryForImage(itemshortname, itemskin), "0.35 0.275", "0.65 0.575");
             }
             else UI.CreateTextOutline(ref element, PanelPurchaseConfirmation, UIColors["white"], UIColors["black"], GetMSG("PurchaseSetInfo", itemname, itemprice), 18, "1", "1", "0.1 0.3", "0.9 0.89"); 
             UI.CreateButton(ref element, PanelPurchaseConfirmation, UIColors["buttongreen"], "Yes", 18, "0.2 0.05", "0.475 0.25", $"UI_Purchase {item}");
@@ -2186,17 +2258,17 @@ namespace Oxide.Plugins
         void PlayerHUD(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, PanelStats);
-            string money = GetACPlayer(player).money.ToString();
+            string money = playerData.players[player.userID].money.ToString();
             var element = UI.CreateElementContainer(PanelStats, "0 0 0 0", "0.35 0.93", "0.65 1.0", false);
-            if (GetACPlayer(player).currentWeaponSet != null)
+            if (playerData.players[player.userID].Weapons != null && playerData.players[player.userID].Weapons.collectionname != null)
             {
-                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud1", GetACPlayer(player).WeaponSetKills[GetACPlayer(player).currentWeaponSet].ToString()), 12, "1", "1", "0.05 0.66", "0.35 0.99", TextAnchor.MiddleLeft);
-                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud4", GetACPlayer(player).currentWeaponSet.ToUpper()), 12, "1", "1", "0.36 0.66", "0.95 0.99", TextAnchor.MiddleLeft);
+                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud1", playerData.players[player.userID].WeaponCollectionKills[playerData.players[player.userID].Weapons.collectionname].ToString()), 12, "1", "1", "0.05 0.66", "0.35 0.99", TextAnchor.MiddleLeft);
+                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud4", playerData.players[player.userID].Weapons.collectionname.ToUpper()), 12, "1", "1", "0.36 0.66", "0.95 0.99", TextAnchor.MiddleLeft);
             }
-            if (GetACPlayer(player).currentGearSet != null)
+            if (playerData.players[player.userID].Gear != null && playerData.players[player.userID].Gear.collectionname != null)
             {
-                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud2", GetACPlayer(player).GearSetKills[GetACPlayer(player).currentGearSet].ToString()), 12, "1", "1", "0.05 0.33", "0.35 0.66", TextAnchor.MiddleLeft);
-                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud5", GetACPlayer(player).currentGearSet.ToUpper()), 12, "1", "1", "0.36 0.33", "0.95 0.66", TextAnchor.MiddleLeft);
+                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud2", playerData.players[player.userID].GearCollectionKills[playerData.players[player.userID].Gear.collectionname].ToString()), 12, "1", "1", "0.05 0.33", "0.35 0.66", TextAnchor.MiddleLeft);
+                UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud5", playerData.players[player.userID].Gear.collectionname.ToUpper()), 12, "1", "1", "0.36 0.33", "0.95 0.66", TextAnchor.MiddleLeft);
             }
             if (configData.UseServerRewards)
             {
@@ -2211,7 +2283,7 @@ namespace Oxide.Plugins
                 UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud3a", Economics.CallHook("GetPlayerMoney", player.userID).ToString()), 12, "1", "1", "0.05 0.0", "0.35 0.33", TextAnchor.MiddleLeft);
             else
                 UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud3b", money), 12, "1", "1", "0.05 0.0", "0.35 0.33", TextAnchor.MiddleLeft);
-            UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud6", GetACPlayer(player).kills.ToString()), 12, "1", "1", "0.36 0.0", "0.95 0.33", TextAnchor.MiddleLeft);
+            UI.CreateTextOutline(ref element, PanelStats, UIColors["black"], UIColors["white"], GetMSG("Hud6", playerData.players[player.userID].kills.ToString()), 12, "1", "1", "0.36 0.0", "0.95 0.33", TextAnchor.MiddleLeft);
             CuiHelper.AddUi(player, element);
         }
 
@@ -2274,33 +2346,33 @@ namespace Oxide.Plugins
 
         private float[] CalcButtonPos(int number)
         {
-            Vector2 position = new Vector2(0.05f, 0.75f);
+            Vector2 position = new Vector2(0.03f, 0.75f);
             Vector2 dimensions = new Vector2(0.15f, 0.15f);
             float offsetY = 0;
             float offsetX = 0;
-            if (number >= 0 && number < 5)
+            if (number >= 0 && number < 6)
             {
                 offsetX = (0.01f + dimensions.x) * number;
             }
-            if (number > 4 && number < 10)
+            if (number > 5 && number < 12)
             {
-                offsetX = (0.01f + dimensions.x) * (number - 5);
-                offsetY = (-0.025f - dimensions.y) * 1;
+                offsetX = (0.01f + dimensions.x) * (number - 6);
+                offsetY = (-0.002f - dimensions.y) * 1;
             }
-            if (number > 9 && number < 15)
+            if (number > 11 && number < 18)
             {
-                offsetX = (0.01f + dimensions.x) * (number - 10);
-                offsetY = (-0.025f - dimensions.y) * 2;
+                offsetX = (0.01f + dimensions.x) * (number - 12);
+                offsetY = (-0.002f - dimensions.y) * 2;
             }
-            if (number > 14 && number < 20)
+            if (number > 17 && number < 24)
             {
-                offsetX = (0.01f + dimensions.x) * (number - 15);
-                offsetY = (-0.025f - dimensions.y) * 3;
+                offsetX = (0.01f + dimensions.x) * (number - 18);
+                offsetY = (-0.002f - dimensions.y) * 3;
             }
-            if (number > 19 && number < 25)
+            if (number > 23 && number < 30)
             {
-                offsetX = (0.01f + dimensions.x) * (number - 20);
-                offsetY = (-0.025f - dimensions.y) * 4;
+                offsetX = (0.01f + dimensions.x) * (number - 24);
+                offsetY = (-0.002f - dimensions.y) * 4;
             }
             Vector2 offset = new Vector2(offsetX, offsetY);
             Vector2 posMin = position + offset;
@@ -2415,7 +2487,7 @@ namespace Oxide.Plugins
         {
             var element = UI.CreateElementContainer(PanelAC, "0 0 0 0", "0.275 0.25", "0.725 0.75", true);
             UI.CreateLabel(ref element, PanelAC, UIColors["black"], $"{TextColors["limegreen"]} {GetLang("SelectCollectionItem")}", 20, "0.05 .9", "1 1", TextAnchor.MiddleCenter);
-            int entriesallowed = 25;
+            int entriesallowed = 30;
             int remainingentries = DefaultItems[slot].Count() - (page * entriesallowed);
             {
                 if (remainingentries > entriesallowed)
@@ -2441,7 +2513,7 @@ namespace Oxide.Plugins
                 else if (i <= shownentries + entriesallowed)
                 {
                     var pos = CalcButtonPos(n);
-                    UI.LoadImage(ref element, PanelAC, TryForImage(entry), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    UI.LoadImage(ref element, PanelAC, TryForImage(entry, 0), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                     UI.CreateButton(ref element, PanelAC, "0 0 0 0", "", 14, $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}", $"UI_AddItem {entry} {Enum.GetName(typeof(Slot), slot)} {type}", TextAnchor.MiddleCenter);
                     n++;
                 }
@@ -2503,21 +2575,54 @@ namespace Oxide.Plugins
             SelectSkin(player, item, type);
         }
 
+        [ConsoleCommand("UI_ChangeSkinPage")]
+        private void cmdUI_ChangeSkinPage(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            ACUIInfo[player.userID].page = Convert.ToInt32(arg.Args[0]);
+            SelectSkin(player, arg.Args[1], arg.Args[2]);
+        }
+
         private void SelectSkin(BasePlayer player, string item, string type)
         {
-            if (gwData.Images.ContainsKey(item) && gwData.Images[item].Count() > 1)
+            if (ItemSkins.ContainsKey(item) && ItemSkins[item].Count() > 1)
             {
-                var i = 0;
-                var element = UI.CreateElementContainer(PanelAC, UIColors["dark"], "0.3 0.3", "0.7 0.9");
+                CuiHelper.DestroyUi(player, PanelAC);
+                var element = UI.CreateElementContainer(PanelAC, UIColors["dark"], "0.3 0.3", "0.7 0.9", true);
                 UI.CreatePanel(ref element, PanelAC, UIColors["light"], "0.01 0.02", "0.99 0.98");
-                UI.CreatePanel(ref element, PanelAC, "0 0 0 0", $".0001 0.0001", $"0.0002 0.0002", true);
                 UI.CreateLabel(ref element, PanelAC, UIColors["black"], $"{TextColors["limegreen"]} {GetMSG("GearSkin", item)}", 20, "0.05 .9", "1 1", TextAnchor.MiddleCenter);
-                foreach (var entry in gwData.Images[item])
+                var page = ACUIInfo[player.userID].page;
+                var skinlist = ItemSkins[item];
+                int entriesallowed = 30;
+                int remainingentries = skinlist.Count - (page * entriesallowed);
                 {
-                    var pos = CalcButtonPos(i);
-                    UI.LoadImage(ref element, PanelAC, entry.Value.ToString(), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                    UI.CreateButton(ref element, PanelAC, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectSkin {item} {entry.Key} {type}");
+                    if (remainingentries > entriesallowed)
+                    {
+                        UI.CreateButton(ref element, PanelAC, UIColors["blue"], "Next", 18, "0.87 0.03", "0.97 0.085", $"UI_ChangeSkinPage {page + 1} {item} {type}");
+                    }
+                    if (page > 0)
+                    {
+                        UI.CreateButton(ref element, PanelAC, UIColors["buttonred"], "Back", 18, "0.73 0.03", "0.83 0.085", $"UI_ChangeSkinPage {page - 1} {item} {type}");
+                    }
+                }
+                int shownentries = page * entriesallowed;
+                int i = 0;
+                int n = 0;
+                foreach (var entry in skinlist)
+                {
                     i++;
+                    if (i < shownentries + 1) continue;
+                    else if (i <= shownentries + entriesallowed)
+                    {
+                        {
+                            var pos = CalcButtonPos(n);
+                            UI.LoadImage(ref element, PanelAC, TryForImage(item, entry), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                            UI.CreateButton(ref element, PanelAC, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectSkin {item} {entry} {type}");
+                            n++;
+                        }
+                    }
                 }
                 CuiHelper.AddUi(player, element);
             }
@@ -2672,7 +2777,13 @@ namespace Oxide.Plugins
                 return;
             var set = string.Join(" ",arg.Args);
             ACUIInfo[player.userID].GearSet = set;
+            ACUIInfo[player.userID].gear = true;
+            ACUIInfo[player.userID].weapon = false;
+            ACUIInfo[player.userID].WeaponSet = "";
             CuiHelper.DestroyUi(player, PanelPurchaseConfirmation);
+            CuiHelper.DestroyUi(player, WPanel);
+            CuiHelper.DestroyUi(player, APanel);
+            WeaponListPanel(player);
             GearListPanel(player);
             GearPanel(player);
         }
@@ -2685,7 +2796,12 @@ namespace Oxide.Plugins
                 return;
             var set = string.Join(" ", arg.Args);
             ACUIInfo[player.userID].WeaponSet = set;
+            ACUIInfo[player.userID].weapon = true;
+            ACUIInfo[player.userID].gear = false;
+            ACUIInfo[player.userID].GearSet = "";
             CuiHelper.DestroyUi(player, PanelPurchaseConfirmation);
+            CuiHelper.DestroyUi(player, GPanel);
+            GearListPanel(player);
             WeaponListPanel(player);
             WeaponPanel(player);
         }
@@ -2764,15 +2880,15 @@ namespace Oxide.Plugins
             switch (request)
             {
                 case "clear":
-                    WeaponSelection[player.userID][set][weapon].Clear();
+                    playerData.players[player.userID].WeaponSelection[set][weapon].Clear();
                     AttachmentPanel(player);
                     break;
                 case "add":
-                    WeaponSelection[player.userID][set][weapon].Add(attachment);
+                    playerData.players[player.userID].WeaponSelection[set][weapon].Add(attachment);
                     AttachmentPanel(player);
                     break;
                 case "remove":
-                    WeaponSelection[player.userID][set][weapon].Remove(attachment);
+                    playerData.players[player.userID].WeaponSelection[set][weapon].Remove(attachment);
                     AttachmentPanel(player);
                     break;
             }
@@ -2795,12 +2911,15 @@ namespace Oxide.Plugins
             switch (type)
             {
                 case "set":
-                    GetACPlayer(player).currentGearSet = set;
-                    SelectSet(player, set);
+                    playerData.players[player.userID].Gear.collectionname = set;
+                    if ((AbsolutWar))
+                        AbsolutWar.Call("SetWeaponClass", player.userID, set);
+                    SelectionGearCollection(player, set);
                     break;
                 case "weapon":
-                    GetACPlayer(player).currentWeaponSet = set;
-                    GetACPlayer(player).CurrentWeapons = WeaponSelection[player.userID][set];
+                    playerData.players[player.userID].Weapons.collectionname = set;
+                    if ((AbsolutWar))
+                        AbsolutWar.Call("SetGearClass", player.userID, set);
                     SelectWeapons(player);
                     break;
             }
@@ -2878,13 +2997,13 @@ namespace Oxide.Plugins
 
         void Purchase(BasePlayer player, string item)
         {
-            var money = GetACPlayer(player).money;
+            var money = playerData.players[player.userID].money;
             var pending = PendingPurchase[player.userID];
             if (pending.gearpurchase == true)
             {
                 if (pending.set == false)
                 {
-                    GetACPlayer(player).PlayerGearSets[pending.setname].Add(item);
+                    playerData.players[player.userID].GearCollections[pending.setname].Add(item);
                     DestroyACPanel(player);
                     if (configData.UseServerRewards)
                         SRAction(player.userID, pending.gear[item].price, "REMOVE");
@@ -2898,10 +3017,10 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    GetACPlayer(player).PlayerGearSets.Add(item, new List<string>());
-                    GetACPlayer(player).GearSetKills.Add(item, 0);
+                    playerData.players[player.userID].GearCollections.Add(item, new List<string>());
+                    playerData.players[player.userID].GearCollectionKills.Add(item, 0);
                     foreach (var entry in gwData.GearSets[item].set.Where(kvp => kvp.free == true))
-                        GetACPlayer(player).PlayerGearSets[item].Add(entry.shortname);
+                        playerData.players[player.userID].GearCollections[item].Add(entry.shortname);
                     DestroyACPanel(player);
                     if (configData.UseServerRewards)
                         SRAction(player.userID, gwData.GearSets[item].cost, "REMOVE");
@@ -2921,7 +3040,7 @@ namespace Oxide.Plugins
                 {
                     if (pending.attachmentpurchase == true)
                     {
-                        GetACPlayer(player).PlayerWeaponSets[pending.setname][item].Add(pending.attachmentName);
+                        playerData.players[player.userID].WeaponCollections[pending.setname][item].Add(pending.attachmentName);
                         DestroyACPanel(player);
                         if (configData.UseServerRewards)
                             SRAction(player.userID, pending.attachment[pending.weapon[item].slot][pending.attachmentName].cost, "REMOVE");
@@ -2935,7 +3054,7 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        GetACPlayer(player).PlayerWeaponSets[pending.setname].Add(item, new List<string>());
+                        playerData.players[player.userID].WeaponCollections[pending.setname].Add(item, new List<string>());
                         DestroyACPanel(player);
                         if (configData.UseServerRewards)
                             SRAction(player.userID, pending.weapon[item].price, "REMOVE");
@@ -2950,10 +3069,10 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    GetACPlayer(player).PlayerWeaponSets.Add(item, new Dictionary<string, List<string>>());
-                    GetACPlayer(player).WeaponSetKills.Add(item, 0);
+                    playerData.players[player.userID].WeaponCollections.Add(item, new Dictionary<string, List<string>>());
+                    playerData.players[player.userID].WeaponCollectionKills.Add(item, 0);
                     foreach (var entry in gwData.WeaponSets[item].set.Where(kvp => kvp.free == true))
-                        GetACPlayer(player).PlayerWeaponSets[item].Add(entry.shortname, new List<string>());
+                        playerData.players[player.userID].WeaponCollections[item].Add(entry.shortname, new List<string>());
                     DestroyACPanel(player);
                     if (configData.UseServerRewards)
                         SRAction(player.userID, gwData.WeaponSets[item].cost, "REMOVE");
@@ -2970,7 +3089,7 @@ namespace Oxide.Plugins
         }
 
         [ConsoleCommand("UI_SaveCollect")]
-        private void cmdUI_SaveSet(ConsoleSystem.Arg arg)
+        private void cmdUI_SaveCollect(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
@@ -3055,13 +3174,14 @@ namespace Oxide.Plugins
                     if (entry.Value.GearSet == set)
                         entry.Value.GearSet = "";
                 }
-                foreach (ACPlayer ac in ACPlayers)
+                foreach (BasePlayer p in BasePlayer.activePlayerList)
                 {
-                    DestroyACPanel(ac.player);
-                    OpenACUI(ac.player);
-                    CheckSets(ac);
+                    if (ACUIInfo[player.userID].open)
+                    { DestroyACPanel(p); OpenACUI(p); }
+                    CheckCollections(p);
                 }
             }
+            OpenACUI(player);
         }
 
         [ConsoleCommand("UI_DeleteWeaponSet")]
@@ -3079,13 +3199,14 @@ namespace Oxide.Plugins
                     if (entry.Value.WeaponSet == set)
                         entry.Value.WeaponSet = "";
                 }
-                foreach (ACPlayer ac in ACPlayers)
+                foreach (BasePlayer p in BasePlayer.activePlayerList)
                 {
-                    DestroyACPanel(ac.player);
-                    OpenACUI(ac.player);
-                    CheckSets(ac);
+                    if (ACUIInfo[player.userID].open)
+                    { DestroyACPanel(p); OpenACUI(p); }
+                    CheckCollections(p);
                 }
             }
+            OpenACUI(player);
         }
 
         [ConsoleCommand("UI_SelectSkin")]
@@ -3112,20 +3233,19 @@ namespace Oxide.Plugins
 
         #region Item Management
 
-        private void SelectSet(BasePlayer player, string name)
+        private void SelectionGearCollection(BasePlayer player, string name)
         {
             if (!PlayerGearSetTimer.ContainsKey(player.userID))
             {
-                player.inventory.Strip();
-                GiveSet(player);
-                GiveWeapon(player);
+                StripGear(player);
+                GiveGearCollection(player);
                 PlayerHUD(player);
                 DestroyACPanel(player);
                 TimerPlayerGearSetselection(player);
             }
             else
             {
-                GetSendMSG(player, "GearSetCooldown", GetACPlayer(player).currentGearSet);
+                GetSendMSG(player, "GearSetCooldown", playerData.players[player.userID].Gear.collectionname);
                 PlayerHUD(player);
             }
         }
@@ -3136,23 +3256,39 @@ namespace Oxide.Plugins
             {
                 PlayerGearSetTimer.Remove(player.userID);
             }
-            else PlayerGearSetTimer.Add(player.userID, timer.Once(configData.SetCooldown * 60, () => TimerPlayerGearSetselection(player)));
+            else PlayerGearSetTimer.Add(player.userID, timer.Once(configData.Cooldown * 60, () => TimerPlayerGearSetselection(player)));
         }
+
+        private void StripWeapons(BasePlayer player)
+        {
+            if (playerData.players[player.userID].Weapons.weapons == null) return;
+            foreach (var item in player.inventory.AllItems())
+                if (playerData.players[player.userID].Weapons.weapons.Contains(item.uid))
+                    item.RemoveFromContainer();
+        }
+
+        private void StripGear(BasePlayer player)
+        {
+            if (playerData.players[player.userID].Gear.gear == null) return;
+            foreach (var item in player.inventory.AllItems())
+                if (playerData.players[player.userID].Gear.gear.Contains(item.uid))
+                    item.RemoveFromContainer();
+        }
+
 
         private void SelectWeapons(BasePlayer player)
         {
             if (!PlayerWeaponSetTimer.ContainsKey(player.userID))
             {
-                player.inventory.Strip();
-                GiveSet(player);
-                GiveWeapon(player);
+                StripWeapons(player);
+                GiveWeaponCollection(player);
                 PlayerHUD(player);
                 DestroyACPanel(player);
                 TimerPlayerWeaponselection(player);
             }
             else
             {
-                GetSendMSG(player, "WeaponSetCooldown", GetACPlayer(player).currentWeaponSet);
+                GetSendMSG(player, "WeaponSetCooldown", playerData.players[player.userID].Weapons.collectionname);
                 PlayerHUD(player);
             }
         }
@@ -3163,34 +3299,40 @@ namespace Oxide.Plugins
             {
                 PlayerWeaponSetTimer.Remove(player.userID);
             }
-            else PlayerWeaponSetTimer.Add(player.userID, timer.Once(configData.SetCooldown * 60, () => TimerPlayerGearSetselection(player)));
+            else PlayerWeaponSetTimer.Add(player.userID, timer.Once(configData.Cooldown * 60, () => TimerPlayerGearSetselection(player)));
         }
 
-        private void GiveSet(BasePlayer player)
+        private void GiveGearCollection(BasePlayer player)
         {
-            if (GetACPlayer(player).currentGearSet == null) return;
-            var set = gwData.GearSets[GetACPlayer(player).currentGearSet];
+            if (playerData.players[player.userID].Gear.collectionname == null) return;
+            if (playerData.players[player.userID].Gear.gear != null)
+                playerData.players[player.userID].Gear.gear.Clear();
+            else playerData.players[player.userID].Gear.gear = new List<uint>();
+            var set = gwData.GearSets[playerData.players[player.userID].Gear.collectionname];
             foreach (var item in set.set)
-            {
-                if (GetACPlayer(player).PlayerGearSets[GetACPlayer(player).currentGearSet].Contains(item.shortname))
-                    GiveItem(player, BuildSet(item), item.container);
-            }
+                if (playerData.players[player.userID].GearCollections[playerData.players[player.userID].Gear.collectionname].Contains(item.shortname))
+                {
+                    var gear = BuildSet(item);
+                    playerData.players[player.userID].Gear.gear.Add(gear.uid);
+                    GiveItem(player, gear, item.container);
+                }
             PlayerHUD(player);
         }
-        private void GiveWeapon(BasePlayer player)
+        private void GiveWeaponCollection(BasePlayer player)
         {
-            if (GetACPlayer(player).CurrentWeapons == null) return;
-            foreach (var weapon in GetACPlayer(player).CurrentWeapons)
-            {
-                foreach (var entry in gwData.WeaponSets[GetACPlayer(player).currentWeaponSet].set.Where(kvp => kvp.shortname == weapon.Key))
-                    GiveItem(player, BuildWeapon(entry, player), entry.container);
-            }
+            if (playerData.players[player.userID].Weapons.collectionname == null || playerData.players[player.userID].WeaponSelection.Count() < 1 || playerData.players[player.userID].Weapons.weapons == null) return;
+            if (playerData.players[player.userID].Weapons.weapons != null)
+                playerData.players[player.userID].Weapons.weapons.Clear();
+            else playerData.players[player.userID].Weapons.weapons = new List<uint>();
+            foreach (var entry in playerData.players[player.userID].WeaponSelection[playerData.players[player.userID].Weapons.collectionname])
+                foreach (var weapon in gwData.WeaponSets[playerData.players[player.userID].Weapons.collectionname].set.Where(kvp => kvp.shortname == entry.Key))
+                    BuildWeapon(weapon, player);
             PlayerHUD(player);
         }
 
-        private Item BuildWeapon(Weapon weapon, BasePlayer player)
+        private void BuildWeapon(Weapon weapon, BasePlayer player)
         {
-            if (weapon == null) return null;
+            if (weapon == null) return;
             var definition = ItemManager.FindItemDefinition(weapon.shortname);
             if (definition != null)
             {
@@ -3212,19 +3354,31 @@ namespace Oxide.Plugins
                     if (weapon.ammo < configData.DefaultAmmoReloads * 4)
                         weapon.ammo = 128;
                     if (string.IsNullOrEmpty(weapon.ammoType))
-                        GiveItem(player, BuildAmmo(held.primaryMagazine.ammoType.shortname, weapon.ammo), "");
-                   else GiveItem(player, BuildAmmo(weapon.ammoType, weapon.ammo), "");
-                    if (GetACPlayer(player).CurrentWeapons[weapon.shortname] == null) return item;
-                    foreach (var attachment in GetACPlayer(player).CurrentWeapons[weapon.shortname])
-                        if (weapon.attachments.ContainsKey(attachment))
-                        {
-                            BuildItem(attachment)?.MoveToContainer(item.contents);
-                        }
+                    {
+                        var ammo = BuildAmmo(held.primaryMagazine.ammoType.shortname, weapon.ammo);
+                        playerData.players[player.userID].Weapons.weapons.Add(ammo.uid);
+                        GiveItem(player,ammo, "");
+                    }
+                    else
+                    {
+                        var ammo = BuildAmmo(weapon.ammoType, weapon.ammo);
+                        playerData.players[player.userID].Weapons.weapons.Add(ammo.uid);
+                        GiveItem(player, ammo, "");
+                    }
+                    if (playerData.players[player.userID].WeaponSelection[playerData.players[player.userID].Weapons.collectionname][weapon.shortname] == null) { GiveItem(player, item, weapon.container); return; }
+                    foreach (var attachment in playerData.players[player.userID].WeaponSelection[playerData.players[player.userID].Weapons.collectionname][weapon.shortname])
+                    {
+                        var att = BuildItem(attachment);
+                        att.MoveToContainer(item.contents);
+                        playerData.players[player.userID].Weapons.weapons.Add(att.uid);
+                    }
                 }
-                return item;
+                playerData.players[player.userID].Weapons.weapons.Add(item.uid);
+                GiveItem(player, item, weapon.container);
+                return;
             }
             Puts("Error making item: " + weapon.shortname);
-            return null;
+            return;
         }
 
         private Item BuildAmmo(string shortname, int amount)
@@ -3290,6 +3444,8 @@ namespace Oxide.Plugins
             if (NewGearCollection.ContainsKey(player.userID))
                 NewGearCollection.Remove(player.userID);
             NewGearCollection.Add(player.userID, new GearCollectionCreation());
+            ACUIInfo[player.userID].gear = true;
+            ACUIInfo[player.userID].weapon = false;
             DestroyACPanel(player);
             OpenACUI(player);
         }
@@ -3299,6 +3455,8 @@ namespace Oxide.Plugins
             if (NewWeaponCollection.ContainsKey(player.userID))
                 NewWeaponCollection.Remove(player.userID);
             NewWeaponCollection.Add(player.userID, new WeaponCollectionCreation());
+            ACUIInfo[player.userID].gear = false;
+            ACUIInfo[player.userID].weapon = true;
             DestroyACPanel(player);
             OpenACUI(player);
         }
@@ -3306,28 +3464,6 @@ namespace Oxide.Plugins
         #endregion
 
         #region Classes
-        [Serializable]
-        class ACPlayer : MonoBehaviour
-        {
-            public BasePlayer player;
-            public int kills;
-            public int deaths;
-            public int money;
-            public Dictionary<string, List<string>> PlayerGearSets = new Dictionary<string, List<string>>();
-            public Dictionary<string, Dictionary<string, List<string>>> PlayerWeaponSets = new Dictionary<string, Dictionary<string, List<string>>>();
-            public string currentGearSet;
-            public string currentWeaponSet;
-            public Dictionary<string, List<string>> CurrentWeapons = new Dictionary<string, List<string>>();
-            public Dictionary<string, int> GearSetKills = new Dictionary<string, int>();
-            public Dictionary<string, int> WeaponSetKills = new Dictionary<string, int>();
-
-            void Awake()
-            {
-                enabled = false;
-                player = GetComponent<BasePlayer>();
-            }
-        }
-
         enum Slot
         {
             head,
@@ -3354,27 +3490,27 @@ namespace Oxide.Plugins
             public Dictionary<string, GearSet> GearSets = new Dictionary<string, GearSet>();
             public Dictionary<string, WeaponSet> WeaponSets = new Dictionary<string, WeaponSet>();
             public Dictionary<Slot, List<string>> Items = new Dictionary<Slot, List<string>>();
-            public Dictionary<string, Dictionary<ulong, uint>> Images = new Dictionary<string, Dictionary<ulong, uint>>();
-        }
-
-        class SavedPlayers
-        {
-            public Dictionary<ulong, SavedPlayer> players = new Dictionary<ulong, SavedPlayer>();
-            public Dictionary<ulong, SavedPlayer> priorSave = new Dictionary<ulong, SavedPlayer>();
         }
 
         class SavedPlayer
         {
+            public Dictionary<ulong, Player> players = new Dictionary<ulong, Player>();
+        }
+
+        class Player
+        {
             public int kills;
             public int deaths;
             public int money;
-            public string lastgearSet;
-            public string lastweaponSet;
-            public Dictionary<string, List<string>> lastWeapons = new Dictionary<string, List<string>>();
-            public Dictionary<string, List<string>> PlayerGearSets = new Dictionary<string, List<string>>();
-            public Dictionary<string, Dictionary<string, List<string>>> PlayerWeaponSets = new Dictionary<string, Dictionary<string, List<string>>>();
-            public Dictionary<string, int> GearSetKills = new Dictionary<string, int>();
-            public Dictionary<string, int> WeaponSetKills = new Dictionary<string, int>();
+            public int TotalKills;
+            public int TotalDeaths;
+            public CurrentWeapons Weapons = new CurrentWeapons();
+            public CurrentGear Gear = new CurrentGear();
+            public Dictionary<string, Dictionary<string, List<string>>> WeaponSelection = new Dictionary<string, Dictionary<string, List<string>>>();
+            public Dictionary<string, List<string>> GearCollections = new Dictionary<string, List<string>>();
+            public Dictionary<string, Dictionary<string, List<string>>> WeaponCollections = new Dictionary<string, Dictionary<string, List<string>>>();
+            public Dictionary<string, int> GearCollectionKills = new Dictionary<string, int>();
+            public Dictionary<string, int> WeaponCollectionKills = new Dictionary<string, int>();
         }
 
         class GearSet
@@ -3383,6 +3519,18 @@ namespace Oxide.Plugins
             public int cost;
             public int killsrequired;
             public List<Gear> set = new List<Gear>();
+        }
+        
+        class CurrentWeapons
+        {
+            public string collectionname;
+            public List<uint> weapons;
+        }
+
+        class CurrentGear
+        {
+            public string collectionname;
+            public List<uint> gear;
         }
 
         class WeaponCollectionCreation
@@ -3529,212 +3677,182 @@ namespace Oxide.Plugins
 
         #region External Hooks
 
+        [HookMethod("GetPlayerKills")]
+        public int GetPlayerKills(ulong PlayerID)
+        {
+            if (!playerData.players.ContainsKey(PlayerID)) return 0;
+            return playerData.players[PlayerID].kills;
+        }
+        [HookMethod("GetPlayerTotalKills")]
+        public int GetPlayerTotalKills(ulong PlayerID)
+        {
+            if (!playerData.players.ContainsKey(PlayerID)) return 0;
+            return playerData.players[PlayerID].TotalKills;
+        }
+        [HookMethod("GetPlayerDeaths")]
+        public int GetPlayerDeaths(ulong PlayerID)
+        {
+            if (!playerData.players.ContainsKey(PlayerID)) return 0;
+            return playerData.players[PlayerID].deaths;
+        }
+        [HookMethod("GetPlayerTotalDeaths")]
+        public int GetPlayerTotalDeaths(ulong PlayerID)
+        {
+            if (!playerData.players.ContainsKey(PlayerID)) return 0;
+            return playerData.players[PlayerID].TotalDeaths;
+        }
+
+        [HookMethod("GiveCollections")]
+        public bool GiveCollections(BasePlayer player)
+        {
+            GiveGearCollection(player);
+            GiveWeaponCollection(player);
+            return true;
+        }
+
+        [HookMethod("AddMoney")]
         object AddMoney(ulong TargetID, int amount, bool notify = true, ulong RequestorID = 0)
         {
+            if (!playerData.players.ContainsKey(TargetID)) return false;
             try
             {
+                playerData.players[TargetID].money += amount;
                 BasePlayer target = BasePlayer.FindByID(TargetID);
-                if (GetACPlayer(target) != null)
-                {
-                    GetACPlayer(target).money += amount;
-                    if (notify)
-                        GetSendMSG(target, "AddMoney", amount.ToString());
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "MoneyAdded", target.displayName, amount.ToString());
-                    }
-                    return true;
-                }
-                else if (playerData.players.ContainsKey(TargetID))
-                {
-                    playerData.players[TargetID].money += amount;
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "MoneyAddedOffline", amount.ToString());
-                    }
-                    return true;
-                }
-                else
-                {
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "NotACPlayer");
-                    }
-                    return null;
-                }
-            }
-            catch
-            {
+                PlayerHUD(target);
+                if (notify)
+                    GetSendMSG(target, "AddMoney", amount.ToString());
                 if (RequestorID != 0)
                 {
                     BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                    GetSendMSG(requestor, "AddMoneyError");
+                    GetSendMSG(requestor, "MoneyAdded", target.displayName, amount.ToString());
                 }
-                Puts(GetLang("AddMoneyError"));
-                return null;
+                return true;
+            }
+            catch
+            {
+                playerData.players[TargetID].money += amount;
+                if (RequestorID != 0)
+                {
+                    BasePlayer requestor = BasePlayer.FindByID(RequestorID);
+                    GetSendMSG(requestor, "MoneyAddedOffline", amount.ToString());
+                }
+                return true;
             }
         }
 
-
+        [HookMethod("TakeMoney")]
         object TakeMoney(ulong TargetID, int amount, bool notify = true, ulong RequestorID = 0)
         {
+            if (!playerData.players.ContainsKey(TargetID)) return false;
             try
             {
+                playerData.players[TargetID].money -= amount;
                 BasePlayer target = BasePlayer.FindByID(TargetID);
-                if (GetACPlayer(target) != null)
-                {
-                    GetACPlayer(target).money -= amount;
-                    if (notify)
-                        GetSendMSG(target, "TakeMoney", amount.ToString());
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "MoneyTaken", target.displayName, amount.ToString());
-                    }
-                    return true;
-                }
-                else if (playerData.players.ContainsKey(TargetID))
-                {
-                    playerData.players[TargetID].money -= amount;
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "MoneyTakenOffline", amount.ToString());
-                    }
-                    return true;
-                }
-                else
-                {
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "NotACPlayer");
-                    }
-                    return null;
-                }
-            }
-            catch
-            {
+                PlayerHUD(target);
+                if (notify)
+                    GetSendMSG(target, "TakeMoney", amount.ToString());
                 if (RequestorID != 0)
                 {
                     BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                    GetSendMSG(requestor, "TakeMoneyError");
+                    GetSendMSG(requestor, "MoneyTaken", target.displayName, amount.ToString());
                 }
-                Puts(GetLang("TakeMoneyError"));
-                return null;
+                return true;
+            }
+            catch
+            {
+                playerData.players[TargetID].money -= amount;
+                if (RequestorID != 0)
+                {
+                    BasePlayer requestor = BasePlayer.FindByID(RequestorID);
+                    GetSendMSG(requestor, "MoneyTakenOffline", amount.ToString());
+                }
+                return true;
             }
         }
 
         object AddKills(ulong TargetID, int amount, string type, string collection, ulong RequestorID = 0)
         {
+            if (!playerData.players.ContainsKey(TargetID)) return false;
             try
             {
+                playerData.players[TargetID].money -= amount;
                 BasePlayer target = BasePlayer.FindByID(TargetID);
-                if (GetACPlayer(target) != null)
-                {
-                    if (type == "gear")
-                    GetACPlayer(target).GearSetKills[collection] += amount;
-                    if (type == "weapon")
-                        GetACPlayer(target).WeaponSetKills[collection] += amount;
-                        GetSendMSG(target, "AddKills", amount.ToString(), collection.ToUpper());
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "KillsAdded", target.displayName, amount.ToString(), collection.ToUpper());
-                    }
-                    return true;
-                }
-                else
-                {
-                    if (type == "gear")
-                        playerData.players[TargetID].GearSetKills[collection] += amount;
-                    if (type == "weapon")
-                        playerData.players[TargetID].WeaponSetKills[collection] += amount;
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "KillsAddedOffline",TargetID.ToString(), amount.ToString(), collection.ToUpper());
-                    }
-                    return true;
-                }
-            }
-            catch
-            {
+                if (type == "gear")
+                    playerData.players[TargetID].GearCollectionKills[collection] += amount;
+                if (type == "weapon")
+                    playerData.players[TargetID].WeaponCollectionKills[collection] += amount;
+                GetSendMSG(target, "AddKills", amount.ToString(), collection.ToUpper());
                 if (RequestorID != 0)
                 {
                     BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                    GetSendMSG(requestor, "AddKillsError");
+                    GetSendMSG(requestor, "KillsAdded", target.displayName, amount.ToString(), collection.ToUpper());
                 }
-                Puts(GetLang("AddKillsError"));
-                return null;
+                return true;
+            }
+            catch
+            {
+                if (type == "gear")
+                    playerData.players[TargetID].GearCollectionKills[collection] += amount;
+                if (type == "weapon")
+                    playerData.players[TargetID].WeaponCollectionKills[collection] += amount;
+                if (RequestorID != 0)
+                {
+                    BasePlayer requestor = BasePlayer.FindByID(RequestorID);
+                    GetSendMSG(requestor, "KillsAddedOffline", TargetID.ToString(), amount.ToString(), collection.ToUpper());
+                }
+                return true;
             }
         }
 
         object TakeKills(ulong TargetID, int amount, string type, string collection, ulong RequestorID = 0)
         {
+            if (!playerData.players.ContainsKey(TargetID)) return false;
             try
             {
+                playerData.players[TargetID].money -= amount;
                 BasePlayer target = BasePlayer.FindByID(TargetID);
-                if (GetACPlayer(target) != null)
+                if (type == "gear")
                 {
-                    if (type == "gear")
-                    {
-                        GetACPlayer(target).GearSetKills[collection] -= amount;
-                        if (GetACPlayer(target).GearSetKills[collection] < 0)
-                            GetACPlayer(target).GearSetKills[collection] = 0;
-                    }
-                    if (type == "weapon")
-                    {
-                        GetACPlayer(target).WeaponSetKills[collection] -= amount;
-                        if (GetACPlayer(target).WeaponSetKills[collection] < 0)
-                            GetACPlayer(target).WeaponSetKills[collection] = 0;
-                    }
-                    GetSendMSG(target, "TakeKills", amount.ToString(), collection.ToUpper());
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "KillsTaken", target.displayName, amount.ToString(), collection.ToUpper());
-                    }
-                    return true;
+                    playerData.players[TargetID].GearCollectionKills[collection] -= amount;
+                    if (playerData.players[TargetID].GearCollectionKills[collection] < 0)
+                        playerData.players[TargetID].GearCollectionKills[collection] = 0;
                 }
-                else
+                if (type == "weapon")
                 {
-                    if (type == "gear")
-                    {
-                        playerData.players[TargetID].GearSetKills[collection] -= amount;
-                        if (playerData.players[TargetID].GearSetKills[collection] < 0)
-                            playerData.players[TargetID].GearSetKills[collection] = 0;
-                    }
-                    if (type == "weapon")
-                    {
-                        playerData.players[TargetID].WeaponSetKills[collection] -= amount;
-                        if (playerData.players[TargetID].WeaponSetKills[collection] < 0)
-                            playerData.players[TargetID].WeaponSetKills[collection] = 0;
-                    }
-                    if (RequestorID != 0)
-                    {
-                        BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                        GetSendMSG(requestor, "KillsTakenOffline", TargetID.ToString(), amount.ToString(), collection.ToUpper());
-                    }
-                    return true;
+                    playerData.players[TargetID].WeaponCollectionKills[collection] -= amount;
+                    if (playerData.players[TargetID].WeaponCollectionKills[collection] < 0)
+                        playerData.players[TargetID].WeaponCollectionKills[collection] = 0;
                 }
-            }
-            catch
-            {
+                GetSendMSG(target, "TakeKills", amount.ToString(), collection.ToUpper());
                 if (RequestorID != 0)
                 {
                     BasePlayer requestor = BasePlayer.FindByID(RequestorID);
-                    GetSendMSG(requestor, "TakeKillsError");
+                    GetSendMSG(requestor, "KillsTakenOffline", TargetID.ToString(), amount.ToString(), collection.ToUpper());
                 }
-                Puts(GetLang("TakeKillsError"));
-                return null;
+                return true;
+            }
+            catch
+            {
+                if (type == "gear")
+                {
+                    playerData.players[TargetID].GearCollectionKills[collection] -= amount;
+                    if (playerData.players[TargetID].GearCollectionKills[collection] < 0)
+                        playerData.players[TargetID].GearCollectionKills[collection] = 0;
+                }
+                if (type == "weapon")
+                {
+                    playerData.players[TargetID].WeaponCollectionKills[collection] -= amount;
+                    if (playerData.players[TargetID].WeaponCollectionKills[collection] < 0)
+                        playerData.players[TargetID].WeaponCollectionKills[collection] = 0;
+                }
+                if (RequestorID != 0)
+                {
+                    BasePlayer requestor = BasePlayer.FindByID(RequestorID);
+                    GetSendMSG(requestor, "KillsTakenOffline", TargetID.ToString(), amount.ToString(), collection.ToUpper());
+                }
+                return true;
             }
         }
-
-
         #endregion
 
         #region GWData Management
@@ -4199,28 +4317,6 @@ namespace Oxide.Plugins
                         } } } } }
         };
 
-        void SaveACPlayer(ACPlayer player)
-        {
-            if (playerData.players.ContainsKey(player.player.userID))
-            {
-                if (!playerData.priorSave.ContainsKey(player.player.userID))
-                    playerData.priorSave.Add(player.player.userID, playerData.players[player.player.userID]);
-            }
-            else playerData.players.Add(player.player.userID, new SavedPlayer { });
-            var d = playerData.players[player.player.userID];
-            d.deaths = player.deaths;
-            d.kills = player.kills;
-            d.money = player.money;
-            d.PlayerGearSets = player.PlayerGearSets;
-            d.GearSetKills = player.GearSetKills;
-            d.PlayerWeaponSets = player.PlayerWeaponSets;
-            d.WeaponSetKills = player.WeaponSetKills;
-            d.lastgearSet = player.currentGearSet;
-            d.lastweaponSet = player.currentWeaponSet;
-            d.lastWeapons = player.CurrentWeapons;
-            SaveData();
-        }
-
         void SaveData()
         {
             GWData.WriteObject(gwData);
@@ -4231,12 +4327,12 @@ namespace Oxide.Plugins
         {
             try
             {
-                playerData = PlayerData.ReadObject<SavedPlayers>();
+                playerData = PlayerData.ReadObject<SavedPlayer>();
             }
             catch
             {
                 Puts("Couldn't load the Absolut Combat Saved Player Data, creating a new datafile");
-                playerData = new SavedPlayers();
+                playerData = new SavedPlayer();
             }
             try
             {
@@ -4263,14 +4359,12 @@ namespace Oxide.Plugins
             public int InfoInterval { get; set; }
             public int KillReward { get; set; }
             public bool BroadcastDeath { get; set; }
-            public bool UseEnviroControl { get; set; }
-            public int SetCooldown { get; set; }
+            public int Cooldown { get; set; }
             public bool PersistentCondition { get; set; }
             public string MenuKeyBinding { get; set; }
             public bool UseServerRewards { get; set; }
             public bool UseEconomics { get; set; }
             public int DefaultAmmoReloads { get; set; }
-            public bool UseAccessories { get; set; }
         }
         private void LoadVariables()
         {
@@ -4283,15 +4377,13 @@ namespace Oxide.Plugins
             {
                 KillReward = 5,
                 BroadcastDeath = true,
-                UseEnviroControl = true,
-                SetCooldown = 10,
+                Cooldown = 10,
                 InfoInterval = 15,
                 PersistentCondition = true,
                 MenuKeyBinding = "p",
                 UseServerRewards = false,
                 UseEconomics = false,
                 DefaultAmmoReloads = 6,
-                UseAccessories = true,
             };
             SaveConfig(config);
         }
@@ -4391,7 +4483,7 @@ namespace Oxide.Plugins
             {"ClickToDetail", "Set Item Cost" },
             {"Remove", "X" },
             {"AddKills", "You have been given {0} Kills for the {1} Collection" },
-             {"TakeKills", "{0} Kills for the {1} Collection have been taken from you" }
+            {"TakeKills", "{0} Kills for the {1} Collection have been taken from you" }
         };
         #endregion
     }

@@ -1,0 +1,19 @@
+{
+    "name": "Duel AKA Wager of Battle",
+    "description": "Players can duel one another for money, winner gets the cash",
+    "author": "Pho3niX90",
+    "version": "0.1.2",
+    "configuration": true,
+    "require": {
+        "EconomyBanks": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/duel-aka-wager-of-battle.1726",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

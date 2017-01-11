@@ -1,0 +1,16 @@
+{
+    "name": "AutoClean",
+    "description": "Automatic cleaning of all buildings and placed objects outside of claimed areas.",
+    "author": "Noviets",
+    "version": "1.0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/autoclean.1696",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

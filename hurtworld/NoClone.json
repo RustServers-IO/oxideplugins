@@ -1,0 +1,16 @@
+{
+    "name": "NoClone",
+    "description": "Automatically kicks players that join if their name is already used",
+    "author": "Noviets",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/noclone.1587",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

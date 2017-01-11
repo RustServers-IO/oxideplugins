@@ -10,7 +10,7 @@ using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomLootSpawns", "k1lly0u", "0.2.2", ResourceId = 1655)]
+    [Info("CustomLootSpawns", "k1lly0u", "0.2.3", ResourceId = 1655)]
     class CustomLootSpawns : RustPlugin
     {
         #region Fields
@@ -404,6 +404,7 @@ namespace Oxide.Plugins
                 Network.Net.sv.write.Send(new Network.SendInfo(cn));
             }
         }
+        private bool IsLootBox(BaseEntity entity) => boxCache.ContainsKey(entity);
         #endregion
 
         #region Chat Commands

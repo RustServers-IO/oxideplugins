@@ -15,7 +15,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerDatabase", "Reneb", "1.5.5")]
+    [Info("PlayerDatabase", "Reneb", "1.5.6", ResourceId = 1939)]
     class PlayerDatabase : CovalencePlugin
     {
         List<string> changedPlayersData = new List<string>();
@@ -98,7 +98,6 @@ namespace Oxide.Plugins
                 if (!isKnownPlayer(arg)) return GetMsg("No players found matching this steamid.", null);
                 else return arg;
             }
-
             Dictionary<string, string> foundPlayers = new Dictionary<string, string>();
             foreach (var userid in KnownPlayers())
             {
@@ -145,7 +144,6 @@ namespace Oxide.Plugins
         void SetupDatabase()
         {
             LoadData();
-            LoadPlayers();
 
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -216,7 +214,7 @@ namespace Oxide.Plugins
                     LoadPlayerData(userid);
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 LogError(string.Format("Loading {0} got this error: {1}", userid, e.Message));
             }
@@ -372,6 +370,7 @@ namespace Oxide.Plugins
             {
                 storedData = new StoredData();
             }
+            LoadPlayers();
         }
 
         void LoadPlayerData(string userid)
@@ -448,8 +447,11 @@ namespace Oxide.Plugins
                     {
                         string steamid = (string)entry["userid"];
                         if (steamid != "0")
+                        {
                             sqliteData.Add(steamid, new Hash<string, string>());
+                        }
                     }
+                    LoadPlayers();
                 });
             }
             catch (Exception e)
@@ -470,8 +472,10 @@ namespace Oxide.Plugins
                     {
                         foreach (var p in entry)
                         {
-                            sqliteData[userid][p.Key] = (string)p.Value;
-
+                            if (p.Value is string)
+                            {
+                                sqliteData[userid][p.Key] = (string)p.Value;
+                            }
                         }
                         newplayer = false;
                     }
@@ -555,6 +559,7 @@ namespace Oxide.Plugins
                         if (steamid != "0")
                             sqlData.Add(steamid, new Hash<string, string>());
                     }
+                    LoadPlayers();
                 });
             }
             catch (Exception e)

@@ -2,8 +2,11 @@
     "name": "Elevators",
     "description": "Build elevators that will be auto triggered when you get on them",
     "author": "Reneb",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "configuration": false,
+    "require": {
+        "Waypoints": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/elevators.983",
     "games": [

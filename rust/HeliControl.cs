@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("HeliControl", "Shady", "1.1.0", ResourceId = 1348)]
+    [Info("HeliControl", "Shady", "1.1.2", ResourceId = 1348)]
     [Description("Tweak various settings of helicopters. Plugin originally developed by koenrad.")]
     class HeliControl : RustPlugin
     {
@@ -335,10 +335,14 @@ namespace Oxide.Plugins
             {
                 var fireball = entity?.GetComponent<FireBall>() ?? null;
                 if (fireball == null) return;
-                if (DisableNapalm) entity.Kill(NoDestroy);
+                if (DisableNapalm)
+                {
+                    fireball.enableSaving = false; //potential fix for entity is null but still in save list
+                    NextTick(() => { if (!(entity?.IsDestroyed ?? true)) entity.Kill(NoDestroy); });
+                }
                 else
                 {
-                    if (!entity.isDestroyed)
+                    if (!entity.IsDestroyed)
                     {
                         fireball.waterToExtinguish = WaterRequired;
                         fireball.SendNetworkUpdate(BasePlayer.NetworkQueue.Update); //may not be needed?
@@ -393,7 +397,7 @@ namespace Oxide.Plugins
                     if (TimeBeforeUnlocking == 0f) UnlockCrate(crate2);
                     else timer.Once(TimeBeforeUnlocking, () =>
                     {
-                        if (entity == null || entity.isDestroyed || crate2 == null) return;
+                        if (entity == null || entity.IsDestroyed || crate2 == null) return;
                         if (crate2 != null)
                         {
                             crate2.CancelInvoke("Think");
@@ -413,7 +417,7 @@ namespace Oxide.Plugins
                 if (debris == null) return;
                 if (DisableGibs)
                 {
-                    if (!entity.isDestroyed) entity.Kill(NoDestroy);
+                    NextTick(() => { if (!(entity?.IsDestroyed ?? true)) entity.Kill(NoDestroy); });
                     return;
                 }
                 if (GibsHealth != 500f)
@@ -429,15 +433,15 @@ namespace Oxide.Plugins
             if (prefabname.Contains("patrolhelicopter") && !prefabname.Contains("gibs"))
             {
                 // Disable Helicopters
+                var isMax = (HeliCount > MaxActiveHelicopters && MaxActiveHelicopters != -1);
+                if (DisableHeli || isMax) NextTick(() => { if (!(entity?.IsDestroyed ?? true)) entity.Kill(NoDestroy); });
                 if (DisableHeli)
                 {
-                    if (!entity.isDestroyed) entity.Kill(NoDestroy);
                     Puts(GetMessage("heliAutoDestroyed"));
                     return;
                 }
-                if (HeliCount > MaxActiveHelicopters && MaxActiveHelicopters != -1)
+                else if (isMax)
                 {
-                    if (!entity.isDestroyed) entity.Kill(NoDestroy);
                     Puts(GetMessage("maxHelis"));
                     return;
                 }
@@ -1223,16 +1227,16 @@ namespace Oxide.Plugins
         #region Util
         private void CheckHelicopter()
         {
-            BaseHelicopters.RemoveWhere(p => p == null || (p?.isDestroyed ?? true));
-            Gibs.RemoveWhere(p => p == null || (p?.isDestroyed ?? true));
-            FireBalls.RemoveWhere(p => p == null || (p?.isDestroyed ?? true));
-            forceCalled.RemoveWhere(p => p == null || (p?.isDestroyed ?? true));
-            lockedCrates.RemoveWhere(p => p == null || (p?.isDestroyed ?? true));
+            BaseHelicopters.RemoveWhere(p => p == null || (p?.IsDestroyed ?? true));
+            Gibs.RemoveWhere(p => p == null || (p?.IsDestroyed ?? true));
+            FireBalls.RemoveWhere(p => p == null || (p?.IsDestroyed ?? true));
+            forceCalled.RemoveWhere(p => p == null || (p?.IsDestroyed ?? true));
+            lockedCrates.RemoveWhere(p => p == null || (p?.IsDestroyed ?? true));
         }
 
         private void UnlockCrate(LockedByEntCrate crate)
         {
-            if (crate == null || (crate?.isDestroyed ?? true)) return;
+            if (crate == null || (crate?.IsDestroyed ?? true)) return;
             crate.CancelInvoke("Think");
             crate.SetLocked(false);
             crate.lockingEnt = null;
@@ -1290,13 +1294,12 @@ namespace Oxide.Plugins
             if (FireBalls.Count <= 0) return countfb;
             foreach (var fb in FireBalls)
             {
-                if (fb == null || fb.isDestroyed)
+                if (fb == null || fb.IsDestroyed)
                 {
                     FireBalls.Remove(fb);
                     continue;
                 }
-                var fbn = (BaseNetworkable)fb;
-                fbn.Kill(NoDestroy);
+                fb.Kill(NoDestroy);
                 countfb++;
             }
             CheckHelicopter();
@@ -1386,15 +1389,12 @@ namespace Oxide.Plugins
         {
             if (item == null) return;
             if (item.parent != null) item.Drop(default(Vector3), default(Vector3));
-            BaseEntity worldEntity = item.GetWorldEntity();
-            if (worldEntity == null)
-                return;
-            item.SetWorldEntity((BaseEntity)null);
+            var worldEntity = item.GetWorldEntity();
+            if (worldEntity == null) return;
+            item.SetWorldEntity(null);
             item.OnRemovedFromWorld();
-            if (item.contents != null)
-                item.contents.OnRemovedFromWorld();
-            if (!BaseEntityEx.IsValid(worldEntity))
-                return;
+            if (item.contents != null) item.contents.OnRemovedFromWorld();
+            if (!BaseEntityEx.IsValid(worldEntity)) return;
             worldEntity.Kill(NoDestroy);
         }
 

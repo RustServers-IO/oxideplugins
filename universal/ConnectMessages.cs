@@ -5,7 +5,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("ConnectMessages", "Spicy", "1.1.5")]
+    [Info("ConnectMessages", "Spicy", "1.1.6", ResourceId = 2178)]
     [Description("Provides connect and disconnect messages.")]
 
     class ConnectMessages : CovalencePlugin

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Player corpse duration modifier", "Mughisi", "2.0.2", ResourceId = 778)]
+    [Info("Player corpse duration modifier", "Mughisi", "2.0.3", ResourceId = 778)]
     [Description("Allows the server owner to set the time that it takes for corpses to disappear.")]
     public class CorpseDuration : RustPlugin
     {
@@ -122,7 +122,7 @@ namespace Oxide.Plugins
 
             timer.Once(1, () =>
                 {
-                    if (!corpse.isDestroyed)
+                    if (!corpse.IsDestroyed)
                         corpse.ResetRemovalTime(Duration);
                 });
         }

@@ -48,21 +48,21 @@ namespace Oxide.Plugins
             }
             foreach (BaseNetworkable item in fakeEntities)
             {
-                if (!item.isDestroyed)
+                if (!item.IsDestroyed)
                 {
                     item.Kill();
                 }
             }
             foreach(BasePlayer item in fakePlayers)
             {
-                if (!item.isDestroyed)
+                if (!item.IsDestroyed)
                 {
                     item.Kill();
                 }
             }
             foreach(BaseCorpse corpse in GameObject.FindObjectsOfType<BaseCorpse>())
             {
-                if (!corpse.isDestroyed)
+                if (!corpse.IsDestroyed)
                 {
                     corpse.Kill();
                 }
@@ -376,7 +376,7 @@ namespace Oxide.Plugins
             {
                 if (gun != null)
                 {
-                    if (!gun.isDestroyed)
+                    if (!gun.IsDestroyed)
                     {
                         WeaponsOnBack.weaponNetworking.Remove(gun);
                         gun.Kill();

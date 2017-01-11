@@ -1,0 +1,16 @@
+{
+    "name": "Light Switch",
+    "description": "Allows you to turn on and off all the lights on the server",
+    "author": "Wulf",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/light-switch.1582",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

@@ -11,7 +11,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("Quests", "k1lly0u", "2.1.72", ResourceId = 1084)]
+    [Info("Quests", "k1lly0u", "2.1.73", ResourceId = 1084)]
     public class Quests : RustPlugin
     {
         #region Fields
@@ -320,8 +320,10 @@ namespace Oxide.Plugins
             {
                 var heli = victim.GetComponent<BaseHelicopter>();
                 var player = info.Initiator.ToPlayer();
+                if (isPlaying(player)) return;
                 NextTick(() =>
                 {
+                    if (heli == null) return;
                     if (!HeliAttackers.ContainsKey(heli.net.ID))
                         HeliAttackers.Add(heli.net.ID, new Dictionary<ulong, int>());
                     if (!HeliAttackers[heli.net.ID].ContainsKey(player.userID))

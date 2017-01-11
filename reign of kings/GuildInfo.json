@@ -1,0 +1,19 @@
+{
+    "name": "Guild Info",
+    "description": "Know thy Enemy! Find out how many members a guild has and which of them are online!",
+    "author": "D-Kay",
+    "version": "1.2.0",
+    "configuration": true,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/guild-info.1125",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

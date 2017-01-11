@@ -9,7 +9,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Kits", "Reneb", "3.1.11")]
+    [Info("Kits", "Reneb", "3.1.12", ResourceId =668)]
     class Kits : RustPlugin
     {
         readonly int playerLayer = LayerMask.GetMask("Player (Server)");
@@ -235,8 +235,8 @@ namespace Oxide.Plugins
             foreach (KitItem kitem in kit.items)
             {
                 if (kitem.weapon)
-                    player.inventory.GiveItem(BuildWeapon(kitem.itemid, kitem.skinid, kitem.mods), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
-                else player.inventory.GiveItem(BuildItem(kitem.itemid, kitem.amount,  kitem.skinid), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
+                    GiveItem(player.inventory,BuildWeapon(kitem.itemid, kitem.skinid, kitem.mods), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
+                else GiveItem(player.inventory,BuildItem(kitem.itemid, kitem.amount,  kitem.skinid), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
 
             }
             if (kit.building != null && kit.building != string.Empty)
@@ -253,7 +253,13 @@ namespace Oxide.Plugins
             }
             return true;
         }
-        private Item BuildItem(int itemid, int amount, ulong skin)
+        bool GiveItem(PlayerInventory inv, Item item, ItemContainer container = null)
+        {
+            if (item == null) { return false; }
+            int position = -1;
+            return (((container != null) && item.MoveToContainer(container, position, true)) || (item.MoveToContainer(inv.containerMain, -1, true) || item.MoveToContainer(inv.containerBelt, -1, true)));
+        }
+    private Item BuildItem(int itemid, int amount, ulong skin)
         {
             if (amount < 1) amount = 1;
             Item item = ItemManager.CreateByItemID(itemid, amount, skin);

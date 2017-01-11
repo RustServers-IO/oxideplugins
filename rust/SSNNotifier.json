@@ -2,7 +2,7 @@
     "name": "SSNNotifier",
     "description": "Collects and sends game information to the Survival Servers Network",
     "author": "",
-    "version": "0.0.5",
+    "version": "0.0.6",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/ssnnotifier.1679",

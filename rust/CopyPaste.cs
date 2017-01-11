@@ -9,7 +9,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("Copy Paste", "Reneb", "3.0.19", ResourceId = 5981)]
+    [Info("Copy Paste", "Reneb", "3.0.20", ResourceId = 5981)]
     class CopyPaste : RustPlugin
     {
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -885,7 +885,7 @@ namespace Oxide.Plugins
             foreach(var entity in entities)
             {
                 if (entity == null) continue;
-                if (entity.isDestroyed) continue;
+                if (entity.IsDestroyed) continue;
                 entity.KillMessage();
             }
             return true;

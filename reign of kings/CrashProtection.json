@@ -1,0 +1,16 @@
+{
+    "name": "Crash Protection",
+    "description": "Protect sleepers from being killed for X seconds. Can help with client crashes.",
+    "author": "SweetLouHD",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/crash-protection.1506",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

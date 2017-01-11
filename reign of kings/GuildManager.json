@@ -1,0 +1,19 @@
+{
+    "name": "GuildManager",
+    "description": "Gain the ability to modify guilds.",
+    "author": "D-Kay",
+    "version": "0.1.0",
+    "configuration": false,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/guildmanager.2172",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Healthy Guns",
+    "description": "Weapons in Barrels\/Crates spawn in good condition.",
+    "author": "",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/healthy-guns.2262",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

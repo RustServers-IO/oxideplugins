@@ -1,0 +1,19 @@
+{
+    "name": "Economy Banks",
+    "description": "Banking, Cash, Interest, Tax, Money drop on death and more",
+    "author": "Pho3niX90",
+    "version": "1.5.51",
+    "configuration": true,
+    "suggest": {
+        "HWClans": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/economy-banks.1653",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

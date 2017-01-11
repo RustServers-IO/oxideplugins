@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("EventBox API", "LaserHydra", "1.0.0", ResourceId = 0)]
+    [Info("EventBox API", "LaserHydra", "1.0.1", ResourceId = 1481)]
     [Description("allows you to set up spots for boxes which other plugins can use.")]
     class EventBox : RustPlugin
     {
@@ -222,7 +222,7 @@ namespace Oxide.Plugins
             Vector3 vector = location.Vector;
 
             BaseEntity box = GameManager.server.CreateEntity("assets/prefabs/deployable/woodenbox/woodbox_deployed.prefab", vector);
-            box.Spawn(true);
+            box.Spawn();
 
             if (!boxes.ContainsKey(name))
                 boxes.Add(name, new List<BaseEntity> { box });

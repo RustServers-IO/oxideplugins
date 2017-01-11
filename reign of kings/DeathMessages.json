@@ -1,0 +1,16 @@
+{
+    "name": "Death Messages",
+    "description": "Displays a server wide message showing who killed who",
+    "author": "PaiN",
+    "version": "0.5",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/death-messages.1042",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

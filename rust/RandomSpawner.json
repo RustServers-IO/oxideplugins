@@ -2,7 +2,7 @@
     "name": "Random Spawner",
     "description": "Randomly spawn a specific amount of an entity on the map",
     "author": "LaserHydra",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/random-spawner.1456",

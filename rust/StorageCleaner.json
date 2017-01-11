@@ -1,0 +1,16 @@
+{
+    "name": "StorageCleaner",
+    "description": "Removes left over UI imagery stored in file storage",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/storagecleaner.2257",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

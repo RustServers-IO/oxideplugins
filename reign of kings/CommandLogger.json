@@ -1,0 +1,16 @@
+{
+    "name": "Command Logger",
+    "description": "Logs chat and commands players attempt to use to a separate file.",
+    "author": "Mughisi",
+    "version": "1.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/command-logger.1103",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

@@ -9,7 +9,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("UniversalUI", "Absolut", "2.0.0", ResourceId = 2226)]
+    [Info("UniversalUI", "Absolut", "2.1.0", ResourceId = 2226)]
 
     class UniversalUI : RustPlugin
     {
@@ -17,7 +17,7 @@ namespace Oxide.Plugins
         Plugin ImageLibrary;
 
         [PluginReference]
-        Plugin BetterChat;
+        Plugin Kits;
 
         string TitleColor = "<color=orange>";
         string MsgColor = "<color=#A9A9A9>";
@@ -29,10 +29,16 @@ namespace Oxide.Plugins
             public int page;
             public bool open;
             public int showSection;
+            public bool admin;
         }
         private bool Debugging;
         private List<ulong> NoInfo = new List<ulong>();
-        private Dictionary<ulong, List<string>> OnDelay = new Dictionary<ulong, List<string>>();
+        private Dictionary<ulong, DelayedCommand> OnDelay = new Dictionary<ulong, DelayedCommand>();
+        class DelayedCommand
+        {
+            public bool closeui;
+            public List<string> args;
+        }
         private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
 
         #region Server Hooks
@@ -102,64 +108,26 @@ namespace Oxide.Plugins
             DestroyPlayer(player);
         }
 
-        private object OnPlayerChat(ConsoleSystem.Arg arg)
+        object OnServerCommand(ConsoleSystem.Arg arg)
         {
-            if (BetterChat) return null;
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.connection?.player as BasePlayer;
             if (player == null)
                 return null;
-            if (OnDelay.ContainsKey(player.userID))
+            if (OnDelay.ContainsKey(player.userID) && arg.cmd?.namefull == "chat.say")
             {
-                if (arg.Args[0].ToString() == "quit")
+                if (arg.Args.Contains("quit"))
                 {
                     OnDelay.Remove(player.userID);
                     GetSendMSG(player, "ExitDelayed");
                     return false;
                 }
-                foreach (var e in arg.Args)
-                    OnDelay[player.userID].Add(e);
-                RunCommand(player, OnDelay[player.userID].ToArray());
+                foreach (var entry in arg.Args)
+                    OnDelay[player.userID].args.Add(entry);
+                RunCommand(player, OnDelay[player.userID].args.ToArray());
                 return false;
             }
             return null;
         }
-
-        object OnBetterChat(IPlayer iplayer, string message)
-        {
-            var player = iplayer.Object as BasePlayer;
-            if (player == null) return message;
-            if (OnDelay.ContainsKey(player.userID))
-            {
-                if(message[0].ToString() == "quit")
-                {
-                    OnDelay.Remove(player.userID);
-                    GetSendMSG(player, "ExitDelayed");
-                    return true;
-                }
-                foreach (var e in message.Split(' '))
-                    OnDelay[player.userID].Add(e);
-                RunCommand(player, OnDelay[player.userID].ToArray());
-                return true;
-            }
-            return message;
-        }
-
-        //object OnServerCommand(ConsoleSystem.Arg arg)
-        //{
-        //    var player = arg.connection?.player as BasePlayer;
-        //    if (player == null)
-        //        return null;
-        //    if (OnDelay.ContainsKey(player.userID))
-        //    {
-        //        List<string> args = new List<string>();
-        //        foreach (var e in arg.Args)
-        //            OnDelay[player.userID].Add(e);
-        //        RunCommand(player, OnDelay[player.userID].ToArray());
-        //        return false;
-        //    }
-        //    return null;
-        //}
-
 
         private void RunCommand(BasePlayer player, string[] command)
         {
@@ -240,36 +208,242 @@ namespace Oxide.Plugins
             OpenUniversalUI(player);
         }
 
+        private object KitMax(string kitname) => Kits?.Call("KitMax", kitname);
+        public int GetKitMax(string kitname)
+        {
+            var Max = KitMax(kitname);
+            if (Max != null)
+            {
+                return Convert.ToInt32(Max);
+            }
+            return 0;
+        }
+
+        private object KitItemAmount(string kitname, int ID) => Kits?.Call("KitItemAmount", kitname, ID);
+        public int GetKitItemAmount(string kitname, int ID)
+        {
+            var amount = KitItemAmount(kitname, ID);
+            if (amount != null)
+            {
+                return Convert.ToInt32(amount);
+            }
+            return 0;
+        }
+
+        private object KitDescription(string kitname) => Kits?.Call("KitDescription", kitname);
+        public string GetKitDescription(string kitname)
+        {
+            var Desc = KitDescription(kitname);
+            if (Desc != null)
+            {
+                if (Desc is string)
+                {
+                    string dsc = Desc as string;
+                    return dsc;
+                }
+            }
+            return "NONE";
+        }
+
+        
+        private object KitImage(string kitname) => Kits?.Call("KitImage", kitname);
+        public string GetKitImage(string kitname)
+        {
+            var image = KitImage(kitname);
+            if (image != null)
+            {
+                if (image is string)
+                {
+                    string img = image as string;
+                    return img;
+                }
+            }
+            return "http://i.imgur.com/xxQnE1R.png";
+        }
+
+        private object KitCooldown(string kitname) => Kits?.Call("KitCooldown", kitname);
+        public int GetKitCooldown(string kitname)
+        {
+            var cooldown = KitCooldown(kitname);
+            if (cooldown != null)
+            {
+                return Convert.ToInt32(cooldown) / 60;
+            }
+            return 0;
+        }
+
+        private object GetKits() => Kits?.Call("GetAllKits");
+        public string[] GetKitNames()
+        {
+            var kits = GetKits();
+            if (kits != null)
+            {
+                if (kits is string[])
+                {
+                    var array = kits as string[];
+                    return array;
+                }
+            }
+            return null;
+        }
+
+
+
+        void AskForPageType(BasePlayer player, int page)
+        {
+            if (!UniversalUIInfo.ContainsKey(player.userID)) return;
+            DestroyUniversalUI(player);
+                CuiHelper.DestroyUi(player, PanelInfo);
+                var element = UI.CreateElementContainer(PanelInfo, "0 0 0 0", "0.3 0.4", "0.7 0.6", true);
+                var types = Enum.GetValues(typeof(PageType)).Cast<PageType>();
+                var amount = types.Count();
+                var i = 0;
+                float[] pos;
+                foreach (var entry in types)
+                {
+                    pos = SelectionButtonLocation(i, amount);
+                    UI.LoadImage(ref element, PanelInfo, TryForImage(entry.ToString()), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                    UI.CreateTextOutline(ref element, PanelInfo, UIColors["white"], UIColors["black"], GetMSG("Type",player, entry.ToString()), 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3] + .05f}", TextAnchor.UpperCenter);
+                    UI.CreateButton(ref element, PanelInfo, "0 0 0 0", "", 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SetPageType {entry.ToString()} {page}", TextAnchor.MiddleCenter);
+                    i++;
+                }
+                CuiHelper.AddUi(player, element);
+        }
+
+        [ConsoleCommand("UI_SetPageType")]
+        private void cmdUI_SetPageType(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            if (!UniversalUIInfo.ContainsKey(player.userID)) return;
+            DestroyUniversalUI(player);
+            if (configData.sections.ContainsKey(UniversalUIInfo[player.userID].section))
+            {
+                configData.sections[UniversalUIInfo[player.userID].section].pages[Convert.ToInt32(arg.Args[1])].type = (PageType)Enum.Parse(typeof(PageType), arg.Args[0]);
+                Config.WriteObject(configData, true);
+            }
+            else GetSendMSG(player, "SectionNotFound");
+            OpenUniversalUI(player);
+        }
+
+
+        private float[] SelectionButtonLocation(int number, int amount)
+        {
+            var size = Decimal.Divide(1, amount);
+            Vector2 position = new Vector2(0.03f, (float)(1 - size));
+            Vector2 dimensions = new Vector2((float)size, .9f);
+            float offsetY = 0;
+            float offsetX = (0.015f + dimensions.x) * number;
+            Vector2 offset = new Vector2(offsetX, offsetY);
+            Vector2 posMin = position + offset;
+            Vector2 posMax = posMin + dimensions;
+            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
+        }
+
+        [ConsoleCommand("UI_AddNewSection")]
+        private void cmdUI_AddNewSection(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            if (!UniversalUIInfo.ContainsKey(player.userID)) return;
+            var index = 1;
+            foreach (var entry in configData.sections.Where(k => k.Key == index))
+            {
+                index++;
+                continue;
+            }
+            configData.sections.Add(index, new Section { name = index.ToString().ToUpper(), pages = new List<Page> { new Page { page = 0, name = $"Added By {player.displayName}" } } });
+            Config.WriteObject(configData, true);
+            OpenUniversalUI(player);
+        }
+
+        [ConsoleCommand("UI_RemoveSection")]
+        private void cmdUI_RemoveSection(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            if (!UniversalUIInfo.ContainsKey(player.userID)) return;
+            if (configData.sections.ContainsKey(UniversalUIInfo[player.userID].section))
+                configData.sections.Remove(UniversalUIInfo[player.userID].section);
+            Config.WriteObject(configData, true);
+            UniversalUIInfo[player.userID].section = 0;
+            OpenUniversalUI(player);
+        }
+
+        [ConsoleCommand("UI_AddNewPage")]
+        private void cmdUI_AddNewPage(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            if (!UniversalUIInfo.ContainsKey(player.userID)) return;
+            var existingPages = configData.sections[UniversalUIInfo[player.userID].section].pages;
+            var index = 0;
+            foreach (var entry in existingPages.Where(k => k.page == index))
+                index++;
+            configData.sections[UniversalUIInfo[player.userID].section].pages.Add(new Page { page = index, name = $"Added By {player.displayName}", buttons = new List<PageButton> { new PageButton { order = 0 }, new PageButton { order = 1 }, new PageButton { order = 2 }, new PageButton { order = 3 } } });
+            AskForPageType(player, index);
+            Config.WriteObject(configData, true);
+        }
+
+        [ConsoleCommand("UI_RemovePage")]
+        private void cmdUI_RemovePage(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            if (!UniversalUIInfo.ContainsKey(player.userID)) return;
+            foreach (var entry in configData.sections[UniversalUIInfo[player.userID].section].pages.Where(k => k.page == UniversalUIInfo[player.userID].page))
+            {
+                configData.sections[UniversalUIInfo[player.userID].section].pages.Remove(entry);
+                break;
+            }
+            Config.WriteObject(configData, true);
+            UniversalUIInfo[player.userID].page = 0;
+            OpenUniversalUI(player);
+        }
+
+
+
+
         [ConsoleCommand("UI_RunConsoleCommand")]
         private void cmdUI_RunConsoleCommand(ConsoleSystem.Arg arg)
         {
             var player = arg.connection.player as BasePlayer;
             if (player == null)
                 return;
+            //Puts(string.Join(" ",arg.Args));
             var cmd = "";
-            if (arg.Args[0] == "delay")
+            if (arg.Args[1] == "delay")
             {
                 if (OnDelay.ContainsKey(player.userID))
                     OnDelay.Remove(player.userID);
-                List<string> args = new List<string>();
-                foreach (var e in arg.Args.Where(e=> e != "delay"))
-                    args.Add(e);
-                OnDelay.Add(player.userID, args);
-                var message = string.Join(" ", arg.Args.Skip(1).ToArray());
-                if (arg.Args[1] == "chat.say")
-                   message = string.Join(" ", arg.Args.Skip(2).ToArray());
+                OnDelay.Add(player.userID, new DelayedCommand { closeui = Convert.ToBoolean(arg.Args[0]), args = new List<string>() });
+                foreach (var e in arg.Args.Skip(2))
+                OnDelay[player.userID].args.Add(e);
+                var message = string.Join(" ", arg.Args.Skip(2).ToArray());
+                //Puts(message);
+                //if (arg.Args[2] == "chat.say")
+                //   message = string.Join(" ", arg.Args.Skip(3).ToArray());
                 GetSendMSG(player, "DelayedCMD", message);
                 DestroyUniversalUI(player);
             }
-            if (arg.Args[0] == "chat.say")
+            else if (arg.Args[1] == "chat.say")
             {
-                cmd = string.Join(" ", arg.Args.Skip(1).ToArray());
+                cmd = string.Join(" ", arg.Args.Skip(2).ToArray());
                 rust.RunClientCommand(player, $"chat.say", cmd);
+                if (Convert.ToBoolean(arg.Args[0]))
+                    DestroyUniversalUI(player);
             }
             else
             {
-                cmd = string.Join(" ", arg.Args);
+                cmd = string.Join(" ", arg.Args.Skip(1).ToArray());
                 rust.RunClientCommand(player, $"{cmd}");
+                if (Convert.ToBoolean(arg.Args[0]))
+                    DestroyUniversalUI(player);
             }
         }
 
@@ -324,6 +498,7 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var section = Convert.ToInt32(arg.Args[0]);
+            if (Debugging) Puts($"{section}");
             UniversalUIInfo[player.userID].showSection = section;
             UIInfoPanel(player);
         }
@@ -352,7 +527,7 @@ namespace Oxide.Plugins
                 player.Command($"bind {configData.MenuKeyBinding} \"\"");
         }
 
-        private string GetLang(string msg)
+        private string GetLang(string msg, BasePlayer player = null)
         {
             if (messages.ContainsKey(msg))
                 return lang.GetMessage(msg, this);
@@ -361,8 +536,17 @@ namespace Oxide.Plugins
 
         private void GetSendMSG(BasePlayer player, string message, string arg1 = "", string arg2 = "", string arg3 = "")
         {
-            string msg = string.Format(lang.GetMessage(message, this), arg1, arg2, arg3);
+            string msg = string.Format(lang.GetMessage(message, this, player.UserIDString), arg1, arg2, arg3);
             SendReply(player, TitleColor + lang.GetMessage("title", this, player.UserIDString) + "</color>" + MsgColor + msg + "</color>");
+        }
+
+        private string GetMSG(string message, BasePlayer player = null, string arg1 = "", string arg2 = "", string arg3 = "")
+        {
+            string p = null;
+            if (player != null)
+                p = player.UserIDString;
+            string msg = string.Format(lang.GetMessage(message, this, p), arg1, arg2, arg3);
+            return msg;
         }
 
         bool isAuth(BasePlayer player)
@@ -401,9 +585,9 @@ namespace Oxide.Plugins
             return true;
         }
 
-        private string TryForImage(string shortname, ulong skin = 99)
+        private string TryForImage(string shortname, ulong skin = 99, bool localimage = true)
         {
-            if (localimages)
+            if (localimage)
                 if (skin == 99)
                     return GetImage(shortname, (ulong)ResourceId);
                 else return GetImage(shortname, skin);
@@ -434,7 +618,6 @@ namespace Oxide.Plugins
 
         public class UI
         {
-            static bool localimage = true;
             static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
@@ -485,17 +668,18 @@ namespace Oxide.Plugins
 
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (UI.localimage)
+                if (img.Contains("http"))
                 {
                     container.Add(new CuiElement
                     {
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
+
                 }
                 else
                     container.Add(new CuiElement
@@ -503,7 +687,7 @@ namespace Oxide.Plugins
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -521,8 +705,7 @@ namespace Oxide.Plugins
                 panel);
 
             }
-
-            static public void CreateTextOutline(ref CuiElementContainer element, string panel, string text, string colorText, string colorOutline, string DistanceA, string DistanceB, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 element.Add(new CuiElement
                 {
@@ -530,7 +713,7 @@ namespace Oxide.Plugins
                     Components =
                     {
                         new CuiTextComponent{Color = colorText, FontSize = size, Align = align, Text = text },
-                        new CuiOutlineComponent {Distance = DistanceA + " " + DistanceB, Color = colorOutline},
+                        new CuiOutlineComponent {Distance = "1 1", Color = colorOutline},
                         new CuiRectTransformComponent {AnchorMax = aMax, AnchorMin = aMin }
                     }
                 });
@@ -591,13 +774,13 @@ namespace Oxide.Plugins
         {
             var pos = CalcButtonPos(num);
             if (Valid($"UUIMainButton{num}"))
-                {
-                    UI.LoadImage(ref container, panelName, TryForImage($"UUIMainButton{num}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    UI.CreateButton(ref container, panelName, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
-                }
+            {
+                UI.LoadImage(ref container, panelName, TryForImage($"UUIMainButton{num}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                UI.CreateButton(ref container, panelName, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+            }
             else
             {
-                UI.CreateButton(ref container, panelName, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
+                UI.CreateButton(ref container, panelName, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
             }
         }
 
@@ -607,56 +790,157 @@ namespace Oxide.Plugins
             if (!UniversalUIInfo.ContainsKey(player.userID))
                 UniversalUIInfo.Add(player.userID, new screen { page = 0, section = 0, showSection = 0 });
             CuiElementContainer element = element = UI.CreateElementContainer(PanelInfo, "0 0 0 0", "0.2 0.2", "0.8 0.8", true);
-            if (UniversalUIInfo[player.userID].showSection != 0)
-                UI.CreateButton(ref element, PanelInfo, UIColors["black"], "<--", 12, "0.17 0.9", "0.2 0.975", $"UI_InfoSectionButtonChange {UniversalUIInfo[player.userID].showSection - 1}");
-            if (UniversalUIInfo[player.userID].showSection + 4 < configData.sections.Max(kvp => kvp.Key))
-                UI.CreateButton(ref element, PanelInfo, UIColors["black"], "-->", 12, "0.95 0.9", "0.98 0.975", $"UI_InfoSectionButtonChange {UniversalUIInfo[player.userID].showSection + 1}");
-            if (UniversalUIInfo[player.userID].section != 0)
-                foreach (var entry in configData.sections)
-                {
-                    if (Debugging) Puts($"No Home Page - Trying Section: {entry.Key.ToString()}");
-                    if (entry.Key < UniversalUIInfo[player.userID].showSection) continue;
-                    if (entry.Key > UniversalUIInfo[player.userID].showSection + 4) continue;
-                    if (entry.Key == UniversalUIInfo[player.userID].section)
-                        foreach (var page in entry.Value.pages.Where(kvp => kvp.page == UniversalUIInfo[player.userID].page))
+            //if (UniversalUIInfo[player.userID].section != 0)
+            foreach (var entry in configData.sections.Where(k => k.Key == UniversalUIInfo[player.userID].section))
+            {
+                if (Debugging) Puts($"No Home Page - Trying Section: {entry.Key.ToString()}");
+                if (entry.Key == UniversalUIInfo[player.userID].section)
+                    foreach (var page in entry.Value.pages.Where(kvp => kvp.page == UniversalUIInfo[player.userID].page))
+                    {
+                        switch (page.type)
                         {
-                            if (Valid($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"))
-                                UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"), "0 0", "1 0.88");
-                            else
-                            {
-                                UI.CreatePanel(ref element, PanelInfo, UIColors["dark"], "0 0", "1 1");
-                                UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.02", "0.99 0.98");
-                            }
-                            if (!string.IsNullOrEmpty(page.name))
-                                UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.name.ToUpper(), 24, "0.3 0.8", "0.7 0.9");
-                            if (!string.IsNullOrEmpty(page.text))
-                                UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.text, 12, "0.03 0.2", "0.97 0.65", TextAnchor.UpperLeft);
-                            foreach (var button in page.buttons.OrderBy(kvp => kvp.order))
-                                if (!string.IsNullOrEmpty(button.command) && isAllowed(player, button.adminOnly, button.permission))
+                            case PageType.text:
                                 {
-                                    var pos = CalcInfoButtonPos(button.order);
-                                    if (Valid($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"))
-                                    {
-                                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                                        if (!string.IsNullOrEmpty(button.name))
-                                        {
-                                            UI.CreateLabel(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
-                                        }
-                                        else
-                                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
-                                    }
+                                    if (Valid($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"))
+                                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"), "0 0", "1 0.88");
                                     else
                                     {
-                                        if (!string.IsNullOrEmpty(button.name))
-                                            UI.CreateButton(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
-                                        else
-                                            UI.CreateButton(ref element, PanelInfo, UIColors["red"], "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.command}");
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["dark"], "0 0", "1 1");
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.02", "0.99 0.98");
                                     }
+                                    if (!string.IsNullOrEmpty(page.name))
+                                        UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.name.ToUpper(), 24, "0.3 0.8", "0.7 0.9");
+                                    if (!string.IsNullOrEmpty(page.text))
+                                        UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.text, 12, "0.03 0.2", "0.97 0.65");
+                                    //foreach (var button in page.buttons.OrderBy(kvp => kvp.order))
+                                    //    if (!string.IsNullOrEmpty(button.command) && isAllowed(player, button.adminOnly, button.permission))
+                                    //    {
+                                    //        var pos = CalcInfoButtonPos(button.order);
+                                    //        if (Valid($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"))
+                                    //        {
+                                    //            UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                    //            if (!string.IsNullOrEmpty(button.name))
+                                    //            {
+                                    //                UI.CreateLabel(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                    //                UI.CreateButton(ref element, PanelInfo, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                    //            }
+                                    //            else
+                                    //                UI.CreateButton(ref element, PanelInfo, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                    //        }
+                                    //        else
+                                    //        {
+                                    //            if (!string.IsNullOrEmpty(button.name))
+                                    //                UI.CreateButton(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                    //            else
+                                    //                UI.CreateButton(ref element, PanelInfo, UIColors["red"], "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                    //        }
+                                    //    }
+                                    break;
+                                }
+                            case PageType.buttons:
+                                {
+                                    if (Valid($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"))
+                                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"), "0 0", "1 0.88");
+                                    else
+                                    {
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["dark"], "0 0", "1 1");
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.02", "0.99 0.98");
+                                    }
+                                    if (!string.IsNullOrEmpty(page.name))
+                                        UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.name.ToUpper(), 24, "0.3 0.8", "0.7 0.9");
+                                    //if (!string.IsNullOrEmpty(page.text))
+                                    //    UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.text, 12, "0.03 0.2", "0.85 0.65", TextAnchor.UpperLeft);
+                                    foreach (var button in page.buttons.OrderByDescending(kvp => kvp.order))
+                                        if (!string.IsNullOrEmpty(button.command) && isAllowed(player, button.adminOnly, button.permission))
+                                        {
+                                            if (button.order > 69) continue;
+                                            var pos = CalcButtonPagePos(button.order);
+                                            if (Valid($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"))
+                                            {
+                                                UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                                if (!string.IsNullOrEmpty(button.name))
+                                                {
+                                                    UI.CreateLabel(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                                    UI.CreateButton(ref element, PanelInfo, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                                }
+                                                else
+                                                    UI.CreateButton(ref element, PanelInfo, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                            }
+                                            else
+                                            {
+                                                if (!string.IsNullOrEmpty(button.name))
+                                                    UI.CreateButton(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                                else
+                                                    UI.CreateButton(ref element, PanelInfo, UIColors["red"], "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                            }
+                                        }
+                                    break;
+                                }
+                            case PageType.kits:
+                                {
+                                    if (Valid($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"))
+                                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"), "0 0", "1 0.88");
+                                    else
+                                    {
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["dark"], "0 0", "1 1");
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.02", "0.99 0.98");
+                                    }
+                                    if (!string.IsNullOrEmpty(page.name))
+                                        UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.name.ToUpper(), 24, "0.3 0.8", "0.7 0.9");
+                                    var i = 0;
+                                    foreach (var kit in page.Kits)
+                                    {
+                                        if (i > 7) break;
+                                        CreateKitEntry(ref element, PanelInfo, player, kit, i); i++;
+                                    }
+                                    if (UniversalUIInfo[player.userID].admin)
+                                        UI.CreateButton(ref element, PanelInfo, UIColors["header"], GetLang("AddKit"), 12, "0.03 0.11", "0.13 0.17", $"UI_SelectKitToAdd {0}");
+                                    break;
+                                }
+                            default:
+                                {
+                                    if (Valid($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"))
+                                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPage{entry.Key}-{UniversalUIInfo[player.userID].page}"), "0 0", "1 0.88");
+                                    else
+                                    {
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["dark"], "0 0", "1 1");
+                                        UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.02", "0.99 0.98");
+                                    }
+                                    if (!string.IsNullOrEmpty(page.name))
+                                        UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.name.ToUpper(), 24, "0.3 0.8", "0.7 0.9");
+                                    if (!string.IsNullOrEmpty(page.text))
+                                        UI.CreateLabel(ref element, PanelInfo, UIColors["white"], page.text, 12, "0.03 0.2", "0.85 0.65", TextAnchor.UpperLeft);
+                                    foreach (var button in page.buttons.OrderBy(kvp => kvp.order))
+                                        if (!string.IsNullOrEmpty(button.command) && isAllowed(player, button.adminOnly, button.permission))
+                                        {
+                                            var pos = CalcInfoButtonPos(button.order);
+                                            if (Valid($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"))
+                                            {
+                                                UI.LoadImage(ref element, PanelInfo, TryForImage($"UUIPageButton{entry.Key}-{UniversalUIInfo[player.userID].page}-{button.order}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                                if (!string.IsNullOrEmpty(button.name))
+                                                {
+                                                    UI.CreateLabel(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                                                    UI.CreateButton(ref element, PanelInfo, "0 0 0 0", button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                                }
+                                                else
+                                                    UI.CreateButton(ref element, PanelInfo, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                            }
+                                            else
+                                            {
+                                                if (!string.IsNullOrEmpty(button.name))
+                                                    UI.CreateButton(ref element, PanelInfo, UIColors["red"], button.name, 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                                else
+                                                    UI.CreateButton(ref element, PanelInfo, UIColors["red"], "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_RunConsoleCommand {button.CloseUI} {button.command}");
+                                            }
+                                        }
+                                    break;
                                 }
                         }
-                }
+                    }
+                break;
+            }
             //Create Section Buttons at the Top
+
             if (UniversalUIInfo[player.userID].section == 0)
             {
                 if (Valid(configData.HomePage.name))
@@ -676,10 +960,14 @@ namespace Oxide.Plugins
             {
                 UI.CreateButton(ref element, PanelInfo, UIColors["blue"], configData.HomePage.name.ToUpper(), 12, "0.02 0.9", "0.16 0.975", $"UI_SwitchSection {0} false ");
             }
-            foreach (var entry in configData.sections)
+            foreach (var entry in configData.sections/*.Where(k => k.Key >= UniversalUIInfo[player.userID].showSection && k.Key < (UniversalUIInfo[player.userID].showSection + 4))*/)
             {
+                if (entry.Key < UniversalUIInfo[player.userID].showSection) continue;
+                if (entry.Key > UniversalUIInfo[player.userID].showSection + 5) continue;
                 var pos = CalcSectionButtonPos(entry.Key - UniversalUIInfo[player.userID].showSection);
                 if (Debugging) Puts($"Trying Section: {entry.Key}");
+                if (Debugging) Puts($"Shown Section: { UniversalUIInfo[player.userID].showSection}");
+                if (Debugging) Puts($"Last Section: { UniversalUIInfo[player.userID].showSection + 4}");
                 var admin = "false";
                 if (entry.Value.adminOnly)
                     admin = "true";
@@ -690,28 +978,25 @@ namespace Oxide.Plugins
                     var currentpage = UniversalUIInfo[player.userID].page;
                     if (currentpage < lastpage - 1)
                     {
-                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Last"), 12, "0.8 0.03", "0.85 0.085", $"UI_PageTurn {lastpage}");
+                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Last"), 12, "0.9 0.03", "0.95 0.085", $"UI_PageTurn {lastpage}");
                     }
                     if (currentpage < lastpage)
                     {
-                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Next"), 12, "0.74 0.03", "0.79 0.085", $"UI_PageTurn {currentpage + 1}");
+                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Next"), 12, "0.84 0.03", "0.89 0.085", $"UI_PageTurn {currentpage + 1}");
                     }
                     if (currentpage > 0)
                     {
-                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Back"), 12, "0.68 0.03", "0.73 0.085", $"UI_PageTurn {currentpage - 1}");
+                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Back"), 12, "0.77 0.03", "0.82 0.085", $"UI_PageTurn {currentpage - 1}");
                     }
                     if (currentpage > 1)
                     {
-                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("First"), 12, "0.62 0.03", "0.67 0.085", $"UI_PageTurn {0}");
+                        UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("First"), 12, "0.71 0.03", "0.76 0.085", $"UI_PageTurn {0}");
                     }
-                    if (Debugging) Puts($"Past Page Turning Buttons");
                     UI.CreatePanel(ref element, PanelInfo, UIColors["red"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
                     if (!string.IsNullOrEmpty(entry.Value.name))
                         UI.CreateLabel(ref element, PanelInfo, UIColors["white"], entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
                     else UI.CreateLabel(ref element, PanelInfo, UIColors["white"], $"Section:{entry.Key.ToString().ToUpper()}", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                    if (Debugging) Puts("Passed Select Section");
                 }
-
                 else
                 {
                     if (Debugging) Puts($"Section Didn't Match: {entry.Key}");
@@ -722,7 +1007,6 @@ namespace Oxide.Plugins
                             UI.CreateButton(ref element, PanelInfo, "0 0 0 0", entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
                         else
                             UI.CreateButton(ref element, PanelInfo, "0 0 0 0", $"Section:{entry.Key.ToString().ToUpper()}", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
-                        if (Debugging) Puts("Section Button Image Try - Non Selected");
                     }
                     else
                     {
@@ -733,12 +1017,211 @@ namespace Oxide.Plugins
                     }
                 }
             }
-
+            if (UniversalUIInfo[player.userID].showSection != 0)
+                UI.CreateButton(ref element, PanelInfo, UIColors["black"], "<--", 12, "0.17 0.9", "0.2 0.975", $"UI_InfoSectionButtonChange {UniversalUIInfo[player.userID].showSection - 1}");
+            if (Debugging) Puts($"Max Section: {configData.sections.Max(kvp => kvp.Key) - 1}");
+            if (UniversalUIInfo[player.userID].showSection + 5 < configData.sections.Max(kvp => kvp.Key))
+                UI.CreateButton(ref element, PanelInfo, UIColors["black"], "-->", 12, "0.95 0.9", "0.98 0.975", $"UI_InfoSectionButtonChange {UniversalUIInfo[player.userID].showSection + 1}");
             if (configData.UseButtonPanel)
                 UI.CreateButton(ref element, PanelInfo, UIColors["red"], GetLang("HideInfoPanel"), 12, "0.03 0.03", "0.13 0.085", "UI_HideInfo");
+            if (isAuth(player))
+                UI.CreateButton(ref element, PanelInfo, UIColors["buttonred"], GetLang("ToggleAdmin"), 13, "0.14 0.03", "0.24 0.085", $"UI_AdminView");
+            if (UniversalUIInfo[player.userID].admin)
+            {
+                UI.CreateButton(ref element, PanelInfo, UIColors["green"], GetLang("AddSection"), 12, "0.25 0.03", "0.35 0.085", "UI_AddNewSection");
+                if (UniversalUIInfo[player.userID].section != 0)
+                {
+                    UI.CreateButton(ref element, PanelInfo, UIColors["red"], GetLang("RemoveSection"), 12, "0.36 0.03", "0.46 0.085", "UI_RemoveSection");
+                    UI.CreateButton(ref element, PanelInfo, UIColors["green"], GetLang("AddPage"), 12, "0.47 0.03", "0.57 0.085", "UI_AddNewPage");
+                    if (UniversalUIInfo[player.userID].page != 0) UI.CreateButton(ref element, PanelInfo, UIColors["red"], GetLang("RemovePage"), 12, "0.58 0.03", "0.68 0.085", "UI_RemovePage");
+                }
+            }
             CuiHelper.AddUi(player, element);
         }
 
+        private void CreateKitEntry(ref CuiElementContainer container, string panelName, BasePlayer player, string kit, int num)
+        {
+            var pos = KitPos(num);
+            UI.CreatePanel(ref container, panelName, UIColors["header"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+            if (num == 0)
+            {
+                UI.CreateLabel(ref container, panelName, UIColors["white"], "Kit", 12, $"{pos[0] + .1f} {pos[1] + .07f}", $"{pos[0] + .22f} {pos[3] + .07f}");
+                UI.CreateLabel(ref container, panelName, UIColors["white"], "Description", 12, $"{pos[0] + .23f} {pos[1] + .07f}", $"{pos[0] + .6f} {pos[3] + .07f}");
+                UI.CreateLabel(ref container, panelName, UIColors["white"], "Cooldown", 12, $"{pos[0] + .64f} {pos[1] + .07f}", $"{pos[0] + .73f} {pos[3] + .07f}");
+                UI.CreateLabel(ref container, panelName, UIColors["white"], "Max", 12, $"{pos[0] + .72f} {pos[1] + .07f}", $"{pos[0] + .78f} {pos[3] + .07f}");
+            }
+            var description = "";
+            if (!string.IsNullOrEmpty(GetKitDescription(kit)))
+                description = GetKitDescription(kit);
+            UI.LoadImage(ref container, panelName, GetKitImage(kit) , $"{pos[0]+.01f} {pos[1]}", $"{pos[0] + .09f} {pos[3]}");
+            UI.CreateLabel(ref container, panelName, UIColors["white"], kit.ToUpper(), 12, $"{pos[0] + .1f} {pos[1] + .01f}", $"{pos[0] + .22f} {pos[3] - .01f}");
+            UI.CreateLabel(ref container, panelName, UIColors["white"], description, 12, $"{pos[0] + .23f} {pos[1] + .01f}", $"{pos[0] + .6f} {pos[3] - .01f}", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, panelName, UIColors["white"], GetKitCooldown(kit).ToString(), 12, $"{pos[0] + .66f} {pos[1] + .01f}", $"{pos[0] + .72f} {pos[3] - .01f}");
+            UI.CreateLabel(ref container, panelName, UIColors["white"], GetKitMax(kit).ToString(), 12, $"{pos[0] + .72f} {pos[1] + .01f}", $"{pos[0] + .78f} {pos[3] - .01f}");
+            UI.CreateButton(ref container, panelName, UIColors["dark"], GetLang("Redeem"), 12, $"{pos[2] - .16f} {pos[1] + .01f}", $"{pos[2] - .09f} {pos[3] - .01f}", $"UI_RedeemKit {kit}");
+            if (UniversalUIInfo[player.userID].admin)
+                UI.CreateButton(ref container, panelName, UIColors["buttonred"], GetLang("Remove"), 12, $"{pos[2] - .08f} {pos[1] + .01f}", $"{pos[2] - .01f} {pos[3] - .01f}", $"UI_RemoveKit {kit}");
+        }
+
+        private void AddKit(BasePlayer player, int page = 0)
+        {
+            double count = GetKitNames().Count() - configData.sections[UniversalUIInfo[player.userID].section].pages[UniversalUIInfo[player.userID].page].Kits.Count();
+            if (count == 0)
+            {
+                GetSendMSG(player, "NoKitsFound");
+                return;
+            }
+            CuiHelper.DestroyUi(player, PanelInfo);
+            var element = UI.CreateElementContainer(PanelInfo, UIColors["dark"], "0.2 0.15", "0.8 0.85", true);
+            UI.CreatePanel(ref element, PanelInfo, UIColors["light"], "0.01 0.015", ".99 .985");
+            UI.CreateLabel(ref element, PanelInfo, UIColors["limegreen"], GetMSG("SelectKit"), 20, "0.05 .95", ".95 1", TextAnchor.MiddleCenter);
+            int entriesallowed = 30;
+            double remainingentries = count - (page * (entriesallowed));
+            double totalpages = (Math.Floor(count / (entriesallowed)));
+            {
+                if (page < totalpages - 1)
+                {
+                    UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Last"), 16, "0.8 0.02", "0.85 0.075", $"UI_SelectKitToAdd {totalpages}");
+                }
+                if (remainingentries > entriesallowed)
+                {
+                    UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Next"), 16, "0.74 0.02", "0.79 0.075", $"UI_SelectKitToAdd {page + 1}");
+                }
+                if (page > 0)
+                {
+                    UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("Back"), 16, "0.68 0.02", "0.73 0.075", $"UI_SelectKitToAdd {page - 1}");
+                }
+                if (page > 1)
+                {
+                    UI.CreateButton(ref element, PanelInfo, UIColors["dark"], GetLang("First"), 16, "0.62 0.02", "0.67 0.075", $"UI_SelectKitToAdd {0}");
+                }
+            }
+            var i = 0;
+            int n = 0;
+            double shownentries = page * entriesallowed;
+            foreach (string kitname in GetKitNames().Where(k => !configData.sections[UniversalUIInfo[player.userID].section].pages[UniversalUIInfo[player.userID].page].Kits.Contains(k)))
+            {
+                i++;
+                if (i < shownentries + 1) continue;
+                else if (i <= shownentries + entriesallowed)
+                {
+                    CreateKitButton(ref element, PanelInfo, UIColors["buttonbg"], kitname, $"UI_AddKit {kitname}", n);
+                    n++;
+                }
+            }
+            UI.CreateButton(ref element, PanelInfo, UIColors["buttonred"], GetLang("Quit"), 16, "0.87 0.02", "0.97 0.075", $"UI_DestroyKitsPanel");
+            CuiHelper.AddUi(player, element);
+        }
+
+        private void CreateKitButton(ref CuiElementContainer container, string panelName, string color, string name, string cmd, int num)
+        {
+            var pos = CalcKitButtonPos(num);
+            UI.CreateButton(ref container, panelName, color, name, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", cmd);
+        }
+
+        [ConsoleCommand("UI_SelectKitToAdd")]
+        private void cmdUI_SelectKitToAdd(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            int page;
+            if (!int.TryParse(arg.Args[0], out page)) return;
+            AddKit(player, page);
+        }
+
+        [ConsoleCommand("UI_AddKit")]
+        private void cmdUI_AddKit(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            var kit = arg.Args[0];
+            configData.sections[UniversalUIInfo[player.userID].section].pages[UniversalUIInfo[player.userID].page].Kits.Add(kit);
+            Config.WriteObject(configData, true);
+            OpenUniversalUI(player);
+        }
+
+        [ConsoleCommand("UI_RedeemKit")]
+        private void cmdUI_RedeemKit(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            var kit = arg.Args[0];
+            object isKit = Kits?.Call("isKit", new object[] { kit });
+            if (isKit is bool)
+                if ((bool)isKit)
+                {
+                    Kits?.Call("TryGiveKit", player, kit);
+                }
+            UniversalUIPanel(player);
+        }
+
+        [ConsoleCommand("UI_RemoveKit")]
+        private void cmdUI_RemoveKit(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            var kit = arg.Args[0];
+            configData.sections[UniversalUIInfo[player.userID].section].pages[UniversalUIInfo[player.userID].page].Kits.Remove(kit);
+            Config.WriteObject(configData, true);
+            OpenUniversalUI(player);
+        }
+
+
+        private float[] CalcKitButtonPos(int number)
+        {
+            Vector2 position = new Vector2(0.05f, 0.82f);
+            Vector2 dimensions = new Vector2(0.125f, 0.125f);
+            float offsetY = 0;
+            float offsetX = 0;
+            if (number >= 0 && number < 6)
+            {
+                offsetX = (0.03f + dimensions.x) * number;
+            }
+            if (number > 5 && number < 12)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 6);
+                offsetY = (-0.06f - dimensions.y) * 1;
+            }
+            if (number > 11 && number < 18)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 12);
+                offsetY = (-0.06f - dimensions.y) * 2;
+            }
+            if (number > 17 && number < 24)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 18);
+                offsetY = (-0.06f - dimensions.y) * 3;
+            }
+            if (number > 23 && number < 36)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 24);
+                offsetY = (-0.06f - dimensions.y) * 4;
+            }
+            Vector2 offset = new Vector2(offsetX, offsetY);
+            Vector2 posMin = position + offset;
+            Vector2 posMax = posMin + dimensions;
+            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
+        }
+
+        private float[] KitPos(int number)
+        {
+            Vector2 position = new Vector2(0.015f, 0.71f);
+            Vector2 dimensions = new Vector2(0.965f, 0.07f);
+            float offsetY = 0;
+            float offsetX = 0;
+            if (number >= 0 && number < 10)
+            {
+                offsetY = (-0.005f - dimensions.y) * number;
+            }
+            Vector2 offset = new Vector2(offsetX, offsetY);
+            Vector2 posMin = position + offset;
+            Vector2 posMax = posMin + dimensions;
+            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
+        }
 
         private float[] CalcButtonPos(int number)
         {
@@ -754,6 +1237,52 @@ namespace Oxide.Plugins
             {
                 offsetY = (-0.01f - dimensions.y) * (number - 10);
                 offsetX = (0.01f + dimensions.x) * 1;
+            }
+            Vector2 offset = new Vector2(offsetX, offsetY);
+            Vector2 posMin = position + offset;
+            Vector2 posMax = posMin + dimensions;
+            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
+        }
+
+        private float[] CalcButtonPagePos(int number)
+        {
+            Vector2 position = new Vector2(0.03f, 0.75f);
+            Vector2 dimensions = new Vector2(0.125f, 0.05f);
+            float offsetY = 0;
+            float offsetX = 0;
+            if (number >= 0 && number < 10)
+            {
+                offsetY = (-0.01f - dimensions.y) * number;
+            }
+            if (number > 9 && number < 20)
+            {
+                offsetY = (-0.01f - dimensions.y) * (number - 10);
+                offsetX = (0.01f + dimensions.x) * 1;
+            }
+            if (number > 19 && number < 30)
+            {
+                offsetY = (-0.01f - dimensions.y) * (number - 20);
+                offsetX = (0.01f + dimensions.x) * 2;
+            }
+            if (number > 29 && number < 40)
+            {
+                offsetY = (-0.01f - dimensions.y) * (number - 30);
+                offsetX = (0.01f + dimensions.x) * 3;
+            }
+            if (number > 39 && number < 50)
+            {
+                offsetY = (-0.01f - dimensions.y) * (number - 40);
+                offsetX = (0.01f + dimensions.x) * 4;
+            }
+            if (number > 49 && number < 60)
+            {
+                offsetY = (-0.01f - dimensions.y) * (number - 50);
+                offsetX = (0.01f + dimensions.x) * 5;
+            }
+            if (number > 59 && number < 70)
+            {
+                offsetY = (-0.01f - dimensions.y) * (number - 60);
+                offsetX = (0.01f + dimensions.x) * 6;
             }
             Vector2 offset = new Vector2(offsetX, offsetY);
             Vector2 posMin = position + offset;
@@ -788,6 +1317,11 @@ namespace Oxide.Plugins
             {
                 offsetY = (-0.01f - dimensions.y) * number;
             }
+            if (number > 9 && number < 20)
+            {
+                offsetX = (-0.01f - dimensions.x) * 1;
+                offsetY = (-0.01f - dimensions.y) * (number - 10);
+            }
             Vector2 offset = new Vector2(offsetX, offsetY);
             Vector2 posMin = position + offset;
             Vector2 posMax = posMin + dimensions;
@@ -805,6 +1339,7 @@ namespace Oxide.Plugins
             public string ButtonImage;
             public bool adminOnly;
             public string permission;
+            public bool CloseUI;
         }
 
         class PageButton
@@ -815,6 +1350,7 @@ namespace Oxide.Plugins
             public bool adminOnly;
             public int order;
             public string permission;
+            public bool CloseUI;
         }
 
         class Section
@@ -833,6 +1369,16 @@ namespace Oxide.Plugins
             public string text;
             public string PageImage;
             public List<PageButton> buttons = new List<PageButton>();
+            public PageType type = PageType.standard;
+            public List<string> Kits = new List<string>();
+        }
+
+        enum PageType
+        {
+            standard,
+            text,
+            buttons,
+            kits
         }
 
         #endregion
@@ -849,6 +1395,18 @@ namespace Oxide.Plugins
             }
             else
                 OpenUniversalUI(player);
+        }
+
+        [ConsoleCommand("UI_AdminView")]
+        private void cmdUI_AdminView(ConsoleSystem.Arg arg)
+        {
+            var player = arg.connection.player as BasePlayer;
+            if (player == null)
+                return;
+            if (UniversalUIInfo[player.userID].admin == true)
+                UniversalUIInfo[player.userID].admin = false;
+            else UniversalUIInfo[player.userID].admin = true;
+            OpenUniversalUI(player);
         }
 
 
@@ -868,6 +1426,10 @@ namespace Oxide.Plugins
 
         private void GetAllImages()
         {
+            AddImage("http://i.imgur.com/GT0ngNJ.png", "text", (ulong)ResourceId);
+            AddImage("http://i.imgur.com/9IpSF2b.png", "buttons", (ulong)ResourceId);
+            AddImage("http://i.imgur.com/DUpRzdb.png", "standard", (ulong)ResourceId);
+            AddImage("http://i.imgur.com/GbNMTDA.png", "kits", (ulong)ResourceId);
             if (string.IsNullOrEmpty(configData.HomePage.PageImage)) configData.HomePage = DefaultHomePage;
             AddImage(configData.HomePage.PageImage, configData.HomePage.name, (ulong)ResourceId);
             foreach (var entry in configData.buttons)
@@ -1088,7 +1650,9 @@ namespace Oxide.Plugins
             {"HideInfoPanel", "Hide Info" },
             {"NotAuth", "You are not authorized." },
             {"DelayedCMD", "You have selected a Delayed Command. To finish the command please type a 'parameter' for command: {0}. Or Type 'quit' to exit." },
-            {"ExitDelayed", "You have exited the Delayed Command." }
+            {"ExitDelayed", "You have exited the Delayed Command." },
+            {"Type", "Type: {0}" },
+
         };
         #endregion
 

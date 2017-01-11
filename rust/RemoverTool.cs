@@ -15,7 +15,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.0.9", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.0.10", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -573,7 +573,7 @@ namespace Oxide.Plugins
             if (Entity != null)
             {
                 Interface.Oxide.CallHook("OnRemovedEntity", Entity);
-                if (!Entity.isDestroyed)
+                if (!Entity.IsDestroyed)
                     Entity.Kill(gibs ? BaseNetworkable.DestroyMode.Gib : BaseNetworkable.DestroyMode.None);
             }
         }
@@ -1249,7 +1249,7 @@ namespace Oxide.Plugins
             for (int i = 0; i < entities.Count; i++)
             {
                 DoRemove(entities[i], false);
-                yield return new WaitWhile(new Func<bool>(() => (!entities[i].isDestroyed)));
+                yield return new WaitWhile(new Func<bool>(() => (!entities[i].IsDestroyed)));
             }
         }
         public static IEnumerator DelayRemove(List<BaseEntity> entities)
@@ -1257,7 +1257,7 @@ namespace Oxide.Plugins
             for (int i = 0; i < entities.Count; i++)
             {
                 DoRemove(entities[i], false);
-                yield return new WaitWhile(new Func<bool>(() => (!entities[i].isDestroyed)));
+                yield return new WaitWhile(new Func<bool>(() => (!entities[i].IsDestroyed)));
             }
         }
         #endregion

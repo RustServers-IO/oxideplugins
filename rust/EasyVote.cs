@@ -19,7 +19,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "1.2.5", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "1.2.6", ResourceId = 2102)]
     [Description("Making voting super easy and smooth!")]
     class EasyVote : RustPlugin
     {
@@ -34,7 +34,7 @@ namespace Oxide.Plugins
         private List<int> numberMax = new List<int>();
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        // {"Claim reward URL", "Get vote status URL", "Server link to chat URL"}
+        // {"Claim reward GET URL", "Vote status GET URL", "Server vote link to chat URL"}
         string[] RustServers = { "http://rust-servers.net/api/?action=custom&object=plugin&element=reward&key={0}&steamid={1}",
             "https://rust-servers.net/api/?object=votes&element=claim&key={0}&steamid={1}", "http://rust-servers.net/server/{0}" };
         string[] TopRustServers = { "http://api.toprustservers.com/api/put?plugin=voter&key={0}&uid={1}",
@@ -45,6 +45,9 @@ namespace Oxide.Plugins
 
         private void Loaded()
         {
+            #region Permissions
+            permission.RegisterPermission("EasyVote.Admin", this);
+            #endregion
             #region Language Setup
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -60,6 +63,7 @@ namespace Oxide.Plugins
                 ["RemeberClaim"] = "You haven't yet claimed your reward from voting server! Use <color=cyan>/claim</color> to claim your reward! \n You have to claim your reward in <color=yellow>24h</color>! Otherwise it will be gone!",
                 ["GlobalClaimAnnouncment"] = "<color=yellow>{0}</color><color=cyan> has voted </color><color=yellow>{1}</color><color=cyan> time(s) and just received their rewards. Find out where to vote by typing</color><color=yellow> /vote</color>\n<color=cyan>To see a list of avaliable rewards type</color><color=yellow> /reward list</color>",
                 ["Voted"] = "You have voted <color=yellow>{0}</color> time! Thank you mate :)",
+                ["Admin"] = "Usage: /vote [test]",
                 ["money"] = "{0} has been desposited into your account",
                 ["rp"] = "You have gained {0} reward points",
                 ["addgroup"] = "You have been added to group {0} {1}",
@@ -156,6 +160,34 @@ namespace Oxide.Plugins
         [ChatCommand("vote")]
         void cmdVote(BasePlayer player, string command, string[] args)
         {
+            if (hasPermission(player, "EasyVote.Admin"))
+            {
+                if (args?.Length != 0)
+                {
+                    string CommandsStr = args[0].ToLower();
+
+                    switch (CommandsStr)
+                    {
+                        case "test":
+                            {
+                                //int CommandsValue = 0;
+
+                                //try { CommandsValue = Convert.ToInt16(args[1]); }
+                                //catch (Exception ex) { Chat(player, Lang("Admin", player.UserIDString)); return; }
+
+                                RewardHandler(player);
+                            }
+                            break;
+                        default:
+                            {
+                                Chat(player, Lang("Admin", player.UserIDString));
+                            }
+                            break;
+                    }
+                    return;
+                }
+            }
+
             // Making sure that ID or KEY isn't Empty
             if (IsEmpty(_config.VoteSettings["RustServersID"].ToString())
                 && IsEmpty(_config.VoteSettings["RustServersKEY"].ToString()))
@@ -226,55 +258,9 @@ namespace Oxide.Plugins
                 if (args[0] == "list")
                     rewardList(player);
             }
-            catch (Exception ex) { }
+            catch (Exception ex) { /*PrintWarning($"Something intresting happen when player try use /reward list command.\n\n{ex.ToString()}");*/ }
 
         }
-        /*[ChatCommand("reward")]
-        void cmdReward(BasePlayer player, string command, string[] args)
-        {
-            string _rewardCmd;
-            if (args?.Length < 1)
-                _rewardCmd = "";
-            else
-                _rewardCmd = args[0];
-            switch (_rewardCmd)
-            {
-                case "list":
-                    {
-                        //SendReply(player, RList.ToString());
-                        rewardList(player);
-                    }
-                    break;
-                default:
-                    {
-                        var timeout = 5500f; // Timeout (in milliseconds)
-                        if (IsEmpty(_config.Settings["RustServersKEY"].ToString()))
-                        {
-                            string _RustServer = String.Format(RustServers[0], _config.Settings["RustServersKEY"], player.userID);
-                            webrequest.EnqueueGet(_RustServer, (code, response) => ClaimReward(code, response, player, "RustServers"), this, null, timeout);
-                            _Debug(player, _RustServer);
-                        }
-                        if (IsEmpty(_config.Settings["TopRustServersKEY"].ToString()))
-                        {
-                            string _TopRustServers = String.Format(TopRustServers[0], _config.Settings["TopRustServersKEY"], player.userID);
-                            webrequest.EnqueueGet(_TopRustServers, (code, response) => ClaimReward(code, response, player, "TopRustServers"), this, null, timeout);
-                            _Debug(player, _TopRustServers);
-                        }
-                        if (IsEmpty(_config.Settings["BeancanKEY"].ToString()))
-                        {
-                            string _Beancan = String.Format(BeancanIO[0], _config.Settings["BeancanKEY"], player.userID);
-                            webrequest.EnqueueGet(_Beancan, (code, response) => ClaimReward(code, response, player, "BeancanIO"), this, null, timeout);
-                            _Debug(player, _Beancan);
-                        }
-                        timer.Once(1.5f, () =>
-                        {
-                            if (NoRewards && !Voted)
-                                Chat(player, $"{Lang("NoRewards", player.UserIDString)}");
-                        });
-                    }
-                    break;
-            }
-        }*/
         #endregion
 
         #region Reward Handler
@@ -297,6 +283,13 @@ namespace Oxide.Plugins
                     ? (x > voted ? y : x)
                     : (y > voted ? x : y));
 
+            if (closest > voted)
+            {
+                _Debug(player, $"Closest ({closest}) number was bigger then voted number ({voted})");
+                _Debug(player, $"Closest ({closest}) is now 0!");
+                closest = 0;
+            }
+
             _Debug(player, $"Reward Number: {closest} Voted: {voted}");
 
             // and here the magic happens.
@@ -305,6 +298,11 @@ namespace Oxide.Plugins
                 if (closest != 0)
                 {
                     // Loop for all rewards.
+                    if (kvp.Key.ToString() == $"vote")
+                    {
+                        _Debug(player, "Founded 'vote' data in config!");
+                    }
+
                     if (kvp.Key.ToString() == $"vote{closest}")
                     {
                         Chat(player, $"{Lang("ThankYou", player.UserIDString, voted)}");
@@ -319,6 +317,7 @@ namespace Oxide.Plugins
                             // If variable not found, then try give item.
                             if (_config.Variables.ContainsKey(variable))
                             {
+                                _Debug(player, $"{getCmdLine(player, variable, value)}");
                                 rust.RunServerCommand(getCmdLine(player, variable, value));
 
                                 if (!value.Contains("-"))
@@ -353,6 +352,29 @@ namespace Oxide.Plugins
             }
             if (_config.Settings["GlobalClaimAnnouncment"]?.ToLower() == "true")
                 PrintToChat($"{Lang("GlobalClaimAnnouncment", player.UserIDString, player.displayName, voted)}");
+        }
+        private string getCmdLine(BasePlayer player, string str, string value)
+        {
+            var output = String.Empty;
+            string playerid = player.UserIDString;
+            string playername = player.displayName;
+
+            // Checking if value contains => -
+            if (!value.Contains('-'))
+                output = _config.Variables[str].ToString()
+                    .Replace("{playerid}", playerid)
+                    .Replace("{playername}", '"' + playername + '"')
+                    .Replace("{value}", value);
+            else
+            {
+                string[] splitValue = value.Split('-');
+                output = _config.Variables[str].ToString()
+                    .Replace("{playerid}", playerid)
+                    .Replace("{playername}", '"' + playername + '"')
+                    .Replace("{value}", splitValue[0])
+                    .Replace("{value2}", splitValue[1]);
+            }
+            return $"{output}";
         }
         #endregion
 
@@ -390,7 +412,7 @@ namespace Oxide.Plugins
                 Variables = new Dictionary<string, string>
                 {
                     ["money"] = "eco.c deposit {playerid} {value}",
-                    ["rp"] = "sr add {playername} {value}",
+                    ["rp"] = "sr add {playerid} {value}",
                     ["addgroup"] = "addgroup {playerid} {value} {value2}",
                     ["grantperm"] = "grantperm {playerid} {value} {value2}",
                     ["zlvl-wc"] = "zlvl {playername} WC +{value}",
@@ -593,13 +615,13 @@ namespace Oxide.Plugins
             StringBuilder rewardList = new StringBuilder();
             rewardList.Clear(); // Making sure that rewardList is empty.
 
-            int lineCounter = 0; // Line counter
-            int lineSplit = 8; // Line "split" value
+            int lineCounter = 0; // Count lines
+            int lineSplit = 2; // Value when split reward list.
 
             foreach (KeyValuePair<string, List<string>> kvp in _config.Reward)
             {
                 // If lineCounter is less then lineSplit.
-                if (lineCounter < lineSplit)
+                if (lineCounter <= lineSplit)
                 {
                     int voteNumber;
                     if (!int.TryParse(kvp.Key.Replace("vote", ""), out voteNumber))
@@ -619,6 +641,17 @@ namespace Oxide.Plugins
                     SendReply(player, rewardList.ToString());
                     rewardList.Clear();
                     lineCounter = 0;
+
+                    int voteNumber;
+                    if (!int.TryParse(kvp.Key.Replace("vote", ""), out voteNumber))
+                    {
+                        PrintWarning($"Invalid vote config format \"{kvp.Key}\"");
+                        continue;
+                    }
+
+                    rewardList.Append(Lang("RewardList", null, voteNumber)).AppendLine();
+                    var valueList = String.Join(Environment.NewLine, kvp.Value.ToArray());
+                    rewardList.Append(valueList).AppendLine();
                 }
             }
 
@@ -627,9 +660,20 @@ namespace Oxide.Plugins
             rewardList.Clear();
             lineCounter = 0;
         }
+        public int getCountRewards()
+        {
+            foreach (KeyValuePair<string, List<string>> kvp in _config.Reward) return kvp.Key.Count();
+            return 0;
+        }
         public bool IsEmpty(string s)
         {
             if (s != String.Empty) return true;
+            return false;
+        }
+        public bool hasPermission(BasePlayer player, string perm)
+        {
+            if (player.IsAdmin()) return true;
+            if (permission.UserHasPermission(player.UserIDString, perm)) return true;
             return false;
         }
         public bool isGroup(string id, string group)
@@ -650,29 +694,6 @@ namespace Oxide.Plugins
                 permission.RemoveUserGroup(id, group);
             else
                 PrintWarning($"Cant delete \"{group}\" group to the player (ID: {id}). Make sure that you write group name right!");
-        }
-        private string getCmdLine(BasePlayer player, string str, string value)
-        {
-            var output = String.Empty;
-            string playerid = player.UserIDString;
-            string playername = player.displayName;
-
-            // Checking if value contains => -
-            if (!value.Contains('-'))
-                output = _config.Variables[str].ToString()
-                    .Replace("{playerid}", playerid)
-                    .Replace("{playername}", '"' + playername + '"')
-                    .Replace("{value}", value);
-            else
-            {
-                string[] splitValue = value.Split('-');
-                output = _config.Variables[str].ToString()
-                    .Replace("{playerid}", playerid)
-                    .Replace("{playername}", '"' + playername + '"')
-                    .Replace("{value}", splitValue[0])
-                    .Replace("{value2}", splitValue[1]);
-            }
-            return $"{output}";
         }
         #endregion
         #region Storing Helper
@@ -724,6 +745,14 @@ namespace Oxide.Plugins
             }
         }
         #endregion
+        #endregion
+
+        #region API
+        // I just leave this comment here.
+
+        //[HookMethod("AddPoints")]
+        //public object AddPoints(object userID, int amount)
+        //{ }
         #endregion
     }
 }

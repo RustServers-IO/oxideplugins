@@ -1,0 +1,16 @@
+{
+    "name": "Private Messaging",
+    "description": "Chat privately with other players",
+    "author": "k1lly0u",
+    "version": "0.1.11",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/private-messaging.1868",
+    "games": [
+        "hide & hold out"
+    ],
+    "keywords": [
+        "oxide",
+        "hide & hold out"
+    ]
+}

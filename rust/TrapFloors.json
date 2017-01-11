@@ -1,8 +1,8 @@
 {
     "name": "Trap Floors",
     "description": "Allow players to turn a floor block into a collapsing trap",
-    "author": "Cheeze",
-    "version": "1.2",
+    "author": "Wulf",
+    "version": "1.2.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/trap-floors.2038",

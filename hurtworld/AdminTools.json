@@ -1,0 +1,16 @@
+{
+    "name": "AdminTools",
+    "description": "Kick, Ban, TempBan, Mute, Freeze and Godmode, with permissions.",
+    "author": "Noviets",
+    "version": "1.3.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/admintools.1584",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

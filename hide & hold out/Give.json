@@ -1,0 +1,16 @@
+{
+    "name": "Give",
+    "description": "Give yourself or others items and vehicles using its ID number or partial name",
+    "author": "k1lly0u",
+    "version": "0.1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/give.1869",
+    "games": [
+        "hide & hold out"
+    ],
+    "keywords": [
+        "oxide",
+        "hide & hold out"
+    ]
+}

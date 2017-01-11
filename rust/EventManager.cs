@@ -1,228 +1,697 @@
+﻿// Requires: EMInterface
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
+using Newtonsoft.Json.Linq;
 using Rust;
+using Network;
+
 
 namespace Oxide.Plugins
 {
-    [Info("Event Manager", "Reneb / k1lly0u", "2.0.24", ResourceId = 740)]
+    [Info("Event Manager", "Reneb / k1lly0u", "3.0.3", ResourceId = 740)]
     class EventManager : RustPlugin
     {
-        #region Fields
-        [PluginReference]
-        Plugin Spawns;
+        #region Fields        
+        [PluginReference] EMInterface EMInterface;
+        [PluginReference] Plugin Economics;
+        [PluginReference] Plugin FriendlyFire;       
+        [PluginReference] Plugin Kits;        
+        [PluginReference] Plugin ServerRewards;
+        [PluginReference] Plugin Spawns;
+        [PluginReference] Plugin ZoneManager;
 
-        [PluginReference]
-        Plugin Kits;
+        MethodInfo killLifestory;
 
-        [PluginReference]
-        Plugin ZoneManager;
-
-        [PluginReference]
-        Plugin ServerRewards;
-
-        [PluginReference]
-        Plugin Economics;
-
-        private string EventSpawnFile;
-        private string EventGameName;
-        private string ZoneName;
-        private string TokenType;
-
-        private bool EventOpen;
-        private bool EventStarted;
-        private bool EventEnded;
-        private bool EventPending;
-        private int EventMaxPlayers = 0;
-        private int EventMinPlayers = 0;
-        private int EventAutoNum = -1;
-
-        public int PlayTimer;
-
-        public float LastAnnounce;
-        public bool AutoEventLaunched = false;
-        public bool UseClassSelection;
-        public GameMode EventMode;
-
-        private List<string> EventGames;
-        private List<EventPlayer> EventPlayers;
-        public List<ulong> Godmode;
-        public List<Timer> AutoArenaTimers;
+        static EventManager ins;
+        static List<MessageData> popupQueue;
 
         private Dictionary<ulong, Timer> KillTimers;
+        private RestorationManager Restoration;
 
-        private ConfigData configData;
+        private GameTimer _GameTimer;
+        private WaveTimer _WaveTimer;        
+        private DynamicConfigFile P_Stats;
+        private DynamicConfigFile RestoreData;
+        
+        private bool _GodEnabled;
+                
+        private bool ResetNoCorpse;
 
-        ClassData classData;
-        private DynamicConfigFile Class_Data;
+        private static string ScoreUI = "EMUI_Scoreboard";
+        private static string ClockUI = "EMUI_Timer";
+        private static string DeathUI = "EMUI_Death";
+        private static string TimerUI = "EMUI_DeathTimer";
 
-        static bool Debug = false;
+        private FieldInfo spectateFilter = typeof(BasePlayer).GetField("spectateFilter", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+
+        public Dictionary<ulong, PlayerStatistics> StatsCache;
+        public List<EMInterface.AEConfig> ValidAutoEvents;
+        public Dictionary<string, Events> ValidEvents;
+        public Events _Event;
+        
+        public string _EventName;
+        public string _CurrentEventConfig;
+        public string _NextEventConfig;
+        public int _NextAutoConfig;
+
+        public bool _Open;
+        public bool _Started;
+        public bool _Ended;
+        public bool _Pending;
+        public bool _Destoyed;
+        public bool _Launched;
+        public bool _RandomizeAuto;
+        public bool _TimerStarted;
+
+        public int _EventNum = 0;       
+                
+        public List<Timer> EventTimers;
+        public Dictionary<ulong, Timer> RespawnTimers;
+        public Dictionary<string, EventSetting> EventGames;
+        public ScoreData GameScores;
+        public SpawnManager SpawnCount;
+        public List<EventPlayer> EventPlayers;
+        public List<BasePlayer> Joiners;
+        
+        public Statistics GameStatistics;
+        public GameMode EventMode;
         #endregion
 
-        #region Classes        
-        class EventPlayer : MonoBehaviour
+        #region UI
+        #region Popup Messages
+        private static string Popup = "EMUI_Popupmsg";
+        private List<string> PopupPanels = new List<string>();
+        private int popUpCount = 0;
+
+        public void PopupMessage(string message)
         {
-            public BasePlayer player;
-
-            public float health;
-            public float calories;
-            public float hydration;
-
-            public bool inEvent;
-            public bool savedInventory;
-            public bool savedHome;
-            public bool OOB;
-
-            public string currentClass;
-
-            public List<EventInvItem> InvItems = new List<EventInvItem>();
-            public Vector3 Home;
-
-            void Awake()
-            {                
-                inEvent = true;
-                savedInventory = false;
-                savedHome = false;
-                player = GetComponent<BasePlayer>();
-                ELog($"{player.displayName} component init");
-            }
-            public void SaveHealth()
+            popupQueue.Add(new MessageData(message, 6, ""));
+            UpdateMessages();
+        }
+        private CuiElementContainer CreateMessageEntry(int number, string panelName, MessageData data)
+        {
+            PopupPanels.Add(panelName);
+            var pos = GetFeedPosition(number);
+            var Main = UI.CreateElementContainer(panelName, "0 0 0 0", $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", false, "Hud");
+            UI.CreateOutLineLabel(ref Main, panelName, "0 0 0 1", data.message, 17, "1 1", "0 0", "1 1");
+            return Main;
+        }
+        private float[] GetFeedPosition(int number)
+        {
+            Vector2 initialPos = new Vector2(0.25f, 0.89f);
+            Vector2 dimensions = new Vector2(0.5f, 0.04f);
+            var yPos = initialPos.y - ((dimensions.y + 0.005f) * number);
+            return new float[] { initialPos.x, yPos, initialPos.x + dimensions.x, yPos + dimensions.y };
+        }
+        private void UpdateMessages(bool destroyed = false)
+        {
+            if (destroyed)
             {
-                ELog($"{player.displayName} saving health");
-                health = player.health;
-                calories = player.metabolism.calories.value;
-                hydration = player.metabolism.hydration.value;
-            }
-            public void SaveHome()
-            {
-                ELog($"{player.displayName} saving home");
-                if (!savedHome)
-                    Home = player.transform.position;
-                savedHome = true;
-            }
-            public void TeleportHome()
-            {
-                ELog($"{player.displayName} TP home");
-                if (!savedHome)
-                    return;
-                TPPlayer(player, Home);
-                savedHome = false;
-            }
-            public void SaveInventory()
-            {
-                ELog($"{player.displayName} saving inv");
-                if (savedInventory)
-                    return;
-                InvItems.Clear();
-                InvItems.AddRange(GetItems(player.inventory.containerWear, "wear"));
-                InvItems.AddRange(GetItems(player.inventory.containerMain, "main"));
-                InvItems.AddRange(GetItems(player.inventory.containerBelt, "belt"));
-                ELog($"{player.displayName} inventory count: {InvItems.Count}");
-                savedInventory = true;
-            }
-            private IEnumerable<EventInvItem> GetItems(ItemContainer container, string containerName)
-            {
-                return container.itemList.Select(item => new EventInvItem
+                if (popupQueue.Count > 0)
                 {
-                    itemid = item.info.itemid,
-                    container = containerName,
-                    amount = item.amount,
-                    ammo = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.contents ?? 0,
-                    skin = item.skin,
-                    condition = item.condition,
-                    contents = item.contents?.itemList.Select(item1 => new EventInvItem
+                    for (int i = 0; i < popupQueue.Count; i++)
                     {
-                        itemid = item1.info.itemid,
-                        amount = item1.amount,
-                        condition = item1.condition
-                    }).ToArray()
-                });
-            }
-            public void RestoreInventory()
-            {
-                ELog($"{player.displayName} restoring inventory, saved count: {InvItems.Count}");
-                player.inventory.Strip();
-                foreach (var kitem in InvItems)
-                {
-                    var item = ItemManager.CreateByItemID(kitem.itemid, kitem.amount, kitem.skin);
-                    item.condition = kitem.condition;
-                    var weapon = item.GetHeldEntity() as BaseProjectile;
-                    if (weapon != null) weapon.primaryMagazine.contents = kitem.ammo;
-                    player.inventory.GiveItem(item, kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
-                    if (kitem.contents == null) continue;
-                    foreach (var ckitem in kitem.contents)
-                    {
-                        var item1 = ItemManager.CreateByItemID(ckitem.itemid, ckitem.amount);
-                        if (item1 == null) continue;
-                        item1.condition = ckitem.condition;
-                        item1.MoveToContainer(item.contents);
+                        if (i >= 3)
+                            return;
+
+                        var feed = popupQueue[i];
+                        var panelName = feed.elementID;
+                        if (!feed.started)
+                        {
+                            panelName = Popup + popUpCount;
+                            popUpCount++;
+                            feed.Begin(panelName);
+                        }
+                        AddUI(CreateMessageEntry(i, panelName, popupQueue[i]));
                     }
                 }
-                ELog($"{player.displayName} restored count: {player.inventory.containerBelt.itemList.Count + player.inventory.containerMain.itemList.Count + player.inventory.containerWear.itemList.Count}");
-                savedInventory = false;
+            }
+            else
+            {
+                if (popupQueue.Count > 0 && popupQueue.Count < 3)
+                {
+                    var feed = popupQueue[popupQueue.Count - 1];
+                    var panelName = Popup + popUpCount;
+                    popUpCount++;
+                    AddUI(CreateMessageEntry(popupQueue.Count - 1, panelName, feed));
+                    feed.Begin(panelName);
+                }
             }
         }
-        class EventInvItem
+        private void AddUI(CuiElementContainer element)
+        {            
+            foreach (var player in EventPlayers)
+            {
+                if (player.inEvent && player.enabled)
+                    CuiHelper.AddUi(player.GetPlayer(), element);
+            }
+        }
+        private void DestroyUpdate()
+        {
+            for (int i = 0; i < popupQueue.Count; i++)
+            {
+                foreach (var player in BasePlayer.activePlayerList)
+                {
+                    CuiHelper.DestroyUi(player, popupQueue[i].elementID);
+                }
+            }
+            UpdateMessages(true);
+        }
+        private void DestroyPopupUI(BasePlayer player)
+        {
+            for (int i = 0; i < popupQueue.Count; i++)
+            {
+                CuiHelper.DestroyUi(player, popupQueue[i].elementID);
+            }
+        }
+        private void DestroyPopupUI(MessageData element)
+        {
+            if (!string.IsNullOrEmpty(element.elementID))
+            {
+                foreach (var player in BasePlayer.activePlayerList)
+                {
+                    CuiHelper.DestroyUi(player, element.elementID);
+                }
+            }
+            popupQueue.Remove(element);
+            DestroyUpdate();
+        }
+        private void DestroyAllPopups()
+        {
+            foreach (var player in BasePlayer.activePlayerList)
+                foreach (var message in PopupPanels)
+                    CuiHelper.DestroyUi(player, message);
+            PopupPanels.Clear();
+        }
+
+        
+        #endregion
+
+        #region Scoreboards
+        public class ScoreData
+        {
+            public Dictionary<ulong, Scoreboard> Scores = new Dictionary<ulong, Scoreboard>();
+            public string ScoreType;
+            public string Additional;
+        }
+        public class Scoreboard
+        {
+            public string Name;
+            public int Position;
+            public int Score;
+        }
+
+        public void CreateScoreboard(BasePlayer player)
+        {
+            if (GameScores == null) return;
+            var scores = GameScores.Scores;
+            var type = GameScores.ScoreType;
+            var additional = GameScores.Additional;
+
+            var Main = UI.CreateElementContainer(ScoreUI, "0.1 0.1 0.1 0.7", "0.82 0.55", "0.99 0.98", false, "Hud.Under");           
+
+            int count = 0;
+            if (!string.IsNullOrEmpty(additional))
+            {
+                UI.CreateLabel(ref Main, ScoreUI, "", additional, 12, $"0.05 {GetHeight(count)}", $"0.95 {GetHeight(count) + 0.06f}");
+                count++;
+            }          
+            if (scores != null)
+            {
+                var topScores = scores.Take(11);
+                UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MainColor}>Name</color>", 12, $"0.25 {GetHeight(count)}", $"0.7 {GetHeight(count) + 0.06f}");
+                if (type != null) UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MainColor}>{type}</color>", 12, $"0.7 {GetHeight(count)}", $"0.95 {GetHeight(count) + 0.06f}");
+                count++;
+
+                if (scores.ContainsKey(player.userID) && scores[player.userID].Position > 10)
+                {
+                    UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MainColor}>{scores[player.userID].Position + 1}</color>", 12, $"0.05 {GetHeight(count)}", $"0.25 {GetHeight(count) + 0.06f}");
+                    UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MsgColor}>{scores[player.userID].Name}</color>", 12, $"0.25 {GetHeight(count)}", $"0.7 {GetHeight(count) + 0.06f}");
+                    UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MsgColor}>{scores[player.userID].Score}</color>", 12, $"0.7 {GetHeight(count)}", $"0.95 {GetHeight(count) + 0.06f}");
+                    count++;
+                }
+                foreach (var score in topScores)
+                {
+                    UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MainColor}>{score.Value.Position + 1}</color>", 12, $"0.05 {GetHeight(count)}", $"0.25 {GetHeight(count) + 0.06f}");
+                    UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MsgColor}>{score.Value.Name}</color>", 12, $"0.25 {GetHeight(count)}", $"0.7 {GetHeight(count) + 0.06f}");
+                    UI.CreateLabel(ref Main, ScoreUI, "", $"<color={configData.Messaging.MsgColor}>{score.Value.Score}</color>", 12, $"0.7 {GetHeight(count)}", $"0.95 {GetHeight(count) + 0.06f}");
+                    count++;
+                }
+            }
+            DestroyScoreboard(player);
+            CuiHelper.AddUi(player, Main);
+        }
+        public void UpdateScoreboard(ScoreData data)
+        {
+            GameScores = data;
+            foreach (var eventPlayer in EventPlayers)
+            {
+                CreateScoreboard(eventPlayer.GetPlayer());
+            }                
+        }
+        float GetHeight(int num) => 0.89f - (0.06f * num);
+        void DestroyScoreboard(BasePlayer player) => CuiHelper.DestroyUi(player, ScoreUI);
+
+        #endregion
+        #endregion
+
+        #region Oxide Hooks
+        void Loaded()
+        {            
+            Unsubscribe(nameof(OnEntityTakeDamage));
+            Unsubscribe(nameof(OnPlayerAttack));
+            Unsubscribe(nameof(OnItemPickup));
+            Unsubscribe(nameof(OnRunPlayerMetabolism));
+            Unsubscribe(nameof(CanNetworkTo));
+            Unsubscribe(nameof(CanLootPlayer));
+
+            P_Stats = Interface.Oxide.DataFileSystem.GetFile("EventManager/Statistics");
+            RestoreData = Interface.Oxide.DataFileSystem.GetFile("EventManager/Restoration_data");
+            Restoration = new RestorationManager();
+
+            killLifestory = typeof(BasePlayer).GetMethod("LifeStoryEnd", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+        }        
+        void OnServerInitialized()
+        {
+            lang.RegisterMessages(Messages, this);
+            if (!Spawns)
+            {
+                PrintError("Unable to load EventManager - Spawns database not found. Please download Spawns database to continue");
+                rust.RunServerCommand("oxide.unload", new object[] { "EventManager" });
+                return;
+            }
+            if (!ZoneManager)
+            {
+                PrintError("Unable to load EventManager - ZoneManager not found. Please download ZoneManager to continue");
+                rust.RunServerCommand("oxide.unload", new object[] { "EventManager" });
+                return;
+            }
+            if (!Kits)            
+                PrintError("Kits is not installed! Unable to issue any weapon kits");
+            SetVars();
+            LoadVariables();
+            LoadData();
+            ins = this;
+
+            foreach(var player in BasePlayer.activePlayerList)
+                CheckForRestore(player);
+
+            timer.In(5, ()=> 
+            {
+                Interface.CallHook("RegisterGame");
+                ValidateAllEvents();
+            });                        
+        }                   
+        void Unload()
+        {
+            SaveStatistics();
+            SaveRestoreInfo();            
+            if (_Open) CloseEvent();
+            if (_Started)
+            {
+                foreach(var eventPlayer in EventPlayers)
+                {
+                    eventPlayer?.GetPlayer().DieInstantly();
+                    UnityEngine.Object.DestroyImmediate(eventPlayer);                    
+                }
+            }
+            else DestroyGame();
+        }
+
+        void OnPlayerInit(BasePlayer player)
+        {
+            CheckForRestore(player);
+        }
+        void OnPlayerDisconnected(BasePlayer player)
+        {
+            if (Joiners.Contains(player))
+                Joiners.Remove(player);
+            if (GetUser(player))
+                LeaveEvent(player);
+        }
+        void OnPlayerRespawned(BasePlayer player)
+        {
+            if (!_Started && !_Open)
+                CheckForRestore(player);
+            else
+            {
+                var eventPlayer = GetUser(player);
+                if (eventPlayer == null) return;
+                if (!EventPlayers.Contains(eventPlayer))
+                {
+                    UnityEngine.Object.DestroyImmediate(eventPlayer);
+                    return;
+                }                
+                if (eventPlayer.inEvent && !eventPlayer.isLeaving)
+                    TeleportPlayerToEvent(player);
+                else if (!eventPlayer.isLeaving)
+                    Restoration.RestorePlayer(player);
+            }     
+        }
+
+        void OnPlayerAttack(BasePlayer player, HitInfo hitinfo)
+        {
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null || !eventPlayer.inEvent)
+                return;
+
+            if (hitinfo.HitEntity != null)
+                Interface.Oxide.CallHook("OnEventPlayerAttack", player, hitinfo);
+
+            if (hitinfo.IsProjectile())
+                AddStats(player, StatType.Shots);
+            return;
+        }  
+        void OnEntityTakeDamage(BaseEntity entity, HitInfo info)
+        {            
+            if (entity.GetComponent<EventCorpse>())
+            {
+                NullifyDamage(info);
+                return;
+            }
+            var player = entity.ToPlayer();
+            var attacker = info.InitiatorPlayer;
+
+            if (player != null)
+            {
+                var eventPlayer = GetUser(player);
+                if (eventPlayer != null)
+                {
+                    if (eventPlayer.isDead)
+                    {
+                        NullifyDamage(info);
+                        return;
+                    }
+                    if (_GodEnabled)
+                    {
+                        NullifyDamage(info);
+                        return;
+                    }
+
+                    float damageAmount = info.damageTypes.Total();
+                    if (attacker != null)
+                    {
+                        if (!GetUser(attacker))
+                        {
+                            NullifyDamage(info);
+                            return;
+                        }
+                        else
+                        {
+                            object multiply = Interface.CallHook("HasDamageMultiplier", player, attacker);
+                            if (multiply is float)
+                            {
+                                damageAmount *= (float)multiply;
+                            }
+                        }
+                    }                    
+
+                    if (info.isHeadshot)                    
+                        damageAmount *= 2;
+                    
+                    if (player.health - damageAmount < 1)                    
+                    {
+                        NullifyDamage(info);                        
+                        OnPlayerDeath(player, info);
+                        return;
+                    }
+                }
+                else if (attacker != null)
+                {
+                    if (GetUser(attacker))
+                    {
+                        NullifyDamage(info);
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void OnRunPlayerMetabolism(PlayerMetabolism metabolism, BaseCombatEntity entity, float delta)
+        {            
+            var eventPlayer = GetUser(entity?.ToPlayer());
+            if (eventPlayer == null) return;
+            if (eventPlayer.isDead)
+            {
+                metabolism.bleeding.value = 0;
+                metabolism.poison.value = 0;
+                metabolism.radiation_level.value = 0;
+                metabolism.radiation_poison.value = 0;
+                metabolism.wetness.value = 0;
+            }
+            else            
+                metabolism.bleeding.value = 0f;                                       
+        }
+        void OnItemPickup(BasePlayer player, Item item)
+        {
+            if (_Started && GetUser(player) != null && _Event.DisableItemPickup)
+            {
+                item.Remove(0.01f);
+                SendMsg(player, "ItemPickup");
+            }
+        }
+        object CanLootPlayer(BasePlayer target, BasePlayer looter)
+        {
+            if (_Started && GetUser(looter) != null && _Event.DisableItemPickup)
+            {
+                SendMsg(looter, "NoLooting");
+                return true;                
+            }
+            return null;
+        }
+
+        void SetVars()
+        {
+            EventGames = new Dictionary<string, EventSetting>();
+            EventPlayers = new List<EventPlayer>();
+            Joiners = new List<BasePlayer>();
+            EventTimers = new List<Timer>();
+            RespawnTimers = new Dictionary<ulong, Timer>();
+            ValidAutoEvents = new List<EMInterface.AEConfig>();
+            ValidEvents = new Dictionary<string, Events>();
+            KillTimers = new Dictionary<ulong, Timer>();
+            StatsCache = new Dictionary<ulong, PlayerStatistics>();
+            GameScores = new ScoreData();
+            SpawnCount = new SpawnManager();
+            Restoration = new RestorationManager();
+            popupQueue = new List<MessageData>();            
+
+            _Open = false;
+            _Started = false;
+            _Ended = true;
+            _Pending = false;
+            _Destoyed = true;
+            _Launched = false;
+            _GodEnabled = false;
+            _RandomizeAuto = false;
+            _EventName = null;
+            _NextEventConfig = null;
+            _CurrentEventConfig = null;
+            _NextAutoConfig = 0;
+            _Event = DefaultConfig;
+            EventMode = GameMode.Normal;
+
+            _TimerStarted = false;
+            _GameTimer = null;
+        }
+        void CheckForRestore(BasePlayer player)
+        {
+            if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+            {
+                timer.Once(3, () => CheckForRestore(player));
+                return;
+            }
+            var eventPlayer = GetUser(player);
+            if (eventPlayer != null && eventPlayer.inEvent && _Started) return;
+
+            if (Restoration.HasPendingRestore(player.userID))
+            {
+                if (Restoration.ReadyToRestore(player))
+                {
+                    if (!Restoration.RestorePlayer(player))
+                    {
+                        SendMsg(player, "failedRestore");
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region Config
+        private ConfigData configData;
+        class ConfigData
+        {
+            public EM_Messaging Messaging { get; set; }
+            public EM_Options Options { get; set; }
+        }
+        class EM_Options
+        {
+            public bool AllowClassSelectionOnDeath { get; set; }
+            public bool LaunchAutoEventsOnStartup { get; set; }
+            public int Battlefield_Timer { get; set; }
+            public int Required_AuthLevel { get; set; }
+            public bool DropCorpseOnDeath { get; set; }
+            public bool UseSpectateMode { get; set; }
+            public bool UseEconomicsAsTokens { get; set; }
+            public bool UseEventPrestart { get; set; }
+            public int EventPrestartTimer { get; set; }
+        }
+        class EM_Messaging
+        {
+            public bool AnnounceEvent { get; set; }
+            public bool AnnounceEvent_During { get; set; }
+            public int AnnounceEvent_Interval { get; set; }
+            public string MainColor { get; set; }
+            public string MsgColor { get; set; }
+        }
+        private void LoadVariables()
+        {
+            LoadConfigVariables();
+            SaveConfig();
+        }
+        private void LoadConfigVariables()
+        {
+            try
+            {
+                configData = Config.ReadObject<ConfigData>();
+            }
+            catch (Exception)
+            {
+                Puts("Invalid config file, restoring default");
+                LoadDefaultConfig();
+            }
+        }
+        protected override void LoadDefaultConfig()
+        {
+            var config = new ConfigData
+            {
+                Messaging = new EM_Messaging
+                {
+                    AnnounceEvent_During = true,
+                    AnnounceEvent_Interval = 120,
+                    AnnounceEvent = true,
+                    MainColor = "#FF8C00",
+                    MsgColor = "#939393"
+                },
+                Options = new EM_Options
+                {
+                    AllowClassSelectionOnDeath = true,
+                    Battlefield_Timer = 1200,
+                    DropCorpseOnDeath = true,
+                    EventPrestartTimer = 30,
+                    LaunchAutoEventsOnStartup = false,
+                    Required_AuthLevel = 1,
+                    UseEconomicsAsTokens = false,
+                    UseSpectateMode = true,
+                    UseEventPrestart = true
+                }               
+            };
+            SaveConfig(config);
+        }
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
+
+        #region Messaging        
+        public void BroadcastEvent(string msg)
+        {
+            foreach (EventPlayer eventplayer in EventPlayers)
+                SendReply(eventplayer.GetPlayer(), $"<color={configData.Messaging.MainColor}>" + msg + "</color>");
+        }        
+        public void BroadcastToChat(string message) => PrintToChat($"<color={configData.Messaging.MainColor}>{msg("Title")}</color><color={configData.Messaging.MsgColor}>{msg(message)}</color>");
+        static string msg(string key, BasePlayer player = null) => ins.lang.GetMessage(key, ins, player?.UserIDString);
+        private void SendMsg(BasePlayer player, string langkey, bool title = true)
+        {
+            string message = $"<color={configData.Messaging.MsgColor}>{msg(langkey)}</color>";
+            if (title) message = $"<color={configData.Messaging.MainColor}>{msg("Title")}</color>" + message;
+            SendReply(player, message);
+        }
+        void AnnounceEvent()
+        {
+            object success = Interface.Oxide.CallHook("OnEventAnnounce");
+            if (success is string)            
+                BroadcastToChat((string)success);            
+            else BroadcastToChat(string.Format(msg("eventOpen"), _Event.EventType));
+        }
+        void AnnounceDuringEvent()
+        {
+            if (configData.Messaging.AnnounceEvent_During)
+            {
+                if (_Open && _Started)
+                {
+                    foreach (BasePlayer player in BasePlayer.activePlayerList)
+                    {
+                        if (!GetUser(player))
+                            SendMsg(player, string.Format(msg("stillOpen"), _Event.EventType));
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        #region Information Classes
+        public class Events
+        {
+            public bool CloseOnStart;
+            public bool DisableItemPickup;
+            public bool UseClassSelector;
+            public int MinimumPlayers;
+            public int MaximumPlayers;
+            public int ScoreLimit;
+            public int RespawnTimer;
+            public int GameRounds;
+            public int EnemiesToSpawn;
+            public string EventType;
+            public string Kit;
+            public string WeaponSet;
+            public string Spawnfile;
+            public string Spawnfile2;
+            public string ZoneID;
+            public GameMode GameMode;
+            public RespawnType RespawnType;
+            public SpawnType SpawnType;
+        }
+        public class EventSetting
+        {
+            public bool LockClothing;
+            public bool RequiresKit;
+            public bool RequiresSpawns;
+            public bool RequiresMultipleSpawns;
+            public bool CanUseClassSelector;
+            public bool CanPlayBattlefield;
+            public bool CanChooseRespawn;
+            public bool ForceCloseOnStart;
+            public bool IsRoundBased;
+            public bool SpawnsEnemies;
+            public string ScoreType;
+        }
+        public class EventInvItem
         {
             public int itemid;
-            public bool bp;
-            public int skin;
-            public string container;
+            public ulong skin;
             public int amount;
             public float condition;
             public int ammo;
+            public string ammotype;
+            public ProtoBuf.Item.InstanceData instanceData;
             public EventInvItem[] contents;
         }
-        class ConfigData
+        public class RestoreInfo
         {
-            public string Default_Gamemode { get; set; }
-            public string Default_Spawnfile { get; set; }
-            public int Battlefield_Timer { get; set; }
-            public bool KillDeserters { get; set; }
-            public int Required_AuthLevel { get; set; }
-            public string Messaging_MainColor { get; set; }
-            public string Messaging_MsgColor { get; set; }
-            public bool Announce_Event { get; set; }
-            public bool AnnounceDuring_Event { get; set; }
-            public int AnnounceEvent_Interval { get; set; }
-            public bool UseEconomicsAsTokens { get; set; }
-            public bool UseClassSelector_Default { get; set; }
-            public AutoEvents z_AutoEvents { get; set; }
-        }
-        class AutoEvents
-        {
-            public int GameInterval { get; set; }
-            public bool AutoCancel { get; set; }
-            public int AutoCancel_Timer { get; set; }
-            public List<AutoEventSetup> z_AutoEventSetup { get; set; }
-        }
-        class AutoEventSetup
-        {
-            public bool UseClassSelector { get; set; }
-            public string GameType { get; set; }
-            public GameMode EventMode { get; set; }
-            public string Spawnfile { get; set; }
-            public string Kit { get; set; }
-            public bool CloseOnStart { get; set; }
-            public int TimeToJoin { get; set; }
-            public int MinimumPlayers { get; set; }
-            public int MaximumPlayers { get; set; }
-            public int TimeLimit { get; set; }
-            public string ZoneID { get; set; }
+            public Dictionary<InventoryType, List<EventInvItem>> inventory = new Dictionary<InventoryType, List<EventInvItem>>();
+            public float health, hydration, calories, x, y, z;
+        }        
 
-        }
-        class ClassData
-        {
-            public Dictionary<string, string> ClassKits = new Dictionary<string, string>();
-        }
         public class UI
         {
-            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor)
+            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor = false, string parent = "Overlay")
             {
                 var NewElement = new CuiElementContainer()
                 {
@@ -233,7 +702,7 @@ namespace Oxide.Plugins
                             RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
                             CursorEnabled = useCursor
                         },
-                        new CuiElement().Parent = "Overlay",
+                        new CuiElement().Parent = parent,
                         panelName
                     }
                 };
@@ -259,448 +728,568 @@ namespace Oxide.Plugins
                 panel);
 
             }
+            static public void CreateOutLineLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string distance, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, string parent = "Overlay")
+            {
+                CuiElement textElement = new CuiElement
+                {
+                    Name = CuiHelper.GetGuid(),
+                    Parent = panel,
+                    FadeOut = 0.2f,
+                    Components =
+                    {
+                        new CuiTextComponent
+                        {
+                            Text = text,
+                            FontSize = size,
+                            Align = TextAnchor.MiddleCenter,
+                            FadeIn = 0.2f
+                        },
+                        new CuiOutlineComponent
+                        {
+                            Distance = distance,
+                            Color = color
+                        },
+                        new CuiRectTransformComponent
+                        {
+                            AnchorMin = aMin,
+                            AnchorMax = aMax
+                        }
+                    }
+                };
+                container.Add(textElement);
+            }
             static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 container.Add(new CuiButton
                 {
-                    Button = { Color = color, Command = command, FadeIn = 1.0f },
+                    Button = { Color = color, Command = command, FadeIn = 0f },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
                     Text = { Text = text, FontSize = size, Align = align }
                 },
                 panel);
             }
+            static public void ImageFromStorage(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
+            {
+                container.Add(new CuiElement
+                {
+                    Name = CuiHelper.GetGuid(),
+                    Parent = panel,
+                    Components =
+                    {
+                        new CuiRawImageComponent {Png = png },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                });
+            }
+            static public void ImageFromURL(ref CuiElementContainer container, string panel, string url, string aMin, string aMax)
+            {
+                container.Add(new CuiElement
+                {
+                    Name = CuiHelper.GetGuid(),
+                    Parent = panel,
+                    Components =
+                    {
+                        new CuiRawImageComponent {Url = url },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                });
+            }
         }
+
+        public enum InventoryType { Main, Wear, Belt };
         public enum GameMode
         {
             Normal,
             Battlefield
         }
+        public enum SpawnType
+        {
+            Random,
+            Consecutive
+        }
+        public enum RespawnType
+        {
+            None,
+            Timer,
+            Waves
+        }
         #endregion
 
-        #region Oxide Hooks
-        void Loaded()
+        #region Components        
+        public class EventPlayer : MonoBehaviour
         {
-            EventGames = new List<string>();
-            EventMode = GameMode.Normal;
-            EventPlayers = new List<EventPlayer>();
-            AutoArenaTimers = new List<Timer>();
-            KillTimers = new Dictionary<ulong, Timer>();
-            Class_Data = Interface.Oxide.DataFileSystem.GetFile("EventManager_Classes");
+            private BasePlayer player;
+            private EventCorpse corpse;
 
-        }
-        void OnServerInitialized()
-        {
-            lang.RegisterMessages(Messages, this);
-            LoadVariables();
-            LoadData();
-            EventOpen = false;
-            EventStarted = false;
-            EventEnded = true;
-            EventPending = false;
-            UseClassSelection = configData.UseClassSelector_Default;
-            EventGameName = configData.Default_Gamemode;
-            timer.Once(0.2f, InitializeGames);
-        }
-        void InitializeGames()
-        {
-            //Interface.Oxide.CallHook("RegisterGame");
-            SelectSpawnfile(configData.Default_Spawnfile);
-        }
-        void Unload()
-        {
-            foreach (var player in BasePlayer.activePlayerList) DestroyUI(player);
-            EndEvent();
-            DestroyGame();
-        }
-        void OnPlayerRespawned(BasePlayer player)
-        {
-            if (!EventStarted) return;
-            if (!player.GetComponent<EventPlayer>()) return;
-            if (player.GetComponent<EventPlayer>().inEvent)
+            public bool inEvent, isDead, isRespawning, isSpectating, OOB, isLeaving;
+            public string currentClass;
+            public int restoreAttempts;
+
+            void Awake()
             {
-                if (!EventStarted) return;
-                TeleportPlayerToEvent(player);
+                inEvent = true;
+                isDead = false;
+                isRespawning = false;
+                OOB = false;
+                player = GetComponent<BasePlayer>();
             }
+            public BasePlayer GetPlayer() => player;
+            public void SetCorpse(EventCorpse corpse) => this.corpse = corpse ?? null;
+            public EventCorpse GetCorpse() => corpse ?? null;
+        }
+        public class EventCorpse : MonoBehaviour
+        {
+            public LootableCorpse entity;
+            void Awake()
+            {
+                entity = GetComponent<LootableCorpse>();
+            }
+            void OnDestroy()
+            {
+                if (entity == null) return;
+                if (entity?.containers == null) return;
+                foreach (var container in entity.containers)
+                {
+                    Item[] array = container.itemList.ToArray();
+                    for (int i = 0; i < array.Length; i++)
+                        array[i].Remove(0f);
+                }
+                ItemManager.DoRemoves();
+                entity.DieInstantly();
+            }
+        }
+
+        private class GameTimer : MonoBehaviour
+        {
+            int timeRemaining;
+            void Awake() => timeRemaining = 0;
+            public void StartTimer(int time)
+            {
+                timeRemaining = time;
+                InvokeRepeating("TimerTick", 1f, 1f);
+                ins._TimerStarted = true;
+            }
+            void OnDestroy()
+            {
+                CancelInvoke("TimerTick");
+                ins._TimerStarted = false;
+                Destroy(this);
+            }
+            internal void TimerTick()
+            {
+                timeRemaining--;
+                if (timeRemaining == 0)
+                {
+                    DestroyUI();
+                    ins.CancelEvent(msg("TimeLimit"));
+                    CancelInvoke("TimerTick");
+                }
+                else UpdateUITimer();
+            }
+            internal void UpdateUITimer()
+            {
+                string clockTime = "";
+                TimeSpan dateDifference = TimeSpan.FromSeconds(timeRemaining);
+                var hours = dateDifference.Hours;
+                var mins = dateDifference.Minutes;
+                var secs = dateDifference.Seconds;
+                if (hours > 0)
+                    clockTime = string.Format("{0:00}:{1:00}:{2:00}", hours, mins, secs);
+                else clockTime = string.Format("{0:00}:{1:00}", mins, secs);
+
+                var CUI = UI.CreateElementContainer(ClockUI, "0.1 0.1 0.1 0.7", "0.45 0.95", "0.55 0.99", false, "Hud.Under");
+                UI.CreateLabel(ref CUI, ClockUI, "", clockTime, 16, "0 0", "1 1");
+                foreach (var ePlayer in ins.EventPlayers)
+                {
+                    CuiHelper.DestroyUi(ePlayer.GetPlayer(), ClockUI);
+                    CuiHelper.AddUi(ePlayer.GetPlayer(), CUI);
+                }
+            }
+            internal void DestroyUI()
+            {
+                foreach (var player in BasePlayer.activePlayerList)
+                    CuiHelper.DestroyUi(player, ClockUI);
+            }
+        }
+        private class WaveTimer : MonoBehaviour
+        {
+            private int waveTimer;
+            void Awake()
+            {
+                waveTimer = ins._Event.RespawnTimer;
+                InvokeRepeating("RespawnTick", 1f, 1f);
+            }
+            void OnDestroy() => CancelInvoke("RespawnTick");
+            private void RespawnTick()
+            {
+                waveTimer--;
+                if (waveTimer <= 0)
+                    waveTimer = ins._Event.RespawnTimer;
+            }
+            public int GetTime() => waveTimer;
+        }
+        public class SpawnManager
+        {
+            public int spawnsCountA = 0;
+            public int spawnsCountB = 0;
+            private int lastSpawnA = 0;
+            private int lastSpawnB = 0;
+
+            public object GetSpawnPoint(string file, bool team = true, int min = -1, int max = -1)
+            {
+                if (ins._Event.SpawnType == SpawnType.Consecutive)
+                {
+                    if (min > 0)
+                    {
+                        if (team)
+                        {
+                            if (lastSpawnA < min || (max > 0 && lastSpawnA > max))
+                            {
+                                lastSpawnA = min - 1;
+                                return GetNextSpawn(file, team);
+                            }
+                        }
+                        else
+                        {
+                            if (lastSpawnB < min || (max > 0 && lastSpawnB > max))
+                            {
+                                lastSpawnB = min - 1;
+                                return GetNextSpawn(file, team);
+                            }
+                        }
+                    }
+                    return GetNextSpawn(file, team);
+                }
+                else
+                {
+                    if (min > 0)
+                    {
+                        if (max > 0)
+                            return GetRandomRange(file, min, max);
+                        else return GetRandomRange(file, min, 9999);
+                    }
+                    return GetRandomSpawn(file);
+                }
+            }
+            private object GetRandomSpawn(string file) => ins.Spawns.Call("GetRandomSpawn", file);
+            private object GetRandomRange(string file, int min, int max) => ins.Spawns.Call("GetRandomSpawnRange", file, min, max);
+            private object GetNextSpawn(string file, bool team)
+            {
+                int number;
+                if (team)
+                {
+                    ++lastSpawnA;
+                    if (lastSpawnA >= spawnsCountA)
+                        lastSpawnA = 0;
+                    number = lastSpawnA;
+                }
+                else
+                {
+                    ++lastSpawnB;
+                    if (lastSpawnB >= spawnsCountB)
+                        lastSpawnB = 0;
+                    number = lastSpawnB;
+                }
+                return ins.Spawns.Call("GetSpawn", file, number);
+            }
+            public void SetSpawnCount(bool team, int number)
+            {
+                if (team)
+                    spawnsCountA = number;
+                else spawnsCountB = number;
+            }
+        }
+        private class MessageData
+        {
+            public int timecount;
+            public string elementID;
+            public string message;
+            public bool started;
+
+            public MessageData(string message, int timecount, string elementID)
+            {
+                this.timecount = timecount;
+                this.elementID = elementID;
+                this.message = message;
+                started = false;
+            }
+            public void Begin(string elementID)
+            {
+                this.elementID = elementID;
+                started = true;
+                StartDestroy();
+            }
+            void StartDestroy()
+            {
+                if (timecount > 0)
+                {
+                    timecount--;
+                    ins.timer.Once(1, () => StartDestroy());
+                }
+                else if (timecount == 0)
+                {
+                    ins.DestroyPopupUI(this);
+                }
+            }
+        }
+
+        private EventPlayer GetUser(BasePlayer player)
+        {
+            if (player == null) return null;
+            var eventPlayer = player.GetComponent<EventPlayer>();
+            if (eventPlayer == null) return null;
+            return eventPlayer;
+        }
+        #endregion
+
+        #region Event Management
+        public object SelectEvent(string name)
+        {
+            if (!(EventGames.ContainsKey(name))) return string.Format(msg("noEvent"), name);
+            if (_Started || _Open) return msg("isAlreadyStarted");
+            Interface.CallHook("OnSelectEventGamePost", new object[] { name });
+            return true;
+        }
+        object SetEventDetails()
+        {
+            var success = SelectEvent(_Event.EventType);
+            if (success is string) return (string)success;
+            if (EventGames.ContainsKey(_Event.EventType))
+            {
+                EventMode = _Event.GameMode;
+                if (EventGames[_Event.EventType].RequiresSpawns && !string.IsNullOrEmpty(_Event.Spawnfile))
+                {
+                    Interface.CallHook("SetSpawnfile", true, _Event.Spawnfile);
+                    object count = Spawns.Call("GetSpawnsCount", _Event.Spawnfile);
+                    if (count is int)
+                        SpawnCount.SetSpawnCount(true, (int)count);                                     
+                }
+                if (EventGames[_Event.EventType].RequiresMultipleSpawns && !string.IsNullOrEmpty(_Event.Spawnfile2))
+                {
+                    Interface.CallHook("SetSpawnfile", false, _Event.Spawnfile2);
+                    object count = Spawns.Call("GetSpawnsCount", _Event.Spawnfile2);
+                    if (count is int)
+                        SpawnCount.SetSpawnCount(false, (int)count);                    
+                }
+                if (_Event.GameRounds > 0)
+                    Interface.CallHook("SetGameRounds", _Event.GameRounds);
+                if (_Event.EnemiesToSpawn > 0)
+                    Interface.CallHook("SetEnemyCount", _Event.EnemiesToSpawn);
+                if (!string.IsNullOrEmpty(EventGames[_Event.EventType].ScoreType))
+                    Interface.CallHook("SetScoreLimit", _Event.ScoreLimit);
+                if (!string.IsNullOrEmpty(_Event.WeaponSet))
+                    Interface.CallHook("ChangeWeaponSet", _Event.WeaponSet);
+                if (!string.IsNullOrEmpty(_Event.Kit))
+                    Interface.CallHook("OnSelectKit", _Event.Kit);
+                if (!string.IsNullOrEmpty(_Event.ZoneID))
+                {
+                    Interface.CallHook("SetEventZone", _Event.ZoneID);
+                    if (configData.Options.DropCorpseOnDeath)
+                    {
+                        var hasFlag = ZoneManager?.Call("HasFlag", _Event.ZoneID, "NoCorpse");
+                        if (hasFlag is bool && (bool)hasFlag)
+                        {
+                            ZoneManager?.Call("RemoveFlag", _Event.ZoneID, "NoCorpse");
+                            ResetNoCorpse = true;
+                        }
+                    }
+                }
+                if (EventGames[_Event.EventType].ForceCloseOnStart)
+                    _Event.CloseOnStart = true;
+                if (!EventGames[_Event.EventType].CanChooseRespawn)
+                {
+                    var type = Interface.CallHook("GetRespawnType");
+                    if (type != null)
+                        _Event.RespawnType = (RespawnType)type;
+                    var time = Interface.CallHook("GetRespawnTime");
+                    if (time != null)
+                        _Event.RespawnTimer = (int)time;
+                }
+                return null;
+            }
+            return "Error setting event details. Please check your settings";
+        }
+        
+        public object OpenEvent()
+        {
+            if (_Event == null) return msg("noneSelected");
+            if (string.IsNullOrEmpty(_Event.EventType)) return msg("noTypeSelected");            
+            if (_Open) return string.Format(msg("isAlreadyOpen"), _Event.EventType);
+            if (_Started && !_Open)
+            {
+                if (!EventGames[_Event.EventType].ForceCloseOnStart)
+                {
+                    _Open = true;
+                    return null;
+                }
+                else return msg("cantOpen");
+            }
+            var success = ValidateEvent(_Event);
+            if (success is string)            
+                return (string)success;
+            success = SetEventDetails();
+            if (success is string)
+                return (string)success;
+            success = Interface.Oxide.CallHook("CanEventOpen");
+            if (success is string)
+                return (string)success;
+            EMInterface.EventVoting.OpenEventVoting(false);
+
+            _Open = true;
+            GameScores = new ScoreData();
+            EventPlayers = new List<EventPlayer>();
+            Joiners = new List<BasePlayer>();
+
+            _EventName = _Event.EventType;
+            if (_Event.GameMode == GameMode.Battlefield)
+                _EventName = $"{msg("Battlefield")} - {_EventName}";
+
+            if (!string.IsNullOrEmpty(_CurrentEventConfig))
+                _EventName = $"{_CurrentEventConfig} ({_Event.EventType})"; 
+
+            BroadcastToChat(string.Format(msg("eventOpen"), _EventName));
+            Interface.Oxide.CallHook("OnEventOpenPost");
+
+            return true;
+        }       
+        public object CloseEvent()
+        {
+            if (!_Open) return msg("eventAlreadyClosed");
+            _Open = false;
+            Interface.Oxide.CallHook("OnEventClosePost");
+
+            if (_Started)
+                BroadcastToChat(msg("eventClose"));
             else
             {
-                RedeemInventory(player);
-                TeleportPlayerHome(player);
-                TryErasePlayer(player);
-            }
-        }
-        void OnPlayerAttack(BasePlayer player, HitInfo hitinfo)
-        {
-            if (!EventStarted) return;
-            if (player.GetComponent<EventPlayer>() == null || !(player.GetComponent<EventPlayer>().inEvent))
-                return;
-            if (hitinfo.HitEntity != null)
-                Interface.Oxide.CallHook("OnEventPlayerAttack", player, hitinfo);
-            return;
-        }
-        void OnEntityDeath(BaseEntity entity, HitInfo hitinfo)
-        {
-            if (!EventStarted) return;
-            if ((entity as BasePlayer)?.GetComponent<EventPlayer>() == null) return;
-            Interface.Oxide.CallHook("OnEventPlayerDeath", ((BasePlayer)entity), hitinfo);
-            return;
-        }
-        void OnPlayerDisconnected(BasePlayer player)
-        {
-            if (!EventStarted) return;
-            if (player.GetComponent<EventPlayer>() != null)
-                LeaveEvent(player);
-        }
-        void OnEntityTakeDamage(BaseEntity entity, HitInfo info)
-        {
-            if (!EventStarted) return;
-            var player = entity as BasePlayer;
-            if (Godmode == null || player == null) return;
-            if (Godmode.Contains(player.userID))
-            {
-                info.damageTypes = new DamageTypeList();
-                info.HitMaterial = 0;
-                info.PointStart = Vector3.zero;
-            }
-        }
-        #endregion
-
-        #region Checks
-        bool hasEventStarted()
-        {
-            return EventStarted;
-        }
-        bool isPlaying(BasePlayer player)
-        {
-            EventPlayer eplayer = player.GetComponent<EventPlayer>();
-            return eplayer != null && eplayer.inEvent;
-        }
-        object canRedeemKit(BasePlayer player)
-        {
-            if (!EventStarted) return null;
-            TryErasePlayer(player);
-            EventPlayer eplayer = player.GetComponent<EventPlayer>();
-            if (eplayer == null) return null;
-            return false;
-        }
-        object canShop(BasePlayer player)
-        {
-            if (!EventStarted) return null;
-            EventPlayer eplayer = player.GetComponent<EventPlayer>();
-            if (eplayer == null) return null;
-            return GetMessage("CanShop");
-        }
-
-        object CanTeleport(BasePlayer player)
-        {
-            if (!EventStarted) return null;
-            EventPlayer eplayer = player.GetComponent<EventPlayer>();
-            if (eplayer == null) return null;
-            return GetMessage("CanTP");
-        }
-        #endregion
-
-        #region Config
-        private void LoadVariables()
-        {
-            LoadConfigVariables();
-            SaveConfig();
-        }
-        private void LoadConfigVariables()
-        {
-            configData = Config.ReadObject<ConfigData>();
-        }
-        protected override void LoadDefaultConfig()
-        {
-            Puts("Creating a new config file");
-            var config = new ConfigData
-            {
-                AnnounceDuring_Event = true,
-                AnnounceEvent_Interval = 120,
-                Announce_Event = true,
-                Battlefield_Timer = 1200,
-                Default_Gamemode = "Deathmatch",
-                Default_Spawnfile = "deathmatchspawns",
-                KillDeserters = true,
-                Required_AuthLevel = 1,
-                Messaging_MainColor = "#FF8C00",
-                Messaging_MsgColor = "#939393",
-                UseEconomicsAsTokens = false,
-                UseClassSelector_Default = true,
-                z_AutoEvents = new AutoEvents
-                {
-                    AutoCancel = true,
-                    AutoCancel_Timer = 300,
-                    GameInterval = 1200,
-                    z_AutoEventSetup = CreateDefaultAutoConfig()
-                }
-            };
-            SaveConfig(config);
-        }
-        void SaveConfig(ConfigData config)
-        {
-            Config.WriteObject(config, true);
-        }
-        static List<AutoEventSetup> CreateDefaultAutoConfig()
-        {
-            var newautoconfiglist = new List<AutoEventSetup>
-            {
-                new AutoEventSetup
-                {
-                    GameType = "Deathmatch",
-                    EventMode = GameMode.Battlefield,
-                    Spawnfile = "deathmatchspawns",
-                    Kit = "",
-                    CloseOnStart = true,
-                    TimeToJoin = 60,
-                    TimeLimit = 1800,
-                    MinimumPlayers = 2,
-                    MaximumPlayers = 20,
-                    UseClassSelector = false,
-                    ZoneID = null
-                },
-                new AutoEventSetup
-                {
-                    GameType = "TeamDeathmatch",
-                    EventMode = GameMode.Normal,
-                    Spawnfile = "tdm_spawns_a",
-                    Kit = "tdmkit",
-                    CloseOnStart = false,
-                    TimeToJoin = 60,
-                    TimeLimit = 0,
-                    MinimumPlayers = 2,
-                    MaximumPlayers = 20,
-                    UseClassSelector = false,
-                    ZoneID = null
-                },
-                new AutoEventSetup
-                {
-                    GameType = "GunGame",
-                    EventMode = GameMode.Battlefield,
-                    Spawnfile = "ggspawns",
-                    Kit = "ggkit",
-                    CloseOnStart = false,
-                    TimeToJoin = 60,
-                    TimeLimit = 0,
-                    MinimumPlayers = 2,
-                    MaximumPlayers = 20,
-                    UseClassSelector = false,
-                    ZoneID = null
-                },
-                new AutoEventSetup
-                {
-                    GameType = "ChopperSurvival",
-                    EventMode = GameMode.Normal,
-                    Spawnfile = "csspawns",
-                    Kit = "cskit",
-                    CloseOnStart = true,
-                    TimeToJoin = 60,
-                    TimeLimit = 0,
-                    MinimumPlayers = 1,
-                    MaximumPlayers = 20,
-                    UseClassSelector = false,
-                    ZoneID = null
-                }
-            };
-            return newautoconfiglist;
-        }
-        #endregion
-
-        #region Messaging
-        private void MSG(BasePlayer player, string langkey, bool title = true)
-        {
-            string message = $"<color={configData.Messaging_MsgColor}>{GetMessage(langkey)}</color>";
-            if (title) message = $"<color={configData.Messaging_MainColor}>{GetMessage("Title")}</color>" + message;
-            SendReply(player, message);
-        }
-        void BroadcastToChat(string msg)
-        {
-            ELog(msg);
-            PrintToChat($"<color={configData.Messaging_MainColor}>{GetMessage("Title")}</color><color={configData.Messaging_MsgColor}>{GetMessage(msg)}</color>");
-        }
-        private string GetMessage(string key) => lang.GetMessage(key, this);
-
-        [HookMethod("BroadcastEvent")]
-        public void BroadcastEvent(string msg)
-        {
-            foreach (EventPlayer eventplayer in EventPlayers)
-                SendReply(eventplayer.player, $"<color={configData.Messaging_MainColor}>" + msg + "</color>");
-        }
-
-        Dictionary<string, string> Messages = new Dictionary<string, string>
-        {
-            { "multipleNames", "Multiple players found"},
-            { "noPlayerFound", "No players found"},
-            { "MessagesEventMinPlayers", "The Event {0} has reached min players and will start in {1} seconds"},
-            { "MessagesEventMaxPlayers", "The Event {0} has reached max players. You may not join for the moment"},
-            { "MessagesEventStatusClosedStarted", "The Event {0} has already started, it's too late to join."},
-            { "Title", "Event Manager: "},
-            { "MessagesEventStatusClosedEnd", "There is currently no event"},
-            { "MessagesEventStatusOpenStarted", "The Event {0} has started, but is still opened: /event join"},
-            { "MessagesEventStatusOpen", "The Event {0} is currently opened for entries: /event, join"},
-            { "MessagesEventCloseAndEnd", "The Event needs to be closed and ended before using this command."},
-            { "MessagesEventNotAnEvent", "This Game {0} isn't registered, did you reload the game after loading Event - Core?"},
-            { "MessagesEventNotInEvent", "You are not currently in the Event."},
-            { "MessagesEventBegin", "Event: {0} is about to begin!"},
-            { "MessagesEventLeft", "{0} has left the Event! (Total Players: {1})"},
-            { "MessagesEventJoined", "{0} has joined the Event!  (Total Players: {1})"},
-            { "MessagesEventAlreadyJoined", "You are already in the Event."},
-            { "MessagesEventPEnd", "Event: {0} is now over, restoring players and sending them home!"},
-            { "MessagesEventEnd", "All players respawned, {0} has ended!"},
-            { "MessagesEventNoGamePlaying", "An Event game is not underway."},
-            { "MessagesEventCancel", "The Event was cancelled!"},
-            { "MessagesEventClose", "The Event entrance is now closed!"},
-            { "MessagesEventOpen", "The Event is now open for : {0} !  Type /event join to join!"},
-            { "MessagesPermissionsNotAllowed", "You are not allowed to use this command"},
-            { "MessagesEventNotSet", "An Event game must first be chosen."},
-            { "MessagesErrorSpawnfileIsNull", "The spawnfile can't be set to null"},
-            { "MessagesEventNoSpawnFile", "A spawn file must first be loaded."},
-            { "MessagesEventAlreadyOpened", "The Event is already open."},
-            { "MessagesEventAlreadyClosed", "The Event is already closed."},
-            { "MessagesEventAlreadyStarted", "An Event game has already started."},
-            { "ClassSelect", "Choose your class!" },
-            { "ClassNotice", "You can reopen this menu at any time by typing /event class" },
-            { "CanShop", "You are not allowed to shop while in an Event" },
-            { "CanTP", "You are not allowed to teleport while in an Event" },
-            { "NoPlayers", "Not enough players" },
-            { "NoAuto", "No Automatic Events Configured" },
-            { "NoAutoInit", "No Events were successfully initialized, check that your events are correctly configured" },
-            { "TimeLimit", "Time limit reached" },
-            { "EventCancelled", "Event {0} was cancelled because: {1}" },
-            { "EventOpen", "Event {0} in now opened, you can join it by typing /event join" },
-            { "StillOpen", "Event {0} is still open, you can join it by typing /event join" },
-            { "EventClosed", "The Event is currently closed." },
-            { "NotInEvent", "You are not currently in the Event." },
-            { "NullKitname", "You can't have a null kitname" },
-            { "NoKits", "Unable to find the Kits plugin" },
-            { "KitNotExist", "The kit {0} doesn't exist" },
-            { "CancelAuto", "Auto events have been cancelled" }
-        };
-        #endregion
-
-        #region Class Selection
-        private void SelectClass(BasePlayer player)
-        {
-            string panelName = "ClassSelector";
-            CuiHelper.DestroyUi(player, panelName);
-            if (player.IsSleeping() || player.IsReceivingSnapshot() || player.IsDead())
-            {                
-                timer.Once(3, () => SelectClass(player));
-                return;
-            }            
-
-            var Class_Element = UI.CreateElementContainer(panelName, "0.1 0.1 0.1 0.98", "0.05 0.05", "0.95 0.95", true);
-
-            UI.CreatePanel(ref Class_Element, panelName, "0.9 0.9 0.9 0.1", "0.04 0.05", "0.96 0.94");
-            UI.CreateLabel(ref Class_Element, panelName, "0.9 0.9 0.9 1.0", $"<color={configData.Messaging_MainColor}>{EventGameName}</color>", 24, "0.05 0.85", "0.95 0.92");
-            UI.CreateLabel(ref Class_Element, panelName, "0.9 0.9 0.9 1.0", $"<color={configData.Messaging_MainColor}>{GetMessage("ClassSelect")}</color>", 24, "0.05 0.75", "0.95 0.83");
-            UI.CreateLabel(ref Class_Element, panelName, "0.9 0.9 0.9 1.0", $"<color={configData.Messaging_MainColor}>{GetMessage("ClassNotice")}</color>", 18, "0.05 0.05", "0.95 0.12");
-
-            int i = 0;
-            foreach (var entry in classData.ClassKits)
-            {
-                CreateClassButton(ref Class_Element, panelName, entry.Key, entry.Value, i);
-                i++;
-            }
-
-            CuiHelper.AddUi(player, Class_Element);
-        }
-        private void CreateClassButton(ref CuiElementContainer container, string panelName, string name, string kit, int number)
-        {
-            Vector2 dimensions = new Vector2(0.25f, 0.07f);
-            Vector2 origin = new Vector2(0.095f, 0.6f);
-            float offsetY = 0;
-            float offsetX = 0;
-            switch (number)
-            {
-                case 0:
-                case 1:
-                case 2:
-                    offsetX = (0.03f + dimensions.x) * number;
-                    break;
-                case 3:
-                case 4:
-                case 5:
-                    {
-                        offsetX = (0.03f + dimensions.x) * (number - 3);
-                        offsetY = (0.07f + dimensions.y) * 1;
-                    }
-                    break;
-                case 6:
-                case 7:
-                case 8:
-                    {
-                        offsetX = (0.03f + dimensions.x) * (number - 6);
-                        offsetY = (0.07f + dimensions.y) * 2;
-                    }
-                    break;
-            }
-            Vector2 offset = new Vector2(offsetX, -offsetY);
-
-            Vector2 posMin = origin + offset;
-            Vector2 posMax = posMin + dimensions;
-
-            UI.CreateButton(ref container, panelName, "0.2 0.2 0.2 0.7", name, 18, posMin.x + " " + posMin.y, posMax.x + " " + posMax.y, $"Choose_Class {kit}");
-        }
-
-        [ConsoleCommand("Choose_Class")]
-        void cmdChoose_Class(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            CuiHelper.DestroyUi(player, "ClassSelector");
-            var className = arg.GetString(0).Replace("'", "");
-            bool noGear = false;
-            if (string.IsNullOrEmpty(player.GetComponent<EventPlayer>().currentClass)) noGear = true;
-            player.GetComponent<EventPlayer>().currentClass = className;
-            if (noGear) GivePlayerKit(player, null);
-        }
-        #endregion
-
-        #region Game Timer UI
-        private void StartTimer(int time)
-        {
-            AutoArenaTimers.Add(timer.Once(time, () => CancelEvent(GetMessage("TimeLimit"))));
-            PlayTimer = time;
-            foreach (var player in EventPlayers)
-                TimerCountdown(player.player);
-        }
-        private void TimerCountdown(BasePlayer player)
-        {
-            CuiHelper.DestroyUi(player, "PlayTimer");
-            if (EventStarted)
-            {
-                var timerElement = UI.CreateElementContainer("PlayTimer", "0.3 0.3 0.3 0.6", "0.45 0.91", "0.55 0.948", false);
-                TimeSpan dateDifference = TimeSpan.FromSeconds(PlayTimer);
-                string clock = string.Format("{0:D2}:{1:D2}", dateDifference.Minutes, dateDifference.Seconds);
-                UI.CreateLabel(ref timerElement, "PlayTimer", "", clock, 20, "0 0", "1 1");
-                CuiHelper.AddUi(player, timerElement);
-                PlayTimer--;
-                AutoArenaTimers.Add(timer.In(1, () => TimerCountdown(player)));
-            }
-        }
-        private void DestroyUI(BasePlayer player)
-        {
-            CuiHelper.DestroyUi(player, "ClassSelector");
-            CuiHelper.DestroyUi(player, "PlayTimer");
-        }
-        #endregion
-
-        #region Global Functions
-        bool hasAccess(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection?.authLevel < 1)
-            {
-                SendReply(arg, GetMessage("MessagesPermissionsNotAllowed"));
-                return false;
+                DestroyTimers();
+                BroadcastToChat(msg("eventCancel"));
+                EMInterface.EventVoting.OpenEventVoting(true);
             }
             return true;
         }
-        static void TPPlayer(BasePlayer player, Vector3 destination)
-        {        
+
+        public object StartEvent()
+        {            
+            object success = Interface.Oxide.CallHook("CanEventStart");
+            if (success is string)
+                return (string)success;
+
+            Subscribe(nameof(OnEntityTakeDamage));
+            Subscribe(nameof(OnPlayerAttack));            
+            Subscribe(nameof(OnRunPlayerMetabolism));
+            Subscribe(nameof(OnItemPickup));
+            Subscribe(nameof(CanNetworkTo));
+            Subscribe(nameof(CanLootPlayer));
+
+            Interface.Oxide.CallHook("OnEventStartPre");            
+            BroadcastToChat(string.Format(msg("eventBegin"), _EventName));
+            _Started = true;
+            _Ended = false;
+            _Destoyed = false;
+
+            if (!GameStatistics.GamesPlayed.ContainsKey(_Event.EventType))
+                GameStatistics.GamesPlayed.Add(_Event.EventType, 1);
+            else GameStatistics.GamesPlayed[_Event.EventType]++;
+
+            DestroyTimers();
+            PreStartEvent();            
+            return true;
+        }
+        public void PreStartEvent()
+        {
+            if (_Event.CloseOnStart)
+                CloseEvent();
+            EnableGod();
+            CreateEventPlayers();
+        }
+
+        public object EndEvent()
+        {
+            DestroyAllPopups(); 
+                       
+            if (_Ended) return msg("noGamePlaying");
+
+            EnableGod();
+            RespawnAllPlayers();
+
+            _Open = false;
+            _Started = false;
+            _Pending = false;
+
+            if (_GameTimer != null)
+                UnityEngine.Object.Destroy(_GameTimer);
+            if (_WaveTimer != null)
+                UnityEngine.Object.Destroy(_WaveTimer);
+               
+            Interface.CallHook("OnEventEndPre");
+            for (int i = 0; i < EventPlayers.Count; i++)
+            {                
+                DestroyScoreboard(EventPlayers[i].GetPlayer());
+                CuiHelper.DestroyUi(EventPlayers[i].GetPlayer(), ClockUI);
+            }
+
+            BroadcastToChat(string.Format(msg("restoringPlayers"), _Event.EventType));
+            
+            _Ended = true;
+            
+            Restoration.StartRestoration();
+            return true;
+        }
+        void FinalizeGameEnd()
+        {
+            CalculateRanks();
+            DestroyGame();
+            Interface.Oxide.CallHook("OnEventEndPost");
+            SaveRestoreInfo();
+
+            if (ResetNoCorpse)
+            {
+                ZoneManager?.Call("AddFlag", _Event.ZoneID, "NoCorpse");
+                ResetNoCorpse = false;
+            }
+        }
+
+        public void CancelEvent(string reason)
+        {
+            DestroyTimers();
+            if (_Started)
+                EndEvent();
+
+            object success = Interface.Oxide.CallHook("OnEventCancel");
+            if (success is string)
+                BroadcastToChat((string)success);
+            else BroadcastToChat(string.Format(msg("EventCancelled"), _EventName, reason));
+
+            DestroyGame();
+            
+            if (_Launched)
+                AutoEventNext();
+        }
+        public void CancelAutoEvent(string reason)
+        {
+            if (_Started || _Open)
+            {
+                if (_Started)
+                {
+                    EndEvent();
+                    object success = Interface.Oxide.CallHook("OnEventCancel");
+                    if (success is string)
+                        BroadcastToChat((string)success);
+                    else BroadcastToChat(string.Format(msg("EventCancelled"), _EventName, reason));
+                }
+                else if (_Open) CancelEvent(reason);
+            }
+            if (_Launched)
+                _Launched = false;
+        }
+        #endregion
+
+        #region Player TP Management  
+        private void MovePosition(BasePlayer player, Vector3 destination)
+        {
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
-            ELog($"Teleporting {player.displayName} to {destination}");
             StartSleeping(player);
             player.MovePosition(destination);
             if (player.net?.connection != null)
@@ -714,1342 +1303,1777 @@ namespace Oxide.Plugins
             try { player.ClearEntityQueue(null); } catch { }
             player.SendFullSnapshot();
         }
-        static void StartSleeping(BasePlayer player)
+        private void StartSleeping(BasePlayer player)
         {
             if (player.IsSleeping())
                 return;
-            ELog($"Put {player.displayName} to sleep");
             player.SetPlayerFlag(BasePlayer.PlayerFlags.Sleeping, true);
             if (!BasePlayer.sleepingPlayerList.Contains(player))
                 BasePlayer.sleepingPlayerList.Add(player);
             player.CancelInvoke("InventoryUpdate");
         }
-        #endregion
-
-        #region Player Management
-        [HookMethod("TeleportAllPlayersToEvent")]
-        public void TeleportAllPlayersToEvent()
+        private object GetSpawnPosition(BasePlayer player)
         {
-            ELog("TeleportAllPlayersToEvent");
-            foreach (EventPlayer eventplayer in EventPlayers.ToArray())
-                TeleportPlayerToEvent(eventplayer.player);
-        }
-
-        void TeleportPlayerToEvent(BasePlayer player)
-        {
-            var eventPlayer = player.GetComponent<EventPlayer>();
-            if (eventPlayer == null || player.net?.connection == null) return;
-            ELog($"Tp2Event {player.displayName}");
-            var targetpos = Spawns.Call("GetRandomSpawn", EventSpawnFile);
+            var targetpos = SpawnCount.GetSpawnPoint(_Event.Spawnfile);           
             if (targetpos is string)
-                return;
+                return null;
             var newpos = Interface.Oxide.CallHook("EventChooseSpawn", player, targetpos);
             if (newpos is Vector3)
                 targetpos = newpos;
-            if (newpos is bool)
-                if ((bool)newpos == false)
+            return (Vector3)targetpos;
+        }
+        public void TeleportPlayerToEvent(BasePlayer player)
+        {
+            EMInterface.DestroyAllUI(player);
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null || player.net?.connection == null) return;
+
+            var targetpos = GetSpawnPosition(player);
+            if (targetpos == null)
+            {
+                LeaveEvent(player);
+                return;
+            }
+
+            MovePosition(player, (Vector3)targetpos);
+            timer.Once(2, () =>
+            {
+                var success = ConfirmTeleportation(player, (Vector3)targetpos);
+                if (!success)
                 {
-                    ELog($"Tp2Event {player.displayName} newpos is false");
-                    timer.Once(3, () => TeleportPlayerToEvent(player));
-                        return;
+                    LeaveEvent(player);
+                    SendMsg(player, "tpError");
                 }
-            if (!configData.KillDeserters)
-                ZoneManager?.Call("AddPlayerToZoneKeepinlist", ZoneName, player);
-
-           
-            TPPlayer(player, (Vector3)targetpos);
-
-            Interface.Oxide.CallHook("OnEventPlayerSpawn", player);
-        }
-        void SaveAllInventories()
-        {
-            ELog($"SaveAllInventories");
-            foreach (EventPlayer player in EventPlayers)
-                player?.SaveInventory();
-        }
-        void SaveAllPlayerStats()
-        {
-            ELog($"SaveAllStats");
-            foreach (EventPlayer player in EventPlayers)
-                player?.SaveHealth();
-        }
-        void SaveAllHomeLocations()
-        {
-            ELog($"SaveAllHomes");
-            foreach (EventPlayer player in EventPlayers)
-                player?.SaveHome();
-        }
-        void SetAllEventPlayers()
-        {
-            ELog($"SetAllPlayers");
-            foreach (EventPlayer player in EventPlayers)
-                SetEventPlayer(player);
-        }      
-        void RedeemInventory(BasePlayer player)
-        {            
-            EventPlayer eventplayer = player.GetComponent<EventPlayer>();
-            if (eventplayer == null) return;
-            ELog($"Redeem Inventory {player.displayName}");
-            if (player.IsDead() || player.health < 1)
-            {
-                ELog($"RI {player.displayName} is dead");
-                timer.Once(5, () => RedeemInventory(player));
-                return;
-            }
-            eventplayer.player.inventory.Strip();
-            if (eventplayer.savedInventory)
-                eventplayer.RestoreInventory();
-        }
-        void TeleportPlayerHome(BasePlayer player)
-        {            
-            EventPlayer eventplayer = player.GetComponent<EventPlayer>();
-            if (eventplayer == null) return;
-            ELog($"TPPlayerHome {player.displayName}");
-            if (player.IsDead() || player.health < 1)
-            {
-                ELog($"TPPH {player.displayName} is dead");
-                return;
-            }
-            if (eventplayer.savedHome)
-                eventplayer.TeleportHome();
-        }
-        void TryErasePlayer(BasePlayer player)
-        {            
-            var eventplayer = player.GetComponent<EventPlayer>();
-            if (eventplayer == null) return;
-            ELog($"TryErase {player.displayName}");
-            if (!(eventplayer.inEvent) && !(eventplayer.savedHome) && !(eventplayer.savedInventory))
-            {
-                ELog($"{player.displayName} !inevent/savedhome/savedinventory");
-                eventplayer.enabled = false;
-                EventPlayers.Remove(eventplayer);
-                UnityEngine.Object.Destroy(eventplayer);
-            }
-        }
-        [HookMethod("GivePlayerKit")]
-        public void GivePlayerKit(BasePlayer player, string GiveKit)
-        {
-            ELog($"give {player.displayName} kit");
-            player.inventory.Strip();
-            if (!AutoEventLaunched)
-            {                
-                if (!UseClassSelection)
-                    Kits.Call("GiveKit", player, GiveKit);
                 else
                 {
-                    if (string.IsNullOrEmpty(player.GetComponent<EventPlayer>().currentClass))
-                        SelectClass(player);
-                    else GiveClassKit(player);
+                    eventPlayer.isDead = false;
+                    ResetMetabolism(player);
+                    player.inventory.Strip();
+                    if (_Started) Interface.Oxide.CallHook("OnEventPlayerSpawn", player);
+                    if (_Event.UseClassSelector && string.IsNullOrEmpty(eventPlayer.currentClass))
+                    {
+                        EMInterface.CloseMap(player);
+                        EMInterface.CreateMenuMain(player);
+                        EMInterface.ClassSelector(player);
+                    }
                 }
+                return;
+            });
+        }
+        private bool ConfirmTeleportation(BasePlayer player, Vector3 position)
+        {
+            if (Vector3.Distance(player.transform.position, position) < 50)
+                return true;
+            return false;
+        }
+        #endregion
+
+        #region Death and Respawn Management 
+        void NullifyDamage(HitInfo info)
+        {
+            info.damageTypes = new DamageTypeList();
+            info.HitEntity = null;
+            info.HitMaterial = 0;
+            info.PointStart = Vector3.zero;
+        }
+        void OnPlayerDeath(BasePlayer player, HitInfo hitinfo)
+        {
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null) return;
+
+            eventPlayer.isDead = true;
+            player.RemoveFromTriggers();
+            RemoveChildren(player);
+
+            Interface.Oxide.CallHook("OnEventPlayerDeath", player, hitinfo);
+              
+            AddStats(player, StatType.Deaths);
+
+            if (_Ended)
+                return;
+
+            string attackerName = GetAttacker(player, hitinfo);
+            switch (_Event.RespawnType)
+            {
+                case RespawnType.None:
+                    ResetPlayer(player);
+                    return;
+                case RespawnType.Timer:
+                    AddRespawnTimer(player, attackerName, false);
+                    return;
+                case RespawnType.Waves:
+                    AddRespawnTimer(player, attackerName, true);
+                    return;
+            }
+        }
+        string GetAttacker(BasePlayer player, HitInfo hitinfo)
+        {            
+            if (hitinfo?.Initiator == null)
+                return string.Empty;
+            if (hitinfo?.InitiatorPlayer != null)
+            {
+                var attacker = hitinfo.InitiatorPlayer;
+                if (attacker != player)
+                {
+                    if (GetUser(attacker))
+                    {
+                        AddStats(attacker, StatType.Kills);
+                        return attacker.displayName;
+                    }
+                }
+            }
+            if (hitinfo.Initiator is BaseHelicopter)
+                return msg("a Helicopter");
+            if (hitinfo.Initiator is AutoTurret)
+                return msg("a AutoTurret");
+            if (hitinfo.Initiator is BaseNPC)
+                return hitinfo.Initiator.ShortPrefabName;
+            return string.Empty;
+        }
+        
+        public void ResetPlayer(BasePlayer player)
+        {
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null) return;
+
+            var eventCorpse = eventPlayer.GetCorpse();
+            if (eventCorpse != null)
+                UnityEngine.Object.Destroy(eventCorpse);
+
+            RemoveChildren(player);
+
+            if (eventPlayer.inEvent)
+            {
+                ResetMetabolism(player);
+
+                if (eventPlayer.isLeaving)
+                {
+                    var restoreData = Restoration.GetPlayerData(player.userID);
+                    if (restoreData != null)
+                    {
+                        Vector3 homePos = new Vector3(restoreData.x, restoreData.y, restoreData.z);
+                        MovePosition(player, homePos);
+                    }
+                    else player.Respawn();
+                }
+                else
+                {
+                    var targetpos = GetSpawnPosition(player);
+                    if (targetpos == null)
+                    {
+                        LeaveEvent(player);
+                        return;
+                    }
+                    player.MovePosition((Vector3)targetpos);
+                    player.ClientRPCPlayer(null, player, "ForcePositionTo", (Vector3)targetpos);
+                    player.SendNetworkUpdateImmediate();
+                    try { player.ClearEntityQueue(null); } catch { }
+                }
+
+                eventPlayer.isRespawning = false;
+                eventPlayer.isDead = false;
+
+                if (_Started && !eventPlayer.isLeaving)
+                    Interface.Oxide.CallHook("OnEventPlayerSpawn", player);
+            }
+            else Restoration.RestorePlayer(player);
+        }
+        void ResetMetabolism(BasePlayer player)
+        {
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Wounded, false);
+            player.metabolism.calories.value = player.metabolism.calories.max;
+            player.metabolism.hydration.value = player.metabolism.hydration.max;
+            player.metabolism.bleeding.value = 0;
+            player.metabolism.radiation_level.value = 0;
+            player.metabolism.radiation_poison.value = 0;
+            player.metabolism.SendChangesToClient();
+        }
+        void RemoveChildren(BasePlayer player)
+        {
+            if (player == null) return;
+            if (player.children == null) return;
+            if (player.children.Count > 0)
+            {
+                for (int i = 0; i < player.children.Count; i++)
+                {
+                    var child = player.children[i];
+                    if (child == null) continue;
+                    child.parentEntity.Set(null);
+                    child.parentBone = 0;                   
+                }
+                player.children.Clear();
+            }
+        }
+
+        #region Death UI
+        LootableCorpse SpawnCorpse(BasePlayer player)
+        {
+            LootableCorpse lootableCorpse = player.DropCorpse("assets/prefabs/player/player_corpse.prefab") as LootableCorpse;
+            if (lootableCorpse)
+            {
+                lootableCorpse.TakeFrom(player.inventory.containerMain, player.inventory.containerWear, player.inventory.containerBelt);
+                lootableCorpse.playerName = player.displayName;
+                lootableCorpse.playerSteamID = player.userID;
+                lootableCorpse.transform.position = player.transform.position + Vector3.up;
+                lootableCorpse.TakeChildren(player);
+                lootableCorpse.Spawn();
+                player.MovePosition(new Vector3(player.transform.position.x, -10, player.transform.position.z));
+                return lootableCorpse;
+            }
+            return null;
+        }
+        public void AddRespawnTimer(BasePlayer player, string attackerName, bool isWave, bool showMsg = true)
+        {
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null) return;
+
+            string message = string.Empty;
+            if (string.IsNullOrEmpty(attackerName)) message = msg("suicide");
+            else message = string.Format(msg("deathBy"), attackerName);
+
+            if (configData.Options.DropCorpseOnDeath)
+            {
+                var corpse = SpawnCorpse(player);
+                if (corpse != null)
+                    eventPlayer.SetCorpse(corpse.gameObject.AddComponent<EventCorpse>());                
+            }                
+
+            if (showMsg)
+                DeathMessageUI(player, message);
+
+            if (configData.Options.UseSpectateMode)
+                StartSpectating(eventPlayer);
+            else UnnetworkPlayer(eventPlayer);
+
+            if (isWave)
+                DeathTimerUI(player, _WaveTimer.GetTime(), true);
+            else
+                DeathTimerUI(player, _Event.RespawnTimer, false);
+        }
+        void DeathMessageUI(BasePlayer player, string message)
+        {
+            var container = UI.CreateElementContainer(DeathUI, "0 0 0 0", "0.25 0.4", "0.75 0.6", false);
+            UI.CreateLabel(ref container, DeathUI, "", message, 26, "0 0", "1 1");
+            CuiHelper.AddUi(player, container);
+        }
+        void DeathTimerUI(BasePlayer player, int time, bool wave)
+        {
+            int timeRemaining = time;
+            var canStartTimer = Interface.CallHook("FreezeRespawn", player);
+            if (canStartTimer is bool && (bool)canStartTimer)
+            {
+                var deathMessage = Interface.CallHook("GetRespawnMsg");
+                var container = UI.CreateElementContainer(TimerUI, "0 0 0 0", "0.25 0.7", "0.75 0.85", false);
+                UI.CreateOutLineLabel(ref container, TimerUI, "0 0 0 1", deathMessage is string ? (string)deathMessage : msg("respawnWait"), 26, "1.0 1.0", "0 0", "1 1");
+                CuiHelper.AddUi(player, container);
             }
             else
             {
-                if (!configData.z_AutoEvents.z_AutoEventSetup[EventAutoNum].UseClassSelector)
-                    Kits.Call("GiveKit", player, configData.z_AutoEvents.z_AutoEventSetup[EventAutoNum].Kit);
-                else
+                if (RespawnTimers.ContainsKey(player.userID))
                 {
-                    if (string.IsNullOrEmpty(player.GetComponent<EventPlayer>().currentClass))
-                        SelectClass(player);
-                    else GiveClassKit(player);
+                    RespawnTimers[player.userID].Destroy();
+                    RespawnTimers.Remove(player.userID);
                 }
+                RespawnTimers.Add(player.userID, timer.Repeat(1, timeRemaining + 1, () =>
+                {
+                    CuiHelper.DestroyUi(player, TimerUI);
+                    if (timeRemaining <= 0)
+                    {
+                        CuiHelper.DestroyUi(player, "EMUI_Panel");
+                        EndRespawnScreen(player);
+                        return;
+                    }
+                    string message = msg("respawnTime");
+                    if (wave) message = msg("respawnWave");
+                    var container = UI.CreateElementContainer(TimerUI, "0 0 0 0", "0.25 0.7", "0.75 0.85", false);
+                    UI.CreateOutLineLabel(ref container, TimerUI, "0 0 0 1", string.Format(message, timeRemaining), 26, "1.0 1.0", "0 0", "1 1");
+                    CuiHelper.AddUi(player, container);
+                    timeRemaining--;
+                }));
             }
+            if (configData.Options.AllowClassSelectionOnDeath && _Event.UseClassSelector)            
+                EMInterface.DeathClassSelector(player);            
         }
-        private void GiveClassKit(BasePlayer player)
+        void EndRespawnScreen(BasePlayer player)
         {
-            ELog($"Give class kit {player.displayName}");
-            Kits.Call("GiveKit", player, player.GetComponent<EventPlayer>().currentClass);
-            Interface.Oxide.CallHook("OnPlayerSelectClass", player);
-        }
-        void EjectPlayer(BasePlayer player)
-        {
-            ELog($"Ejecting {player.displayName}");
-            if (player.IsAlive())
+            if (RespawnTimers.ContainsKey(player.userID))
             {
-                ELog($"Eject Alive {player.displayName}");
-                player.SetPlayerFlag(BasePlayer.PlayerFlags.Wounded, false);
-                player.CancelInvoke("WoundingEnd");
-                player.metabolism.bleeding.value = 0f;
+                RespawnTimers[player.userID].Destroy();
+                RespawnTimers.Remove(player.userID);
             }
-            if (!configData.KillDeserters)
-                if (!string.IsNullOrEmpty(ZoneName))
-                    ZoneManager?.Call("RemovePlayerFromZoneKeepinlist", ZoneName, player);
+            CuiHelper.DestroyUi(player, DeathUI);
+            CuiHelper.DestroyUi(player, TimerUI);
 
-            player.GetComponent<EventPlayer>().inEvent = false;
-            Interface.Oxide.CallHook("DisableBypass", player.userID);
-        }    
-        void RestorePlayerHealth(BasePlayer player)
+            if (configData.Options.UseSpectateMode)
+                EndSpectating(player);
+            else NetworkPlayer(player);
+
+            ResetPlayer(player);
+        }
+        public void RespawnAllPlayers()
         {
-            ELog($"Restoring health {player.displayName}");
-            EventPlayer eventplayer = player.GetComponent<EventPlayer>();
-            if (eventplayer)
+            foreach (EventPlayer eventPlayer in EventPlayers)
             {
-                ELog($"RH {player.displayName} is event player");
-                player.health = eventplayer.health;
-                player.metabolism.calories.value = eventplayer.calories;
-                player.metabolism.hydration.value = eventplayer.hydration;
-                player.metabolism.bleeding.value = 0;
-                player.metabolism.SendChangesToClient();
+                if (eventPlayer.isDead || eventPlayer.isRespawning)
+                {
+                    EndRespawnScreen(eventPlayer.GetPlayer());
+                }
             }
         }
         #endregion
 
-        #region Event Management
-        [HookMethod("OpenEvent")]
-        public object OpenEvent()
+        #region Spectate
+        object CanNetworkTo(BaseEntity entity, BasePlayer target)
         {
-            if (EventOpen)
-                return $"{EventGameName} is already open";
-            ELog($"Opening Event {EventGameName}");
-
-            var success = Interface.Oxide.CallHook("CanEventOpen");
-            if (success is string)
-                return (string)success;
-            
-            EventOpen = true;
-            EventPlayers = new List<EventPlayer>();
-
-            var name = EventGameName;
-            if (EventMode == GameMode.Battlefield)
-                name = "Battlefield - ";
-            BroadcastToChat(string.Format(GetMessage("MessagesEventOpen"), name));
-            Interface.Oxide.CallHook("OnEventOpenPost");
-                     
-            ELog($"Game type: {EventMode}");
-            ELog($"AutoEvent: {AutoEventLaunched}");
-            ELog($"{EventGameName} Successfully opened");
-
-            return true;
-        }
-        void OnEventOpenPost() => OnEventOpenPostAutoEvent();
-        void OnEventOpenPostAutoEvent()
-        {
-            if (!AutoEventLaunched) return;
-            ELog($"Start auto event timers");
-            DestroyTimers();
-            var autocfg = configData.z_AutoEvents;
-            if (autocfg.AutoCancel_Timer != 0)
-                AutoArenaTimers.Add(timer.Once(autocfg.AutoCancel_Timer, () => CancelEvent(GetMessage("NoPlayers"))));
-            AutoArenaTimers.Add(timer.Repeat(configData.AnnounceEvent_Interval, 0, AnnounceEvent));
-        }
-        object CanEventOpen()
-        {
-            if (EventGameName == null) return GetMessage("MessagesEventNotSet");
-            else if (EventSpawnFile == null) return GetMessage("MessagesEventNoSpawnFile");
-            else if (EventOpen) return GetMessage("MessagesEventAlreadyOpened");
-
-            object success = Spawns.Call("GetSpawnsCount", EventSpawnFile);
-            if (success is string)
-                return (string)success;
+            var player = entity as BasePlayer;
+            var eventPlayer = GetUser(player ?? (entity as HeldEntity)?.GetOwnerPlayer());
+            if (eventPlayer == null || target == null) return null;
+            if (eventPlayer.isSpectating) 
+                return false;
             return null;
         }
-
-        [HookMethod("CloseEvent")]
-        public object CloseEvent()
+        void StartSpectating(EventPlayer eventPlayer)
         {
-            if (!EventOpen) return GetMessage("MessagesEventAlreadyClosed");
-            EventOpen = false;
-            Interface.Oxide.CallHook("OnEventClosePost");
-            if (EventStarted)
-                BroadcastToChat(GetMessage("MessagesEventClose"));
-            else
-                BroadcastToChat(GetMessage("MessagesEventCancel"));
-            return true;
-        }
-        object AutoEventNext()
-        {
-            ELog($"Next auto event");
-            if (configData.z_AutoEvents.z_AutoEventSetup.Count == 0)
+            var player = eventPlayer.GetPlayer();
+            if (!eventPlayer.isSpectating)
             {
-                ELog($"No events setup");
-                AutoEventLaunched = false;
-                return GetMessage("NoAuto");
-            }
-            bool successful = false;
-            for (int i = 0; i < configData.z_AutoEvents.z_AutoEventSetup.Count; i++)
-            {
-                EventAutoNum++;
-                if (EventAutoNum >= configData.z_AutoEvents.z_AutoEventSetup.Count) EventAutoNum = 0;
+                eventPlayer.isSpectating = true; 
+                eventPlayer.isRespawning = true;
 
-                var autocfg = configData.z_AutoEvents.z_AutoEventSetup[EventAutoNum];
+                player.inventory.Strip();              
+                player.playerFlags = player.playerFlags | BasePlayer.PlayerFlags.Spectating;
+                player.gameObject.SetLayerRecursive(10);
+                player.CancelInvoke("MetabolismUpdate");
+                player.CancelInvoke("InventoryUpdate");
+                spectateFilter.SetValue(player, $"@123nofilter123");
 
-                object success = SelectEvent(autocfg.GameType);
-                if (success is string) { continue; }
-
-                success = SelectSpawnfile(autocfg.Spawnfile);
-                if (success is string) { continue; }
-
-                success = SelectMinplayers(autocfg.MinimumPlayers);
-                if (success is string) { continue; }
-
-                success = SelectMaxplayers(autocfg.MaximumPlayers);
-                if (success is string) { continue; }
-
-                success = Interface.Oxide.CallHook("CanEventOpen");
-                if (success is string) { continue; }
-
-                if (!string.IsNullOrEmpty(autocfg.ZoneID))
-                    ZoneName = autocfg.ZoneID;
-
-                successful = true;
-                break;
-            }
-            if (!successful)
-            {
-                ELog($"No events init");
-                return GetMessage("NoAutoInit");
-            }
-            ELog($"Auto init success");
-            AutoArenaTimers.Add(timer.Once(configData.z_AutoEvents.GameInterval, () => OpenEvent()));
-            return null;
-        }
-        void OnEventStartPost()
-        {
-            ELog($"Event starting");
-            DestroyTimers();
-            if (AutoEventLaunched)
-                OnEventStartPostAutoEvent();
-            else if (EventMode == GameMode.Battlefield)
-                StartTimer(configData.Battlefield_Timer);
-            if (configData.AnnounceDuring_Event)
-                AutoArenaTimers.Add(timer.Repeat(configData.AnnounceEvent_Interval, 0, () => AnnounceDuringEvent()));
-        }
-        void OnEventStartPostAutoEvent()
-        {           
-            if (configData.z_AutoEvents.z_AutoEventSetup[EventAutoNum].TimeLimit != 0)
-                StartTimer(configData.z_AutoEvents.z_AutoEventSetup[EventAutoNum].TimeLimit);
-        }
-        void DestroyTimers()
-        {
-            ELog($"Destroying timers");
-            foreach (Timer eventtimer in AutoArenaTimers)
-                eventtimer.Destroy();
-            AutoArenaTimers.Clear();
-        }
-        void CancelEvent(string reason)
-        {
-            ELog($"Cancelling event");
-            var message = GetMessage("EventCancelled");
-            object success = Interface.Oxide.CallHook("OnEventCancel");
-            if (success != null)
-            {
-                if (success is string)
-                    message = (string)success;
-                else
-                    return;
-            }
-            BroadcastToChat(string.Format(message, EventGameName, reason));
-            DestroyTimers();
-            if (EventStarted)
-                EndEvent();
-            else if (AutoEventLaunched)
-                AutoEventNext();
-        }
-        void AnnounceEvent()
-        {
-            var message = GetMessage("EventOpen");
-            object success = Interface.Oxide.CallHook("OnEventAnnounce");
-            if (success is string)
-            {
-                message = (string)success;
-            }
-            BroadcastToChat(string.Format(message, EventGameName));
-        }
-        void AnnounceDuringEvent()
-        {
-            if (configData.AnnounceDuring_Event)
-            {
-                if (EventOpen && EventStarted)
+                if (configData.Options.DropCorpseOnDeath)
                 {
-                    var message = GetMessage("StillOpen");
-                    foreach (BasePlayer player in BasePlayer.activePlayerList)
+                    var entity = eventPlayer?.GetCorpse()?.entity;
+                    if (entity != null)
                     {
-                        if (!player.GetComponent<EventPlayer>())
-                            SendReply(player, string.Format(message, EventGameName));
+                        player.ClearEntityQueue(null);
+                        player.gameObject.Identity();
+                        player.SetParent(entity, 0);
                     }
                 }
             }
         }
-        object LaunchEvent()
+        void EndSpectating(BasePlayer player)
         {
-            ELog($"Launching auto events");
-            AutoEventLaunched = true;
-            if (!EventStarted)
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null) return;
+            if (eventPlayer.isSpectating)
             {
-                if (!EventOpen)
+                if (configData.Options.DropCorpseOnDeath)
                 {
-                    object success = AutoEventNext();
-                    if (success is string)                    
-                        return (string)success;
-                    
-                    success = OpenEvent();
-                    if (success is string)                    
-                        return (string)success;                    
+                    var parentEnt = player.GetParentEntity();
+                    if (parentEnt != null)
+                        parentEnt.RemoveChild(player);
+                    player.parentEntity.Set(null);
+                    player.parentBone = 0;
                 }
-                else OnEventOpenPostAutoEvent();
+                player.playerFlags = player.playerFlags & ~BasePlayer.PlayerFlags.Spectating;
+                player.gameObject.SetLayerRecursive(17);                
+                eventPlayer.isSpectating = false;
+                player.InvokeRepeating("InventoryUpdate", 1f, 0.1f * UnityEngine.Random.Range(0.99f, 1.01f));
+                eventPlayer.isRespawning = false;
             }
-            else OnEventStartPostAutoEvent();
-            ELog($"Launch successful");
-            return null;
         }
 
-        [HookMethod("EndEvent")]
-        public object EndEvent()
+        void UnnetworkPlayer(EventPlayer eventPlayer)
         {
-            if (EventEnded) return GetMessage("MessagesEventNoGamePlaying");
-            ELog($"Ending event");
-            foreach (var player in EventPlayers)
-                Interface.Oxide.CallHook("DestroyUI", player.player);
-
-            BroadcastToChat(string.Format(GetMessage("MessagesEventPEnd"), EventGameName));
-            EventOpen = false;
-            EventStarted = false;
-            EventPending = false;
-            EventEnded = true;
-            EnableGod();
-            BroadcastToChat(string.Format(GetMessage("MessagesEventEnd"), EventGameName));
-            Interface.Oxide.CallHook("OnEventEndPre");
-            ProcessPlayers();
-            return true;
-        }       
-        void ProcessPlayers()
-        {
-            ELog($"Processing players");
-            for (int i = 0; i < EventPlayers.Count; i++)
-                RestorePlayer(EventPlayers[i]);
-
-            timer.Once(5, () =>
+            var player = eventPlayer.GetPlayer();
+            if (!eventPlayer.isSpectating)
             {
-                if (EventPlayers.Count > 0)
+                eventPlayer.isSpectating = true;
+                eventPlayer.isRespawning = true;
+
+                player.inventory.Strip();
+                if (Net.sv.write.Start()) // Try catch?
                 {
-                    ELog($"EventPlayers.Count > 0, count is {EventPlayers.Count}");
-                    ProcessPlayers();
-                    return;
+                    Net.sv.write.PacketID(Message.Type.EntityDestroy);
+                    Net.sv.write.EntityID(player.net.ID);
+                    Net.sv.write.UInt8((byte)BaseNetworkable.DestroyMode.None);
+                    Net.sv.write.Send(new SendInfo(player.net.group.subscribers.Where(x => x.userid != player.userID).ToList()));
                 }
-                ELog($"EventPlayers.Count is 0");
-                DestroyGame();
-                Interface.Oxide.CallHook("OnEventEndPost");
-            });
-
-            
-        }
-        void RestorePlayer(EventPlayer p)
-        {            
-            if (p == null) return;
-            ELog($"Restoring {p.player.displayName}");
-            if (p.player.IsDead() || !p.player.IsAlive())
-            {
-                ELog($"RP {p.player.displayName} is dead");
-                var pos = Spawns.Call("GetRandomSpawn", EventSpawnFile);
-                if (pos is Vector3) p.player.RespawnAt((Vector3)pos, new Quaternion());
-                else p.player.Respawn();
-                return;
-            }
-            if (p.player.IsWounded() || p.player.health < 2)
-            {
-                ELog($"RP {p.player.displayName} is wounded");
-                p.player.SetPlayerFlag(BasePlayer.PlayerFlags.Wounded, false);
-                RestorePlayerHealth(p.player);
-                return;
-            }
-            if (p.player.IsSleeping())
-            {
-                ELog($"RP {p.player.displayName} is sleeping");
-                p.player.EndSleeping();
-                return;
-            }
-            ELog($"Starting restoration of {p.player.displayName}");
-            p.RestoreInventory();
-            p.TeleportHome();
-            RestorePlayerHealth(p.player);
-            Godmode.Remove(p.player.userID);
-            if (!p.savedHome && !p.savedInventory)
-            {
-                ELog($"{p.player.displayName} has no saved home or inv, try erase");
-                EjectPlayer(p.player);
-                TryErasePlayer(p.player);
+                player.CancelInvoke("MetabolismUpdate");
+                player.CancelInvoke("InventoryUpdate");
             }            
         }
-        
-        void EnableGod()
+        void NetworkPlayer(BasePlayer player)
         {
-            Godmode = new List<ulong>();
-            foreach (EventPlayer player in EventPlayers)
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null) return;
+            if (eventPlayer.isSpectating)
             {
-                ELog($"Godmode added {player.player.displayName}");
-                Godmode.Add(player.player.userID);
-                player.player.metabolism.bleeding.value = 0;
-                player.player.metabolism.SendChangesToClient();
+                eventPlayer.isSpectating = false;
+                player.InvokeRepeating("InventoryUpdate", 1f, 0.1f * UnityEngine.Random.Range(0.99f, 1.01f));
+                eventPlayer.isRespawning = false;
+            }           
+        }
+        #endregion
+        #endregion
+
+        #region Kit Management        
+        public void GivePlayerKit(BasePlayer player, string kit)
+        {
+            player.inventory.Strip();
+            if (_Started)
+            {
+                if (_Event.UseClassSelector)
+                {
+                    if (string.IsNullOrEmpty(player.GetComponent<EventPlayer>().currentClass))
+                    {
+                        EMInterface.CloseMap(player);
+                        EMInterface.CreateMenuMain(player);
+                        EMInterface.ClassSelector(player);
+                    }
+                    else GiveClassKit(player);
+                }
+                else
+                    GiveKit(player, kit);
             }
         }
-        void DisableGod()
-        {      
-            Godmode.Clear();
-        }
-        void DestroyGame()
+        private void GiveKit(BasePlayer player, string kitname) => Kits?.Call("GiveKit", player, kitname);
+        private void GiveClassKit(BasePlayer player)
         {
-            ELog($"Destroying game");
-            DestroyTimers();
-            EventPlayers.Clear();
-            ZoneName = "";
-            var objects = UnityEngine.Object.FindObjectsOfType<EventPlayer>();
-            if (objects != null)
-                foreach (var gameObj in objects)
-                    UnityEngine.Object.Destroy(gameObj);
-            ELog($"{objects.Count()} eventplayer components left over");
+            GiveKit(player, player.GetComponent<EventPlayer>().currentClass);
+            Interface.Oxide.CallHook("OnPlayerSelectClass", player);
         }
-        object CanEventStart()
-        {
-            if (EventGameName == null) return GetMessage("MessagesEventNotSet");
-            if (EventSpawnFile == null) return GetMessage("MessagesEventNoSpawnFile");
-            return EventStarted ? GetMessage("MessagesEventAlreadyStarted") : null;
-        }
+        #endregion
 
-        [HookMethod("StartEvent")]
-        public object StartEvent()
+        #region Zone Management
+        void OnExitZone(string zoneId, BasePlayer player)
         {
-            object success = Interface.Oxide.CallHook("CanEventStart");
-            if (success is string)
-                return (string)success;
-            ELog($"StartEvent");
-            Interface.Oxide.CallHook("OnEventStartPre");
-            if (!AutoEventLaunched)
-                ZoneName = (string)Interface.Oxide.CallHook("OnRequestZoneName");
-            BroadcastToChat(string.Format(GetMessage("MessagesEventBegin"), EventGameName));
-            EventStarted = true;
-            EventEnded = false;
-            DestroyTimers();
-            SaveAllInventories();
-            SaveAllHomeLocations();
-            SaveAllPlayerStats();
-            SetAllEventPlayers();
-            TeleportAllPlayersToEvent();
-            Interface.Oxide.CallHook("OnEventStartPost");
-            ELog($"Event Starting");
-            return true;
-        }        
-       
-        void SetEventPlayer(EventPlayer player)
-        {
-            ELog($"event player setup {player.player.displayName}");
-            Interface.Oxide.CallHook("EnableBypass", player.player.userID);
-            player.inEvent = true;
-            player.enabled = true;
-            player.SaveHome();
-            player.SaveInventory();
-            player.SaveHealth();
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null) return;
+            if (eventPlayer.isDead) return;
+            if (_Started && zoneId.Equals(_Event.ZoneID))
+            {
+                eventPlayer.OOB = true;
+                if (!KillTimers.ContainsKey(player.userID))
+                {
+                    SendReply(player, msg("oobMsg").Replace("{MsgColor}", configData.Messaging.MsgColor).Replace("{MainColor}", configData.Messaging.MainColor));
+                    int time = 10;
+                    KillTimers.Add(player.userID, timer.Repeat(1, time, () =>
+                    {
+                        if (eventPlayer.OOB)
+                        {
+                            time--;
+                            SendReply(player, msg("oobMsg2").Replace("{MsgColor}", configData.Messaging.MsgColor).Replace("{MainColor}", configData.Messaging.MainColor).Replace("{time}", time.ToString()), false);
+
+                            if (time == 0)
+                            {
+                                Effect.server.Run("assets/prefabs/tools/c4/effects/c4_explosion.prefab", player.transform.position);
+                                if (!eventPlayer.isDead)
+                                    OnPlayerDeath(player, new HitInfo());
+                                PopupMessage(msg("oobMsg3").Replace("{MsgColor}", configData.Messaging.MsgColor).Replace("{MainColor}", configData.Messaging.MainColor).Replace("{playerName}", player.displayName));
+                            }
+                        }
+                    }));
+                }
+            }
         }
-        object JoinEvent(BasePlayer player)
+        void OnEnterZone(string zoneID, BasePlayer player)
         {
-            if (player.GetComponent<EventPlayer>())
-                if (EventPlayers.Contains(player.GetComponent<EventPlayer>()))
-                    return GetMessage("MessagesEventAlreadyJoined");
-            ELog($"{player.displayName} is joining the event");
+            var eventPlayer = GetUser(player);
+            if (eventPlayer == null) return;
+            if (_Started && zoneID.Equals(_Event.ZoneID))
+            {
+                eventPlayer.OOB = false;
+                if (KillTimers.ContainsKey(player.userID))
+                {
+                    KillTimers[player.userID].Destroy();
+                    KillTimers.Remove(player.userID);
+                }
+            }
+        }
+        #endregion
+
+        #region Player Event Management  
+        void EnableGod() => _GodEnabled = true;
+        void DisableGod() => _GodEnabled = false;
+
+        public object JoinEvent(BasePlayer player)
+        {
+            var notNull = GetUser(player);
+            if ((notNull && EventPlayers.Contains(notNull)) || Joiners.Contains(player))
+                return msg("alreadyJoined");
+
             object success = Interface.Oxide.CallHook("CanEventJoin", player);
             if (success is string)
                 return (string)success;
-            var eventPlayer = player.GetComponent<EventPlayer>() ?? player.gameObject.AddComponent<EventPlayer>();
-            EventPlayers.Add(eventPlayer);
-            if (EventStarted)
-            {
-                ELog($"Event has already started, TPing {player.displayName}");
-                if (EventMode == GameMode.Battlefield || (AutoEventLaunched && configData.z_AutoEvents.z_AutoEventSetup[EventAutoNum].TimeLimit != 0))
-                    TimerCountdown(player);
-                SetEventPlayer(eventPlayer);
-                BroadcastToChat(string.Format(GetMessage("MessagesEventJoined"), player.displayName, EventPlayers.Count));
-                Interface.Oxide.CallHook("OnEventJoinPost", player);
-                TeleportPlayerToEvent(player);
-                return true;
-            }            
 
-            BroadcastToChat(string.Format(GetMessage("MessagesEventJoined"), player.displayName, EventPlayers.Count));
-            Interface.Oxide.CallHook("OnEventJoinPost", player);
+            killLifestory.Invoke(player, null);
+
+            UpdateName(player);
+
+            if (_Started)
+            {                
+                player.inventory.crafting.CancelAll(true);
+                var eventPlayer = player.gameObject.AddComponent<EventPlayer>();
+                EventPlayers.Add(eventPlayer);
+                BroadcastToChat(string.Format(msg("successJoined"), player.displayName, EventPlayers.Count));
+                if (SetEventPlayer(eventPlayer))
+                {
+                    HasJoinedEvent(player);
+                    Interface.Oxide.CallHook("OnEventJoinPost", player);
+                    TeleportPlayerToEvent(player);
+                    AddStats(player, StatType.Played);
+                    CreateScoreboard(player);
+                }
+            }
+            else
+            {
+                Joiners.Add(player);
+                BroadcastToChat(string.Format(msg("successJoined"), player.displayName, Joiners.Count));
+                if (_Launched && _Open && !_Pending && Joiners.Count >= _Event.MinimumPlayers)
+                {
+                    int timerStart = EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List[_EventNum].TimeToStart;
+                    BroadcastToChat(string.Format(msg("reachedMinPlayers"), _EventName, timerStart));
+
+                    _Pending = true;
+                    DestroyTimers();
+                    timer.Once(timerStart, () => StartEvent());
+                }
+            }
             return true;
+        }
+        public object LeaveEvent(BasePlayer player)
+        {
+            if (!_Started)
+            {
+                if (!Joiners.Contains(player))
+                    return msg("notInEvent");
+                Joiners.Remove(player);
+                BroadcastToChat(string.Format(msg("leftEvent"), player.displayName, Joiners.Count));
+            }
+            else
+            {                
+                var eventPlayer = GetUser(player);
+                if (eventPlayer == null || !EventPlayers.Contains(eventPlayer))
+                    return msg("notInEvent");
+
+                eventPlayer.isLeaving = true;
+
+                Interface.Oxide.CallHook("OnEventLeavePre");
+                Interface.Oxide.CallHook("DisableBypass", player.userID);
+
+                if (!_Ended || _Started)
+                    BroadcastToChat(string.Format(msg("leftEvent"), player.displayName, (EventPlayers.Count - 1)));
+                                
+                Restoration.LeaveLoop(player);                
+            }
+            return true;
+        }
+
+        void CreateEventPlayers()
+        {
+            if (Joiners.Count > 0)
+            {
+                var player = Joiners[0];
+                if (player != null)
+                {
+                    if (GetUser(player) != null)
+                    {
+                        UnityEngine.Object.DestroyImmediate(player.GetComponent<EventPlayer>());
+                        CreateEventPlayers();
+                        return;
+                    }
+                    player.inventory.crafting.CancelAll(true);
+                    var eventPlayer = player.gameObject.AddComponent<EventPlayer>();
+                    EventPlayers.Add(eventPlayer);
+
+                    if (SetEventPlayer(eventPlayer))
+                    {
+                        HasJoinedEvent(player);
+                        Joiners.Remove(player);
+                        Interface.Oxide.CallHook("OnEventJoinPost", player);
+                        if (!string.IsNullOrEmpty(_Event.ZoneID))
+                        {
+                            ZoneManager?.Call("AddPlayerToZoneWhitelist", _Event.ZoneID, player);
+                        }
+                        TeleportPlayerToEvent(player);
+                        AddStats(player, StatType.Played);
+                    }
+                }
+                CreateEventPlayers();
+            }
+            else WaitToStart();
+        }
+        void WaitToStart()
+        {
+            if (configData.Options.UseEventPrestart && configData.Options.EventPrestartTimer > 0)
+            {
+                int remaining = configData.Options.EventPrestartTimer;
+                EventTimers.Add(timer.Repeat(1, configData.Options.EventPrestartTimer, () =>
+                {
+                    remaining--;                                       
+                    if (remaining < 1)
+                    {
+                        foreach(var eventPlayer in EventPlayers)
+                        {
+                            var player = eventPlayer.GetPlayer();
+                            ResetPlayer(player);
+                            ResetMetabolism(player);                            
+                        }
+                        EventBegin();
+                        return;
+                    }
+                    popupQueue.Add(new MessageData(string.Format(msg("eventBeginIn"), remaining), 1, ""));
+                    UpdateMessages();
+                }));
+            }
+            else
+                EventBegin();
+        }
+        void EventBegin()
+        {
+            if (_Event.RespawnType == RespawnType.Waves)
+                _WaveTimer = new GameObject().AddComponent<WaveTimer>();
+            DisableGod();
+            Interface.Oxide.CallHook("OnEventStartPost");
+        }
+        bool SetEventPlayer(EventPlayer eventPlayer)
+        {
+            var player = eventPlayer.GetPlayer();
+
+            Interface.Oxide.CallHook("EnableBypass", player.userID);
+            eventPlayer.enabled = true;
+            eventPlayer.inEvent = true;
+            Restoration.StorePlayer(player);           
+
+            if (EventGames[_Event.EventType].LockClothing && !player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))
+            {
+                player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, true);
+                player.inventory.SendSnapshot();
+            }
+            return true;
+        }
+        #endregion
+
+        #region Event Methods
+        public object RegisterEventGame(string name, EventSetting eventSettings, Events defaultConfig)
+        {
+            if (!EventGames.ContainsKey(name))
+                EventGames.Add(name, eventSettings);
+
+            var success = ValidateEvent(defaultConfig);
+            if (success is string)
+            {
+                PrintError($"Error generating a default event config for game: {name}\n{(string)success}");
+            }
+            else ValidEvents.Add($"{name} Default", defaultConfig);
+
+            Puts(string.Format("Registered event game: {0}", name));
+
+            return true;
+        }
+        void OnEventStartPost()
+        {
+            DestroyTimers();
+            if (_Launched) OnEventStartPostAutoEvent();
+            if (_Event.GameMode == GameMode.Battlefield && !_TimerStarted)
+                StartTimer(configData.Options.Battlefield_Timer);
+            if (configData.Messaging.AnnounceEvent_During)
+                EventTimers.Add(timer.Repeat(configData.Messaging.AnnounceEvent_Interval, 0, () => AnnounceDuringEvent()));
+        }
+        void OnEventStartPostAutoEvent()
+        {
+            if (EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List[_EventNum].TimeLimit != 0)
+                StartTimer(EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List[_EventNum].TimeLimit * 60);
+        }
+        object CanEventStart()
+        {
+            if (_Event.EventType == null) return msg("noEventSet");
+            if (EventGames[_Event.EventType].RequiresSpawns && string.IsNullOrEmpty(_Event.Spawnfile))
+                return msg("noSpawnsSet");
+            if (EventGames[_Event.EventType].RequiresMultipleSpawns && string.IsNullOrEmpty(_Event.Spawnfile2))
+                return msg("noSpawnsSet");
+            return _Started ? msg("alreadyStarted") : null;
         }
         object CanEventJoin(BasePlayer player)
         {
-            if (!EventOpen)
-                return GetMessage("EventClosed");
+            if (!_Open) return msg("isClosed");
 
-            if (EventMaxPlayers != 0 && EventPlayers.Count >= EventMaxPlayers)
-                return string.Format(GetMessage("MessagesEventMaxPlayers"), EventGameName);
-                       
-            return null;
-        }
-        object OnEventJoinPost(BasePlayer player)
-        {
-            if (!AutoEventLaunched) return null;
-            var autocfg = configData.z_AutoEvents.z_AutoEventSetup[EventAutoNum];
-            if (EventPlayers.Count >= autocfg.MinimumPlayers && !EventStarted && EventEnded && !EventPending)
-            {                
-                float timerStart = autocfg.TimeToJoin;
-                BroadcastToChat(string.Format(GetMessage("MessagesEventMinPlayers"), EventGameName, timerStart));
+            if (!_Started && _Event.MaximumPlayers != 0)
+                if (Joiners.Count >= _Event.MaximumPlayers)
+                    return string.Format(msg("reachedMaxPlayers"), _EventName);
 
-                EventPending = true;
-                DestroyTimers();
-                AutoArenaTimers.Add(timer.Once(timerStart, () => StartEvent()));
-            }
+            if (_Started && _Event.MaximumPlayers != 0)
+                if (EventPlayers.Count >= _Event.MaximumPlayers)
+                    return string.Format(msg("reachedMaxPlayers"), _EventName);
+
             return null;
         }
         void OnEventEndPost()
         {
-            if (AutoEventLaunched)
+            if (_Launched)
                 AutoEventNext();
         }
-        [HookMethod("LeaveEvent")]
-        public object LeaveEvent(BasePlayer player)
+        void DestroyGame()
         {
-            var eventPlayer = player.GetComponent<EventPlayer>();
-            if (eventPlayer == null && !EventPlayers.Contains(eventPlayer))
-                return GetMessage("NotInEvent");
-            ELog($"{player.displayName} is leaving the event");
-            Interface.Oxide.CallHook("OnEventLeavePre");
-            Interface.Oxide.CallHook("DisableBypass", player.userID);
-            eventPlayer.inEvent = false;
+            Unsubscribe(nameof(OnEntityTakeDamage));
+            Unsubscribe(nameof(OnPlayerAttack));
+            Unsubscribe(nameof(OnItemPickup));
+            Unsubscribe(nameof(CanNetworkTo));
+            Unsubscribe(nameof(CanLootPlayer));
 
-            if (!EventEnded || !EventStarted)
-                BroadcastToChat(string.Format(GetMessage("MessagesEventLeft"), player.displayName, (EventPlayers.Count - 1)));
+            DestroyTimers();
+            EventPlayers.Clear();
+            Joiners.Clear();
+            DisableGod();
+            SpawnCount.SetSpawnCount(true, -1);
+            SpawnCount.SetSpawnCount(false, -1);
+            _Open = false;
+            _Pending = false;
+            _Destoyed = true;
 
-            if (!configData.KillDeserters)
-                if (!string.IsNullOrEmpty(ZoneName))
-                    ZoneManager?.Call("RemovePlayerFromZoneKeepinlist", ZoneName, player);
+            var players = UnityEngine.Object.FindObjectsOfType<EventPlayer>();
+            if (players != null)
+                foreach (var gameObj in players)
+                    UnityEngine.Object.Destroy(gameObj);
 
-            if (EventStarted)
-            {
-                player.inventory.Strip();
-                RedeemInventory(player);
-                TeleportPlayerHome(player);
-                RestorePlayerHealth(player);
-                EjectPlayer(player);
-                TryErasePlayer(player);
-                Interface.Oxide.CallHook("OnEventLeavePost", player);
-            }
-            else
-            {
-                EventPlayers.Remove(eventPlayer);
-                UnityEngine.Object.Destroy(eventPlayer);
-            }
-            return true;
+            var corpses = UnityEngine.Object.FindObjectsOfType<EventCorpse>();
+            if (corpses != null)
+                foreach (var gameObj in corpses)
+                    UnityEngine.Object.Destroy(gameObj);
         }
-        [HookMethod("SelectEvent")]
-        public object SelectEvent(string name)
+        void StartTimer(int time)
         {
-            if (!(EventGames.Contains(name))) return string.Format(GetMessage("MessagesEventNotAnEvent"), name);
-            if (EventStarted || EventOpen) return GetMessage("MessagesEventCloseAndEnd");
-            EventGameName = name;
-            Interface.Oxide.CallHook("OnSelectEventGamePost", name);
-            return true;
+            if (_GameTimer != null || _TimerStarted) return;
+            _GameTimer = new GameObject().AddComponent<GameTimer>();
+            _GameTimer.StartTimer(time);
         }
-
-        [HookMethod("SelectSpawnfile")]
-        public object SelectSpawnfile(string name)
+        void DestroyTimers()
         {
-            if (name == null) return GetMessage("MessagesErrorSpawnfileIsNull");
-
-            var eventset = CheckEventSet();
-            if (eventset is string)
-                return (string)eventset;
-
-            object success = Interface.Oxide.CallHook("OnSelectSpawnFile", name);
-            if (success == null)
-                return string.Format(GetMessage("MessagesEventNotAnEvent"), EventGameName);            
-
-            EventSpawnFile = name;
-            success = Spawns.Call("GetSpawnsCount", EventSpawnFile);
-
-            if (success is string)
+            if (_GameTimer != null)
             {
-                EventSpawnFile = null;
-                return (string)success;
+                UnityEngine.Object.Destroy(_GameTimer);
+                _GameTimer = null;
+                _TimerStarted = false;
+            }
+            if (_WaveTimer != null)
+            {
+                UnityEngine.Object.Destroy(_WaveTimer);
             }
 
-            return true;
+            foreach (Timer eventtimer in EventTimers)
+                eventtimer.Destroy();
+            EventTimers.Clear();
+
+            foreach (var eventtimer in RespawnTimers)
+                eventtimer.Value.Destroy();
+            RespawnTimers.Clear();
         }
-        object SelectKit(string kitname)
-        {
-            if (kitname == null) return GetMessage("NullKitname");
-            var eventset = CheckEventSet();
-            if (eventset is string)
-                return (string)eventset;
+        #endregion
 
-            object success = Kits.Call("isKit", kitname);
-            if (!(success is bool))
-                return GetMessage("NoKits");
-            if (!(bool)success)
-                return string.Format(GetMessage("KitNotExist"), kitname);
-            success = Interface.Oxide.CallHook("OnSelectKit", kitname);
-            if (success == null)
-                return $"{EventGameName} doesn't let you choose a kit";
-            return true;
-        }       
-        object SelectMaxplayers(int num)
+        #region Player Restoration
+        private RestoreStorage DataStorage;
+        class RestoreStorage
         {
-            var eventset = CheckEventSet();
-            if (eventset is string)
-                return (string)eventset;
-
-            Interface.Oxide.CallHook("OnPostSelectMaxPlayers", num);
-            return true;
+            public Dictionary<ulong, RestoreInfo> playerData = new Dictionary<ulong, RestoreInfo>();
         }
-        object SelectMinplayers(int num)
+        class RestorationManager
         {
-            var eventset = CheckEventSet();
-            if (eventset is string)
-                return (string)eventset;
+            public Dictionary<ulong, RestoreInfo> playerData = new Dictionary<ulong, RestoreInfo>();
+            private int restoreNum;
+            private int restoreCycles;
 
-            Interface.Oxide.CallHook("OnPostSelectMinPlayers", num);
-            return true;
-        }
-        object SelectNewZone(MonoBehaviour monoplayer, string radius)
-        {
-            var eventset = CheckEventSet();
-            if (eventset is string)
-                return (string)eventset;
-
-            if (EventStarted || EventOpen) return GetMessage("MessagesEventCloseAndEnd");
-            Interface.Oxide.CallHook("OnSelectEventZone", monoplayer, radius);
-            return true;
-        }
-        private object CheckEventSet()
-        {
-            if (string.IsNullOrEmpty(EventGameName)) return GetMessage("MessagesEventNotSet");
-            if (!(EventGames.Contains(EventGameName))) return string.Format(GetMessage("MessagesEventNotAnEvent"), EventGameName);
-            return null;
-        }
-
-        [HookMethod("RegisterEventGame")]
-        public object RegisterEventGame(string name)
-        {
-            if (!(EventGames.Contains(name)))
-                EventGames.Add(name);
-            Puts(string.Format("Registered event game: {0}", name));
-            Interface.Oxide.CallHook("OnSelectEventGamePost", EventGameName);
-
-            if (EventGameName == name)
+            #region Storage
+            public void StorePlayer(BasePlayer player)
             {
-                object success = SelectEvent(EventGameName);
-                if (success is string)
-                    Puts((string)success);
+                RestoreInfo info = new RestoreInfo
+                {
+                    inventory = new Dictionary<InventoryType, List<EventInvItem>>
+                    {
+                        {InventoryType.Belt, GetItems(player.inventory.containerBelt).ToList() },
+                        {InventoryType.Main, GetItems(player.inventory.containerMain).ToList() },
+                        {InventoryType.Wear, GetItems(player.inventory.containerWear).ToList() }
+                    },
+                    health = player.Health(),
+                    calories = player.metabolism.calories.value,
+                    hydration = player.metabolism.hydration.value,
+                    x = player.transform.position.x,
+                    y = player.transform.position.y,
+                    z = player.transform.position.z
+                };
+                if (!playerData.ContainsKey(player.userID))
+                    playerData.Add(player.userID, info);
+                else playerData[player.userID] = info;                
+            }
+            public RestoreInfo GetPlayerData(ulong playerId)
+            {
+                RestoreInfo returnData;
+                if (playerData.TryGetValue(playerId, out returnData))
+                    return returnData;
+                return null;
+            }
+            public void RemovePlayer(ulong playerId)
+            {
+                if (playerData.ContainsKey(playerId))
+                    playerData.Remove(playerId);
             }            
-            return true;
-        }
-        void OnExitZone(string zoneId, BasePlayer player)
-        {
-            if (EventStarted)
-                if (player.GetComponent<EventPlayer>())
-                    if (zoneId.Equals(ZoneName))
-                        if (configData.KillDeserters)
-                        {
-                            ELog($"{player.displayName} is attempting to leave the zone");
-                            player.GetComponent<EventPlayer>().OOB = true;
-                            if (!KillTimers.ContainsKey(player.userID))
-                            {                                         
-                                MSG(player, $"<color={configData.Messaging_MsgColor}>You have</color> <color={configData.Messaging_MainColor}>10</color><color={configData.Messaging_MsgColor}> seconds to return to the arena</color>");
-                                ELog($"{player.displayName} has left the zone, adding kill timer");
-                                int time = 10;
-                                KillTimers.Add(player.userID, timer.Repeat(1, time, () =>
-                                {
-                                    if (player.GetComponent<EventPlayer>().OOB)
-                                    {
-                                        time--;
-                                        MSG(player, $"<color={configData.Messaging_MainColor}>{time}</color><color={configData.Messaging_MsgColor}> seconds</color>", false);
+            public bool HasPendingRestore(ulong playerId) => playerData.ContainsKey(playerId);            
+            private IEnumerable<EventInvItem> GetItems(ItemContainer container)
+            {
+                return container.itemList.Select(item => new EventInvItem
+                {
+                    itemid = item.info.itemid,
+                    amount = item.amount,
+                    ammo = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.contents ?? 0,
+                    ammotype = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.ammoType.shortname ?? null,
+                    skin = item.skin,
+                    condition = item.condition,
+                    instanceData = item.instanceData ?? null,
+                    contents = item.contents?.itemList.Select(item1 => new EventInvItem
+                    {
+                        itemid = item1.info.itemid,
+                        amount = item1.amount,
+                        condition = item1.condition
+                    }).ToArray()
+                });
+            }
+            #endregion
 
-                                        if (time == 0)
-                                        {
-                                            Effect.server.Run("assets/prefabs/tools/c4/effects/c4_explosion.prefab", (player.transform.position));
-                                            player.Hurt(200f, Rust.DamageType.Explosion, null, true);
-                                            BroadcastEvent($"<color={configData.Messaging_MainColor}>{player.displayName}</color><color={configData.Messaging_MsgColor}> tried to run away...</color>");
-                                        }
-                                    }
-                                }));
+            #region Restoration
+            public void StartRestoration()
+            {
+                restoreNum = 0;
+                restoreCycles = 0;
+                RestoreLoop();
+            }
+            public void LeaveLoop(BasePlayer player, int attempts = 0)
+            {
+                if (player != null)
+                {
+                    if (attempts > 3)
+                    {
+                        player.DieInstantly();
+                        Interface.CallHook("OnEventLeavePost", player);
+                        return;
+                    }
+                    if (ReadyToRestore(player))
+                    {
+                        if (RestorePlayer(player))
+                        {
+                            Interface.CallHook("OnEventLeavePost", player);
+                            return;
+                        }
+                    }
+                    ins.timer.In(5, ()=> LeaveLoop(player, ++attempts));
+                    return;
+                }
+            }
+            private void RestoreLoop()
+            {
+                if (ins.EventPlayers.Count > 0)
+                {
+                    if (restoreNum > ins.EventPlayers.Count - 1)
+                    {
+                        restoreCycles++;
+                        if (restoreCycles > 4)
+                        {
+                            foreach (var eventPlayer in ins.EventPlayers)
+                            {
+                                var eplayer = eventPlayer?.GetPlayer();
+                                if (eplayer != null)
+                                {
+                                    eplayer?.DieInstantly();
+                                    ins.SendReply(eplayer, msg("failedRestore", eplayer));
+                                }                                
+                            }
+                            ins.FinalizeGameEnd();
+                            return;
+                        }
+                        restoreNum = 0;
+                        --restoreCycles;
+                        ins.timer.In(5, () => RestoreLoop());
+                        return;
+                    }
+                    var player = ins.EventPlayers[restoreNum]?.GetPlayer();
+                    if (player != null)
+                    {
+                        if (ReadyToRestore(player))
+                        {
+                            if (RestorePlayer(player))
+                            {
+                                RestoreLoop();
+                                return;
                             }
                         }
-        }
-        void OnEnterZone(string zoneID, BasePlayer player)
-        {
-            if (EventStarted)
-                if (player.GetComponent<EventPlayer>())
-                    if (zoneID.Equals(ZoneName))
-                    {
-                        player.GetComponent<EventPlayer>().OOB = false;
-                        if (KillTimers.ContainsKey(player.userID))
-                        {
-                            ELog($"{player.displayName} has entered the zone, destroying kill timer");
-                            KillTimers[player.userID].Destroy();
-                            KillTimers.Remove(player.userID);
-                        }
                     }
+                    else ins.EventPlayers.RemoveAt(restoreNum);
+                    restoreNum++;
+                    RestoreLoop();
+                    return;
+                }
+                else ins.FinalizeGameEnd();
+            }
+            public bool ReadyToRestore(BasePlayer player)
+            {
+                player.inventory.Strip();
+                UnlockInventory(player);
+                DestroyUI(player);
+
+                var eventPlayer = ins.GetUser(player);
+                if (eventPlayer != null)
+                {
+                    if (eventPlayer.isRespawning)
+                    {
+                        ins.EndRespawnScreen(player);
+                        return false;
+                    }
+                    if (eventPlayer.isDead)
+                    {
+                        ins.ResetPlayer(player);
+                        return false;
+                    }
+                    if (eventPlayer.isSpectating)
+                    {
+                        if (ins.configData.Options.UseSpectateMode)
+                            ins.EndSpectating(player);
+                        else ins.NetworkPlayer(player);
+                        return false;
+                    }
+                }
+
+                if (player.IsSleeping())
+                {
+                    player.EndSleeping();
+                    return false;
+                }
+
+                if (player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+                {
+                    return false;
+                }
+
+                if (player.IsDead() || !player.IsAlive())
+                {
+                    var spawnPos = ins.GetSpawnPosition(player);
+                    if (spawnPos is Vector3)
+                        player.RespawnAt((Vector3)spawnPos, new Quaternion());
+                    else player.Respawn();
+                    return false;                   
+                }
+
+                if (player.IsWounded() || player.health < 1)
+                {
+                    player.metabolism.Reset();
+                    player.SetPlayerFlag(BasePlayer.PlayerFlags.Wounded, false);
+                    return false;
+                }
+                return true;
+            }
+            public bool RestorePlayer(BasePlayer player)
+            {
+                if (player == null) return true;
+                var restoreData = GetPlayerData(player.userID);
+                if (restoreData == null)
+                    return true;
+                var eventPlayer = ins.GetUser(player);
+                if (eventPlayer != null)
+                {
+                    eventPlayer.restoreAttempts++;
+                    if (eventPlayer.restoreAttempts > 3)
+                    {
+                        ins.EventPlayers.Remove(eventPlayer);
+                        UnityEngine.Object.DestroyImmediate(eventPlayer);
+                        player.RespawnAt(new Vector3(restoreData.x, restoreData.y, restoreData.z), new Quaternion());
+                        return true;
+                    }
+
+                    if (eventPlayer.GetCorpse() != null)
+                        UnityEngine.Object.Destroy(eventPlayer.GetCorpse());
+                }
+                
+                player.RemoveFromTriggers();
+                ins.RemoveChildren(player);
+
+                RemoveFromZone(player);
+
+                RestorePlayerStats(player, restoreData.health, restoreData.hydration, restoreData.calories);
+
+                if (!RestoreInventory(player, restoreData)) return false;
+
+                SendPlayerHome(player, new Vector3(restoreData.x, restoreData.y, restoreData.z));
+
+                if (eventPlayer != null)
+                    DestroyEventPlayer(eventPlayer);
+
+                RemovePlayer(player.userID);
+                return true;
+            }            
+            private void UnlockInventory(BasePlayer player)
+            {
+                if (player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))
+                {
+                    player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, false);
+                    player.inventory.SendSnapshot();
+                }
+            }
+            private void DestroyUI(BasePlayer player)
+            {
+                ins.DestroyScoreboard(player);
+                ins.DestroyPopupUI(player);
+                CuiHelper.DestroyUi(player, ClockUI);
+                CuiHelper.DestroyUi(player, DeathUI);
+                CuiHelper.DestroyUi(player, TimerUI);
+                CuiHelper.DestroyUi(player, TimerUI);
+                CuiHelper.DestroyUi(player, "EMUI_Panel");
+            }
+            private void RemoveFromZone(BasePlayer player)
+            {
+                string zoneId = ins._Event.ZoneID;
+                if (!string.IsNullOrEmpty(zoneId))
+                    ins.ZoneManager?.Call("RemovePlayerFromZoneWhitelist", zoneId, player);
+
+                Interface.Oxide.CallHook("DisableBypass", player.userID);
+            }
+            private void RestorePlayerStats(BasePlayer player, float health, float hydration, float calories)
+            {
+                player.metabolism.Reset();
+                player.health = health;
+                player.metabolism.calories.value = calories;
+                player.metabolism.hydration.value = hydration;
+                player.metabolism.bleeding.value = 0;
+                player.metabolism.SendChangesToClient();
+            }
+            private void SendPlayerHome(BasePlayer player, Vector3 position)
+            {
+                ins.MovePosition(player, position);                
+            }
+            private bool RestoreInventory(BasePlayer player, RestoreInfo info)
+            {       
+                if (RestoreItems(player, info, InventoryType.Belt) && RestoreItems(player, info, InventoryType.Main) && RestoreItems(player, info, InventoryType.Wear))
+                    return true;
+                else
+                {
+                    player.inventory.Strip();
+                    return false;
+                }
+            }
+            private bool RestoreItems(BasePlayer player, RestoreInfo info, InventoryType type)
+            {
+                ItemContainer container = type == InventoryType.Belt ? player.inventory.containerBelt : type == InventoryType.Wear ? player.inventory.containerWear : player.inventory.containerMain;
+             
+                for (int i = 0; i < container.capacity; i++)
+                {
+                    var existingItem = container.GetSlot(i);
+                    if (existingItem != null)
+                    {
+                        existingItem.RemoveFromContainer();
+                        existingItem.Remove(0f);
+                    }
+                    if (info.inventory[type].Count > i)
+                    {
+                        var itemData = info.inventory[type][i];
+                        var item = ItemManager.CreateByItemID(itemData.itemid, itemData.amount, itemData.skin);                        
+                        item.condition = itemData.condition;
+                        if (itemData.instanceData != null)
+                            item.instanceData = itemData.instanceData;
+
+                        var weapon = item.GetHeldEntity() as BaseProjectile;
+                        if (weapon != null)
+                        {
+                            if (!string.IsNullOrEmpty(itemData.ammotype))
+                                weapon.primaryMagazine.ammoType = ItemManager.FindItemDefinition(itemData.ammotype);
+                            weapon.primaryMagazine.contents = itemData.ammo;
+                        }
+                        if (itemData.contents != null)
+                        {
+                            foreach (var contentData in itemData.contents)
+                            {
+                                var newContent = ItemManager.CreateByItemID(contentData.itemid, contentData.amount);
+                                if (newContent != null)
+                                {
+                                    newContent.condition = contentData.condition;
+                                    newContent.MoveToContainer(item.contents);
+                                }
+                            }
+                        }
+                        item.position = i;
+                        item.SetParent(container);
+                    }
+                }
+                if (container.itemList.Count == info.inventory[type].Count)
+                    return true;
+                return false;
+            }
+            private void DestroyEventPlayer(EventPlayer eventPlayer)
+            {
+                eventPlayer.inEvent = false;
+                eventPlayer.enabled = false;
+                ins.EventPlayers.Remove(eventPlayer);
+                UnityEngine.Object.DestroyImmediate(eventPlayer);
+            }
+            #endregion
+        }
+
+        [ChatCommand("restoreme")]
+        void cmdRestoreMe(BasePlayer player, string command, string[] args)
+        {
+            if (Restoration.HasPendingRestore(player.userID))
+            {
+                if (Restoration.ReadyToRestore(player))
+                {
+                    if (Restoration.RestorePlayer(player))
+                    {
+                        return;
+                    }
+                }
+                SendMsg(player, "restoreFailed");
+            }
+            else SendMsg(player, "noRestoreSaved");
         }
         #endregion
-
-        #region Commands
-        [ChatCommand("event")]
-        void cmdEvent(BasePlayer player, string command, string[] args)
+        
+        #region AutoEvent Management        
+        public object LaunchEvent()
         {
-            if (args == null || args.Length == 0)
+            _Launched = true;
+            if (!_Started)
             {
-                string message = string.Empty;
-                if (!EventOpen && !EventStarted) message = GetMessage("MessagesEventStatusClosedEnd");
-                else if (EventOpen && !EventStarted) message = GetMessage("MessagesEventStatusOpen");
-                else if (EventOpen && EventStarted) message = GetMessage("MessagesEventStatusOpenStarted");
-                else message = GetMessage("MessagesEventStatusClosedStarted");
-                MSG(player, string.Format(message, EventGameName));
+                if (!_Open)
+                {
+                    object success = AutoEventNext();
+                    if (success is string)
+                        return (string)success;
 
-                if (EventOpen)
-                {
-                    SendReply(player, "/event join - Join a event");
-                    SendReply(player, "/event leave - Leave a event");
-                    if (UseClassSelection)
-                        SendReply(player, "/event class - Opens the class selector");
+                    success = OpenEvent();
+                    if (success is string)
+                        return (string)success;
                 }
-                if (player.IsAdmin())
-                {
-                    SendReply(player, "/event open - Open a event");
-                    SendReply(player, "/event cancel - Cancel a event");
-                    SendReply(player, "/event cs - Activate/de-activate class selection");
-                    SendReply(player, "/event cs add <classname> <kitname> - Add a new kit to class selection");
-                    SendReply(player, "/event cs remove <classname> - Remove a kit from class selection");
-                    SendReply(player, "/event start - Start a event");
-                    SendReply(player, "/event close - Close a event to new entries");
-                    SendReply(player, "/event end - End a event");
-                    SendReply(player, "/event launch - Launch auto events");
-                    SendReply(player, "/event game \"Game Name\" - Change event game");
-                    SendReply(player, "/event gamemode <normal/battlefield> - Switch game modes");
-                    SendReply(player, "/event minplayers XX - Set minimum required players (auto event)");
-                    SendReply(player, "/event maxplayers XX - Set maximum players (auto event)");
-                    SendReply(player, "/event spawnfile \"filename\" - Change the event spawnfile");
-                    SendReply(player, "/event kit \"kitname\" - Change the event kit");
-                }
-                return;
+                else OnEventOpenPostAutoEvent();
             }
-            switch (args[0].ToLower())
-            {
-                case "join":
-                    object join = JoinEvent(player);
-                    if (join is string)
-                    {
-                        SendReply(player, (string)join);
-                        return;
-                    }
-                    return;
-                case "leave":
-                    object leave = LeaveEvent(player);
-                    if (leave is string)
-                    {
-                        SendReply(player, (string)leave);
-                        return;
-                    }
-                    return;
-                case "class":
-                    if (UseClassSelection)
-                        if (EventStarted)
-                            if (player.GetComponent<EventPlayer>())
-                                SelectClass(player);                    
-                    return;
-            }
-            if (!player.IsAdmin()) return;
-            switch (args[0].ToLower())
-            {
-                case "cancel":
-                    AutoEventLaunched = false;
-                    if (EventOpen) CancelEvent(GetMessage("CancelAuto"));
-                    DestroyTimers();
-                    SendReply(player, GetMessage("CancelAuto"));
-                    return;
-                case "open":
-                    object open = OpenEvent();
-                    if (open is string)
-                    {
-                        SendReply(player, (string)open);
-                        return;
-                    }
-                    SendReply(player, string.Format("Event \"{0}\" is now opened.", EventGameName));
-                    return;
-                case "debug":
-                    if (Debug) { Debug = false; SendReply(player, "Debug deactivated"); }
-                    else { Debug = true;  SendReply(player, "Debug activated"); }
-                    return;
-                case "start":
-                    object start = StartEvent();
-                    if (start is string)
-                    {
-                        SendReply(player, (string)start);
-                        return;
-                    }
-                    SendReply(player, string.Format("Event \"{0}\" is now started.", EventGameName));
-                    return;
-                case "close":
-                    object close = CloseEvent();
-                    if (close is string)
-                    {
-                        SendReply(player, (string)close);
-                        return;
-                    }
-                    SendReply(player, string.Format("Event \"{0}\" is now closed for entries.", EventGameName));
-                    return;
-                case "cs":
-                    if (args.Length >= 2)
-                    {
-                        switch (args[1].ToLower())
-                        {
-                            case "add":
-                                if (classData.ClassKits.Count >= 9)
-                                {
-                                    SendReply(player, "You have already set the maximum number of classes");
-                                    return;
-                                }
-                                if (args.Length == 4)
-                                {
-                                    object isKit = Kits.Call("isKit", args[3]);
-                                    if (!(isKit is bool))
-                                    {
-                                        SendReply(player, "Unable to find the kits plugin");
-                                        return;
-                                    }
-                                    if (!(bool)isKit)
-                                    {
-                                        SendReply(player, string.Format("The kit {0} doesn't exist", args[3]));
-                                        return;
-                                    }
-                                    classData.ClassKits.Add(args[2], args[3]);
-                                    SaveData();
-                                    SendReply(player, $"You have successfully added a new class kit {args[2]}, using kit {args[3]}");
-                                }
-                                return;
-                            case "remove":
-                                if (args.Length == 3)
-                                {
-                                    if (classData.ClassKits.ContainsKey(args[2]))
-                                    {
-                                        classData.ClassKits.Remove(args[2]);
-                                        SaveData();
-                                        SendReply(player, $"You have successfully removed the class {args[2]}");
-                                        return;
-                                    }
-                                    SendReply(player, string.Format("The class {0} doesn't exist", args[2]));
-                                }
-                                return;
-                        }
-                    }
-                    if (UseClassSelection)
-                    {
-                        UseClassSelection = false;
-                        SendReply(player, "You have de-activated class selection");
-                        return;
-                    }
-                    if (classData.ClassKits.Count < 1)
-                    {
-                        SendReply(player, "You must set classes before activating the class selector");
-                        return;
-                    }
-                    UseClassSelection = true;
-                    SendReply(player, "You have activated class selection");
-                    return;
-                case "end":
-                    object end = EndEvent();
-                    if (end is string)
-                    {
-                        SendReply(player, (string)end);
-                        return;
-                    }
-                    SendReply(player, string.Format("Event \"{0}\" has ended.", EventGameName));
-                    return;
-                case "game":
-                    if (args.Length > 1)
-                    {
-                        object game = SelectEvent(args[1]);
-                        if (game is string)
-                        {
-                            SendReply(player, (string)game);
-                            return;
-                        }
-                        configData.Default_Gamemode = EventGameName;
-                        SaveConfig();
-                        SendReply(player, string.Format("{0} is now the next Event game.", args[1]));
-                    }
-                    return;
-                case "gamemode":
-                    if (args.Length > 1)
-                    {
-                        switch (args[1].ToLower())
-                        {
-                            case "normal":
-                                EventMode = GameMode.Normal;
-                                break;
-                            case "battlefield":
-                                EventMode = GameMode.Battlefield;
-                                break;
-                            default:
-                                break;                      
-                        }
-                        SendReply(player, string.Format("Event game mode is now set to {0}", EventMode.ToString()));
-                    }
-                    return;
-                case "minplayers":
-                    if (args.Length > 1)
-                    {
-                        int min;
-                        if (!int.TryParse(args[1], out min))
-                        {
-                            MSG(player, "You must enter a number", false);
-                            return;
-                        }
-                        object minplayers = SelectMinplayers(min);
-                        if (minplayers is string)
-                        {
-                            MSG(player, (string)minplayers);
-                            return;
-                        }
-                        SendReply(player, string.Format("Minimum Players for {0} is now {1} (this is only useful for auto events).", args[1], EventSpawnFile));
-                    }
-                    return;
-                case "maxplayers":
-                    if (args.Length > 1)
-                    {
-                        int max;
-                        if (!int.TryParse(args[1], out max))
-                        {
-                            MSG(player, "You must enter a number", false);
-                            return;
-                        }
-                        object maxplayers = SelectMaxplayers(max);
-                        if (maxplayers is string)
-                        {
-                            SendReply(player, (string)maxplayers);
-                            return;
-                        }
-                        SendReply(player, string.Format("Maximum Players for {0} is now {1}.", args[1], EventSpawnFile));
-                    }
-                    return;
-                case "spawnfile":
-                    if (args.Length > 1)
-                    {
-                        object spawnfile = SelectSpawnfile(args[1]);
-                        if (spawnfile is string)
-                        {
-                            SendReply(player, (string)spawnfile);
-                            return;
-                        }
-                        configData.Default_Spawnfile = args[1];
-                        SaveConfig();
-                        SendReply(player, string.Format("Spawnfile for {0} is now {1} .", EventGameName, EventSpawnFile));
-                    }
-                        return;
-                case "kit":
-                    if (args.Length > 1)
-                    {
-                        object success = SelectKit(args[1]);
-                        if (success is string)
-                        {
-                            SendReply(player, (string)success);
-                            return;
-                        }
-                        SendReply(player, string.Format("The new Kit for {0} is now {1}", EventGameName, args[1]));
-                    }
-                    return;
-                case "launch":
-                    object launch = LaunchEvent();
-                    if (launch is string)
-                    {
-                        SendReply(player, (string)launch);
-                        return;
-                    }
-                    SendReply(player, string.Format("Event \"{0}\" is now launched.", EventGameName));
-                    return;
-            }
+            else OnEventStartPostAutoEvent();
+            return null;
         }
-
-        [ConsoleCommand("event")]
-        void ccmdEvent(ConsoleSystem.Arg arg)
+        void OnEventOpenPost()
         {
-            if (!hasAccess(arg)) return;
-            if (arg.Args == null || arg.Args.Length == 0)
+            if (configData.Messaging.AnnounceEvent)
+                EventTimers.Add(timer.Repeat(configData.Messaging.AnnounceEvent_Interval, 0, ()=> AnnounceEvent()));
+            if (_Launched)
+                if (EMInterface.Event_Config.AutoEvent_Config.AutoCancel)
+                    EventTimers.Add(timer.Once(EMInterface.Event_Config.AutoEvent_Config.AutoCancel_Timer * 60, () => { CloseEvent(); AutoEventNext(); }));
+        }
+        void OnEventOpenPostAutoEvent()
+        {
+            if (!_Launched) return;
+            DestroyTimers();
+            var autocfg = EMInterface.Event_Config.AutoEvent_Config;
+            if (autocfg.AutoCancel_Timer != 0)
+                EventTimers.Add(timer.Once(autocfg.AutoCancel_Timer, () => CancelEvent(msg("notEnoughPlayers"))));
+            EventTimers.Add(timer.Repeat(configData.Messaging.AnnounceEvent_Interval, 0, () => AnnounceEvent()));
+        }       
+        object AutoEventNext()
+        {
+            if (ValidAutoEvents.Count == 0)
             {
-                SendReply(arg, "event open - Open a event");
-                SendReply(arg, "event cancel - Cancel a event");
-                SendReply(arg, "event start - Start a event");
-                SendReply(arg, "event close - Close a event to new entries");
-                SendReply(arg, "event end - End a event");
-                SendReply(arg, "event launch - Launch auto events");
-                SendReply(arg, "event game \"Game Name\" - Change event game");
-                SendReply(arg, "event minplayers XX - Set minimum required players (auto event)");
-                SendReply(arg, "event maxplayers XX - Set maximum players (auto event)");
-                SendReply(arg, "event spawnfile \"filename\" - Change the event spawnfile");
-                SendReply(arg, "event kit \"kitname\" - Change the event kit");
-                SendReply(arg, "event cs - Activate/de-activate class selection");
-                SendReply(arg, "event cs add <classname> <kitname> - Add a new kit to class selection");
-                SendReply(arg, "event cs remove <classname> - Remove a kit from class selection");
+                _Launched = false;
+                return msg("noAuto");
+            }
+            var next = _NextAutoConfig;
+            if (next > ValidAutoEvents.Count - 1) next = 0; 
+                       
+            var autocfg = ValidAutoEvents[next];
+            if (autocfg != null)
+            {
+                if (EMInterface.Event_Config.Event_List.ContainsKey(autocfg.EventConfig))
+                {
+                    _Event = EMInterface.Event_Config.Event_List[autocfg.EventConfig];                    
+                }
+                else return $"{msg("errorAutoFind")} {autocfg.EventConfig}";
+            }
+            if (_RandomizeAuto)
+            {
+                _NextAutoConfig = UnityEngine.Random.Range(0, ValidAutoEvents.Count - 2);
+                if (_NextAutoConfig >= next)
+                    _NextAutoConfig += 1;
+            }
+            else _NextAutoConfig = next + 1;
+            _EventNum = next;
+            
+            EventTimers.Add(timer.Once(EMInterface.Event_Config.AutoEvent_Config.GameInterval * 60, () => OpenEvent()));
+            return null;
+        }  
+        
+        public void ValidateAllEvents()
+        {
+            PrintWarning("--- Validating all event configs and auto events ---");
+            if (EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List.Count == 0)
+            {
+                PrintError("No auto events found!");
                 return;
             }
-            switch (arg.Args[0].ToLower())
+            for (int i = 0; i < EMInterface.Event_Config.Event_List.Count; i++)
             {
-                case "cancel":
-                    AutoEventLaunched = false;
-                    if (EventOpen) CancelEvent("Auto events have been cancelled");
-                    DestroyTimers();
-                    SendReply(arg, string.Format("Auto events have been cancelled", EventGameName));
-                    return;
-                case "open":
-                    object open = OpenEvent();
-                    if (open is string)
-                    {
-                        SendReply(arg, (string)open);
-                        return;
-                    }
-                    SendReply(arg, string.Format("Event \"{0}\" is now opened.", EventGameName));
-                    return;
-                case "start":
-                    object start = StartEvent();
-                    if (start is string)
-                    {
-                        SendReply(arg, (string)start);
-                        return;
-                    }
-                    SendReply(arg, string.Format("Event \"{0}\" is now started.", EventGameName));
-                    return;
-                case "close":
-                    object close = CloseEvent();
-                    if (close is string)
-                    {
-                        SendReply(arg, (string)close);
-                        return;
-                    }
-                    SendReply(arg, string.Format("Event \"{0}\" is now closed for entries.", EventGameName));
-                    return;
-                case "debug":
-                    if (Debug) { Debug = false; SendReply(arg, "Debug deactivated"); }
-                    else { Debug = true; SendReply(arg, "Debug activated"); }
-                    return;
-                case "cs":
-                    if (arg.Args.Length > 1)
-                    {
-                        switch (arg.Args[1].ToLower())
-                        {
-                            case "add":
-                                if (classData.ClassKits.Count >= 9)
-                                {
-                                    SendReply(arg, "You have already set the maximum number of classes");
-                                    return;
-                                }
-                                if (arg.Args.Length == 4)
-                                {
-                                    object isKit = Kits.Call("isKit", arg.Args[3]);
-                                    if (!(isKit is bool))
-                                    {
-                                        SendReply(arg, "Unable to find the kits plugin");
-                                        return;
-                                    }
-                                    if (!(bool)isKit)
-                                    {
-                                        SendReply(arg, string.Format("The kit {0} doesn't exist", arg.Args[3]));
-                                        return;
-                                    }
-                                    classData.ClassKits.Add(arg.Args[2], arg.Args[3]);
-                                    SaveData();
-                                    SendReply(arg, $"You have successfully added a new class kit {arg.Args[2]}, using kit {arg.Args[3]}");
-                                }
-                                return;
-                            case "remove":
-                                if (arg.Args.Length == 3)
-                                {
-                                    if (classData.ClassKits.ContainsKey(arg.Args[2]))
-                                    {
-                                        classData.ClassKits.Remove(arg.Args[2]);
-                                        SaveData();
-                                        SendReply(arg, $"You have successfully removed the class {arg.Args[2]}");
-                                        return;
-                                    }
-                                    SendReply(arg, string.Format("The class {0} doesn't exist", arg.Args[2]));
-                                }
-                                return;
-                        }
-                    }
-                    if (UseClassSelection)
-                    {
-                        UseClassSelection = false;
-                        SendReply(arg, "You have de-activated class selection");
-                        return;
-                    }
-                    if (classData.ClassKits.Count < 1)
-                    {
-                        SendReply(arg, "You must set classes before activating the class selector");
-                        return;
-                    }
-                    UseClassSelection = true;
-                    SendReply(arg, "You have activated class selection");
-                    return;
-                case "end":
-                    object end = EndEvent();
-                    if (end is string)
-                    {
-                        SendReply(arg, (string)end);
-                        return;
-                    }
-                    SendReply(arg, string.Format("Event \"{0}\" has ended.", EventGameName));
-                    return;
-                case "game":
-                    object game = SelectEvent(arg.Args[1]);
-                    if (game is string)
-                    {
-                        SendReply(arg, (string)game);
-                        return;
-                    }
-                    configData.Default_Gamemode = EventGameName;
-                    SaveConfig();
-                    SendReply(arg, string.Format("{0} is now the next Event game.", arg.Args[1]));
-                    return;
-                case "gamemode":
-                    if (arg.Args.Length > 1)
-                    {
-                        switch (arg.Args[1].ToLower())
-                        {
-                            case "normal":
-                                EventMode = GameMode.Normal;
-                                break;
-                            case "battlefield":
-                                EventMode = GameMode.Battlefield;
-                                break;
-                            default:
-                                break;
-                        }
-                        SendReply(arg, string.Format("Event game mode is now set to {0}", EventMode.ToString()));
-                    }
-                    return;
-                case "minplayers":
-                    int min;
-                    if (!int.TryParse(arg.Args[1], out min))
-                    {
-                        SendReply(arg, "You must enter a number");
-                        return;
-                    }
-                    object minplayers = SelectMinplayers(min);
-                    if (minplayers is string)
-                    {
-                        SendReply(arg, (string)minplayers);
-                        return;
-                    }
-                    SendReply(arg, string.Format("Minimum Players for {0} is now {1} (this is only useful for auto events).", arg.Args[1], EventSpawnFile));
-                    return;
-                case "maxplayers":
-                    int max;
-                    if (!int.TryParse(arg.Args[1], out max))
-                    {
-                        SendReply(arg, "You must enter a number");
-                        return;
-                    }
-                    object maxplayers = SelectMaxplayers(max);
-                    if (maxplayers is string)
-                    {
-                        SendReply(arg, (string)maxplayers);
-                        return;
-                    }
-                    SendReply(arg, string.Format("Maximum Players for {0} is now {1}.", arg.Args[1], EventSpawnFile));
-                    return;
-                case "spawnfile":
-                    object spawnfile = SelectSpawnfile(arg.Args[1]);
-                    if (spawnfile is string)
-                    {
-                        SendReply(arg, (string)spawnfile);
-                        return;
-                    }
-                    configData.Default_Spawnfile = arg.Args[1];
-                    SaveConfig();
-                    SendReply(arg, string.Format("Spawnfile for {0} is now {1} .", EventGameName, EventSpawnFile));
-                    return;
-                case "kit":
-                    object success = SelectKit(arg.Args[1]);
+                var eventcfg = EMInterface.Event_Config.Event_List.Keys.ToList()[i];
+                if (EMInterface.Event_Config.Event_List.ContainsKey(eventcfg))
+                {
+                    var success = ValidateEvent(EMInterface.Event_Config.Event_List[eventcfg]);
                     if (success is string)
                     {
-                        SendReply(arg, (string)success);
-                        return;
+                        PrintError((string)success);                        
                     }
-                    SendReply(arg, string.Format("The new Kit for {0} is now {1}", EventGameName, arg.Args[1]));
-                    return;  
-                case "launch":
-                    object launch = LaunchEvent();
-                    if (launch is string)
-                    {
-                        SendReply(arg, (string)launch);
-                        return;
-                    }
-                    SendReply(arg, string.Format("Event \"{0}\" is now launched.", EventGameName));
-                    return;
+                    else ValidEvents.Add(eventcfg, EMInterface.Event_Config.Event_List[eventcfg]);
+                }
             }
+            for (int i = 0; i < EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List.Count; i++)            
+            {
+                var autocfg = EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List[i];
+                var success = ValidateAutoEvent(autocfg, i);
+                if (success is string)
+                    PrintError((string)success);
+                else
+                {
+                    if (ValidEvents.ContainsKey(autocfg.EventConfig))
+                        ValidAutoEvents.Add(autocfg);
+                }                
+            }
+            PrintWarning("--- Finished event validation ---");
+            if (ValidAutoEvents.Count > 0 && configData.Options.LaunchAutoEventsOnStartup)
+                LaunchEvent();
+        }    
+        private object ValidateAutoEvent(EMInterface.AEConfig autocfg, int number)
+        {
+            var errorList = new List<string>();
+            if (autocfg != null)
+            {
+                if (string.IsNullOrEmpty(autocfg.EventConfig) || !ValidEvents.ContainsKey(autocfg.EventConfig))
+                {
+                    EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List.Remove(autocfg);
+                    return $"No valid event config selected for autoevent : #{number}";
+                }
+                else return null;
+            }
+            return $"AutoEvent config is null: #{number}";
+        }
+        public object ValidateEvent(Events eventcfg)
+        {
+            var errorList = new List<string>();
+            if (eventcfg != null)
+            {
+                if (!EventGames.ContainsKey(eventcfg.EventType))
+                    errorList.Add($"Event game not registered: {eventcfg.EventType}");
+                else
+                {
+                    if (EventGames[eventcfg.EventType].RequiresSpawns)
+                    {
+                        if (string.IsNullOrEmpty(eventcfg.Spawnfile))
+                            errorList.Add("No spawnfile selected");
+                        else if (ValidateSpawnFile(eventcfg.Spawnfile) != null)
+                            errorList.Add("Invalid spawnfile selected");
+                    }
+
+                    if (EventGames[eventcfg.EventType].RequiresMultipleSpawns)
+                    {
+                        if (string.IsNullOrEmpty(eventcfg.Spawnfile2))
+                            errorList.Add("No secondary spawnfile selected");
+                        else if (ValidateSpawnFile(eventcfg.Spawnfile2) != null)
+                            errorList.Add("Invalid spawnfile selected");
+                    }
+
+                    if (string.IsNullOrEmpty(eventcfg.ZoneID))
+                        errorList.Add("No Zone ID selected");
+                    else if (ValidateZoneID(eventcfg.ZoneID) != null)
+                        errorList.Add("Invalid Zone ID");
+
+                    if (EventGames[eventcfg.EventType].RequiresKit)
+                    {
+                        if (!eventcfg.UseClassSelector)
+                        {
+                            if (string.IsNullOrEmpty(eventcfg.Kit))
+                                errorList.Add("No kit selected");
+                            else if (ValidateKit(eventcfg.Kit) != null)
+                                errorList.Add("Invalid kit selected");
+                        }
+                    }      
+
+                    if (eventcfg.MinimumPlayers <= 0)
+                        errorList.Add("Minimum Players must be greater than 0");
+                }                
+            }
+            else errorList.Add("Invalid event config selected");
+
+            if (errorList.Count > 0)
+            {
+                return string.Join(Environment.NewLine, errorList.ToArray());                
+            }
+            else return null;
         }
         #endregion
 
-        #region Tokens
-        [HookMethod("AddTokens")]
-        public void AddTokens(string userid, int amount)
+        #region File Validation
+        public object ValidateSpawnFile(string name)
         {
+            var success = Spawns?.Call("GetSpawnsCount", name);
+            if (success is string)
+                return (string)success;
+            else return null;
+        }
+        public object ValidateZoneID(string name)
+        {
+            var success = ZoneManager?.Call("CheckZoneID", name);
+            if (name is string && !string.IsNullOrEmpty((string)name))
+                return null;
+            else return msg("zoneNotExist");
+        }
+        public object ValidateKit(string name)
+        {
+            object success = Kits?.Call("isKit", name);
+            if ((success is bool))
+                if (!(bool)success)
+                    return string.Format(msg("kitNotExist"), name);
+            return null;
+        }
+        #endregion
+
+        #region Prizes
+        [HookMethod("AddTokens")]
+        public void AddTokens(ulong userid, int amount, bool winner = false)
+        {
+            if (amount == 0) return;
             string tokentype = "";
-            if (configData.UseEconomicsAsTokens)
+            if (configData.Options.UseEconomicsAsTokens)
             {
                 if (Economics)
                 {
-                    Economics?.Call("Deposit", userid, amount);
-                    tokentype = "Coins";
+                    Economics?.Call("Deposit", userid.ToString(), amount);
+                    tokentype = msg("rewardCoins");
                 }
             }
-            else
+            else if (ServerRewards)
             {
-                ServerRewards?.Call("AddPoints", userid, amount);
-                tokentype = "RP";
+                ServerRewards?.Call("AddPoints", userid.ToString(), amount);
+                tokentype = msg("rewardRP");
             }
-            BasePlayer player = BasePlayer.FindByID(ulong.Parse(userid));
+            if (winner)
+            {
+                if (GameStatistics.Stats.ContainsKey(userid))
+                    GameStatistics.Stats[userid].GamesWon++;
+            }
+            BasePlayer player = BasePlayer.FindByID(userid);
             if (player != null && !string.IsNullOrEmpty(tokentype))
             {
-                ELog($"Adding {amount} {tokentype} to {player.displayName}");
-                SendReply(player, $"<color={configData.Messaging_MainColor}>{Title}:</color><color={configData.Messaging_MsgColor}> You have been awarded </color><color={configData.Messaging_MainColor}>{amount} {tokentype}</color>");
+                SendReply(player, $"<color={configData.Messaging.MainColor}>{Title}:</color><color={configData.Messaging.MsgColor}> {msg("rewardText")} </color><color={configData.Messaging.MainColor}>{amount} {tokentype}</color>");
             }
-        }    
-       
+        }
         #endregion
 
-        #region Data
-
-        void SaveData()
+        #region Statistics
+        public enum StatType
         {
-            Class_Data.WriteObject(classData);
-            Puts("Saved class data");
+            Kills, Deaths, Played, Won, Lost, Flags, Shots, Choppers, Rank
+        }
+        public class PlayerStatistics
+        {
+            public string Name;
+            public int Kills;
+            public int Deaths;
+            public int GamesPlayed;
+            public int GamesWon;
+            public int GamesLost;
+            public double Score;
+            public int Rank;
+            public int FlagsCaptured;
+            public int ShotsFired;
+            public int ChoppersKilled;
+
+            public PlayerStatistics(string Name)
+            {
+                this.Name = Name;
+            }
         }        
+        public class Statistics
+        {
+            public Dictionary<ulong, PlayerStatistics> Stats = new Dictionary<ulong, PlayerStatistics>();
+            public Dictionary<string, int> GamesPlayed = new Dictionary<string, int>();
+
+            public string GetTotalKills()
+            {
+                int Kills = 0;
+                foreach (var player in Stats)
+                    Kills += player.Value.Kills;
+                return Kills.ToString();
+            }
+            public string GetTotalDeaths()
+            {
+                int Deaths = 0;
+                foreach (var player in Stats)
+                    Deaths += player.Value.Deaths;
+                return Deaths.ToString();
+            }
+            public string GetTotalGamesPlayed()
+            {
+                int GamesPlayed = 0;
+                foreach (var player in Stats)
+                    if (player.Value.GamesPlayed > GamesPlayed)
+                    GamesPlayed += (player.Value.GamesPlayed - GamesPlayed);
+                return GamesPlayed.ToString();
+            }
+            public string GetTotalShotsFired()
+            {
+                int ShotsFired = 0;
+                foreach (var player in Stats)
+                    ShotsFired += player.Value.ShotsFired;
+                return ShotsFired.ToString();
+            }
+            public string GetFlagsCaptured()
+            {
+                int FlagsCaptured = 0;
+                foreach (var player in Stats)
+                    FlagsCaptured += player.Value.FlagsCaptured;
+                return FlagsCaptured.ToString();
+            }
+            public string GetChoppersKilled()
+            {
+                int ChoppersKilled = 0;
+                foreach (var player in Stats)
+                    ChoppersKilled += player.Value.ChoppersKilled;
+                return ChoppersKilled.ToString();
+            }
+            public string GetTotalPlayers() => Stats.Count.ToString();
+            
+            public Dictionary<string, int> GetGamesPlayed() => GamesPlayed;
+        }
+        private void HasStats(BasePlayer player)
+        {
+            if (!StatsCache.ContainsKey(player.userID))
+                StatsCache.Add(player.userID, new PlayerStatistics(player.displayName));
+        }
+        private void UpdateName(BasePlayer player)
+        {
+            HasStats(player);
+            if (StatsCache[player.userID].Name != player.displayName)
+                StatsCache[player.userID].Name = player.displayName;
+        }
+        public void AddStats(BasePlayer player, StatType type, int amount = 1)
+        {
+            HasStats(player);
+            switch (type)
+            {
+                case StatType.Kills:
+                    StatsCache[player.userID].Kills += amount;
+                    return;
+                case StatType.Deaths:
+                    StatsCache[player.userID].Deaths += amount;
+                    return;
+                case StatType.Played:
+                    StatsCache[player.userID].GamesPlayed += amount;
+                    return;
+                case StatType.Won:
+                    StatsCache[player.userID].GamesWon += amount;
+                    return;
+                case StatType.Lost:
+                    StatsCache[player.userID].GamesLost += amount;
+                    return;
+                case StatType.Flags:
+                    StatsCache[player.userID].FlagsCaptured += amount;
+                    return;
+                case StatType.Shots:
+                    StatsCache[player.userID].ShotsFired += amount;
+                    return;
+                case StatType.Choppers:
+                    StatsCache[player.userID].ChoppersKilled += amount;
+                    return;
+                case StatType.Rank:
+                    StatsCache[player.userID].Rank = amount;
+                    return;               
+            }
+        }
+        public int GetStats(BasePlayer player, StatType type)
+        {
+            HasStats(player);
+            switch (type)
+            {
+                case StatType.Kills:
+                    return StatsCache[player.userID].Kills;
+                case StatType.Deaths:
+                    return StatsCache[player.userID].Deaths;
+                case StatType.Played:
+                    return StatsCache[player.userID].GamesPlayed;
+                case StatType.Won:
+                    return StatsCache[player.userID].GamesWon;
+                case StatType.Lost:
+                    return StatsCache[player.userID].GamesLost;
+                case StatType.Flags:
+                    return StatsCache[player.userID].FlagsCaptured;
+                case StatType.Shots:
+                    return StatsCache[player.userID].ShotsFired;
+                case StatType.Choppers:
+                    return StatsCache[player.userID].ChoppersKilled;
+                case StatType.Rank:
+                    return StatsCache[player.userID].Rank;
+            }
+            return 0;
+        }        
+        void CalculateRanks()
+        {
+            foreach (var eplayer in StatsCache)
+            {
+                int score = 0;
+                if (eplayer.Value.Kills > 0) score += eplayer.Value.Kills * 2;
+                if (eplayer.Value.GamesWon > 0) score += eplayer.Value.GamesWon * 2;
+                score -= eplayer.Value.Deaths;
+                score += eplayer.Value.GamesPlayed;
+                score -= eplayer.Value.GamesLost;
+                eplayer.Value.Score = score;
+            }
+            var sortedPlayers = StatsCache.OrderByDescending(x => x.Value.Score).ToList();
+            foreach (var eplayer in sortedPlayers)
+            {
+                StatsCache[eplayer.Key].Rank = sortedPlayers.IndexOf(eplayer) + 1;
+            }
+            SaveStatistics();
+        }
+        void SaveStatistics()
+        {
+            GameStatistics.Stats = StatsCache;
+            P_Stats.WriteObject(GameStatistics);
+            Puts("Saved player statistics");
+        }
+        void SaveRestoreInfo()
+        {
+            DataStorage.playerData = Restoration.playerData;
+            RestoreData.WriteObject(DataStorage);
+        }
         void LoadData()
         {
             try
             {
-                classData = Class_Data.ReadObject<ClassData>();
+                GameStatistics = P_Stats.ReadObject<Statistics>();
+                StatsCache = GameStatistics.Stats;
             }
             catch
             {
-                Puts("Couldn't load class data, creating new datafile");
-                classData = new ClassData();
-            }            
+                Puts("Couldn't load player statistics, creating new datafile");
+                GameStatistics = new Statistics();
+            }
+            try
+            {
+                DataStorage = RestoreData.ReadObject<RestoreStorage>();
+                Restoration.playerData = DataStorage.playerData;
+            }
+            catch
+            {
+                DataStorage = new RestoreStorage();
+            }
+        }
+        #endregion     
+
+        #region API
+        [HookMethod("isPlaying")]
+        public bool isPlaying(BasePlayer player)
+        {
+            if (GetUser(player) != null) return true;
+            if (Joiners.Contains(player)) return true;
+            return false;
+        }
+        [HookMethod("GetUserClass")]
+        public string GetUserClass(BasePlayer player)
+        {
+            var eventPlayer = GetUser(player);
+            if (eventPlayer != null)
+                return eventPlayer.currentClass;
+            return null;
+        }
+
+        [HookMethod("GetUserStats")]
+        public JObject GetUserStats(string userId)
+        {
+            ulong playerId;
+            if (ulong.TryParse(userId, out playerId))
+            {
+                if (!StatsCache.ContainsKey(playerId)) return null;
+                var obj = new JObject();
+                var stats = StatsCache[playerId];
+                obj["ChoppersKilled"] = stats.ChoppersKilled;
+                obj["Deaths"] = stats.Deaths;
+                obj["FlagsCaptured"] = stats.FlagsCaptured;
+                obj["GamesLost"] = stats.GamesLost;
+                obj["GamesPlayed"] = stats.GamesPlayed;
+                obj["GamesWon"] = stats.GamesWon;
+                obj["Kills"] = stats.Kills;
+                obj["Name"] = stats.Name;
+                obj["Rank"] = stats.Rank;
+                obj["Score"] = stats.Score;
+                obj["ShotsFired"] = stats.ShotsFired;
+                return obj;
+            }
+            else return null;
+        }
+
+        [HookMethod("GetAllStats")]
+        public JObject GetAllStats()
+        {
+            var obj = new JObject();            
+            foreach(var player in StatsCache)
+            {
+                var stats = new JObject();
+                stats["ChoppersKilled"] = player.Value.ChoppersKilled;
+                stats["Deaths"] = player.Value.Deaths;
+                stats["FlagsCaptured"] = player.Value.FlagsCaptured;
+                stats["GamesLost"] = player.Value.GamesLost;
+                stats["GamesPlayed"] = player.Value.GamesPlayed;
+                stats["GamesWon"] = player.Value.GamesWon;
+                stats["Kills"] = player.Value.Kills;
+                stats["Rank"] = player.Value.Rank;
+                stats["Name"] = player.Value.Name;
+                stats["Score"] = player.Value.Score;
+                stats["ShotsFired"] = player.Value.ShotsFired;
+                obj[player.Key] = stats;
+            }
+            return obj;
+        }
+
+        [HookMethod("GetGamesPlayed")]
+        public JObject GetGamesPlayed()
+        {
+            var obj = new JObject();
+            foreach (var game in GameStatistics.GamesPlayed)
+            {
+                obj[game.Key] = game.Value;                
+            }
+            return obj;
+        }
+
+        [HookMethod("GetGameStats")]
+        public JObject GetGameStats()
+        {
+            var obj = new JObject();
+            obj["ChoppersKilled"] = GameStatistics.GetChoppersKilled();
+            obj["FlagsCaptured"] = GameStatistics.GetFlagsCaptured();
+            obj["TotalDeaths"] = GameStatistics.GetTotalDeaths();
+            obj["TotalGamesPlayed"] = GameStatistics.GetTotalGamesPlayed();
+            obj["TotalKills"] = GameStatistics.GetTotalKills();
+            obj["TotalPlayers"] = GameStatistics.GetTotalPlayers();
+            obj["TotalShotsFired"] = GameStatistics.GetTotalShotsFired();
+            return obj;
+        }
+
+        void HasJoinedEvent(BasePlayer player) => Interface.CallHook("JoinedEvent", player);
+        void HasLeftEvent(BasePlayer player) => Interface.CallHook("LeftEvent", player);
+        #endregion
+
+        #region External Hooks
+        private object canRedeemKit(BasePlayer player)
+        {
+            if (GetUser(player) != null && _Started) { return msg("noKits"); }
+            return null;
+        }
+        private object CanTeleport(BasePlayer player)
+        {
+            if (GetUser(player) != null && _Started) { return msg("noTP"); }
+            return null;
+        }
+        private object canRemove(BasePlayer player)
+        {
+            if (GetUser(player) != null && _Started) { return msg("noRemove"); }
+            return null;
+        }
+        private object canShop(BasePlayer player)
+        {
+            if (GetUser(player) != null && _Started) { return msg("noShop"); }
+            return null;
+        }
+        private object CanTrade(BasePlayer player)
+        {
+            if (GetUser(player) != null && _Started) { return msg("noTrade"); }
+            return null;
         }
         #endregion
 
-        static void ELog(string message)
+        public Events DefaultConfig = new Events
         {
-            if (Debug)            
-                ConVar.Server.Log("oxide/logs/EventManager.txt", message);
-        }
+            CloseOnStart = false,
+            DisableItemPickup = false,
+            UseClassSelector = false,
+            EventType = string.Empty,
+            GameMode = GameMode.Normal,
+            Kit = string.Empty,
+            MaximumPlayers = 0,
+            MinimumPlayers = 2,
+            Spawnfile = null,
+            SpawnType = SpawnType.Consecutive,            
+            ZoneID = string.Empty,
+            RespawnType = RespawnType.None,
+            RespawnTimer = 10,
+            EnemiesToSpawn = 0,
+            GameRounds = 1,
+            ScoreLimit = 10,
+            Spawnfile2 = string.Empty,
+            WeaponSet = string.Empty
+        };
 
-        //[ConsoleCommand("event.openauto")]
-        // void ccmdEventOpenAuto(ConsoleSystem.Arg arg)
-        //{
-        // if (!hasAccess(arg)) return;
-        // object success = OpenEvent();
-        // if (success is string)
-        // {
-        //     SendReply(arg, (string)success);
-        //     return;
-        // }
-        // OpenAutoEventLaunched = true;
-        // EventAutoNum = 0;
-        // DestroyTimers();
-        // var evencfg = EventAutoConfig[EventAutoNum.ToString()] as Dictionary<string, object>;
-        // if (evencfg["timelimit"] != null && evencfg["timelimit"].ToString() != "0")
-        //    AutoArenaTimers.Add(timer.Once(Convert.ToSingle(evencfg["timelimit"]), () => CancelEvent("Not enough players")));
-        //SelectMinplayers((string)evencfg["minplayers"]);
-        // SendReply(arg, string.Format("Event \"{0}\" is now opened.", EventGameName));
-        //}
+        #region Localization
+        Dictionary<string, string> Messages = new Dictionary<string, string>
+        {
+            { "Title", "Event Manager: "},
+            { "reachedMinPlayers", "The event {0} has reached min players and will start in {1} seconds"},
+            { "reachedMaxPlayers", "The event {0} has reached max players. You may not join for the moment"},            
+            { "eventBegin", "{0} is about to begin!"},
+            { "leftEvent", "{0} has left the Event! (Total Players: {1})"},
+            { "successJoined", "{0} has joined the Event!  (Total Players: {1})"},
+            { "alreadyJoined", "You are already in the Event."},
+            { "restoringPlayers", "{0} is now over, restoring players and sending them home!"},
+            { "MessagesEventEnd", "All players respawned, {0} has ended!"},
+            { "noGamePlaying", "An event game is not underway."},
+            { "eventCancel", "The event was cancelled!"},
+            { "eventClose", "The event entrance is now closed!"},
+            { "noEventSet", "An event config must first be chosen."},
+            { "noSpawnsSet", "You must select spawnfiles for this event"},
+            { "eventAlreadyClosed", "The event is already closed."},
+            { "alreadyStarted", "An event game has already started."},
+            { "notEnoughPlayers", "Not enough players" },
+            { "noAuto", "No automatic events configured" },
+            { "noAutoInit", "No events were successfully initialized, check that your events are correctly configured" },
+            { "TimeLimit", "Time limit reached" },
+            { "EventCancelled", "Event {0} was cancelled because: {1}" },
+            { "eventOpen", "{0} is now open, you can join it by typing /event join" },
+            { "stillOpen", "{0} is still open for contestants! You can join it by typing /event join" },
+            { "isClosed", "The event is currently closed." },
+            { "notInEvent", "You are not currently in the event." },
+            { "kitNotExist", "The kit {0} doesn't exist" },
+            {"zoneNotExist", "Invalid Zone ID" },
+            { "CancelAuto", "Auto events have been cancelled" },            
+            {"ItemPickup", "Item pickup has been disabled during this event!" },
+            {"NoLooting", "Looting has been disabled during this event!" },
+            {"noEvent", "Unable to find a event called: {0}" },
+            {"isAlreadyStarted", "An event is already underway" },
+            {"noneSelected", "No event has been selected" },
+            {"noTypeSelected", "No event type has been selected" },
+            {"isAlreadyOpen","{0} is already open" },
+            {"cantOpen", "This game type can not be opened once it has started" },
+            {"Battlefield", "Battlefield" },
+            {"tpError", "There was a error sending you to the event. Please try again" },
+            {"a Helicopter","a Helicopter" },
+            {"a AutoTurret","a AutoTurret" },
+            {"suicide", "You killed yourself..." },
+            {"deathBy", "You were killed by {0}" },
+            {"respawnWait","Waiting to respawn" },
+            {"respawnTime", "Respawning in {0} seconds..." },
+            {"respawnWave", "The next wave spawns in {0} seconds..." },
+            {"oobMsg", "<color={MsgColor}>You have</color> <color={MainColor}>10</color><color={MsgColor}> seconds to return to the arena</color>" },
+            {"oobMsg2", "<color={MainColor}>{time}</color><color={MsgColor}> seconds</color>" },
+            {"oobMsg3", "<color={MainColor}>{playerName}</color><color={MsgColor}> tried to run away...</color>" },
+            {"errorAutoFind", "Error finding event config:" },
+            {"rewardText", "You have been awarded" },
+            {"rewardCoins", "Coins" },
+            {"rewardRP", "RP" },
+            {"noKits", "You may not redeem a kit in the arena" },
+            {"noTP", "You may not teleport in the arena" },
+            {"noRemove", "You may not use the remover tool in the arena" },
+            {"noShop", "You can not use the store in the arena" },
+            {"restoreSuccess", "You have successfully been restored" },
+            {"noTrade", "You can not trade in the arena" },
+            {"failedRestore", "An attempt to restore your previous state was unsuccessful. You can opt to manually restore at anytime by typing \"/restoreme\"" },
+            {"noRestoreSaved", "You do not have any pending restore data" },
+            {"restoreFailed", "Unable to restore you at this time as all requirements have not been met. Please try again shortly" },
+            {"eventBeginIn", "The event will start in {0} seconds!" }
+        };
+        #endregion
     }
 }

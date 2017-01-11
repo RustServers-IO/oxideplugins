@@ -1,0 +1,16 @@
+{
+    "name": "LootChests",
+    "description": "Spawns storage chests with set loot across the map",
+    "author": "Noviets",
+    "version": "1.0.8",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/lootchests.1672",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

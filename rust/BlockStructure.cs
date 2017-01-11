@@ -4,7 +4,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("BlockStructure", "Marat", "1.0.1, ResourceId = 2092")]
+    [Info("BlockStructure", "Marat", "1.0.2", ResourceId = 2092)]
 	[Description("Sets a limit build in height and depth in water")]
 	
     class BlockStructure : RustPlugin
@@ -66,7 +66,7 @@ namespace Oxide.Plugins
         }
         void Block(BaseNetworkable block, BasePlayer player, bool Height, bool Water)
         {
-            if (usePermissions && !IsAllowed(player.UserIDString, permBS) && block && !block.isDestroyed)
+            if (usePermissions && !IsAllowed(player.UserIDString, permBS) && block && !block.IsDestroyed)
             {
                 Vector3 Pos = block.transform.position;
                 if (Height || Water)

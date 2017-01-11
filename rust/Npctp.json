@@ -1,15 +1,18 @@
 {
     "name": "Npctp",
-    "description": "Create a npc that will tp a player to any x y z. or run console commands.",
+    "description": "Create a npc that will tp a player to any x y z. and run commands",
     "author": "",
-    "version": "2.0.0",
+    "version": "2.2.5",
     "configuration": true,
+    "suggest": {
+        "Economics": "*"
+    },
     "require": {
         "HumanNPC": "*",
         "NTeleportation": "*",
         "Spawns": "*"
     },
-    "language": "lua",
+    "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/npctp.2229",
     "games": [
         "rust"

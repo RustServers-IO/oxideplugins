@@ -1,0 +1,16 @@
+{
+    "name": "Restarter",
+    "description": "Restart server on chat command.",
+    "author": "OpenFunRus",
+    "version": "0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/restarter.1887",
+    "games": [
+        "7 days to die"
+    ],
+    "keywords": [
+        "oxide",
+        "7 days to die"
+    ]
+}

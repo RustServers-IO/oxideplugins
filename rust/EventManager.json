@@ -1,8 +1,8 @@
 {
     "name": "Event Manager",
-    "description": "Event Manager plugin, needs mods to work",
+    "description": "A versitile arena event plugin",
     "author": "k1lly0u",
-    "version": "2.0.24",
+    "version": "3.0.3",
     "configuration": true,
     "suggest": {
         "ServerRewards": "*",
@@ -10,6 +10,7 @@
         "FriendlyFire": "*"
     },
     "require": {
+        "EMInterface": "*",
         "Kits": "*",
         "ZoneManager": "*",
         "Spawns": "*"

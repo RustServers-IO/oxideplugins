@@ -1,0 +1,16 @@
+{
+    "name": "Reporting",
+    "description": "Allows player reporting and chat logging",
+    "author": "Noviets",
+    "version": "1.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/reporting.1623",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

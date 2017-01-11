@@ -1,0 +1,20 @@
+{
+    "name": "Voting System",
+    "description": "Players can vote to change the time and weather",
+    "author": "D-Kay",
+    "version": "1.4.1",
+    "configuration": true,
+    "suggest": {
+        "LevelSystem": "*",
+        "GrandExchange": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/voting-system.1190",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "RaidOffDefender",
+    "description": "Punish people doing raidoff or\/and raidon",
+    "author": "PierreA",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/raidoffdefender.1769",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}
