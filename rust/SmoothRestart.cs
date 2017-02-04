@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.0.4", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.0.5", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -409,7 +409,7 @@ namespace Oxide.Plugins
 		[ConsoleCommand("sr.simulatepatch")]
 		void checkOxideCommits(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			currentDevblog--;
 			currentOxideBuild--;
 			SendReply(arg, "Changed current Devblog and OxideBuild numbers to simulate successful checks");
@@ -420,7 +420,7 @@ namespace Oxide.Plugins
 		[ConsoleCommand("sr.restart")]
 		void smoothRestartConsoleCommand(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			if (arg.Args != null && arg.Args.Length == 1)
 			{
 				if (arg.Args[0].ToLower() == "stop")

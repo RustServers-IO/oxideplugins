@@ -10,7 +10,7 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("BackupExt", "Fujikura", "0.3.0", ResourceId = 2137 )]
+    [Info("BackupExt", "Fujikura", "0.3.1", ResourceId = 2137 )]
     class BackupExt : RustPlugin
     {
 		bool Changed;
@@ -142,12 +142,12 @@ namespace Oxide.Plugins
 		[ConsoleCommand("extbackup")]
 		void ccmdExtBackup(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			if (backupBroadcast)
 			{
 				if (useBroadcastDelay)
 				{
-					SendReply(arg, string.Format(lang.GetMessage("backupannounce", this, arg.connection != null ? arg.connection.userid.ToString() : null ), backupDelay));
+					SendReply(arg, string.Format(lang.GetMessage("backupannounce", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ), backupDelay));
 					BroadcastChat(string.Format(lang.GetMessage("backupannounce", this), backupDelay));
 					timer.Once(backupDelay, () => BackupRun(arg));
 				}
@@ -164,9 +164,9 @@ namespace Oxide.Plugins
 		{
 			if (backupBroadcast)
 				BroadcastChat(lang.GetMessage("backuprunning", this));
-			SendReply(arg, lang.GetMessage("backuprunning", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+			SendReply(arg, lang.GetMessage("backuprunning", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 			BackupCreate(true);
-			SendReply(arg, lang.GetMessage("backupfinish", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+			SendReply(arg, lang.GetMessage("backupfinish", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 			if (backupBroadcast)
 				BroadcastChat(lang.GetMessage("backupfinish", this));
 		}

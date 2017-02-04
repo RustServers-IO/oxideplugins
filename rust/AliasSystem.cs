@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Alias System", "LaserHydra", "2.1.0", ResourceId = 1307)]
+    [Info("Alias System", "LaserHydra", "2.1.1", ResourceId = 1307)]
     [Description("Setup alias for chat and console commands")]
     class AliasSystem : RustPlugin
     {
@@ -110,7 +110,7 @@ namespace Oxide.Plugins
 		
 		void ConsoleAlias(ConsoleSystem.Arg arg)
 		{
-			BasePlayer player = (BasePlayer)arg?.connection?.player ?? null;
+			BasePlayer player = (BasePlayer)arg?.Connection?.player ?? null;
 			if(player == null) return;
 			
 			string command = arg?.cmd?.FullName?.Replace("global.", "") ?? "";

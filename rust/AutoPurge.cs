@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoPurge", "Fujikura/Norn", "1.5.0", ResourceId = 1566)]
+    [Info("AutoPurge", "Fujikura/Norn", "1.5.1", ResourceId = 1566)]
     [Description("Remove entities if the owner becomes inactive.")]
     public class AutoPurge : RustPlugin
     {
@@ -329,7 +329,7 @@ namespace Oxide.Plugins
 		[ConsoleCommand("autopurge.remove")]
         void ccmdRunRemove(ConsoleSystem.Arg arg)
         {
-            if(arg.connection != null && arg.connection.authLevel < 2)
+            if(arg.Connection != null && arg.Connection.authLevel < 2)
 				return;
 			if (arg.Args == null)
 			{
@@ -354,7 +354,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("autopurge.run")]
         void ccmdRunPurge(ConsoleSystem.Arg arg)
         {
-            if(arg.connection != null && arg.connection.authLevel < 2)
+            if(arg.Connection != null && arg.Connection.authLevel < 2)
 				return;
 			MainTimer();
         }

@@ -4,7 +4,7 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("InventoryGuardian", "k1lly0u", "0.2.3", ResourceId = 773)]
+    [Info("InventoryGuardian", "k1lly0u", "0.2.4", ResourceId = 773)]
     class InventoryGuardian : RustPlugin
     {
         #region Fields
@@ -533,7 +533,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("ig")]
         private void ccmdInvGuard(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             { 
             if (arg.Args == null || arg.Args.Length == 0)
             {

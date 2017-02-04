@@ -2,7 +2,7 @@
     "name": "LimitedSuicide",
     "description": "Adds a limit to F1 + \"kill\"",
     "author": "dcode",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/limitedsuicide.835",

@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Event Manager Menu Interface", "k1lly0u", "1.0.2", ResourceId = 2258)]
+    [Info("Event Manager Menu Interface", "k1lly0u", "1.0.23", ResourceId = 2258)]
     class EMInterface : RustPlugin
     {
         #region Fields
@@ -244,6 +244,7 @@ namespace Oxide.Plugins
                             var success = EventManager.EndEvent();
                             if (success is string)
                                 SendReply(player, (string)success);
+                            SendReply(player, msg("endingEvent", player));
                         }
                         return;
                     default:
@@ -1626,7 +1627,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_ChangeElement")]
         private void ccmdChangeElement(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyEntries(player);
@@ -1694,7 +1695,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_ChangePage")]
         private void ccmdChangePage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyEntries(player);
@@ -1731,7 +1732,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_AutoEditor")]
         private void ccmdAutoEditor(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyEntries(player);
@@ -1783,7 +1784,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_Control")]
         private void ccmdControls(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!HasPerm(player)) return;
@@ -2083,7 +2084,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_Creator")]
         private void ccmdCreator(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!HasPerm(player)) return;
@@ -2261,8 +2262,12 @@ namespace Oxide.Plugins
                         var name = $"{newEvent.EventType}_{i}";
                         if (Event_Config.Event_List.ContainsKey(name))
                             name += UnityEngine.Random.Range(1, 10000);
-                        Event_Config.Event_List.Add(name, newEvent);
-                        EventManager.ValidEvents.Add(name, newEvent);
+                        if (Event_Config.Event_List.ContainsKey(name))
+                            Event_Config.Event_List[name] = newEvent;
+                        else Event_Config.Event_List.Add(name, newEvent);
+                        if (EventManager.ValidEvents.ContainsKey(name))
+                            EventManager.ValidEvents[name] = newEvent;
+                        else EventManager.ValidEvents.Add(name, newEvent);
                         SaveData();
                         EventControl(player);
                         PopupMessage(player, string.Format(msg("CreateSuccess", player), Color1, name), false, 8);
@@ -2276,7 +2281,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_ChangeClass")]
         private void ccmdChangeClass(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             string kit = string.Join(" ", arg.Args);
@@ -2309,7 +2314,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_DeathChangeClass")]
         private void ccmdDeathChangeClass(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             string kit = string.Join(" ", arg.Args);
@@ -2332,7 +2337,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_AddClass")]
         private void ccmdAddClass(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (HasPerm(player))
@@ -2353,7 +2358,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_RemoveClass")]
         private void ccmdRemoveClass(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (HasPerm(player))
@@ -2369,7 +2374,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_SelectConfig")]
         private void ccmdSelectConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (HasPerm(player))
@@ -2382,7 +2387,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_NextAutoConfig")]
         private void ccmdNextAutoConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (HasPerm(player))
@@ -2395,7 +2400,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_NewAutoConfig")]
         private void ccmdNewAutoConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (HasPerm(player))
@@ -2458,7 +2463,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_KickPlayer")]
         private void ccmdKickPlayer(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var ID = arg.Args[0];
@@ -2474,7 +2479,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_LeaveEvent")]
         private void ccmdLeaveEvent(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;            
             PopupMessage(player, msg("You have left the event", player));
@@ -2484,7 +2489,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_JoinEvent")]
         private void ccmdJoinEvent(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;            
             EventManager.JoinEvent(player);
@@ -2495,7 +2500,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_JoinPlayer")]
         private void ccmdJoinPlayer(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var ID = arg.Args[0];
@@ -2511,7 +2516,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_ClassDescription")]
         private void ccmdClassDescription(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             string kit = string.Join(" ", arg.Args);
@@ -2525,7 +2530,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_DestroyAll")]
         private void ccmdDestroyAll(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyAllUI(player);
@@ -2533,7 +2538,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_RemoveEvent")]
         private void ccmdRemoveEvent(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (HasPerm(player))
@@ -2558,7 +2563,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_RemoveAutoEvent")]
         private void ccmdRemoveAutoEvent(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (HasPerm(player))
@@ -2575,7 +2580,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("EMI_EventVote")]
         private void ccmdEventVote(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyEntries(player);
@@ -3231,7 +3236,7 @@ namespace Oxide.Plugins
                     return;
             }
         }
-        bool HasAccess(ConsoleSystem.Arg arg) => arg.connection == null || arg.connection?.authLevel < 1;
+        bool HasAccess(ConsoleSystem.Arg arg) => arg.Connection == null || arg.Connection?.authLevel < 1;
         bool HasPerm(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "eminterface.admin") || player.IsAdmin();
 
         Dictionary<string, string> Messages = new Dictionary<string, string>
@@ -3491,7 +3496,8 @@ namespace Oxide.Plugins
             {"Spawn Type", "Spawn Type" },
             {"Consecutive","Consecutive" },
             {"Random","Random" },
-            {"Switch Class", "Switch Class" }
+            {"Switch Class", "Switch Class" },
+            {"endingEvent", "The event is now ending" }
         };
     }
 }

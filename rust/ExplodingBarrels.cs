@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("ExplodingBarrels", "ignignokt84", "0.3.3", ResourceId = 1902)]
+	[Info("ExplodingBarrels", "ignignokt84", "0.3.4", ResourceId = 1902)]
 	class ExplodingBarrels : RustPlugin
 	{
 		// list of barrels containing explosives
@@ -267,7 +267,7 @@ namespace Oxide.Plugins
 					}
 			}
 			
-			BasePlayer player = BasePlayer.Find(arg.connection.username);
+			BasePlayer player = BasePlayer.Find(arg.Connection.username);
 			Vector3 closestPos = Vector3.zero;
 			float distance = -1f;
 			
@@ -313,9 +313,9 @@ namespace Oxide.Plugins
 		// check user access
 		bool hasAccess(ConsoleSystem.Arg arg)
 		{
-			if (arg.connection != null)
+			if (arg.Connection != null)
 			{
-				if (arg.connection.authLevel < 1)
+				if (arg.Connection.authLevel < 1)
 				{
 					SendReply(arg, GetMessage("NoPermission"));
 					return false;

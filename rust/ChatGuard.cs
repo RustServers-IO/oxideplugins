@@ -4,7 +4,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Chat Guard", "LaserHydra", "2.1.0", ResourceId = 1486)]
+    [Info("Chat Guard", "LaserHydra", "2.1.1", ResourceId = 1486)]
     [Description("Allows you to censor unwanted words and symbols in the chat.")]
     class ChatGuard : RustPlugin
     {
@@ -50,7 +50,7 @@ namespace Oxide.Plugins
 
         object OnPlayerChat(ConsoleSystem.Arg arg)
         {
-            BasePlayer player = (BasePlayer) arg.connection.player;
+            BasePlayer player = (BasePlayer) arg.Connection.player;
             string message = arg.GetString(0, "");
             
             if (FilterText(message) != message)

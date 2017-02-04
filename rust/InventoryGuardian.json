@@ -2,7 +2,7 @@
     "name": "Inventory Guardian",
     "description": "Restore players inventory even after server wipe",
     "author": "k1lly0u",
-    "version": "0.2.3",
+    "version": "0.2.4",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/inventory-guardian.773",

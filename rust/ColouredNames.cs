@@ -3,7 +3,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("ColouredNames", "PsychoTea", "1.0.6")]
+    [Info("ColouredNames", "PsychoTea", "1.0.8")]
     internal class ColouredNames : RustPlugin
     {
         class StoredData
@@ -24,7 +24,7 @@ namespace Oxide.Plugins
 
         object OnPlayerChat(ConsoleSystem.Arg arg)
         {
-            BasePlayer player = (BasePlayer)arg.connection.player;
+            BasePlayer player = (BasePlayer)arg.Connection.player;
 
             if (!storedData.colour.ContainsKey(player.userID)) return null;
             if (storedData.colour[player.userID] == "clear") return null;

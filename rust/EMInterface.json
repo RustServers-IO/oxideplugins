@@ -2,7 +2,7 @@
     "name": "EMInterface",
     "description": "The control system for EventManager",
     "author": "k1lly0u",
-    "version": "1.0.2",
+    "version": "1.0.23",
     "configuration": true,
     "require": {
         "EventManager": "*"

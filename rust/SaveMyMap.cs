@@ -8,7 +8,7 @@ using IEnumerator = System.Collections.IEnumerator;
 
 namespace Oxide.Plugins
 {
-	[Info("SaveMyMap", "Fujikura", "1.2.0", ResourceId = 2111)] 
+	[Info("SaveMyMap", "Fujikura", "1.2.1", ResourceId = 2111)] 
 	class SaveMyMap : RustPlugin
 	{
 		bool Changed;
@@ -204,9 +204,9 @@ namespace Oxide.Plugins
 		[ConsoleCommand("smm.save")]
 		void cMapSave(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			if (SaveRestore.IsSaving) {
-				SendReply(arg, lang.GetMessage("alreadysaving", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+				SendReply(arg, lang.GetMessage("alreadysaving", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 				return;
 			}
 			SaveBackupCreate();
@@ -220,17 +220,17 @@ namespace Oxide.Plugins
 				IEnumerator enumerator = SaveRestore.Save(saveName, true);
 				while (enumerator.MoveNext()) {}
 				Interface.Oxide.DataFileSystem.WriteObject(this.Title, new List<object>(new object[] { saveName, "custom" }) );
-				arg.ReplyWith(lang.GetMessage("customsavecomplete", this, arg.connection != null ? arg.connection.userid.ToString() : null )); }
+				arg.ReplyWith(lang.GetMessage("customsavecomplete", this, arg.Connection != null ? arg.Connection.userid.ToString() : null )); }
 			catch { PrintWarning(lang.GetMessage("dirnotfound", this)); }
 		}
 		
 		[ConsoleCommand("smm.loadmap")]
 		void cLoadMap(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			if (arg.Args == null || arg.Args.Length != 1 || arg.Args[0] != "force")
 			{
-				SendReply(arg, lang.GetMessage("needconfirm", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+				SendReply(arg, lang.GetMessage("needconfirm", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 				return;
 			}
 			foreach (var player in BasePlayer.activePlayerList.ToList())
@@ -241,16 +241,16 @@ namespace Oxide.Plugins
 		[ConsoleCommand("smm.loadfile")]
 		void cLoadFile(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			if (arg.Args == null || arg.Args.Length < 1 )
 			{
-					SendReply(arg, lang.GetMessage("definefilename", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+					SendReply(arg, lang.GetMessage("definefilename", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 					return;
 			}
 			int folderNumber = -1;
 			if (arg.Args[0].Length <= 4 && arg.Args[0] != "last" && !int.TryParse(arg.Args[0], out folderNumber))
 			{
-					SendReply(arg, lang.GetMessage("lastfilename", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+					SendReply(arg, lang.GetMessage("lastfilename", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 					return;
 			}			
 			string file = "";
@@ -281,7 +281,7 @@ namespace Oxide.Plugins
 			}
 			else
 			{
-				SendReply(arg, lang.GetMessage("filenotfound", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+				SendReply(arg, lang.GetMessage("filenotfound", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 				return;
 			}
 		}
@@ -289,10 +289,10 @@ namespace Oxide.Plugins
 		[ConsoleCommand("smm.loadnamed")]
 		void cLoadNamed(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			if (arg.Args == null || arg.Args.Length < 1 )
 			{
-					SendReply(arg, lang.GetMessage("definefilename", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+					SendReply(arg, lang.GetMessage("definefilename", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 					return;
 			}
 			foreach (var player in BasePlayer.activePlayerList.ToList())
@@ -309,7 +309,7 @@ namespace Oxide.Plugins
 			}
 			else
 			{
-				SendReply(arg, lang.GetMessage("filenotfound", this, arg.connection != null ? arg.connection.userid.ToString() : null ));
+				SendReply(arg, lang.GetMessage("filenotfound", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 				return;
 			}
 		}

@@ -2,7 +2,7 @@
     "name": "Alias System",
     "description": "Create an aliases for an existing commands",
     "author": "LaserHydra",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/alias-system.1307",

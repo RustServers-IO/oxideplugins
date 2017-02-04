@@ -2,7 +2,7 @@
     "name": "SaveMyMap",
     "description": "A save location bridge to support a better map save revision",
     "author": "Fujikura",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/savemymap.2111",

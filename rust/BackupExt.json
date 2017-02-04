@@ -2,7 +2,7 @@
     "name": "Backup Extended",
     "description": "Backup extension with customizable number of retention folders",
     "author": "Fujikura",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/backup-extended.2137",

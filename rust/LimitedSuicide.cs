@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("LimitedSuicide", "playrust.io / dcode", "1.0.2", ResourceId = 835)]
+    [Info("LimitedSuicide", "playrust.io / dcode", "1.0.3", ResourceId = 835)]
     public class LimitedSuicide : RustPlugin
     {
         // Default configuration: Once per 300 seconds
@@ -42,9 +42,9 @@ namespace Oxide.Plugins
 
         [HookMethod("OnRunCommand")]
         object OnRunCommand(ConsoleSystem.Arg arg) {
-            if (arg.connection == null || arg.connection.player == null || arg.cmd.name != "kill")
+            if (arg.Connection == null || arg.Connection.player == null || arg.cmd.Name != "kill")
                 return null;
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return null;
             List<DateTime> times;

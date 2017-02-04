@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.2.1", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.2.2", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
@@ -323,12 +323,12 @@ namespace Oxide.Plugins
         #region Methods
         void OnServerCommand(ConsoleSystem.Arg arg)
         {
-            if (!Enabled || arg == null || arg.connection == null || arg.Args == null) return;
+            if (!Enabled || arg == null || arg.Connection == null || arg.Args == null) return;
 
             var str = arg.GetString(0);
             if (str.Length == 0 || str[0] != '/') return;
 
-            var player = (BasePlayer)arg.connection.player;
+            var player = (BasePlayer)arg.Connection.player;
             if (!player || !HasPermission(player.UserIDString, PermUse)) return;
 
             ChatInfo chatData;
@@ -355,7 +355,7 @@ namespace Oxide.Plugins
         {
             if (!Enabled) return null;
 
-            var player = (BasePlayer)arg.connection.player;
+            var player = (BasePlayer)arg.Connection.player;
             if (!player || !HasPermission(player.UserIDString, PermUse)) return null;
 
             ChatInfo chatData;
