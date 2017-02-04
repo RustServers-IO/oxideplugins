@@ -5,7 +5,7 @@ using UnityEngine;
 using System.Linq;
 namespace Oxide.Plugins
 {
-    [Info("RandomDeployables", "Norn", "0.1.6", ResourceId = 2187)]
+    [Info("RandomDeployables", "Norn", "0.1.7", ResourceId = 2187)]
     [Description("Randomize deployable skins")]
 
     class RandomDeployables : RustPlugin
@@ -31,7 +31,7 @@ namespace Oxide.Plugins
             List<ItemDefinition> ItemsDefinition = ItemManager.GetItemDefinitions() as List<ItemDefinition>;
             foreach (ItemDefinition itemdef in ItemsDefinition)
             {
-                if (itemdef.GetComponent<ItemModDeployable>() != null) deployedToItem.Add(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath, itemdef.itemid);
+                if (itemdef.GetComponent<ItemModDeployable>() != null && !deployedToItem.ContainsKey(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath)) deployedToItem.Add(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath, itemdef.itemid);
                 foreach(ItemSkinDirectory.Skin skin in itemdef.skins)
                 {
                     var ws = Rust.Workshop.Approved.FindByInventoryId((ulong)skin.id);
@@ -68,7 +68,7 @@ namespace Oxide.Plugins
         {
             List<int> skins = new List<int> { 0 };
             skins.AddRange(ItemSkinDirectory.ForItem(def).Select(skin => skin.id));
-            skins.AddRange(Rust.Workshop.Approved.All.Where(skin => skin.ItemType.ItemName == def.shortname).Select(skin => (int)skin.WorkshopdId));
+            skins.AddRange(Rust.Workshop.Approved.All.Where(skin => skin.Skinnable.ItemName == def.shortname).Select(skin => (int)skin.WorkshopdId));
             if (!Convert.ToBoolean(Config["Settings", "AllowDefaultSkin"])) { if (skins.Contains(0)) { skins.Remove(0); } }
             return skins;
         }

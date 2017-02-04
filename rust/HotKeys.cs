@@ -3,10 +3,10 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("HotKeys", "Calytic", "0.0.31", ResourceId = 2135)]
+    [Info("HotKeys", "rustservers.io", "0.0.5", ResourceId = 2135)]
     class HotKeys : RustPlugin
     {
-        private Dictionary<string, object> keys;
+        private Dictionary<string, Dictionary<string, object>> keys = new Dictionary<string, Dictionary<string, object>>();
         private bool ResetDefaultKeysOnJoin;
 
         Dictionary<string, string> defaultRustBinds = new Dictionary<string, string>()
@@ -39,15 +39,27 @@ namespace Oxide.Plugins
             {"v", "+voice"},
             {"t", "chat.open"},
             {"return", "chat.open"},
-            {"mousewheelup", "+invnext"},
-            {"mousewheeldown", "+invprev"},
+            {"mousewheelup", "+invprev"},
+            {"mousewheeldown", "+invnext"},
             {"tab", "inventory.toggle "},
         };
 
         void Loaded()
         {
             CheckConfig();
-            keys = GetConfig("Settings", "Keys", GetDefaultKeys());
+            keys.Add("default", GetConfig("Settings", "default", GetDefaultKeys()));
+
+            foreach (var group in permission.GetGroups())
+            {
+                if (group != "default")
+                {
+                    var groupKeys = GetConfig("Settings", group, GetEmptyKeys());
+                    if (groupKeys != null && groupKeys.Count > 0)
+                    {
+                        keys.Add(group, groupKeys);
+                    }
+                }
+            }
             ResetDefaultKeysOnJoin = GetConfig("Settings", "ResetDefaultKeysOnJoin", true);
 
             BindAll();
@@ -65,7 +77,8 @@ namespace Oxide.Plugins
         [ConsoleCommand("hotkey.bind")]
         private void ccHotKeyBind(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null && arg.connection.authLevel < 1)
+            string group = "default";
+            if (arg.Connection != null && arg.Connection.authLevel < 1)
             {
                 return;
             }
@@ -73,8 +86,8 @@ namespace Oxide.Plugins
             if (arg.Args.Length == 1)
             {
                 string keyCombo = arg.Args[0].Trim();
-                if(keys.ContainsKey(keyCombo)) {
-                    SendReply(arg, keyCombo + ": " + keys[keyCombo].ToString());
+                if(keys[group].ContainsKey(keyCombo)) {
+                    SendReply(arg, keyCombo + ": " + keys[group][keyCombo].ToString());
                     SaveBinds();
                     BindAll();
                 } else {
@@ -84,15 +97,15 @@ namespace Oxide.Plugins
                 string keyCombo = arg.Args[0].Trim();
                 string bind = arg.Args[1].Trim();
 
-                if (keys.ContainsKey(keyCombo))
+                if (keys[group].ContainsKey(keyCombo))
                 {
                     SendReply(arg, "[HotKeys] Replaced " + keyCombo + ": " + bind);
-                    keys[keyCombo] = bind;
+                    keys[group][keyCombo] = bind;
                 }
                 else
                 {
                     SendReply(arg, "[HotKeys] Bound " + keyCombo + ": " + bind);
-                    keys.Add(keyCombo, bind);
+                    keys[group].Add(keyCombo, bind);
                 }
 
                 SaveBinds();
@@ -107,7 +120,8 @@ namespace Oxide.Plugins
         [ConsoleCommand("hotkey.unbind")]
         private void ccHotKeyUnbind(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null && arg.connection.authLevel < 1)
+            string group = "default";
+            if (arg.Connection != null && arg.Connection.authLevel < 1)
             {
                 return;
             }
@@ -116,10 +130,10 @@ namespace Oxide.Plugins
             {
                 string keyCombo = arg.Args[0].Trim();
 
-                if (keys.ContainsKey(keyCombo))
+                if (keys[group].ContainsKey(keyCombo))
                 {
-                    string bind = keys[keyCombo].ToString();
-                    keys.Remove(keyCombo);
+                    string bind = keys[group][keyCombo].ToString();
+                    keys[group].Remove(keyCombo);
                     if (defaultRustBinds.ContainsKey(keyCombo))
                     {
                         SendReply(arg, "[HotKeys] Reverted " + keyCombo + ": " + defaultRustBinds[keyCombo]);
@@ -169,10 +183,23 @@ namespace Oxide.Plugins
 
         void BindKeys(BasePlayer player)
         {
-            foreach (KeyValuePair<string, object> kvp in keys)
+            foreach (KeyValuePair<string, Dictionary<string, object>> kvp in keys)
             {
-                player.SendConsoleCommand("bind " + kvp.Key + " " + kvp.Value.ToString());
+                var group = kvp.Key;
+                var binds = kvp.Value;
+
+                if (binds != null && binds.Count > 0)
+                {
+                    if (permission.UserHasGroup(player.UserIDString, group))
+                    {
+                        foreach (KeyValuePair<string, object> kvp2 in binds)
+                        {
+                            player.SendConsoleCommand("bind " + kvp2.Key + " " + kvp2.Value.ToString());
+                        }
+                    }
+                }
             }
+            
         }
 
         void UnbindKey(BasePlayer player, string keyCombo)
@@ -187,13 +214,13 @@ namespace Oxide.Plugins
 
         void SaveBinds()
         {
-            Config["Settings", "Keys"] = keys;
+            Config["Settings", "default"] = keys;
             Config.Save();
         }
 
         void LoadDefaultConfig()
         {
-            Config["Settings", "Keys"] = GetDefaultKeys();
+            Config["Settings", "default"] = GetDefaultKeys();
             Config["Settings", "ResetDefaultKeysOnJoin"] = GetConfig("Settings","ResetDefaultKeysOnJoin", true);
 
             Config["VERSION"] = Version.ToString();
@@ -219,10 +246,25 @@ namespace Oxide.Plugins
 
             // NEW CONFIGURATION OPTIONS HERE
             Config["Settings", "ResetDefaultKeysOnJoin"] = GetConfig("Settings", "ResetDefaultKeysOnJoin", true);
+            if (Config["Settings", "default"] == null)
+            {
+                Config["Settings", "default"] = GetConfig("Settings", "Keys", GetDefaultKeys());
+            }
             // END NEW CONFIGURATION OPTIONS
 
             PrintToConsole("Upgrading configuration file");
             SaveConfig();
+        }
+
+        void OnUserGroupAdded(string id, string name)
+        {
+            Dictionary<string, object> binds;
+            if(keys.TryGetValue(name, out binds)) {
+                BasePlayer player = BasePlayer.Find(id);
+                if(player is BasePlayer) {
+                    BindKeys(player);
+                }
+            }
         }
 
         Dictionary<string, object> GetDefaultKeys()
@@ -233,6 +275,13 @@ namespace Oxide.Plugins
                 {"c", "duck"},
                 {"z", "+attack;+duck"},
                 {"f", "forward;sprint"},
+            };
+        }
+
+        Dictionary<string, object> GetEmptyKeys()
+        {
+            return new Dictionary<string, object>()
+            {
             };
         }
 

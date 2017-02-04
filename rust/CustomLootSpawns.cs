@@ -10,7 +10,7 @@ using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomLootSpawns", "k1lly0u", "0.2.3", ResourceId = 1655)]
+    [Info("CustomLootSpawns", "k1lly0u", "0.2.4", ResourceId = 1655)]
     class CustomLootSpawns : RustPlugin
     {
         #region Fields
@@ -138,7 +138,7 @@ namespace Oxide.Plugins
                         else item.MoveToContainer((newBox as StorageContainer).inventory);
                     }
                 }
-            }
+            }            
             boxCache.Add(newBox, ID);           
         }
         private BaseEntity SpawnBoxEntity(string type, Vector3 pos, float rot, ulong skin = 0)
@@ -153,6 +153,10 @@ namespace Oxide.Plugins
         {
             if (container is LootContainer)
             {
+                (container as LootContainer).minSecondsBetweenRefresh = -1;
+                (container as LootContainer).maxSecondsBetweenRefresh = 0;
+                (container as LootContainer).CancelInvoke("SpawnLoot");
+
                 while ((container as LootContainer).inventory.itemList.Count > 0)
                 {
                     var item = (container as LootContainer).inventory.itemList[0];

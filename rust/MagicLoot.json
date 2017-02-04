@@ -1,8 +1,8 @@
 {
     "name": "Magic Loot",
-    "description": "Simple loot system",
+    "description": "Simple components multiplier & loot system",
     "author": "Norn",
-    "version": "0.1.6",
+    "version": "0.1.8",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/magic-loot.2212",

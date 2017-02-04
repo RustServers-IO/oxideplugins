@@ -13,7 +13,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NukeWeapons", "k1lly0u", "0.1.5", ResourceId = 2044)]
+    [Info("NukeWeapons", "k1lly0u", "0.1.61", ResourceId = 2044)]
     class NukeWeapons : RustPlugin
     {
         #region Fields
@@ -726,7 +726,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_Craft")]
         private void cmdNWCraft(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var nukeType = arg.GetString(0);            
@@ -752,7 +752,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_DeactivateMenu")]
         private void cmdNWDeActivate(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             activeUsers.Remove(player.userID);
@@ -779,7 +779,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_DeactivateButton")]
         private void cmdNWDeActivateButton(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             activeUsers.Remove(player.userID);
@@ -788,7 +788,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_DeactivateIcons")]
         private void cmdNWDeactivateIcons(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             activeUsers.Remove(player.userID);
@@ -797,7 +797,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_OpenMenu")]
         private void cmdNWOpenMenu(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;           
             
@@ -811,7 +811,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_Activate")]
         private void cmdNWActivate(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var nukeType = arg.GetString(0);
@@ -841,7 +841,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_ChangeElement")]
         private void cmdNWChangeElement(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var panelName = arg.GetString(0);
@@ -868,7 +868,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("NWUI_DestroyAll")]
         private void cmdNWDestroyAll(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             OpenMap(player);
@@ -1422,7 +1422,7 @@ namespace Oxide.Plugins
                             filehandler.nukeData.ImageIDs.Add(info.imagename, 0);            
                         ClearStream();
                         stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
+                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                         ClearStream();
                         filehandler.nukeData.ImageIDs[info.imagename] = textureID;
                     }
@@ -1435,7 +1435,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("nukeicons")]
         private void cmdNukeIcons(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 string dir = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "NukeWeapons" + Path.DirectorySeparatorChar + "Icons" + Path.DirectorySeparatorChar;
                 foreach (var image in configData.URL_IconList)

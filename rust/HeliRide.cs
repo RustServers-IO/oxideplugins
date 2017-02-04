@@ -6,29 +6,53 @@ using Oxide.Core;
 using Network;
 using System;
 using Rust;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("HeliRide", "ColonBlow", "1.1.4")]
+    [Info("HeliRide", "ColonBlow", "1.1.8", ResourceId = 2274)]
     public class HeliRide : RustPlugin
     {
+
+        [PluginReference]
+        Plugin Chute;
+
+        [PluginReference]
+        Plugin Vanish;
+
 	static Dictionary<ulong, HeliData> HeliFlying = new Dictionary<ulong, HeliData>();
 	static Dictionary<ulong, HeliDamage> DamagedHeli = new Dictionary<ulong, HeliDamage>();
+	static Dictionary<ulong, HasParachute> AddParachute = new Dictionary<ulong, HasParachute>();
 
-        public class HeliData
-        {
-             	public BasePlayer player;
-        }
+        public class HeliData { public BasePlayer player; }
+	public class HeliDamage { public BasePlayer player; }
+	public class HasParachute { public BasePlayer player; }
 
-	public class HeliDamage
-        {
-             	public BasePlayer player;
-        }
+	bool Changed;
+	private static bool ShowCockpitOverlay = true;
+	private static bool ShowCrosshair = true;
+	private static bool UseParachutes = true;
+	private static bool SpawnCrates = false;
+	private static bool UseAutoVanish = false;
+	private static double RocketDelay = 0.2;
+	private static float RocketMax = 36f;
+	private static float NapalmMax = 36f;
+	private static double RocketNapalmReloadTime = 20;
+	private static float BulletDamage = 50f;
 
         static readonly FieldInfo serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Instance | BindingFlags.NonPublic));
 
         void Loaded()
         {
+		if (Chute == null)
+		{
+                	PrintWarning($"Chute Plugin not found. To Enable player parachutes when there helicopter dies, install Chute Plugin !!");
+		}
+		if (Vanish == null)
+		{
+                	PrintWarning($"Vanish Plugin not found. Player will be visable and UseAutoVanish will be turned off");
+			UseAutoVanish = false;
+		}
 		LoadVariables();
 		lang.RegisterMessages(messages, this);
 		permission.RegisterPermission("heliride.allowed", this);
@@ -44,21 +68,28 @@ namespace Oxide.Plugins
        	 Dictionary<string, string> messages = new Dictionary<string, string>()
         {
 		{"notallowed", "You are not allowed to access that command." },
+		{"noheli", "You are not flying a helicopter." },
 		{"notflying", "You must be noclipping to activate Helicopter." }
         };
 
 	bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
 
 	////////////////////////////////////////////////////////////////////////////////
-
-	bool Changed;
-	private static bool ShowCockpitOverlay = true;
-	private static bool ShowCrosshair = true;
+	///// Configuration Stuff
+	////////////////////////////////////////////////////////////////////////////////
 
         private void LoadConfigVariables()
         {		
         	CheckCfg("ShowCockpitOverlay", ref ShowCockpitOverlay);
 		CheckCfg("ShowCrosshair", ref ShowCrosshair);
+		CheckCfg("UseParachutes", ref UseParachutes);
+		CheckCfg("SpawnCrates", ref SpawnCrates);
+		CheckCfg("UseAutoVanish", ref UseAutoVanish);
+		CheckCfg("RocketDelay", ref RocketDelay);
+		CheckCfg("RocketNapalmReloadTime", ref RocketNapalmReloadTime);
+		CheckCfgFloat("BulletDamage", ref BulletDamage);
+		CheckCfgFloat("Max Rockets Loaded", ref RocketMax);
+		CheckCfgFloat("Max Napalm Loaded", ref NapalmMax);
         }
 
         private void LoadVariables()
@@ -105,6 +136,49 @@ namespace Oxide.Plugins
        	}
 
 	////////////////////////////////////////////////////////////////////////////////
+	///// Cancels Damage to Player while they are flying the helicopter
+	////////////////////////////////////////////////////////////////////////////////
+
+        void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
+        {
+		if (entity is BasePlayer)
+		{
+			var player = (BasePlayer)entity;
+			if (HeliFlying.ContainsKey(player.userID))
+			{
+				//Puts("Heli null damage"); //debug damage null
+				hitInfo.damageTypes.ScaleAll(0);
+				return;
+			}	
+		}
+	}
+
+	void OnPlayerTick(BasePlayer player)
+	{
+		if (!UseParachutes) return;
+		if (UseParachutes)
+		{
+			if (!AddParachute.ContainsKey(player.userID)) return;
+			if (AddParachute.ContainsKey(player.userID))
+			{
+				if (Chute != null)
+				{
+					AddParachute.Remove(player.userID);
+					timer.Once(0.5f, () => Chute.Call("ExternalAddPlayerChute", player));
+					if (Vanish != null && UseAutoVanish)
+					{
+						timer.Once(0.5f, () => Vanish.Call("Reappear", player));
+					}
+				}
+				if (Chute == null)
+				{
+					AddParachute.Remove(player.userID);
+				}		
+			}
+		}
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
 
 	public bool CockpitOverlay=> Config.Get<bool>("Show Custom Cockpit Overlay");
 	public bool CrossHair => Config.Get<bool>("Show Custom Crosshair");
@@ -127,14 +201,36 @@ namespace Oxide.Plugins
 		public Vector3 CurrentPOS;
 		Vector3 direction;
 
+		float bulletDamage;
+		private float rocketMax;
+		private bool hasRockets;
+		private float napalmMax;
+		private bool hasNapalm;
+		private double rocketcycletimer;
+		private double reloadtimer;
+		private double rocketDelay;
+		private bool rocketcycle;
 		bool leftTubeFiredLast = false;
+		private bool isReloading;
+		private double rocketNapalmReploadTime;
 
             	void Awake()
             	{
                 	player = GetComponent<BasePlayer>();
 			input = serverinput.GetValue(player) as InputState;
+			rocketcycletimer = 0.0;
+			reloadtimer = 0.0;
+			isReloading = false;
+			rocketNapalmReploadTime = RocketNapalmReloadTime;
+			rocketMax = RocketMax;
+			hasRockets = true;
+			napalmMax = NapalmMax;
+			hasNapalm = true;
+			rocketDelay = RocketDelay;
+			bulletDamage = BulletDamage;
+			rocketcycle = false;
 			PlayerPOS = player.transform.position+player.eyes.BodyForward()*3f;
-
+			
 			string prefab = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
 			helicopterBase = GameManager.server.CreateEntity(prefab, new Vector3(),  new Quaternion(), true);
 			heliAI = helicopterBase.GetComponent<PatrolHelicopterAI>();
@@ -143,21 +239,24 @@ namespace Oxide.Plugins
 			heliturret = helicopterBase.GetComponent<HelicopterTurret>();
 
 			heli = helicopterBase.GetComponent<BaseHelicopter>();
-			heli.maxCratesToSpawn = 10;
-			heli.bulletDamage = 50f;
+			heli.InitalizeWeakspots();
+
+			if (!SpawnCrates) heli.maxCratesToSpawn = 0;
+			heli.bulletDamage = bulletDamage;
+
 			heli.spotlightTarget = FindTarget(target);
                 	helicopterBase.Spawn();
 
 			if (ShowCockpitOverlay) CockpitOverlay(player);
 			if (ShowCrosshair) CrosshairOverlay(player);
 
-			helicopterBase.transform.position = PlayerPOS;
+			helicopterBase.transform.localPosition = PlayerPOS;
 			helicopterBase.transform.rotation = player.eyes.rotation;
             	}
 
-		///////////////////////////////////////////
+		//////////////////////////////////////////////////////////////////////////////////////
 
-        	void CockpitOverlay(BasePlayer player)
+        	public void CockpitOverlay(BasePlayer player)
         	{
 			var cockpitcui = new CuiElementContainer();
 
@@ -174,7 +273,7 @@ namespace Oxide.Plugins
             		CuiHelper.AddUi(player, cockpitcui);
         	}
 
-        	void CrosshairOverlay(BasePlayer player)
+        	public void CrosshairOverlay(BasePlayer player)
         	{
 			var crosshaircui = new CuiElementContainer();
 
@@ -191,7 +290,7 @@ namespace Oxide.Plugins
             		CuiHelper.AddUi(player, crosshaircui);
         	}
 
-        	void DamageOverlay(BasePlayer player)
+        	public void DamageOverlay(BasePlayer player)
         	{
 			var damageoverlay = new CuiElementContainer();
 
@@ -207,19 +306,33 @@ namespace Oxide.Plugins
                 	});
             		CuiHelper.AddUi(player, damageoverlay);
         	}
+
+        	public void HealthIndicator(BasePlayer player, float health)
+        	{
+			CuiHelper.DestroyUi(player, "HealthGui");
+			var healthstr = health.ToString();
+			var rocketstr = (isReloading ? "R" : rocketMax.ToString());
+			var napalmstr = (isReloading ? "R" : napalmMax.ToString());
+			var dispalystr = (isReloading ? ("Reloading     "+healthstr+"     Reloading") : ("N: "+napalmstr+"         "+healthstr+"         R: "+rocketstr));
+			
+			var healthindicator = new CuiElementContainer();
+            		healthindicator.Add(new CuiButton
+			{
+                		Button = { Command = $"", Color = "0.0 0.0 0.0 1.0" },
+                		RectTransform = { AnchorMin = "0.40 0.15",  AnchorMax = "0.60 0.18" },
+                		Text = { Text = (dispalystr), FontSize = 18, Color = "1.0 0.0 0.0 0.2", Align = TextAnchor.MiddleCenter } 
+            		}, "Overall", "HealthGui");
+			CuiHelper.AddUi(player, healthindicator);
+        	}
+
+		//////////////////////////////////////////////////////////////////////////////////////
 		
 		void FixedUpdate()
 		{
 			player = GetComponent<BasePlayer>();
-			if (player.IsDead())
+			if (player.IsDead() || (!player.IsFlying()))
 			{
-				OnDestroy();
-				return;
-			}
-			if (!player.IsFlying()) 
-			{
-				OnDestroy();
-				return;
+				heliAI._currentState = PatrolHelicopterAI.aiState.DEATH;
 			}
 			if (heliAI._currentState == PatrolHelicopterAI.aiState.DEATH)
 			{
@@ -229,29 +342,59 @@ namespace Oxide.Plugins
 				return;
 			}
 
+			if (rocketMax <= 0) hasRockets = false;
+			if (napalmMax <= 0) hasNapalm = false;
 			Vector3 PlayerPOS = player.GetEstimatedWorldPosition()-(player.eyes.BodyForward()*5)+(Vector3.down*0.45f);
 			CurrentPOS = helicopterBase.transform.position;
-			Vector3 direction = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
+			Vector3 direction = Quaternion.Euler(input.current.aimAngles) * Vector3.fwd;
 
 			heli.spotlightTarget = FindTarget(target);
 
-			helicopterBase.transform.position = Vector3.Lerp(CurrentPOS, PlayerPOS, 1f);
-			helicopterBase.transform.rotation = player.eyes.rotation;
+			helicopterBase.transform.localPosition = PlayerPOS;
+			helicopterBase.transform.rotation = Quaternion.Lerp(helicopterBase.transform.rotation, player.eyes.rotation, 2f * Time.deltaTime);
+
+			helicopterBase.transform.eulerAngles = new Vector3(0, helicopterBase.transform.eulerAngles.y, 0);
 
 			BaseCombatEntity helientity = helicopterBase.GetComponent<BaseCombatEntity>();
 			float health = helientity.Health();
+
+			HealthIndicator(player, health);
 			if (health <= 3000f && (ShowCockpitOverlay))
 			{
 				if (!(DamagedHeli.ContainsKey(player.userID)))	
 				{
-					DamageOverlay(player);
-					DamagedHeli.Add(player.userID, new HeliDamage
+					if (ShowCockpitOverlay)
 					{
-					player = player,
-					});
+						DamageOverlay(player);
+						DamagedHeli.Add(player.userID, new HeliDamage
+						{
+						player = player,
+						});
+					}
 				}	
 			}
-
+			if (isReloading)
+			{
+				reloadtimer += Time.deltaTime;
+				if(reloadtimer >= rocketNapalmReploadTime)
+				{
+					isReloading = false;
+					rocketMax = RocketMax;
+					hasRockets = true;
+					napalmMax = NapalmMax;
+					hasNapalm = true;
+					reloadtimer = 0.0;
+				}	
+			}
+			if (rocketcycle)
+			{
+				rocketcycletimer += Time.deltaTime;
+				if(rocketcycletimer >= rocketDelay)
+				{
+					rocketcycle = false;
+					rocketcycletimer = 0.0;
+				}	
+			}
 			if (health > 3000f && (ShowCockpitOverlay))
 			{
 				if (DamagedHeli.ContainsKey(player.userID))
@@ -261,6 +404,18 @@ namespace Oxide.Plugins
 				}	
 			}
 
+			if (input.IsDown(BUTTON.RELOAD))
+			{
+				isReloading = true;
+			}
+
+			if (input.IsDown(BUTTON.DUCK))
+			{
+				Vector3 downPos = player.transform.position + Vector3.down * (UnityEngine.Time.deltaTime * 3f);
+				player.ClientRPCPlayer(null, player, "ForcePositionTo", downPos);
+				player.SendNetworkUpdate();
+			}
+
 			if (input.IsDown(BUTTON.FIRE_PRIMARY))
 			{
 				target = FindTarget(target);
@@ -268,14 +423,16 @@ namespace Oxide.Plugins
 			}
 			if (input.IsDown(BUTTON.FIRE_SECONDARY))
 			{
-				leftTubeFiredLast = !leftTubeFiredLast;
-				FireRocket(leftTubeFiredLast, direction, PlayerPOS);
+				if (!hasRockets || isReloading) return;
+				if (!rocketcycle) { leftTubeFiredLast = !leftTubeFiredLast; FireRocket(leftTubeFiredLast, direction, PlayerPOS, true); }
+				rocketcycle = true;
 			}
 			if (input.IsDown(BUTTON.FIRE_THIRD))
-			{
-				FireNapalm(leftTubeFiredLast, direction, PlayerPOS);
+			{	
+				if (!hasNapalm || isReloading) return;
+				if (!rocketcycle) { leftTubeFiredLast = !leftTubeFiredLast; FireRocket(leftTubeFiredLast, direction, PlayerPOS, false); }
+				rocketcycle = true;
 			}
-
 		}
 
 		void FireGuns(Vector3 target)
@@ -284,12 +441,15 @@ namespace Oxide.Plugins
 			heliAI.FireGun(target, ConVar.PatrolHelicopter.bulletAccuracy, false);
 		}
 
-		void FireRocket(bool leftTubeFiredLast, Vector3 direction, Vector3 PlayerPOS)
+		void FireRocket(bool leftTubeFiredLast, Vector3 direction, Vector3 PlayerPOS, bool isrocket)
 		{
-
 			RaycastHit hit;
+			string projectile;
+			if (isrocket) { rocketMax = rocketMax - 1f; }
+			if (!isrocket) { napalmMax = napalmMax - 1f; }
                 	float num = 4f;
-			Vector3 origin = PlayerPOS;
+			projectile = (isrocket ? heliAI.rocketProjectile.resourcePath : heliAI.rocketProjectile_Napalm.resourcePath);
+			Vector3 origin = PlayerPOS + Vector3.down;
                 	if (num > 0f)
                 	{
                     		direction = (Vector3)(Quaternion.Euler(UnityEngine.Random.Range((float)(-num * 0.5f), (float)(num * 0.5f)), UnityEngine.Random.Range((float)(-num * 0.5f), (float)(num * 0.5f)), UnityEngine.Random.Range((float)(-num * 0.5f), (float)(num * 0.5f))) * direction);
@@ -301,33 +461,8 @@ namespace Oxide.Plugins
                 	}
 			Transform transform = !leftTubeFiredLast ? heliAI.helicopterBase.rocket_tube_right.transform : heliAI.helicopterBase.rocket_tube_left.transform;
 			Effect.server.Run(heliAI.helicopterBase.rocket_fire_effect.resourcePath, heliAI.helicopterBase, StringPool.Get(!leftTubeFiredLast ? "rocket_tube_right" : "rocket_tube_left"), Vector3.zero, Vector3.forward, null, true);
-
-			rockets = GameManager.server.CreateEntity(heliAI.rocketProjectile.resourcePath, origin, new Quaternion(), true);
-			if (rockets != null)
-                	{
-				rockets.SendMessage("InitializeVelocity", (Vector3)(direction * 1f));
-				rockets.Spawn();
-			}
-		}
-
-		void FireNapalm(bool leftTubeFiredLast, Vector3 direction, Vector3 PlayerPOS)
-		{
-			RaycastHit hit;
-                	float num = 4f;
-			Vector3 origin = PlayerPOS;
-                	if (num > 0f)
-                	{
-                    		direction = (Vector3)(Quaternion.Euler(UnityEngine.Random.Range((float)(-num * 0.5f), (float)(num * 0.5f)), UnityEngine.Random.Range((float)(-num * 0.5f), (float)(num * 0.5f)), UnityEngine.Random.Range((float)(-num * 0.5f), (float)(num * 0.5f))) * direction);
-                	}
-                	float maxDistance = 1f;
-                	if (Physics.Raycast(origin, direction, out hit, maxDistance, -1063040255))
-                	{
-                    		maxDistance = hit.distance - 0.1f;
-                	}
-			Transform transform = !leftTubeFiredLast ? heliAI.helicopterBase.rocket_tube_right.transform : heliAI.helicopterBase.rocket_tube_left.transform;
-			Effect.server.Run(heliAI.helicopterBase.rocket_fire_effect.resourcePath, heliAI.helicopterBase, StringPool.Get(!leftTubeFiredLast ? "rocket_tube_right" : "rocket_tube_left"), Vector3.zero, Vector3.forward, null, true);
-
-			rockets = GameManager.server.CreateEntity(heliAI.rocketProjectile_Napalm.resourcePath, origin, new Quaternion(), true);
+			Vector3 rocketPos = !leftTubeFiredLast ? heliAI.helicopterBase.rocket_tube_right.transform.position : heliAI.helicopterBase.rocket_tube_left.transform.position;
+			rockets = GameManager.server.CreateEntity(projectile, rocketPos, new Quaternion(), true);
 			if (rockets != null)
                 	{
 				rockets.SendMessage("InitializeVelocity", (Vector3)(direction * 1f));
@@ -350,11 +485,23 @@ namespace Oxide.Plugins
 			CuiHelper.DestroyUi(player, "CockpitGuiOverlay");
 			CuiHelper.DestroyUi(player, "CrosshairGuiOverlay");
 			CuiHelper.DestroyUi(player, "DamageGuiOverlay");
+			CuiHelper.DestroyUi(player, "HealthGui");
 			DamagedHeli.Remove(player.userID);
+		}
+
+		void addplayerchute()
+		{
+			if (!UseParachutes) return;
+			AddParachute.Add(player.userID, new HasParachute
+			{
+			player = player,
+			});
 		}
 
             	public void OnDestroy()
             	{
+			player = GetComponent<BasePlayer>();
+
 			DestroyCui(player);
 			DamagedHeli.Remove(player.userID);
 			HeliFlying.Remove(player.userID);
@@ -362,7 +509,10 @@ namespace Oxide.Plugins
 			if (helicopterBase == null) return;
                		if (heliAI._currentState == PatrolHelicopterAI.aiState.DEATH)
 			{
+				heliAI.enabled = true;
+				heli.bulletDamage = 0f;
 				GameObject.Destroy(this);
+				addplayerchute();
 				return;
 			}
 			helicopterBase.Kill(BaseNetworkable.DestroyMode.None);
@@ -370,7 +520,8 @@ namespace Oxide.Plugins
             	}
         }
 
-
+	////////////////////////////////////////////////////////////////////////////////
+	// Chat and Console Commands
 	////////////////////////////////////////////////////////////////////////////////
 
         [ChatCommand("flyheli")]
@@ -384,12 +535,14 @@ namespace Oxide.Plugins
 			if (HeliFlying.ContainsKey(player.userID))
 			{
 				GameObject.Destroy(playerheli);
+				if (Vanish != null && UseAutoVanish) { Vanish.Call("Reappear", player); }
 				HeliFlying.Remove(player.userID);
 				return;
 			}
 			if (playerheli != null)
 			{
 				GameObject.Destroy(playerheli);
+				if (Vanish != null && UseAutoVanish) { Vanish.Call("Reappear", player); }
 				HeliFlying.Remove(player.userID);
 				return;
 			}
@@ -397,6 +550,7 @@ namespace Oxide.Plugins
 			if (playerheli == null)
 			{
 				if (!player.IsFlying()) { rust.RunClientCommand(player, "noclip"); }
+				if (Vanish != null && UseAutoVanish) { Vanish.Call("Disappear", player); }
 				timer.Once(1f, () => AddHeli(player));
 				return;
 			}
@@ -423,11 +577,13 @@ namespace Oxide.Plugins
 			{
 				GameObject.Destroy(playerheli);
 				HeliFlying.Remove(player.userID);
+				if (Vanish != null && UseAutoVanish) { Vanish.Call("Reappear", player); }
 				return;
 			}
 			if (playerheli != null)
 			{
 				GameObject.Destroy(playerheli);
+				if (Vanish != null && UseAutoVanish) { Vanish.Call("Reappear", player); }
 				HeliFlying.Remove(player.userID);
 				return;
 			}
@@ -435,6 +591,7 @@ namespace Oxide.Plugins
 			if (playerheli == null)
 			{
 				if (!player.IsFlying()) { rust.RunClientCommand(player, "noclip"); }
+				if (Vanish != null && UseAutoVanish) { Vanish.Call("Disappear", player); }
 				timer.Once(1f, () => AddHeli(player));
 				return;
 			}
@@ -447,6 +604,46 @@ namespace Oxide.Plugins
 		}
 		return;
         }
+
+	[ConsoleCommand("showcockpit")]
+        void cmdConsoleShowCockpit(ConsoleSystem.Arg arg)
+	{
+		BasePlayer player = arg.Player();
+		var playerheli = player.GetComponent<FlyHelicopter>();
+		if (!playerheli) 
+		{
+			string SteamID = player.userID.ToString();
+			SendReply(player, lang.GetMessage("noheli", this, SteamID));
+			return;
+		}
+		if (playerheli)
+		{
+			playerheli.CockpitOverlay(player);
+			playerheli.CrosshairOverlay(player);
+		}
+
+	}
+
+	[ConsoleCommand("hidecockpit")]
+        void cmdConsoleHideCockpit(ConsoleSystem.Arg arg)
+	{
+		BasePlayer player = arg.Player();
+		var playerheli = player.GetComponent<FlyHelicopter>();
+		if (!playerheli) 
+		{
+			string SteamID = player.userID.ToString();
+			SendReply(player, lang.GetMessage("noheli", this, SteamID));
+			return;
+		}
+		if (playerheli)
+		{
+			CuiHelper.DestroyUi(player, "CockpitGuiOverlay");
+			CuiHelper.DestroyUi(player, "CrosshairGuiOverlay");
+			CuiHelper.DestroyUi(player, "DamageGuiOverlay");
+		}
+	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
 	void AddHeli(BasePlayer player)
 	{

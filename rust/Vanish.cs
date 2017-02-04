@@ -23,7 +23,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg", "0.3.4", ResourceId = 1420)]
+    [Info("Vanish", "Wulf/lukespragg", "0.3.5", ResourceId = 1420)]
     [Description("Allows players with permission to become truly invisible.")]
 
     class Vanish : RustPlugin
@@ -141,7 +141,7 @@ namespace Oxide.Plugins
 
         void VanishConsoleCmd(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection?.player as BasePlayer;
+            var player = arg.Connection?.player as BasePlayer;
             if (player != null) VanishChatCmd(player);
         }
 
@@ -161,7 +161,7 @@ namespace Oxide.Plugins
             }
             if (Net.sv.write.Start()) // Try catch?
             {
-                Net.sv.write.PacketID(Message.Type.EntityDestroy);
+                Net.sv.write.PacketID(Network.Message.Type.EntityDestroy);
                 Net.sv.write.EntityID(player.net.ID);
                 Net.sv.write.UInt8((byte)BaseNetworkable.DestroyMode.None);
                 Net.sv.write.Send(new SendInfo(connections));
@@ -169,7 +169,7 @@ namespace Oxide.Plugins
             var item = player.GetActiveItem();
             if (item?.GetHeldEntity() != null && Net.sv.write.Start())
             {
-                Net.sv.write.PacketID(Message.Type.EntityDestroy);
+                Net.sv.write.PacketID(Network.Message.Type.EntityDestroy);
                 Net.sv.write.EntityID(item.GetHeldEntity().net.ID);
                 Net.sv.write.UInt8((byte)BaseNetworkable.DestroyMode.None);
                 Net.sv.write.Send(new SendInfo(connections));

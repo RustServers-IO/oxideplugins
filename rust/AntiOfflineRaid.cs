@@ -17,7 +17,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiOfflineRaid", "Calytic", "0.2.7", ResourceId = 1464)]
+    [Info("AntiOfflineRaid", "rustservers.io", "0.2.8", ResourceId = 1464)]
     [Description("Prevents/reduces offline raiding")]
     public class AntiOfflineRaid : RustPlugin
     {
@@ -380,6 +380,7 @@ namespace Oxide.Plugins
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
             if (hitInfo == null) return;
+            if (entity == null) return;
 
             if (IsBlocked(entity)) OnStructureAttack(entity, hitInfo);
         }
@@ -568,13 +569,16 @@ namespace Oxide.Plugins
                 return true;
             }
 
-            string prefabName = entity.ShortPrefabName;
-
-            foreach (string p in prefabs)
+            if (!string.IsNullOrEmpty(entity.ShortPrefabName))
             {
-                if (prefabName.IndexOf(p) != -1)
+                string prefabName = entity.ShortPrefabName;
+
+                foreach (string p in prefabs)
                 {
-                    return true;
+                    if (prefabName.IndexOf(p) != -1)
+                    {
+                        return true;
+                    }
                 }
             }
 
@@ -846,15 +850,16 @@ namespace Oxide.Plugins
         [ConsoleCommand("ao")]
         private void ccStatus(ConsoleSystem.Arg arg)
         {
-            if (arg.connection.player is BasePlayer)
+            if (arg.Connection == null) return;
+            if (arg.Connection.player is BasePlayer)
             {
-                if (!HasPerm(arg.connection.player as BasePlayer, "antiofflineraid.check") && arg.connection.authLevel < 1)
+                if (!HasPerm(arg.Connection.player as BasePlayer, "antiofflineraid.check") && arg.Connection.authLevel < 1)
                 {
-                    SendReply(arg, GetMsg("Denied: Permission", arg.connection.userid));
+                    SendReply(arg, GetMsg("Denied: Permission", arg.Connection.userid));
                     return;
                 }
             }
-            SendReply(arg, SendStatus(arg.connection, arg.Args));
+            SendReply(arg, SendStatus(arg.Connection, arg.Args));
         }
 
         [ChatCommand("ao")]
@@ -869,18 +874,20 @@ namespace Oxide.Plugins
             SendReply(player, SendStatus(player.net.connection, args));
         }
 
-        //[ChatCommand("boffline")]
-        //private void cmdboffline(BasePlayer player, string command, string[] args)
-        //{
-        //    lastOnline[player.userID].lastOnline = lastOnline[player.userID].lastOnline.Subtract(TimeSpan.FromHours(3));
-        //}
+        [ChatCommand("boffline")]
+        private void cmdboffline(BasePlayer player, string command, string[] args)
+        {
+            if (!player.IsAdmin()) return;
+            lastOnline[player.userID].lastOnline = lastOnline[player.userID].lastOnline.Subtract(TimeSpan.FromHours(3));
+        }
 
-        //[ChatCommand("bonline")]
-        //private void cmdbonline(BasePlayer player, string command, string[] args)
-        //{
-        //    lastOnline[player.userID].lastOnline = DateTime.Now;
-        //    lastOnline[player.userID].afkMinutes = 0;
-        //}
+        [ChatCommand("bonline")]
+        private void cmdbonline(BasePlayer player, string command, string[] args)
+        {
+            if (!player.IsAdmin()) return;
+            lastOnline[player.userID].lastOnline = DateTime.Now;
+            lastOnline[player.userID].afkMinutes = 0;
+        }
 
         #endregion
 

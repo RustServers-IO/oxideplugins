@@ -2,7 +2,7 @@
     "name": "CraftUI",
     "description": "A fully customizable custom crafting UI, which allows admins to change item ingredients.",
     "author": "",
-    "version": "1.1.1",
+    "version": "1.2.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/craftui.2273",

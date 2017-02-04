@@ -1,8 +1,5 @@
-
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
-using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
 using Rust;
@@ -14,7 +11,8 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.5.0", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.5.3", ResourceId = 1789)]
+	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
 		private TruePVEData data = new TruePVEData();
@@ -22,14 +20,17 @@ namespace Oxide.Plugins
 		
 		static FieldInfo serverinput;
 		
+		[PluginReference]
+		Plugin ZoneManager;
+		
 		// usage information string with formatting
 		public string usageString;
 		// valid commands
 		private enum Command { usage, set, get, list, version, def };
 		// valid options
-		public enum Option { allowSuicide, authDamage, corpseLooting, handleDamage, handleLooting, heliDamage, heliDamageLocked, heliDamagePlayer, humanNPCDamage, immortalLocks, sleeperAdminDamage, sleeperLooting, sleeperProtection };
+		public enum Option { allowSuicide, authDamage, corpseLooting, handleDamage, handleLooting, heliDamage, heliDamageLocked, heliDamagePlayer, humanNPCDamage, immortalLocks, sleeperAdminDamage, sleeperLooting, sleeperProtection, useZones };
 		// default values array
-		private bool[] def = { true, false, false, true, true, true, false, true, true, true, false, false, false };
+		private bool[] def = { true, false, false, true, true, true, false, true, true, true, false, false, false, false };
 		// layer mask for finding authorization
         private readonly int triggerMask = LayerMask.GetMask("Trigger");
         
@@ -112,6 +113,21 @@ namespace Oxide.Plugins
 			
 			serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
 		}
+		
+		// plugin loaded
+		private void OnPluginLoaded(Plugin plugin)
+		{
+			if(plugin.Name == "ZoneManager")
+				ZoneManager = plugin;
+		}
+
+		// plugin unloaded
+		private void OnPluginUnloaded(Plugin plugin)
+		{
+			if(plugin.Name == "ZoneManager")
+				ZoneManager = null;
+		}
+		
 		// delegation method for console commands
 		//[ConsoleCommand("tpve")]
 		void ccmdDelegator(ConsoleSystem.Arg arg)
@@ -119,7 +135,7 @@ namespace Oxide.Plugins
 			// return if user doesn't have access to run console command
 			if(!hasAccess(arg)) return;
 			
-			string cmd = arg.cmd.namefull.Split('.')[1];
+			string cmd = arg.cmd.Name;
 			if(!Enum.IsDefined(typeof(Command), cmd))
 			{
 				// shouldn't hit this
@@ -162,9 +178,9 @@ namespace Oxide.Plugins
 		// check user access
 		bool hasAccess(ConsoleSystem.Arg arg)
 		{
-			if (arg.connection != null)
+			if (arg.Connection != null)
 			{
-				if (arg.connection.authLevel < 1)
+				if (arg.Connection.authLevel < 1)
 				{
 					SendMessage(arg, "Error_NoPermission");
 					return false;
@@ -385,6 +401,7 @@ namespace Oxide.Plugins
 			traps.description = "Traps, landmines, and spikes";
 			traps.types.Add(typeof(AutoTurret).Name);
 			traps.types.Add(typeof(BearTrap).Name);
+			traps.types.Add(typeof(FlameTurret).Name);
 			traps.types.Add(typeof(Landmine).Name);
 			traps.prefabs.Add("spikes.floor");
 			global.links[traps.name] = true; // anything can damage traps
@@ -406,6 +423,8 @@ namespace Oxide.Plugins
 			heli.description = "Heli";
 			heli.types.Add(typeof(BaseHelicopter).Name);
 			global.links[heli.name] = true; // heli can take damage
+			
+			data.zoneData["testzone"] = new Dictionary<string,Hurtable>();
 			
 			return true;
 		}
@@ -496,6 +515,23 @@ namespace Oxide.Plugins
 				}
 			}
 			
+			// check for exclusion zones (zones with no rules mapped)
+			List<string> entityZoneIds = null;
+			List<string> initZoneIds = null;
+			List<string> zones = null;
+			if(data.config[Option.useZones] && data.HasZones() && ZoneManager != null && hitinfo.Initiator != null)
+			{
+				entityZoneIds = getZoneIDs(entity);
+				initZoneIds = getZoneIDs(hitinfo.Initiator);
+				if(entityZoneIds != null && initZoneIds != null)
+				{
+					zones = entityZoneIds.Where(str => initZoneIds.Contains(str) && data.HasZone(str)).ToList();
+					if(zones != null && zones.Count > 0)
+						if(data.HasEmptyZone(zones[0]))
+							return true;
+				}
+			}
+			
 			// Check storage containers and doors for locks
 			if((entity is StorageContainer || entity is Door) && data.config[Option.immortalLocks])
 			{
@@ -519,11 +555,65 @@ namespace Oxide.Plugins
 				if(isHumanNPC(entity as BasePlayer) || isHumanNPC(hitinfo.Initiator as BasePlayer))
 					return true;
 			
+			// process zone rules
+			if(data.config[Option.useZones] && data.HasZones() && ZoneManager != null)
+			{
+				if(zones != null && zones.Count > 0)
+					return processZoneRules(entity, hitinfo, zones[0]);
+			}
+			return processRules(entity, hitinfo);
+		}
+		
+		private bool processRules(BaseCombatEntity entity, HitInfo hitinfo)
+		{
 			// handle rules
 			List<Hurtable> hurtableList = new List<Hurtable>();
 			hurtableList = data.Lookup(hitinfo.Initiator);
 			List<Hurtable> otherList = new List<Hurtable>();
 			otherList = data.Lookup(entity);
+			if(hurtableList != null && hurtableList.Count > 0 && otherList != null && otherList.Count > 0)
+			{
+				// check direct assignment (hurtable mapped to hurtable)
+				foreach(Hurtable h1 in hurtableList)
+					foreach(Hurtable h2 in otherList)
+					{
+						object r = h1.CanHurt(h2);
+						if(r != null)
+							return (bool)r;
+					}
+			}
+			if(hurtableList != null && hurtableList.Count > 0)
+			{
+				// check if initiator can hurt anything (hurtable mapped to global)
+				foreach(Hurtable h1 in hurtableList)
+				{
+					object r = h1.CanHurt(global);
+					if(r != null)
+						return (bool)r;
+				}
+			}
+			if(otherList != null && otherList.Count > 0)
+			{
+				// check if anything can hurt entity (global mapped to hurtable)
+				foreach(Hurtable h2 in otherList)
+				{
+					object r = global.CanHurt(h2);
+					if(r != null)
+						return (bool)r;
+				}
+			}
+			
+			// handle global damage (global mapped to global)
+			return global.links[global.name];
+		}
+		
+		private bool processZoneRules(BaseCombatEntity entity, HitInfo hitinfo, string zoneId)
+		{
+			// handle rules
+			List<Hurtable> hurtableList = new List<Hurtable>();
+			hurtableList = data.Lookup(hitinfo.Initiator, zoneId);
+			List<Hurtable> otherList = new List<Hurtable>();
+			otherList = data.Lookup(entity, zoneId);
 			if(hurtableList != null && hurtableList.Count > 0 && otherList != null && otherList.Count > 0)
 			{
 				// check direct assignment (hurtable mapped to hurtable)
@@ -705,7 +795,25 @@ namespace Oxide.Plugins
 		{
 			if(isAdmin(player))
 				return true;
-			else if(target is BasePlayer && (target as BasePlayer).IsSleeping())
+				
+			// check for exclusion zones (zones with no rules mapped)
+			List<string> playerZoneIds = null;
+			List<string> targetZoneIds = null;
+			List<string> zones = null;
+			if(data.config[Option.useZones] && data.HasZones() && ZoneManager != null)
+			{
+				playerZoneIds = getZoneIDs(player);
+				targetZoneIds = getZoneIDs(target);
+				if(playerZoneIds != null && targetZoneIds != null)
+				{
+					zones = playerZoneIds.Where(str => targetZoneIds.Contains(str) && data.HasZone(str)).ToList();
+					if(zones != null && zones.Count > 0)
+						if(data.HasEmptyZone(zones[0]))
+							return true;
+				}
+			}
+			
+			if(target is BasePlayer && (target as BasePlayer).IsSleeping())
 				return data.config[Option.sleeperLooting];
 			else if(target is LootableCorpse && (Convert.ToString(player.userID) != Convert.ToString((target as LootableCorpse).playerSteamID)))
 				return data.config[Option.corpseLooting];
@@ -776,31 +884,64 @@ namespace Oxide.Plugins
 		}
 		
 		// is admin
-        private bool isAdmin(BasePlayer player)
-        {
-        	if (player == null) return false;
-            if (player?.net?.connection == null) return true;
-            return player.net.connection.authLevel > 0;
-        }
-        
-        // is player a HumanNPC
-        private bool isHumanNPC(BasePlayer player)
-        {
-        	return player.userID < 76560000000000000L && player.userID > 0L && !player.IsDestroyed;
-        }
+		private bool isAdmin(BasePlayer player)
+		{
+			if (player == null) return false;
+			if (player?.net?.connection == null) return true;
+			return player.net.connection.authLevel > 0;
+		}
+		
+		// is player a HumanNPC
+		private bool isHumanNPC(BasePlayer player)
+		{
+			return player.userID < 76560000000000000L && player.userID > 0L && !player.IsDestroyed;
+		}
+		
+		private List<string> getZoneIDs(BaseEntity entity)
+		{
+			if(ZoneManager == null || data.zoneData == null) return null;
+			List<string> zones = (List<string>) ZoneManager.Call("GetEntityZones", new object[] {entity});
+			if(zones == null || zones.Count == 0) return null;
+			return zones;
+		}
 		
 		// configuration and data storage container
 		private class TruePVEData
 		{
 			public Dictionary<Option,bool> config = new Dictionary<Option,bool>();
 			public Dictionary<string,Hurtable> data = new Dictionary<string,Hurtable>();
+			public Dictionary<string,Dictionary<string,Hurtable>> zoneData = new Dictionary<string,Dictionary<string,Hurtable>>();
+			
+			public bool HasZones() {
+				return zoneData != null && zoneData.Count > 0;
+			}
+			
+			public bool HasZone(string zoneId) {
+				return HasZones() && zoneData.ContainsKey(zoneId);
+			}
+			
+			public bool HasEmptyZone(string zoneId) {
+				return HasZone(zoneId) && (zoneData[zoneId] == null || zoneData[zoneId].Count == 0);
+			}
 			
 			public Hurtable LookupByName(string name) {
 				return data.ContainsKey(name) ? data[name] : null;
 			}
 			
+			public Hurtable LookupByName(string name, string zone) {
+				if(!zoneData.ContainsKey(zone))
+					return null;
+				return zoneData[zone].ContainsKey(name) ? zoneData[zone][name] : null;
+			}
+			
 			public List<Hurtable> Lookup(BaseEntity entity) {
 				return data.Values.ToList().Where(h => (h.prefabs != null && h.prefabs.Contains(entity.ShortPrefabName)) || (h.types != null && h.types.Contains(entity.GetType().Name))).ToList();
+			}
+			
+			public List<Hurtable> Lookup(BaseEntity entity, string zone) {
+				if(!zoneData.ContainsKey(zone))
+					return null;
+				return zoneData[zone].Values.ToList().Where(h => (h.prefabs != null && h.prefabs.Contains(entity.ShortPrefabName)) || (h.types != null && h.types.Contains(entity.GetType().Name))).ToList();
 			}
 			
 			public Hurtable CreateHurtable(string name)
@@ -808,6 +949,14 @@ namespace Oxide.Plugins
 				Hurtable h = new Hurtable();
 				h.name = name;
 				data[h.name] = h;
+				return h;
+			}
+			
+			public Hurtable CreateHurtable(string name, string zone)
+			{
+				Hurtable h = new Hurtable();
+				h.name = name;
+				zoneData[zone][h.name] = h;
 				return h;
 			}
 		}

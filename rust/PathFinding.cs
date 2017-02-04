@@ -7,7 +7,7 @@ using static UnityEngine.Vector3;
 
 namespace Oxide.Plugins
 {
-    [Info("PathFinding", "Reneb / Nogrod", "1.1.1")]
+    [Info("PathFinding", "Reneb / Nogrod", "1.1.2")]
     public class PathFinding : RustPlugin
     {
         private static readonly Vector3 Up = up;
@@ -369,7 +369,6 @@ namespace Oxide.Plugins
                 nextPos = Lerp(StartPos, EndPos, waypointDone);
                 entity.transform.position = nextPos;
                 player?.ClientRPCPlayer(null, player, "ForcePositionTo", nextPos);
-                entity.TransformChanged();
             }
 
             private void FindNextWaypoint()

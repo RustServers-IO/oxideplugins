@@ -2,7 +2,7 @@
     "name": "AdminMenu",
     "description": "In-game GUI for common admin commands",
     "author": "",
-    "version": "2.0.6",
+    "version": "2.0.7",
     "configuration": true,
     "suggest": {
         "BetterChat": "*",

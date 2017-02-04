@@ -2,7 +2,7 @@
     "name": "CustomCommands",
     "description": "UI Buttons for Custom Console and Chat Commands - Unique to each Player!",
     "author": "Absolut",
-    "version": "1.1.0",
+    "version": "1.1.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/customcommands.2158",

@@ -12,7 +12,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("BetterLoot", "Fujikura/dcode", "2.11.4", ResourceId = 828)]
+	[Info("BetterLoot", "Fujikura/dcode", "2.11.6", ResourceId = 828)]
 	[Description("A complete re-implementation of the drop system")]
 	public class BetterLoot : RustPlugin
 	{
@@ -68,6 +68,15 @@ namespace Oxide.Plugins
 
 		Regex _findTrash = new Regex(@"explosives|leather|gunpowder|cloth|map|wall.window.bars.wood|torch|paper|note|jackolantern.happy|jackolantern.angry|hat.cap|hat.boonie|hammer|lowgradefuel|door.hinged.wood|door.double.hinged.wood|campfire|building.planner|bone.club|bandage|ammo.rocket.smoke|tool.camera|hide|bone.fragments|boar|burlap|cactus|corn|seed|meat|flare|generator|battery|blood|pumpjack|signal|key|human|chicken|spoiled|cooked|burned|raw", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+		static Dictionary<string,object> defaultItemOverride()
+		{
+			var dp = new Dictionary<string, object>();
+			dp.Add("autoturret", 4);
+			dp.Add("lmg.m249", 4);
+			dp.Add("targeting.computer", 3);
+			return dp;
+		}
+		
 		#region Config
 
 		bool pluginEnabled;
@@ -97,6 +106,8 @@ namespace Oxide.Plugins
 		bool useCustomTableSupply;
 		bool refreshBarrels;
 		bool refreshCrates;
+		
+		Dictionary<string,object> rarityItemOverride = null;
 
 		object GetConfig(string menu, string datavalue, object defaultValue)
 		{
@@ -119,7 +130,8 @@ namespace Oxide.Plugins
 
 		void LoadVariables()
 		{
-			//baseItemRarity = Convert.ToDouble(GetConfig("Chances", "baseItemRarity", 2));
+			rarityItemOverride = (Dictionary<string, object>)GetConfig("Rarity", "Override", defaultItemOverride());
+			
 			minItemsPerBarrel =  Convert.ToInt32(GetConfig("Barrel", "minItemsPerBarrel", 1));
 			maxItemsPerBarrel = Convert.ToInt32(GetConfig("Barrel", "maxItemsPerBarrel", 3));
 			refreshBarrels = Convert.ToBoolean(GetConfig("Barrel", "refreshBarrels", false));
@@ -129,7 +141,7 @@ namespace Oxide.Plugins
 			minItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "minItemsPerCrate", 3));
 			maxItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "maxItemsPerCrate", 6));
 			refreshCrates = Convert.ToBoolean(GetConfig("Crate", "refreshCrates", true));
-			crateTypes = Convert.ToString(GetConfig("Crate","crateTypes","crate_normal"));
+			crateTypes = Convert.ToString(GetConfig("Crate","crateTypes","crate_normal|crate_tools"));
 			enableCrates = Convert.ToBoolean(GetConfig("Crate", "enableCrates", true));
 
 			minItemsPerSupplyDrop = Convert.ToInt32(GetConfig("SupplyDrop", "minItemsPerSupplyDrop", 3));
@@ -337,15 +349,26 @@ namespace Oxide.Plugins
 			var notExistingItemsHeli = 0;
 			var notExistingItemsSupply = 0;
 
+			foreach (var rarity in rarityItemOverride.ToList())
+			{
+				int check = Convert.ToInt32(rarityItemOverride[rarity.Key]);
+				if (check < 0) check = 0;
+				if (check > 4) check = 4;
+				rarityItemOverride[rarity.Key] = check;
+			}
+			
 			if (seperateLootTables)
 			{
 				foreach (var item in originalItemsB)
 				{
-					if (item == null)
-						continue;
+					if (item == null) continue;
+					int index = RarityIndex(item.rarity);
+					object indexoverride;
+					if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
+						index = Convert.ToInt32(indexoverride);
 					if (ItemExists(item.shortname)) {
 						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-							itemsB[RarityIndex(item.rarity)].Add(item.shortname);
+							itemsB[index].Add(item.shortname);
 							++totalItemsB;
 						}
 					}
@@ -356,11 +379,14 @@ namespace Oxide.Plugins
 				}
 				foreach (var item in originalItemsC)
 				{
-					if (item == null)
-						continue;
+					if (item == null) continue;
+					int index = RarityIndex(item.rarity);
+					object indexoverride;
+					if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
+						index = Convert.ToInt32(indexoverride);
 					if (ItemExists(item.shortname)) {
 						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-							itemsC[RarityIndex(item.rarity)].Add(item.shortname);
+							itemsC[index].Add(item.shortname);
 							++totalItemsC;
 						}
 					}
@@ -375,9 +401,13 @@ namespace Oxide.Plugins
 				foreach (var item in originalItems)
 				{
 					if (item == null) continue;
+					int index = RarityIndex(item.rarity);
+					object indexoverride;
+					if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
+						index = Convert.ToInt32(indexoverride);
 					if (ItemExists(item.shortname)) {
 						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-							items[RarityIndex(item.rarity)].Add(item.shortname);
+							items[index].Add(item.shortname);
 							++totalItems;
 						}
 					}
@@ -391,11 +421,14 @@ namespace Oxide.Plugins
 			{
 				foreach (var item in originalItemsHeli)
 				{
-					if (ItemExists(item.shortname))
-					{
-						if (!storedBlacklist.ItemList.Contains(item.shortname))
-						{
-							itemsHeli[RarityIndex(item.rarity)].Add(item.shortname);
+					if (item == null) continue;
+					int index = RarityIndex(item.rarity);
+					object indexoverride;
+					if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
+						index = Convert.ToInt32(indexoverride);
+					if (ItemExists(item.shortname)) {
+						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
+							itemsHeli[index].Add(item.shortname);
 							++totalItemsHeli;
 						}
 					}
@@ -409,9 +442,14 @@ namespace Oxide.Plugins
 			{
 				foreach (var item in originalItemsSupply)
 				{
+					if (item == null) continue;
+					int index = RarityIndex(item.rarity);
+					object indexoverride;
+					if (rarityItemOverride.TryGetValue(item.shortname, out indexoverride))
+						index = Convert.ToInt32(indexoverride);
 					if (ItemExists(item.shortname)) {
 						if (!storedBlacklist.ItemList.Contains(item.shortname)) {
-							itemsSupply[RarityIndex(item.rarity)].Add(item.shortname);
+							itemsSupply[index].Add(item.shortname);
 							++totalItemsSupply;
 						}
 					}
@@ -1297,7 +1335,7 @@ namespace Oxide.Plugins
 		[ConsoleCommand("betterloot.reload")]
 		void consoleReload(ConsoleSystem.Arg arg)
 		{
-			if(arg.connection != null && arg.connection.authLevel < 2) return;
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
 			try { Config.Load(); }
 			catch { LoadDefaultConfig(); }
 			LoadVariables();

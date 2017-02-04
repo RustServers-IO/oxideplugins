@@ -26,7 +26,7 @@ using Timer = Oxide.Plugins.Timer;
 namespace Oxide.Plugins
 {
 
-    [Info("Hunt RPG", "PedraozauM / SW / Nogrod", "1.5.9", ResourceId = 841)]
+    [Info("Hunt RPG", "PedraozauM / SW / Nogrod", "1.5.10", ResourceId = 841)]
     public class HuntPlugin : RustPlugin
     {
         [PluginReference]
@@ -2038,7 +2038,6 @@ namespace Oxide.Plugins
         {
             player.MovePosition(position);
             player.ClientRPCPlayer(null, player, "ForcePositionTo", position);
-            player.TransformChanged();
             //TODO replace later
             //ForcePlayerPosition(player, position);
         }

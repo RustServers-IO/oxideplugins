@@ -9,7 +9,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Death Notes", "LaserHydra", "5.2.8", ResourceId = 819)]
+    [Info("Death Notes", "LaserHydra", "5.2.9", ResourceId = 819)]
     [Description("Broadcast deaths with many details")]
     class DeathNotes : RustPlugin
     {
@@ -910,13 +910,13 @@ namespace Oxide.Plugins
         {
             bool hasPerm = false;
 
-            if (arg?.connection == null)
+            if (arg?.Connection == null)
                 hasPerm = true;
             else
             {
-                if((BasePlayer)arg.connection.player != null)
+                if((BasePlayer)arg.Connection.player != null)
                 {
-                    if (HasPerm(arg.connection.userid, "reproduce"))
+                    if (HasPerm(arg.Connection.userid, "reproduce"))
                         hasPerm = true;
                 }
             }

@@ -2,7 +2,7 @@
     "name": "WaterDisconnect",
     "description": "Hurts or kills players that log out underwater",
     "author": "Wulf",
-    "version": "2.2.1",
+    "version": "2.2.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/waterdisconnect.2122",

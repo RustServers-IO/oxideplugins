@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("WaterDisconnect", "Wulf/lukespragg", "2.2.1", ResourceId = 2122)]
+    [Info("WaterDisconnect", "Wulf/lukespragg", "2.2.2", ResourceId = 2122)]
     [Description("Hurts or kills players that log out underwater")]
 
     class WaterDisconnect : CovalencePlugin
@@ -46,12 +45,11 @@ namespace Oxide.Plugins
 
         #region Disconnect Handling
 
-        readonly FieldInfo modelStateInfo = typeof(BasePlayer).GetField("modelState", BindingFlags.Instance | BindingFlags.NonPublic);
         readonly Dictionary<ulong, Timer> timers = new Dictionary<ulong, Timer>();
 
         void HandleDisconnect(BasePlayer player)
         {
-            var modelState = modelStateInfo.GetValue(player) as ModelState;
+            var modelState = player.modelState;
             if (!(modelState != null && modelState.waterLevel > (waterPercent / 100f))) return;
             if (permission.UserHasPermission(player.UserIDString, permExclude)) return;
 

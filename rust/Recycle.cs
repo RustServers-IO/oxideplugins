@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Oxide.Core;
 using System.Text;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Recycle", "Calytic", "2.0.21", ResourceId = 1296)]
+    [Info("Recycle", "Calytic", "2.0.4", ResourceId = 1296)]
     [Description("Recycle crafted items to base resources")]
     class Recycle : RustPlugin
     {
@@ -65,6 +66,11 @@ namespace Oxide.Plugins
                     CloseBoxView(player, onlinePlayer.View);
                 }
             }
+        }
+
+        void Init()
+        {
+            Unsubscribe(nameof(CanNetworkTo));
         }
 
         void Loaded()
@@ -126,9 +132,42 @@ namespace Oxide.Plugins
             }, this);
         }
 
+        private bool IsBox(BaseNetworkable entity)
+        {
+            foreach (KeyValuePair<BasePlayer, OnlinePlayer> kvp in onlinePlayers)
+            {
+                if (kvp.Value.View != null && kvp.Value.View.net.ID == entity.net.ID)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         #endregion
 
         #region Oxide Hooks
+
+        object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
+        {
+            if (entity == null || target == null || entity == target) return null;
+            if (target.IsAdmin()) return null;
+
+            OnlinePlayer onlinePlayer;
+            bool IsMyBox = false;
+            if (onlinePlayers.TryGetValue(target, out onlinePlayer))
+            {
+                if (onlinePlayer.View != null && onlinePlayer.View.net.ID == entity.net.ID)
+                {
+                    IsMyBox = true;
+                }
+            }
+
+            if (IsBox(entity) && !IsMyBox) return false;
+
+            return null;
+        }
 
         void OnPlayerInit(BasePlayer player)
         {
@@ -196,7 +235,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("rec")]
         void ccRec(ConsoleSystem.Arg arg)
         {
-            cmdRec(arg.connection.player as BasePlayer, arg.cmd.name, arg.Args);
+            cmdRec(arg.Connection.player as BasePlayer, arg.cmd.Name, arg.Args);
         }
 
         [ChatCommand("rec")]
@@ -282,6 +321,8 @@ namespace Oxide.Plugins
 
         void OpenBoxView(BasePlayer player, BaseEntity targArg)
         {
+            Subscribe(nameof(CanNetworkTo));
+
             var pos = new Vector3(player.transform.position.x, player.transform.position.y-0.6f, player.transform.position.z);
             int slots = 1;
             var view = GameManager.server.CreateEntity(box,pos) as StorageContainer;
@@ -339,6 +380,11 @@ namespace Oxide.Plugins
             onlinePlayer.Target = null;
 
             view.KillMessage();
+
+            if (onlinePlayers.Values.Count(p => p.View != null) <= 0)
+            {
+                Unsubscribe(nameof(CanNetworkTo));
+            }
         }
 
         bool SalvageItem(BasePlayer player, Item item)

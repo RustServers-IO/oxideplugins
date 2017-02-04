@@ -10,7 +10,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutMail", "Absolut", "1.0.2", ResourceId = 2255)]
+    [Info("AbsolutMail", "Absolut", "1.0.6", ResourceId = 2255)]
 
     class AbsolutMail : RustPlugin
     {
@@ -131,10 +131,10 @@ namespace Oxide.Plugins
         object OnServerCommand(ConsoleSystem.Arg arg)
         {
             //Puts("TRYING COMMAND");
-            var player = arg.connection?.player as BasePlayer;
+            var player = arg.Connection?.player as BasePlayer;
             if (player == null)
                 return null;
-            if (UIinfo[player.userID].Composing && arg.cmd?.namefull == "chat.say")
+            if (UIinfo[player.userID].Composing && arg.cmd?.FullName == "chat.say")
             {
                 //Puts("TRUE");
                 if (arg.Args.Contains("quit"))
@@ -378,6 +378,7 @@ namespace Oxide.Plugins
                 timers["info"].Destroy();
                 timers.Remove("info");
             }
+            if (configData.InfoInterval == 0) return;
             foreach (BasePlayer p in BasePlayer.activePlayerList)
             {
                 var extra = "";
@@ -386,7 +387,7 @@ namespace Oxide.Plugins
                 if (configData.UseThemes) extra += GetLang("ThemeInfo");
                 GetSendMSG(p, "MailInfo", extra);
             }
-            timers.Add("info", timer.Once(900, () => InfoLoop()));
+            timers.Add("info", timer.Once(configData.InfoInterval * 60, () => InfoLoop()));
         }
 
         #endregion
@@ -658,6 +659,9 @@ namespace Oxide.Plugins
             UI.CreatePanel(ref element, PanelMessage, UIColors["light"], "0.05 .3", ".95 .9");
             if (mail.message != null)
                 UI.CreateTextOutline(ref element, PanelMessage, UIColors["black"], UIColors["white"], mail.message, 12, "0.06 .3", ".94 .9", TextAnchor.UpperLeft);
+            UI.CreatePanel(ref element, PanelMessage, UIColors["light"], "0.2 0.05", "0.7 0.1");
+            if (mail.sender != null)
+                UI.CreateTextOutline(ref element, PanelMessage, UIColors["black"], UIColors["white"], GetMSG("Sender", player, mail.sender), 10, "0.2 0.05", "0.7 0.1");
             UI.CreateTextOutline(ref element, PanelMessage, UIColors["black"], UIColors["white"], GetLang("Attachment", player), 12, "0.75 0.2", "0.95 0.25", TextAnchor.UpperCenter);
             UI.CreatePanel(ref element, PanelMessage, UIColors["light"], "0.75 0.05", "0.95 0.2");
             if (mail.attachment != null)
@@ -676,7 +680,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_OpenMessage")]
         private void cmdUI_OpenMessage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!UIinfo.ContainsKey(player.userID) || !data.mail.ContainsKey(player.userID)) return;
@@ -703,7 +707,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ChangeMailPage")]
         private void cmdUI_ChangeMailPage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var page = Convert.ToInt32(arg.Args[0]);
@@ -714,7 +718,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectRecipient")]
         private void cmdUI_SelectRecipient(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CuiHelper.DestroyUi(player, PanelMessage);
@@ -758,7 +762,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ComposeMail")]
         private void cmdUI_ComposeMail(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ulong target = Convert.ToUInt64(arg.Args[0]);
@@ -785,7 +789,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CloseUI")]
         private void cmdUI_CloseUI(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CuiHelper.DestroyUi(player, PanelMail);
@@ -822,7 +826,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_GetAttachment")]
         private void cmdUI_GetAttachment(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null || !UIinfo.ContainsKey(player.userID) || UIinfo[player.userID].CurrentMail == null || UIinfo[player.userID].CurrentMail.attachment == null)
                 return;
             var mailattachment = UIinfo[player.userID].CurrentMail.attachment;
@@ -868,7 +872,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("cmdMail")]
         private void cmdMail(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!configData.PhysicalMailBox)
@@ -889,7 +893,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_OpenMail")]
         private void cmdUI_OpenMail(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             MailBoxScreen(player);
@@ -898,7 +902,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AttachItem")]
         private void cmdUI_AttachItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args[0] == "no")
@@ -913,7 +917,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DeleteMessage")]
         private void cmdUI_DeleteMessage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             //if (!UIinfo.ContainsKey(player.userID) || UIinfo[player.userID].CurrentMail == null || !data.mail.ContainsKey(player.userID)) return;
@@ -926,7 +930,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectItem")]
         private void cmdUI_SelectItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             uint id = Convert.ToUInt32(arg.Args[0]);
@@ -1183,10 +1187,11 @@ namespace Oxide.Plugins
             try
             {
                 data = Data.ReadObject<SavedData>();
-                if (Data == null)
+                if (data == null)
                 {
                     Puts("Corrupt Data file....creating new datafile");
                     data = new SavedData();
+
 
                 }
             }
@@ -1259,6 +1264,7 @@ namespace Oxide.Plugins
             {"SelectRecipient", "Select a recipient" },
             {"NotAMailbox", "This is not a mailbox" },
             {"Attachment", "Attachment" },
+            {"Sender", "Sent by: {0}" },
             {"MailBox", "MailBox" },
             {"CreateMailBoxInstructions", "To access your mailbox create a mailbox by typing '/mail new'. Once created you can interact with the mail system by pressing '{0}' while facing your mailbox." },
             {"SetThemeInstructions", "To set a mailbox theme simply type /mail theme 'url of image'. For example if the picture you want is at www.something.com.. type /mail theme www.something.com" },

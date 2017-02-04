@@ -15,7 +15,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.0.10", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.0.11", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -1332,7 +1332,7 @@ namespace Oxide.Plugins
                 SendReply(arg, "remove.allow true/false");
                 return;
             }
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
                 if (!hasPermission(arg.Player(), permissionOverride, authOverride)) return;
                 {

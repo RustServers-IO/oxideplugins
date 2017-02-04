@@ -1,15 +1,15 @@
 {
     "name": "Npctp",
-    "description": "Create a npc that will tp a player to any x y z. and run commands",
+    "description": "Create a npc that will tp a player to any where. or have it  run commands",
     "author": "",
-    "version": "2.2.5",
+    "version": null,
     "configuration": true,
     "suggest": {
-        "Economics": "*"
+        "Economics": "*",
+        "ServerRewards": "*"
     },
     "require": {
         "HumanNPC": "*",
-        "NTeleportation": "*",
         "Spawns": "*"
     },
     "language": "cs",

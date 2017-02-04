@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 using Rust;
 namespace Oxide.Plugins
 {
-    [Info("MagicTeleportation", "Norn", 1.1, ResourceId = 1404)]
+    [Info("MagicTeleportation", "Norn", "1.1.1", ResourceId = 1404)]
     [Description("Teleportation system.")]
     public class MagicTeleportation : RustPlugin
     {
@@ -299,8 +299,8 @@ namespace Oxide.Plugins
             List<ItemDefinition> ItemsDefinition = ItemManager.GetItemDefinitions() as List<ItemDefinition>;
             foreach (ItemDefinition itemdef in ItemsDefinition)
             {
-                displaynameToShortname.Add(itemdef.displayName.english.ToString().ToLower(), itemdef.shortname.ToString());
-                if (itemdef.GetComponent<ItemModDeployable>() != null) deployedToItem.Add(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath, itemdef.itemid);
+                if (!displaynameToShortname.ContainsKey(itemdef.displayName.english.ToString().ToLower())) { displaynameToShortname.Add(itemdef.displayName.english.ToString().ToLower(), itemdef.shortname.ToString()); }
+                if (itemdef.GetComponent<ItemModDeployable>() != null && !deployedToItem.ContainsKey(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath)) deployedToItem.Add(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath, itemdef.itemid);
             }
 
 
@@ -310,6 +310,7 @@ namespace Oxide.Plugins
             if (entity.GetComponentInParent<Deployable>() != null)
             {
                 Deployable refund_item = entity.GetComponentInParent<Deployable>();
+                Puts(refund_item.name.ToString());
                 if (refund_item != null)
                 {
                     var RefundItem = ItemManager.FindItemDefinition(deployedToItem[refund_item.gameObject.name]); Item i = null;
@@ -335,11 +336,10 @@ namespace Oxide.Plugins
                             int max_homes = Convert.ToInt32(Config["HomeSettings", "MaxHomes"]);
                             if (PlayerHomeCount(player) >= max_homes)
                             {
+                                if (Convert.ToBoolean(Config["Settings", "RefundEntity"])) RefundHomeEntity(player, e, 1);
                                 string parsed_config = Config["GeneralMessages", "MaxHomes"].ToString();
                                 parsed_config = parsed_config.Replace("{max_homes}", max_homes.ToString());
                                 if (parsed_config.Length >= 1) PrintToChatEx(player, parsed_config);
-
-                                if (Convert.ToBoolean(Config["Settings", "RefundEntity"])) RefundHomeEntity(player, e, 1);
                                 e.Kill();
                                 return;
                             }
@@ -876,7 +876,6 @@ namespace Oxide.Plugins
 				player.inventory.crafting.CancelAll(true);
 				player.MovePosition(pos);
 				player.ClientRPCPlayer(null, player, "ForcePositionTo", pos, null, null, null, null);
-				player.TransformChanged();
 				player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
 				player.UpdateNetworkGroup();
 				player.SendNetworkUpdateImmediate(false);

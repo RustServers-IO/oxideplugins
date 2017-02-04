@@ -2,7 +2,7 @@
     "name": "Hunt RPG",
     "description": "A RPG system with level, stats, skills and especializations",
     "author": "Nogrod",
-    "version": "1.5.9",
+    "version": "1.5.10",
     "configuration": true,
     "suggest": {
         "Pets": "*",

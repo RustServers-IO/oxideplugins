@@ -1,9 +1,9 @@
 {
     "name": "Enhanced Hammer",
     "description": "Quickly upgrade your base!",
-    "author": "Visagalis",
-    "version": "0.5.0",
-    "configuration": false,
+    "author": "Fujikura",
+    "version": "1.2.1",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/enhanced-hammer.1439",
     "games": [

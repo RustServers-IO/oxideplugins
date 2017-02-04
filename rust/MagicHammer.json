@@ -1,8 +1,8 @@
 {
     "name": "Magic Hammer",
     "description": "Hit stuff with the hammer and do things",
-    "author": "Fujikura",
-    "version": "0.4",
+    "author": "Werkrat",
+    "version": "0.5.1",
     "configuration": true,
     "suggest": {
         "PopupNotifications": "*"

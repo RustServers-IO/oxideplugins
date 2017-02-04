@@ -11,7 +11,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("SSNNotifier", "Umlaut", "0.0.6")]
+    [Info("SSNNotifier", "Umlaut", "0.0.7")]
     class SSNNotifier : RustPlugin
     {
         // Types defenition
@@ -40,7 +40,7 @@ namespace Oxide.Plugins
             }
         }
 
-        public class JsonPlayerConnected
+        public class JsonOnlinePlayer
         {
             [JsonProperty("player")]
             public JsonPlayer player { get; set; }
@@ -48,10 +48,10 @@ namespace Oxide.Plugins
             [JsonProperty("ip_address")]
             public string ipAddress { get; set; }
 
-            public JsonPlayerConnected(BasePlayer _player)
+            public JsonOnlinePlayer(ulong _steamid, string _displayName, string _ipAddress)
             {
-                player = new JsonPlayer(_player.userID, _player.displayName);
-                ipAddress = _player.net.connection.ipaddress.Split(':')[0];
+                player = new JsonPlayer(_steamid, _displayName);
+                ipAddress = _ipAddress;
             }
         }
 
@@ -115,10 +115,19 @@ namespace Oxide.Plugins
             }
         }
 
-        public class JsonServerOn
+        public class JsonBroadcastMessages
         {
-            [JsonProperty("players")]
-            public JsonPlayer[] players { get; set; }
+            [JsonProperty("interval")]
+            public int interval { get; set; }
+
+            [JsonProperty("messages")]
+            public string[] messages { get; set; }
+        }
+
+        public class JsonServerStatus
+        {
+            [JsonProperty("online_players")]
+            public JsonOnlinePlayer[] onlinePlayers { get; set; }
         }
 
         public class JsonMurder
@@ -202,6 +211,11 @@ namespace Oxide.Plugins
 
         Dictionary<ulong, string> m_playersNames;
         Dictionary<ulong, List<ulong>> m_contextPlayers = new Dictionary<ulong, List<ulong>>();
+
+        int m_broadcastMessagesInterval = 0;
+        int m_broadcastMessagesCurrentIndex = 0;
+        string[] m_broadcastMessages;
+        Timer m_broadcastTimer;
 
         //
 
@@ -289,6 +303,8 @@ namespace Oxide.Plugins
             InsertDefaultMessage("player_save_unspent_xp_less_zero", "You can save your profile when unspent xp is greater or equal 1.");
             InsertDefaultMessage("player_save_server_now_allowed", "This server is not allowed for syncronization.");
 
+            InsertDefaultMessage("broadcast_messages_count", "Count of broadcast messages: <color=cyan>%count</color>.");
+
             foreach (var timeRange in Enum.GetValues(typeof(TimeRange)))
             {
                 InsertDefaultMessage(timeRange.ToString(), timeRange.ToString());
@@ -302,15 +318,18 @@ namespace Oxide.Plugins
             LoadConfig();
             LoadDynamic();
 
-            NotifyServerOn();
+            NotifyServerStatus();
+            NotifyBroadcastMessagesUpdate();
 
             timer.Repeat(60, 0, () => SaveDynamic());
-            timer.Repeat(60, 0, () => NotifyServerOn());
+            timer.Repeat(60, 0, () => NotifyServerStatus());
+            timer.Repeat(600, 0, () => NotifyBroadcastMessagesUpdate());
 
             checkPermission("SSNNotifier.mute");
             checkPermission("SSNNotifier.unmute");
             checkPermission("SSNNotifier.ban");
             checkPermission("SSNNotifier.unban");
+            checkPermission("SSNNotifier.broadcast_messages_update");
         }
 
         void checkPermission(string _permission)
@@ -323,7 +342,6 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
-            NotifyServerOff();
             SaveDynamic();
         }
 
@@ -356,7 +374,7 @@ namespace Oxide.Plugins
 
         void OnPlayerInit(BasePlayer player)
         {
-            NotifyPlayerConnected(player);
+            NotifyServerStatus();
 
             m_playersNames[player.userID] = player.displayName;
             if (m_configData.Messages["wellcome"].Length != 0)
@@ -365,7 +383,7 @@ namespace Oxide.Plugins
 
         void OnPlayerDisconnected(BasePlayer player)
         {
-            NotifyPlayerDisconnected(player);
+            NotifyServerStatus();
         }
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo hitInfo)
@@ -388,7 +406,7 @@ namespace Oxide.Plugins
                 Math.Pow(playerVictim.transform.position.y - playerKiller.transform.position.y, 2) +
                 Math.Pow(playerVictim.transform.position.z - playerKiller.transform.position.z, 2));
 
-            NotifyMurder(playerVictim, playerKiller, hitInfo.Weapon.GetItem().info, distance, hitInfo.isHeadshot, playerVictim.IsSleeping());
+            NotifyPlayerKill(playerVictim, playerKiller, hitInfo.Weapon.GetItem().info, distance, hitInfo.isHeadshot, playerVictim.IsSleeping());
         }
 
         object OnPlayerChat(ConsoleSystem.Arg arg)
@@ -543,9 +561,7 @@ namespace Oxide.Plugins
                 player.ChatMessage(m_configData.Messages["player_not_found"]);
                 return;
             }
-            Puts("8");
             string playerName = PlayerName(userId);
-            Puts("9");
             string reason = "";
             for (int i = 1; i < args.Length; ++i)
             {
@@ -555,10 +571,8 @@ namespace Oxide.Plugins
                     reason += " ";
                 }
             }
-            Puts("10");
             if (m_configData.BannedPlayers.ContainsKey(userId))
             {
-                Puts("11");
                 BanItem banItem = m_configData.BannedPlayers[userId];
                 string message = m_configData.Messages["player_is_banned_already"];
                 message = message.Replace("%player_name", playerName);
@@ -568,15 +582,12 @@ namespace Oxide.Plugins
             }
             else
             {
-                Puts("12");
                 BanItem banItem = new BanItem();
                 banItem.reason = reason;
                 banItem.timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 m_configData.BannedPlayers[userId] = banItem;
-                Puts("13");
                 ConsoleSystem.Run.Server.Quiet(string.Format("banid {0} \"{1}\" \"{2}\"", userId.ToString(), playerName, reason).ToString(), true);
                 ConsoleSystem.Run.Server.Quiet("server.writecfg", true);
-                Puts("14");
                 SaveConfig();
 
                 string message = m_configData.Messages["player_was_banned"];
@@ -839,6 +850,38 @@ namespace Oxide.Plugins
             SetContextPlayers(player.userID, contextPlayers);
         }
 
+        [ChatCommand("broadcast_messages")]
+        void cmdChatBroadcastMessages(BasePlayer player, string command, string[] args)
+        {
+            if (args.Length > 0)
+            {
+                player.ChatMessage(m_configData.Messages["invalid_arguments"]);
+                return;
+            }
+            player.ChatMessage(m_configData.Messages["broadcast_messages_count"].Replace("%count", m_broadcastMessages.Length.ToString()));
+            for (int i = 0; i < m_broadcastMessages.Length; ++i)
+            {
+                player.ChatMessage((i + 1).ToString() + ") " + m_broadcastMessages[i]);
+            }
+        }
+
+        [ChatCommand("broadcast_messages_update")]
+        void cmdChatBroadcastMessagesUpdate(BasePlayer player, string command, string[] args)
+        {
+            if (player.net.connection.authLevel == 0 && !permission.UserHasPermission(player.userID.ToString(), "SSNNotifier.broadcast_messages_update"))
+            {
+                player.ChatMessage(m_configData.Messages["have_not_permission"]);
+                return;
+            }
+
+            if (args.Length > 0)
+            {
+                player.ChatMessage(m_configData.Messages["invalid_arguments"]);
+                return;
+            }
+            NotifyBroadcastMessagesUpdate();
+        }
+
         //
 
         private ulong UserIdByAlias(ulong contextId, string alias)
@@ -899,7 +942,7 @@ namespace Oxide.Plugins
             string requestUrl = "http://%host:%port/api/%server_name/%suburl".Replace("%host", m_host).Replace("%port", m_port).Replace("%suburl", subUrl).Replace("%server_name", m_configData.server_name);
 
             Dictionary<string, string> headers = new Dictionary<string, string>();
-
+            
             byte[] data = MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(body + m_configData.server_password));
             StringBuilder sBuilder = new StringBuilder();
             for (int i = 0; i < data.Length; i++)
@@ -929,9 +972,57 @@ namespace Oxide.Plugins
             }
         }
 
+        private void ReceiveWebResponseBroadcastMessages(int code, string response)
+        {
+            if (response == null)
+            {
+                if (m_configData.print_errors)
+                {
+                    Puts("Couldn't get an answer from SSN service.");
+                }
+            }
+            else if (code != 200)
+            {
+                if (m_configData.print_errors)
+                {
+                    Puts("SSN error (%code): %text".Replace("%code", code.ToString()).Replace("%text", response));
+                }
+            }
+
+            JsonBroadcastMessages jsonBroadcastMessages = JsonConvert.DeserializeObject<JsonBroadcastMessages>(response);
+            if (m_broadcastMessagesInterval != jsonBroadcastMessages.interval)
+            {
+                m_broadcastMessagesInterval = jsonBroadcastMessages.interval;
+                if (m_broadcastMessagesInterval > 0)
+                {
+                    if (m_broadcastTimer == null)
+                    {
+                        m_broadcastTimer = timer.Repeat(m_broadcastMessagesInterval, 0, () => BroadcastNextMessage());
+                    }
+                    else
+                    {
+                        m_broadcastTimer.Reset(m_broadcastMessagesInterval, 0);
+                    }
+                }
+            }
+            m_broadcastMessages = jsonBroadcastMessages.messages;
+        }
+
+        private void BroadcastNextMessage()
+        {
+            if (m_broadcastMessagesCurrentIndex >= m_broadcastMessages.Length)
+            {
+                m_broadcastMessagesCurrentIndex = 0;
+            }
+            if (m_broadcastMessages.Length != 0)
+            {
+                PrintToChat(m_broadcastMessages[m_broadcastMessagesCurrentIndex++]);
+            }
+        }
+
         // Notifiers
 
-        private void NotifyMurder(BasePlayer victimPlayer, BasePlayer killerPlayer, ItemDefinition itemDefinition, double distance, bool isHeadshot, bool isSleeping)
+        private void NotifyPlayerKill(BasePlayer victimPlayer, BasePlayer killerPlayer, ItemDefinition itemDefinition, double distance, bool isHeadshot, bool isSleeping)
         {
             JsonMurder jsonMurder = new JsonMurder();
             jsonMurder.victimPlayer = new JsonPlayer(victimPlayer.userID, victimPlayer.displayName);
@@ -940,18 +1031,7 @@ namespace Oxide.Plugins
             jsonMurder.distance = distance;
             jsonMurder.isHeadshot = isHeadshot;
             jsonMurder.isSleeping = isSleeping;
-            SendWebRequest("murder/create", JsonConvert.SerializeObject(jsonMurder), (code, response) => ReceiveWebResponse(code, response));
-        }
-
-        private void NotifyPlayerConnected(BasePlayer player)
-        {
-            JsonPlayerConnected jsonPlayerConnected = new JsonPlayerConnected(player);
-            SendWebRequest("player/connect", JsonConvert.SerializeObject(jsonPlayerConnected), (code, response) => ReceiveWebResponse(code, response));
-        }
-
-        private void NotifyPlayerDisconnected(BasePlayer player)
-        {
-            SendWebRequest("player/disconnect", JsonConvert.SerializeObject(new JsonPlayer(player.userID, player.displayName)), (code, response) => ReceiveWebResponse(code, response));
+            SendWebRequest("player/kill", JsonConvert.SerializeObject(jsonMurder), (code, response) => ReceiveWebResponse(code, response));
         }
 
         private void NotifyPlayerChatMessage(BasePlayer player, string messageText)
@@ -969,20 +1049,21 @@ namespace Oxide.Plugins
             SendWebRequest("player/mute", JsonConvert.SerializeObject(new JsonPlayerMute(steamid, displayName, reason)), (code, response) => ReceiveWebResponse(code, response));
         }
 
-        private void NotifyServerOn()
+        private void NotifyServerStatus()
         {
-            JsonServerOn jsonServerOn = new JsonServerOn();
-            jsonServerOn.players = new JsonPlayer[BasePlayer.activePlayerList.Count];
+            JsonServerStatus jsonServerStatus = new JsonServerStatus();
+            jsonServerStatus.onlinePlayers = new JsonOnlinePlayer[BasePlayer.activePlayerList.Count];
             for (int i = 0; i < BasePlayer.activePlayerList.Count; ++i)
             {
-                jsonServerOn.players[i] = new JsonPlayer(BasePlayer.activePlayerList[i].userID, BasePlayer.activePlayerList[i].displayName);
+                jsonServerStatus.onlinePlayers[i] = new JsonOnlinePlayer(BasePlayer.activePlayerList[i].userID, BasePlayer.activePlayerList[i].displayName, BasePlayer.activePlayerList[i].net.connection.ipaddress.Split(':')[0]);
             }
-            SendWebRequest("server/on", JsonConvert.SerializeObject(jsonServerOn), (code, response) => ReceiveWebResponse(code, response));
+            SendWebRequest("server/status", JsonConvert.SerializeObject(jsonServerStatus), (code, response) => ReceiveWebResponse(code, response));
         }
 
-        private void NotifyServerOff()
+        private void NotifyBroadcastMessagesUpdate()
         {
-            SendWebRequest("server/off", null, (code, response) => ReceiveWebResponse(code, response));
+            SendWebRequest("broadcast_messages", "", (code, response) => ReceiveWebResponseBroadcastMessages(code, response));
         }
+
     }
 }

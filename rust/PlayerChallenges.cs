@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
@@ -9,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerChallenges", "k1lly0u", "2.0.36", ResourceId = 1442)]
+    [Info("PlayerChallenges", "k1lly0u", "2.0.7", ResourceId = 1442)]
     class PlayerChallenges : RustPlugin
     {
         #region Fields
@@ -22,8 +23,10 @@ namespace Oxide.Plugins
         ChallengeData chData;
         private DynamicConfigFile data;
 
+        private Dictionary<int, Challenges> uiOrder = new Dictionary<int, Challenges>();
         private Dictionary<ulong, StatData> statCache = new Dictionary<ulong, StatData>();
-        private Dictionary<CTypes, LeaderData> titleCache = new Dictionary<CTypes, LeaderData>();
+        private Dictionary<Challenges, LeaderData> titleCache = new Dictionary<Challenges, LeaderData>();
+        private Dictionary<ulong, WoundedData> woundedData = new Dictionary<ulong, WoundedData>();
 
         private bool UIDisabled = false;
         #endregion
@@ -103,7 +106,7 @@ namespace Oxide.Plugins
             var MenuElement = PCUI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 1", true);
             PCUI.CreatePanel(ref MenuElement, UIMain, UIColors["light"], "0.005 0.93", "0.995 0.99");
             var vNum = Version;
-            PCUI.CreateLabel(ref MenuElement, UIMain, "", $"{configData.Messaging.MSG_ColorMain}{MSG("UITitle").Replace("{Version}", vNum.ToString())}</color>", 22, "0.05 0.93", "0.6 0.99", TextAnchor.MiddleLeft);           
+            PCUI.CreateLabel(ref MenuElement, UIMain, "", $"<color={configData.Colors.MSG_ColorMain}>{MSG("UITitle").Replace("{Version}", vNum.ToString())}</color>", 22, "0.05 0.93", "0.6 0.99", TextAnchor.MiddleLeft);           
             
             CuiHelper.AddUi(player, MenuElement);
             CreateMenuContents(player, 0);
@@ -114,32 +117,32 @@ namespace Oxide.Plugins
             switch (page)
             {
                 case 0:
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[0], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[1], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[2], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[3], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[4], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");                    
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[0], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[1], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[2], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[3], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[4], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");                    
                     break;
                 case 1:
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[5], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[6], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[7], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[8], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[9], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[5], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[6], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[7], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[8], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[9], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
                     break;
                 case 2:
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[10], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[11], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[12], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[13], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[14], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[10], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[11], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[12], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[13], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[14], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
                     break;
                 case 3:
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[15], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[16], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[17], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[18], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, configData.UI_Arrangement[19], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[15], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[16], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[17], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[18], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
+                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[19], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
                     break;
                 default:
                     break;
@@ -150,25 +153,20 @@ namespace Oxide.Plugins
             PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Close", 16, "0.85 0.94", "0.95 0.98", "PCUI_DestroyAll");
             CuiHelper.AddUi(player, MenuElement);
         }
-        private void AddMenuStats(ref CuiElementContainer MenuElement, string panel, string type, string posMinA, string posMaxA, string posMinB, string posMaxB)
+        private void AddMenuStats(ref CuiElementContainer MenuElement, string panel, Challenges type, string posMinA, string posMaxA, string posMinB, string posMaxB)
         {
-            var entry = GetTypeFromString(type);
-            if (entry != null)
+            if (configData.ChallengeSettings[type].Enabled)
             {
-                var ctype = (CTypes)entry;
-                if (configData.ActiveChallengeTypes[type])
-                {
-                    PCUI.CreatePanel(ref MenuElement, UIPanel, UIColors["light"], posMinA, posMaxA);
-                    PCUI.CreateLabel(ref MenuElement, UIPanel, "", GetLeaders(ctype), 16, posMinB, posMaxB, TextAnchor.UpperLeft);
-                }
-            }            
+                PCUI.CreatePanel(ref MenuElement, UIPanel, UIColors["light"], posMinA, posMaxA);
+                PCUI.CreateLabel(ref MenuElement, UIPanel, "", GetLeaders(type), 16, posMinB, posMaxB, TextAnchor.UpperLeft);
+            }       
         }
 
         #region UI Commands       
         [ConsoleCommand("PCUI_ChangePage")]
         private void cmdChangePage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CuiHelper.DestroyUi(player, UIPanel);
@@ -178,7 +176,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("PCUI_DestroyAll")]
         private void cmdDestroyAll(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;           
             DestroyUI(player);
@@ -187,9 +185,9 @@ namespace Oxide.Plugins
         #endregion
 
         #region UI Functions
-        private string GetLeaders(CTypes type)
+        private string GetLeaders(Challenges type)
         {
-            var listNames = $" -- {configData.Messaging.MSG_ColorMain}{MSG(type.ToString().ToLower()).ToUpper()}</color>\n\n";
+            var listNames = $" -- <color={configData.Colors.MSG_ColorMain}>{MSG(type.ToString()).ToUpper()}</color>\n\n";
 
             var userStats = new Dictionary<string, int>();
 
@@ -210,7 +208,7 @@ namespace Oxide.Plugins
 
             foreach (var entry in leaders)
             {
-                listNames += $"{i}.  - {configData.Messaging.MSG_ColorMain}{entry.Value}</color> -  {entry.Key}\n";
+                listNames += $"{i}.  - <color={configData.Colors.MSG_ColorMain}>{entry.Value}</color> -  {entry.Key}\n";
                 i++;            
             }
             return listNames;
@@ -287,16 +285,31 @@ namespace Oxide.Plugins
             LoadVariables();
             LoadData();
             CheckValidData();
+            SortUIOrder();
+
+            RegisterTitles();
             RegisterGroups();
-            AddAllUsergroups();            
+            AddAllUsergroups();  
+                      
             SaveLoop();
-            if (configData.UI_Arrangement.Count != 20)
-            {
-                UIDisabled = true;
-                PrintError("The UI has been disabled as there is a error in your config.\n The UI arrangement list does not contain enough entries. Check the overview to ensure you have all challenge types in the list");
-            }
+            
             if (configData.Options.UseUpdateTimer)
-                CheckUpdateTimer();                    
+                CheckUpdateTimer();
+            foreach (var player in BasePlayer.activePlayerList)
+                OnPlayerInit(player);                   
+        }
+        void SortUIOrder()
+        {
+            foreach(var entry in configData.ChallengeSettings)
+            {
+                if (uiOrder.ContainsKey(entry.Value.UIPosition))
+                {
+                    PrintError("Duplicate UI position registered in the config! Make sure each challenge type has a unique UI position number between 0 and 19");
+                    UIDisabled = true;
+                    continue;
+                }
+                uiOrder.Add(entry.Value.UIPosition, entry.Key);
+            }
         }
         void Unload()
         {
@@ -305,19 +318,31 @@ namespace Oxide.Plugins
                 DestroyUI(player);
             RemoveAllUsergroups();
         }
-        
+        void OnPluginLoaded(Plugin plugin)
+        {
+            if (plugin.Title == "BetterChat")
+                RegisterTitles();
+        }
+        void OnPlayerInit(BasePlayer player)
+        {
+            if (statCache.ContainsKey(player.userID))
+            {
+                if (statCache[player.userID].DisplayName != player.displayName)
+                    statCache[player.userID].DisplayName = player.displayName;                             
+            }
+        }
         void OnRocketLaunched(BasePlayer player, BaseEntity entity)
         {
-            if (player == null || !configData.ActiveChallengeTypes[CTypes.Rockets.ToString()]) return;            
-            AddPoints(player, CTypes.Rockets, 1);
+            if (player == null || !configData.ChallengeSettings[Challenges.RocketsFired].Enabled) return;            
+            AddPoints(player, Challenges.RocketsFired, 1);
         }
         void OnHealingItemUse(HeldEntity item, BasePlayer target)
         {
             var player = item.GetOwnerPlayer();
             if (player == null) return;
-            if (player != target && configData.ActiveChallengeTypes[CTypes.Healed.ToString()])
+            if (player != target && configData.ChallengeSettings[Challenges.PlayersHealed].Enabled)
             {
-                AddPoints(player, CTypes.Healed, 1);
+                AddPoints(player, Challenges.PlayersHealed, 1);
             }            
         }
         void OnItemCraftFinished(ItemCraftTask task, Item item)
@@ -325,40 +350,56 @@ namespace Oxide.Plugins
             var player = task.owner;
             if (player == null) return;
 
-            if (item.info.category == ItemCategory.Attire && configData.ActiveChallengeTypes[CTypes.Clothes.ToString()])
-                AddPoints(player, CTypes.Clothes, 1);
-            if (item.info.category == ItemCategory.Weapon && configData.ActiveChallengeTypes[CTypes.Weapons.ToString()])
-                AddPoints(player, CTypes.Weapons, 1);
+            if (item.info.category == ItemCategory.Attire && configData.ChallengeSettings[Challenges.ClothesCrafted].Enabled)
+                AddPoints(player, Challenges.ClothesCrafted, 1);
+            if (item.info.category == ItemCategory.Weapon && configData.ChallengeSettings[Challenges.WeaponsCrafted].Enabled)
+                AddPoints(player, Challenges.WeaponsCrafted, 1);
         }
         void OnPlantGather(PlantEntity plant, Item item, BasePlayer player)
         {
-            if (player == null || !configData.ActiveChallengeTypes[CTypes.Plants.ToString()]) return;
-            AddPoints(player, CTypes.Plants, 1);
+            if (player == null || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
+            AddPoints(player, Challenges.PlantsGathered, 1);
         }
         void OnCollectiblePickup(Item item, BasePlayer player, CollectibleEntity entity)
         {
             if (item == null) return;
-            if (player == null || !configData.ActiveChallengeTypes[CTypes.Plants.ToString()]) return;
+            if (player == null || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
             if (plantShortnames.Contains(item?.info?.shortname))
-                AddPoints(player, CTypes.Plants, 1);
+                AddPoints(player, Challenges.PlantsGathered, 1);
         }
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             var player = entity.ToPlayer();
             if (player == null || dispenser == null) return;
 
-            if (dispenser.gatherType == ResourceDispenser.GatherType.Tree && configData.ActiveChallengeTypes[CTypes.Wood.ToString()])
-                AddPoints(player, CTypes.Wood, item.amount);
+            if (dispenser.gatherType == ResourceDispenser.GatherType.Tree && configData.ChallengeSettings[Challenges.WoodGathered].Enabled)
+                AddPoints(player, Challenges.WoodGathered, item.amount);
 
-            if (dispenser.gatherType == ResourceDispenser.GatherType.Ore && configData.ActiveChallengeTypes[CTypes.Rocks.ToString()])
-                AddPoints(player, CTypes.Rocks, item.amount);               
+            if (dispenser.gatherType == ResourceDispenser.GatherType.Ore && configData.ChallengeSettings[Challenges.RocksGathered].Enabled)
+                AddPoints(player, Challenges.RocksGathered, item.amount);               
         }
         void OnEntityBuilt(Planner plan, GameObject go)
         {
             var player = plan.GetOwnerPlayer();
-            if (player == null || !configData.ActiveChallengeTypes[CTypes.Built.ToString()]) return;
+            if (player == null || !configData.ChallengeSettings[Challenges.StructuresBuilt].Enabled) return;
 
-            AddPoints(player, CTypes.Built, 1);
+            AddPoints(player, Challenges.StructuresBuilt, 1);
+        }
+        void CanBeWounded(BasePlayer player, HitInfo hitInfo)
+        {
+            if (player == null || hitInfo == null) return;
+
+            var attacker = hitInfo.InitiatorPlayer;
+            if (attacker != null)
+            {
+                if (attacker == player || IsPlaying(attacker) || IsFriend(attacker.userID, player.userID) || IsClanmate(attacker.userID, player.userID)) return;
+                woundedData[player.userID] = new WoundedData {distance = Vector3.Distance(player.transform.position, attacker.transform.position), attackerId = attacker.userID };
+            }            
+        }
+        void OnPlayerRecover(BasePlayer player)
+        {
+            if (woundedData.ContainsKey(player.userID))
+                woundedData.Remove(player.userID);
         }
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
@@ -370,48 +411,53 @@ namespace Oxide.Plugins
                 if (entity is BasePlayer)
                 {
                     var victim = entity.ToPlayer();
-                    if (IsPlaying(attacker)) return;
-                    if (IsFriend(attacker.userID, victim.userID)) return;
-                    if (IsClanmate(attacker.userID, victim.userID)) return;
-                    if (configData.Options.IgnoreSleepers && victim.IsSleeping()) return;
+
+                    if (attacker == victim || IsPlaying(attacker) || IsFriend(attacker.userID, victim.userID) || IsClanmate(attacker.userID, victim.userID) || (configData.Options.IgnoreSleepers && victim.IsSleeping())) return;
 
                     var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
-                    AddDistance(attacker, CTypes.PVPKill, (int)distance);
+                    if (woundedData.ContainsKey(victim.userID))
+                    {
+                        var woundData = woundedData[victim.userID];
+                        if (attacker.userID == woundData.attackerId)
+                            distance = woundData.distance;
+                        woundedData.Remove(victim.userID);
+                    }
+                    AddDistance(attacker, Challenges.PVPKillDistance, (int)distance);
 
-                    if (info.isHeadshot && configData.ActiveChallengeTypes[CTypes.Headshots.ToString()])
-                        AddPoints(attacker, CTypes.Headshots, 1);
+                    if (info.isHeadshot && configData.ChallengeSettings[Challenges.Headshots].Enabled)
+                        AddPoints(attacker, Challenges.Headshots, 1);
                     var weapon = info?.Weapon?.GetItem()?.info?.shortname;
                     if (!string.IsNullOrEmpty(weapon))
                     {
-                        if (bladeShortnames.Contains(weapon) && configData.ActiveChallengeTypes[CTypes.Swords.ToString()])
-                            AddPoints(attacker, CTypes.Swords, 1);
-                        else if (meleeShortnames.Contains(weapon) && configData.ActiveChallengeTypes[CTypes.Melee.ToString()])
-                            AddPoints(attacker, CTypes.Melee, 1);
-                        else if (weapon == "bow.hunting" && configData.ActiveChallengeTypes[CTypes.Arrows.ToString()])
-                            AddPoints(attacker, CTypes.Arrows, 1);
-                        else if (weapon == "pistol.revolver" && configData.ActiveChallengeTypes[CTypes.Revolver.ToString()])
-                            AddPoints(attacker, CTypes.Revolver, 1);
-                        else if (configData.ActiveChallengeTypes[CTypes.Killed.ToString()]) AddPoints(attacker, CTypes.Killed, 1);
+                        if (bladeShortnames.Contains(weapon) && configData.ChallengeSettings[Challenges.BladeKills].Enabled)
+                            AddPoints(attacker, Challenges.BladeKills, 1);
+                        else if (meleeShortnames.Contains(weapon) && configData.ChallengeSettings[Challenges.MeleeKills].Enabled)
+                            AddPoints(attacker, Challenges.MeleeKills, 1);
+                        else if (weapon == "bow.hunting" && configData.ChallengeSettings[Challenges.ArrowKills].Enabled)
+                            AddPoints(attacker, Challenges.ArrowKills, 1);
+                        else if (weapon == "pistol.revolver" && configData.ChallengeSettings[Challenges.RevolverKills].Enabled)
+                            AddPoints(attacker, Challenges.RevolverKills, 1);
+                        else if (configData.ChallengeSettings[Challenges.PlayersKilled].Enabled) AddPoints(attacker, Challenges.PlayersKilled, 1);
                     }
                 }
                 else if (entity.GetComponent<BaseNPC>() != null)
                 {
                     var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
-                    AddDistance(attacker, CTypes.PVEKill, (int)distance);
-                    AddPoints(attacker, CTypes.Animals, 1);
+                    AddDistance(attacker, Challenges.PVEKillDistance, (int)distance);
+                    AddPoints(attacker, Challenges.AnimalKills, 1);
                 }
             }
             catch { }          
         }
         void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
-            if (player == null || !configData.ActiveChallengeTypes[CTypes.Explosives.ToString()]) return;
-            AddPoints(player, CTypes.Explosives, 1);
+            if (player == null || !configData.ChallengeSettings[Challenges.ExplosivesThrown].Enabled) return;
+            AddPoints(player, Challenges.ExplosivesThrown, 1);
         }
         void OnStructureRepair(BaseCombatEntity block, BasePlayer player)
         {
-            if (player == null || !configData.ActiveChallengeTypes[CTypes.Repaired.ToString()]) return;
-            AddPoints(player, CTypes.Repaired, 1);
+            if (player == null || !configData.ChallengeSettings[Challenges.StructuresRepaired].Enabled) return;
+            AddPoints(player, Challenges.StructuresRepaired, 1);
         }
         #endregion
 
@@ -420,19 +466,19 @@ namespace Oxide.Plugins
         public void CompletedQuest(BasePlayer player)
         {
             CheckEntry(player);
-            AddPoints(player, CTypes.Quests, 1);            
+            AddPoints(player, Challenges.QuestsCompleted, 1);            
         }
         #endregion
 
         #region Functions        
-        private void AddPoints(BasePlayer player, CTypes type, int amount)
+        private void AddPoints(BasePlayer player, Challenges type, int amount)
         {
             if (configData.Options.IgnoreAdmins && player.IsAdmin()) return;
             CheckEntry(player);
             statCache[player.userID].Stats[type] += amount;            
             CheckForUpdate(player, type);
         }
-        private void AddDistance(BasePlayer player, CTypes type, int amount)
+        private void AddDistance(BasePlayer player, Challenges type, int amount)
         {
             if (configData.Options.IgnoreAdmins && player.IsAdmin()) return;
             CheckEntry(player);
@@ -440,7 +486,7 @@ namespace Oxide.Plugins
                 statCache[player.userID].Stats[type] = amount;
             CheckForUpdate(player, type);
         }
-        private void CheckForUpdate(BasePlayer player, CTypes type)
+        private void CheckForUpdate(BasePlayer player, Challenges type)
         {
             if (titleCache[type].UserID == player.userID)
             {
@@ -451,88 +497,65 @@ namespace Oxide.Plugins
             {
                 if (statCache[player.userID].Stats[type] > titleCache[type].Count)
                 {
-                    SwitchLeader(player.userID, type);
+                    SwitchLeader(player.userID, titleCache[type].UserID, type);
                 }
             }         
         }
-        private void SwitchLeader(ulong ID, CTypes type)
-        {    
-            if (configData.Options.UseBetterChat && BetterChat)
-            {
-                var name = GetGroupName(type);
+        private void SwitchLeader(ulong newId, ulong oldId, Challenges type)
+        {
+            var name = GetGroupName(type);
 
-                if (UserInGroup(titleCache[type].UserID.ToString(), name))
-                    RemoveFromGroup(titleCache[type].UserID.ToString(), name);
-
-                AddToGroup(ID.ToString(), name);
+            if (configData.Options.UseOxideGroups)
+            {      
+                if (oldId != 0U && permission.GroupExists(name))
+                    RemoveUserFromGroup(name, oldId.ToString());
+                if (newId != 0U && permission.GroupExists(name))
+                    AddUserToGroup(name, newId.ToString());                
             }
 
             titleCache[type] = new LeaderData
             {
-                Count = statCache[ID].Stats[type],
-                DisplayName = statCache[ID].DisplayName,
-                UserID = ID
+                Count = statCache[newId].Stats[type],
+                DisplayName = statCache[newId].DisplayName,
+                UserID = newId
             };
 
             if (configData.Options.AnnounceNewLeaders)
             {
-                string message = MSG("newLeader", ID.ToString())
-                    .Replace("{playername}", $"{configData.Messaging.MSG_ColorMain}{statCache[ID].DisplayName}</color>{configData.Messaging.MSG_ColorMsg}")
-                    .Replace("{ctype}", $"</color>{configData.Messaging.MSG_ColorMain}{MSG(type.ToString().ToLower(), ID.ToString())}</color>");
+                string message = MSG("newLeader")
+                    .Replace("{playername}", $"<color={configData.Colors.MSG_ColorMain}>{statCache[newId].DisplayName}</color><color={configData.Colors.MSG_ColorMsg}>")
+                    .Replace("{ctype}", $"</color><color={configData.Colors.MSG_ColorMain}>{MSG(type.ToString())}</color>");
                 PrintToChat(message);
-            }
+            }            
         }
-        private void AddAllUsergroups()
-        {
-            if (BetterChat && configData.Options.UseBetterChat)
-            {
-                foreach (var type in titleCache)
-                {
-                    var name = GetGroupName(type.Key);
-                    if (titleCache[type.Key].UserID == 0) continue;
-                    if (!UserInGroup(titleCache[type.Key].UserID.ToString(), name))
-                        AddToGroup(titleCache[type.Key].UserID.ToString(), name);
-                }
-            }
-        }
-        private void RemoveAllUsergroups()
-        {
-            if (BetterChat && configData.Options.UseBetterChat)
-            {
-                foreach (var type in titleCache)
-                {
-                    var name = GetGroupName(type.Key);
-                    if (titleCache[type.Key].UserID == 0) continue;
-                    if (UserInGroup(titleCache[type.Key].UserID.ToString(), name))
-                        RemoveFromGroup(titleCache[type.Key].UserID.ToString(), name);
-                }
-            }
-        }
+      
         private void CheckUpdateTimer()
         {
             if ((GrabCurrentTime() - chData.LastUpdate) > configData.Options.UpdateTimer)
             {
-                var Updates = new Dictionary<CTypes, ulong>();
-
-                foreach (var type in titleCache)
-                    Updates.Add(type.Key, type.Value.UserID);
-
-                foreach (var entry in statCache)
+                var updates = new Dictionary<Challenges, UpdateInfo>();
+                foreach (var type in typeList)
                 {
-                    foreach (var stat in entry.Value.Stats)
+                    bool hasChanged = false;
+                    UpdateInfo info = new UpdateInfo
                     {
-                        if (stat.Value > titleCache[stat.Key].Count)
-                            Updates[stat.Key] = entry.Key;
-                    }
-                }
-
-                foreach (var entry in Updates)
-                {
-                    if (titleCache[entry.Key].UserID != Updates[entry.Key])
+                        newId = titleCache[type].UserID,
+                        oldId = titleCache[type].UserID,
+                        count = titleCache[type].Count
+                    };
+                    foreach (var player in statCache)
                     {
-                        SwitchLeader(entry.Value, entry.Key);
+                        if (info.oldId == player.Key) continue;
+                        if (player.Value.Stats[type] > info.count)
+                        {
+                            hasChanged = true;
+                            info.newId = player.Key;
+                            info.count = player.Value.Stats[type];
+                        }
                     }
-                }
+                    if (hasChanged)
+                        SwitchLeader(info.newId, info.oldId, type);
+                }               
             }
             else
             {
@@ -540,7 +563,12 @@ namespace Oxide.Plugins
                 timer.Once((int)timeRemaining + 10, () => CheckUpdateTimer());
             }
         }
-
+        class UpdateInfo
+        {
+            public ulong newId;
+            public ulong oldId;
+            public int count;
+        }
         #endregion
 
         #region Chat Commands
@@ -556,13 +584,23 @@ namespace Oxide.Plugins
         {
             if (!player.IsAdmin()) return;
             RemoveAllUsergroups();
-            titleCache = new Dictionary<CTypes, LeaderData>();
+            titleCache = new Dictionary<Challenges, LeaderData>();
             statCache = new Dictionary<ulong, StatData>();            
             CheckValidData();
             SendReply(player, MSG("dataWipe", player.UserIDString));
             SaveData();
         }
-
+        [ConsoleCommand("pc_wipe")]
+        private void ccmdPCWipe(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null) return;
+            RemoveAllUsergroups();
+            titleCache = new Dictionary<Challenges, LeaderData>();
+            statCache = new Dictionary<ulong, StatData>();
+            CheckValidData();
+            SendReply(arg, MSG("dataWipe"));
+            SaveData();
+        }
         #endregion
 
         #region Helper Methods
@@ -573,129 +611,111 @@ namespace Oxide.Plugins
                 statCache.Add(player.userID, new StatData
                 {
                     DisplayName = player.displayName,
-                    Stats = new Dictionary<CTypes, int>()
+                    Stats = new Dictionary<Challenges, int>()
                 });
                 foreach (var type in typeList)
                     statCache[player.userID].Stats.Add(type, 0);
             }
         }
-        private string GetGroupName(CTypes type)
-        {
-            switch (type)
-            {
-                case CTypes.Animals:
-                    return configData.Titles.AnimalsKilled;
-                case CTypes.Arrows:
-                    return configData.Titles.ArrowKills;
-                case CTypes.Clothes:
-                    return configData.Titles.ClothesCrafted;
-                case CTypes.Headshots:
-                    return configData.Titles.Headshots;
-                case CTypes.Plants:
-                    return configData.Titles.PlantsGathered;
-                case CTypes.Healed:
-                    return configData.Titles.PlayersHealed;
-                case CTypes.Killed:
-                    return configData.Titles.PlayersKilled;
-                case CTypes.Melee:
-                    return configData.Titles.MeleeKills;
-                case CTypes.Revolver:
-                    return configData.Titles.RevolverKills;
-                case CTypes.Rockets:
-                    return configData.Titles.RocketsFired;
-                case CTypes.Rocks:
-                    return configData.Titles.RocksGathered;
-                case CTypes.Swords:
-                    return configData.Titles.BladeKills;
-                case CTypes.Built:
-                    return configData.Titles.StructuresBuilt;
-                case CTypes.Repaired:
-                    return configData.Titles.StructuresRepaired;
-                case CTypes.Explosives:
-                    return configData.Titles.ThrownExplosives;
-                case CTypes.Weapons:
-                    return configData.Titles.WeaponsCrafted;
-                case CTypes.Wood:
-                    return configData.Titles.WoodGathered;
-                case CTypes.Quests:
-                    return configData.Titles.QuestsCompleted;
-                case CTypes.PVPKill:
-                    return configData.Titles.PVPKillDistance;
-                case CTypes.PVEKill:
-                    return configData.Titles.PVEKillDistance;
-                default:
-                    return null;
-            }
-        }
+        private string GetGroupName(Challenges type) => configData.ChallengeSettings[type].Title;        
         static double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).Hours;
         #endregion
 
-        #region BetterChat Intergration
+        #region Titles and Groups
         private void RegisterGroups()
         {
-            if (!BetterChat || !configData.Options.UseBetterChat) return;
-            if (BetterChat.Version < new VersionNumber(4,0,0))
-            {
-                PrintError("You are using an old version of BetterChat that is not supported by this plugin");
-                return;
-            }
+            if (!configData.Options.UseOxideGroups) return;           
             foreach (var type in typeList)
                 RegisterGroup(type);
         }
-        private void RegisterGroup(CTypes type)
+
+        private void RegisterGroup(Challenges type)
         {
             var name = GetGroupName(type);
-            if (!GroupExists(name))
+            if (!permission.GroupExists(name))
             {
-                NewGroup(name);
-                SetGroupTitle(name);
-                SetGroupColor(name);
+                permission.CreateGroup(name, string.Empty, 0);                
             }
         }
-        
-        private bool GroupExists(string name) => (bool)BetterChat?.Call("API_GroupExists", name);
-        private bool NewGroup(string name) => (bool)BetterChat?.Call("API_AddGroup", name);
-        private bool UserInGroup(string ID, string name) => (bool)BetterChat?.Call("API_IsUserInGroup", ID, name);
-        private bool AddToGroup(string ID, string name) => (bool)BetterChat?.Call("API_AddUserToGroup", ID, name);
-        private bool RemoveFromGroup(string ID, string name) => (bool)BetterChat?.Call("API_RemoveUserFromGroup", ID, name);
-        private object SetGroupTitle(string name) => BetterChat?.Call("API_SetGroupSetting", name, "title", $"[{name}]");
-        private object SetGroupColor(string name) => BetterChat?.Call("API_SetGroupSetting", name, "titlecolor", "orange");
+        private void RegisterTitles()
+        {
+            if (!configData.Options.UseBetterChat)
+                return;
+            if (!BetterChat)
+            {
+                timer.In(30, RegisterTitles);
+                return;
+            }
+            BetterChat?.Call("API_RegisterThirdPartyTitle", new object[] { this, new Func<IPlayer, string>(GetPlayerTitles) });
+        }
+        private string GetPlayerTitles(IPlayer player)
+        {
+            if (!configData.Options.UseBetterChat) return string.Empty;
+            string playerTitle = string.Empty;
+            int count = 0;
+            var titles = titleCache.OrderByDescending(x => configData.ChallengeSettings[x.Key].Priority).Reverse();
+            foreach (var title in titles)
+            {
+                if (!configData.ChallengeSettings[title.Key].Enabled) continue;
+                if (title.Value.UserID == 0U) continue;
+                if (title.Value.UserID.ToString() == player.Id)
+                {
+                    playerTitle += $"{(count > 0 ? " " : "")}[{GetGroupName(title.Key)}]";
+                    count++;
+                    if (count >= configData.Options.MaximumTags)
+                        break;
+                }
+            }
+            return count == 0 ? string.Empty : $"[{configData.Colors.TitleColor}]{playerTitle}[/#]";
+        }
+        private void AddAllUsergroups()
+        {
+            if (configData.Options.UseOxideGroups)
+            {
+                foreach (var type in titleCache)
+                {
+                    var name = GetGroupName(type.Key);
+                    if (titleCache[type.Key].UserID == 0 || !GroupExists(name)) continue;
+                    if (!UserInGroup(name, titleCache[type.Key].UserID.ToString()))
+                        AddUserToGroup(name, titleCache[type.Key].UserID.ToString());
+                }
+            }
+        }
+        private void RemoveAllUsergroups()
+        {
+            if (configData.Options.UseOxideGroups)
+            {
+                foreach (var type in titleCache)
+                {
+                    var name = GetGroupName(type.Key);
+                    if (titleCache[type.Key].UserID == 0 || !GroupExists(name)) continue;
+                    if (UserInGroup(name, titleCache[type.Key].UserID.ToString()))
+                        RemoveUserFromGroup(name, titleCache[type.Key].UserID.ToString());
+                }
+            }
+        }
+        private bool GroupExists(string name) => permission.GroupExists(name);
+        private bool UserInGroup(string name, string playerId) => permission.UserHasGroup(playerId, name);
+        private void AddUserToGroup(string name, string playerId) => permission.AddUserGroup(playerId, name);
+        private void RemoveUserFromGroup(string name, string playerId) => permission.RemoveUserGroup(playerId, name);
         #endregion
 
         #region Config        
         private ConfigData configData;
         class ConfigData
         {
-            public Titles Titles { get; set; }
-            public Dictionary<string, bool> ActiveChallengeTypes { get; set; }
+            public Dictionary<Challenges, ChallengeInfo> ChallengeSettings { get; set; }           
             public Options Options { get; set; } 
-            public Messaging Messaging { get; set; }
-            public List<string> UI_Arrangement { get; set; }
+            public Colors Colors { get; set; }           
         }       
-        class Titles
-        {
-            public string ThrownExplosives;
-            public string RocketsFired;
-            public string ArrowKills;
-            public string PlayersKilled;
-            public string Headshots;
-            public string AnimalsKilled;
-            public string StructuresBuilt;
-            public string WoodGathered;
-            public string RocksGathered;
-            public string PlantsGathered;
-            public string ClothesCrafted;
-            public string WeaponsCrafted;
-            public string PlayersHealed;
-            public string RevolverKills;
-            public string StructuresRepaired;
-            public string MeleeKills;
-            public string BladeKills;
-            public string QuestsCompleted;
-            public string PVPKillDistance;
-            public string PVEKillDistance;
-        }
        
+        class ChallengeInfo
+        {
+            public string Title;
+            public bool Enabled;
+            public int UIPosition;
+            public int Priority;
+        }
         class Options
         {
             public bool IgnoreSleepers;
@@ -704,13 +724,16 @@ namespace Oxide.Plugins
             public bool IgnoreEventKills;
             public bool AnnounceNewLeaders;
             public bool UseUpdateTimer;
+            public bool UseOxideGroups;
             public int UpdateTimer;
+            public int MaximumTags;
             public int SaveTimer;
         }
-        class Messaging
+        class Colors
         {
             public string MSG_ColorMain;
             public string MSG_ColorMsg;
+            public string TitleColor;
         }
         private void LoadVariables()
         {
@@ -721,97 +744,214 @@ namespace Oxide.Plugins
         {
             var config = new ConfigData
             {
-                ActiveChallengeTypes = new Dictionary<string, bool>
+                ChallengeSettings = new Dictionary<Challenges, ChallengeInfo>
                 {
-                    {CTypes.Animals.ToString(), true },
-                    {CTypes.Arrows.ToString(), true },
-                    {CTypes.Built.ToString(), true },
-                    {CTypes.Clothes.ToString(), true },
-                    {CTypes.Explosives.ToString(), true },
-                    {CTypes.Headshots.ToString(), true },
-                    {CTypes.Healed.ToString(), true },
-                    {CTypes.Killed.ToString(), true },
-                    {CTypes.Melee.ToString(), true },
-                    {CTypes.Plants.ToString(), true },
-                    {CTypes.PVEKill.ToString(), true },
-                    {CTypes.PVPKill.ToString(), true },
-                    {CTypes.Quests.ToString(), true },
-                    {CTypes.Repaired.ToString(), true },
-                    {CTypes.Revolver.ToString(), true },
-                    {CTypes.Rockets.ToString(), true },
-                    {CTypes.Rocks.ToString(), true },
-                    {CTypes.Swords.ToString(), true },
-                    {CTypes.Weapons.ToString(), true },
-                    {CTypes.Wood.ToString(), true }
-
-                },
-                Titles = new Titles
-                {
-                    AnimalsKilled = "Hunter",
-                    ArrowKills = "Archer",
-                    BladeKills = "Swordsman",
-                    ClothesCrafted = "Tailor",
-                    Headshots = "Assassin",
-                    MeleeKills = "Fighter",
-                    PlantsGathered = "Harvester",
-                    PlayersHealed = "Medic",
-                    PlayersKilled = "Murderer",
-                    RevolverKills = "Gunslinger",
-                    RocketsFired = "Rocketeer",
-                    RocksGathered = "Miner",
-                    StructuresBuilt = "Architect",
-                    StructuresRepaired = "Handyman",
-                    ThrownExplosives = "Bomb-tech",
-                    WeaponsCrafted = "Gunsmith",
-                    WoodGathered = "Lumberjack",
-                    QuestsCompleted = "Adventurer",
-                    PVPKillDistance = "Sniper",
-                    PVEKillDistance = "Deadshot"
-                },
+                    {
+                        Challenges.AnimalKills, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Hunter",
+                            UIPosition = 0,
+                            Priority = 5
+                        }
+                    },
+                    {
+                        Challenges.ArrowKills, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Archer",
+                            UIPosition = 1,
+                            Priority = 11
+                        }
+                    },
+                    {
+                        Challenges.StructuresBuilt, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Architect",
+                            UIPosition = 2,
+                            Priority = 12
+                        }
+                    },
+                    {
+                        Challenges.ClothesCrafted, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Tailor",
+                            UIPosition = 3,
+                            Priority = 19
+                        }
+                    },
+                    {
+                        Challenges.ExplosivesThrown, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Bomb-tech",
+                            UIPosition = 4,
+                            Priority = 10
+                        }
+                    },
+                    {
+                        Challenges.Headshots, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Assassin",
+                            UIPosition = 5,
+                            Priority = 1
+                        }
+                    },
+                    {
+                        Challenges.PlayersHealed, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Medic",
+                            UIPosition = 6,
+                            Priority = 18
+                        }
+                    },
+                    {
+                        Challenges.PlayersKilled, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Murderer",
+                            UIPosition = 7,
+                            Priority = 2
+                        }
+                    },
+                    {
+                        Challenges.MeleeKills, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Fighter",
+                            UIPosition = 8,
+                            Priority = 3
+                        }
+                    },
+                    {
+                        Challenges.PlantsGathered, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Harvester",
+                            UIPosition = 9,
+                            Priority = 17
+                        }
+                    },
+                    {
+                        Challenges.PVEKillDistance, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Deadshot",
+                            UIPosition = 10,
+                            Priority = 6
+                        }
+                    },
+                    {
+                        Challenges.PVPKillDistance, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Sniper",
+                            UIPosition = 11,
+                            Priority = 4
+                        }
+                    },
+                    {
+                        Challenges.StructuresRepaired, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Handyman",
+                            UIPosition = 12,
+                            Priority = 13
+                        }
+                    },
+                    {
+                        Challenges.RevolverKills, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Gunslinger",
+                            UIPosition = 13,
+                            Priority = 7
+                        }
+                    },
+                    {
+                        Challenges.RocketsFired, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Rocketeer",
+                            UIPosition = 14,
+                            Priority = 8
+                        }
+                    },
+                    {
+                        Challenges.RocksGathered, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Miner",
+                            UIPosition = 15,
+                            Priority = 16
+                        }
+                    },
+                    {
+                        Challenges.BladeKills, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "BladeKillsman",
+                            UIPosition = 16,
+                            Priority = 9
+                        }
+                    },
+                    {
+                        Challenges.WeaponsCrafted, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Gunsmith",
+                            UIPosition = 17,
+                            Priority = 14
+                        }
+                    },
+                    {
+                        Challenges.WoodGathered, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Lumberjack",
+                            UIPosition = 18,
+                            Priority = 15
+                        }
+                    },
+                    {
+                        Challenges.QuestsCompleted, new ChallengeInfo
+                        {
+                            Enabled = true,
+                            Title = "Adventurer",
+                            UIPosition = 19,
+                            Priority = 20
+                        }
+                    }                  
+                },             
+               
                 Options = new Options
                 {
-                    AnnounceNewLeaders = false,
+                    AnnounceNewLeaders = false,                    
                     IgnoreAdmins = true,
                     IgnoreSleepers = true,
                     IgnoreEventKills = true,
+                    MaximumTags = 2,
                     SaveTimer = 600,
                     UseBetterChat = true,
+                    UseOxideGroups = false,
                     UseUpdateTimer = false,
                     UpdateTimer = 168
                 },
-                Messaging = new Messaging
+                Colors = new Colors
                 {
-                    MSG_ColorMain = "<color=orange>",
-                    MSG_ColorMsg = "<color=#939393>",
-                }  ,
-                UI_Arrangement = new List<string>
-                {
-                    CTypes.Animals.ToString(),
-                    CTypes.Arrows.ToString(),
-                    CTypes.Built.ToString(),
-                    CTypes.Clothes.ToString(),
-                    CTypes.Explosives.ToString(),
-                    CTypes.Headshots.ToString(),
-                    CTypes.Healed.ToString(),
-                    CTypes.Killed.ToString(),
-                    CTypes.Melee.ToString(),
-                    CTypes.Plants.ToString(),
-                    CTypes.PVEKill.ToString(),
-                    CTypes.PVPKill.ToString(),
-                    CTypes.Quests.ToString(),
-                    CTypes.Repaired.ToString(),
-                    CTypes.Revolver.ToString(),
-                    CTypes.Rockets.ToString(),
-                    CTypes.Rocks.ToString(),
-                    CTypes.Swords.ToString(),
-                    CTypes.Weapons.ToString(),
-                    CTypes.Wood.ToString()
-                }                            
+                    MSG_ColorMain = "orange",
+                    MSG_ColorMsg = "#939393",
+                    TitleColor = "#88E188"
+                }                
             };
             SaveConfig(config);
         }
         private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);        
         #endregion
 
         #region Data Management
@@ -857,13 +997,13 @@ namespace Oxide.Plugins
         class ChallengeData
         {
             public Dictionary<ulong, StatData> Stats = new Dictionary<ulong, StatData>();
-            public Dictionary<CTypes, LeaderData> Titles = new Dictionary<CTypes, LeaderData>();
+            public Dictionary<Challenges, LeaderData> Titles = new Dictionary<Challenges, LeaderData>();
             public double LastUpdate = 0;
         }   
         class StatData
         {
-            public string DisplayName = null;
-            public Dictionary<CTypes, int> Stats = new Dictionary<CTypes, int>();
+            public string DisplayName = string.Empty;
+            public Dictionary<Challenges, int> Stats = new Dictionary<Challenges, int>();
         }    
         class LeaderData
         {
@@ -871,15 +1011,20 @@ namespace Oxide.Plugins
             public string DisplayName = null;
             public int Count = 0;
         }
-        enum CTypes
+        class WoundedData
         {
-            Animals, Arrows, Clothes, Headshots, Plants, Healed, Killed, Melee, Revolver, Rockets, Rocks, Swords, Built, Repaired, Explosives, Weapons, Wood, Quests, PVPKill, PVEKill
+            public float distance;
+            public ulong attackerId;
+        }
+        enum Challenges
+        {
+            AnimalKills, ArrowKills, ClothesCrafted, Headshots, PlantsGathered, PlayersHealed, PlayersKilled, MeleeKills, RevolverKills, RocketsFired, RocksGathered, BladeKills, StructuresBuilt, StructuresRepaired, ExplosivesThrown, WeaponsCrafted, WoodGathered, QuestsCompleted, PVPKillDistance, PVEKillDistance
         }
 
         #endregion
 
         #region Lists
-        List<CTypes> typeList = new List<CTypes> { CTypes.Animals, CTypes.Arrows, CTypes.Clothes, CTypes.Headshots, CTypes.Plants, CTypes.Healed, CTypes.Killed, CTypes.Melee, CTypes.Revolver, CTypes.Rockets, CTypes.Rocks, CTypes.Swords, CTypes.Built, CTypes.Repaired, CTypes.Explosives, CTypes.Weapons, CTypes.Wood, CTypes.Quests, CTypes.PVEKill, CTypes.PVPKill };
+        List<Challenges> typeList = new List<Challenges> { Challenges.AnimalKills, Challenges.ArrowKills, Challenges.ClothesCrafted, Challenges.Headshots, Challenges.PlantsGathered, Challenges.PlayersHealed, Challenges.PlayersKilled, Challenges.MeleeKills, Challenges.RevolverKills, Challenges.RocketsFired, Challenges.RocksGathered, Challenges.BladeKills, Challenges.StructuresBuilt, Challenges.StructuresRepaired, Challenges.ExplosivesThrown, Challenges.WeaponsCrafted, Challenges.WoodGathered, Challenges.QuestsCompleted, Challenges.PVEKillDistance, Challenges.PVPKillDistance };
         List<string> meleeShortnames = new List<string> { "bone.club", "hammer.salvaged", "hatchet", "icepick.salvaged", "knife.bone", "mace", "machete", "pickaxe", "rock", "stone.pickaxe", "stonehatchet", "torch" };
         List<string> bladeShortnames = new List<string> { "salvaged.sword", "salvaged.cleaver", "longsword", "axe.salvaged" };
         List<string> plantShortnames = new List<string> { "pumpkin", "cloth", "corn", "mushroom", "seed.hemp", "seed.corn", "seed.pumpkin" };
@@ -891,26 +1036,26 @@ namespace Oxide.Plugins
         Dictionary<string, string> Messages = new Dictionary<string, string>
         {
             {"newLeader", "{playername} has topped the leader board for most {ctype}" },
-            {"animals", "animal kills" },
-            {"arrows", "kills with arrows" },
-            {"clothes", "clothes crafted" },
-            {"headshots", "headshots" },
-            {"plants", "plants gathered" },
-            {"healed", "players healed" },
-            {"killed", "players killed" },
-            {"melee", "melee kills" },
-            {"revolver", "revolver kills" },
-            {"rockets", "rockets fired" },
-            {"rocks", "ore gathered" },
-            {"swords", "blade kills" },
-            {"built", "structures built" },
-            {"repaired", "structures repaired" },
-            {"explosives", "explosives thrown" },
-            {"weapons", "weapons crafted" },
-            {"wood", "wood gathered" },
-            {"pvekill", "longest PVE kill"},
-            {"pvpkill", "longest PVP kill" },
-            {"quests", "quests completed" },
+            {"AnimalKills", "animal kills" },
+            {"ArrowKills", "kills with arrows" },
+            {"ClothesCrafted", "clothes crafted" },
+            {"Headshots", "headshots" },
+            {"PlantsGathered", "plants gathered" },
+            {"PlayersHealed", "players healed" },
+            {"PlayersKilled", "players killed" },
+            {"MeleeKills", "melee kills" },
+            {"RevolverKills", "revolver kills" },
+            {"RocketsFired", "rockets fired" },
+            {"RocksGathered", "ore gathered" },
+            {"BladeKills", "blade kills" },
+            {"StructuresBuilt", "structures built" },
+            {"StructuresRepaired", "structures repaired" },
+            {"ExplosivesThrown", "explosives thrown" },
+            {"WeaponsCrafted", "weapons crafted" },
+            {"WoodGathered", "wood gathered" },
+            {"PVEKillDistance", "longest PVE kill"},
+            {"PVPKillDistance", "longest PVP kill" },
+            {"QuestsCompleted", "quests completed" },
             {"UITitle", "Player Challenges   v{Version}" },
             {"UIDisabled", "The UI has been disabled as there is a error in the config. Please contact a admin" },
             {"dataWipe", "You have wiped all player stats and titles" }

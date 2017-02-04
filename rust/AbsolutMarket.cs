@@ -11,7 +11,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutMarket", "Absolut", "1.6.0", ResourceId = 2118)]
+    [Info("AbsolutMarket", "Absolut", "1.6.1", ResourceId = 2118)]
 
     class AbsolutMarket : RustPlugin
     {
@@ -43,7 +43,7 @@ namespace Oxide.Plugins
         private Dictionary<ulong, AMItem> SalesItemPrep = new Dictionary<ulong, AMItem>();
         private Dictionary<ulong, List<Item>> PlayerInventory = new Dictionary<ulong, List<Item>>();
         private Dictionary<ulong, List<Item>> ItemsToTransfer = new Dictionary<ulong, List<Item>>();
-        private Dictionary<ulong, bool> PlayerPurchaseApproval = new Dictionary<ulong, bool>();
+        //private Dictionary<ulong, bool> PlayerPurchaseApproval = new Dictionary<ulong, bool>();
         private Dictionary<ulong, AMItem> SaleProcessing = new Dictionary<ulong, AMItem>();
 
         #region Server Hooks
@@ -200,7 +200,7 @@ namespace Oxide.Plugins
 
         private object OnPlayerChat(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return null;
             bool isPreping = false;
@@ -1690,7 +1690,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SaveTradeBox")]
         private void cmdUI_SaveTradeBox(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyMarketPanel(player);
@@ -1718,7 +1718,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CancelTradeBox")]
         private void cmdUI_CancelTradeBox(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyMarketPanel(player);
@@ -1732,7 +1732,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyMarketPanel")]
         private void cmdUI_DestroyBoxConfirmation(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyMarketPanel(player);
@@ -1741,7 +1741,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyPurchaseScreen")]
         private void cmdUI_DestroyPurchaseScreen(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyPurchaseScreen(player);
@@ -1750,7 +1750,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ToggleMarketScreen")]
         private void cmdUI_ToggleMarketScreen(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ToggleMarketScreen(player);
@@ -1759,7 +1759,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectSalesItem")]
         private void cmdUI_SelectSalesItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyMarketPanel(player);
@@ -1785,7 +1785,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectMoney")]
         private void cmdUI_SelectMoney(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyMarketPanel(player);
@@ -1815,7 +1815,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SRAmount")]
         private void cmdUI_SRAmount(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int amount = Convert.ToInt32(arg.Args[0]);
@@ -1847,7 +1847,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ECOAmount")]
         private void cmdUI_ECOAmount(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int amount = Convert.ToInt32(arg.Args[0]);
@@ -1880,7 +1880,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectpriceItemshortname")]
         private void cmdUI_SelectpriceItemshortname(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             string priceItemshortname = arg.Args[0];
@@ -1905,7 +1905,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectPriceAmount")]
         private void cmdUI_SelectPriceAmount(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int amount = Convert.ToInt32(arg.Args[0]);
@@ -1925,7 +1925,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ListItem")]
         private void cmdUI_ListItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (SalesItemPrep[player.userID].cat != Category.Money)
@@ -1972,7 +1972,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CancelListing")]
         private void cmdUI_CancelListing(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CancelListing(player);
@@ -1981,7 +1981,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ChangeBackground")]
         private void cmdUI_ChangeBackground(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             mData.background[player.userID] = arg.Args[0];
@@ -1991,7 +1991,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_MarketMainScreen")]
         private void cmdUI_MainMarketScreen(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int page;
@@ -2004,7 +2004,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_MarketBackgroundMenu")]
         private void cmdUI_MarketBackgroundMenu(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int page;
@@ -2015,7 +2015,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BlackList")]
         private void cmdUI_BlackList(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int page;
@@ -2027,7 +2027,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ClearMarket")]
         private void cmdUI_ClearMarket(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null || !isAuth(player))
                 return;
             var count = mData.MarketListings.Count();
@@ -2038,7 +2038,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AdminPanel")]
         private void cmdUI_AdminPanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             AdminPanel(player);
@@ -2047,7 +2047,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_MarketSellScreen")]
         private void cmdUI_MarketSellScreen(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int page;
@@ -2058,7 +2058,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Mode")]
         private void cmdUI_Mode(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int action;
@@ -2075,7 +2075,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetBoxMode")]
         private void cmdUI_SetBoxMode(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!SettingBox.Contains(player.userID)) SettingBox.Add(player.userID);
@@ -2087,7 +2087,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BuyConfirm")]
         private void cmdUI_BuyConfirm(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyPurchaseScreen(player);
@@ -2218,7 +2218,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ProcessMoney")]
         private void cmdUI_ProcessMoney(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyPurchaseScreen(player);
@@ -2227,7 +2227,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ProcessItem")]
         private void cmdUI_ProcessItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyPurchaseScreen(player);
@@ -2238,11 +2238,9 @@ namespace Oxide.Plugins
             ulong seller = mData.MarketListings[ID].seller;
             if (PlayerInventory.ContainsKey(buyer))
                 PlayerInventory.Remove(buyer);
-            if (PlayerPurchaseApproval.ContainsKey(buyer))
-                PlayerPurchaseApproval.Remove(buyer);
+            bool PlayerPurchaseApproval = false;
             List<uint> TransferableItems = new List<uint>();
             PlayerInventory.Add(buyer, new List<Item>());
-            PlayerPurchaseApproval.Add(buyer, false);
             if (GetTradeBox(seller) != null && GetTradeBox(buyer) != null)
             {
                 StorageContainer buyerbox = GetTradeBox(buyer);
@@ -2261,7 +2259,7 @@ namespace Oxide.Plugins
                             TransferableItems.Add(entry.uid);
                             if (amount >= purchaseitem.priceAmount)
                             {
-                                PlayerPurchaseApproval[buyer] = true;
+                                PlayerPurchaseApproval = true;
                                 break;
                             }
                             else continue;
@@ -2270,17 +2268,21 @@ namespace Oxide.Plugins
                     else
                     {
                         if (purchaseitem.priceItemshortname == "SR")
+                        {
                             if ((int)CheckPoints(player.userID) >= purchaseitem.priceAmount)
                             {
-                                PlayerPurchaseApproval[buyer] = true;
+                                PlayerPurchaseApproval = true;
                             }
+                        }
                         else if (purchaseitem.priceItemshortname == "ECO")
+                        {
                             if (CheckEco(player.userID) >= purchaseitem.priceAmount)
                             {
-                                PlayerPurchaseApproval[buyer] = true;
+                                PlayerPurchaseApproval = true;
                             }
+                        }
                     }
-                    if (PlayerPurchaseApproval[buyer] == true)
+                    if (PlayerPurchaseApproval)
                     {
                         if (ItemsToTransfer.ContainsKey(buyer))
                             ItemsToTransfer.Remove(buyer);
@@ -2359,7 +2361,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RemoveListing")]
         private void cmdUI_RemoveListing(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             uint ID;
@@ -2375,7 +2377,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SellItems")]
         private void cmdUI_SellItems(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int page;
@@ -2386,7 +2388,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BackListItem")]
         private void cmdUI_BackListItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var action = arg.Args[0];

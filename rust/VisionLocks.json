@@ -1,10 +1,10 @@
 {
     "name": "VisionLocks",
     "description": "Indestructible locks",
-    "author": "Darwin",
-    "version": "0.1.0",
+    "author": "Maurice",
+    "version": "1.0.1",
     "configuration": false,
-    "language": "js",
+    "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/visionlocks.1654",
     "games": [
         "rust"

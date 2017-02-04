@@ -7,7 +7,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("InfiniteRocket", "deniskozlov", 0.2)]
+    [Info("InfiniteRocket", "deniskozlov", "0.2.1", ResourceId = 2265)]
     [Description("Launched rocket never will explode by time only when it does collide with something")]
     public class InfiniteRocket : RustPlugin
     {
@@ -51,7 +51,7 @@ namespace Oxide.Plugins
                     var strValue = explodeTimer as string;
                     if (string.IsNullOrEmpty(strValue))
                     {
-                        Log($"Invalid parameter for config parameter ExplodeTimer", this);
+                        PrintWarning("Invalid parameter for config parameter ExplodeTimer");
                     }
                     if (strValue.ToLower() != "infinite")
                     {
@@ -67,7 +67,7 @@ namespace Oxide.Plugins
                         }
                         else
                         {
-                            Log($"Invalid parameter for config parameter ExplodeTimer", this);
+                            PrintWarning("Invalid parameter for config parameter ExplodeTimer");
                         }
                     }
                 }
@@ -104,7 +104,6 @@ namespace Oxide.Plugins
             if (args != null && args.Length > 0)
             {
                 float.TryParse(args[0], out time);
-
             }
 
             lastRocket.Invoke("Explode", time);
@@ -129,11 +128,9 @@ namespace Oxide.Plugins
             }, this);
         }
 
-
         T GetConfig<T>(string name, T defaultValue) => Config[name] == null ? defaultValue : (T)Convert.ChangeType(Config[name], typeof(T));
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
         bool IsAllowed(string id, string perm) => permission.UserHasPermission(id, perm);
-
 
         private void AddToRocketLaunch(string playerId, TimedExplosive explosive)
         {

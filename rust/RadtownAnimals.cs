@@ -7,7 +7,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("RadtownAnimals", "k1lly0u", "0.2.11", ResourceId = 1561)]
+    [Info("RadtownAnimals", "k1lly0u", "0.2.12", ResourceId = 1561)]
     class RadtownAnimals : RustPlugin
     {
         #region Fields
@@ -379,7 +379,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("ra_killall")]
         private void ccmdKillAnimals(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 foreach (var animal in animalList)
                 {

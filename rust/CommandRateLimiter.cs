@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("CommandRateLimiter", "Calytic", "0.0.9", ResourceId = 1812)]
+    [Info("CommandRateLimiter", "Calytic", "0.1.1", ResourceId = 1812)]
     public class CommandRateLimiter : CovalencePlugin
     {
         private int KickAfter;
@@ -30,10 +30,17 @@ namespace Oxide.Plugins
             Config["ClearRateCountSeconds"] = ClearRateCountSeconds = GetConfig("ClearRateCountSeconds", 5);
             Config["LogExcessiveUsage"] = LogExcessiveUsage = GetConfig("LogExcessiveUsage", false);
             Config["SendPlayerMessage"] = SendPlayerMessage = GetConfig("SendPlayerMessage", true);
-            Config["CommandWhitelist"] = commandWhitelist = GetConfig("CommandWhitelist", new List<object>());
+            Config["CommandWhitelist"] = commandWhitelist = GetConfig("CommandWhitelist", GetDefaultWhitelist());
             Config["Version"] = Version.ToString();
             SaveConfig();
             LoadMessages();
+        }
+
+        List<object> GetDefaultWhitelist()
+        {
+            return new List<object>() {
+                "add"
+            };
         }
 
         void LoadMessages()
@@ -52,7 +59,7 @@ namespace Oxide.Plugins
             Config["ClearRateCountSeconds"] = 5;
             Config["LogExcessiveUsage"] = false;
             Config["SendPlayerMessage"] = true;
-            Config["CommandWhitelist"] = new List<string>();
+            Config["CommandWhitelist"] = GetDefaultWhitelist();
             Config["Version"] = Version.ToString();
         }
 
@@ -91,9 +98,9 @@ namespace Oxide.Plugins
                 TimeSpan ts = DateTime.Now - lastTime;
                 if (ts.TotalMilliseconds < CooldownMS)
                 {
-                    if (arg.cmd.name != null)
+                    if (arg.cmd.Name != null)
                     {
-                        if (commandWhitelist.Contains(arg.cmd.name))
+                        if (commandWhitelist.Contains(arg.cmd.Name))
                         {
                             return null;
                         }
@@ -118,13 +125,13 @@ namespace Oxide.Plugins
                                 });
                             }
 
-                            if (!spamLog[player.Id].ContainsKey(arg.cmd.name))
+                            if (!spamLog[player.Id].ContainsKey(arg.cmd.Name))
                             {
-                                spamLog[player.Id].Add(arg.cmd.name, 1);
+                                spamLog[player.Id].Add(arg.cmd.Name, 1);
                             }
                             else
                             {
-                                spamLog[player.Id][arg.cmd.name]++;
+                                spamLog[player.Id][arg.cmd.Name]++;
                             }
                         }
                     }

@@ -12,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Finder", "Reneb", "3.0.2", ResourceId = 692)]
+    [Info("Finder", "Reneb", "3.0.3", ResourceId = 692)]
     class Finder : RustPlugin
     {
         //////////////////////////////////////////////////////////////////////////////////////////
@@ -332,11 +332,6 @@ namespace Oxide.Plugins
                         if (inventory == null) continue;
                         List<Item> list = inventory.itemList.FindAll((Item x) => x.info.itemid == item.itemid);
                         int amount = 0;
-                        foreach (Item current in list)
-                        {
-                            if(ownerid == 0L || IsOwned(current, ownerid))
-                                amount += current.amount;
-                        }
                         if (amount < itemamount) continue;
                         pu.AddFind("Box", sc.transform.position, amount.ToString());
                     }
@@ -395,13 +390,6 @@ namespace Oxide.Plugins
 
 
             return returnstring;
-        }
-
-        bool IsOwned(Item item, ulong userid)
-        {
-            var owner = item.owners.Where(x => x.userid == userid).ToList();
-            if (owner == null || owner.Count == 0) return false;
-            return true;
         }
 
         [ChatCommand("find")]

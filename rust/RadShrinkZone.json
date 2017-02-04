@@ -1,8 +1,8 @@
 {
     "name": "BattleRoyale Local RadZone",
     "description": "BattleRoyale-styled radiation system",
-    "author": "",
-    "version": "1.0.4",
+    "author": "Wulf",
+    "version": "1.0.5",
     "configuration": true,
     "require": {
         "ZoneManager": "*"

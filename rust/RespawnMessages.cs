@@ -1,50 +1,34 @@
-using Oxide.Core.Plugins;
+using System;using System.Collections.Generic;using Oxide.Core.Plugins;
+
 namespace Oxide.Plugins
 {
-    [Info("RespawnMessages", "Kappasaurus", 0.1)]
-    [Description("Make customized notes players view on respawn!")]
+    [Info("RespawnMessages", "Kappasaurus", "0.2.1", ResourceId = 1996)]
+    [Description("Customize respawn messages sent to players on respawn")]
 
     class RespawnMessages : RustPlugin
     {
         [PluginReference]
         Plugin PopupNotifications;
-        void LoadDefaultConfig()
-        {
-            Config.Clear();
-            Config["RespawnMessagePopup"] = "<size=20>Hey, <color=#cd422b>try not to die</color> this time!</size>";
-            Config["RespawnMessageChat"] = "Hey, <color=#cd422b>try not to die</color> this time!";
-            Config["Prefix"] = "[ <color=#cd422b>RespawnNotes</color> ]";
-            Config["PopupEnabled"] = false;
-            Config["ChatEnabled"] = true;
-            Config["PrefixEnabled"] = true;
-            Config.Save();
-        }
-        void OnPlayerRespawn(BasePlayer player)
-        {
-            if ((bool)Config["PrefixEnabled"] == true)
-            {
-                if ((bool)Config["PopupEnabled"] == true)
-					{
-						PopupNotifications?.Call("CreatePopupNotification", Config["RespawnMessagePopup"].ToString());
-					}
-                if ((bool)Config["ChatEnabled"] == true)
-					{
-						SendReply(player, Config["Prefix"].ToString() + " " + Config["RespawnMessageChat"].ToString());
-					}
-            }
-            else
 
-            {
-                if ((bool)Config["PopupEnabled"] == true)
-					{
-						PopupNotifications?.Call("CreatePopupNotification", Config["RespawnMessagePopup"].ToString());
-					}
-                if ((bool)Config["ChatEnabled"] == true)
-					{
-							SendReply(player, Config["RespawnMessageChat"].ToString());
-					}
-            }
+        bool chatMessage;
+        bool popupMessage;
+
+        protected override void LoadDefaultConfig()
+        {
+            Config["Chat Message (true/false)"] = chatMessage = GetConfig("Chat Message (true/false)", true);
+            Config["Popup Message (true/false)"] = popupMessage = GetConfig("Popup Message (true/false)", false);
+
+            SaveConfig();
         }
+        void Init()        {            LoadDefaultConfig();
+
+            // English
+            lang.RegisterMessages(new Dictionary<string, string> { ["Respawn"] = "Hey, try not to die this time!" }, this);        }        void OnPlayerRespawned(BasePlayer player)
+        {
+            if (chatMessage) SendReply(player, lang.GetMessage("Respawn", this, player.UserIDString));
+            if (popupMessage) PopupNotifications?.Call("CreatePopupNotification", lang.GetMessage("Respawn", this, player.UserIDString), player);
+        }
+
+        T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
     }
 }
- 

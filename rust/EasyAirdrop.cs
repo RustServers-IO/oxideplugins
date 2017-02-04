@@ -5,7 +5,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Easy Airdrop", "LaserHydra", "3.2.2", ResourceId = 860)]
+    [Info("Easy Airdrop", "LaserHydra", "3.2.3", ResourceId = 860)]
     [Description("Easy Airdrop")]
     class EasyAirdrop : RustPlugin
     {
@@ -279,7 +279,7 @@ namespace Oxide.Plugins
             if (arg == null) return;
 
             BasePlayer player = arg?.connection?.player == null ? arg?.connection?.player as BasePlayer : null;
-            string cmd = arg.cmd?.name ?? "unknown";
+            string cmd = arg.cmd?.Name ?? "unknown";
             string[] args = arg.HasArgs() ? arg.Args : new string[0];
 
             command(player, cmd, args);

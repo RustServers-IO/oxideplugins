@@ -9,7 +9,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("MonumentRadiation", "k1lly0u", "0.2.3", ResourceId = 1562)]
+    [Info("MonumentRadiation", "k1lly0u", "0.2.31", ResourceId = 1562)]
     class MonumentRadiation : RustPlugin
     {
         private bool RadsOn;
@@ -262,8 +262,8 @@ namespace Oxide.Plugins
         }
         bool isAuth(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)            
-                if (arg.connection.authLevel < 1)
+            if (arg.Connection != null)            
+                if (arg.Connection.authLevel < 1)
                 {
                     SendReply(arg, lang.GetMessage("noPerms", this));
                     return false;

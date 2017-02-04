@@ -4,7 +4,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-	[Info("MagicMeat", "ignignokt84", "0.1.1", ResourceId = 2011)]
+	[Info("MagicMeat", "ignignokt84", "0.1.2", ResourceId = 2011)]
 	class MagicMeat : RustPlugin
 	{
 		void LoadDefaultMessages()
@@ -78,7 +78,7 @@ namespace Oxide.Plugins
 			// user doesn't have access to run console command
 			if(!hasAccess(arg)) return;
 			
-			string cmd = arg.cmd.namefull.Split('.')[1];
+			string cmd = arg.cmd.Name;
 			if(!Enum.IsDefined(typeof(Command), cmd))
 			{
 				// shouldn't hit
@@ -105,7 +105,7 @@ namespace Oxide.Plugins
 						showUsage(arg);
 						return;
 				}
-				SendReply(arg, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidParamForCmd"), arg.cmd.namefull))));
+				SendReply(arg, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidParamForCmd"), arg.cmd.FullName))));
 			}
 			showUsage(arg);
 		}
@@ -225,7 +225,6 @@ namespace Oxide.Plugins
 				// item added to player inventory
 				item.RemoveFromContainer();
 				Item cookedMeat = ItemManager.CreateByItemID(cookedId, amount);
-				cookedMeat.AddOwners(item.owners);
 				if (!cookedMeat.MoveToContainer(container, position, true))
 					cookedMeat.Remove(0f);
 			}
@@ -236,7 +235,6 @@ namespace Oxide.Plugins
 				// item added to storage box
 				item.RemoveFromContainer();
 				Item cookedMeat = ItemManager.CreateByItemID(cookedId, amount);
-				cookedMeat.AddOwners(item.owners);
 				if (!cookedMeat.MoveToContainer(container, position, true))
 					cookedMeat.Remove(0f);
 			}

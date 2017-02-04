@@ -1,349 +1,1091 @@
 ﻿using System;
 using System.Collections.Generic;
-using UnityEngine;
-using Oxide.Core.Plugins;
-using System.Reflection;
-using Oxide.Core;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Converters;
+using Oxide.Core;
 using Oxide.Core.Configuration;
+using UnityEngine;
+using System.Linq;
+using System.Reflection;
+using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("BoobyTraps", "k1lly0u", "0.1.7", ResourceId = 1549)]
+    [Info("BoobyTraps", "k1lly0u", "0.2.11", ResourceId = 1549)]
     class BoobyTraps : RustPlugin
     {
-        [PluginReference]
-        Plugin ZoneManager;
-
-        private bool Changed;
-
+        #region Fields
         StoredData storedData;
-        private DynamicConfigFile BoobyTrapData;        
-        private Dictionary<uint, bTraps> currentTraps = new Dictionary<uint, bTraps>();
-        private Dictionary<uint, bTraps> tempTraps = new Dictionary<uint, bTraps>();
-        private List<string> currentRadTraps = new List<string>();
-        private Dictionary<string, string> langMsg = new Dictionary<string, string>();
+        private DynamicConfigFile data;
+        private bool initialized;
+                
+        private List<ZoneList> radiationZones;
+        private List<Timer> trapTimers;
+
+        private Dictionary<string, ItemDefinition> itemDefs;
+        private Dictionary<uint, TrapInfo> currentTraps;
 
         private FieldInfo serverinput;
-        private static LayerMask GROUND_MASKS = LayerMask.GetMask("Terrain", "World", "Construction");
 
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Oxide Hooks ///////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
+        const string grenadeFX = "assets/prefabs/weapons/f1 grenade/effects/bounce.prefab";
+        const string explosiveFX = "assets/prefabs/locks/keypad/effects/lock.code.denied.prefab";
+        const string beancanFX = "assets/prefabs/weapons/beancan grenade/effects/bounce.prefab";
+        const string radiationFX = "assets/prefabs/weapons/beancan grenade/effects/beancan_grenade_explosion.prefab";
+        const string landmineFX = "assets/bundled/prefabs/fx/weapons/landmine/landmine_trigger.prefab";
+        const string beartrapFX = "assets/bundled/prefabs/fx/beartrap/arm.prefab";
+        const string shockFX = "assets/prefabs/locks/keypad/effects/lock.code.shock.prefab";
+
+        const string landminePrefab = "assets/prefabs/deployable/landmine/landmine.prefab";
+        const string beartrapPrefab = "assets/prefabs/deployable/bear trap/beartrap.prefab";
+        const string explosivePrefab = "assets/prefabs/tools/c4/explosive.timed.deployed.prefab";
+        const string beancanPrefab = "assets/prefabs/weapons/beancan grenade/grenade.beancan.deployed.prefab";
+        const string grenadePrefab = "assets/prefabs/weapons/f1 grenade/grenade.f1.deployed.prefab";
+        const string firePrefab = "assets/bundled/prefabs/oilfireballsmall.prefab";
+
+        const string explosivePerm = "boobytraps.explosives";
+        const string deployPerm = "boobytraps.deployables";
+        const string elementPerm = "boobytraps.elements";
+        const string adminPerm = "boobytraps.admin";
+        #endregion
+
+        #region Oxide Hooks
         void Loaded()
         {
-            permission.RegisterPermission("boobytraps.explosives", this);
-            permission.RegisterPermission("boobytraps.deployables", this);
-            permission.RegisterPermission("boobytraps.elements", this);
-            permission.RegisterPermission("boobytraps.admin", this);
-            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-
-            lang.RegisterMessages(messages, this);
-
-            BoobyTrapData = Interface.Oxide.DataFileSystem.GetFile("BoobyTrap");
-            BoobyTrapData.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter(), };
-
-            LoadData();
-            LoadVariables();
-            
-            if (!plugins.Exists("ZoneManager"))
-            {
-                Puts(lang.GetMessage("noZoneManager", this));
-                return;
-            }           
-                  
+            data = Interface.Oxide.DataFileSystem.GetFile("boobytrap_data");
+            data.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter() };
+                       
+            radiationZones = new List<ZoneList>();
+            trapTimers = new List<Timer>();
+            currentTraps = new Dictionary<uint, TrapInfo>();
         }
-        protected override void LoadDefaultConfig()
+        void OnServerInitialized()
         {
-            Puts("Creating a new config file");
-            Config.Clear();
+            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+            itemDefs = ItemManager.itemList.ToDictionary(i => i.shortname);
             LoadVariables();
+            LoadData();
+            InitializePlugin();            
         }
         void Unload()
         {
-            removeAllZones();
-            currentRadTraps.Clear();
-            tempTraps.Clear();
-        }             
+            for (int i = 0; i < radiationZones.Count; i++)
+            {
+                radiationZones[i].time.Destroy();
+                UnityEngine.Object.Destroy(radiationZones[i].zone);
+            }
+            radiationZones.Clear();
+            
+            foreach (var time in trapTimers)
+                time.Destroy();
+            SaveData();
+        }
+
         void OnEntitySpawned(BaseEntity entity)
         {
-            if (entity == null) return;
+            if (!initialized) return;
+            if (entity == null || entity.net == null) return;
 
-            if ((entity is SupplyDrop) && (boobyTrapAirdrops))
+            if (entity is SupplyDrop)
             {
-                var drop = entity as SupplyDrop;
-                processDrop(drop);
+                if (configData.AutotrapSettings.UseAirdrops)
+                {
+                    ProcessEntity(entity, configData.AutotrapSettings.AirdropChance);                    
+                }
                 return;
             }
-            if ((entity is LootContainer) && (boobyTrapLoot))
+            if (entity is LootContainer)
             {
-                var box = entity as LootContainer;
-                processLoot(box);
+                if (configData.AutotrapSettings.UseLootContainers)
+                {
+                    ProcessEntity(entity, configData.AutotrapSettings.LootContainerChance);                    
+                }
                 return;
             }
         }
         void OnLootEntity(BasePlayer inventory, BaseEntity target)
         {
-            if (target is StorageContainer)
+            if (target == null || target.net == null) return;
+            TryActivateTrap(target.net.ID, inventory);
+        }
+        void OnEntityTakeDamage(BaseCombatEntity target, HitInfo info)
+        {
+            if (target == null || target.net == null || info == null) return;
+            TryActivateTrap(target.net.ID, info?.InitiatorPlayer ?? null);
+        }
+        void OnEntityDeath(BaseCombatEntity target, HitInfo info)
+        {
+            if (target == null || target.net == null || info == null) return;
+            TryActivateTrap(target.net.ID, info?.InitiatorPlayer ?? null);
+        }
+        void CanUseDoor(BasePlayer player, BaseLock locks)
+        {
+            var target = locks.GetParentEntity();
+            if (target == null || target.net == null) return;
+            TryActivateTrap(target.net.ID, player);
+        }
+        void OnDoorOpened(Door target, BasePlayer player)
+        {
+            if (target == null || target.net == null) return;
+            TryActivateTrap(target.net.ID, player);
+        }
+        void OnDoorClosed(Door target, BasePlayer player)
+        {
+            if (target == null || target.net == null) return;
+            TryActivateTrap(target.net.ID, player);
+        }
+        void OnEntityKill(BaseNetworkable entity)
+        {
+            if (entity == null || entity.net == null) return;
+            if (currentTraps.ContainsKey(entity.net.ID))
+                currentTraps.Remove(entity.net.ID);
+        }
+        #endregion
+
+        #region Functions
+        private void InitializePlugin()
+        {
+            lang.RegisterMessages(Messages, this);
+            permission.RegisterPermission(explosivePerm, this);
+            permission.RegisterPermission(deployPerm, this);
+            permission.RegisterPermission(elementPerm, this);
+            permission.RegisterPermission(adminPerm, this);
+
+            if (!ConVar.Server.radiation)
             {
-                checkActivateTrap(target as StorageContainer);           
+                configData.TrapTypes[Traps.Radiation].Enabled = false;
+                SaveConfig(configData);
+            }
+            CheckCurrentTraps();           
+            initialized = true;
+        }
+        private void CheckCurrentTraps()
+        {
+            var entities = BaseEntity.serverEntities.Select(x => x.net.ID);
+            var trapIds = currentTraps.Keys.ToArray();
+
+            for (int i = 0; i < trapIds.Length; i++)
+            {
+                var entId = trapIds[i];
+                if (!entities.Contains(entId))
+                    currentTraps.Remove(entId);
             }
         }
-        void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
-        {
-            if (entity is StorageContainer)
-            {
-                checkActivateTrap(entity as StorageContainer);
-            }
-        }
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            removeTrap(entity.net.ID);
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Configuration /////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        bool boobyTrapAirdrops = true;
-        bool boobyTrapLoot = true;
-        bool radiationTraps = true;
-        bool grenadeTraps = true;
-        bool beancanTraps = true;
-        bool explosiveTraps = true;
-        bool mineTraps = true;
-        bool bearTraps = true;
-        bool shockTraps = true;
-        bool fireTraps = true;
-        bool useOwners = true;
-        bool buildingPriv = true;
-
-        float trapCountdown = 2f;
-        float radiationDestroy = 60f;
-        int airdropChance = 5;
-        int lootChance = 5;
-                       
-        int radiationRadius = 10;
-        int radiationAmount = 75;
-
-        float fireDamage = 1f;
-        float fireRadius = 2f;
-
-        int mineAmount = 10;
-        float mineRadius = 2f;
-
-        int beartrapAmount = 10;
-        float beartrapRadius = 2f;
         
-        int computerAmount = 2;
+        private void ProcessEntity(BaseEntity entity, int chance)
+        {
+            if (!SetRandom(chance)) return;            
 
-        int lowgradeAmount = 50;
-        int crudeoilAmount = 50;
+            var trap = configData.TrapTypes.Where(x => x.Value.Enabled).ToList().GetRandom().Key;
+            SetTrap(entity, trap, string.Empty);
 
-        int grenadeAmount = 2;
-        float grenadeRadius = 5f;
-        float grenadeDamage = 75f;
+            if (configData.Options.NotifyRandomSetTraps)
+                Puts($"Random trap has been set at {entity.transform.position} using trap {trap}");
+        }       
+        private void SetTrap(BaseEntity entity, Traps trap, string owner)
+        {
+            var Id = entity.net.ID;
+            TrapInfo info = new TrapInfo
+            {
+                location = entity.transform.position,
+                saveTrap = string.IsNullOrEmpty(owner) ? false : true,
+                trapOwner = owner,
+                trapType = trap
+            };
 
-        int beancanAmount = 2;
-        float beancanRadius = 4f;
-        float beancanDamage = 30f;
+            currentTraps[Id] = info;
+        }
+        private bool TryPurchaseTrap(BasePlayer player, Traps trap)
+        {
+            if (configData.Options.OverrideCostsForAdmins && HasPermission(player.UserIDString, adminPerm))
+                return true;
 
-        int explosiveAmount = 2;
-        float explosiveRadius = 10f;
-        float explosiveDamage = 110f;
+            var costs = configData.TrapTypes[trap].Costs;
+            Dictionary<int, int> itemToTake = new Dictionary<int, int>();
+            foreach(var cost in costs)
+            {
+                ItemDefinition itemDef;
+                if (!itemDefs.TryGetValue(cost.Shortname, out itemDef))
+                {
+                    PrintError($"Error finding a item with the shortname \"{cost.Shortname}\". Please fix this mistake in your BoobyTrap config!");
+                    continue;
+                }
+                if (!HasEnoughRes(player, itemDef.itemid, cost.Amount))
+                {
+                    SendReply(player, msg("insufficientResources", player.UserIDString));
+                    return false;
+                }
+                itemToTake[itemDef.itemid] = cost.Amount;
+            }
+            foreach (var item in itemToTake)
+                TakeResources(player, item.Key, item.Value);
+            return true;
+        }
+        void TryActivateTrap(uint Id, BasePlayer player = null)
+        {
+            if (!IsBoobyTrapped(Id)) return;
+            TrapInfo info = currentTraps[Id];
 
-        float shockRadius = 2f;
-        float shockDamage = 95f;
+            string warningFX = string.Empty;
+            string prefab = string.Empty;
 
+            Vector3 location = info.location;
+            float fuse = configData.TrapTypes[info.trapType].FuseTimer;
+            float amount = configData.TrapTypes[info.trapType].DamageAmount;
+            float radius = configData.TrapTypes[info.trapType].Radius;
+
+            bool spawnPrefab = false;
+            bool radiusSpawn = false;
+            bool isRadiation = false;
+            bool isFire = false;
+
+            switch (info.trapType)
+            {
+                case Traps.BeancanGrenade:
+                    warningFX = beancanFX;
+                    prefab = beancanPrefab;
+                    spawnPrefab = true;
+                    break;
+                case Traps.Grenade:
+                    warningFX = grenadeFX;
+                    prefab = grenadePrefab;
+                    spawnPrefab = true;
+                    break;
+                case Traps.Explosive:
+                    warningFX = explosiveFX;
+                    prefab = explosivePrefab;
+                    spawnPrefab = true;
+                    break;
+                case Traps.Landmine:
+                    warningFX = landmineFX;
+                    prefab = landminePrefab;
+                    amount = configData.TrapTypes[Traps.Landmine].Costs[0].Amount;
+                    radiusSpawn = true;
+                    break;
+                case Traps.Beartrap:
+                    warningFX = beancanFX;
+                    prefab = beartrapPrefab;
+                    amount = configData.TrapTypes[Traps.Beartrap].Costs[0].Amount;
+                    radiusSpawn = true;
+                    break;
+                case Traps.Radiation:
+                    warningFX = explosiveFX;
+                    prefab = radiationFX;
+                    isRadiation = true;
+                    break;
+                case Traps.Fire:
+                    warningFX = beancanFX;
+                    prefab = firePrefab;
+                    isFire = true;
+                    break;
+                case Traps.Shock:
+                    warningFX = explosiveFX;
+                    prefab = shockFX;
+                    break;
+            }
+            currentTraps.Remove(Id);
+            if (configData.Options.PlayTrapWarningSoundFX)
+                Effect.server.Run(warningFX, location);
+
+            if (spawnPrefab)
+            {
+                BaseEntity entity = GameManager.server.CreateEntity(prefab, location, new Quaternion(), true);
+                TimedExplosive timedExplosive = entity.GetComponent<TimedExplosive>();
+                entity.Spawn();
+                if (timedExplosive != null)
+                {
+                    timedExplosive.SetFuse(fuse);
+                    timedExplosive.explosionRadius = radius;
+                    timedExplosive.damageTypes = new List<DamageTypeEntry> { new DamageTypeEntry { amount = amount, type = DamageType.Explosion } };
+                }
+            }
+            else
+            {
+                trapTimers.Add(timer.In(fuse, () =>
+                {
+                    if (radiusSpawn)
+                    {
+                        float angle = 360 / amount;
+                        for (int i = 0; i < amount; i++)
+                        {
+                            float ang = i * angle;
+                            Vector3 position = GetPositionOnCircle(location, ang, radius);
+                            BaseEntity entity = GameManager.server.CreateEntity(prefab, position, new Quaternion(), true);
+                            entity.Spawn();
+                        }
+                    }
+                    else if (isFire)
+                    {
+                        BaseEntity entity = GameManager.server.CreateEntity(prefab, location, new Quaternion(), true);
+                        entity.Spawn();                        
+                    }
+                    else if (isRadiation)
+                    {
+                        Effect.server.Run(prefab, location);
+                        InitializeZone(location, configData.TrapTypes[Traps.Radiation].DamageAmount, configData.TrapTypes[Traps.Radiation].Duration, configData.TrapTypes[Traps.Radiation].Radius);
+                    }
+                    else
+                    {
+                        Effect.server.Run(prefab, location);
+                        List<BasePlayer> nearbyPlayers = new List<BasePlayer>();
+                        Vis.Entities(location, radius, nearbyPlayers);
+                        foreach (BasePlayer nearPlayer in nearbyPlayers)
+                            nearPlayer.Hurt(amount, DamageType.ElectricShock, null, true);
+                    }
+                }));                
+            }
+            if (configData.Options.NotifyPlayersWhenTrapTriggered && player != null)
+                trapTimers.Add(timer.In(fuse, () => SendReply(player, string.Format(msg("triggered", player.UserIDString), info.trapType))));
+        }
+        private Vector3 GetPositionOnCircle(Vector3 pos, float ang, float radius)
+        {
+            Vector3 randPos;
+            randPos.x = pos.x + radius * Mathf.Sin(ang * Mathf.Deg2Rad);
+            randPos.z = pos.z + radius * Mathf.Cos(ang * Mathf.Deg2Rad);
+            randPos.y = pos.y;
+            var targetPos = GetGroundPosition(randPos);
+            return targetPos;
+        }
+        private Vector3 GetGroundPosition(Vector3 sourcePos)
+        {
+            RaycastHit hitInfo;
+
+            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, LayerMask.GetMask("Terrain", "World", "Construction")))            
+                sourcePos.y = hitInfo.point.y;            
+            sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
+            return sourcePos;
+        }
+        private BaseEntity FindValidEntity(BasePlayer player, bool set)
+        {
+            BaseEntity entity = FindEntity(player);
+            if (entity == null)
+            {
+                SendReply(player, msg("invalidEntity", player.UserIDString));
+                return null;
+            }
+            if (configData.Options.RequireBuildingPrivToTrap && !player.CanBuild())
+            {
+                SendReply(player, msg("buildBlocked", player.UserIDString));
+                return null;
+            }
+            if (configData.Options.RequireOwnershipToTrap)
+            {
+                if (entity.OwnerID != 0U && entity.OwnerID != player.userID)
+                {
+                    SendReply(player, msg("notOwner", player.UserIDString));
+                    return null;
+                }
+            }
+            if (set && currentTraps.ContainsKey(entity.net.ID))
+            {
+                SendReply(player, msg("hasTrap", player.UserIDString));
+                return null;
+            }
+            return entity;
+        }
+        private BaseEntity FindEntity(BasePlayer player)
+        {
+            var input = serverinput.GetValue(player) as InputState;
+            var currentRot = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
+            Vector3 eyesAdjust = new Vector3(0f, 1.5f, 0f);
+
+            var rayResult = CastRay(player.transform.position + eyesAdjust, currentRot);
+            if (rayResult is BaseEntity)
+            {
+                var entity = rayResult as BaseEntity;
+                if (entity.GetComponent<SupplyDrop>())
+                {
+                    if (!configData.Options.CanTrapSupplyDrops)
+                        return null;
+                }
+                else if (entity.GetComponent<LootContainer>())
+                {
+                    if (!configData.Options.CanTrapLoot)
+                        return null;
+                }
+                else if (entity.GetComponent<StorageContainer>())
+                {
+                    if (!configData.Options.CanTrapBoxes)
+                        return null;
+                }
+                else if (entity.GetComponent<Door>())
+                {
+                    if (!configData.Options.CanTrapDoors)
+                        return null;
+                }
+                
+                return entity;
+            }
+            return null;
+        }
+        object CastRay(Vector3 Pos, Vector3 Aim)
+        {
+            var hits = Physics.RaycastAll(Pos, Aim);
+            float distance = 100;
+            object target = null;
+
+            foreach (var hit in hits)
+            {
+                if (hit.collider.GetComponentInParent<BaseEntity>() != null)
+                {
+                    if (hit.distance < distance)
+                    {
+                        distance = hit.distance;
+                        target = hit.collider.GetComponentInParent<BaseEntity>();
+                    }
+                }               
+            }
+            return target;
+        }
+        void SendEchoConsole(Network.Connection cn, string msg)
+        {
+            if (Network.Net.sv.IsConnected())
+            {
+                Network.Net.sv.write.Start();
+                Network.Net.sv.write.PacketID(Network.Message.Type.ConsoleMessage);
+                Network.Net.sv.write.String(msg);
+                Network.Net.sv.write.Send(new Network.SendInfo(cn));
+            }
+        }
+        #endregion
+
+        #region Helpers
+        private bool HasPermission(string userId, string perm) => permission.UserHasPermission(userId, perm);
+        private bool HasAnyPerm(string userId) => (HasPermission(userId, explosivePerm) || HasPermission(userId, deployPerm) || HasPermission(userId, elementPerm) || HasPermission(userId, adminPerm));
+        private bool IsBoobyTrapped(uint Id) => currentTraps.ContainsKey(Id);
+        private void RemoveTrap(uint Id) => currentTraps.Remove(Id);
+        private bool HasEnoughRes(BasePlayer player, int itemid, int amount) => player.inventory.GetAmount(itemid) >= amount;
+        private void TakeResources(BasePlayer player, int itemid, int amount) => player.inventory.Take(null, itemid, amount);
+        private double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;        
+        private int GetRandom(int chance) => UnityEngine.Random.Range(1, chance);
+        private bool SetRandom(int chance) => GetRandom(chance) == 1;
+        #endregion
+
+        #region Radiation
+        private void InitializeZone(Vector3 Location, float intensity, float duration, float radius)
+        {            
+            var newZone = new GameObject().AddComponent<RadZones>();
+            newZone.Activate(Location, radius, intensity);
+
+            var listEntry = new ZoneList { zone = newZone };
+            listEntry.time = timer.Once(duration, () => DestroyZone(listEntry));
+
+            radiationZones.Add(listEntry);
+        }
+        private void DestroyZone(ZoneList zone)
+        {
+            if (radiationZones.Contains(zone))
+            {
+                var index = radiationZones.FindIndex(a => a.zone == zone.zone);
+                radiationZones[index].time.Destroy();
+                UnityEngine.Object.Destroy(radiationZones[index].zone);
+                radiationZones.Remove(zone);
+            }
+        }        
+        public class ZoneList
+        {
+            public RadZones zone;
+            public Timer time;
+        }
+        public class RadZones : MonoBehaviour
+        {
+            private void Awake()
+            {
+                gameObject.layer = (int)Layer.Reserved1;
+                gameObject.name = "Radiation Zone";
+            }
+            public void Activate(Vector3 pos, float radius, float amount)
+            {                
+                transform.position = pos;
+                transform.rotation = new Quaternion();
+
+                var collider = gameObject.AddComponent<SphereCollider>();
+                collider.radius = radius;
+                collider.transform.position = pos;
+                       
+                var radTrigger = collider.gameObject.AddComponent<TriggerRadiation>();
+                radTrigger.RadiationAmountOverride = amount;
+                radTrigger.radiationSize = radius;
+                radTrigger.interestLayers = LayerMask.GetMask("Player (Server)");
+                radTrigger.enabled = true;
+
+                gameObject.SetActive(true);
+                enabled = true;
+            }
+            private void OnDestroy()
+            {
+                Destroy(gameObject);
+            }            
+        }
+        #endregion
+
+        #region Commands
+        [ChatCommand("trap")]
+        void cmdTrap(BasePlayer player, string command, string[] args)
+        {
+            string userId = player.UserIDString;
+            if (!HasAnyPerm(userId)) return;
+            if (args.Length == 0)
+            {
+                SendReply(player, string.Format(msg("help1", player.UserIDString), Title, Version, configData.Options.CanTrapDoors, configData.Options.CanTrapBoxes, configData.Options.CanTrapLoot, configData.Options.CanTrapSupplyDrops));
+                SendReply(player, msg("help2", player.UserIDString));
+                var types = configData.TrapTypes;
+                if (HasPermission(userId, adminPerm))
+                {
+                    SendReply(player, msg("help3", player.UserIDString));
+                    SendReply(player, msg("help4", player.UserIDString));
+                }
+                else
+                {
+                    List<string> trapTypes = new List<string>();
+                    if (HasPermission(userId, explosivePerm))
+                    {
+                        if (types[Traps.BeancanGrenade].Enabled && !types[Traps.BeancanGrenade].AdminOnly)
+                            trapTypes.Add("Beancan");
+                        if (types[Traps.Grenade].Enabled && !types[Traps.Grenade].AdminOnly)
+                            trapTypes.Add("Grenade");
+                        if (types[Traps.Explosive].Enabled && !types[Traps.BeancanGrenade].AdminOnly)
+                            trapTypes.Add("Explosive");
+                    }
+                    if (HasPermission(userId, deployPerm))
+                    {
+                        if (types[Traps.Landmine].Enabled && !types[Traps.Landmine].AdminOnly)
+                            trapTypes.Add("Landmine");
+                        if (types[Traps.Beartrap].Enabled && !types[Traps.Beartrap].AdminOnly)
+                            trapTypes.Add("Beartrap");                        
+                    }
+                    if (HasPermission(userId, elementPerm))
+                    {
+                        if (types[Traps.Radiation].Enabled && !types[Traps.Radiation].AdminOnly && ConVar.Server.radiation)
+                            trapTypes.Add("Radiation");
+                        if (types[Traps.Fire].Enabled && !types[Traps.Fire].AdminOnly)
+                            trapTypes.Add("Fire");
+                        if (types[Traps.Shock].Enabled && !types[Traps.Shock].AdminOnly)
+                            trapTypes.Add("Shock");
+                    }
+                    SendReply(player, $"{msg("help5", player.UserIDString)} <color=#939393>{trapTypes.ToSentence()}</color>");
+                }
+                return;         
+            }
+            switch (args[0].ToLower())
+            {
+                case "cost":
+                    if (args.Length > 1)
+                    {                        
+                        Traps trap;
+                        switch (args[1].ToLower())
+                        {
+                            case "beancan":
+                                {
+                                    if (!HasPermission(userId, explosivePerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.BeancanGrenade;
+                                    break;
+                                }
+                            case "grenade":
+                                {
+                                    if (!HasPermission(userId, explosivePerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Grenade;
+                                    break;
+                                }
+                            case "explosive":
+                                {
+                                    if (!HasPermission(userId, explosivePerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Explosive;
+                                    break;
+                                }
+                            case "landmine":
+                                {
+                                    if (!HasPermission(userId, deployPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Landmine;
+                                    break;
+                                }
+                            case "beartrap":
+                                {
+                                    if (!HasPermission(userId, deployPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Beartrap;
+                                    break;
+                                }
+                            case "radiation":
+                                {
+                                    if (!ConVar.Server.radiation || (!HasPermission(userId, elementPerm) && !HasPermission(userId, adminPerm)))
+                                        return;
+                                    trap = Traps.Radiation;
+                                    break;
+                                }
+                            case "fire":
+                                {
+                                    if (!HasPermission(userId, elementPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Fire;
+                                    break;
+                                }
+                            case "shock":
+                                {
+                                    if (!HasPermission(userId, elementPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Shock;
+                                    break;
+                                }
+                            default:
+                                SendReply(player, msg("invalidTrap", player.UserIDString));
+                                return;
+                        }
+                        if (!configData.TrapTypes[trap].Enabled || (configData.TrapTypes[trap].AdminOnly && !HasPermission(userId, adminPerm)))
+                        {
+                            SendReply(player, msg("notEnabled", player.UserIDString));
+                            return;
+                        }
+
+                        string costs = string.Format(msg("getCosts", player.UserIDString), trap);                        
+                        foreach(var cost in configData.TrapTypes[trap].Costs)
+                        {
+                            ItemDefinition itemDef;
+                            if (!itemDefs.TryGetValue(cost.Shortname, out itemDef))
+                            {
+                                PrintError($"Error finding a item with the shortname \"{cost.Shortname}\". Please fix this mistake in your BoobyTrap config!");
+                                continue;
+                            }
+                            costs += $"\n<color=#00CC00>{cost.Amount}</color> <color=#939393>x</color> <color=#00CC00>{itemDef.displayName.translated}</color>";
+                        }
+                        SendReply(player, costs);
+                    }
+                    return;
+                case "set":
+                    if (args.Length > 1)
+                    {
+                        BaseEntity entity = FindValidEntity(player, true);
+                        if (entity == null)                                                    
+                            return;
+
+                        Traps trap;                    
+                        switch (args[1].ToLower())
+                        {
+                            case "beancan":
+                                {
+                                    if (!HasPermission(userId, explosivePerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.BeancanGrenade;                                    
+                                    break;
+                                }
+                            case "grenade":
+                                {
+                                    if (!HasPermission(userId, explosivePerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Grenade;
+                                    break;
+                                }
+                            case "explosive":
+                                {
+                                    if (!HasPermission(userId, explosivePerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Explosive;
+                                    break;
+                                }
+                            case "landmine":
+                                {
+                                    if (!HasPermission(userId, deployPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Landmine;
+                                    break;
+                                }
+                            case "beartrap":
+                                {
+                                    if (!HasPermission(userId, deployPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Beartrap;
+                                    break;
+                                }
+                            case "radiation":
+                                {
+                                    if (!HasPermission(userId, elementPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Radiation;
+                                    break;
+                                }
+                            case "fire":
+                                {
+                                    if (!HasPermission(userId, elementPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Fire;
+                                    break;
+                                }
+                            case "shock":
+                                {
+                                    if (!HasPermission(userId, elementPerm) && !HasPermission(userId, adminPerm))
+                                        return;
+                                    trap = Traps.Shock;
+                                    break;
+                                }
+                            default:
+                                SendReply(player, msg("invalidTrap", player.UserIDString));
+                                return;
+                        }
+                        if (!configData.TrapTypes[trap].Enabled || (configData.TrapTypes[trap].AdminOnly && !HasPermission(userId, adminPerm)))
+                        {
+                            SendReply(player, msg("notEnabled", player.UserIDString));
+                            return;
+                        }
+                        if (TryPurchaseTrap(player, trap))
+                        {
+                            SetTrap(entity, trap, player.UserIDString);
+                            SendReply(player, string.Format(msg("trapSet", player.UserIDString), trap));
+                        }
+                    }
+                    return;
+                case "remove":
+                    {
+                        BaseEntity entity = FindValidEntity(player, false);
+                        if (entity == null)
+                            return;
+                        if (configData.Options.RequireOwnershipToTrap && (entity.OwnerID != 0U && entity.OwnerID != player.userID))
+                        {
+                            SendReply(player, msg("notOwner", player.UserIDString));
+                            return;
+                        }
+                        if (!currentTraps.ContainsKey(entity.net.ID))
+                        {
+                            SendReply(player, msg("noTrap", player.UserIDString));
+                            return;
+                        }
+                        else
+                        {
+                            currentTraps.Remove(entity.net.ID);
+                            SendReply(player, msg("removeSuccess", player.UserIDString));
+                            return;
+                        }
+                    }
+                case "check":
+                    {
+                        BaseEntity entity = FindValidEntity(player, false);
+                        if (entity == null)
+                            return;
+                        if (configData.Options.RequireOwnershipToTrap && (entity.OwnerID != 0U && entity.OwnerID != player.userID))
+                        {
+                            SendReply(player, msg("notOwner", player.UserIDString));
+                            return;
+                        }
+                        if (!currentTraps.ContainsKey(entity.net.ID))
+                        {
+                            SendReply(player, msg("noTrap", player.UserIDString));
+                            return;
+                        }
+                        else
+                        {
+                            TrapInfo info = currentTraps[entity.net.ID];                            
+                            SendReply(player, string.Format(msg("trapInfo", player.UserIDString), info.trapType));
+                            return;
+                        }
+                    }
+                case "removeall":
+                    {
+                        if (!player.IsAdmin() && !HasPermission(userId, adminPerm))
+                        {
+                            SendReply(player, msg("noPerm", player.UserIDString));
+                            return;
+                        }
+                        currentTraps.Clear();
+                        SendReply(player, msg("removedAll", player.UserIDString));
+                        return;
+                    }
+                case "list":
+                    {
+                        if (!player.IsAdmin() && !HasPermission(userId, adminPerm))
+                        {
+                            SendReply(player, msg("noPerm", player.UserIDString));
+                            return;
+                        }
+                        SendEchoConsole(player.net.connection, string.Format(msg("currentTraps", player.UserIDString), currentTraps.Count));
+                        Puts(string.Format(msg("currentTraps", player.UserIDString), currentTraps.Count));
+                        foreach(var trap in currentTraps)
+                        {
+                            string trapInfo = string.Format("{0} - {1} - {2}", trap.Key, trap.Value.trapType, trap.Value.location);
+                            SendEchoConsole(player.net.connection, trapInfo);
+                            Puts(trapInfo);
+                        }
+                        return;
+                    }    
+            }
+        }
+        [ConsoleCommand("trap")]
+        void ccmdTrap(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null) return;
+            if (arg.Args == null || arg.Args.Length == 0)
+            {
+                SendReply(arg, $"-- {Title}  v{Version} --");
+                SendReply(arg, msg("conHelp"));
+                return;
+            }
+            switch (arg.Args[0].ToLower())
+            {
+                case "removeall":
+                    currentTraps.Clear();
+                    SendReply(arg, msg("removedAll"));
+                    return;
+                case "list":
+                    Puts(string.Format(msg("currentTraps"), currentTraps.Count));
+                    foreach (var trap in currentTraps)
+                    {
+                        string trapInfo = string.Format("{0} - {1} - {2}", trap.Key, trap.Value.trapType, trap.Value.location);
+                        Puts(trapInfo);
+                    }
+                    return;
+                default:
+                    return;
+            }
+        }
+        #endregion
+
+        #region Config 
+        private ConfigData configData;
+        class TrapCostEntry
+        {
+            public string Shortname { get; set; }
+            public int Amount { get; set; }
+        }  
+        class TrapEntry
+        {
+            public bool Enabled { get; set; }
+            public bool AdminOnly { get; set; }
+            public float DamageAmount { get; set; }
+            public float Radius { get; set; }
+            public float FuseTimer { get; set; }
+            public float Duration { get; set; }
+            public List<TrapCostEntry> Costs { get; set; }
+
+        }          
+        class Autotraps
+        {
+            public bool UseAirdrops { get; set; }
+            public bool UseLootContainers { get; set; }
+            public int AirdropChance { get; set; }
+            public int LootContainerChance { get; set; }
+        }         
+        class Options
+        {
+            public bool NotifyRandomSetTraps { get; set; }
+            public bool NotifyPlayersWhenTrapTriggered { get; set; }
+            public bool PlayTrapWarningSoundFX { get; set; }
+            public bool CanTrapBoxes { get; set; }
+            public bool CanTrapLoot { get; set; }
+            public bool CanTrapSupplyDrops { get; set; }
+            public bool CanTrapDoors { get; set; }
+            public bool RequireOwnershipToTrap { get; set; }
+            public bool RequireBuildingPrivToTrap { get; set; }
+            public bool OverrideCostsForAdmins { get; set; }
+        }
+        class ConfigData
+        {
+            public Autotraps AutotrapSettings { get; set; }
+            public Dictionary<Traps, TrapEntry> TrapTypes { get; set; }
+            public Options Options { get; set; }
+        }
         private void LoadVariables()
         {
             LoadConfigVariables();
             SaveConfig();
         }
-        private void LoadConfigVariables()
+        protected override void LoadDefaultConfig()
         {
-            CheckCfg("Options - Autotraps - Airdrops", ref boobyTrapAirdrops);
-            CheckCfg("Options - Autotraps - Airdrops - Chance", ref airdropChance);
-            CheckCfg("Options - Autotraps - Loot Containers", ref boobyTrapLoot);
-            CheckCfg("Options - Autotraps - Loot Container - Chance", ref lootChance);
-            CheckCfg("Options - Traps - Trap timer", ref trapCountdown);
-            CheckCfg("Options - Plugins - Use Owners ", ref useOwners);
-            CheckCfg("Options - Tool Cupboard - Use Building Privileges ", ref buildingPriv);
-
-            CheckCfg("Traps - Grenade", ref grenadeTraps);
-            CheckCfg("Traps - Grenade - Buy Amount", ref grenadeAmount);
-            CheckCfgFloat("Traps - Grenade - Damage", ref grenadeDamage);
-            CheckCfgFloat("Traps - Grenade - Radius", ref grenadeRadius);
-
-            CheckCfg("Traps - Beancan", ref beancanTraps);
-            CheckCfg("Traps - Beancan - Buy Amount", ref beancanAmount);
-            CheckCfgFloat("Traps - Beancan - Damage", ref beancanDamage);
-            CheckCfgFloat("Traps - Beancan - Radius", ref beancanRadius);
-
-            CheckCfg("Traps - Explosive", ref explosiveTraps);
-            CheckCfg("Traps - Explosive - Buy Amount", ref explosiveAmount);
-            CheckCfgFloat("Traps - Explosive - Damage", ref explosiveDamage);
-            CheckCfgFloat("Traps - Explosive - Radius", ref explosiveRadius);
-
-            CheckCfg("Traps - Landmine", ref mineTraps);
-            CheckCfg("Traps - Landmine - Buy Amount", ref mineAmount);
-            CheckCfgFloat("Traps - Landmine - Radius", ref mineRadius);
-
-            CheckCfg("Traps - Beartraps", ref bearTraps);
-            CheckCfg("Traps - Beartraps - Buy Amount", ref beartrapAmount);
-            CheckCfgFloat("Traps - Beartraps - Radius", ref beartrapRadius);
-
-            CheckCfg("Traps - Radiation", ref radiationTraps);
-            CheckCfg("Traps - Radiation - Buy Amount", ref radiationAmount);
-            CheckCfg("Traps - Radiation - Radius", ref radiationRadius);
-            CheckCfgFloat("Traps - Radiation - Time to keep radiation active", ref radiationDestroy);
-
-            CheckCfg("Traps - Shock", ref shockTraps);
-            CheckCfgFloat("Traps - Shock - Damage", ref shockDamage);
-            CheckCfgFloat("Traps - Shock - Radius", ref shockRadius);
-
-            CheckCfg("Traps - Fire", ref fireTraps);
-            CheckCfg("Traps - Fire - Buy Amount - Oil", ref crudeoilAmount);
-            CheckCfg("Traps - Fire - Buy Amount - LowGrade", ref lowgradeAmount);
-            CheckCfgFloat("Traps - Fire - Damage", ref fireDamage);
-            CheckCfgFloat("Traps - Fire - Radius", ref fireRadius);
-
-
-        }
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-        private void CheckCfgFloat(string Key, ref float var)
-        {
-
-            if (Config[Key] != null)
-                var = Convert.ToSingle(Config[Key]);
-            else
-                Config[Key] = var;
-        }
-        object GetConfig(string menu, string datavalue, object defaultValue)
-        {
-            var data = Config[menu] as Dictionary<string, object>;
-            if (data == null)
+            var config = new ConfigData
             {
-                data = new Dictionary<string, object>();
-                Config[menu] = data;
-                Changed = true;
-            }
-            object value;
-            if (!data.TryGetValue(datavalue, out value))
-            {
-                value = defaultValue;
-                data[datavalue] = value;
-                Changed = true;
-            }
-            return value;
+                AutotrapSettings = new Autotraps
+                {
+                    AirdropChance = 40,
+                    LootContainerChance = 40,
+                    UseAirdrops = true,
+                    UseLootContainers = true
+                },
+                Options = new Options
+                {
+                    NotifyRandomSetTraps = true,
+                    NotifyPlayersWhenTrapTriggered = true,
+                    PlayTrapWarningSoundFX = true,
+                    CanTrapBoxes = true,
+                    CanTrapDoors = true,
+                    CanTrapLoot = false,
+                    CanTrapSupplyDrops = false,
+                    OverrideCostsForAdmins = true,
+                    RequireBuildingPrivToTrap = true,
+                    RequireOwnershipToTrap = true
+                },
+                TrapTypes = new Dictionary<Traps, TrapEntry>
+                {
+                    {Traps.BeancanGrenade, new TrapEntry
+                    {
+                        AdminOnly = false,
+                        Costs = new List<TrapCostEntry>
+                        {
+                            new TrapCostEntry
+                            {
+                                Shortname = "grenade.beancan",
+                                Amount = 2
+                            }
+                        },
+                        DamageAmount = 30,
+                        Radius = 4,
+                        FuseTimer = 2,
+                        Enabled = true
+                    }
+                    },
+                    {Traps.Beartrap, new TrapEntry
+                    {
+                        AdminOnly = false,
+                        Costs = new List<TrapCostEntry>
+                        {
+                            new TrapCostEntry
+                            {
+                                Shortname = "trap.bear",
+                                Amount = 10
+                            }
+                        },
+                        DamageAmount = 0,
+                        Radius = 2,
+                        FuseTimer = 2,
+                        Enabled = true
+                    }
+                    },
+                    {Traps.Explosive, new TrapEntry
+                    {
+                        AdminOnly = false,
+                        Costs = new List<TrapCostEntry>
+                        {
+                            new TrapCostEntry
+                            {
+                                Shortname = "explosive.timed",
+                                Amount = 2
+                            }
+                        },
+                        DamageAmount = 110,
+                        Radius = 10,
+                        FuseTimer = 3,
+                        Enabled = true
+                    }
+                    },
+                    {Traps.Fire, new TrapEntry
+                    {
+                        AdminOnly = false,
+                        Costs = new List<TrapCostEntry>
+                        {
+                            new TrapCostEntry
+                            {
+                                Shortname = "lowgradefuel",
+                                Amount = 50
+                            }
+                        },
+                        DamageAmount = 1,
+                        Radius = 2,
+                        FuseTimer = 3,
+                        Enabled = true
+                    }
+                    },
+                    {Traps.Grenade, new TrapEntry
+                    {
+                        AdminOnly = false,
+                        Costs = new List<TrapCostEntry>
+                        {
+                            new TrapCostEntry
+                            {
+                                Shortname = "grenade.f1",
+                                Amount = 2
+                            }
+                        },
+                        DamageAmount = 75,
+                        Radius = 5,
+                        FuseTimer = 3,
+                        Enabled = true
+                    }
+                    },
+                    {Traps.Landmine, new TrapEntry
+                    {
+                        AdminOnly = false,
+                        Costs = new List<TrapCostEntry>
+                        {
+                            new TrapCostEntry
+                            {
+                                Shortname = "trap.landmine",
+                                Amount = 10
+                            }
+                        },
+                        DamageAmount = 0,
+                        Radius = 2,
+                        FuseTimer = 2,
+                        Enabled = true
+                    }
+                    },
+                    {Traps.Radiation, new TrapEntry
+                    {
+                        AdminOnly = true,
+                        Costs = new List<TrapCostEntry>(),
+                        DamageAmount = 20,
+                        Radius = 10,
+                        FuseTimer = 3,
+                        Duration = 20,
+                        Enabled = true
+                    }
+                    },
+                    {Traps.Shock, new TrapEntry
+                    {
+                        AdminOnly = true,
+                        Costs = new List<TrapCostEntry>(),
+                        DamageAmount = 95,
+                        Radius = 2,
+                        FuseTimer = 2,
+                        Enabled = true
+                    }
+                    }
+                }
+            };
+            SaveConfig(config);
         }
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
 
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Messages //////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        Dictionary<string, string> messages = new Dictionary<string, string>()
+        #region Data Management
+        enum Traps
         {
-            {"title", "<color=orange>BoobyTraps</color> : " },
-            {"noZoneManager", "ZoneManager is not installed, unable to generate radiation traps" },
-            {"alreadyTrapped", "This box is already booby trapped!"},
-            {"notYourBox", "This is not your box"},
-            {"noBox", "You are not looking at a box"},
-            {"needGrenades", "You need {0} Grenade(s) to set this trap"},
-            {"needBeancans", "You need {0} Beancan Grenade(s) to set this trap"},
-            {"needExplosives", "You need {0} Timed Explosive(s) to set this trap"},
-            {"needMines", "You need {0} Landmines to set this trap"},
-            {"needBeartraps", "You need {0} Beartraps to set this trap"},
-            {"needComputer", "You need {0} Targeting Computer(s) to set this trap"},
-            {"needFire", "You need {0} Low Grade Fuel and {1} Crude Oil to set this trap"},
-            {"boxTrapped", "This box is now booby trapped with {0}!"},
-            {"noPerms", "You do not have permission to use this command"},
-            {"badSyntax", "Incorrect Syntax"},
-            {"disGren", "Grenade traps are disabled"},            
-            {"disBeancan", "Beancan traps are disabled"},
-            {"disExplosive", "Explosive traps are disabled"},
-            {"disMine", "Landmine traps are disabled"},
-            {"disBear", "Beartrap traps are disabled"},
-            {"disRads", "Radiation traps are disabled"},
-            {"disShock", "Shock traps are disabled"},
-            {"disFire", "Fire traps are disabled"},
-            {"removedTrap", "You have removed this trap!"},
-            {"noTraps", "This box has no traps"},
-            {"checkConsole", "Check your console for the list"},
-            {"boxClean", "This box is clean!"},
-            {"eraseAll", "All traps erased!"},
-            {"trappedWith", "This box is booby trapped with {0}!" },
-            {"availableTraps", "Available trap names are;" },
-            {"explos", "grenade, beancan, explosive" },
-            {"deplo", "landmine, beartrap" },
-            {"element", "shock, fire" },
-            {"rads", "radiation" },
-            {"noPrivs", "You must have building privilege to place a trap here" },
-            {"activatedTrap", "You activated a booby trap!" }
-        };
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Data Management ///////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-               
-        class StoredData
-        {
-            public readonly HashSet<bTraps> currentTraps = new HashSet<bTraps>();
+            BeancanGrenade,
+            Grenade,
+            Explosive,
+            Landmine,
+            Beartrap,
+            Radiation,
+            Fire,
+            Shock
+        }
+        class TrapInfo
+        {            
+            public Traps trapType;
+            public Vector3 location;
+            public string trapOwner;
+            public bool saveTrap; 
         }
         void SaveData()
         {
-            BoobyTrapData.WriteObject(storedData);
+            storedData.trapData = currentTraps.Where(x => x.Value.saveTrap == true).ToDictionary(y => y.Key, y => y.Value);
+            data.WriteObject(storedData);
         }
         void LoadData()
         {
             try
             {
-                BoobyTrapData.Settings.NullValueHandling = NullValueHandling.Ignore;
-                storedData = BoobyTrapData.ReadObject<StoredData>();                
+                storedData = data.ReadObject<StoredData>();
+                currentTraps = storedData.trapData;
             }
             catch
             {
-                Puts("Couldn't load BoobyTrap data, creating new datafile");
                 storedData = new StoredData();
             }
-            BoobyTrapData.Settings.NullValueHandling = NullValueHandling.Include;
-
-            foreach (var box in storedData.currentTraps)
-                currentTraps[box.ID] = box;
         }
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Booby Trap data class /////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        class bTraps
+        class StoredData
         {
-            public uint ID;
-            public string Name;
-            public int Trap;
-            public Vector3 Position;
-            public string TrapOwner;
-
-            public bTraps()
-            {
-
-            }
-            public bTraps(uint id, string name, int trapnum, Vector3 pos, string trapowner)
-            {
-                ID = id;
-                Name = name;
-                Trap = trapnum;
-                Position = pos;
-                TrapOwner = trapowner;
-            }
+            public Dictionary<uint, TrapInfo> trapData = new Dictionary<uint, TrapInfo>();
         }
         private class UnityVector3Converter : JsonConverter
         {
@@ -368,796 +1110,36 @@ namespace Oxide.Plugins
             {
                 return objectType == typeof(Vector3);
             }
-        } // borrowed from ZoneManager
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Booby Trap core functions /////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        private bool randomNumber(int chance)
-        {
-            int number1 = UnityEngine.Random.Range(1, chance);
-            int number2 = UnityEngine.Random.Range(1, chance);
-            if (number1 == number2)
-                return true;
-            return false;
         }
-        private void processDrop(SupplyDrop drop)
+        #endregion
+
+        #region Messaging
+        private string msg(string key, string playerid = null) => lang.GetMessage(key, this, playerid);
+        Dictionary<string, string> Messages = new Dictionary<string, string>()
         {
-            bool proceed = randomNumber(airdropChance);
-            if (!proceed) return;
-            var lootDrop = drop.GetComponent<LootContainer>();
-            assignTraps(drop);
-        }
-        private void processLoot(LootContainer container)
-        {
-            bool proceed = randomNumber(lootChance);
-            if (!proceed) return;
-            assignTraps(container);
-        }
-        private void assignTraps(LootContainer drop)
-        {
-            uint boxID = drop.net.ID;
-            int randomTrap = randomTrapCheck();
-
-            bTraps trapInfo;
-            if (!tempTraps.TryGetValue(boxID, out trapInfo))
-                trapInfo = new bTraps { ID = boxID };
-            trapInfo.Position = drop.transform.position;
-            trapInfo.Name = drop.panelName;
-            trapInfo.Trap = randomTrap;
-            trapInfo.TrapOwner = "boobytraps";
-
-            tempTraps[boxID] = trapInfo;
-            var trapName = convertToName(trapInfo.Trap.ToString());
-            Puts("Random trap set at " + drop.transform.position + " using trap: " + trapName);
-        }
-        private int randomTrapCheck()
-        {
-            int num = UnityEngine.Random.Range(1, 8);
-            switch (num)
-            {
-                case 1:
-                    if (grenadeTraps)
-                        return 1;
-                    break;
-                case 2:
-                    if (beancanTraps)
-                        return 2;
-                    break;
-                case 3:
-                    if (explosiveTraps)
-                        return 3;
-                    break;
-                case 4:
-                    if (mineTraps)
-                        return 4;
-                    break;
-                case 5:
-                    if (bearTraps)
-                        return 5;
-                    break;
-                case 6:
-                    if ((radiationTraps) && (plugins.Exists("ZoneManager")))
-                        return 6;
-                    break;
-                case 7:
-                    if (shockTraps)
-                        return 7;
-                    break;
-                case 8:
-                    if (fireTraps)
-                        return 8;
-                    break;                    
-            }
-            int newNum = randomTrapCheck();
-            return newNum;
-        }
-        private void playerTraps(BasePlayer player, int trap)
-        {
-            var box = findBox(player);
-            if (box != null)
-            {
-                if (currentTraps.ContainsKey(box.net.ID))
-                {
-                    SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("alreadyTrapped", this, player.UserIDString));
-                    return;
-                }
-                var name = convertToName(trap.ToString());
-                if (canBoobyTrapAdmin(player))
-                {
-                    addTrap(player, box, trap);
-                    return;
-                }
-                if (useOwners)
-                {
-                    var owner = box.OwnerID;
-                    if (owner == 0 || owner == player.userID)
-                    {
-                        chargeTraps(player, box, trap);
-                        return;
-                    }
-                    if (owner != player.userID)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("notYourBox", this, player.UserIDString));
-                        return;
-                    }
-                }
-                if (buildingPriv)
-                {
-                    if (!player.CanBuild())
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noPrivs", this, player.UserIDString));
-                        return;
-                    }
-                }
-                chargeTraps(player, box, trap);
-                return;
-            }
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noBox", this, player.UserIDString));
-        }
-        private void chargeTraps(BasePlayer player, StorageContainer box, int trap)
-        {
-            if (!(box.panelName == "largewoodbox" || box.panelName == "smallwoodbox" || box.panelName == "smallstash" || box.panelName == "generic")) return;
-
-            int invGrenades = player.inventory.GetAmount(-1308622549);
-            int invBeancans = player.inventory.GetAmount(384204160);
-            int invExplosives = player.inventory.GetAmount(498591726);
-            int invLandmines = player.inventory.GetAmount(255101535);
-            int invBeartraps = player.inventory.GetAmount(1046072789);
-            int invLowgrade = player.inventory.GetAmount(28178745);
-            int invCrudeoil = player.inventory.GetAmount(1983936587);
-            int invComputer = player.inventory.GetAmount(1490499512);            
-
-            if (canBoobyTrapAdmin(player))
-            {                
-                addTrap(player, box, trap);
-                return;
-            }
-
-            switch (trap)
-            {
-                case 1:
-                    if (invGrenades >= grenadeAmount)
-                    {
-                        player.inventory.Take(null, -1308622549, grenadeAmount);
-                        addTrap(player, box, trap);
-                    }
-                    else SendReply(player, string.Format(lang.GetMessage("needGrenades", this, player.UserIDString), grenadeAmount));
-                    break;
-                case 2:
-                    if (invBeancans >= beancanAmount)
-                    {
-                        player.inventory.Take(null, 384204160, beancanAmount);
-                        addTrap(player, box, trap);                        
-                    }
-                    else SendReply(player, string.Format(lang.GetMessage("needBeancans", this, player.UserIDString), beancanAmount));
-                    break;
-                case 3:
-                    if (invExplosives >= explosiveAmount)
-                    {
-                        player.inventory.Take(null, 498591726, explosiveAmount);
-                        addTrap(player, box, trap);
-                    }
-                    else SendReply(player, string.Format(lang.GetMessage("needExplosives", this, player.UserIDString), explosiveAmount));
-                    break;
-                case 4:
-                    if (invLandmines >= mineAmount)
-                    {
-                        player.inventory.Take(null, 255101535, mineAmount);
-                        addTrap(player, box, trap);
-                    }
-                    else SendReply(player, string.Format(lang.GetMessage("needMines", this, player.UserIDString), mineAmount));
-                    break;
-                case 5:
-                    if (invBeartraps >= beartrapAmount)
-                    {
-                        player.inventory.Take(null, 1046072789, beartrapAmount);
-                        addTrap(player, box, trap);
-                    }
-                    else SendReply(player, string.Format(lang.GetMessage("needBeartraps", this, player.UserIDString), beartrapAmount));
-                    break;
-                case 6:
-                    addTrap(player, box, trap);
-                    break;
-                case 7:
-                    if (invComputer >= computerAmount)
-                    {
-                        player.inventory.Take(null, 1490499512, computerAmount);
-                        addTrap(player, box, trap);
-                    }
-                    else SendReply(player, string.Format(lang.GetMessage("needComputer", this, player.UserIDString), computerAmount));
-                    break;
-                case 8:
-                    if (invLowgrade >= lowgradeAmount && invCrudeoil >= lowgradeAmount)
-                    {
-                        player.inventory.Take(null, 1983936587, crudeoilAmount);
-                        player.inventory.Take(null, 28178745, lowgradeAmount);
-                        addTrap(player, box, trap);
-                    }
-                    else SendReply(player, string.Format(lang.GetMessage("needFire", this, player.UserIDString), lowgradeAmount, crudeoilAmount));
-                    break;
-                default:
-                    return;                 
-            }
-        }
-        private void addTrap(BasePlayer player, StorageContainer box, int trap)
-        {
-            uint boxID = box.net.ID;
-            var trapName = convertToName(trap.ToString());
-
-            bTraps trapInfo;
-            if (!currentTraps.TryGetValue(boxID, out trapInfo))
-                trapInfo = new bTraps { ID = boxID };
-            trapInfo.Position = box.transform.position;
-            trapInfo.Name = box.panelName;
-            trapInfo.Trap = trap;
-            trapInfo.TrapOwner = player.userID.ToString();
-
-            if (!(trapInfo.Name == "generic"))
-            {
-                currentTraps[boxID] = trapInfo;
-                storedData.currentTraps.Add(trapInfo);
-                SaveData();
-            }
-            else tempTraps[boxID] = trapInfo;
-
-            SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("boxTrapped", this, player.UserIDString), trapName));
-        }
-        private void checkActivateTrap(StorageContainer box)
-        {
-            uint boxID = box.net.ID;
-            Vector3 targetPos = box.transform.position;
-
-            if (currentTraps.ContainsKey(boxID) || tempTraps.ContainsKey(boxID))
-            {
-                bTraps trapinfo;
-                if (currentTraps.TryGetValue(boxID, out trapinfo) || tempTraps.TryGetValue(boxID, out trapinfo))
-                {
-                    int trap = trapinfo.Trap;
-                    if (trap == 0 || trap >= 9) return;
-                    switch (trap)
-                    {
-                        case 1:
-                            grenadeTrap(targetPos);
-                            break;
-                        case 2:
-                            beancanTrap(targetPos);
-                            break;
-                        case 3:
-                            explosiveTrap(targetPos);
-                            break;
-                        case 4:
-                            landmineTrap(targetPos);
-                            break;
-                        case 5:
-                            beartrapTrap(targetPos);
-                            break;
-                        case 6:
-                            radiationTrap(targetPos);
-                            break;
-                        case 7:
-                            shockTrap(targetPos);
-                            break;
-                        case 8:
-                            fireTrap(targetPos);
-                            break;
-
-                        default:
-                            Puts("trap not found");
-                            return;
-                    }                    
-                }
-                removeTrap(boxID);                
-            }
-        }
-        object rayBox(Vector3 Pos, Vector3 Aim)
-        {
-            var hits = Physics.RaycastAll(Pos, Aim);
-            float distance = 1000f;
-            object target = null;
-
-            foreach (var hit in hits)
-            {
-                if (hit.collider.GetComponentInParent<StorageContainer>() != null)
-                {
-                    if (hit.distance < distance)
-                    {
-                        distance = hit.distance;
-                        target = hit.collider.GetComponentInParent<StorageContainer>();
-                    }
-                }
-                else if (hit.collider.GetComponentInParent<BasePlayer>() != null)
-                {
-                    if (hit.distance < distance)
-                    {
-                        distance = hit.distance;
-                        target = hit.collider.GetComponentInParent<BasePlayer>();
-                    }
-                }
-            }
-            return target;
-        }
-        private StorageContainer findBox(BasePlayer player)
-        {
-            var input = serverinput.GetValue(player) as InputState;
-            var currentRot = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
-            Vector3 eyesAdjust = new Vector3(0f, 1.5f, 0f);
-
-            var rayResult = rayBox(player.transform.position + eyesAdjust, currentRot);
-            if (rayResult is StorageContainer)
-            {
-                var box = rayResult as StorageContainer;
-                return box;
-            }
-            return null;
-        }
-        private Vector3 getRandomPosCircle(Vector3 pos, int ang, float radius)
-        {            
-            Vector3 randPos;
-            randPos.x = pos.x + radius * Mathf.Sin(ang * Mathf.Deg2Rad);
-            randPos.z = pos.z + radius * Mathf.Cos(ang * Mathf.Deg2Rad);
-            randPos.y = pos.y;
-            var targetPos = getGroundPosition(randPos);
-            return targetPos;
-        }
-        private string convertToName(string num)
-        {
-            var trapnum = num.ToString();
-            switch (trapnum.ToString())
-            {
-                case "1":
-                    trapnum = "Grenades";
-                    break;
-                case "2":
-                    trapnum = "Beancan Grenades";
-                    break;
-                case "3":
-                    trapnum = "Explosives";
-                    break;
-                case "4":
-                    trapnum = "Landmines";
-                    break;
-                case "5":
-                    trapnum = "Beartraps";
-                    break;
-                case "6":
-                    trapnum = "Radiation";
-                    break;
-                case "7":
-                    trapnum = "Electricity";
-                    break;
-                case "8":
-                    trapnum = "Fire";
-                    break;
-
-                default:
-                    break;
-            }
-            return trapnum;
-        }
-        static Vector3 getGroundPosition(Vector3 sourcePos) // credit Wulf & Nogrod
-        {
-            RaycastHit hitInfo;
-
-            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, GROUND_MASKS))
-            {
-                sourcePos.y = hitInfo.point.y;
-            }
-            sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
-            return sourcePos;
-        }       
-       
-        private bool removeTrap(uint id)
-        {
-            if (currentTraps.ContainsKey(id))
-            {
-                bTraps trapInfo;
-                currentTraps.TryGetValue(id, out trapInfo);
-                storedData.currentTraps.Remove(trapInfo);
-                currentTraps.Remove(id);
-                SaveData();
-                return true;
-            }
-            else if (tempTraps.ContainsKey(id))
-            {
-                tempTraps.Remove(id);
-                return true;
-            }
-            return false;
-        }
-        private void removeAllZones()
-        {
-            foreach (var radtrap in currentRadTraps)
-            {
-                ZoneManager.Call("EraseZone", radtrap);
-                Puts("Removed rad trap " + radtrap);
-            }
-        }       
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Traps /////////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        Rust.DamageType explodeDamage = Rust.DamageType.Explosion;
-        Rust.DamageType flameDamage = Rust.DamageType.Heat;
-        Rust.DamageType elecDamage = Rust.DamageType.ElectricShock;
-        private void grenadeTrap(Vector3 pos)
-        {
-            timer.Once(0.1f, () => Effect.server.Run("assets/prefabs/weapons/f1 grenade/effects/bounce.prefab", pos));
-            timer.Once(trapCountdown, () =>
-            {
-                Effect.server.Run("assets/prefabs/weapons/f1 grenade/effects/f1grenade_explosion.prefab", pos);
-                dealDamage(pos, grenadeDamage, grenadeRadius, explodeDamage);
-            });
-        }
-        private void explosiveTrap(Vector3 pos)
-        {
-            timer.Once(0.1f, () => Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", pos));
-            timer.Once(trapCountdown, () =>
-            {
-                Effect.server.Run("assets/prefabs/tools/c4/effects/c4_explosion.prefab", pos);
-                dealDamage(pos, explosiveDamage, explosiveRadius, explodeDamage);
-            });
-        }
-        private void beancanTrap(Vector3 pos)
-        {
-            timer.Once(0.1f, () => Effect.server.Run("assets/prefabs/weapons/beancan grenade/effects/bounce.prefab", pos));
-            timer.Once(trapCountdown, () =>
-            {
-                Effect.server.Run("assets/prefabs/weapons/beancan grenade/effects/beancan_grenade_explosion.prefab", pos);
-                dealDamage(pos, beancanDamage, beancanRadius, explodeDamage);
-            });
-        }
-        private void radiationTrap(Vector3 pos)
-        {
-            timer.Once(0.1f, () => Effect.server.Run("assets/bundled/prefabs/fx/smoke/generator_smoke.prefab", pos));
-            timer.Once(trapCountdown, () =>
-            {
-                int randomNum = UnityEngine.Random.Range(1, 1000);
-                string randID = ("boobytraps_" + randomNum);
-
-                string[] zoneArgs = new string[4]; ;
-                zoneArgs[0] = "radius";
-                zoneArgs[1] = radiationRadius.ToString();
-                zoneArgs[2] = "radiation";
-                zoneArgs[3] = radiationAmount.ToString();
-
-                if (pos == null)
-                    return;
-
-                ZoneManager?.Call("CreateOrUpdateZone", randID, zoneArgs, pos);
-                currentRadTraps.Add(randID);
-
-                timer.Once(radiationDestroy, () =>
-                {
-                    ZoneManager?.Call("EraseZone", randID);
-                    currentRadTraps.Remove(randID);
-                    Puts("Radiation trap zone " + randID + " removed.");
-                });
-            });
-        }
-        private void landmineTrap(Vector3 pos)
-        {
-            for (int i = 0; i < mineAmount; i++)
-            {
-                int ang = i * 32;
-                Vector3 targetPos = getRandomPosCircle(pos, ang, mineRadius);
-                BaseEntity entity = GameManager.server.CreateEntity("assets/prefabs/deployable/landmine/landmine.prefab", targetPos, new Quaternion(), true);
-                entity.Spawn();
-            }
-        }
-        private void beartrapTrap(Vector3 pos)
-        {
-            for (int i = 0; i < beartrapAmount; i++)
-            {
-                int ang = i * 32;
-                Vector3 targetPos = getRandomPosCircle(pos, ang, beartrapRadius);
-                BaseEntity entity = GameManager.server.CreateEntity("assets/prefabs/deployable/bear trap/beartrap.prefab", targetPos, new Quaternion(), true);
-                entity.Spawn();
-            }
-        }
-        private void shockTrap(Vector3 pos)
-        {
-            timer.Once(0.1f, () => Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", pos));
-            timer.Once(trapCountdown, () =>
-            {
-                Effect.server.Run("assets/bundled/prefabs/fx/headshot.prefab", pos);
-                dealDamage(pos, shockDamage, shockRadius, elecDamage);
-            });            
-        }
-        private void fireTrap(Vector3 pos)
-        {
-            timer.Once(0.1f, () => Effect.server.Run("assets/prefabs/weapons/beancan grenade/effects/bounce.prefab", pos));
-            timer.Once(trapCountdown, () =>
-            {
-                Effect.server.Run("assets/bundled/prefabs/fx/fire/fire_v3.prefab", pos);
-                timer.Repeat(0.5f, 16, () =>
-                {
-                    Effect.server.Run("assets/bundled/prefabs/fx/impacts/additive/fire.prefab", pos);
-                    dealDamage(pos, fireDamage, fireRadius, flameDamage);
-                });
-            });
-        }
-
-        private void dealDamage(Vector3 deathPos, float damage, float radius, Rust.DamageType type)
-        {
-            List<BaseCombatEntity> entitiesClose = new List<BaseCombatEntity>();
-            List<BaseCombatEntity> entitiesNear = new List<BaseCombatEntity>();
-            List<BaseCombatEntity> entitiesFar = new List<BaseCombatEntity>();
-            Vis.Entities(deathPos, radius / 3, entitiesClose);
-            Vis.Entities(deathPos, radius / 2, entitiesNear);
-            Vis.Entities(deathPos, radius, entitiesFar);
-
-            foreach (BaseCombatEntity entity in entitiesClose)
-            {
-                entity.Hurt(damage, type, null, true);
-                notifyPlayer(entity);
-            }
-
-            foreach (BaseCombatEntity entity in entitiesNear)
-            {
-                if (entitiesClose.Contains(entity)) return;
-                entity.Hurt(damage / 2, type, null, true);
-                notifyPlayer(entity);
-            }
-
-            foreach (BaseCombatEntity entity in entitiesFar)
-            {
-                if (entitiesClose.Contains(entity) || entitiesNear.Contains(entity)) return;
-                entity.Hurt(damage / 4, type, null, true);
-                notifyPlayer(entity);
-            }
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Permission/Auth Check /////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        bool canBoobyTrapAdmin(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "boobytraps.admin")) return true;
-            else if (isAuth(player)) return true;
-            return false;
-        }
-        bool canBoobyTrapDeployable(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "boobytraps.deployables")) return true;
-            else if (isAuth(player)) return true;
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noPerms", this, player.UserIDString));
-            return false;
-        }
-        bool canBoobyTrapExplosives(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "boobytraps.explosives")) return true;
-            else if (isAuth(player)) return true;
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noPerms", this, player.UserIDString));
-            return false;
-        }
-        bool canBoobyTrapElements(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "boobytraps.elements")) return true;
-            else if (isAuth(player)) return true;
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noPerms", this, player.UserIDString));
-            return false;
-        }
-        bool isAuth(BasePlayer player)
-        {
-            if (player.net.connection.authLevel == 2) return true;            
-            return false;
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Chat Commands /////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-        private void notifyPlayer(BaseEntity entity)
-        {
-            if (entity is BasePlayer)
-            {
-                var player = (BasePlayer)entity;
-                SendReply(player, lang.GetMessage("activatedTrap", this, player.UserIDString));
-            }
-        }
-        private void incorrectSyntax(BasePlayer player)
-        {
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("badSyntax", this, player.UserIDString));
-            SendReply(player, lang.GetMessage("availableTraps", this, player.UserIDString));
-            if (canBoobyTrapExplosives(player) || (canBoobyTrapAdmin(player)))
-            {
-                SendReply(player, lang.GetMessage("explos", this, player.UserIDString));
-            }
-            if (canBoobyTrapDeployable(player) || (canBoobyTrapAdmin(player)))
-            {
-                SendReply(player, lang.GetMessage("deplo", this, player.UserIDString));
-            }
-            if (canBoobyTrapElements(player) || (canBoobyTrapAdmin(player)))
-            {
-                SendReply(player, lang.GetMessage("elements", this, player.UserIDString));
-            }
-            if (canBoobyTrapAdmin(player))
-            SendReply(player, lang.GetMessage("rads", this, player.UserIDString));
-        }
-
-        [ChatCommand("settrap")]
-        private void chatSetTrap(BasePlayer player, string command, string[] args)
-        {
-            if (!((canBoobyTrapAdmin(player)) || (canBoobyTrapDeployable(player)) || (canBoobyTrapElements(player)) || (canBoobyTrapExplosives(player)))) return;
-            if ((args.Length == 0) || (args.Length >= 2))
-            {
-                incorrectSyntax(player);
-                return;
-            }
-            switch (args[0].ToLower())
-            {
-                case "grenade":
-                    if (!grenadeTraps)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disGren", this, player.UserIDString));
-                        return;
-                    }
-                    if (canBoobyTrapExplosives(player))
-                        playerTraps(player, 1);
-                    break;
-                case "beancan":
-                    if (!beancanTraps)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disBeancan", this, player.UserIDString));
-                        return;
-                    }
-                    if (canBoobyTrapExplosives(player))
-                        playerTraps(player, 2);
-                    break;
-                case "explosive":
-                    if (!explosiveTraps)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disExplosive", this, player.UserIDString));
-                        return;
-                    }
-                    if (canBoobyTrapExplosives(player))
-                        playerTraps(player, 3);
-                    break;
-                case "landmine":
-                    if (!mineTraps)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disMine", this, player.UserIDString));
-                        return;
-                    }
-                    if (canBoobyTrapDeployable(player))
-                        playerTraps(player, 4);
-                    break;
-                case "beartrap":
-                    if (!bearTraps)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disBear", this, player.UserIDString));
-
-                        return;
-                    }
-                    if (canBoobyTrapDeployable(player))
-                        playerTraps(player, 5);
-                    break;
-                case "radiation":
-                    if (!radiationTraps || !(plugins.Exists("ZoneManager")))
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disRads", this, player.UserIDString));
-                        return;
-                    }
-                    if (canBoobyTrapAdmin(player))
-                    {
-                        if (plugins.Exists("ZoneManager"))
-                            playerTraps(player, 6);
-                        else SendReply(player, lang.GetMessage("noZoneManager", this, player.UserIDString));
-                    }
-                    break;
-                case "shock":
-                    if (!shockTraps)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disShock", this, player.UserIDString));
-                        return;
-                    }
-                    if (canBoobyTrapElements(player))
-                        playerTraps(player, 7);
-                    break;
-                case "fire":
-                    if (!fireTraps)
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("disFire", this, player.UserIDString));
-                        return;
-                    }
-                    if (canBoobyTrapElements(player))
-                        playerTraps(player, 8);
-                    break;
-
-                default:
-                    incorrectSyntax(player);
-                return;
-            }
-        }        
-
-        [ChatCommand("removetrap")]
-        private void chatRemoveTrap(BasePlayer player, string command, string[] args)
-        {
-            if (!canBoobyTrapAdmin(player)) return;
-            var box = findBox(player);
-            if (box != null)
-            {
-                if (removeTrap(box.net.ID))
-                {
-                    SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("removedTrap", this, player.UserIDString));
-                    return;
-                }
-
-                SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noTraps", this, player.UserIDString));
-                return;
-            }
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noBox", this, player.UserIDString));
-        }
-
-        [ChatCommand("listtraps")]
-        private void chatListTrap(BasePlayer player, string command, string[] args)
-        {
-            if (!isAuth(player)) return;
-
-            Puts("---- Storagebox trap list ----");
-            if (currentTraps.Count == 0) Puts("none");
-            foreach (var trap in storedData.currentTraps)
-            {
-                var type = convertToName(trap.Trap.ToString());
-                Puts("ID - " + trap.ID + ", Position - " + trap.Position + ", Owner - " + trap.TrapOwner + ", Type - " + type);
-            }
-
-            if (boobyTrapAirdrops || boobyTrapLoot)
-            {
-                Puts("--- Despawnable lootbox trap list ---");
-                if (tempTraps.Count == 0) Puts("none");
-                foreach (var trap in tempTraps)
-                {
-                    bTraps info;
-                    var key = trap.Key;                    
-                    tempTraps.TryGetValue(key, out info);
-                    var type = convertToName(info.Trap.ToString());
-                    Puts("ID - " + info.ID + ", Position - " + info.Position + ", Owner - " + info.TrapOwner + ", Type - " + type);
-                }
-            }
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("checkConsole", this, player.UserIDString));
-        }
-
-        [ChatCommand("checktrap")]
-        private void chatCheckTrap(BasePlayer player, string command, string[] args)
-        {
-            if (!canBoobyTrapAdmin(player)) return;
-            var box = findBox(player);
-            if (box != null)
-            {
-                uint boxID = box.net.ID;
-                Vector3 targetPos = box.transform.position;
-
-                if (currentTraps.ContainsKey(boxID))
-                {
-                    bTraps trapinfo;
-                    if (currentTraps.TryGetValue(boxID, out trapinfo))
-                    {
-                        var trapnum = convertToName(currentTraps[box.net.ID].Trap.ToString());
-                        SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("trappedWith", this, player.UserIDString), trapnum));
-                        return;
-                    }
-                }
-                SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("boxClean", this, player.UserIDString));
-                return;
-            }
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noBox", this, player.UserIDString));
-        }
-
-        [ChatCommand("erasealltraps")]
-        private void chatEraseAllTrap(BasePlayer player, string command, string[] args)
-        {
-            if (!isAuth(player)) return;
-
-            removeAllZones();
-            currentRadTraps.Clear();
-            tempTraps.Clear();
-            storedData.currentTraps.Clear();
-            SaveData();
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("eraseAll", this, player.UserIDString));
-        }
+            {"insufficientResources", "<color=#939393>You have insufficient resources to purchase this trap!</color>" },
+            {"triggered","<color=#939393>You just triggered a </color><color=#00CC00>{0}</color> <color=#939393>trap!</color>" },
+            {"invalidEntity", "<color=#939393>You are not looking at a valid trap-able entity!</color>"},
+            {"buildBlocked","<color=#939393>You can not place/remove a trap while building blocked!</color>" },
+            {"notOwner", "<color=#939393>You must own the entity you wish to place/remove a trap on!</color>"},
+            {"hasTrap", "<color=#939393>This entity already has a trap placed on it!</color>"},
+            {"help1", "<color=#00CC00>-- {0}  v{1} --</color>\n<color=#939393>With this plugin you can set traps on a variety of objects.\nDoors : {2}\nStorage Containers : {3}\nLoot Containers : {4}\nSupply Drops : {5}</color>"},
+            {"help2", "<color=#00CC00>/trap cost <traptype></color><color=#939393> - Displays the cost to place this trap</color>\n<color=#00CC00>/trap set <traptype></color><color=#939393> - Sets a trap on the object you are looking at</color><color=#00CC00>\n/trap remove</color><color=#939393> - Removes a trap set by yourself on the object you are looking at</color><color=#00CC00>\n/trap check</color><color=#939393> - Check the object your are looking at for traps set by yourself</color>"},
+            {"help3", "<color=#00CC00>-- Available Types --</color><color=#939393>\nBeancan, Grenade, Explosive, Landmine, Beartrap, Radiation, Fire, Shock</color>"},
+            {"help4", "<color=#00CC00>/trap removeall</color><color=#939393>> - Removes all active traps on the map</color><color=#00CC00>\n/trap list</color><color=#939393> - Lists all traps in console</color>"},
+            {"help5", "<color=#00CC00>-- Available Types -- </color>\n"},
+            {"invalidTrap", "<color=#939393>Invalid trap type selected</color>"},
+            {"noTrap", "<color=#939393>The object you are looking at does not have a trap on it!</color>"},
+            {"removeSuccess", "<color=#939393>You have successfully removed the trap from this object!</color>"},
+            {"trapInfo", "<color=#939393>This object is trapped with a </color><color=#00CC00>{0}</color><color=#939393> trap!</color>"},
+            {"noPerm", "<color=#939393>You do not have permission to use this command!</color>"},
+            {"removedAll", "<color=#939393>You have successfully removed all traps!</color>"},
+            {"currentTraps", "-- There are currently {0} active traps --\n[Entity ID] - [Trap Type] - [Location]"},
+            {"conHelp", "trap removeall - Removes all active traps on the map\ntrap list - Lists all traps"},
+            {"trapSet", "<color=#939393>You have successfully set a </color><color=#00CC00>{0} </color><color=#939393>trap on this object!</color>" },
+            {"getCosts", "<color=#939393>Costs to set a </color><color=#00CC00>{0}</color> <color=#939393>trap:</color>" },
+            {"notEnabled", "<color=#939393>This trap is not enabled!</color>" }
+        };
+        #endregion
     }
 }

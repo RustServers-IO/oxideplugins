@@ -12,7 +12,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Kill Feed", "Tuntenfisch", "1.15.5", ResourceId = 1433)]
+    [Info("Kill Feed", "Tuntenfisch", "1.15.6", ResourceId = 1433)]
     [Description("Displays a basic Kill Feed on screen!")]
     public class KillFeed : RustPlugin
     {
@@ -352,6 +352,7 @@ namespace Oxide.Plugins
                     { "explosive.satchel", "0/0b/Satchel_Charge_icon.png" },
                     { "explosive.timed", "6/6c/Timed_Explosive_Charge_icon.png" },
                     { "flamethrower", "5/55/Flame_Thrower_icon.png" },
+                    { "flameturret", "http://i.imgur.com/bi5VmCd.png" },
                     { "gates.external.high.stone", "8/85/High_External_Stone_Gate_icon.png" },
                     { "gates.external.high.wood", "5/53/High_External_Wooden_Gate_icon.png" },
                     { "grenade.beancan", "b/be/Beancan_Grenade_icon.png" },
@@ -369,6 +370,7 @@ namespace Oxide.Plugins
                     { "pickaxe", "8/86/Pick_Axe_icon.png" },
                     { "pistol.eoka", "b/b5/Eoka_Pistol_icon.png" },
                     { "pistol.m92", "4/43/M92_Pistol_icon.png" },
+                    { "pistol.python", "d/d4/Python_Revolver_icon.png" },
                     { "pistol.revolver", "5/58/Revolver_icon.png" },
                     { "pistol.semiauto", "6/6b/Semi-Automatic_Pistol_icon.png" },
                     { "rifle.ak", "d/d1/Assault_Rifle_icon.png" },
@@ -1370,6 +1372,11 @@ namespace Oxide.Plugins
                         else if (info.WeaponPrefab.ShortPrefabName.Equals("explosive.satchel.deployed")) weapon = "explosive.satchel";
                         else if (info.WeaponPrefab.ShortPrefabName.Equals("explosive.timed.deployed")) weapon = "explosive.timed";
                         else if (info.WeaponPrefab.ShortPrefabName.Equals("flamethrower.entity")) weapon = "flamethrower";
+                        else if (info.WeaponPrefab.ShortPrefabName.Equals("flameturret.deployed"))
+                        {
+                            weapon = "flameturret";
+                            selfInflicted = true;
+                        }
                         else if (info.WeaponPrefab.ShortPrefabName.Equals("grenade.beancan.deployed")) weapon = "grenade.beancan";
                         else if (info.WeaponPrefab.ShortPrefabName.Equals("grenade.f1.deployed")) weapon = "grenade.f1";
                         else if (info.WeaponPrefab.ShortPrefabName.Equals("hammer_salvaged.entity")) weapon = "hammer.salvaged";
@@ -1643,7 +1650,7 @@ namespace Oxide.Plugins
                     {
                         new CuiRawImageComponent
                         {
-                            Sprite = "assets/content/textures/generic/fulltransparent.tga",
+                            Sprite = "assets/content/textures/generic/fulltransparent.tga"
                         },
                         new CuiRectTransformComponent
                         {

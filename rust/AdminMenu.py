@@ -12,7 +12,7 @@ class AdminMenu:
     def __init__(self):
         self.Title = "Admin Menu"
         self.Author = "FlamingMojo"
-        self.Version = V(2,0,6)
+        self.Version = V(2,0,7)
         self.HasConfig = True
         self.ResourceId = 1986
 
@@ -43,7 +43,7 @@ class AdminMenu:
 
         self.Default = {
             'SETTINGS':{
-                'Version' : '2.0.6',
+                'Version' : '2.0.7',
                 'ConnectedPlugins' : ('AdminMenu',
                                       'BetterChat',
                                       'HeliControl',
@@ -767,7 +767,7 @@ class AdminMenu:
         PlayerPage = 'page0'
         SelectedCmdCat = None
         try:
-            for arg in args.ArgsStr.split(' '):
+            for arg in args.Args:
                 if arg in self.Config['SETTINGS']['ConnectedPlugins']:
                     SelectedPlugin = arg
                 elif 'page' in arg:
@@ -1088,20 +1088,20 @@ class AdminMenu:
         targetPlyID = ''
         targetPlyName = ''
         for player in BasePlayer.activePlayerList:
-            if player.UserIDString in args.ArgsStr:
+            if player.UserIDString in args.Args:
                 targetPly = player
                 targetPlyName = player.displayName
                 targetPlyID = player.UserIDString
         for player in BasePlayer.sleepingPlayerList:
-            if player.UserIDString in args.ArgsStr:
+            if player.UserIDString in args.Args:
                 targetPly = player
                 targetPlyName = player.displayName
                 targetPlyID = player.UserIDString
         
-        if 'kick' in args.ArgsStr:
+        if 'kick' in args.Args:
             cmd = 'kick'
             length = len(self.Config['REASONS']['KICK'])*0.025
-        elif 'ban' in args.ArgsStr:
+        elif 'ban' in args.Args:
             cmd = 'ban'
             length = len(self.Config['REASONS']['BAN'])*0.025
         else:
@@ -1171,19 +1171,19 @@ class AdminMenu:
             print 'Economics is not installed'
         else:
             for player in BasePlayer.activePlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetplyID = player.UserIDString
                     targetply = player
                     targetplyName = player.displayName
             for player in BasePlayer.sleepingPlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetplyID = player.UserIDString
                     targetply = player
                     targetplyName = player.displayName
             callingply = self.getCallingPlayer(args)
             Bal = False
             amount = 0
-            for arg in args.ArgsStr.split(' '):
+            for arg in args.Args:
                 try:
                     amount = int(arg)
                 except ValueError:
@@ -1254,7 +1254,7 @@ class AdminMenu:
         callingplyName = self.getCallingPlayerName(args)
         if permission.UserHasPermission(callingplyID,'adminmenu.allow.kill')or permission.UserHasPermission(callingplyID, 'adminmenu.allow.all'):
             try:
-                targetplyID = args.ArgsStr.split(' ')[0]
+                targetplyID = args.Args[0]
                 for player in BasePlayer.activePlayerList:
                     if player.UserIDString == targetplyID:
                         player.Die()
@@ -1274,11 +1274,11 @@ class AdminMenu:
             SR = plugins.Find('ServerRewards')
             targetplyID = None
             for player in BasePlayer.activePlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetplyID = player.UserIDString
                     targetply = player
             for player in BasePlayer.sleepingPlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetplyID = player.UserIDString
                     targetply = player
             if targetplyID:
@@ -1301,11 +1301,11 @@ class AdminMenu:
             targetplyID = None
             targetply = None
             for player in BasePlayer.activePlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetplyID = player.UserIDString
                     targetply = player
             for player in BasePlayer.sleepingPlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetplyID = player.UserIDString
                     targetply = player
             if targetplyID:
@@ -1327,11 +1327,11 @@ class AdminMenu:
             GodMode = plugins.Find('Godmode')
             targetply = None
             for player in BasePlayer.activePlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetply = player
                     
             for player in BasePlayer.sleepingPlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetply = player
             if targetply:
                 playerName = targetply.displayName
@@ -1351,10 +1351,10 @@ class AdminMenu:
             GodMode = plugins.Find('Godmode')
             targetply = None
             for player in BasePlayer.activePlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetply = player
             for player in BasePlayer.sleepingPlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetply = player
             if targetply:
                 playerName = targetply.displayName
@@ -1370,7 +1370,7 @@ class AdminMenu:
         callingplyID = self.getCallingPlayerID(args)
         callingplyName = self.getCallingPlayerName(args)
         try:
-            targetplyID = args.ArgsStr.split(' ')[0]
+            targetplyID = args.Args[0]
         except:
             targetplyID = '000000000'
             print '[AdminMenu] Failed to tp - Invalid player ID'
@@ -1390,7 +1390,7 @@ class AdminMenu:
         callingplyID = self.getCallingPlayerID(args)
         callingplyName = self.getCallingPlayerName(args)
         try:
-            targetplyID = args.ArgsStr.split(' ')[0]
+            targetplyID = args.Args[0]
         except:
             targetplyID = '000000000'
             print ' [AdminMenu]Failed to tp - Invalid player ID'
@@ -1410,14 +1410,14 @@ class AdminMenu:
         callingplyID = self.getCallingPlayerID(args)
         callingplyName = self.getCallingPlayerName(args)
         for player in BasePlayer.activePlayerList:
-            if player.UserIDString in args.ArgsStr:
+            if player.UserIDString in args.Args:
                 targetplyID = player.UserIDString
                 targetplyName = player.displayName
         for player in BasePlayer.sleepingPlayerList:
-            if player.UserIDString in args.ArgsStr:
+            if player.UserIDString in args.Args:
                 targetplyID = player.UserIDString
         try:
-            reason = args.ArgsStr.split('"')[1]
+            reason = args.Args[1]
         except KeyError:
             reason = None
         if permission.UserHasPermission(callingplyID, 'adminmenu.allow.kick')or permission.UserHasPermission(callingplyID, 'adminmenu.allow.all'):
@@ -1440,14 +1440,14 @@ class AdminMenu:
         callingplyID = self.getCallingPlayerID(args)
         callingplyName = self.getCallingPlayerName(args)
         for player in BasePlayer.activePlayerList:
-            if player.UserIDString in args.ArgsStr:
+            if player.UserIDString in args.Args:
                 targetplyID = player.UserIDString
                 targetplyName = player.displayName
         for player in BasePlayer.sleepingPlayerList:
-            if player.UserIDString in args.ArgsStr:
+            if player.UserIDString in args.Args:
                 targetplyID = player.UserIDString
         try:
-            reason = args.ArgsStr.split('"')[1]
+            reason = args.Args[1]
         except KeyError:
             reason = None
         if permission.UserHasPermission(callingplyID, 'adminmenu.allow.ban')or permission.UserHasPermission(callingplyID, 'adminmenu.allow.all'):
@@ -1605,7 +1605,7 @@ class AdminMenu:
             permpage = 'page0'
             page = 0
             group = 'default'
-            for arg in args.ArgsStr.split(' '):
+            for arg in args.Args:
                 if 'page' in arg:
                     permpage = arg
                     page = int(permpage.replace('page',''))
@@ -1734,16 +1734,16 @@ class AdminMenu:
             elements = Cui.CuiElementContainer()
             targetPly = None
             for player in BasePlayer.activePlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetPly = player
             for player in BasePlayer.sleepingPlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetPly = player
             if not targetPly:
                 return
             permpage = 'page0'
             page = 0
-            for arg in args.ArgsStr.split(' '):
+            for arg in args.Args:
                 if 'page' in arg:
                     permpage = arg
                     page = int(permpage.replace('page',''))
@@ -1878,7 +1878,7 @@ class AdminMenu:
             return
         if plugins.Exists('WeatherController'):
             WC = plugins.Find('WeatherController')
-            for arg in args.ArgsStr.split(' '):
+            for arg in args.Args:
                 if arg == 'clouds':
                     self.weathertoggle[0] = not self.weathertoggle[0]
                     WC.weather(callingply,"clouds",int(self.weathertoggle[0]))
@@ -1919,10 +1919,10 @@ class AdminMenu:
             elements = Cui.CuiElementContainer()
             targetPly = None
             for player in BasePlayer.activePlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetPly = player
             for player in BasePlayer.sleepingPlayerList:
-                if player.UserIDString in args.ArgsStr:
+                if player.UserIDString in args.Args:
                     targetPly = player
             if not targetPly:
                 return
@@ -1959,7 +1959,7 @@ class AdminMenu:
             singleitems = list(self.Config['SETTINGS']['Single Items'])
             manyitems = list(self.Config['SETTINGS']['Many Items'])
             for category in self.ItemList.keys():
-                if category in args.ArgsStr:
+                if category in args.Args:
                     i = 0
                     flip = False
                     for item in self.ItemList[category].keys():

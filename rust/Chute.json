@@ -1,0 +1,19 @@
+{
+    "name": "Chute",
+    "description": "Allowed Authorized Players to Parchute",
+    "author": "Colon Blow",
+    "version": "1.0.4",
+    "configuration": true,
+    "suggest": {
+        "FauxAdmin": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/chute.2279",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

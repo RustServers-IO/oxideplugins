@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ProtocolKickInfo", "Fujikura", "1.0.2", ResourceId = 2041)]
+    [Info("ProtocolKickInfo", "Fujikura", "1.0.3", ResourceId = 2041)]
     class ProtocolKickInfo : RustPlugin
     {
 		
@@ -58,7 +58,7 @@ namespace Oxide.Plugins
 				else
 					quitTimer[connection.userid]++;
 				Network.Net.sv.Kick(connection, lang.GetMessage("msgServerWrong", this, connection.userid.ToString()));
-				connection.protocol = (uint)serverProtocol;
+				//connection.protocol = (uint)serverProtocol;
 				NextTick(() => ServerMgr.Instance.connectionQueue.RemoveConnection(connection));
 			}
 			if (connection.protocol < serverProtocol)
@@ -86,7 +86,7 @@ namespace Oxide.Plugins
 				else
 					quitTimer[connection.userid]++;
 				Network.Net.sv.Kick(connection, lang.GetMessage("msgClientWrong", this, connection.userid.ToString()));
-				connection.protocol = (uint)serverProtocol;
+				//connection.protocol = (uint)serverProtocol;
 				NextTick(() => ServerMgr.Instance.connectionQueue.RemoveConnection(connection));
 			}
 		}

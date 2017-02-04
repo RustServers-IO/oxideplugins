@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lottery", "Sami37", "1.0.6", ResourceId = 2145)]
+    [Info("Lottery", "Sami37", "1.1.0", ResourceId = 2145)]
     internal class Lottery : RustPlugin
     {
         #region Economy Support
@@ -81,7 +81,7 @@ namespace Oxide.Plugins
         public Dictionary<ulong, playerinfo> Currentbet = new Dictionary<ulong, playerinfo>();
         private string container, containerwin, BackgroundUrl, BackgroundColor, WinBackgroundUrl, WinBackgroundColor;
         private DynamicConfigFile data;
-        private List<object> NPCID;
+        private List<object> NPCID = new List<object>();
         private double jackpot, SRMinBet, SRjackpot, MinBetjackpot;
         private int JackpotNumber, SRJackpotNumber, DefaultMaxRange, DefaultMinRange;
         public Dictionary<string, object> IndividualRates { get; private set; }
@@ -243,7 +243,11 @@ namespace Oxide.Plugins
                 {"MiniSRBet", "You need to bet more to place bet. (Min: {0})"},
                 {"BetMore", "If you had bet more you could win the jackpot. (Min: {0})"},
                 {"MinimumSRBet", "Minimum bet of {0} to win the current jackpot: {1} point(s)"},
-                {"CantOpen", "You must have Economics or ServerRewards installed and loaded."}
+                {"CantOpen", "You must have Economics or ServerRewards installed and loaded."},
+                {"WinRateText", "Win rate"},
+                {"PointsText", "{0} : {1} point(s)"},
+                {"MultiplierText", "Multiplier : x{0}"},
+                {"BetmodifiersText", "Bet modifiers :"}
             };
             lang.RegisterMessages(messages, this);
             Puts("Messages loaded...");
@@ -421,7 +425,7 @@ namespace Oxide.Plugins
             {
                 Text =
                 {
-                    Text = "Win Rate",
+                    Text = lang.GetMessage("WinRateText", this, player.UserIDString),
                     FontSize = 18,
                     Align = TextAnchor.MiddleCenter
                 },
@@ -867,7 +871,7 @@ namespace Oxide.Plugins
                 {
                     Text =
                     {
-                        Text = "Win Rate",
+                        Text = lang.GetMessage("WinRateText", this, player.UserIDString),
                         FontSize = 18,
                         Align = TextAnchor.MiddleCenter
                     },
@@ -887,7 +891,7 @@ namespace Oxide.Plugins
                     {
                         Text =
                         {
-                            Text = elem.Key + ": " + elem.Value + " point(s)",
+                            Text = lang.GetMessage("PointsText", this, player.UserIDString).Replace("{0}", elem.Key).Replace("{1}", elem.Value.ToString()),
                             FontSize = 18,
                             Align = TextAnchor.MiddleCenter
                         },
@@ -961,7 +965,7 @@ namespace Oxide.Plugins
                 {
                     Text =
                     {
-                        Text = "Multiplier : x" + playerbet.multiplicator,
+                        Text = lang.GetMessage("MultiplierText", this, player.UserIDString).Replace("{0}", playerbet.multiplicator.ToString()),
                         FontSize = 18,
                         Align = TextAnchor.MiddleLeft
                     },
@@ -1017,7 +1021,7 @@ namespace Oxide.Plugins
                 {
                     Text =
                     {
-                        Text = "Bet modifiers :",
+                        Text = lang.GetMessage("BetmodifiersText", this, player.UserIDString),
                         FontSize = 18,
                         Align = TextAnchor.MiddleCenter
                     },
@@ -1583,7 +1587,7 @@ namespace Oxide.Plugins
 
         void OnUseNPC(BasePlayer npc, BasePlayer player, Vector3 destination)
         {
-            if (NPCID.Contains(npc.UserIDString))
+            if (NPCID != null && NPCID.Contains(npc.UserIDString))
             {
                 if(Economy.IsLoaded && !UseSR)
                     ShowLotery(player, null);
@@ -1672,7 +1676,7 @@ namespace Oxide.Plugins
                 if (playerbet != null && SRMinBet <= playerbet.currentbet*playerbet.multiplicator)
                 {
                     var reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
-                    if (reward != (object) 0)
+                    if (reward != null && Convert.ToInt32(reward) != 0)
                     {
                         rwd = (int)reward;
                         if (playerbet.currentbet*playerbet.multiplicator >= MinBetjackpot)
@@ -1730,7 +1734,7 @@ namespace Oxide.Plugins
                 if (playerbet != null)
                 {
                     var reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
-                    if (reward != null && reward != (object) 0)
+                    if (reward != null && Convert.ToInt32(reward) != 0)
                     {
                         rwd = (int) reward;
                         if (random == JackpotNumber)

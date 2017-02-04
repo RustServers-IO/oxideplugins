@@ -13,7 +13,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut", "1.6.0", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut", "1.6.1", ResourceId = 2193)]
 
     class ImageLibrary : RustPlugin
     {
@@ -29,7 +29,8 @@ namespace Oxide.Plugins
             public Dictionary<string, Dictionary<ulong, uint>> Images = new Dictionary<string, Dictionary<ulong, uint>>();
             public Dictionary<string, Dictionary<ulong, string>> ImageURLs = new Dictionary<string, Dictionary<ulong, string>>();
         }
-
+        private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
+        public List<string> UnableToFindImageList = new List<string>();
         static GameObject webObject;
         static Images images;
         static MethodInfo getFileData = typeof(FileStorage).GetMethod("StorageGet", (BindingFlags.Instance | BindingFlags.NonPublic));
@@ -53,6 +54,9 @@ namespace Oxide.Plugins
 
         void Unload()
         {
+            foreach (var entry in timers)
+                entry.Value.Destroy();
+            timers.Clear();
             SaveData();
         }
 
@@ -66,6 +70,7 @@ namespace Oxide.Plugins
             InitializeItemList();
             RelocateImages();
             RefreshImages();
+            timers.Add("clear", timer.Once(300, () => ClearImageNotFoundList()));
         }
 
         string GetPluginName(ulong resourceId)
@@ -73,6 +78,17 @@ namespace Oxide.Plugins
             foreach (var entry in plugins.GetAll().Where(k => k.ResourceId == (int)resourceId))
                 return entry.Name;
             return "";
+        }
+
+        private void ClearImageNotFoundList()
+        {
+            if (timers.ContainsKey("clear"))
+            {
+                timers["clear"].Destroy();
+                timers.Remove("clear");
+            }
+            UnableToFindImageList.Clear();
+            timers.Add("clear", timer.Once(300, () => ClearImageNotFoundList()));
         }
 
         #endregion
@@ -90,6 +106,7 @@ namespace Oxide.Plugins
         [HookMethod("GetImageURL")]
         public string GetImageURL(string shortname, ulong skin = 0)
         {
+            shortname = shortname.ToLower();
             if (!imageData.ImageURLs.ContainsKey(shortname)) return imageData.ImageURLs["NONE"][0].ToString();
             if (!imageData.ImageURLs[shortname].ContainsKey(skin))
                 return imageData.ImageURLs["NONE"][0].ToString();
@@ -99,32 +116,18 @@ namespace Oxide.Plugins
         [HookMethod("GetImage")]
         public string GetImage(string shortname, ulong skin = 0)
         {
+            shortname = shortname.ToLower();
             if (!imageData.Images.ContainsKey(shortname))
             {
+                if (UnableToFindImageList.Contains(shortname)) return imageData.Images["NONE"][0].ToString();
+                UnableToFindImageList.Add(shortname);
                 if (GetPluginName(skin) != "")
                 {
-                    var pluginfolder = GetPluginName(skin);
-                    string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
-                    images.Add(path + shortname + ".png", shortname, skin);
-                }
-                try
-                {
-                    return imageData.Images[shortname][skin].ToString();
-                }
-                catch
-                {
-                }
-                return imageData.Images["NONE"][0].ToString();
-            }
-            else if (!imageData.Images[shortname].ContainsKey(skin))
-            {
-                if (GetPluginName(skin) != "")
-                {
-                    var pluginfolder = GetPluginName(skin);
-                    string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
-                    images.Add(path + shortname + ".png", shortname, skin);
                     try
                     {
+                        var pluginfolder = GetPluginName(skin);
+                        string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
+                        images.Add(path + shortname + ".png", shortname, skin);
                         return imageData.Images[shortname][skin].ToString();
                     }
                     catch
@@ -133,12 +136,34 @@ namespace Oxide.Plugins
                 }
                 return imageData.Images["NONE"][0].ToString();
             }
-            else return imageData.Images[shortname][skin].ToString();
+            if (!imageData.Images[shortname].ContainsKey(skin))
+            {
+                if (UnableToFindImageList.Contains(shortname)) return imageData.Images["NONE"][0].ToString();
+                UnableToFindImageList.Add(shortname);
+                //Puts("NOT FOUND - Skin");
+                if (GetPluginName(skin) != "")
+                {
+                    try
+                    {
+                        var pluginfolder = GetPluginName(skin);
+                        string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
+                        images.Add(path + shortname + ".png", shortname, skin);
+                        return imageData.Images[shortname][skin].ToString();
+                    }
+                    catch
+                    {
+                    }
+                }
+                return imageData.Images["NONE"][0].ToString();
+            }
+            //Puts("FOUND");
+            return imageData.Images[shortname][skin].ToString();
         }
 
         [HookMethod("GetImageList")]
         public List<ulong> GetImageList(string shortname)
         {
+            shortname = shortname.ToLower();
             if (!imageData.Images.ContainsKey(shortname)) return null;
             List<ulong> images = new List<ulong>();
             foreach (var entry in imageData.Images[shortname])
@@ -150,6 +175,7 @@ namespace Oxide.Plugins
         [HookMethod("HasImage")]
         public bool HasImage(string shortname, ulong skin = 0)
         {
+            shortname = shortname.ToLower();
             if (!imageData.Images.ContainsKey(shortname)) return false;
             if (!imageData.Images[shortname].ContainsKey(skin))
                 return false;
@@ -159,12 +185,26 @@ namespace Oxide.Plugins
         [HookMethod("AddImage")]
         public bool AddImage(string url, string name, ulong skin = 0)
         {
+            name = name.ToLower();
             try
             {
-                if (imageData.Images.ContainsKey(name))
+                if (url == "local")
+                {
+                    if (GetPluginName(skin) != "")
+                    {
+                        var pluginfolder = GetPluginName(skin);
+                        string path = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}{pluginfolder}{ Path.DirectorySeparatorChar}Images{ Path.DirectorySeparatorChar}";
+                        images.Add(path + name + ".png", name, skin);
+                    }
+                }
+                else if (!imageData.Images.ContainsKey(name))
+                    images.Add(url, name, skin);
+                else
+                {
                     if (imageData.Images[name].ContainsKey(skin))
                         imageData.Images[name].Remove(skin);
-                images.Add(url, name, skin);
+                    images.Add(url, name, skin);
+                }
                 return true;
             }
             catch
@@ -192,7 +232,7 @@ namespace Oxide.Plugins
         class Images : MonoBehaviour
         {
             ImageLibrary filehandler;
-            const ulong MaxActiveLoads = 100;
+            const ulong MaxActiveLoads = 10;
             static readonly List<QueueImages> QueueList = new List<QueueImages>();
             static byte activeLoads;
             private void Awake() => filehandler = (ImageLibrary)Interface.Oxide.RootPluginManager.GetPlugin(nameof(ImageLibrary));
@@ -233,6 +273,19 @@ namespace Oxide.Plugins
                 stream.SetLength(0);
             }
 
+            byte[] GetImageBytes(WWW www)
+            {
+                var tex = www.texture;
+                byte[] img;
+                //if (tex.format == TextureFormat.)
+                //    img = tex.EncodeToPNG();
+                //else
+                    img = www.bytes;
+                //img = tex.EncodeToJPG(85);
+                DestroyImmediate(tex);
+                return img;
+            }
+
             IEnumerator WaitForRequest(WWW www, QueueImages info)
             {
                 yield return www;
@@ -249,13 +302,14 @@ namespace Oxide.Plugins
                         filehandler.imageData.Images[info.name].Add(info.skin, 0);
                     {
                         ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
+                        byte[] image = GetImageBytes(www);
+                        stream.Write(image, 0, image.Length);
                         //uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue);
                         uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                         ClearStream();
                         //filehandler.Puts($"NEW: {textureID.ToString()}");
                         //filehandler.Puts($"OLD: {filehandler.imageData.Images[info.name][info.skin]}");
-                        if (filehandler.imageData.Images[info.name][info.skin] != textureID)
+                        //if (filehandler.imageData.Images[info.name][info.skin] != textureID)
                             filehandler.imageData.Images[info.name][info.skin] = textureID;
                     }
                 }
@@ -349,7 +403,7 @@ namespace Oxide.Plugins
             Puts("Loading Basic Images");
             if (imageData.CommID != CommunityEntity.ServerInstance.net.ID)
                 imageData.CommID = CommunityEntity.ServerInstance.net.ID;
-            images.Add("http://www.hngu.net/Images/College_Logo/28/b894b451_c203_4c08_922c_ebc95077c157.png", "NONE", 0);
+            images.Add("http://i.imgur.com/sZepiWv.png", "NONE", 0);
             webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", (code, response) =>
             {
                 if (!(response == null && code == 200))
@@ -2098,6 +2152,11 @@ namespace Oxide.Plugins
                 { 0, "http://vignette3.wikia.nocookie.net/play-rust/images/8/83/Blueprint_icon.png/revision/latest/scale-to-width-down/100?cb=20160819063752" }
             }
             },
+            {"pistol.python", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/d/d4/Python_Revolver_icon.png/revision/latest/scale-to-width-down/100?cb=20170118190136" }
+            }
+            },
 };
 
 
@@ -2115,7 +2174,7 @@ namespace Oxide.Plugins
             try
             {
                 imageData = ImageLibraryData.ReadObject<ImageData>();
-                if (imageData == null || imageData.Images == null)
+                if (imageData == null || imageData.Images == null || imageData.ImageURLs == null)
                 {
                     Puts("Image Data File appears corrupt. Creating a new file, loading images...");
                     imageData = new ImageData();

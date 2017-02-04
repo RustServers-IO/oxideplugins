@@ -2,7 +2,7 @@
     "name": "HotKeys",
     "description": "Manage default binds for your server",
     "author": "Calytic",
-    "version": "0.0.31",
+    "version": "0.0.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/hotkeys.2135",

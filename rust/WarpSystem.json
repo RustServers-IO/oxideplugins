@@ -2,7 +2,7 @@
     "name": "Warp System",
     "description": "Create warp points for players",
     "author": "PaiN",
-    "version": "1.9.8",
+    "version": "1.9.10",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/warp-system.760",

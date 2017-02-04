@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FireArrows", "Colon Blow", "1.2.5")]
+    [Info("FireArrows", "Colon Blow", "1.2.6")]
     class FireArrows : RustPlugin
     {
 
@@ -326,7 +326,7 @@ namespace Oxide.Plugins
 	[ConsoleCommand("firearrow")]
         void cmdConsolefirearrow(ConsoleSystem.Arg arg)
 	{
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 SendReply(arg, "You can't use this command from the server console");
                 return;

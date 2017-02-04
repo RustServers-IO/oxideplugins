@@ -2,7 +2,7 @@
     "name": "MagicDescription",
     "description": "Adds dynamic information in the server description",
     "author": "Wulf",
-    "version": "1.2.3",
+    "version": "1.2.4",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/magicdescription.1447",

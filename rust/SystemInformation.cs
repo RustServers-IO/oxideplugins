@@ -4,7 +4,7 @@ using RustNative;
 
 namespace Oxide.Plugins {
 
-	[Info("SystemInformation", "cone", "0.1.3", ResourceId = 2036)]
+	[Info("SystemInformation", "cone", "0.1.4", ResourceId = 2036)]
 	[Description("Rcon commands to display current server memory usage and uptime.")]
 	class SystemInformation : RustPlugin {
 
@@ -24,7 +24,7 @@ namespace Oxide.Plugins {
 		private string toDisplay(double d) => d.ToString("F2");
 
 		//Checks if a console command was sent by an authorized party.
-		private bool isAuthorized(ConsoleSystem.Arg console, string permission) => (console.isAdmin || (console.connection != null && console.connection.authLevel >= 2) || this.permission.UserHasPermission(rust.UserIDFromConnection(console.connection), permission));
+		private bool isAuthorized(ConsoleSystem.Arg console, string permission) => (console.isAdmin || (console.Connection != null && console.Connection.authLevel >= 2) || this.permission.UserHasPermission(rust.UserIDFromConnection(console.Connection), permission));
 		private bool isAuthorized(BasePlayer player, string permission) => (player.net.connection.authLevel >= 1 || this.permission.UserHasPermission(player.UserIDString, permission));
 
 		//Localization utilities
@@ -100,10 +100,10 @@ namespace Oxide.Plugins {
 			string sSteamID = null;
 
 			//Check if the console has a connetion, if not, it is an RCON connection.
-			if (console.connection != null) {
+			if (console.Connection != null) {
 
 				//If so, convert the steam ID to a string.
-				sSteamID = console.connection.userid.ToString();
+				sSteamID = console.Connection.userid.ToString();
 
 			}
 

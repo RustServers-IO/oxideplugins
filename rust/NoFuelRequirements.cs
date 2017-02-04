@@ -2,11 +2,12 @@
 
 namespace Oxide.Plugins
 {
-    [Info("NoFuelRequirements", "k1lly0u", "1.3.0", ResourceId = 1179)]
+    [Info("NoFuelRequirements", "k1lly0u", "1.3.1", ResourceId = 1179)]
     class NoFuelRequirements : RustPlugin
     {
         #region Fields        
         bool usingPermissions;
+        bool initialized;
         #endregion
 
         #region Oxide Hooks        
@@ -14,9 +15,11 @@ namespace Oxide.Plugins
         {
             LoadVariables();
             RegisterPermissions();
+            initialized = true;
         }
         void OnConsumeFuel(BaseOven oven, Item fuel, ItemModBurnable burnable)
         {
+            if (!initialized || oven == null || fuel == null) return;
             ConsumeTypes type = StringToType(oven?.ShortPrefabName);
             if (type == ConsumeTypes.None) return;
 
@@ -26,11 +29,13 @@ namespace Oxide.Plugins
                 {
                     if (!HasPermission(oven.OwnerID.ToString(), type)) return;
                 }
-                ++fuel.amount;                
+                fuel.amount += 1;
             }
         }
         void OnConsumableUse(Item item, int amount)
         {
+            if (!initialized || item == null || amount == 0) return;
+
             string shortname = item?.parent?.parent?.info?.shortname;
             if (string.IsNullOrEmpty(shortname))
                 shortname = item?.GetRootContainer()?.entityOwner?.ShortPrefabName;

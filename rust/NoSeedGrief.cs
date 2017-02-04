@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info( "NoSeedGrief", "mvrb", "1.0.1" )]
+    [Info( "NoSeedGrief", "mvrb", "1.0.2", ResourceId = 2260 )]
     class NoSeedGrief : RustPlugin
     {		
 		void Init() => LoadDefaultMessages();

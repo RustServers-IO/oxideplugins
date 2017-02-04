@@ -1,12 +1,9 @@
 {
     "name": "BoobyTraps",
-    "description": "Booby trap boxes with a variety of traps",
+    "description": "Booby trap boxes and doors with a variety of traps",
     "author": "k1lly0u",
-    "version": "0.1.7",
+    "version": "0.2.11",
     "configuration": true,
-    "suggest": {
-        "ZoneManager": "*"
-    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/boobytraps.1549",
     "games": [

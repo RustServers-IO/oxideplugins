@@ -1,0 +1,16 @@
+{
+    "name": "Stash Blocker",
+    "description": "Disables players from placing stashes near foundations",
+    "author": "Ankawi",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/stash-blocker.2301",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

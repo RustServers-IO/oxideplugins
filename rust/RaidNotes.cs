@@ -18,7 +18,7 @@ using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("RaidNotes", "Calytic", "0.0.5")]
+    [Info("RaidNotes", "Calytic", "0.0.6")]
     [Description("Broadcasts raid activity to chat")]
     public class RaidNotes : RustPlugin
     {
@@ -309,14 +309,21 @@ namespace Oxide.Plugins
                 if (modEntity != null && modEntity.entityPrefab != null)
                 {
                     var prefab = modEntity.entityPrefab.Get();
-                    if (prefab != null)
-                    {
-                        var thrownWeapon = prefab.GetComponent<ThrownWeapon>();
+                    var thrownWeapon = prefab.GetComponent<ThrownWeapon>();
 
-                        if (thrownWeapon != null && thrownWeapon.prefabToThrow != null && thrownWeapon.prefabToThrow.resourcePath != null && !reverseItems.ContainsKey(thrownWeapon.prefabToThrow.resourcePath))
-                        {
-                            reverseItems.Add(thrownWeapon.prefabToThrow.resourcePath, def.itemid);
-                        }
+                    if (thrownWeapon != null && !string.IsNullOrEmpty(thrownWeapon.prefabToThrow.guid) && !reverseItems.ContainsKey(thrownWeapon.prefabToThrow.resourcePath))
+                    {
+                        reverseItems.Add(thrownWeapon.prefabToThrow.resourcePath, def.itemid);
+                        continue;
+                    }
+                }
+
+                var baseProjectile = def.GetComponent<ItemModProjectile>();
+                if (baseProjectile != null && !string.IsNullOrEmpty(baseProjectile.projectileObject.guid) && !reverseItems.ContainsKey(baseProjectile.projectileObject.resourcePath))
+                {
+                    if (baseProjectile.projectileObject.resourcePath.Contains("rocket"))
+                    {
+                        reverseItems.Add(baseProjectile.projectileObject.resourcePath, def.itemid);
                     }
                 }
             }

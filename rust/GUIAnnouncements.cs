@@ -10,7 +10,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("GUIAnnouncements", "JoeSheep", "1.17.48", ResourceId = 1222)]
+    [Info("GUIAnnouncements", "JoeSheep", "1.17.49", ResourceId = 1222)]
     [Description("Creates announcements with custom messages by command across the top of every player's screen in a banner.")]
 
     public class GUIAnnouncements : RustPlugin
@@ -971,7 +971,7 @@ namespace Oxide.Plugins
 
         void ccmdAnnounce(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 if (arg.Args == null || arg?.Args?.Length <= 0)
                 {
@@ -1014,7 +1014,7 @@ namespace Oxide.Plugins
 
         void ccmdAnnounceTo(ConsoleSystem.Arg arg, string[] args)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 if (arg.Args == null || arg?.Args?.Length <= 1)
                 {
@@ -1060,7 +1060,7 @@ namespace Oxide.Plugins
 
         void ccmdAnnounceDestroy(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 destroyAllGUI();
             }
@@ -1119,7 +1119,7 @@ namespace Oxide.Plugins
         {
             if (arg?.Args?.Length > 0)
             {
-                if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+                if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
                 {
                     string targetPlayer = arg.Args[0].ToLower();
                     ulong targetPlayerUID64; ulong.TryParse(targetPlayer, out targetPlayerUID64);
@@ -1184,7 +1184,7 @@ namespace Oxide.Plugins
 
         void ccmdScheduleRestart(ConsoleSystem.Arg arg, string[] args)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 if (arg?.Args?.Length == 1)
                 {
@@ -1229,7 +1229,7 @@ namespace Oxide.Plugins
 
         void ccmdCancelScheduledRestart(ConsoleSystem.Arg arg, string cmd)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 if (RestartScheduled)
                 {
@@ -1252,7 +1252,7 @@ namespace Oxide.Plugins
 
         void ccmdSuspendRestart(ConsoleSystem.Arg arg, string cmd)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 RestartSuspended = true;
                 SendReply(arg, Lang("RestartSuspendedConsole").Replace("{time}", NextRestart.ToLongTimeString()));
@@ -1270,7 +1270,7 @@ namespace Oxide.Plugins
 
         void ccmdResumeRestart(ConsoleSystem.Arg arg, string cmd)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 RestartSuspended = false;
                 SendReply(arg, Lang("RestartResumed").Replace("{time}", NextRestart.ToLongTimeString()));
@@ -1288,7 +1288,7 @@ namespace Oxide.Plugins
 
         void ccmdGetNextRestart(ConsoleSystem.Arg arg, string cmd)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 var timeLeft = NextRestart.Subtract(DateTime.Now);
                 SendReply(arg, Lang("GetNextRestart").Replace("{time1}", timeLeft.ToShortString()).Replace("{time2}", NextRestart.ToLongTimeString()));
@@ -1311,7 +1311,7 @@ namespace Oxide.Plugins
 
         void ccmdCancelRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 if (SixtySecondsTimer != null && !SixtySecondsTimer.Destroyed)
                 {
@@ -1338,12 +1338,12 @@ namespace Oxide.Plugins
 
         void ccmdAnnounceHelp(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounce))
+            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 SendReply(arg, Lang("AnnounceHelp"));
             }
             else
-                if (arg.isAdmin || hasPermission(arg.connection.player as BasePlayer, PermAnnounceToggle))
+                if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounceToggle))
             {
                 SendReply(arg, Lang("PlayerHelp"));
             }

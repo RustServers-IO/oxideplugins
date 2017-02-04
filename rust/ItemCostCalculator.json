@@ -1,7 +1,7 @@
 {
     "name": "ItemCostCalculator",
     "description": "Automatically Calculates Item Costs based on ingredients",
-    "author": "{Midgard}Altimus Maximus",
+    "author": "Absolut",
     "version": "1.0.0",
     "configuration": true,
     "language": "cs",

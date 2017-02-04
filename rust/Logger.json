@@ -2,7 +2,7 @@
     "name": "Logger",
     "description": "Configurable logging of chat, commands, and more",
     "author": "Wulf",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/logger.670",

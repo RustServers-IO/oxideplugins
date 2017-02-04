@@ -2,7 +2,7 @@
     "name": "Magic Craft",
     "description": "Alternative crafting system",
     "author": "Norn",
-    "version": "0.2.7",
+    "version": "0.2.8",
     "configuration": true,
     "suggest": {
         "PopupNotifications": "*"

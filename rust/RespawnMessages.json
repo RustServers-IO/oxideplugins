@@ -2,7 +2,7 @@
     "name": "Respawn Messages",
     "description": "Shows custom messages to players on respawn",
     "author": "Kappasaurus",
-    "version": "0.1",
+    "version": "2.1",
     "configuration": true,
     "suggest": {
         "PopupNotifications": "*"

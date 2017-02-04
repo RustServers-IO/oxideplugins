@@ -1,11 +1,14 @@
 using System.Collections.Generic;
+using Oxide.Core.Configuration;
 using Oxide.Game.Rust;
+using System.Linq;
 using UnityEngine;
+using Oxide.Core;
 using System;
 
 namespace Oxide.Plugins
 {
-	[Info( "AdminHammer", "mvrb", "1.0.0" )]
+	[Info( "AdminHammer", "mvrb", "1.0.2", ResourceId = 2237 )]
 	class AdminHammer : RustPlugin
 	{
 		const string permAllow = "adminhammer.allow";		
@@ -16,7 +19,9 @@ namespace Oxide.Plugins
 		
 		int layerMask = LayerMask.GetMask( "Construction", "Deployed", "Default" );
 		
-		List<BasePlayer> Users = new List<BasePlayer>();
+		readonly DynamicConfigFile dataFile = Interface.Oxide.DataFileSystem.GetFile( "AdminHammer" );
+		
+		List<ulong> Users = new List<ulong>();
 		
 		protected override void LoadDefaultConfig()
         {
@@ -30,9 +35,14 @@ namespace Oxide.Plugins
         
         void Init()
 		{
+			Users = dataFile.ReadObject<List<ulong>>();
+			
 			LoadDefaultConfig();
 			LoadDefaultMessages();
 			RegisterPermissions();
+			
+			//cmd.AddChatCommand( "ah", this, "cmdAdminHammer" );
+			cmd.AddChatCommand( "adminhammer", this, "cmdAdminHammer" );
 		}
 		
 		void LoadDefaultMessages()
@@ -53,26 +63,27 @@ namespace Oxide.Plugins
 		
 		void RegisterPermissions() => permission.RegisterPermission( permAllow, this );
 		
-		[ChatCommand( "adminhammer" )]
 		void cmdAdminHammer( BasePlayer player )
 		{
 			if ( !permission.UserHasPermission( player.UserIDString, permAllow ) ) return;
 			
-			if ( Users.Contains( player ) )
+			if ( Users.Contains( player.userID ) )
 			{
-				Users.Remove( player );
+				Users.Remove( player.userID );
 				player.ChatMessage( Lang( "ToolDeactivated", player.UserIDString ) );
 			}
 			else
 			{
-				Users.Add( player );
+				Users.Add( player.userID );
 				player.ChatMessage( Lang( "ToolActivated", player.UserIDString ) );
 			}
+			
+			dataFile.WriteObject( Users );
 		}
 		
 		void OnPlayerInput( BasePlayer player, InputState input )
 		{
-			if ( !Users.Contains( player ) ) return;
+			if ( !Users.Contains( player.userID ) ) return;
 			
 			if ( permission.UserHasPermission( player.UserIDString, permAllow ) )
 			{
@@ -91,7 +102,15 @@ namespace Oxide.Plugins
 				if ( entity is BuildingPrivlidge || entity is AutoTurret )
 				{
 					player.ChatMessage( GetAuthorized( entity, player ) );
-				}				
+				}
+				else if ( entity is StorageContainer )
+				{
+					var storageContainer = entity as StorageContainer;
+					string msg = $"Items in the {storageContainer.ShortPrefabName} owned by {GetName( storageContainer.OwnerID.ToString() )}:\n";
+					foreach ( var item in storageContainer.inventory.itemList )
+                        msg += $"{item.amount}x {item.info.displayName.english}\n";
+					player.ChatMessage( msg );
+				}
 				else
 				{
 					player.ChatMessage( entity.OwnerID == 0 ? Lang( "NoOwner", player.UserIDString ) : Lang( "ChatEntityOwnedBy", player.UserIDString, entity.ShortPrefabName, GetName( entity.OwnerID.ToString() ) ) );
@@ -119,7 +138,7 @@ namespace Oxide.Plugins
 			return authed == 0 ? Lang( "NoAuthorizedPlayers", player.UserIDString ) : msg;
 		}
 				
-		string GetName( string id ) { return RustCore.FindPlayer( id ) ? RustCore.FindPlayer( id ).displayName : covalence.Players.FindPlayer( id )?.Name; }
+		string GetName( string id ) { if ( id == "0" ) return "[SERVERSPAWN]"; return RustCore.FindPlayer( id ) ? RustCore.FindPlayer( id ).displayName : covalence.Players.FindPlayer( id )?.Name; }
 		
 		T GetConfig<T>( string name, T value ) => Config[name] == null ? value : ( T )Convert.ChangeType( Config[name], typeof( T ) );
 		

@@ -1,32 +1,37 @@
 ﻿// Reference: Rust.Workshop
 using System;
-using Oxide.Core;
-using System.Collections.Generic;
-using Oxide.Core.Plugins;
-using Oxide.Game.Rust.Cui;
-using Oxide.Core.Configuration;
-using Oxide.Core.Libraries.Covalence;
-using Newtonsoft.Json;
-using Rust;
-using UnityEngine;
 using System.Collections;
-using System.Reflection;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Reflection;
 using Facepunch.Steamworks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Oxide.Core;
+using Oxide.Core.Configuration;
+using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
+using Oxide.Game.Rust.Cui;
+using Rust;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.3.9", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.3.92", ResourceId = 1751)]
     public class ServerRewards : RustPlugin
     {
         #region Fields
-        [PluginReference] Plugin Kits;
-        [PluginReference] Plugin Economics;
-        [PluginReference] Plugin HumanNPC;
-        [PluginReference] Plugin LustyMap;
-        [PluginReference] Plugin PlaytimeTracker;
+        [PluginReference]
+        Plugin Kits;
+        [PluginReference]
+        Plugin Economics;
+        [PluginReference]
+        Plugin HumanNPC;
+        [PluginReference]
+        Plugin LustyMap;
+        [PluginReference]
+        Plugin PlaytimeTracker;
 
         #region Datafiles
         PointData playerData;
@@ -80,7 +85,7 @@ namespace Oxide.Plugins
         {
             public Dictionary<string, KitInfo> RewardKits = new Dictionary<string, KitInfo>();
             public Dictionary<int, ItemInfo> RewardItems = new Dictionary<int, ItemInfo>();
-            public Dictionary<string, CommandInfo> RewardCommands = new Dictionary<string, CommandInfo>();            
+            public Dictionary<string, CommandInfo> RewardCommands = new Dictionary<string, CommandInfo>();
         }
         class SaleDataStorage
         {
@@ -304,14 +309,14 @@ namespace Oxide.Plugins
             }
             if (type == ElementType.Transfer)
             {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);                
+                UIElements.DestroyUI(player, OpenUI[player.userID]);
                 OpenUI[player.userID].type = ElementType.Transfer;
                 OpenUI[player.userID].page = 0;
                 CreateTransferElement(player, page);
             }
             else if (type == ElementType.Sell)
             {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);                
+                UIElements.DestroyUI(player, OpenUI[player.userID]);
                 OpenUI[player.userID].type = ElementType.Sell;
                 OpenUI[player.userID].page = 0;
                 CreateSaleElement(player);
@@ -474,30 +479,30 @@ namespace Oxide.Plugins
 
             MemoryStream stream = new MemoryStream();
 
-            var keys = imageData.storedImages.Keys.ToList();  
-                      
-            for(int i = 0; i < imageData.storedImages.Count; i++)
+            var keys = imageData.storedImages.Keys.ToList();
+
+            for (int i = 0; i < imageData.storedImages.Count; i++)
             {
                 var skins = imageData.storedImages[keys[i]].Keys.ToList();
 
                 for (int j = 0; j < imageData.storedImages[keys[i]].Count; j++)
-                {                    
+                {
                     var image = imageData.storedImages[keys[i]][skins[j]];
 
                     byte[] bytes = FileStorage.server.Get(image, FileStorage.Type.png, imageData.instanceId);
                     if (bytes != null)
                     {
                         stream.Write(bytes, 0, bytes.Length);
-                                                
+
                         var imageId = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
 
-                        if (imageId != image)                        
-                            imageData.storedImages[keys[i]][skins[j]] = imageId;                        
+                        if (imageId != image)
+                            imageData.storedImages[keys[i]][skins[j]] = imageId;
 
                         stream.Position = 0;
                         stream.SetLength(0);
                     }
-                }                    
+                }
             }
 
             imageData.instanceId = CommunityEntity.ServerInstance.net.ID;
@@ -506,7 +511,7 @@ namespace Oxide.Plugins
             PrintWarning("All images successfully re-located!");
             InitializeAllElements();
         }
-       
+
         #region Standard Elements
         private void CreateNavUI()
         {
@@ -918,7 +923,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_CancelSale")]
         private void cmdCancelSale(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CreateSaleElement(player);
@@ -926,7 +931,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_SellItem")]
         private void cmdSellItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int itemId = arg.GetInt(0);
@@ -945,7 +950,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_Sell")]
         private void cmdSell(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int itemId = arg.GetInt(0);
@@ -1054,7 +1059,6 @@ namespace Oxide.Plugins
                             item1.amount = item1.amount - num1;
                             num = num + num1;
                             Item item2 = ItemManager.CreateByItemID(itemid, 1, skinId);
-                            item2.AddOwners(item.owners, 1f);
                             item2.amount = num1;
                             item2.CollectedForCrafting(player);
                             if (collect != null)
@@ -1359,10 +1363,10 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_BuyKit")]
         private void cmdBuyKit(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            var kitName = arg.ArgsStr;
+            var kitName = arg.FullString;
             if (rewardData.RewardKits.ContainsKey(kitName))
             {
                 var kit = rewardData.RewardKits[kitName];
@@ -1389,10 +1393,10 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_BuyCommand")]
         private void cmdBuyCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            var commandname = arg.ArgsStr;
+            var commandname = arg.FullString;
             if (rewardData.RewardCommands.ContainsKey(commandname))
             {
                 var command = rewardData.RewardCommands[commandname];
@@ -1421,7 +1425,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_BuyItem")]
         private void cmdBuyItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var itemname = int.Parse(arg.GetString(0).Replace("'", ""));
@@ -1456,7 +1460,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_ChangeElement")]
         private void cmdChangeElement(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
 
@@ -1496,7 +1500,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_Exchange")]
         private void cmdExchange(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var type = int.Parse(arg.GetString(0).Replace("'", ""));
@@ -1530,7 +1534,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_Transfer")]
         private void ccmdTransfer(ConsoleSystem.Arg args)
         {
-            var player = args.connection.player as BasePlayer;
+            var player = args.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var type = args.GetInt(0);
@@ -1540,7 +1544,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_TransferNext")]
         private void ccmdTransferNext(ConsoleSystem.Arg args)
         {
-            var player = args.connection.player as BasePlayer;
+            var player = args.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var ID = args.GetString(0);
@@ -1551,7 +1555,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_TransferID")]
         private void ccmdTransferID(ConsoleSystem.Arg args)
         {
-            var player = args.connection.player as BasePlayer;
+            var player = args.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var ID = args.GetUInt64(0);
@@ -1573,7 +1577,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_DestroyAll")]
         private void cmdDestroyAll(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyUI(player);
@@ -1582,7 +1586,7 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Oxide Hooks  
+        #region Oxide Hooks
         void Loaded()
         {
             lang.RegisterMessages(messages, this);
@@ -1652,7 +1656,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Functions        
+        #region Functions
         private void SendMSG(BasePlayer player, string msg, string keyword = "title")
         {
             if (keyword == "title") keyword = lang.GetMessage("title", this, player.UserIDString);
@@ -1718,9 +1722,9 @@ namespace Oxide.Plugins
 
                     Global.SteamServer.Inventory.Definitions = defs.ToArray();
 
-                    foreach (var item in ItemManager.itemList)                    
-                        skins2.SetValue(item, Global.SteamServer.Inventory.Definitions.Where(x => (x.GetStringProperty("itemshortname") == item.shortname) && !string.IsNullOrEmpty(x.GetStringProperty("workshopdownload"))).ToArray());                    
-                }               
+                    foreach (var item in ItemManager.itemList)
+                        skins2.SetValue(item, Global.SteamServer.Inventory.Definitions.Where(x => (x.GetStringProperty("itemshortname") == item.shortname) && !string.IsNullOrEmpty(x.GetStringProperty("workshopdownload"))).ToArray());
+                }
             }, this);
         }
         private void GiveItem(BasePlayer player, int itemkey)
@@ -1918,7 +1922,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region External API Calls        
+        #region External API Calls
         private void CloseMap(BasePlayer player)
         {
             if (LustyMap)
@@ -2091,8 +2095,8 @@ namespace Oxide.Plugins
         {
             var Main = SR_UI.CreateElementContainer(UISelect, "0 0 0 0", "0 0", "1 1");
             SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("save", player.UserIDString), 16, "0.85 0.91", "0.95 0.96", "SRUI_NPCSave", TextAnchor.MiddleCenter, 0f);
-            SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("storeClose",player.UserIDString), 16, "0.05 0.91", "0.15 0.96", "SRUI_NPCCancel", TextAnchor.MiddleCenter, 0f);
-            
+            SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("storeClose", player.UserIDString), 16, "0.05 0.91", "0.15 0.96", "SRUI_NPCCancel", TextAnchor.MiddleCenter, 0f);
+
             int[] itemNames = rewardData.RewardItems.Keys.ToArray();
             string[] kitNames = rewardData.RewardKits.Keys.ToArray();
             string[] commNames = rewardData.RewardCommands.Keys.ToArray();
@@ -2109,7 +2113,7 @@ namespace Oxide.Plugins
                 if (page > 0)
                     SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_NPCPage {page - 1}", TextAnchor.MiddleCenter, 0f);
             }
-            
+
             int maxComm = (30 * (page + 1));
             if (maxComm > commNames.Length)
                 maxComm = commNames.Length;
@@ -2131,7 +2135,7 @@ namespace Oxide.Plugins
                     command1 = $"SRUI_CustomList Commands {text1.Replace(" ", "%!%")} false {page}";
                 }
                 if (n + 1 < commNames.Length)
-                {                    
+                {
                     color2 = UIColors["buttonbg"];
                     text2 = commNames[n + 1];
                     command2 = $"SRUI_CustomList Commands {text2.Replace(" ", "%!%")} true {page}";
@@ -2160,21 +2164,21 @@ namespace Oxide.Plugins
                 string command1 = $"SRUI_CustomList Kits {text1.Replace(" ", "%!%")} true {page}";
                 string color2 = "0 0 0 0";
                 string text2 = "";
-                string command2 = "";                
+                string command2 = "";
                 if (NPCCreator[player.userID].kitList.Contains(kitNames[n]))
                 {
                     color1 = UIColors["buttoncom"];
-                    command1 = $"SRUI_CustomList Kits {text1.Replace(" ", "%!%")} false {page}";                    
+                    command1 = $"SRUI_CustomList Kits {text1.Replace(" ", "%!%")} false {page}";
                 }
                 if (n + 1 < kitNames.Length)
-                {                    
+                {
                     color2 = UIColors["buttonbg"];
-                    text2 = kitNames[n+1];
+                    text2 = kitNames[n + 1];
                     command2 = $"SRUI_CustomList Kits {text2.Replace(" ", "%!%")} true {page}";
-                    if (NPCCreator[player.userID].kitList.Contains(kitNames[n+1]))
+                    if (NPCCreator[player.userID].kitList.Contains(kitNames[n + 1]))
                     {
                         color2 = UIColors["buttoncom"];
-                        command2 = $"SRUI_CustomList Kits {text2.Replace(" ", "%!%")} false {page}";                        
+                        command2 = $"SRUI_CustomList Kits {text2.Replace(" ", "%!%")} false {page}";
                     }
                     ++n;
                 }
@@ -2204,7 +2208,7 @@ namespace Oxide.Plugins
                     command1 = $"SRUI_CustomList Items {n} false {page}";
                 }
                 if (n + 1 < rewardData.RewardItems.Count)
-                {                   
+                {
                     color2 = UIColors["buttonbg"];
                     text2 = rewardData.RewardItems[n + 1].DisplayName;
                     command2 = $"SRUI_CustomList Items {n + 1} true {page}";
@@ -2248,12 +2252,12 @@ namespace Oxide.Plugins
 
             SR_UI.CreateButton(ref Main, panel, b1color, b1text, 14, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", b1command, TextAnchor.MiddleCenter, 0f);
             SR_UI.CreateButton(ref Main, panel, b2color, b2text, 14, $"{posMin.x + offsetX + dimensions.x} {posMin.y}", $"{posMax.x + offsetX + dimensions.x} {posMax.y}", b2command, TextAnchor.MiddleCenter, 0f);
-        }  
-              
+        }
+
         [ConsoleCommand("SRUI_CustomList")]
         private void cmdCustomList(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
 
@@ -2279,24 +2283,24 @@ namespace Oxide.Plugins
                     if (isAdding)
                         NPCCreator[player.userID].itemList.Add(id);
                     else NPCCreator[player.userID].itemList.Remove(id);
-                    break;                                 
+                    break;
             }
             NPCLootMenu(player, page);
         }
         [ConsoleCommand("SRUI_NPCPage")]
         private void cmdNPCPage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
 
-            int page = arg.GetInt(0);           
+            int page = arg.GetInt(0);
             NPCLootMenu(player, page);
         }
         [ConsoleCommand("SRUI_NPCOption")]
         private void cmdNPCOption(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             switch (arg.Args[1])
@@ -2325,7 +2329,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_NPCCancel")]
         private void cmdNPCCancel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             NPCCreator.Remove(player.userID);
@@ -2336,12 +2340,12 @@ namespace Oxide.Plugins
         [ConsoleCommand("SRUI_NPCSave")]
         private void cmdNPCSave(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
 
             CuiHelper.DestroyUi(player, UIMain);
-            CuiHelper.DestroyUi(player, UISelect);            
+            CuiHelper.DestroyUi(player, UISelect);
             var info = NPCCreator[player.userID];
             npcDealers.NPCIDs[info.NPCID].isCustom = true;
             npcDealers.NPCIDs[info.NPCID].itemList = info.itemList;
@@ -2357,7 +2361,7 @@ namespace Oxide.Plugins
         #region Sale updater
         void UpdatePriceList()
         {
-            bool changed = false;            
+            bool changed = false;
             foreach (var item in ItemManager.itemList)
             {
                 if (!saleData.Prices.ContainsKey(item.itemid))
@@ -2378,7 +2382,7 @@ namespace Oxide.Plugins
                             changed = true;
                         }
                     }
-                    foreach(var skin in Rust.Workshop.Approved.All.Where(x => x.ItemType.ItemName == item.shortname))
+                    foreach (var skin in Rust.Workshop.Approved.All.Where(x => x.Name == item.shortname))
                     {
                         if (saleData.Prices[item.itemid].ContainsKey(skin.InventoryId))
                             saleData.Prices[item.itemid].Remove(skin.InventoryId);
@@ -2402,7 +2406,7 @@ namespace Oxide.Plugins
                 var skins = ItemSkinDirectory.ForItem(item).ToList();
                 if (skins.Count > 0)
                     return true;
-                else if (Rust.Workshop.Approved.All.Where(x => x.ItemType.ItemName == item.shortname).Count() > 0)
+                else if (Rust.Workshop.Approved.All.Where(x => x.Name == item.shortname).Count() > 0)
                     return true;
 
             }
@@ -2410,14 +2414,14 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Chat Commands 
+        #region Chat Commands
         [ChatCommand("s")]
         private void cmdStore(BasePlayer player, string command, string[] args)
         {
             if ((configData.Options.NPCDealers_Only && isAuth(player)) || !configData.Options.NPCDealers_Only)
             {
                 OpenStore(player);
-            }            
+            }
         }
 
         [ChatCommand("rewards")]
@@ -2425,7 +2429,7 @@ namespace Oxide.Plugins
         {
             if (args == null || args.Length == 0)
             {
-                SendMSG(player, "V " + Version, msg("title", player.UserIDString));                
+                SendMSG(player, "V " + Version, msg("title", player.UserIDString));
                 SendMSG(player, msg("chatCheck1", player.UserIDString), msg("chatCheck", player.UserIDString));
                 SendMSG(player, msg("storeSyn2", player.UserIDString), msg("storeSyn21", player.UserIDString));
                 if (isAuth(player))
@@ -2436,7 +2440,7 @@ namespace Oxide.Plugins
                     SendMSG(player, msg("chatRemove", player.UserIDString), msg("remSynKit", player.UserIDString));
                     SendMSG(player, msg("chatRemove", player.UserIDString), msg("remSynItem", player.UserIDString));
                     SendMSG(player, msg("chatRemove", player.UserIDString), msg("remSynCommand", player.UserIDString));
-                    SendMSG(player, msg("chatList1", player.UserIDString), msg("chatList", player.UserIDString));                    
+                    SendMSG(player, msg("chatList1", player.UserIDString), msg("chatList", player.UserIDString));
                 }
                 return;
             }
@@ -2460,7 +2464,7 @@ namespace Oxide.Plugins
                             {
                                 SendEchoConsole(player.net.connection, string.Format("ID: {0} - Type: {1} - Amount: {2} - Cost: {3}", entry.Key, entry.Value.DisplayName, entry.Value.Amount, entry.Value.Cost));
                             }
-                        return;                    
+                        return;
                     case "add":
                         if (args.Length >= 2)
                             if (isAuth(player))
@@ -2510,14 +2514,14 @@ namespace Oxide.Plugins
                                                 }
                                                 ItemInfo newItem = new ItemInfo
                                                 {
-                                                    Amount = item.amount,                                                    
+                                                    Amount = item.amount,
                                                     Cost = i,
                                                     DisplayName = item.info.displayName.english,
                                                     ID = item.info.itemid,
                                                     Skin = item.skin,
                                                     URL = "",
                                                     TargetID = !item.IsBlueprint() ? 0 : item.blueprintTarget
-                                                };                                                
+                                                };
                                                 rewardData.RewardItems.Add(rewardData.RewardItems.Count, newItem);
                                                 SendMSG(player, string.Format(msg("addSuccess", player.UserIDString), "item", newItem.DisplayName, i));
                                                 SaveRewards();
@@ -2529,7 +2533,7 @@ namespace Oxide.Plugins
                                         SendMSG(player, "", msg("addSynItem", player.UserIDString));
                                         return;
                                     case "command":
-                                        
+
                                         if (args.Length == 5)
                                         {
                                             int i = -1;
@@ -2575,7 +2579,7 @@ namespace Oxide.Plugins
                                             rewardData.RewardItems.Remove(i);
                                             Dictionary<int, ItemInfo> newList = new Dictionary<int, ItemInfo>();
                                             int n = 0;
-                                            foreach(var entry in rewardData.RewardItems)
+                                            foreach (var entry in rewardData.RewardItems)
                                             {
                                                 newList.Add(n, entry.Value);
                                                 n++;
@@ -2596,15 +2600,15 @@ namespace Oxide.Plugins
                                         }
                                         SendMSG(player, msg("noCommandRem", player.UserIDString), "");
                                         return;
-                                }                               
+                                }
                             }
-                
-                        return;                    
-                }                
-            }
-        }               
 
-        
+                        return;
+                }
+            }
+        }
+
+
 
         [ChatCommand("sr")]
         private void cmdSR(BasePlayer player, string command, string[] args)
@@ -2618,12 +2622,12 @@ namespace Oxide.Plugins
                 SendMSG(player, msg("srCheck", player.UserIDString), "/sr check <playername>");
                 SendMSG(player, msg("srAdd3", player.UserIDString), "/sr add all <amount>");
                 SendMSG(player, msg("srTake3", player.UserIDString), "/sr take all <amount>");
-                SendMSG(player, msg("srClear3", player.UserIDString), "/sr clear all");                
+                SendMSG(player, msg("srClear3", player.UserIDString), "/sr clear all");
                 return;
             }
             if (args.Length >= 2)
             {
-                if(args[1].ToLower() == "all")
+                if (args[1].ToLower() == "all")
                 {
                     switch (args[0].ToLower())
                     {
@@ -2660,7 +2664,7 @@ namespace Oxide.Plugins
                                     }
 
                                     SendMSG(player, string.Format(msg("remPointsAll", player.UserIDString), i));
-                                }                                
+                                }
                             }
                             return;
                         case "clear":
@@ -2712,7 +2716,7 @@ namespace Oxide.Plugins
                             }
                             return;
                     }
-                }                
+                }
             }
         }
 
@@ -2766,7 +2770,7 @@ namespace Oxide.Plugins
                                             if ((int)amount >= i)
                                                 TakePoints(entry, i);
                                             else TakePoints(entry, (int)amount);
-                                        }                                        
+                                        }
                                     }
 
                                     SendReply(arg, string.Format(msg("remPointsAll"), i));
@@ -2826,7 +2830,7 @@ namespace Oxide.Plugins
                             }
                             return;
                     }
-                }                    
+                }
             }
         }
 
@@ -2839,16 +2843,16 @@ namespace Oxide.Plugins
         }
         bool isAuthCon(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < 1)
+                if (arg.Connection.authLevel < 1)
                 {
                     SendReply(arg, "You dont not have permission to use this command.");
                     return false;
                 }
             }
             return true;
-        }        
+        }
         #endregion
 
         #region Data
@@ -2856,7 +2860,7 @@ namespace Oxide.Plugins
         {
             playerData.Players = PointCache;
             PlayerData.WriteObject(playerData);
-            Puts("Saved player data");            
+            Puts("Saved player data");
         }
         void SaveRewards()
         {
@@ -2875,7 +2879,7 @@ namespace Oxide.Plugins
         }
         void SavePrices() => SaleData.WriteObject(saleData);
         private void SaveLoop() => saveTimer = timer.Once(configData.Options.Save_Interval * 60, () => { SaveData(); SaveLoop(); });
-            
+
         void LoadData()
         {
             try
@@ -2924,7 +2928,7 @@ namespace Oxide.Plugins
                 Puts("Couldn't load sale pricings, creating new datafile");
                 saleData = new SaleDataStorage();
             }
-        }        
+        }
         #endregion
 
         #region Config
@@ -2965,7 +2969,7 @@ namespace Oxide.Plugins
             public Exchange CurrencyExchange { get; set; }
             public Messaging Messaging { get; set; }
             public Options Options { get; set; }
-            public UIOptions UI_Options { get; set; }           
+            public UIOptions UI_Options { get; set; }
         }
         private void LoadVariables()
         {
@@ -2988,7 +2992,7 @@ namespace Oxide.Plugins
                     Disable_Kits = false,
                     Disable_CurrencyExchange = false,
                     Disable_CurrencyTransfer = false,
-                    Disable_SellersScreen = false                 
+                    Disable_SellersScreen = false
                 },
                 CurrencyExchange = new Exchange
                 {
@@ -3011,7 +3015,7 @@ namespace Oxide.Plugins
                 {
                     DisableUI_FadeIn = false,
                     ShowKitContents = true
-                }                
+                }
             };
             SaveConfig(config);
         }
@@ -3026,12 +3030,12 @@ namespace Oxide.Plugins
         {
             public string url;
             public string itemid;
-            public ulong skinid;            
+            public ulong skinid;
             public QueueItem(string ur, string na, ulong sk)
             {
                 url = ur;
                 itemid = na;
-                skinid = sk;               
+                skinid = sk;
             }
         }
         class UnityWeb : MonoBehaviour
@@ -3102,20 +3106,20 @@ namespace Oxide.Plugins
         [ConsoleCommand("loadimages")]
         private void cmdLoadImages(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 LoadImages();
             }
         }
-       
+
         private void LoadImages()
         {
             string dir = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "ServerRewards" + Path.DirectorySeparatorChar + "Icons" + Path.DirectorySeparatorChar;
-                        
+
             imageData.storedImages.Clear();
             uWeb.Add("http://i.imgur.com/zq9zuKw.jpg", "999999999", 0);
             foreach (var entry in rewardData.RewardItems)
-            {               
+            {
                 if (!string.IsNullOrEmpty(entry.Value.URL))
                 {
                     var url = entry.Value.URL;
@@ -3126,7 +3130,7 @@ namespace Oxide.Plugins
             }
 
             foreach (var entry in rewardData.RewardKits)
-            {               
+            {
                 if (!string.IsNullOrEmpty(entry.Value.URL))
                 {
                     var url = entry.Value.URL;
@@ -3216,7 +3220,7 @@ namespace Oxide.Plugins
             {"errorCommand", "There was a error purchasing this command. Contact a administrator" },
             {"buyItem", "You have purchased {0}x {1}" },
             {"errorItem", "There was a error purchasing this item. Contact a administrator" },
-            {"notEnoughCoins", "You do not have enough coins to exchange" },            
+            {"notEnoughCoins", "You do not have enough coins to exchange" },
             {"exchange", "You have exchanged " },
             {"itemInHand", "You must place the item you wish to add in your hands" },
             {"itemIDHelp", "You must enter the items number. Type /rewards list to see available entries" },

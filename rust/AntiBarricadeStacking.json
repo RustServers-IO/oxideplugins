@@ -1,0 +1,16 @@
+{
+    "name": "Anti Barricade Stacking",
+    "description": "Stops monument barricades from stacking on top of each other",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/anti-barricade-stacking.2302",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

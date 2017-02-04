@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("MagicDescription", "Wulf/lukespragg", "1.2.3", ResourceId = 1447)]
+    [Info("MagicDescription", "Wulf/lukespragg", "1.2.4", ResourceId = 1447)]
     [Description("Adds dynamic information in the server description")]
 
     class MagicDescription : RustPlugin
@@ -99,7 +99,7 @@ namespace Oxide.Plugins
         {
             if (!serverInitialized) return null;
 
-            var command = arg.cmd.namefull;
+            var command = arg.cmd.FullName;
             if (command != "server.description" || !arg.isAdmin) return null;
             if (!arg.HasArgs() || arg.Args.GetValue(0) == null) return null;
 

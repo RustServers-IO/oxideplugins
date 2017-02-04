@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bank", "Calytic", "0.0.41", ResourceId = 2116)]
+    [Info("Bank", "rustservers.io", "0.0.6", ResourceId = 2116)]
     [Description("Safe player storage")]
     class Bank : RustPlugin
     {
@@ -229,7 +229,7 @@ namespace Oxide.Plugins
                     return this.container;
                 }
                 ItemContainer container = new ItemContainer();
-                container.ServerInitialize((Item) null, slots);
+                container.ServerInitialize(null, slots);
                 if ((int) container.uid == 0)
                     container.GiveUID();
                 container.playerOwner = player;
@@ -332,7 +332,7 @@ namespace Oxide.Plugins
         void Init() {
             Unsubscribe(nameof(CanNetworkTo));
             Unsubscribe(nameof(OnEntityTakeDamage));
-            //Unsubscribe(nameof(OnItemAddedToContainer));
+            ////Unsubscribe(nameof(OnItemAddedToContainer));
         }
 
         void Loaded() { 
@@ -539,6 +539,7 @@ namespace Oxide.Plugins
                 }
                 profile = banks[playerID];
             }
+
             string path = "bank_"+playerID.ToString();
             int pc = profile.Count;
             datafile.WriteObject<BankProfile>(path, profile);
@@ -597,14 +598,14 @@ namespace Oxide.Plugins
             }
         }
 
-        object CanUseDoor(BasePlayer player, BaseLock lockItem)
+        object CanUseLock(BasePlayer player, BaseLock lockItem)
         {
             if(!keyring) {
                 return null;
             }
 
             if(MasterKey != null) {
-                var result = MasterKey.Call("CanUseDoor", player, lockItem);
+                var result = MasterKey.Call("CanUseLock", player, lockItem);
                 if(result is bool) {
                     return null;
                 }
@@ -758,7 +759,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("bank")]
         void ccBank(ConsoleSystem.Arg arg)
         {
-            cmdBank(arg.connection.player as BasePlayer, arg.cmd.name, arg.Args);
+            cmdBank(arg.Connection.player as BasePlayer, arg.cmd.Name, arg.Args);
         }
 
         [ChatCommand("bank")]

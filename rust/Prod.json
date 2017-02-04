@@ -1,7 +1,7 @@
 {
     "name": "Prod (Who Owns)",
     "description": "Get owners of deployable, building structures and whitelist of tool cupboards",
-    "author": "Wulf",
+    "author": "Reneb",
     "version": "2.2.8",
     "configuration": true,
     "language": "cs",

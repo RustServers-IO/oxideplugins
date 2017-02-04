@@ -10,7 +10,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins 
 { 
-	[Info("Rules GUI", "PaiN", "1.4.8", ResourceId = 1247)]
+	[Info("Rules GUI", "PaiN", "1.4.9", ResourceId = 1247)]
 	[Description("This plugin displays the rules on connect.")] 
 	class RulesGUI : RustPlugin
 	{ 
@@ -198,7 +198,7 @@ namespace Oxide.Plugins
 		[ConsoleCommand("hardestcommandtoeverguess")]
 		void cmdHardestcmd(ConsoleSystem.Arg arg)
 		{
-			BasePlayer player = (BasePlayer)arg.connection.player;
+			BasePlayer player = (BasePlayer)arg.Connection.player;
 			Network.Net.sv.Kick(player.net.connection, rust.QuoteSafe(kickmsg));
 		}
 		

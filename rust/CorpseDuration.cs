@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Player corpse duration modifier", "Mughisi", "2.0.3", ResourceId = 778)]
+    [Info("Player corpse duration modifier", "Mughisi", "2.0.4", ResourceId = 778)]
     [Description("Allows the server owner to set the time that it takes for corpses to disappear.")]
     public class CorpseDuration : RustPlugin
     {
@@ -93,21 +93,21 @@ namespace Oxide.Plugins
         {
             if (!HasPermission(arg, "corpseduration.modify") || !arg.HasArgs())
             {
-                arg.ReplyWith(string.Format(GetMessage("Setting", arg?.connection?.userid.ToString()), Math.Round(Duration / 60, 1)));
+                arg.ReplyWith(string.Format(GetMessage("Setting", arg?.Connection?.userid.ToString()), Math.Round(Duration / 60, 1)));
                 return;
             }
 
             var duration = arg.GetFloat(0, -1);
             if (duration < 0)
             {
-                arg.ReplyWith(GetMessage("SyntaxError", arg?.connection?.userid.ToString()));
+                arg.ReplyWith(GetMessage("SyntaxError", arg?.Connection?.userid.ToString()));
                 return;
             }
 
             Duration = duration * 60;
             SetConfigValue("Options", "Duration", Duration);
 
-            arg.ReplyWith(string.Format(GetMessage("Modify", arg?.connection?.userid.ToString()), Math.Round(Duration / 60, 1)));
+            arg.ReplyWith(string.Format(GetMessage("Modify", arg?.Connection?.userid.ToString()), Math.Round(Duration / 60, 1)));
         }
 
         #endregion
@@ -198,7 +198,7 @@ namespace Oxide.Plugins
 
         private bool HasPermission(BasePlayer player, string perm) => permission.UserHasPermission(player.userID.ToString(), perm);
 
-        private bool HasPermission(ConsoleSystem.Arg arg, string perm) => (arg.connection == null) || permission.UserHasPermission(arg.connection.userid.ToString(), perm);
+        private bool HasPermission(ConsoleSystem.Arg arg, string perm) => (arg.Connection == null) || permission.UserHasPermission(arg.Connection.userid.ToString(), perm);
 
         #endregion
 

@@ -1,9 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("NightLantern", "k1lly0u", "2.0.3", ResourceId = 1182)]
+    [Info("NightLantern", "k1lly0u", "2.0.4", ResourceId = 1182)]
     class NightLantern : RustPlugin
     {
         #region Fields
@@ -68,19 +69,33 @@ namespace Oxide.Plugins
             if (entity is BaseOven && lights.Contains(entity as BaseOven))
                 lights.Remove(entity as BaseOven);
         }
+        void OnEntityKill(BaseNetworkable entity)
+        {
+            if (entity == null || !(entity is BaseOven)) return;
+            if (entity is BaseOven && lights.Contains(entity as BaseOven))
+                lights.Remove(entity as BaseOven);
+        }
         void Unload()
         {
             if (timeCheck != null)
                 timeCheck.Destroy();
+        }
+        void OnPluginLoaded(Plugin plugin)
+        {
+            if (plugin.Title == "NoFuelRequirements")
+            {
+                nfrInstalled = true;
+                configData.ConsumeFuel = false;
+            }
         }
         #endregion
 
         #region Functions
         void FindLights()
         {
-            var ovens = UnityEngine.Object.FindObjectsOfType<BaseOven>().ToList();
+            var ovens = BaseEntity.serverEntities.Where(x => x is BaseOven).ToList();
             foreach (var oven in ovens)            
-                CheckType(oven);            
+                CheckType(oven as BaseOven);            
             TimeLoop();
         }
         void CheckType(BaseOven oven)
@@ -125,12 +140,13 @@ namespace Oxide.Plugins
             for (int i = 0; i < lights.Count; i++)
             {
                 var light = lights[i];
+                if (light == null || light.IsDestroyed) continue;
+
                 if (configData.ConsumeFuel)
                 {
-                    if (status && !light.IsInvoking("Cook"))
+                    if (status)
                         light.StartCooking();
-                    else if (!status && light.IsInvoking("Cook"))
-                        light.StopCooking();
+                    else light.StopCooking();
                 }
                 else
                 {

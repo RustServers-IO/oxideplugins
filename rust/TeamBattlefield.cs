@@ -7,7 +7,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("TeamBattlefield", "BodyweightEnergy / k1lly0u", "2.1.2", ResourceId = 1330)]
+    [Info("TeamBattlefield", "BodyweightEnergy / k1lly0u", "2.1.41", ResourceId = 1330)]
     class TeamBattlefield : RustPlugin
     {
         #region Fields
@@ -192,9 +192,9 @@ namespace Oxide.Plugins
         {
             if (UseTB)
             {
-                if (player.IsSleeping())
+                if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
                 {
-                    timer.Once(3, () =>
+                    timer.Once(1, () =>
                     {
                         player.EndSleeping();
                         OnPlayerInit(player);
@@ -226,24 +226,21 @@ namespace Oxide.Plugins
         {
             if (UseTB)
             {
-                if (player.GetComponent<TBPlayer>())
+                CuiHelper.DestroyUi(player, UIMain);
+                CuiHelper.DestroyUi(player, UIScoreboard);
+
+                TBPlayer tbPlayer = player.GetComponent<TBPlayer>();
+                if (tbPlayer != null)
                 {
-                    DCPlayers.Add(player.userID, new PlayerData { kills = player.GetComponent<TBPlayer>().kills, team = player.GetComponent<TBPlayer>().team });
+                    DCPlayers.Add(player.userID, new PlayerData { kills = tbPlayer.kills, team = tbPlayer.team });
                     DCTimers.Add(player.userID, timer.Once(configData.Options.RemoveSleeper_Timer * 60, () => { DCPlayers.Remove(player.userID); DCTimers[player.userID].Destroy(); DCTimers.Remove(player.userID); }));
-                    DestroyPlayer(player);
-                }
+                                
+                    if (TBPlayers.Contains(tbPlayer))
+                        TBPlayers.Remove(tbPlayer);
+                    UnityEngine.Object.Destroy(tbPlayer);
+                }                
             }
-        }
-        private void DestroyPlayer(BasePlayer player)
-        {
-            CuiHelper.DestroyUi(player, UIMain);
-            CuiHelper.DestroyUi(player, UIScoreboard);
-            if (TBPlayers.Contains(player.GetComponent<TBPlayer>()))
-            {                
-                TBPlayers.Remove(player.GetComponent<TBPlayer>());
-                UnityEngine.Object.Destroy(player.GetComponent<TBPlayer>());
-            }
-        }
+        }      
         private void OnPlayerRespawned(BasePlayer player) 
         {
             if (UseTB)
@@ -276,7 +273,7 @@ namespace Oxide.Plugins
             {
                 if (configData.Options.UsePluginChatControl)
                 {
-                    BasePlayer player = (BasePlayer)arg.connection.player;
+                    BasePlayer player = (BasePlayer)arg.Connection.player;
                     string message = arg.GetString(0, "text");
                     string color = configData.Spectators.Chat_Color + configData.Spectators.Chat_Prefix;
                     if (player.GetComponent<TBPlayer>())
@@ -304,7 +301,7 @@ namespace Oxide.Plugins
         void Unload()
         {
             foreach (var p in BasePlayer.activePlayerList)
-                DestroyPlayer(p);
+                OnPlayerDisconnected(p);
 
             var objects = UnityEngine.Object.FindObjectsOfType<TBPlayer>();
             if (objects != null)
@@ -362,7 +359,6 @@ namespace Oxide.Plugins
 
             player.MovePosition(destination);
             player.ClientRPCPlayer(null, player, "ForcePositionTo", destination, null, null, null, null);
-            player.TransformChanged();
             player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
 
@@ -635,9 +631,9 @@ namespace Oxide.Plugins
 
         bool isAuth(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < 1)
+                if (arg.Connection.authLevel < 1)
                 {
                     SendReply(arg, "You dont not have permission to use this command.");
                     return false;
@@ -688,7 +684,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("TBUI_TeamSelect")]
         private void cmdTeamSelectA(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var team = ConvertStringToTeam(arg.GetString(0));

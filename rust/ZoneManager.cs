@@ -20,7 +20,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneManager", "Reneb / Nogrod", "2.4.8", ResourceId = 739)]
+    [Info("ZoneManager", "Reneb / Nogrod", "2.4.10", ResourceId = 739)]
     public class ZoneManager : RustPlugin
     {
         private const string PermZone = "zonemanager.zone";
@@ -560,42 +560,43 @@ namespace Oxide.Plugins
 
         }
         [Flags]
-        public enum ZoneFlags : long
+        public enum ZoneFlags : ulong
         {
             None = 0L,
-            AutoLights = 1L,
-            Eject = 1L << 1,
-            PvpGod = 1L << 2,
-            PveGod = 1L << 3,
-            SleepGod = 1L << 4,
-            UnDestr = 1L << 5,
-            NoBuild = 1L << 6,
-            NoTp = 1L << 7,
-            NoChat = 1L << 8,
-            NoGather = 1L << 9,
-            NoPve = 1L << 10,
-            NoWounded = 1L << 11,
-            NoDecay = 1L << 12,
-            NoDeploy = 1L << 13,
-            NoKits = 1L << 14,
-            NoBoxLoot = 1L << 15,
-            NoPlayerLoot = 1L << 16,
-            NoCorpse = 1L << 17,
-            NoSuicide = 1L << 18,
-            NoRemove = 1L << 19,
-            NoBleed = 1L << 20,
-            KillSleepers = 1L << 21,
-            NpcFreeze = 1L << 22,
-            NoDrown = 1L << 23,
-            NoStability = 1L << 24,
-            NoUpgrade = 1L << 25,
-            EjectSleepers = 1L << 26,
-            NoPickup = 1L << 27,
-            NoCollect = 1L << 28,
-            NoDrop = 1L << 29,
-			Kill = 1L << 30,
-            NoCup = 1L << 31,
-            AlwaysLights = 1L << 32
+            AutoLights = 1UL,
+            Eject = 1UL << 1,
+            PvpGod = 1UL << 2,
+            PveGod = 1UL << 3,
+            SleepGod = 1UL << 4,
+            UnDestr = 1UL << 5,
+            NoBuild = 1UL << 6,
+            NoTp = 1UL << 7,
+            NoChat = 1UL << 8,
+            NoGather = 1UL << 9,
+            NoPve = 1UL << 10,
+            NoWounded = 1UL << 11,
+            NoDecay = 1UL << 12,
+            NoDeploy = 1UL << 13,
+            NoKits = 1UL << 14,
+            NoBoxLoot = 1UL << 15,
+            NoPlayerLoot = 1UL << 16,
+            NoCorpse = 1UL << 17,
+            NoSuicide = 1UL << 18,
+            NoRemove = 1UL << 19,
+            NoBleed = 1UL << 20,
+            KillSleepers = 1UL << 21,
+            NpcFreeze = 1UL << 22,
+            NoDrown = 1UL << 23,
+            NoStability = 1UL << 24,
+            NoUpgrade = 1UL << 25,
+            EjectSleepers = 1UL << 26,
+            NoPickup = 1UL << 27,
+            NoCollect = 1UL << 28,
+            NoDrop = 1UL << 29,
+			Kill = 1UL << 30,
+            NoCup = 1UL << 31,
+            AlwaysLights = 1UL << 32,
+            NoTrade = 1UL << 33
         }
 
         private bool HasZoneFlag(Zone zone, ZoneFlags flag)
@@ -732,6 +733,11 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             if (Initialized) return;
+            var values = Enum.GetValues(typeof(ZoneFlags)).Cast<ZoneFlags>();
+            foreach (var flagse in values)
+            {
+                Puts("{0} {1}", flagse, (ulong)flagse);
+            }
             timer.In(1, () => {
                 SetupCollectibleEntity();
                 foreach (var zoneDefinition in ZoneDefinitions.Values)
@@ -813,8 +819,8 @@ namespace Oxide.Plugins
         private object OnServerCommand(ConsoleSystem.Arg arg)
         {
             if (arg.Player() == null) return null;
-            if (arg.cmd?.name == null) return null;
-            if (arg.cmd.name == "kill" && HasPlayerFlag(arg.Player(), ZoneFlags.NoSuicide))
+            if (arg.cmd?.Name == null) return null;
+            if (arg.cmd.Name == "kill" && HasPlayerFlag(arg.Player(), ZoneFlags.NoSuicide))
             {
                 SendMessage(arg.Player(), "You are not allowed to suicide here");
                 return false;
@@ -853,7 +859,10 @@ namespace Oxide.Plugins
             foreach (var zone in resourceZone)
             {
                 if (HasZoneFlag(zone, ZoneFlags.NoGather))
+                {
                     hitinfo.HitEntity = null;
+                    break;
+                }
             }
         }
 
@@ -1020,7 +1029,7 @@ namespace Oxide.Plugins
         /////////////////////////////////////////
         private object CanLootPlayer(BasePlayer target, BasePlayer looter)
         {
-            return OnLootPlayerInternal(looter, target) ? null : (object)false;
+            return OnLootPlayerInternal(looter, target) ? null : (object) false;
         }
 
         private void OnLootPlayer(BasePlayer looter, BasePlayer target)
@@ -1051,8 +1060,7 @@ namespace Oxide.Plugins
 
         private object CanBeWounded(BasePlayer player, HitInfo hitinfo)
         {
-            if (HasPlayerFlag(player, ZoneFlags.NoWounded)) return false;
-            return null;
+            return HasPlayerFlag(player, ZoneFlags.NoWounded) ? (object) false : null;
         }
 
         /////////////////////////////////////////
@@ -1061,30 +1069,27 @@ namespace Oxide.Plugins
 
         private object canRedeemKit(BasePlayer player)
         {
-            if (HasPlayerFlag(player, ZoneFlags.NoKits)) { return "You may not redeem a kit inside this area"; }
-            return null;
+            return HasPlayerFlag(player, ZoneFlags.NoKits) ? "You may not redeem a kit inside this area" : null;
         }
 
         private object CanTeleport(BasePlayer player)
         {
-            if (HasPlayerFlag(player, ZoneFlags.NoTp)) { return "You may not teleport in this area"; }
-            return null;
+            return HasPlayerFlag(player, ZoneFlags.NoTp) ? "You may not teleport in this area" : null;
         }
 
         private object canRemove(BasePlayer player)
         {
-            if (HasPlayerFlag(player, ZoneFlags.NoRemove)) { return "You may not use the remover tool in this area"; }
-            return null;
+            return HasPlayerFlag(player, ZoneFlags.NoRemove) ? "You may not use the remover tool in this area" : null;
         }
 
         private bool CanChat(BasePlayer player)
         {
-            if (HasPlayerFlag(player, ZoneFlags.NoChat))
-            {
-                //SendMessage(player, "You are not allowed to chat here");
-                return false;
-            }
-            return true;
+            return !HasPlayerFlag(player, ZoneFlags.NoChat);
+        }
+
+        private object CanTrade(BasePlayer player)
+        {
+            return HasPlayerFlag(player, ZoneFlags.NoTrade) ? "You may not trade in this area" : null;
         }
 
         private void UpdateZoneDefinition(ZoneDefinition zone, string[] args, BasePlayer player = null)
@@ -1800,7 +1805,6 @@ namespace Oxide.Plugins
             newPos.y = TerrainMeta.HeightMap.GetHeight(newPos);
             player.MovePosition(newPos);
             player.ClientRPCPlayer(null, player, "ForcePositionTo", player.transform.position);
-            player.TransformChanged();
             player.SendNetworkUpdateImmediate();
         }
 
@@ -1815,7 +1819,6 @@ namespace Oxide.Plugins
             newPos.y = TerrainMeta.HeightMap.GetHeight(newPos);
             player.MovePosition(newPos);
             player.ClientRPCPlayer(null, player, "ForcePositionTo", player.transform.position);
-            player.TransformChanged();
             player.SendNetworkUpdateImmediate();
         }
 

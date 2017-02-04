@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("TurboGather", "redBDGR", "1.1.1", ResourceId = 2221)]
+    [Info("TurboGather", "redBDGR", "1.1.5", ResourceId = 2221)]
     [Description("Lets players activate a resouce gather boost for a certain amount of time")]
 
     class TurboGather : RustPlugin
@@ -75,7 +75,7 @@ namespace Oxide.Plugins
         {
             try
             {
-                storedData = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(this.Title);
+                storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Title);
                 cacheDictionary = storedData.turboGatherInformation;
             }
             catch
@@ -121,9 +121,7 @@ namespace Oxide.Plugins
         public bool pickupEnabled = true;
         public bool quarryEnabled = true;
 
-        public bool activateTurboOnPlayerKill = false;
-        public bool activateTurboOnFriendlyAnimalKill = false;
-        public bool activateTurboOnHostileAnimalKill = false;
+        public bool activateTurboOnAnimalKill = false;
 
         public string PrefixName = "[<color=#0080ff>TurboGather</color>]";
 
@@ -164,6 +162,8 @@ namespace Oxide.Plugins
 
             TurboAnimals = (List<object>)GetConfig("Settings", "Enabled animals", Animals());
 
+            activateTurboOnAnimalKill = Convert.ToBoolean(GetConfig("Settings", "Activate Turbo on Animal Kill", false));
+
             if (!Changed) return;
             SaveConfig();
             Changed = false;
@@ -184,6 +184,7 @@ namespace Oxide.Plugins
                 ["AdminInvalidSyntax"] = "<color=#B20000>Invalid syntax! /giveturbo <playername> <length> <multiplier> </color>",
                 ["PlayerOffline"] = "<color=#B20000>The playername / ID you entered is not online or invalid! </color>",
                 ["PlayerGivenTurbo"] = "<color=#00FFFF>{0}'s TurboGather has been activated! (x{1} for {2}s) </color>",
+                ["PlayerGivenTurbo(CONSOLE)"] = "{0}'s TurboGather has been activated! (x{1} for {2}s)",
                 ["AdminBoostEnd"] = "<color=#00FFFF>Your admin applied ability has ended! </color>",
                 ["AdminBoostStart"] = "<color=#00FFFF>An admin has given you turbo gather! (x{0} resources for {1}s) </color>",
                 ["AnimalBoostEnd"] = "<color=#00FFFF>Your ability has ended!</color>",
@@ -194,6 +195,22 @@ namespace Oxide.Plugins
             }, this);
 
             turboGatherData = Interface.Oxide.DataFileSystem.GetFile("TurboGather");
+
+            /*
+            foreach (string key in cacheDictionary.Keys)
+            {
+                if (cacheDictionary[key].turboEndTime < GrabCurrentTime())
+                {
+                    BasePlayer player = FindPlayer(key);
+                    if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN) || permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP) || permission.UserHasPermission(player.UserIDString, permissionNameANIMAL))
+                        cacheDictionary[key].turboEnabled = false;
+                    else
+                        cacheDictionary.Remove(key);
+                }
+                else
+                    cacheDictionary[key].turboEnabled = true;
+            }
+            */
         }
 
         #endregion
@@ -209,50 +226,26 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permissionNameANIMAL, this);
             LoadData();
             AddWeapons();
+        }
 
+        void AddWeapons()
+        {
+            turboweapons.Add("rock.entity");
+            turboweapons.Add("hatchet.entity");
+            turboweapons.Add("pickaxe.entity");
+            turboweapons.Add("stone_pickaxe.entity");
+            turboweapons.Add("stonehatchet.entity");
+            turboweapons.Add("icepick_salvaged.entity");
+            turboweapons.Add("axe_salvaged.entity");
+            turboweapons.Add("hammer_salvaged.entity");
         }
 
         #endregion
 
-        //
-        // Shoutouts to Nogrod for the snippet below taken from PrivateMessage ( http://oxidemod.org/plugins/private-messaging.659/ )
-        //
-
-        private static BasePlayer FindPlayer(string nameOrId)
-        {
-            foreach (var activePlayer in BasePlayer.activePlayerList)
-            {
-                if (activePlayer.UserIDString == nameOrId)
-                    return activePlayer;
-                if (activePlayer.displayName.Contains(nameOrId, CompareOptions.OrdinalIgnoreCase))
-                    return activePlayer;
-                if (activePlayer.net?.connection != null && activePlayer.net.connection.ipaddress == nameOrId)
-                    return activePlayer;
-            }
-            return null;
-        }
-
-        // checking if a players turbo still has time and making sure it is turned on at server restart (also cleans up a bit)
-        void OnTerrainInitialized()
-        {
-            foreach (string key in cacheDictionary.Keys)
-            {
-                if (cacheDictionary[key].turboEndTime < GrabCurrentTime())
-                {
-                    var player = FindPlayer(key);
-                    if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN) || permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP) || permission.UserHasPermission(player.UserIDString, permissionNameANIMAL))
-                        cacheDictionary[key].turboEnabled = false;
-                    else
-                        cacheDictionary.Remove(key);
-                }
-                else
-                    cacheDictionary[key].turboEnabled = true;
-            }
-        }
-
         // handling animal / player killing
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
+            if (!activateTurboOnAnimalKill) return;
             if (entity == null || info == null || info.Initiator == null || !(info.Initiator is BasePlayer) || !(entity.isActiveAndEnabled)) return;
             if (permission.UserHasPermission(info.InitiatorPlayer.UserIDString, permissionNameANIMAL))
             {
@@ -275,9 +268,26 @@ namespace Oxide.Plugins
             }
         }
 
+        void OnPlayerAttack(BasePlayer attacker, HitInfo info)
+        {
+            if (info.HitEntity == null || info == null) return;
+            if (!effectEnabled) return;
+            if (cacheDictionary.ContainsKey(attacker.UserIDString))
+                if (cacheDictionary[attacker.UserIDString].turboEnabled || cacheDictionary[attacker.UserIDString].adminTurboGiven || globalBoostEnabled)
+                    if (turboweapons.Contains(info.Weapon.ShortPrefabName))
+                    {
+                        Effect.server.Run(effect, info.HitPositionWorld);
+                        return;
+                    }
+                    else if (globalBoostEnabled)
+                        if (turboweapons.Contains(info.Weapon.ShortPrefabName))
+                            Effect.server.Run(effect, info.HitPositionWorld);
+            return;
+        }
+
         #region Dispenser & Pickups
 
-        void DoGather(BasePlayer player, Item item, ResourceDispenser dispenser)
+        void DoGather(BasePlayer player, Item item)
         {
             if (player == null) return;
             if (!globalBoostEnabled)
@@ -327,62 +337,21 @@ namespace Oxide.Plugins
                 item.amount = (int)(item.amount * boostMultiplierGLOBAL);
         }
 
-        void OnPlayerAttack(BasePlayer attacker, HitInfo info)
-        {
-            if (info.HitEntity == null || info == null) return;
-            if (!effectEnabled) return;
-            if (!turboweapons.Contains(info.Weapon.ShortPrefabName)) return;
-            if (permission.UserHasPermission(attacker.UserIDString, permissionName) || permission.UserHasPermission(attacker.UserIDString, permissionNameVIP) || permission.UserHasPermission(attacker.UserIDString, permissionNameANIMAL))
-            {
-                if (cacheDictionary.ContainsKey(attacker.UserIDString))
-                {
-                    if (cacheDictionary[attacker.UserIDString].turboEnabled)
-                    {
-                        Vector3 pos = info.HitPositionWorld;
-                        Effect.server.Run(effect, pos);
-                    }
-                }
-            }
-        }
-
         // Dispensers
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
-            if (dispenser == null) return;
-            if (entity == null) return;
             if (dispenserEnabled)
             {
-                BasePlayer player = entity.ToPlayer();
-                if (permission.UserHasPermission(player.UserIDString, permissionName) || (permission.UserHasPermission(player.UserIDString, permissionNameVIP)))
-                {
-                    DoGather(entity.ToPlayer(), item, dispenser);
-                }
+                if (entity.ToPlayer() is BasePlayer)
+                    DoGather(entity.ToPlayer(), item);
             }
-        }
-
-        Vector3 GetPos (BasePlayer player, ResourceDispenser dispenser)
-        {
-            Vector3 hitpos = new Vector3((player.transform.position.x + dispenser.transform.position.x) / 2, (player.transform.position.y + dispenser.transform.position.y) / 2 + 1.1f, ((player.transform.position.z + dispenser.transform.position.z) / 2));
-            return hitpos;
-        }
-
-        void AddWeapons()
-        {
-            turboweapons.Add("rock.entity");
-            turboweapons.Add("hatchet.entity");
-            turboweapons.Add("pickaxe.entity");
-            turboweapons.Add("stone_pickaxe.entity");
-            turboweapons.Add("stonehatchet.entity");
-            turboweapons.Add("icepick_salvaged.entity");
-            turboweapons.Add("axe_salvaged.entity");
-            turboweapons.Add("hammer_salvaged.entity");
         }
 
         // collectables / pickups
         void OnCollectiblePickup(Item item, BasePlayer player)
         {
             if (pickupEnabled == true)
-                DoGather(player, item, null);
+                DoGather(player, item);
         }
 
         // quarries
@@ -391,7 +360,7 @@ namespace Oxide.Plugins
             if (quarryEnabled == true)
             {
                 BasePlayer player = BasePlayer.FindByID(quarry.OwnerID) ?? BasePlayer.FindSleeping(quarry.OwnerID);
-                DoGather(player, item, null);
+                DoGather(player, item);
             }
         }
         #endregion
@@ -404,18 +373,14 @@ namespace Oxide.Plugins
             if (cacheDictionary.ContainsKey(player.UserIDString))
             {
                 endTime = GrabCurrentTime() + activeTimeANIMAL;
-
-                cacheDictionary[player.UserIDString].turboEnabled = true;
-                cacheDictionary[player.UserIDString].activeAgain = endTime;
-                cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + activeTimeANIMAL;
-
+                cacheDictionary[player.UserIDString].turboEnabled = true; /*  */ cacheDictionary[player.UserIDString].activeAgain = endTime; /*  */ cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + activeTimeANIMAL;
                 SendReply(player, PrefixName + " " + string.Format(msg("BoostStart", player.UserIDString), boostMultiplierANIMAL, activeTimeANIMAL));
 
                 timer.Once(activeTimeANIMAL, () =>
                 {
                     if (player == null) return;
                     cacheDictionary[player.UserIDString].turboEnabled = false;
-                    SendReply(player, PrefixName + " " + string.Format(msg("AnimalBoostEnd", player.UserIDString)));
+                    SendReply(player, PrefixName + " " + msg("AnimalBoostEnd", player.UserIDString));
                 });
             }
             else return;
@@ -446,7 +411,7 @@ namespace Oxide.Plugins
                     timer.Once(cooldownFloat, () =>
                     {
                         if (player == null) return;
-                        SendReply(player, PrefixName + " " + string.Format(msg("CooldownEnded", player.UserIDString)));
+                        SendReply(player, PrefixName + " " + msg("CooldownEnded", player.UserIDString));
                     });
                 });
             }
@@ -464,7 +429,7 @@ namespace Oxide.Plugins
                     timer.Once(cooldownFloat, () =>
                     {
                         if (player == null) return;
-                        SendReply(player, PrefixName + " " + string.Format(msg("CooldownEnded", player.UserIDString)));
+                        SendReply(player, PrefixName + " " + msg("CooldownEnded", player.UserIDString));
                     });
                 });
             }
@@ -479,7 +444,7 @@ namespace Oxide.Plugins
             {
                 if (!permission.UserHasPermission(player.UserIDString, permissionNameVIP))
                 {
-                    SendReply(player, string.Format(msg("NoPermissions", player.UserIDString)));
+                    SendReply(player, msg("NoPermissions", player.UserIDString));
                     return;
                 }
                 else if (permission.UserHasPermission(player.UserIDString, permissionNameVIP)) { }
@@ -499,7 +464,7 @@ namespace Oxide.Plugins
                     }
                 }
                 else if (cacheDictionary[player.UserIDString].turboEnabled == true)
-                    SendReply(player, PrefixName + " " + string.Format(msg("AlreadyInUse", player.UserIDString)));
+                    SendReply(player, PrefixName + " " + msg("AlreadyInUse", player.UserIDString));
                 else
                 {
                     double cooldownTimeLeft = cacheDictionary[player.UserIDString].activeAgain - GrabCurrentTime();
@@ -520,40 +485,39 @@ namespace Oxide.Plugins
         {
             if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
             {
-                SendReply(player, string.Format(msg("NoPermissions", player.UserIDString)));
+                SendReply(player, msg("NoPermissions", player.UserIDString));
                 return;
             }
 
             if (args.Length == 3)
             {
-                string playerNameInput = args[0];
-                var playerNameID = FindPlayer(playerNameInput);
-                string dictionaryPlayerName = playerNameID.UserIDString;
+                BasePlayer targetPlayer = FindPlayer(args[0]);
+                string dictionaryPlayerName = targetPlayer.UserIDString;
                 float playerActiveLengthInput = float.Parse(args[1]);
                 double playerMultiplierInput = Convert.ToDouble(args[2]);
 
-                if (playerNameID != null)
+                if (targetPlayer != null)
                 {
                     if (!cacheDictionary.ContainsKey(dictionaryPlayerName))
-                        cacheDictionary.Add(playerNameID.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0, adminTurboGiven = false, adminMultiplierGiven = 0 });
-
-                    cacheDictionary[dictionaryPlayerName].turboEndTime = GrabCurrentTime() + playerActiveLengthInput;
-                    cacheDictionary[dictionaryPlayerName].adminTurboGiven = true;
-                    cacheDictionary[dictionaryPlayerName].adminMultiplierGiven = playerMultiplierInput;
-                    SendReply(player, PrefixName + " " + string.Format(msg("PlayerGivenTurbo", player.UserIDString), dictionaryPlayerName, playerMultiplierInput, playerActiveLengthInput));
-                    playerNameID.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostStart", playerNameInput), playerMultiplierInput, playerActiveLengthInput));
-
-                    timer.Once(playerActiveLengthInput, () =>
+                        cacheDictionary.Add(targetPlayer.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = GrabCurrentTime() + playerActiveLengthInput, adminTurboGiven = true, adminMultiplierGiven = playerMultiplierInput });
+                    else
                     {
-                        if (playerNameID == null) return;
-                        playerNameID.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostEnd", playerNameInput)));
+                        cacheDictionary[dictionaryPlayerName].turboEndTime = GrabCurrentTime() + playerActiveLengthInput;
+                        cacheDictionary[dictionaryPlayerName].adminMultiplierGiven = Convert.ToDouble(args[2]);
+                        cacheDictionary[dictionaryPlayerName].adminTurboGiven = true;
+                    }
+                    SendReply(player, PrefixName + " " + string.Format(msg("PlayerGivenTurbo", player.UserIDString), targetPlayer.displayName, playerMultiplierInput, playerActiveLengthInput));
+                    targetPlayer.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostStart", targetPlayer.UserIDString), playerMultiplierInput, playerActiveLengthInput));
+
+                    timer.Once(Convert.ToSingle(playerActiveLengthInput), () =>
+                    {
+                        if (targetPlayer == null) return;
+                        targetPlayer.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostEnd", targetPlayer.UserIDString)));
+                        cacheDictionary[dictionaryPlayerName].adminTurboGiven = false;
                     });
                 }
                 else
-                {
                     SendReply(player, PrefixName + " " + string.Format(msg("PlayerOffline", player.UserIDString)));
-                    return;
-                }
             }
             else
                 SendReply(player, PrefixName + " " + string.Format(msg("AdminInvalidSyntax")));
@@ -653,7 +617,7 @@ namespace Oxide.Plugins
                     if (globalBoostEnabled)
                     {
                         globalBoostEnabled = false;
-                        PrintToChat(PrefixName + " " + string.Format(msg("GlobalTurboEnd")));
+                        PrintToChat(PrefixName + " " + msg("GlobalTurboEnd"));
                     }
                     else
                         SendReply(player, "Global turbo is already disabled!");
@@ -661,7 +625,7 @@ namespace Oxide.Plugins
                 return;
             }
             else
-                SendReply(player, PrefixName + " " + string.Format(msg("NoPermissions", player.UserIDString)));
+                SendReply(player, PrefixName + " " + msg("NoPermissions", player.UserIDString));
         }
 
         // console command giveturbo
@@ -677,38 +641,40 @@ namespace Oxide.Plugins
             else
             {
                 string playerNameInput = arg.Args[0];
-                var playerNameID = FindPlayer(playerNameInput);
-                string dictionaryPlayerName = playerNameID.UserIDString;
+                BasePlayer player = FindPlayer(playerNameInput);
                 float playerActiveLengthInput = float.Parse(arg.Args[1]);
-                double playerMultiplierInput = Convert.ToDouble(arg.Args[2]);
+                double playerInputMultiplier = Convert.ToDouble(arg.Args[2]);
 
-                if (playerNameID != null)
+                if (player != null)
                 {
-                    if (!cacheDictionary.ContainsKey(dictionaryPlayerName))
-                        cacheDictionary.Add(playerNameID.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0, adminTurboGiven = false, adminMultiplierGiven = 0 });
-
-                    cacheDictionary[dictionaryPlayerName].turboEndTime = GrabCurrentTime() + playerActiveLengthInput;
-                    cacheDictionary[dictionaryPlayerName].adminTurboGiven = true;
-                    cacheDictionary[dictionaryPlayerName].adminMultiplierGiven = playerMultiplierInput;
-                    Puts(string.Format(msg("PlayerGivenTurbo"), dictionaryPlayerName, playerMultiplierInput, playerActiveLengthInput));
-                    playerNameID.ChatMessage(string.Format(msg("AdminBoostStart", playerNameInput), playerMultiplierInput, playerActiveLengthInput));
-
-                    timer.Once(playerActiveLengthInput, () =>
+                    if (!cacheDictionary.ContainsKey(player.UserIDString))
+                        cacheDictionary.Add(player.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = GrabCurrentTime() + playerActiveLengthInput, adminTurboGiven = true, adminMultiplierGiven = playerInputMultiplier });
+                    else
                     {
-                        if (playerNameID == null) return;
-                        playerNameID.ChatMessage(string.Format(msg("AdminBoostEnd", playerNameInput)));
+                        cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + playerActiveLengthInput;
+                        cacheDictionary[player.UserIDString].adminMultiplierGiven = playerInputMultiplier;
+                        cacheDictionary[player.UserIDString].adminTurboGiven = true;
+                    }
+
+                    Puts(string.Format(msg("PlayerGivenTurbo(CONSOLE)"), player.UserIDString, playerInputMultiplier, playerActiveLengthInput));
+                    player.ChatMessage(string.Format(msg("AdminBoostStart", playerNameInput), playerInputMultiplier, playerActiveLengthInput));
+
+                    timer.Once(Convert.ToSingle(playerActiveLengthInput), () =>
+                    {
+                        if (player == null) return;
+                        player.ChatMessage(string.Format(msg("AdminBoostEnd", playerNameInput)));
+                        cacheDictionary[player.UserIDString].adminTurboGiven = false;
                     });
                 }
                 else
-                {
                     Puts("The playername / ID you entered is not online or invalid!");
-                    return;
-                }
             }
             return;
         }
 
         #endregion
+
+        #region Extras
 
         object GetConfig(string menu, string datavalue, object defaultValue)
         {
@@ -731,5 +697,27 @@ namespace Oxide.Plugins
 
         double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
         string msg(string key, string id = null) => lang.GetMessage(key, this, id);
+
+
+        //
+        // Shoutouts to Nogrod for the snippet below taken from PrivateMessage ( http://oxidemod.org/plugins/private-messaging.659/ )
+        //
+
+        private static BasePlayer FindPlayer(string nameOrId)
+        {
+            foreach (var activePlayer in BasePlayer.activePlayerList)
+            {
+                if (activePlayer.UserIDString == nameOrId)
+                    return activePlayer;
+                if (activePlayer.displayName.Contains(nameOrId, CompareOptions.OrdinalIgnoreCase))
+                    return activePlayer;
+                if (activePlayer.net?.connection != null && activePlayer.net.connection.ipaddress == nameOrId)
+                    return activePlayer;
+            }
+            return null;
+        }
+
+        #endregion
+
     }
 }

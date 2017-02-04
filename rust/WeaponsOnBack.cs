@@ -7,7 +7,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("WeaponsShownOnBack", "Jake_Rich", 0.20)]
+    [Info("WeaponsShownOnBack", "Jake_Rich", "0.2.3")]
     [Description("Shows player's best two weapons holstered on their back")]
 
     public class WeaponsOnBack : RustPlugin
@@ -111,6 +111,10 @@ namespace Oxide.Plugins
         [ChatCommand("weapondisplay")]
        void ConfigureWeaponsSettings(BasePlayer player, string command, string[] args)
         {
+            if (!player.IsAdmin())
+            {
+                return;
+            }
             if (args.Length == 1)
             {
                 if (args[0] == "1")
@@ -127,11 +131,16 @@ namespace Oxide.Plugins
         }
 
         //Test commands
-        /*
+        
         #region Testing Commands
+        /*
         [ChatCommand("player")]
         void SpawnPlayerTest(BasePlayer player, string command, string[] args)
         {
+            if(!player.IsAdmin())
+            {
+                return;
+            }
             string prefab = "assets/prefabs/player/player.prefab";
             BasePlayer newPlayer = (BasePlayer)GameManager.server.CreateEntity(prefab, player.transform.position + new Vector3(0,0,1));
             newPlayer.Spawn();
@@ -157,6 +166,10 @@ namespace Oxide.Plugins
         [ChatCommand("showall")]
         void ShowAllGuns(BasePlayer player, string command, string[] args)
         {
+            if (!player.IsAdmin())
+            {
+                return;
+            }
             int Count = 0;
             foreach(KeyValuePair<string,GunConfig> data in WeaponData.gunSettings_main)
             {
@@ -175,8 +188,9 @@ namespace Oxide.Plugins
                 Count++;
             }
         }
-        #endregion
         */
+        #endregion
+        
 
         #region Hooks
 
@@ -309,6 +323,8 @@ namespace Oxide.Plugins
     {
         {"pistol.semiauto", new GunConfig(new Vector3(0f,0.05f,0.15f),new Vector3(60,180,0), new Vector3(0f,-0.05f,-0.2f), new Vector3(180,0,-10), "assets/prefabs/weapons/semi auto pistol/pistol_semiauto.entity.prefab", 20) }, //Holster
         {"pistol.revolver", new GunConfig(new Vector3(0f,0.05f,0.18f),new Vector3(80,180,0), new Vector3(0f,-0.05f,-0.2f), new Vector3(180,0,-10), "assets/prefabs/weapons/revolver/pistol_revolver.entity.prefab",10) }, //Holster as well  
+        {"pistol.python", new GunConfig(new Vector3(0f,0.05f,0.18f),new Vector3(80,180,0), new Vector3(0f,-0.05f,-0.2f), new Vector3(180,0,-10), "assets/prefabs/weapons/python/python.entity.prefab",15) },
+        {"pistol.m92", new GunConfig(new Vector3(0f,0.05f,0.18f),new Vector3(80,180,0), new Vector3(0f,-0.05f,-0.2f), new Vector3(180,0,-10), "assets/prefabs/weapons/m92/m92.entity.prefab",40) },
     };
 
             public static Dictionary<string, Vector3> shirtOffsetValues = new Dictionary<string, Vector3>()

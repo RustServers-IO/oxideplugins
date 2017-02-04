@@ -11,7 +11,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Jail", "Reneb / k1lly0u", "3.0.2", ResourceId = 794)]
+    [Info("Jail", "Reneb / k1lly0u", "3.0.31", ResourceId = 794)]
     class Jail : RustPlugin
     {
         [PluginReference] Plugin ZoneManager;
@@ -340,11 +340,13 @@ namespace Oxide.Plugins
                 jailData.Prisoners.Add(player.userID, inmate);
 
                 SendMsg(player, lang.GetMessage("sentPrison", this, player.UserIDString));
+                player.inventory.crafting.CancelAll(true);
                 timer.Once(5, ()=>
                 {
                     SaveInventory(player);
                     ZoneManager.Call("AddPlayerToZoneKeepinlist", zoneID, player);
                     player.inventory.Strip();
+                    
                     TeleportPlayerPosition(player, (Vector3)cellPos);
 
                     jailTimerList.Add(player.userID, time);
@@ -431,15 +433,30 @@ namespace Oxide.Plugins
             }
             return false;
         }
-        void TeleportPlayerPosition(BasePlayer player, Vector3 destination)
+        private void TeleportPlayerPosition(BasePlayer player, Vector3 destination)
         {
+            if (player.net?.connection != null)
+                player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+            StartSleeping(player);
             player.MovePosition(destination);
-            player.ClientRPCPlayer(null, player, "ForcePositionTo", destination);
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
+            if (player.net?.connection != null)
+                player.ClientRPCPlayer(null, player, "ForcePositionTo", destination);
+            if (player.net?.connection != null)
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
             player.SendNetworkUpdateImmediate(false);
-            player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+            if (player.net?.connection == null) return;
+            try { player.ClearEntityQueue(null); } catch { }
             player.SendFullSnapshot();
+        }
+        private void StartSleeping(BasePlayer player)
+        {
+            if (player.IsSleeping())
+                return;
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Sleeping, true);
+            if (!BasePlayer.sleepingPlayerList.Contains(player))
+                BasePlayer.sleepingPlayerList.Add(player);
+            player.CancelInvoke("InventoryUpdate");
         }
         private string FindEmptyPrison()
         {
@@ -679,8 +696,8 @@ namespace Oxide.Plugins
         [ConsoleCommand("jail.free")]
         private void ccmdJailFree(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
-                if (arg.connection.authLevel < 1) return;
+            if (arg.Connection != null)
+                if (arg.Connection.authLevel < 1) return;
             if (arg.Args.Length != 0)
             {
                 object freePlayer = FindPlayer(arg.Args[0]);
@@ -697,8 +714,8 @@ namespace Oxide.Plugins
         [ConsoleCommand("jail.send")]
         private void ccmdjailSend(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
-                if (arg.connection.authLevel < 1) return;
+            if (arg.Connection != null)
+                if (arg.Connection.authLevel < 1) return;
             if (arg.Args.Length >= 1)
             {
                 object addPlayer = FindPlayer(arg.Args[0]);

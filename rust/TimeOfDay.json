@@ -1,0 +1,16 @@
+{
+    "name": "TimeOfDay",
+    "description": "Alter day and night duration",
+    "author": "Fujikura",
+    "version": "2.2.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/timeofday.1355",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "SignTracker",
+    "description": "Track who last updated a sign with name and Steam ID, and optional logging",
+    "author": "Wulf",
+    "version": "2.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/signtracker.1060",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

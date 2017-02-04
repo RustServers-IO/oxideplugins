@@ -6,17 +6,20 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Alias System", "LaserHydra", "2.0.0", ResourceId = 1307)]
+    [Info("Alias System", "LaserHydra", "2.1.0", ResourceId = 1307)]
     [Description("Setup alias for chat and console commands")]
     class AliasSystem : RustPlugin
     {
+		const string permadmin = "aliassystem.admin";
+		const string permuse = "aliassystem.use";
+
 		class Alias
 		{
 			public string original;
 			public string alias;
 			public string originaltype;
 			public string aliastype;
-			public string permission = "commandalias.use";
+			public string permission = permuse;
 			
 			public Alias(string aliasname, string Original)
 			{
@@ -48,12 +51,12 @@ namespace Oxide.Plugins
 		
 		Data LoadData() 
 		{
-			return Interface.GetMod().DataFileSystem.ReadObject<Data>("AliasSystem_Data");
+			return Interface.Oxide.DataFileSystem.ReadObject<Data>("AliasSystem_Data");
 		}
 		
 		void SaveData()
 		{
-			Interface.GetMod().DataFileSystem.WriteObject("AliasSystem_Data", data);
+			Interface.Oxide.DataFileSystem.WriteObject("AliasSystem_Data", data);
 		}
 		
 		void Loaded()
@@ -61,8 +64,8 @@ namespace Oxide.Plugins
 			data = LoadData();
 			LoadConfig();
 			
-			if(!permission.PermissionExists("commandalias.admin")) permission.RegisterPermission("commandalias.admin", this);
-			if(!permission.PermissionExists("commandalias.use")) permission.RegisterPermission("commandalias.use", this);
+			permission.RegisterPermission(permadmin, this);
+			permission.RegisterPermission(permuse, this);
 
             foreach(Alias current in data.alias)
             {
@@ -110,7 +113,7 @@ namespace Oxide.Plugins
 			BasePlayer player = (BasePlayer)arg?.connection?.player ?? null;
 			if(player == null) return;
 			
-			string command = arg?.cmd?.namefull?.Replace("global.", "") ?? "";
+			string command = arg?.cmd?.FullName?.Replace("global.", "") ?? "";
 			
 			if(GetAliasByName(command) == null) return;
 			
@@ -131,7 +134,7 @@ namespace Oxide.Plugins
 		[ChatCommand("alias")]
 		void cmdAlias(BasePlayer player, string command, string[] args)
 		{
-			if(!permission.UserHasPermission(player.userID.ToString(), "commandalias.admin")) 
+			if(!permission.UserHasPermission(player.userID.ToString(), permadmin)) 
 			{
 				SendChatMessage(player, "Command Alias", "You have no permission to use this command.");
 				return;

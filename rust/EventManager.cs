@@ -1,4 +1,5 @@
 ﻿// Requires: EMInterface
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,10 +13,9 @@ using Newtonsoft.Json.Linq;
 using Rust;
 using Network;
 
-
 namespace Oxide.Plugins
 {
-    [Info("Event Manager", "Reneb / k1lly0u", "3.0.3", ResourceId = 740)]
+    [Info("Event Manager", "Reneb / k1lly0u", "3.0.4", ResourceId = 740)]
     class EventManager : RustPlugin
     {
         #region Fields        
@@ -1288,18 +1288,15 @@ namespace Oxide.Plugins
         #region Player TP Management  
         private void MovePosition(BasePlayer player, Vector3 destination)
         {
-            if (player.net?.connection != null)
-                player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+            if (player.net?.connection == null)
+				return;
+			player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
             StartSleeping(player);
             player.MovePosition(destination);
-            if (player.net?.connection != null)
-                player.ClientRPCPlayer(null, player, "ForcePositionTo", destination);
-            player.TransformChanged();
-            if (player.net?.connection != null)
-                player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
+			player.ClientRPCPlayer(null, player, "ForcePositionTo", destination);
+			player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
             player.SendNetworkUpdateImmediate(false);
-            if (player.net?.connection == null) return;
             try { player.ClearEntityQueue(null); } catch { }
             player.SendFullSnapshot();
         }

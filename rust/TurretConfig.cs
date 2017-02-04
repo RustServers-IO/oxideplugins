@@ -10,14 +10,14 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("TurretConfig", "Calytic", "1.0.1", ResourceId = 1418)]
+    [Info("TurretConfig", "Calytic", "1.0.3", ResourceId = 1418)]
     [Description("Change turret damage, accuracy, bullet speed, health, targeting, etc")]
     class TurretConfig : RustPlugin
     {
         private readonly string turretPrefab = "assets/prefabs/npc/autoturret/autoturret_deployed.prefab";
         private uint turretPrefabId;
 
-        FieldInfo bulletDamageField = typeof(AutoTurret).GetField("bulletDamage", (BindingFlags.Instance | BindingFlags.NonPublic));
+        //FieldInfo bulletDamageField = typeof(AutoTurret).GetField("bulletDamage", (BindingFlags.NonPublic));
 
         FieldInfo healthField = typeof(BaseCombatEntity).GetField("_health", (BindingFlags.Instance | BindingFlags.NonPublic));
         FieldInfo maxHealthField = typeof(BaseCombatEntity).GetField("_maxHealth", (BindingFlags.Instance | BindingFlags.NonPublic));
@@ -29,14 +29,14 @@ namespace Oxide.Plugins
         private bool useGlobalDamageModifier;
         private float globalDamageModifier;
 
-        private float defaultBulletDamage;
+        //private float defaultBulletDamage;
         private float defaultBulletSpeed;
         private string defaultAmmoType;
         private float defaultSightRange;
         private float defaultHealth;
         private float defaultAimCone;
 
-        private Dictionary<string, object> bulletDamages;
+        //private Dictionary<string, object> bulletDamages;
         private Dictionary<string, object> bulletSpeeds;
         private Dictionary<string, object> ammoTypes;
         private Dictionary<string, object> sightRanges;
@@ -70,11 +70,11 @@ namespace Oxide.Plugins
             defaultHealth = GetConfig("Settings", "defaultHealth", 1000f);
             defaultAimCone = GetConfig("Settings", "defaultAimCone", 5f);
             defaultSightRange = GetConfig("Settings", "defaultSightRange", 30f);
-            defaultBulletDamage = GetConfig("Settings", "defaultBulletDamage", 10f);
+            //defaultBulletDamage = GetConfig("Settings", "defaultBulletDamage", 10f);
             defaultBulletSpeed = GetConfig("Settings", "defaultBulletSpeed", 10f);
             defaultAmmoType = GetConfig("Settings", "defaultAmmoType", "ammo.rifle");
 
-            bulletDamages = GetConfig("Settings", "bulletDamages", GetDefaultBulletDamages());
+            //bulletDamages = GetConfig("Settings", "bulletDamages", GetDefaultBulletDamages());
             bulletSpeeds = GetConfig("Settings", "bulletSpeeds", GetDefaultBulletSpeeds());
             ammoTypes = GetConfig("Settings", "ammoTypes", GetDefaultAmmoTypes());
             sightRanges = GetConfig("Settings", "sightRanges", GetDefaultSightRanges());
@@ -83,13 +83,13 @@ namespace Oxide.Plugins
 
             infiniteAmmo = GetConfig("Settings", "infiniteAmmo", false);
 
-            foreach (KeyValuePair<string, object> kvp in bulletDamages)
-            {
-                if (!permission.PermissionExists(kvp.Key))
-                {
-                    permission.RegisterPermission(kvp.Key, this);
-                }
-            }
+            //foreach (KeyValuePair<string, object> kvp in bulletDamages)
+            //{
+            //    if (!permission.PermissionExists(kvp.Key))
+            //    {
+            //        permission.RegisterPermission(kvp.Key, this);
+            //    }
+            //}
 
             foreach (KeyValuePair<string, object> kvp in bulletSpeeds)
             {
@@ -137,11 +137,11 @@ namespace Oxide.Plugins
         [ConsoleCommand("turrets.reload")]
         void ccTurretReload(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < 1)
+                if (arg.Connection.authLevel < 1)
                 {
-                    SendReply(arg, GetMsg("Denied: Permission", arg.connection.userid.ToString()));
+                    SendReply(arg, GetMsg("Denied: Permission", arg.Connection.userid.ToString()));
                     return;
                 }
             }
@@ -383,21 +383,21 @@ namespace Oxide.Plugins
             }
         }
 
-        float GetBulletDamage(string userID)
-        {
-            if (!string.IsNullOrEmpty(userID) && userID != "0")
-            {
-                foreach (KeyValuePair<string, object> kvp in bulletDamages)
-                {
-                    if (permission.UserHasPermission(userID, kvp.Key))
-                    {
-                        return Convert.ToSingle(kvp.Value);
-                    }
-                }
-            }
+        //float GetBulletDamage(string userID)
+        //{
+        //    if (!string.IsNullOrEmpty(userID) && userID != "0")
+        //    {
+        //        foreach (KeyValuePair<string, object> kvp in bulletDamages)
+        //        {
+        //            if (permission.UserHasPermission(userID, kvp.Key))
+        //            {
+        //                return Convert.ToSingle(kvp.Value);
+        //            }
+        //        }
+        //    }
 
-            return defaultBulletDamage;
-        }
+        //    return defaultBulletDamage;
+        //}
 
         float GetHealth(string userID)
         {
@@ -488,7 +488,7 @@ namespace Oxide.Plugins
             float turretHealth = GetHealth(userID);
             string ammoType = GetAmmoType(userID);
 
-            bulletDamageField.SetValue(turret, GetBulletDamage(userID));
+            //bulletDamageField.SetValue(turret, GetBulletDamage(userID));
             if (justCreated)
             {
                 healthField.SetValue(turret, turretHealth);
@@ -503,7 +503,7 @@ namespace Oxide.Plugins
             {
                 turret.InitializeHealth(turret.health, turretHealth);
             }
-            
+
             turret.bulletSpeed = GetBulletSpeed(userID);
             turret.sightRange = GetSightRange(userID);
             turret.startHealth = turretHealth;
@@ -527,8 +527,6 @@ namespace Oxide.Plugins
 
             turret.Reload();
 
-            //turret.enableSaving = false;
-            //turret.ServerInit();
             turret.SendNetworkUpdateImmediate(justCreated);
             
         }

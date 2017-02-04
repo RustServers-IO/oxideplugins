@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("Logger", "Wulf/lukespragg", "1.2.0", ResourceId = 670)]
+    [Info("Logger", "Wulf/lukespragg", "1.2.1", ResourceId = 670)]
     [Description("Configurable logging of chat, commands, and more")]
 
     class Logger : RustPlugin
@@ -141,13 +141,13 @@ namespace Oxide.Plugins
         {
             if (!logCommands || arg.connection == null) return;
 
-            var command = arg.cmd.namefull;
+            var command = arg.cmd.FullName;
             var args = arg.GetString(0);
 
             if (args.StartsWith("/") && !exclusions.Contains(args))
                 Log("commands", Lang("ChatCommand", null, arg.connection.username, arg.connection.userid, args));
             if (command != "chat.say" && !exclusions.Contains(command))
-                Log("commands", Lang("ConsoleCommand", null, arg.connection.username, arg.connection.userid, command, arg.ArgsStr));
+                Log("commands", Lang("ConsoleCommand", null, arg.connection.username, arg.connection.userid, command, arg.FullString));
         }
 
         #endregion

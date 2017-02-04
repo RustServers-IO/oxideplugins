@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("ExplodingBarrels", "ignignokt84", "0.3.0", ResourceId = 1902)]
+	[Info("ExplodingBarrels", "ignignokt84", "0.3.3", ResourceId = 1902)]
 	class ExplodingBarrels : RustPlugin
 	{
 		// list of barrels containing explosives
@@ -122,14 +122,16 @@ namespace Oxide.Plugins
 		bool DefaultItemMappings()
 		{
 			data.itemMappings.Clear();
-			data.itemMappings[1974032895] = "PropaneExplosion"; // propane tank id
+			data.itemMappings[0] = "DefaultExplosion"; // random explosion handling
+			data.itemMappings[1974032895] = "DefaultExplosion"; // propane tank explosion
 			return true;
 		}
 		
 		bool DefaultEffects()
 		{
+			// default explosion effect
 			BarrelEffect eff = new BarrelEffect();
-			eff.name = "PropaneExplosion";
+			eff.name = "DefaultExplosion";
 			eff.damageMap["Blunt"] = 50f;
 			eff.damageMap["Heat"] = 25f;
 			eff.damageMap["Explosion"] = 25f;
@@ -157,16 +159,18 @@ namespace Oxide.Plugins
 		void OnEntitySpawned(BaseNetworkable entity)
 		{
 			if(entity == null) return;
-			if(entity is LootContainer && entity.ShortPrefabName.Contains("loot-barrel"))
+			if(entity is LootContainer && entity.ShortPrefabName.Contains("barrel"))
 			{
 				foreach(int id in data.itemMappings.Keys)
 				{
-					Item item = ((LootContainer)entity).inventory.FindItemByItemID(id);
+					Item item = null;
+					if(id != 0) // random explosion for all barrels, skip item check
+						item = ((LootContainer)entity).inventory.FindItemByItemID(id);
 
 					// explosive item found
-					if(item != null)
+					if(id == 0 || item != null)
 					{
-						barrels[entity.net.ID] = data.itemMappings[item.info.itemid];
+						barrels[entity.net.ID] = data.itemMappings[id];
 						break;
 					}
 				}
@@ -342,7 +346,7 @@ namespace Oxide.Plugins
 			// user doesn't have access to run console command
 			if(!hasAccess(arg)) return;
 			
-			string cmd = arg.cmd.namefull.Split('.')[1];
+			string cmd = arg.cmd.Name;
 			if(!Enum.IsDefined(typeof(Command), cmd))
 			{
 				// shouldn't hit
@@ -369,7 +373,7 @@ namespace Oxide.Plugins
 						showUsage(arg);
 						return;
 				}
-				SendReply(arg, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidParamForCmd"), arg.cmd.namefull))));
+				SendReply(arg, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidParamForCmd"), arg.cmd.FullName))));
 			}
 			showUsage(arg);
 		}

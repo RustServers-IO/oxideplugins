@@ -21,11 +21,12 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("CraftUI", "EinTime", "1.1.1")]
+    [Info("CraftUI", "EinTime", "1.2.1")]
     [Description("A fully customizable custom crafting UI, which allows admins to change item ingredients.")]
     class CraftUI : RustPlugin
     {
         const string ItemInfoListName = "Item List";
+        const float refreshTime = 0.25f;
 
         public static CraftUI S;
 
@@ -110,7 +111,7 @@ namespace Oxide.Plugins
 
             [NotAdmin] = "Only admins may use this command.",
 
-            [FacepunchGUIDisabled] = "Crafting from the FacePunch Crafting GUI is disabled.",
+            [FacepunchGUIDisabled] = "Crafting from the FacePunch Crafting GUI is disabled. Please press {0} to open the correct crafting gui.",
 
             [ItemListLoaded] = "Item List was loaded successfully",
             [ItemListSaved] = "Item List was saved successfully",
@@ -168,6 +169,7 @@ namespace Oxide.Plugins
             LoadDefaultMessages();
 
             CloseCraftUI_AllPlayers();
+            CloseOverlay_AllPlayers();
             S = this;
 
             itemInfoDic = new Dictionary<int, ItemInfo>();
@@ -216,6 +218,7 @@ namespace Oxide.Plugins
         void Unload()
         {
             CloseCraftUI_AllPlayers();
+            CloseOverlay_AllPlayers();
             SaveItemInfoDic();
             foreach(var kvp in playerDic)
             {
@@ -234,41 +237,79 @@ namespace Oxide.Plugins
 
         void SetBinding(BasePlayer player)
         {
+            rust.RunClientCommand(player, "bind f1 consoletoggle;craftui.closeoverlay;craftui.close");
+            rust.RunClientCommand(player, "bind escape craftui.closeoverlay;craftui.close");
+            rust.RunClientCommand(player, "bind tab inventory.toggle;craftui.toggleoverlay;craftui.close");
             rust.RunClientCommand(player, "bind " + OpenCraftUIBinding + " craftui.toggle");
         }
         void ResetBinding(BasePlayer player)
         {
             rust.RunClientCommand(player, "bind " + OpenCraftUIBinding + " " + defaultBinds[OpenCraftUIBinding]);
+            rust.RunClientCommand(player, "bind f1 consoletoggle");
+            rust.RunClientCommand(player, "bind tab inventory.toggle");
         }
 
         object OnItemCraft(ItemCraftTask task, BasePlayer crafter)
         {
+            PlayerInfo playerInfo = GetPlayer(crafter);
+
             if(AllowOldCrafting)
+            {
+                RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
+                RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
                 return null;
+            }
             if(!customItemCrafts.Contains(task.taskUID))
             {
                 foreach(var ingredient in task.blueprint.ingredients)
                 {
                     crafter.inventory.GiveItem(ItemManager.CreateByItemID(ingredient.itemid, (int)ingredient.amount * task.amount, 0));
                 }
-                PlayerChat(crafter, FacepunchGUIDisabled);
+                PlayerChat(crafter, FacepunchGUIDisabled, "'" + OpenCraftUIBinding + "'");
                 return false;
             }
+            RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
+            RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
             return null;
+        }
+        void OnItemCraftFinished(ItemCraftTask task, Item item)
+        {
+            PlayerInfo playerInfo = GetPlayer(task.owner);
+
+            RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
+            RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
         }
         void OnItemCraftCancelled(ItemCraftTask task)
         {
+
             if(task.owner == null) return;
             PlayerInfo playerInfo = GetPlayer(task.owner);
             if(playerInfo == null) return;
             if(!playerInfo.uiOpen) return;
 
-            RenderPanel(CraftQueueName, playerInfo);
-            timer.In(0.25f, () => RenderPanel(CraftQueueName, playerInfo));
-            RenderPanel(ResourceCostName, playerInfo);
-            timer.In(0.25f, () => RenderPanel(ResourceCostName, playerInfo));
-            RenderPanel(CraftQueueTimerName, playerInfo);
-            timer.In(0.25f, () => RenderPanel(CraftQueueTimerName, playerInfo));
+            RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
+            RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
+            RenderHudPanelDelayed(refreshTime, ResourceCostName, playerInfo);
+        }
+
+        void OnLootEntity(BasePlayer player, BaseEntity entity)
+        {
+            PlayerInfo playerInfo = GetPlayer(player);
+            StorageContainer storage = entity as StorageContainer;
+            if(storage == null) return;
+            float columns = Mathf.Max(1, Mathf.CeilToInt((float)storage.inventorySlots / 6f));
+            if(storage is BaseOven)
+                columns += 1.5f;
+            else if(storage is RepairBench)
+                columns += 1;
+            else if(storage is LiquidContainer)
+                columns += 3.5f;
+            else if(storage is SupplyDrop)
+                columns += 2f;
+            else if(storage is LootContainer)
+                columns += 2f;
+
+            RenderOverlay(playerInfo, true, columns);
         }
 
         void RefreshCraftQueue()
@@ -277,7 +318,7 @@ namespace Oxide.Plugins
             {
                 if(kvp.Value.uiOpen)
                 {
-                    RenderPanel(CraftQueueTimerName, kvp.Value);
+                    RenderHudPanel(CraftQueueTimerName, kvp.Value);
                 }
             }
         }
@@ -349,6 +390,9 @@ namespace Oxide.Plugins
         {
             public readonly BasePlayer basePlayer;
             public bool uiOpen;
+            public bool overlayOpen;
+            public bool overlayLooting;
+            public float overlayLootingColumns;
             public string selectedCategory;
             public ItemInfo selectedItem;
             public int currentCraftAmount;
@@ -488,6 +532,20 @@ namespace Oxide.Plugins
                 }
 
                 return true;
+            }
+            public int GetCraftCount(PlayerInfo playerInfo)
+            {
+                if(playerInfo == null)
+                    return -1;
+
+                int num = -1;
+                foreach(var ingredient in ingredients)
+                {
+                    num = Mathf.FloorToInt((float)playerInfo.basePlayer.inventory.GetAmount(ingredient.ingredientID) / ingredient.amount);
+                    if(num <= 0)
+                        return -1;
+                }
+                return num;
             }
             public string GetFormattedURL()
             {
@@ -676,6 +734,14 @@ namespace Oxide.Plugins
                 changeMade = true;
             }
 
+            foreach(var item in ItemManager.bpList)
+            {
+                if(CanAddItemInfo(item.targetItem))
+                {
+                    AddItemInfo(item.targetItem, true);
+                    changeMade = true;
+                }
+            }
             foreach(var item in ItemManager.itemList)
             {
                 if(CanAddItemInfo(item))
@@ -1141,6 +1207,10 @@ namespace Oxide.Plugins
         const string CraftQueueName = "CraftQueue";
         const string CraftQueueTimerName = "CraftQueueTimer";
 
+        const string CraftingButtonOverlayName = "CraftingButtonOverlay";
+        const string QuickCraftOverlayName = "QuickCraftOverlay";
+        const string QuickCraftOverlayLootingName = "QuicKCraftOverlayLooting";
+
         static readonly Dictionary<string, PanelInfo> panelAnchors = new Dictionary<string, PanelInfo>()
         {
             { CraftUIName, new PanelInfo(new PanelRect(0, 0, 1, 1), "0.1 0.1 0.1 0.9") },
@@ -1152,13 +1222,25 @@ namespace Oxide.Plugins
             { CraftQueueName, new PanelInfo(new PanelRect(0.06f, 0.15f, 0.55f, 0.246f), "0.4 0.4 0.4 0.4") },
             { CraftQueueTimerName, new PanelInfo(new PanelRect(0, 0, 0, 0), "0 0 0 0") }
         };
-
-        void ToggleCraftUI(BasePlayer player)
+        static readonly Dictionary<string, PanelInfo> overlayAnchors = new Dictionary<string, PanelInfo>()
         {
-            PlayerInfo pi = GetPlayer(player);
-            if (pi != null)
-                ToggleCraftUI(pi);
-        }
+            { CraftingButtonOverlayName, new PanelInfo( new PanelRect(0.2f, 0.9f, 0.8f, 1f), "0 0 0 0") },
+            { QuickCraftOverlayName, new PanelInfo( new PanelRect(0.65f, 0.125f, 0.95f, 0.45f), "0.3 0.3 0.3 1") },
+            { QuickCraftOverlayLootingName, new PanelInfo( new PanelRect(0.65f, 0.475f, 0.95f, 0.8f), "0.3 0.3 0.3 1") }
+        };
+
+        //This dictionary is used for the positiopn of the quick craft overlay. It's position needs to be shifted based on the number of columns on a lootable item.
+        static readonly Dictionary<float, PanelRect> lootableOverlayAnchors = new Dictionary<float, PanelRect>()
+        {
+            { 1, new PanelRect(0.65f, 0.325f, 0.95f, 0.65f) },
+            { 2, new PanelRect(0.65f, 0.4f, 0.95f, 0.725f) },
+            { 2.5f, new PanelRect(0.65f, 0.45f, 0.95f, 0.775f) },
+            { 3, new PanelRect(0.65f, 0.5f, 0.95f, 0.825f) },
+            { 4, new PanelRect(0.65f, 0.475f, 0.95f, 0.8f) },
+            { 4.5f, new PanelRect(0.65f, 0.55f, 0.95f, 0.875f) },
+            { 5, new PanelRect(0.65f, 0.65f, 0.95f, 0.975f) },
+        };
+
         void ToggleCraftUI(PlayerInfo playerInfo)
         {
             if (playerInfo == null)
@@ -1178,7 +1260,7 @@ namespace Oxide.Plugins
 
             foreach (var panel in panelAnchors)
             {
-                RenderPanel(panel.Key, playerInfo);
+                RenderHudPanel(panel.Key, playerInfo);
             }
         }
         void CloseCraftUI(PlayerInfo playerInfo)
@@ -1205,7 +1287,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void RenderPanel(string panelName, PlayerInfo playerInfo)
+        void RenderHudPanel(string panelName, PlayerInfo playerInfo)
         {
             if (playerInfo == null || playerInfo.basePlayer == null)
             {
@@ -1233,7 +1315,6 @@ namespace Oxide.Plugins
                 RectTransform = { AnchorMin = panelRect.AnchorMin, AnchorMax = panelRect.AnchorMax },
                 CursorEnabled = true
             }, "Hud", panelName);
-
             
             switch(panelName)
             {
@@ -1268,9 +1349,14 @@ namespace Oxide.Plugins
 
             CuiHelper.AddUi(playerInfo.basePlayer, elements);
         }
-
+        void RenderHudPanelDelayed(float delay, string panelName, PlayerInfo playerInfo)
+        {
+            NextTick(() => RenderHudPanel(panelName, playerInfo));
+            timer.Once(delay, () => RenderHudPanel(panelName, playerInfo));
+        }
         void RenderCategories(CuiElementContainer elements, PlayerInfo playerInfo)
         {
+            
             List<string> itemCategories = new List<string>(CategoryNames);
             itemCategories.Reverse();
             
@@ -1328,18 +1414,27 @@ namespace Oxide.Plugins
                 else
                     uncraftableItems.Add(itemInfo);
             }
+            
 
             float lowestBottom = 1f;
             for(int i = 0; i < craftableItems.Count; i++)
             {
+                if(craftableItems[i] == null)
+                    continue;
+
                 float bottom = AddItem(elements, i, craftableItems[i], playerInfo, true);
                 if (bottom < lowestBottom)
                     lowestBottom = bottom;
             }
             for(int i = 0; i < uncraftableItems.Count; i++)
             {
+                if(uncraftableItems[i] == null)
+                    continue;
+
                 AddItem(elements, i, uncraftableItems[i], playerInfo, false, lowestBottom);
             }
+
+            
         }
         float AddItem(CuiElementContainer elements, float index, ItemInfo itemInfo, PlayerInfo playerInfo, bool craftable, float startTop = 1)
         {
@@ -1652,9 +1747,223 @@ namespace Oxide.Plugins
             }, CraftQueueName);
         }
 
+        void RenderOverlay(PlayerInfo playerInfo, bool looting, float lootColumns = 3)
+        {
+            if(playerInfo == null)
+                return;
+
+            playerInfo.overlayOpen = true;
+            playerInfo.overlayLooting = looting;
+            playerInfo.overlayLootingColumns = lootColumns;
+
+            foreach(var panel in overlayAnchors)
+            {
+                if((looting && panel.Key == QuickCraftOverlayName) || (!looting && panel.Key == QuickCraftOverlayLootingName))
+                    continue;
+                RenderOverlayPanel(panel.Key, playerInfo);
+            }
+        }
+        void CloseOverlay(PlayerInfo playerInfo)
+        {
+            if(playerInfo == null)
+                return;
+
+            foreach(var kvp in overlayAnchors)
+            {
+                CuiHelper.DestroyUi(playerInfo.basePlayer, kvp.Key);
+            }
+            playerInfo.overlayOpen = false;
+        }
+        void CloseOverlay_AllPlayers()
+        {
+            if(BasePlayer.activePlayerList == null || BasePlayer.activePlayerList.Count == 0)
+                return;
+
+            foreach(var p in BasePlayer.activePlayerList)
+            {
+                PlayerInfo playerInfo = GetPlayer(p);
+                if(playerInfo != null)
+                    CloseOverlay(playerInfo);
+            }
+        }
+
+        void RenderOverlayPanel(string panelName, PlayerInfo playerInfo)
+        {
+            if(playerInfo == null || playerInfo.basePlayer == null)
+            {
+                PrintError("Render Overlay Panel called with a null PlayerInfo");
+                return;
+            }
+
+            if(!overlayAnchors.ContainsKey(panelName))
+            {
+                PrintError("Cannot render overlay panel '" + panelName + "' for player '" + playerInfo.basePlayer.displayName + "'. It does not exist");
+                PlayerChat(playerInfo.basePlayer, UnknownError);
+                return;
+            }
+
+            if(!playerInfo.overlayOpen)
+                return;
+
+            
+            PanelRect panelRect = overlayAnchors[panelName].rect;
+            if(panelName == QuickCraftOverlayLootingName)
+                panelRect = lootableOverlayAnchors[playerInfo.overlayLootingColumns];
+
+            CuiHelper.DestroyUi(playerInfo.basePlayer, panelName);
+            CuiElementContainer elements = new CuiElementContainer();
+
+            elements.Add(new CuiPanel
+            {
+                Image = { Color = overlayAnchors[panelName].backgroundColor },
+                RectTransform = { AnchorMin = panelRect.AnchorMin, AnchorMax = panelRect.AnchorMax }
+            }, "Overlay", panelName);
+
+            switch(panelName)
+            {
+                case CraftingButtonOverlayName:
+                    RenderCraftingButtonBlocker(elements, playerInfo);
+                    break;
+                case QuickCraftOverlayName:
+                case QuickCraftOverlayLootingName:
+                    RenderQuickCraft(elements, playerInfo);
+                    break;
+            }
+
+            CuiHelper.AddUi(playerInfo.basePlayer, elements);
+        }
+        void RenderCraftingButtonBlocker(CuiElementContainer elements, PlayerInfo playerInfo)
+        {
+            if(playerInfo == null)
+                return;
+
+            elements.Add(new CuiButton
+            {
+                Button = { Command = "craftui.closeoverlayopencraftui", Color = "0 0 0 0" },
+                Text = { Text = "" },
+                RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" }
+            }, CraftingButtonOverlayName);
+        }
+        void RenderQuickCraft(CuiElementContainer elements, PlayerInfo playerInfo)
+        {
+            if(playerInfo == null || itemInfoDic == null)
+                return;
+
+            List<ItemInfo> craftableItems = new List<ItemInfo>();
+            foreach(var itemInfo in itemInfoDic.Values)
+            {
+                if(itemInfo == null) continue;
+                if(!CategoryNames.Contains(itemInfo.category)) continue;
+                if(itemInfo.blocked) continue;
+                ItemDefinition itemDef = itemInfo.GetItemDef();
+                if(itemDef == null) continue;
+                if(!IncludeUncraftableItems && !itemDef.Blueprint.userCraftable)
+                    continue;
+                
+                if(itemInfo.GetCraftable(playerInfo))
+                    craftableItems.Add(itemInfo);
+            }
+
+            craftableItems = craftableItems.OrderByDescending(x => x.GetCraftCount(playerInfo)).Take(18).ToList();
+
+            string parentName = playerInfo.overlayLooting ? QuickCraftOverlayLootingName : QuickCraftOverlayName;
+
+            for(int i = 0; i < craftableItems.Count; i++)
+            {
+                AddQuickCraftItem(elements, i, craftableItems[i], playerInfo, parentName);
+            }
+
+            elements.Add(new CuiLabel
+            {
+                RectTransform = { AnchorMin = "0 0.8", AnchorMax = "1 0.97"},
+                Text = {Text = "QUICK CRAFT", Align = TextAnchor.MiddleLeft, Color = "1 1 1 1", FontSize = 20}
+            }, parentName);
+        }
+        float AddQuickCraftItem(CuiElementContainer elements, float index, ItemInfo itemInfo, PlayerInfo playerInfo, string parentName)
+        {
+            const int maxRows = 4;
+            const int maxColumns = 6;
+
+            int row = (int)(index / maxColumns);
+            int column = (int)index - (row * maxColumns);
+
+            float left = (float)column / maxColumns;
+            float right = (float)(column + 1) / maxColumns;
+            float top = 1 - ((float)row / maxRows);
+            float bottom = 1 - ((float)(row + 1) / maxRows);
+            left += 0.0025f;
+            right -= 0.0025f;
+            top -= 0.0025f;
+            bottom += 0.0025f;
+
+            top -= 0.2f;
+            bottom -= 0.2f;
+
+            PanelRect rect = new PanelRect(left, bottom, right, top);
+            string buttonColor = "0 0 0 0";
+
+            CuiRawImageComponent rawImage = new CuiRawImageComponent();
+            rawImage.Url = itemInfo.GetFormattedURL();
+            rawImage.Sprite = transparentSprite;
+            rawImage.Color = "1 1 1 1";
+
+            elements.Add(new CuiElement
+            {
+                Parent = parentName,
+                Components =
+                    {
+                        rawImage,
+                        new CuiRectTransformComponent {AnchorMin = rect.AnchorMin, AnchorMax = rect.AnchorMax },
+                    }
+            });
+
+            elements.Add(new CuiButton
+            {
+                Button = { Command = $"craft.begin { itemInfo.itemID }", Color = buttonColor },//, Sprite = transparentSprite },//, Color = backgroundColor },
+                RectTransform =
+                {
+                    AnchorMin = rect.AnchorMin,
+                    AnchorMax = rect.AnchorMax
+                },
+                Text = { Text = "", FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "0 0 0 0" },//, Color = "0.8 0.8 0.8 1" }
+            }, parentName);
+
+            
+            return bottom;
+        }
         #endregion
 
         #region Console Commands
+        [ConsoleCommand("craftui.toggleoverlay")]
+        void ccmdOverlayToggle(ConsoleSystem.Arg arg)
+        {
+            BasePlayer player = arg.Player();
+            PlayerInfo playerInfo = GetPlayer(player);
+
+            if(!playerInfo.overlayOpen)
+                RenderOverlay(playerInfo, false);
+            else
+                CloseOverlay(playerInfo);
+        }
+        [ConsoleCommand("craftui.closeoverlay")]
+        void ccmdOverlayClose(ConsoleSystem.Arg arg)
+        {
+            BasePlayer player = arg.Player();
+            PlayerInfo playerInfo = GetPlayer(player);
+
+            CloseOverlay(playerInfo);
+        }
+        [ConsoleCommand("craftui.closeoverlayopencraftui")]
+        void ccmdCloseOverlayOpenCraftUI(ConsoleSystem.Arg arg)
+        {
+            BasePlayer player = arg.Player();
+            PlayerInfo playerInfo = GetPlayer(player);
+
+            CloseOverlay(playerInfo);
+            rust.RunClientCommand(player, "inventory.toggle");
+            RenderCraftUI(playerInfo);
+        }
+
         [ConsoleCommand("craftui.toggle")]
         void ccmdCraftUIToggle(ConsoleSystem.Arg arg)
         {
@@ -1664,6 +1973,13 @@ namespace Oxide.Plugins
                 RenderCraftUI(playerInfo);
             else
                 CloseCraftUI(playerInfo);
+        }
+        [ConsoleCommand("craftui.close")]
+        void ccmdCraftUIClose(ConsoleSystem.Arg arg)
+        {
+            BasePlayer player = arg.Player();
+            PlayerInfo playerInfo = GetPlayer(player);
+            CloseCraftUI(playerInfo);
         }
 
         [ConsoleCommand("category.select")]
@@ -1675,10 +1991,11 @@ namespace Oxide.Plugins
             if (playerInfo == null) return;
 
             var categoryName = arg.ArgsStr;
+            
             playerInfo.selectedCategory = categoryName;
 
-            RenderPanel(CategoriesName, playerInfo);
-            RenderPanel(ItemListName, playerInfo);
+            RenderHudPanel(CategoriesName, playerInfo);
+            RenderHudPanel(ItemListName, playerInfo);
         }
 
         [ConsoleCommand("item.select")]
@@ -1696,10 +2013,10 @@ namespace Oxide.Plugins
             
             playerInfo.selectedItem = itemInfo;
 
-            RenderPanel(ItemListName, playerInfo);
-            RenderPanel(ItemInfoName, playerInfo);
-            RenderPanel(ResourceCostName, playerInfo);
-            RenderPanel(CraftCountName, playerInfo);
+            RenderHudPanel(ItemListName, playerInfo);
+            RenderHudPanel(ItemInfoName, playerInfo);
+            RenderHudPanel(ResourceCostName, playerInfo);
+            RenderHudPanel(CraftCountName, playerInfo);
         }
 
         [ConsoleCommand("craftamount.change")]
@@ -1716,8 +2033,8 @@ namespace Oxide.Plugins
             if (playerInfo.currentCraftAmount < 1)
                 playerInfo.currentCraftAmount = 1;
 
-            RenderPanel(ResourceCostName, playerInfo);
-            RenderPanel(CraftCountName, playerInfo);
+            RenderHudPanel(ResourceCostName, playerInfo);
+            RenderHudPanel(CraftCountName, playerInfo);
         }
         [ConsoleCommand("craftamount.max")]
         void ccmdCraftAmountMax(ConsoleSystem.Arg arg)
@@ -1743,8 +2060,8 @@ namespace Oxide.Plugins
 
             playerInfo.currentCraftAmount = curMax;
 
-            RenderPanel(ResourceCostName, playerInfo);
-            RenderPanel(CraftCountName, playerInfo);
+            RenderHudPanel(ResourceCostName, playerInfo);
+            RenderHudPanel(CraftCountName, playerInfo);
         }
         [ConsoleCommand("craft.begin")]
         void ccmdCraft(ConsoleSystem.Arg arg)
@@ -1779,10 +2096,12 @@ namespace Oxide.Plugins
 
             playerInfo.currentCraftAmount = 1;
 
-            RenderPanel(ResourceCostName, playerInfo);
-            RenderPanel(CraftCountName, playerInfo);
-            RenderPanel(CraftQueueName, playerInfo);
-            RenderPanel(CraftQueueTimerName, playerInfo);
+            RenderHudPanel(ResourceCostName, playerInfo);
+            RenderHudPanel(CraftCountName, playerInfo);
+            RenderHudPanel(CraftQueueName, playerInfo);
+            RenderHudPanel(CraftQueueTimerName, playerInfo);
+            RenderOverlayPanel(playerInfo.overlayLooting ? QuickCraftOverlayLootingName : QuickCraftOverlayName, playerInfo);
+            //RenderOverlayPanel(QuickCraftOverlayLootingName, playerInfo);
         }
         [ConsoleCommand("craft.end")]
         void ccmdCraftEnd(ConsoleSystem.Arg arg)
@@ -1804,9 +2123,9 @@ namespace Oxide.Plugins
             }
             if (task == null || task.blueprint == null || task.blueprint.targetItem == null)
             {
-                PrintError("Player '" + player.displayName + "' is attempting to cancel an invalid task.");
-                NextTick(() => RenderPanel(CraftQueueName, playerInfo));
-                NextTick(() => RenderPanel(CraftQueueTimerName, playerInfo));
+                PrintWarning("Player '" + player.displayName + "' is attempting to cancel an invalid task.");
+                RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
+                RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
                 return;
             }
             ItemInfo itemInfo = FindItemInfo(task.blueprint.targetItem);
@@ -1816,9 +2135,8 @@ namespace Oxide.Plugins
             }
 
             player.inventory.crafting.CancelTask(taskID, false);
-
-            NextTick(() => RenderPanel(CraftQueueName, playerInfo));
-            NextTick(() => RenderPanel(CraftQueueTimerName, playerInfo));
+            RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
+            RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
         }
         #endregion
 
@@ -1853,12 +2171,9 @@ namespace Oxide.Plugins
             }
 
             PlayerInfo playerInfo = GetPlayer(owner);
-            RenderPanel(CraftQueueName, playerInfo);
-            timer.In(0.25f, () => RenderPanel(CraftQueueName, playerInfo));
-            RenderPanel(ResourceCostName, playerInfo);
-            timer.In(0.25f, () => RenderPanel(ResourceCostName, playerInfo));
-            RenderPanel(CraftQueueTimerName, playerInfo);
-            timer.In(0.25f, () => RenderPanel(CraftQueueTimerName, playerInfo));
+            RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
+            RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
+            RenderHudPanelDelayed(refreshTime, ResourceCostName, playerInfo);
 
             owner.inventory.crafting.queue.Enqueue(itemCraftTask);
             if(itemCraftTask.owner != null)
@@ -1977,10 +2292,13 @@ namespace Oxide.Plugins
         {
             string url = string.Empty;
             idToURL.TryGetValue(itemID, out url);
+            if(url == "null" || url == null)
+                url = "";
             return url;
         }
         readonly Dictionary<int, string> idToURL = new Dictionary<int, string>()
         {
+            { 2033918259, "http://vignette2.wikia.nocookie.net/play-rust/images/d/d4/Python_Revolver_icon.png/revision/latest/scale-to-width-down/{0}" },   
             { 3655341, "http://vignette4.wikia.nocookie.net/play-rust/images/f/f2/Wood_icon.png/revision/latest/scale-to-width-down/{0}" },
             { 547302405, "http://vignette3.wikia.nocookie.net/play-rust/images/f/f2/Water_Jug_icon.png/revision/latest/scale-to-width-down/{0}" },
             { 112903447, "http://vignette3.wikia.nocookie.net/play-rust/images/7/7f/Water_icon.png/revision/latest/scale-to-width-down/{0}" },

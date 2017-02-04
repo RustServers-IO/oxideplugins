@@ -1,10 +1,11 @@
 ﻿using Oxide.Core;
-//using Oxide.Core.Libraries;
+using Oxide.Core.Libraries;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
 using Rust;
 using System;                      //DateTime
 using System.Collections.Generic;  //Required for Whilelist
+using Oxide.Core.Libraries.Covalence; //Requrired for IPlayer stuff
 //using System.Data;
 //using System.Globalization;
 using System.Linq;
@@ -16,326 +17,216 @@ using UnityEngine;
 //using Network;
 //using ProtoBuf;
 //using System.Runtime.CompilerServices;
-//using Oxide.Core.Libraries.Covalence;
 //using System.Text.RegularExpressions;
 //using Oxide.Plugins;
 using Oxide.Core.Configuration;
-
+//using Oxide.Core.CSharp;
+//using Rust.Registry;
+//using RustNative;
+using Oxide.Core.Database;
 namespace Oxide.Plugins
 {
-    [Info("PvXSelector", "Alphawar", "0.9.5", ResourceId = 1817)]
-    [Description("Player vs X Selector: Beta version 14")]
+    [Info("PvXSelector", "Alphawar", "0.9.6", ResourceId = 1817)]
+    [Description("Player vs X Selector: Beta version 19/01/2017")]
     class PvXselector : RustPlugin
     {
-
         #region Data/PlayerJoin/ServerInit
         //Loaded goes first
-        PlayerDataStorage playerData;
-        private DynamicConfigFile PlayerData;
-        TicketDataStorage ticketData;
-        private DynamicConfigFile TicketData;
-        TicketLogStorage ticketLog;
-        private DynamicConfigFile TicketLog;
+        public static PvXselector instance;
 
-        private List<ulong> selectGuiOpen = new List<ulong>();
-        private Hash<ulong, PlayerInfo> InfoCache = new Hash<ulong, PlayerInfo>();
-        private List<ulong> SleeperCache = new List<ulong>();
-        private List<ulong> UnknownUserCache = new List<ulong>();
-        private List<BasePlayer> AdminPlayerMode = new List<BasePlayer>();
-        private List<BasePlayer> activeAdmins = new List<BasePlayer>();
-        private List<ulong> antiChatSpam = new List<ulong>();
-        private Dictionary<ulong, List<string>> OpenUI = new Dictionary<ulong, List<string>>();
 
-        class PlayerDataStorage
+        public static class Cooldowns
         {
-            public Hash<ulong, PlayerInfo> Info = new Hash<ulong, PlayerInfo>();
-            public List<ulong> sleepers = new List<ulong>();
-            public List<ulong> UnknownUser = new List<ulong>();
-        }
-        class TicketDataStorage
-        {
-            public Dictionary<int, ulong> Link = new Dictionary<int, ulong>();
-            public Dictionary<ulong, Ticket> Info = new Dictionary<ulong, Ticket>();
-            public Dictionary<ulong, string> Notification = new Dictionary<ulong, string>();
-        }
-        class TicketLogStorage
-        {
-            public Dictionary<int, LogData> Log = new Dictionary<int, LogData>();
+            public static List<ulong> enemyOpModeWarning = new List<ulong>();
+            public static List<ulong> menuGui = new List<ulong>();
         }
 
-        class PlayerInfo
-        {
-            public string username;
-            public string FirstConnection;
-            public string LatestConnection;
-            public string mode;
-            public bool ticket;
-        }
-        class Ticket
-        {
-            public int TicketNumber;
-            public string Username;
-            public string UserId;
-            public string requested;
-            public string reason;
-            public string CreatedTimeStamp;
-        }
-        class LogData
-        {
-            public string UserId;
-            public string AdminId;
-            public string Username;
-            public string AdminName;
-            public string requested;
-            public string reason;
-            public bool Accepted;
-            public string CreatedTimeStamp;
-            public string ClosedTimeStamp;
-        }
 
+        void Loaded()
+        {
+            ModeSwitch.Ticket.Data.Initiate();
+            ModeSwitch.Cooldown.Data.Initiate();
+            Players.Data.Initiate();
+            Containers.Data.Initiate();
+            lang.RegisterMessages(Lang.List, this);
+            PermissionHandle();
+            LoadVariables();
+            instance = this;
+        }
         void OnServerInitialized()
         {
             LoadData();
-            InfoCache = playerData.Info;
-            checkPlayersRegistered();
-            RegisterGroups();
-            foreach (BasePlayer _player in BasePlayer.activePlayerList)
+            CheckPlayersRegistered();
+            foreach (BasePlayer Player in BasePlayer.activePlayerList)
             {
-                if (!isNPC(_player))
+                if (!Players.State.IsNPC(Player))
                 {
-                    createPvXIndicator(_player);
-                    if (isplayerNA(_player))createPvXSelector(_player);
-                    if (hasPerm(_player, "admin"))
+                    GUI.Create.PlayerIndicator(Player);
+                    ModeSwitch.Cooldown.Check(Player);
+                    if (HasPerm(Player, "admin"))
                     {
-                        activeAdmins.Add(_player);
-                        createAdminIndicator(_player);
+                        Players.Adminmode.AddPlayer(Player.OwnerID);
+                        GUI.Create.AdminIndicator(Player);
                     }
-                    updatePlayerChatTag(_player);
+                    if (Players.State.IsNA(Player)) PvxChatNotification(Player);
+                    UpdatePlayerChatTag(Player);
                 }
             }
-            foreach (ulong _key in playerData.Info.Keys)
+            foreach (ulong _key in Players.Data.playerData.Info.Keys)
             {
-                if (playerData.Info[_key].FirstConnection == null) playerData.Info[_key].FirstConnection = DateTimeStamp();
-                if (playerData.Info[_key].LatestConnection == null) playerData.Info[_key].LatestConnection = DateTimeStamp();
-                if (playerData.Info[_key].FirstConnection == "null") playerData.Info[_key].FirstConnection = DateTimeStamp();
-                if (playerData.Info[_key].LatestConnection == "null") playerData.Info[_key].LatestConnection = DateTimeStamp();
+                if (Players.Data.playerData.Info[_key].FirstConnection == null) Players.Data.playerData.Info[_key].FirstConnection = DateTimeStamp();
+                if (Players.Data.playerData.Info[_key].LatestConnection == null) Players.Data.playerData.Info[_key].LatestConnection = DateTimeStamp();
+                if (Players.Data.playerData.Info[_key].FirstConnection == "null") Players.Data.playerData.Info[_key].FirstConnection = DateTimeStamp();
+                if (Players.Data.playerData.Info[_key].LatestConnection == "null") Players.Data.playerData.Info[_key].LatestConnection = DateTimeStamp();
             }
-        }
-        void Loaded()
-        {
-            PlayerData = Interface.Oxide.DataFileSystem.GetFile("PvX/PlayerData");
-            TicketData = Interface.Oxide.DataFileSystem.GetFile("PvX/TicketData");
-            TicketLog = Interface.Oxide.DataFileSystem.GetFile("PvX/TicketLog");
-            lang.RegisterMessages(messages, this);
-            permissionHandle();
-            LoadVariables();
-        }
-        void Unloaded()
-        {
-            foreach (var _player in BasePlayer.activePlayerList)
-            {
-                DestroyAllPvXUI(_player);
-            }
-            SaveAll();
         }
 
-        void saveCacheData()
+        void Unloaded()
         {
-            playerData.Info = InfoCache;
-            playerData.sleepers = SleeperCache;
-            playerData.UnknownUser = UnknownUserCache;
-            PlayerData.WriteObject(playerData);
+            foreach (var Player in BasePlayer.activePlayerList)
+            {
+                DestroyAllPvXUI(Player);
+            }
+            SaveData.All();
         }
-        void saveTicketData()
+
+        class SaveData
         {
-            TicketData.WriteObject(ticketData);
-        }
-        void saveTicketLog()
-        {
-            TicketLog.WriteObject(TicketLog);
-        }
-        void SaveAll()
-        {
-            playerData.Info = InfoCache;
-            playerData.sleepers = SleeperCache;
-            playerData.UnknownUser = UnknownUserCache;
-            PlayerData.WriteObject(playerData);
-            TicketData.WriteObject(ticketData);
-            TicketLog.WriteObject(ticketLog);
+            public static void All()
+            {
+                ModeSwitch.Cooldown.Data.Save();
+                ModeSwitch.Ticket.Data.Save();
+                Players.Data.Save();
+                Containers.Data.Save();
+            }
+            public static void TicketData()
+            {
+                ModeSwitch.Ticket.Data.Save();
+            }
+            public static void ModeSwitchData()
+            {
+                ModeSwitch.Cooldown.Data.Save();
+            }
+            public static void SharedContainer()
+            {
+                Containers.Data.Save();
+            }
         }
 
         void LoadData()
         {
-            try
-            {
-                playerData = PlayerData.ReadObject<PlayerDataStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load player data, creating new datafile");
-                playerData = new PlayerDataStorage();
-                InfoCache = playerData.Info;
-            }
-            try
-            {
-                ticketData = TicketData.ReadObject<TicketDataStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load Ticket data, creating new datafile");
-                ticketData = new TicketDataStorage();
-            }
-            try
-            {
-                ticketLog = TicketLog.ReadObject<TicketLogStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load Ticket Log, creating new datafile");
-                ticketLog = new TicketLogStorage();
-            }
+            ModeSwitch.Ticket.Data.Load();
+            ModeSwitch.Cooldown.Data.Load();
+            Players.Data.Load();
+            Containers.Data.Load();
         }
-        void OnPlayerInit(BasePlayer _player)
+        void OnPlayerInit(BasePlayer Player)
         {
-            if (_player == null) return;
-            if (_player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+            if (Player == null) return;
+            if (Player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
             {
-                timer.Once(3, () => OnPlayerInit(_player));
+                timer.Once(3f, () =>
+                {
+                    OnPlayerInit(Player);
+                });
                 return;
             }
-            else PlayerLoaded(_player);
+            else PlayerLoaded(Player);
         }
-        void PlayerLoaded(BasePlayer _player)
+        void PlayerLoaded(BasePlayer Player)
         {
-            if (hasPerm(_player, "admin"))
+            if (Players.State.IsNPC(Player)) return;
+            if (Players.IsNewPlayer(Player.userID))
+                Players.Add(Player);
+            ModeSwitch.Cooldown.Check(Player);
+            GUI.Create.PlayerIndicator(Player);
+            if (IsAdmin(Player))
             {
-                activeAdmins.Add(_player);
-                createAdminIndicator(_player);
+                Players.Adminmode.AddPlayer(Player.OwnerID);
+                GUI.Create.AdminIndicator(Player);
             }
-            if (playerData.UnknownUser.Contains(_player.userID))
+            if (Players.Data.playerData.UnknownUsers.Contains(Player.userID))
             {
-                updatePvXPlayerData(_player);
-                playerData.UnknownUser.Remove(_player.userID);
+                UpdatePvXPlayerData(Player);
+                Players.Data.playerData.UnknownUsers.Remove(Player.userID);
             }
-            if (isplayerNA(_player))
+            if (Players.Data.playerData.Sleepers.Contains(Player.userID))
             {
-                updatePlayerChatTag(_player);
-                saveCacheData();
-                createPvXIndicator(_player);
-                createPvXSelector(_player);
-                return;
+                UpdatePvXPlayerData(Player);
+                Players.Data.playerData.Sleepers.Remove(Player.userID);
             }
-            InfoCache[_player.userID].LatestConnection = DateTimeStamp();
-            updatePlayerChatTag(_player);
-            if (SleeperCache.Contains(_player.userID))
-            {
-                updatePvXPlayerData(_player);
-                SleeperCache.Remove(_player.userID);
-                saveCacheData();
-            }
-            if (UnknownUserCache.Contains(_player.userID))
-            {
-                updatePvXPlayerData(_player);
-                saveCacheData();
-            }
-            SaveAll();
-            createPvXIndicator(_player);
-            if (InfoCache[_player.userID].mode != "NA") return;
-            else if (ticketData.Notification.ContainsKey(_player.userID)) LangMSG(_player, "TickClosLogin", ticketData.Notification[_player.userID]);
-            else createPvXSelector(_player);
+            Players.Data.playerData.Info[Player.userID].LatestConnection = DateTimeStamp();
+            UpdatePlayerChatTag(Player);
+            SaveData.All();
+            GUI.Create.PlayerIndicator(Player);
+            if (Players.Data.playerData.Info[Player.userID].mode != Mode.NA) return;
+            else if (ModeSwitch.Ticket.Data.ticketData.Notification.ContainsKey(Player.userID)) Messages.Chat(Players.Find.Iplayer(Player.userID), "TickClosLogin", ModeSwitch.Ticket.Data.ticketData.Notification[Player.userID]);
+            else if (Players.Data.playerData.Info[Player.userID].mode == Mode.NA) PvxChatNotification(Player);
         }
-        void OnPlayerDisconnected(BasePlayer _player)
+        void OnPlayerDisconnected(BasePlayer Player)
         {
-            selectGuiOpen.Remove(_player.userID);
-            if (hasPerm(_player, "admin"))
+            if (IsAdmin(Player))
             {
-                activeAdmins.Remove(_player);
+                Players.Adminmode.Online.Remove(Player.userID);
+            }
+            if (Players.Adminmode.ContainsPlayer(Player.userID))
+            {
+                Players.Adminmode.RemovePlayer(Player.userID);
             }
         }
-        void OnPlayerRespawned(BasePlayer _player)
+        void OnPlayerRespawned(BasePlayer Player)
         {
         }
 
-
-        void addTicketLog(BasePlayer _admin, int _ticketID, bool _)
+        void CheckPlayersRegistered()
         {
-            ulong _UserID = ticketData.Link[_ticketID];
-            int _logID = NewLogID();
-            ticketLog.Log.Add(_logID, new LogData
-            {
-                Accepted = true,
-                ClosedTimeStamp = DateTimeStamp(),
-                AdminId = _admin.UserIDString,
-                CreatedTimeStamp = ticketData.Info[_UserID].CreatedTimeStamp,
-                reason = ticketData.Info[_UserID].reason,
-                requested = ticketData.Info[_UserID].requested,
-                UserId = ticketData.Info[_UserID].UserId,
-                AdminName = _admin.displayName,
-                Username = ticketData.Info[_UserID].Username,
-            });
+            foreach (BasePlayer Player in BasePlayer.activePlayerList)
+                if (!(Players.Data.playerData.Info.ContainsKey(Player.userID)))
+                    Players.Add(Player);
+
+            foreach (BasePlayer Player in BasePlayer.sleepingPlayerList)
+                if (!(Players.Data.playerData.Info.ContainsKey(Player.userID)))
+                    Players.AddSleeper(Player);
         }
 
-        void checkPlayersRegistered()
-        {
-            foreach (BasePlayer _player in BasePlayer.activePlayerList)
-                if (!(InfoCache.ContainsKey(_player.userID)))
-                    addPlayer(_player);
 
-            foreach (BasePlayer _player in BasePlayer.sleepingPlayerList)
-                if (!(InfoCache.ContainsKey(_player.userID)))
-                    addSleeper(_player);
-        }
-        void addPlayer(BasePlayer _player)
-        {
-            if (isNPC(_player.userID)) return;
-            InfoCache.Add(_player.userID, new PlayerInfo
-            {
-                username = _player.displayName,
-                mode = "NA",
-                ticket = false,
-                FirstConnection = DateTimeStamp(),
-                LatestConnection = DateTimeStamp(),
-            });
-            createPvXSelector(_player);
-            saveCacheData();
-        }
-        void addSleeper(BasePlayer _player)
-        {
-            if (isNPC(_player.userID)) return;
-            InfoCache.Add(_player.userID, new PlayerInfo
-            {
-                username = _player.displayName,
-                mode = "NA",
-                ticket = false,
-                FirstConnection = DateTimeStamp(),
-                LatestConnection = "Sleeper",
-            });
-            SleeperCache.Add(_player.userID);
-            saveCacheData();
-        }
-        void addOffline(ulong _userID)
-        {
-            if (isNPC(_userID)) return;
-            InfoCache.Add(_userID, new PlayerInfo
-            {
-                username = "UNKNOWN",
-                mode = "NA",
-                ticket = false,
-                FirstConnection = DateTimeStamp(),
-                LatestConnection = "UNKNOWN",
-            });
-            UnknownUserCache.Add(_userID);
-            saveCacheData();
-        }
+        static string pvxIndicator = "PvXPlayerStateIndicator";
+        static string pvxMenuBack = "PvXMenu_Main_Background";
+        static string pvxMenuBanner = "PvXMenu_Main_Banner";
+        static string pvxMenuBannerTitle = "PvXMenu_Main_Banner_Title";
+        static string pvxMenuBannerVersion = "PvXMenu_Main_Banner_Version";
+        static string pvxMenuBannerModType = "PvXMenu_Main_Banner_ModType";
+        static string pvxMenuSide = "PvXMenu_Main_Side";
+        static string pvxMenuMain = "PvXMenu_Main";
 
-        static string pvxPlayerSelectorUI = "createPvXModeSelector";
+
+        static string pvxIndicatorGui = "createPvXModeSelector";
         static string pvxPlayerUI = "pvxPlayerModeUI";
         static string pvxAdminUI = "pvxAdminTicketCountUI";
-        string[] GuiList = new string[] { pvxPlayerSelectorUI, pvxPlayerUI, pvxAdminUI};
+        static string UIMain = "PvXUI_Main";
+        static string UIPanel = "PvXUI_Panel";
+        static string[] GuiList = new string[] { pvxIndicatorGui,
+            pvxPlayerUI, pvxAdminUI,
+            UIMain, UIPanel, pvxMenuBanner,
+            pvxIndicator, pvxMenuBack , pvxMenuMain,
+            pvxMenuBannerTitle, pvxMenuBannerVersion,
+            pvxMenuBannerModType
+        };
 
         #endregion
 
         #region Config/Permision/Plugin Ref
+        //None Adjustable
+        private string PvXModtype = "Patreon Edition";//Regular Oxide Donator Patreon Developer
+        private bool DebugMode;
+        //Core
+        private bool TicketSystem;
+        private bool CooldownSystem;
+        private int CooldownTime;
+        private float playerIndicatorMinWid;
+        private float playerIndicatorMinHei;
+        private float adminIndicatorMinWid;
+        private float adminIndicatorMinHei;
         //Players
         private bool PvEAttackPvE;
         private bool PvEAttackPvP;
@@ -423,11 +314,14 @@ namespace Oxide.Plugins
         private float FireDamagePvPStruc;
         //Others
         public static bool DisableUI_FadeIn;
-        private bool DebugMode;
-        private bool NamesIncludeSleepers;
         private string ChatPrefixColor;
         private string ChatPrefix;
         private string ChatMessageColor;
+        /*
+         *
+         * END Of Config
+         *  
+        */
 
         protected override void LoadDefaultConfig()
         {
@@ -437,97 +331,105 @@ namespace Oxide.Plugins
         }
         void LoadVariables() //Stores Default Values, calling GetConfig passing: menu, dataValue, defaultValue
         {
+            //Core
+            TicketSystem = Convert.ToBoolean(GetConfig(ConfigLists.Core, "01:Ticket System", true));
+            CooldownSystem = Convert.ToBoolean(GetConfig(ConfigLists.Core, "01:Cooldown System", true));
+            CooldownTime = Convert.ToInt32(GetConfig(ConfigLists.Core, "02:Cooldown Time (Seconds)", 3600));
+            playerIndicatorMinWid = Convert.ToSingle(GetConfig(ConfigLists.Core, "08:player Gui width anchor", 0.484));
+            playerIndicatorMinHei = Convert.ToSingle(GetConfig(ConfigLists.Core, "07:player Gui height anchor", 0.111));
+            adminIndicatorMinHei = Convert.ToSingle(GetConfig(ConfigLists.Core, "09:admin Gui height anchor", 0.055));
+            adminIndicatorMinWid = Convert.ToSingle(GetConfig(ConfigLists.Core, "10:admin Gui width anchor", 0.166));
             //Players
-            PvEAttackPvE = Convert.ToBoolean(GetConfig("2: Player", "01: PvE v PvE", false));
-            PvEAttackPvP = Convert.ToBoolean(GetConfig("2: Player", "02:PvE v PvP", false));
-            PvPAttackPvE = Convert.ToBoolean(GetConfig("2: Player", "03:PvP v PvE", false));
-            PvPAttackPvP = Convert.ToBoolean(GetConfig("2: Player", "04:PvP v PvP", true));
-            PvELootPvE = Convert.ToBoolean(GetConfig("2: Player", "05:PvE Loot PvE", true));
-            PvELootPvP = Convert.ToBoolean(GetConfig("2: Player", "06:PvE Loot PvP", false));
-            PvPLootPvE = Convert.ToBoolean(GetConfig("2: Player", "07:PvP Loot PvE", false));
-            PvPLootPvP = Convert.ToBoolean(GetConfig("2: Player", "08:PvP Loot PvP", true));
-            PvEUsePvPDoor = Convert.ToBoolean(GetConfig("2: Player", "09:PvE Use PvPDoor", false));
-            PvPUsePvEDoor = Convert.ToBoolean(GetConfig("2: Player", "10:PvP Use PvEDoor", false));
-            PvEDamagePvE = Convert.ToSingle(GetConfig("2: Player", "11:PvE Damage PvE", 0.0));
-            PvEDamagePvP = Convert.ToSingle(GetConfig("2: Player", "12:PvE Damage PvP", 0.0));
-            PvPDamagePvE = Convert.ToSingle(GetConfig("2: Player", "13:PvP Damage PvE", 0.0));
-            PvPDamagePvP = Convert.ToSingle(GetConfig("2: Player", "14:PvP Damage PvP", 1.0));
-            PvEDamagePvEStruct = Convert.ToSingle(GetConfig("2: Player", "15: PvEDamagePvEStruct", 0.0));
-            PvEDamagePvPStruct = Convert.ToSingle(GetConfig("2: Player", "16: PvEDamagePvPStruct", 0.0));
-            PvPDamagePvEStruct = Convert.ToSingle(GetConfig("2: Player", "17: PvPDamagePvEStruct", 0.0));
-            PvPDamagePvPStruct = Convert.ToSingle(GetConfig("2: Player", "18: PvPDamagePvPStruct", 1.0));
+            PvEAttackPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "01: PvE v PvE", false));
+            PvEAttackPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "02:PvE v PvP", false));
+            PvPAttackPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "03:PvP v PvE", false));
+            PvPAttackPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "04:PvP v PvP", true));
+            PvELootPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "05:PvE Loot PvE", true));
+            PvELootPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "06:PvE Loot PvP", false));
+            PvPLootPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "07:PvP Loot PvE", false));
+            PvPLootPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "08:PvP Loot PvP", true));
+            PvEUsePvPDoor = Convert.ToBoolean(GetConfig(ConfigLists.Player, "09:PvE Use PvPDoor", false));
+            PvPUsePvEDoor = Convert.ToBoolean(GetConfig(ConfigLists.Player, "10:PvP Use PvEDoor", false));
+            PvEDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Player, "11:PvE Damage PvE", 0.0));
+            PvEDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Player, "12:PvE Damage PvP", 0.0));
+            PvPDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Player, "13:PvP Damage PvE", 0.0));
+            PvPDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Player, "14:PvP Damage PvP", 1.0));
+            PvEDamagePvEStruct = Convert.ToSingle(GetConfig(ConfigLists.Player, "18: PvEDamagePvEStruct", 0.0));
+            PvEDamagePvPStruct = Convert.ToSingle(GetConfig(ConfigLists.Player, "18: PvEDamagePvPStruct", 0.0));
+            PvPDamagePvEStruct = Convert.ToSingle(GetConfig(ConfigLists.Player, "18: PvPDamagePvEStruct", 0.0));
+            PvPDamagePvPStruct = Convert.ToSingle(GetConfig(ConfigLists.Player, "18: PvPDamagePvPStruct", 1.0));
             //Metabolism
-            PvEFoodLossRate = Convert.ToSingle(GetConfig("3: Metabolism", "01: PvEFoodLossRate", 0.03));
-            PvEWaterLossRate = Convert.ToSingle(GetConfig("3: Metabolism", "02: PvEWaterLossRate", 0.03));
-            PvEHealthGainRate = Convert.ToSingle(GetConfig("3: Metabolism", "03: PvEHealthGainRate", 0.03));
-            PvEFoodSpawn = Convert.ToSingle(GetConfig("3: Metabolism", "04: PvEFoodSpawn", 100.0));
-            PvEWaterSpawn = Convert.ToSingle(GetConfig("3: Metabolism", "05: PvEWaterSpawn", 250.00));
-            PvEHealthSpawn = Convert.ToSingle(GetConfig("3: Metabolism", "06: PvEHealthSpawn", 500.00));
-            PvPFoodLossRate = Convert.ToSingle(GetConfig("3: Metabolism", "07: PvPFoodLossRate", 0.03));
-            PvPWaterLossRate = Convert.ToSingle(GetConfig("3: Metabolism", "08: PvPWaterLossRate", 0.03));
-            PvPHealthGainRate = Convert.ToSingle(GetConfig("3: Metabolism", "09: PvPHealthGainRate", 0.03));
-            PvPFoodSpawn = Convert.ToSingle(GetConfig("3: Metabolism", "10: PvPFoodSpawn", 100.0));
-            PvPWaterSpawn = Convert.ToSingle(GetConfig("3: Metabolism", "11: PvPWaterSpawn", 250.0));
-            PvPHealthSpawn = Convert.ToSingle(GetConfig("3: Metabolism", "12: PvPHealthSpawn", 500.0));
+            PvEFoodLossRate = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "01: PvEFoodLossRate", 0.03));
+            PvEWaterLossRate = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "02: PvEWaterLossRate", 0.03));
+            PvEHealthGainRate = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "03: PvEHealthGainRate", 0.03));
+            PvEFoodSpawn = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "04: PvEFoodSpawn", 100.0));
+            PvEWaterSpawn = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "05: PvEWaterSpawn", 250.00));
+            PvEHealthSpawn = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "06: PvEHealthSpawn", 500.00));
+            PvPFoodLossRate = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "07: PvPFoodLossRate", 0.03));
+            PvPWaterLossRate = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "08: PvPWaterLossRate", 0.03));
+            PvPHealthGainRate = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "09: PvPHealthGainRate", 0.03));
+            PvPFoodSpawn = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "10: PvPFoodSpawn", 100.0));
+            PvPWaterSpawn = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "11: PvPWaterSpawn", 250.0));
+            PvPHealthSpawn = Convert.ToSingle(GetConfig(ConfigLists.Metabolism, "12: PvPHealthSpawn", 500.0));
             //NPC
-            NPCAttackPvE = Convert.ToBoolean(GetConfig("4: NPC", "01: NPC Attack PvE", true));
-            NPCAttackPvP = Convert.ToBoolean(GetConfig("4: NPC", "02: NPC Attack PvP", true));
-            PvEAttackNPC = Convert.ToBoolean(GetConfig("4: NPC", "03: PvE Attack NPC", true));
-            PvPAttackNPC = Convert.ToBoolean(GetConfig("4: NPC", "04: PvP Attack NPC", true));
-            NPCDamagePvE = Convert.ToSingle(GetConfig("4: NPC", "05: NPC Damage PvE", 1.0));
-            NPCDamagePvP = Convert.ToSingle(GetConfig("4: NPC", "06: NPC Damage PvP", 1.0));
-            PvEDamageNPC = Convert.ToSingle(GetConfig("4: NPC", "07: PvE Damage NPC", 1.0));
-            PvPDamageNPC = Convert.ToSingle(GetConfig("4: NPC", "08: PvP Damage NPC", 1.0));
-            PvELootNPC = Convert.ToBoolean(GetConfig("4: NPC", "09: PvE Loot NPC", true));
-            PvPLootNPC = Convert.ToBoolean(GetConfig("4: NPC", "10: PvP Loot NPC", true));
+            NPCAttackPvE = Convert.ToBoolean(GetConfig(ConfigLists.NPC, "01: NPC Attack PvE", true));
+            NPCAttackPvP = Convert.ToBoolean(GetConfig(ConfigLists.NPC, "02: NPC Attack PvP", true));
+            PvEAttackNPC = Convert.ToBoolean(GetConfig(ConfigLists.NPC, "03: PvE Attack NPC", true));
+            PvPAttackNPC = Convert.ToBoolean(GetConfig(ConfigLists.NPC, "04: PvP Attack NPC", true));
+            NPCDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.NPC, "05: NPC Damage PvE", 1.0));
+            NPCDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.NPC, "06: NPC Damage PvP", 1.0));
+            PvEDamageNPC = Convert.ToSingle(GetConfig(ConfigLists.NPC, "07: PvE Damage NPC", 1.0));
+            PvPDamageNPC = Convert.ToSingle(GetConfig(ConfigLists.NPC, "08: PvP Damage NPC", 1.0));
+            PvELootNPC = Convert.ToBoolean(GetConfig(ConfigLists.NPC, "09: PvE Loot NPC", true));
+            PvPLootNPC = Convert.ToBoolean(GetConfig(ConfigLists.NPC, "10: PvP Loot NPC", true));
             //Animal
-            PvEDamageAnimals = Convert.ToSingle(GetConfig("5: Animals", "1: PvE Damage Animals", 1.0f));
-            PvPDamageAnimals = Convert.ToSingle(GetConfig("5: Animals", "2: PvP Damage Animals", 1.0f));
-            NPCDamageAnimals = Convert.ToSingle(GetConfig("5: Animals", "3: NPC Damage Animals", 1.0f));
-            AnimalsDamagePvE = Convert.ToSingle(GetConfig("5: Animals", "4: Animals Damage PvE", 1.0f));
-            AnimalsDamagePvP = Convert.ToSingle(GetConfig("5: Animals", "5: Animals Damage PvP", 1.0f));
-            AnimalsDamageNPC = Convert.ToSingle(GetConfig("5: Animals", "6: Animals Damage NPC", 1.0f));
+            PvEDamageAnimals = Convert.ToSingle(GetConfig(ConfigLists.Animals, "1: PvE Damage Animals", 1.0f));
+            PvPDamageAnimals = Convert.ToSingle(GetConfig(ConfigLists.Animals, "2: PvP Damage Animals", 1.0f));
+            NPCDamageAnimals = Convert.ToSingle(GetConfig(ConfigLists.Animals, "3: NPC Damage Animals", 1.0f));
+            AnimalsDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Animals, "4: Animals Damage PvE", 1.0f));
+            AnimalsDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Animals, "5: Animals Damage PvP", 1.0f));
+            AnimalsDamageNPC = Convert.ToSingle(GetConfig(ConfigLists.Animals, "6: Animals Damage NPC", 1.0f));
             //Turret
-            TurretPvETargetPvE = Convert.ToBoolean(GetConfig("6: Turret", "01: TurretPvETargetPvE", true));
-            TurretPvETargetPvP = Convert.ToBoolean(GetConfig("6: Turret", "02: TurretPvETargetPvP", false));
-            TurretPvPTargetPvE = Convert.ToBoolean(GetConfig("6: Turret", "03: TurretPvPTargetPvE", false));
-            TurretPvPTargetPvP = Convert.ToBoolean(GetConfig("6: Turret", "04: TurretPvPTargetPvP", true));
-            TurretPvETargetNPC = Convert.ToBoolean(GetConfig("6: Turret", "05: TurretPvETargetNPC", true));
-            TurretPvPTargetNPC = Convert.ToBoolean(GetConfig("6: Turret", "06: TurretPvPTargetNPC", true));
-            TurretPvETargetAnimal = Convert.ToBoolean(GetConfig("6: Turret", "07: TurretPvETargetAnimal", true));
-            TurretPvPTargetAnimal = Convert.ToBoolean(GetConfig("6: Turret", "08: TurretPvPTargetAnimal", true));
-            TurretPvEDamagePvEAmnt = Convert.ToSingle(GetConfig("6: Turret", "09: TurretPvEDamagePvEAmnt", 1.0f));
-            TurretPvEDamagePvPAmnt = Convert.ToSingle(GetConfig("6: Turret", "10: TurretPvEDamagePvPAmnt", 0.0f));
-            TurretPvPDamagePvEAmnt = Convert.ToSingle(GetConfig("6: Turret", "11: TurretPvPDamagePvEAmnt", 0.0f));
-            TurretPvPDamagePvPAmnt = Convert.ToSingle(GetConfig("6: Turret", "12: TurretPvPDamagePvPAmnt", 1.0f));
-            TurretPvEDamageNPCAmnt = Convert.ToSingle(GetConfig("6: Turret", "13: TurretPvEDamageNPCAmnt", 1.0f));
-            TurretPvPDamageNPCAmnt = Convert.ToSingle(GetConfig("6: Turret", "14: TurretPvPDamageNPCAmnt", 1.0f));
-            TurretPvEDamageAnimalAmnt = Convert.ToSingle(GetConfig("6: Turret", "15: TurretPvEDamageAnimal", 1.0f));
-            TurretPvPDamageAnimalAmnt = Convert.ToSingle(GetConfig("6: Turret", "16: TurretPvPDamageAnimal", 1.0f));
+            TurretPvETargetPvE = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "01: TurretPvETargetPvE", true));
+            TurretPvETargetPvP = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "02: TurretPvETargetPvP", false));
+            TurretPvPTargetPvE = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "03: TurretPvPTargetPvE", false));
+            TurretPvPTargetPvP = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "04: TurretPvPTargetPvP", true));
+            TurretPvETargetNPC = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "05: TurretPvETargetNPC", true));
+            TurretPvPTargetNPC = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "06: TurretPvPTargetNPC", true));
+            TurretPvETargetAnimal = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "07: TurretPvETargetAnimal", true));
+            TurretPvPTargetAnimal = Convert.ToBoolean(GetConfig(ConfigLists.Turret, "08: TurretPvPTargetAnimal", true));
+            TurretPvEDamagePvEAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "09: TurretPvEDamagePvEAmnt", 1.0f));
+            TurretPvEDamagePvPAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "10: TurretPvEDamagePvPAmnt", 0.0f));
+            TurretPvPDamagePvEAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "11: TurretPvPDamagePvEAmnt", 0.0f));
+            TurretPvPDamagePvPAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "12: TurretPvPDamagePvPAmnt", 1.0f));
+            TurretPvEDamageNPCAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "13: TurretPvEDamageNPCAmnt", 1.0f));
+            TurretPvPDamageNPCAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "14: TurretPvPDamageNPCAmnt", 1.0f));
+            TurretPvEDamageAnimalAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "15: TurretPvEDamageAnimal", 1.0f));
+            TurretPvPDamageAnimalAmnt = Convert.ToSingle(GetConfig(ConfigLists.Turret, "16: TurretPvPDamageAnimal", 1.0f));
             //Helicopter
-            HeliTargetPvE = Convert.ToBoolean(GetConfig("7: Heli", "01: HeliTargetPvE", false));
-            HeliTargetPvP = Convert.ToBoolean(GetConfig("7: Heli", "02: HeliTargetPvP", true));
-            HeliTargetNPC = Convert.ToBoolean(GetConfig("7: Heli", "03: HeliTargetNPC", false));
-            HeliDamagePvE = Convert.ToSingle(GetConfig("7: Heli", "04: HeliDamagePvE", 0.0));
-            HeliDamagePvP = Convert.ToSingle(GetConfig("7: Heli", "05: HeliDamagePvP", 1.0));
-            HeliDamageNPC = Convert.ToSingle(GetConfig("7: Heli", "06: HeliDamageNPC", 0.0));
-            HeliDamagePvEStruct = Convert.ToSingle(GetConfig("7: Heli", "07: HeliDamagePvEStruct", 0.0));
-            HeliDamagePvPStruct = Convert.ToSingle(GetConfig("7: Heli", "08: HeliDamagePvPStruct", 1.0));
-            HeliDamageAnimal = Convert.ToSingle(GetConfig("7: Heli", "09: HeliDamageAnimal", 1.0));
-            HeliDamageByPvE = Convert.ToSingle(GetConfig("7: Heli", "10: HeliDamageByPvE", 0.0));
-            HeliDamageByPvP = Convert.ToSingle(GetConfig("7: Heli", "11: HeliDamageByPvp", 1.0));
+            HeliTargetPvE = Convert.ToBoolean(GetConfig(ConfigLists.Heli, "01: HeliTargetPvE", false));
+            HeliTargetPvP = Convert.ToBoolean(GetConfig(ConfigLists.Heli, "02: HeliTargetPvP", true));
+            HeliTargetNPC = Convert.ToBoolean(GetConfig(ConfigLists.Heli, "03: HeliTargetNPC", false));
+            HeliDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Heli, "04: HeliDamagePvE", 0.0));
+            HeliDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Heli, "05: HeliDamagePvP", 1.0));
+            HeliDamageNPC = Convert.ToSingle(GetConfig(ConfigLists.Heli, "06: HeliDamageNPC", 0.0));
+            HeliDamagePvEStruct = Convert.ToSingle(GetConfig(ConfigLists.Heli, "07: HeliDamagePvEStruct", 0.0));
+            HeliDamagePvPStruct = Convert.ToSingle(GetConfig(ConfigLists.Heli, "08: HeliDamagePvPStruct", 1.0));
+            HeliDamageAnimal = Convert.ToSingle(GetConfig(ConfigLists.Heli, "09: HeliDamageAnimal", 1.0));
+            HeliDamageByPvE = Convert.ToSingle(GetConfig(ConfigLists.Heli, "10: HeliDamageByPvE", 0.0));
+            HeliDamageByPvP = Convert.ToSingle(GetConfig(ConfigLists.Heli, "11: HeliDamageByPvp", 1.0));
             //fire
-            FireDamagePvE = Convert.ToSingle(GetConfig("8: Fire", "1: FireDamagePvE", 0.1));
-            FireDamagePvP = Convert.ToSingle(GetConfig("8: Fire", "2: FireDamagePvP", 1.0));
-            FireDamageNPC = Convert.ToSingle(GetConfig("8: Fire", "3: FireDamageNPC", 1.0));
-            FireDamagePvEStruc = Convert.ToSingle(GetConfig("8: Fire", "4: FireDamagePvEStruc", 0.0));
-            FireDamagePvPStruc = Convert.ToSingle(GetConfig("8: Fire", "5: FireDamagePvPStruc", 1.0));
+            FireDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Fire, "1: FireDamagePvE", 0.1));
+            FireDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Fire, "2: FireDamagePvP", 1.0));
+            FireDamageNPC = Convert.ToSingle(GetConfig(ConfigLists.Fire, "3: FireDamageNPC", 1.0));
+            FireDamagePvEStruc = Convert.ToSingle(GetConfig(ConfigLists.Fire, "4: FireDamagePvEStruc", 0.0));
+            FireDamagePvPStruc = Convert.ToSingle(GetConfig(ConfigLists.Fire, "5: FireDamagePvPStruc", 1.0));
             //others
-            DisableUI_FadeIn = Convert.ToBoolean(GetConfig("9-1:Settings", "DisableUI Fadein", false));
-            DebugMode = Convert.ToBoolean(GetConfig("9-1:Settings", "DebugMode", false));
-            ChatPrefix = Convert.ToString(GetConfig("9-1:Settings", "ChatPrefix", "PvX"));
-            ChatPrefixColor = Convert.ToString(GetConfig("9-1:Settings", "ChatPrefixColor", "008800"));
-            ChatMessageColor = Convert.ToString(GetConfig("9-1:Settings", "ChatMessageColor", "yellow"));
+            DisableUI_FadeIn = Convert.ToBoolean(GetConfig(ConfigLists.Settings, "DisableUI Fadein", false));
+            DebugMode = Convert.ToBoolean(GetConfig(ConfigLists.Settings, "DebugMode", false));
+            ChatPrefix = Convert.ToString(GetConfig(ConfigLists.Core, "03:ChatPrefix", "PvX"));
+            ChatPrefixColor = Convert.ToString(GetConfig(ConfigLists.Settings, "04:ChatPrefixColor", "008800"));
+            ChatMessageColor = Convert.ToString(GetConfig(ConfigLists.Settings, "06:ChatMessageColor", "yellow"));
         }
 
         object GetConfig(string menu, string dataValue, object defaultValue)
@@ -559,18 +461,31 @@ namespace Oxide.Plugins
             return (T)Convert.ChangeType(Config.Get(stringArgs.ToArray()), typeof(T));
         }
 
-        bool hasPerm(BasePlayer _player, string perm, string reason = null)
+        private bool HasPerm(BasePlayer Player, string perm, string reason = null)
         {
             string regPerm = Title.ToLower() + "." + perm; //pvxselector.admin
-            if (permission.UserHasPermission(_player.UserIDString, regPerm)) return true;
+            if (permission.UserHasPermission(Player.UserIDString, regPerm)) return true;
             if (reason != "null")
-                SendReply(_player, reason);
+                SendReply(Player, reason);
             return false;
         }
-
-        void permissionHandle()
+        private bool IsMod(BasePlayer Player)
         {
-            string[] Permissionarray = { "admin", "wipe" };
+            string regPerm = Title.ToLower() + "." + "moderator";
+            if (permission.UserHasPermission(Player.UserIDString, regPerm)) return true;
+            else if (IsAdmin(Player)) return true;
+            else return false;
+        }
+        private bool IsAdmin(BasePlayer Player)
+        {
+            string regPerm = Title.ToLower() + "." + "admin";
+            if (permission.UserHasPermission(Player.UserIDString, regPerm)) return true;
+            else return false;
+        }
+
+        void PermissionHandle()
+        {
+            string[] Permissionarray = { "admin", "moderator", "wipe" }; //DO NOT EVER TOUCH THIS EVER!!!!!!
             foreach (string i in Permissionarray)
             {
                 string regPerm = Title.ToLower() + "." + i;
@@ -586,29 +501,70 @@ namespace Oxide.Plugins
                 }
             }
         }
+
+        class ConfigLists
+        {
+            public static readonly ConfigLists Core = new ConfigLists("1: Core", 1, MenuItemEnum.Core);
+            public static readonly ConfigLists Player = new ConfigLists("2: Player", 2, MenuItemEnum.Player);
+            public static readonly ConfigLists Metabolism = new ConfigLists("3: Metabolism", 3, MenuItemEnum.Metabolism);
+            public static readonly ConfigLists NPC = new ConfigLists("4: NPC", 4, MenuItemEnum.NPC);
+            public static readonly ConfigLists Animals = new ConfigLists("5: Animals", 5, MenuItemEnum.Animals);
+            public static readonly ConfigLists Turret = new ConfigLists("6: Turrets", 6, MenuItemEnum.Turret);
+            public static readonly ConfigLists Heli = new ConfigLists("7: Heli", 7, MenuItemEnum.Heli);
+            public static readonly ConfigLists Fire = new ConfigLists("8: Fire", 8, MenuItemEnum.Fire);
+            public static readonly ConfigLists Settings = new ConfigLists("9: Settings", 9, MenuItemEnum.Settings);
+
+            public string Value;
+            public int Index;
+            public MenuItemEnum EnumValue;
+
+            private ConfigLists(string value, int index, MenuItemEnum enumValue)
+            {
+                Value = value;
+                Index = index;
+                EnumValue = enumValue; //possible to remove extra value
+            }
+
+            public static implicit operator string(ConfigLists configLists)
+            {
+                return configLists.Value;
+            }
+        }
+        public enum MenuItemEnum //Possible to remove exta value
+        {
+            Core,
+            Player,
+            Metabolism,
+            NPC,
+            Animals,
+            Turret,
+            Heli,
+            Fire,
+            Settings
+        }
         #endregion
 
         #region UI Creation
         class QUI
         {
-            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
+            public static CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor = false, string parent = "Hud")
             {
                 var NewElement = new CuiElementContainer()
-            {
                 {
-                    new CuiPanel
                     {
-                        Image = {Color = color},
-                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
-                        CursorEnabled = cursor
-                    },
-                    new CuiElement().Parent = "Hud",
-                    panelName
-                }
-            };
+                        new CuiPanel
+                        {
+                            Image = {Color = color},
+                            RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                            CursorEnabled = useCursor
+                        },
+                        new CuiElement().Parent = parent,
+                        panelName
+                    }
+                };
                 return NewElement;
             }
-            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
+            public static void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
             {
                 container.Add(new CuiPanel
                 {
@@ -618,7 +574,7 @@ namespace Oxide.Plugins
                 },
                 panel);
             }
-            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
+            public static void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, float fadein = 1.0f, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 if (DisableUI_FadeIn)
                     fadein = 0;
@@ -630,7 +586,7 @@ namespace Oxide.Plugins
                 panel);
 
             }
-            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
+            public static void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, float fadein = 1.0f, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 if (DisableUI_FadeIn)
                     fadein = 0;
@@ -642,7 +598,7 @@ namespace Oxide.Plugins
                 },
                 panel);
             }
-            static public void LoadImage(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
+            public static void LoadImage(ref CuiElementContainer container, string panel, string png, string aMin, string aMax)
             {
                 container.Add(new CuiElement
                 {
@@ -654,7 +610,7 @@ namespace Oxide.Plugins
                     }
                 });
             }
-            static public void CreateTextOverlay(ref CuiElementContainer container, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
+            public static void CreateTextOverlay(ref CuiElementContainer container, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
             {
                 if (DisableUI_FadeIn)
                     fadein = 0;
@@ -667,10 +623,54 @@ namespace Oxide.Plugins
 
             }
         }
+        class UIColours
+        {
+            public static readonly UIColours Black_100 = new UIColours("0.00 0.00 0.00 1.00"); //Black
+            public static readonly UIColours Black_050 = new UIColours("0.00 0.00 0.00 0.50");
+            public static readonly UIColours Black_015 = new UIColours("0.00 0.00 0.00 0.15");
+            public static readonly UIColours Grey2_100 = new UIColours("0.20 0.20 0.20 1.00"); //Grey 2
+            public static readonly UIColours Grey2_050 = new UIColours("0.20 0.20 0.20 0.50");
+            public static readonly UIColours Grey2_015 = new UIColours("0.20 0.20 0.20 0.15");
+            public static readonly UIColours Grey5_100 = new UIColours("0.50 0.50 0.50 1.00"); //Grey 5
+            public static readonly UIColours Grey5_050 = new UIColours("0.50 0.50 0.50 0.50");
+            public static readonly UIColours Grey5_015 = new UIColours("0.50 0.50 0.50 0.15");
+            public static readonly UIColours Grey8_100 = new UIColours("0.80 0.80 0.80 1.00"); //Grey 8
+            public static readonly UIColours Grey8_050 = new UIColours("0.80 0.80 0.80 0.50");
+            public static readonly UIColours Grey8_015 = new UIColours("0.80 0.80 0.80 0.15");
+            public static readonly UIColours White_100 = new UIColours("1.00 1.00 1.00 1.00"); //White
+            public static readonly UIColours White_050 = new UIColours("1.00 1.00 1.00 0.50");
+            public static readonly UIColours White_015 = new UIColours("1.00 1.00 1.00 0.15");
+            public static readonly UIColours Red_100 = new UIColours("0.70 0.20 0.20 1.00");   //Red
+            public static readonly UIColours Red_050 = new UIColours("0.70 0.20 0.20 0.50");
+            public static readonly UIColours Red_015 = new UIColours("0.70 0.20 0.20 0.15");
+            public static readonly UIColours Green_100 = new UIColours("0.20 0.70 0.20 1.00");  //Green
+            public static readonly UIColours Green_050 = new UIColours("0.20 0.70 0.20 0.50");
+            public static readonly UIColours Green_015 = new UIColours("0.20 0.70 0.20 0.15");
+            public static readonly UIColours Blue_100 = new UIColours("0.20 0.20 0.70 1.00");  //Blue
+            public static readonly UIColours Blue_050 = new UIColours("0.20 0.20 0.70 0.50");
+            public static readonly UIColours Blue_015 = new UIColours("0.20 0.20 0.70 0.15");
+            public static readonly UIColours Yellow_100 = new UIColours("0.90 0.90 0.20 1.00");  //Yellow
+            public static readonly UIColours Yellow_050 = new UIColours("0.90 0.90 0.20 0.50");
+            public static readonly UIColours Yellow_015 = new UIColours("0.90 0.90 0.20 0.15");
+            public static readonly UIColours Gold_100 = new UIColours("0.745 0.550 0.045 1.00"); //Gold
+
+            public string Value;
+            public int Index;
+
+            private UIColours(string value)
+            {
+                Value = value;
+            }
+
+            public static implicit operator string(UIColours uiColours)
+            {
+                return uiColours.Value;
+            }
+        }
 
         private void DestroyAllPvXUI(BasePlayer player)
         {
-            foreach(string _v in GuiList)
+            foreach (string _v in GuiList)
             {
                 CuiHelper.DestroyUi(player, _v);
             }
@@ -680,530 +680,592 @@ namespace Oxide.Plugins
         {
             CuiHelper.DestroyUi(player, _ui);
         }
-        //private void DestroyEntries(BasePlayer player)
-        //{
-        //    CuiHelper.DestroyUi(player, UIPanel);
-        //    if (OpenUI.ContainsKey(player.userID))
-        //    {
-        //        foreach (var entry in OpenUI[player.userID])
-        //            CuiHelper.DestroyUi(player, entry);
-        //        OpenUI.Remove(player.userID);
-        //    }
-        //}
-        private void AddUIString(BasePlayer player, string name)
-        {
-            if (!OpenUI.ContainsKey(player.userID))
-                OpenUI.Add(player.userID, new List<string>());
-            OpenUI[player.userID].Add(name);
-        }
-
-        private Dictionary<string, string> UIColors = new Dictionary<string, string>
-        {
-            {"Black-100", "0.0 0.0 0.0 1.0" },  //Black
-            {"Black-50", "0.0 0.0 0.0 0.50" },
-            {"Black-15", "0.0 0.0 0.0 0.15" },
-            {"Grey2-100", "0.2 0.2 0.2 1.0" },  //Grey 2
-            {"Grey2-50", "0.2 0.2 0.2 0.50" },
-            {"Grey2-15", "0.2 0.2 0.2 0.15" },
-            {"Grey5-100", "0.5 0.5 0.5 1.0" },  //Grey 5
-            {"Grey5-50", "0.5 0.5 0.5 0.50" },
-            {"Grey5-15", "0.5 0.5 0.5 0.15" },
-            {"Grey8-100", "0.8 0.8 0.8 1.0" },  //Grey 8
-            {"Grey8-50", "0.8 0.8 0.8 0.50" },
-            {"Grey8-15", "0.8 0.8 0.8 0.15" },
-            {"White-100", "1.0 1.0 1.0 1.0" },  //White
-            {"White-50", "1.0 1.0 1.0 0.50" },
-            {"White-15", "1.0 1.0 1.0 0.15" },
-            {"Red-100", "0.7 0.2 0.2 1.0" },    //Red
-            {"Red-50", "0.7 0.2 0.2 0.50" },
-            {"Red-15", "0.7 0.2 0.2 0.15" },
-            {"Green-100", "0.2 0.7 0.2 1.0" },  //Green
-            {"Green-50", "0.2 0.7 0.2 0.50" },
-            {"Green-15", "0.2 0.7 0.2 0.15" },
-            {"Blue-100", "0.2 0.2 0.7 1.0" },  //Blue
-            {"Blue-50", "0.2 0.2 0.7 0.50" },
-            {"Blue-15", "0.2 0.2 0.7 0.15" },
-            {"Yellow-100", "0.9 0.9 0.2 1.0" },  //Yellow
-            {"Yellow-50", "0.9 0.9 0.2 0.50" },
-            {"Yellow-15", "0.9 0.9 0.2 0.15" },
-            {"buttonbg", "0.2 0.2 0.2 0.7" },
-            {"buttonopen", "0.2 0.8 0.2 0.9" },
-            {"buttoncompleted", "0 0.5 0.1 0.9" },
-            {"buttonred", "0.85 0 0.35 0.9" },
-            {"buttongrey", "0.8 0.8 0.8 0.9" },
-        };
         #endregion
 
         #region GUIs
+        class GUI
+        {
+            public static void CreateSignature(ref CuiElementContainer container, string panel, string color, string text, int size, float fadein = 1.0f, TextAnchor align = TextAnchor.LowerLeft)
+            {
+                float widthPadding = 0.017f;
+                float heightPadding = 0.013f;
 
-        private void createPvXSelector(BasePlayer _player)
-        {
-            selectGuiOpen.Add(_player.userID);
-            timer.Once(5, () => updatePvXSelector(_player));
-            var PvXselectorContainer = QUI.CreateElementContainer(
-                pvxPlayerSelectorUI,
-                UIColors["Black-50"],
-                "0.17 0.15",
-                "0.33 0.25",
-                true
-                );
-            QUI.CreateButton(
-                ref PvXselectorContainer,
-                pvxPlayerSelectorUI,
-                UIColors["Red-100"],
-                "PvP",
-                22,
-                "0.1 0.2",
-                "0.45 0.8",
-                "PvXGuiCMD pvp"
-                );
-            QUI.CreateButton(
-                ref PvXselectorContainer,
-                pvxPlayerSelectorUI,
-                UIColors["Green-100"],
-                "PvE",
-                22,
-                "0.55 0.2",
-                "0.9 0.8",
-                "PvXGuiCMD pve"
-                );
-            CuiHelper.AddUi(_player, PvXselectorContainer);
-        }
-        private void updatePvXSelector(BasePlayer _player)
-        {
-            CuiHelper.DestroyUi(_player, pvxPlayerSelectorUI);
-            if (isplayerNA(_player))createPvXSelector(_player);
-        }
+                float textWidth = 0.966f;
+                float textHeight = 0.040f;
 
-        private void createPvXIndicator(BasePlayer _player)
-        {
-            var indicatorContainer = QUI.CreateElementContainer(
-                pvxPlayerUI,
-                UIColors["Black-15"],
-                "0.48 0.11",
-                "0.52 0.14");
-            if (InfoCache[_player.userID].mode == "NA")
-                indicatorContainer = QUI.CreateElementContainer(
-                    pvxPlayerUI,
-                    UIColors["Red-100"],
-                    "0.48 0.11",
-                    "0.52 0.14");
-            else if (ticketData.Info.ContainsKey(_player.userID))
-                indicatorContainer = QUI.CreateElementContainer(
-                    pvxPlayerUI,
-                    UIColors["Yellow-15"],
-                    "0.48 0.11",
-                    "0.52 0.14");
-            if (AdminPlayerMode.Contains(_player))
-            {
-                QUI.CreateLabel(
-                    ref indicatorContainer,
-                    pvxPlayerUI,
-                    UIColors["Green-100"],
-                    InfoCache[_player.userID].mode,
-                    15,
-                    "0.1 0.1",
-                    "0.90 0.99");
-            }
-            else
-            {
-                QUI.CreateLabel(ref indicatorContainer,
-                    pvxPlayerUI,
-                    UIColors["White-100"],
-                    InfoCache[_player.userID].mode,
-                    15,
-                    "0.1 0.1",
-                    "0.90 0.99");
-            }
-            CuiHelper.AddUi(_player, indicatorContainer);
-        }
-        private void updatePvXIndicator(BasePlayer _player)
-        {
-            CuiHelper.DestroyUi(_player, pvxPlayerUI);
-            createPvXIndicator(_player);
-        }
+                float minWidth = widthPadding;
+                float maxWidth = widthPadding + textWidth;
+                float minHeight = heightPadding;
+                float maxHeight = heightPadding + textHeight;
 
-        private void createAdminIndicator(BasePlayer _player)
-        {
-            if (!hasPerm(_player, "admin")) return;
-            var adminCountContainer = QUI.CreateElementContainer(
-                pvxAdminUI,
-                UIColors["Black-100"],
-                "0.166 0.055",
-                "0.34 0.0955");
-            QUI.CreateLabel(ref adminCountContainer,
-                pvxAdminUI,
-                UIColors["White-100"],
-                "PvX Tickets",
-                10,
-                "0.0 0.1",
-                "0.3 0.90");
-            QUI.CreateLabel(ref adminCountContainer,
-                pvxAdminUI,
-                UIColors["White-100"],
-                string.Format("Open: {0}", ticketData.Info.Count.ToString()),
-                10,
-                "0.301 0.1",
-                "0.65 0.90");
-            QUI.CreateLabel(ref adminCountContainer,
-                pvxAdminUI,
-                UIColors["White-100"],
-                string.Format("Closed: {0}", ticketLog.Log.Count.ToString()),
-                10,
-                "0.651 0.1",
-                "1 0.90");
-            CuiHelper.AddUi(_player, adminCountContainer);
-        }
-        private void UpdateAdminIndicator()
-        {
-            if (activeAdmins == null) return;
-            else if (activeAdmins.Count < 1) return;
-            foreach (BasePlayer _player in activeAdmins)
-            {
-                CuiHelper.DestroyUi(_player, pvxAdminUI);
-                createAdminIndicator(_player);
+                QUI.CreateLabel(ref container,
+                    panel,
+                    color,
+                    text,
+                    size,
+                    $"{minWidth} {minHeight}",
+                    $"{maxWidth} {maxHeight}",
+                    fadein,
+                    align);
             }
-        }
 
-        private void createButton(BasePlayer _player)
-        { }
-        #endregion
-
-        #region Lang/Chat
-        void LangMSG(BasePlayer _player, string langMsg, params object[] args)
-        {
-            string message = lang.GetMessage(langMsg, this, _player.UserIDString);
-            PrintToChat(_player, $"<color={ChatPrefixColor}>{ChatPrefix}</color>: <color={ChatMessageColor}>{message}</color>", args);
-        }
-        void LangMSGBroadcast(string langMsg, params object[] args)
-        {
-            string message = lang.GetMessage(langMsg, this);
-            PrintToChat($"<color={ChatPrefixColor}>{ChatPrefix}</color>: <color={ChatMessageColor}>{message}</color>", args);
-        }
-        void BroadcastMessageHandle(string message, params object[] args)
-        {
-            PrintToChat($"<color={ChatPrefixColor}>{ChatPrefix}</color>: <color={ChatMessageColor}>{message}</color>", args);
-        }
-        void ChatMessageHandle(BasePlayer _player, string message, params object[] args)
-        {
-            PrintToChat(_player, $"<color={ChatPrefixColor}>{ChatPrefix}</color>: <color={ChatMessageColor}>{message}</color>", args);
-        }
-        void PutsLang(string langMsg, params object[] args)
-        {
-            string message = lang.GetMessage(langMsg, this);
-            Puts(string.Format(message, args));
-        }
-        void PutsPlayerHandle(BasePlayer _player, string msg, params object[] args)
-        {
-            Puts(msg, args);
-            PrintToChat(_player, $"<color={ChatPrefixColor}>{ChatPrefix}</color>: <color={ChatMessageColor}>{msg}</color>", args);
-        }
-        void PutsPlayerHandleLang(BasePlayer _player, string langMsg, params object[] args)
-        {
-            string msg = lang.GetMessage(langMsg, this, _player.UserIDString);
-            Puts(msg, args);
-            SendReply(_player, msg, args);
-        }
-
-        Dictionary<string, string> messages = new Dictionary<string, string>()
-        {
-            {"xx", "xxx" },
-            {"notAllwPickup", "You can't pick this item as owner is: {0}" },
-            {"AdmModeRem", "You have deactivated Admin Mode" },
-            {"AdmModeAdd", "You are now in Admin mode" },
-            {"lvlRedxpSav", "Your Level was reduced, Lost xp has been saved." },
-            {"lvlIncrxpRes", "Your Level has been increased, Lost xp Restored." },
-            {"numbonly", "Incorrect format: Included letter in ticketID" },
-            {"TickCrea", "You have created a ticket" },
-            {"TickCanc", "You have Canceled your ticket" },
-            {"TickAcep", "Your Ticket has been accepted" },
-            {"TickDecl", "Your Ticket has been declined" },
-            {"TickAcepAdm", "Your Ticket accepted the ticket" },
-            {"TickDeclAdm", "Your Ticket decline the ticket" },
-            {"TickClosLogin", "Welcome back, Your ticket was {0}" },
-            {"TickList", "Ticket#: {0}, User: {1}" },
-            {"TickDet", "Ticket Details:" },
-            {"TickID", "Ticket ID: {0}" },
-            {"TickName", "Username: {0}" },
-            {"TickStmID", "SteamID: {0}" },
-            {"TickSelc", "Selected: {0}" },
-            {"TickRsn", "Reason: {0}" },
-            {"TickDate", "Ticket Created: {0}" },
-            {"TickCnt", "Open Tickets: {0}" },
-            {"TickNotAvail", "Ticket#:{0} Does not exist" },
-            {"ComndList", "PvX Command List:" },
-            {"CompTickCnt", "Closed Tickets: {0}" },
-            {"IncoForm", "Incorrect format" },
-            {"IncoFormPleaUse", "Incorrect format Please Use:" },
-            {"TicketDefaultReason", "Change Requested Via Chat" },
-            {"NoTicket", "There are no tickets to display" },
-            {"AlreadySubmitted", "You have already requested to change, Please conctact your admin" },
-            {"PvETarget", "You are attacking a PvE player" },
-            {"NoActTick", "You do not have an active ticket" },
-            {"RSNChan", "You have changed your tickets reason." },
-            {"PvEStructure", "That structure belongs to a PvE player" },
-            {"NoXPModeNA", "You will not earn XP until you have selected PvE/PvP" },
-            {"NoSaveLvLNA", "Your levl is not saved unless you select PvE or PvP" },
-            {"TargisGod", "You are attacking a god" },
-            {"YouisGod", "You are attacking a god" },
-            {"MissPerm", "You do not have the required permision" }
-        };
-        #endregion
-
-        #region Ticket Functions
-        void createTicket(BasePlayer _player, string selection)
-        {
-            int _TicketNumber = GetNewID();
-            string _username = _player.displayName;
-            string _requested = selection;
-            string _reason = lang.GetMessage("TicketDefaultReason", this, _player.UserIDString);
-            ticketData.Link.Add(_TicketNumber, _player.userID);
-            ticketData.Info.Add(_player.userID, new Ticket
+            public static class Create
             {
-                CreatedTimeStamp = DateTimeStamp(),
-                reason = lang.GetMessage("TicketDefaultReason", this, _player.UserIDString),
-                requested = selection,
-                TicketNumber = _TicketNumber,
-                UserId = _player.UserIDString,
-                Username = _player.displayName
-            });
-            LangMSG(_player, "TickCrea");
-            InfoCache[_player.userID].ticket = true;
-            SaveAll();
-            UpdateAdminIndicator();
-            updatePvXIndicator(_player);
-        }
-        void cancelTicket(BasePlayer _player)
-        {
-            if (playerData.Info[_player.userID].ticket == false) return;
-            int _ticketNumber = ticketData.Info[_player.userID].TicketNumber;
-            ticketData.Link.Remove(_ticketNumber);
-            ticketData.Info.Remove(_player.userID);
-            InfoCache[_player.userID].ticket = false;
-            SaveAll();
-            LangMSG(_player, "TickCanc");
-            updatePvXIndicator(_player);
-            UpdateAdminIndicator();
-            return;
-        }
-        void ticketAccept(BasePlayer _admin, int _ticketID)//Update required to fix Baseplayer NRE
-        {
-            ulong _UserID = ticketData.Link[_ticketID];
-            addTicketLog(_admin, _ticketID, true);
-            LangMSG(_admin, "TickAcepAdm");
-            playerData.Info[_UserID].ticket = false;
-            InfoCache[_UserID].mode = ticketData.Info[_UserID].requested;
-            SaveAll();
-            BasePlayer _player = basePlayerByID(_UserID);
-            if (_player != null && _player.isConnected)
-            {
-                LangMSG(_player, "TickAcep");
-                updatePvXIndicator(_player);
-                updatePlayerChatTag(_player);
-            }
-            else if (_player != null && !_player.isConnected)
-            {
-                ticketData.Notification.Add(_player.userID, "Accepted");
-            }
-            else
-            {
-                ticketData.Notification.Add(_player.userID, "Accepted");
-            }
-            ticketData.Info.Remove(_UserID);
-            ticketData.Link.Remove(_ticketID);
-            SaveAll();
-            UpdateAdminIndicator();
-            if (_player != null && _player.isConnected) updatePvXIndicator(_player);
-        }
-        void ticketDecline(BasePlayer _admin, int _ticketID)//updated: Fixed Baseplayer NRE
-        {
-            ulong _UserID = ticketData.Link[_ticketID];
-            addTicketLog(_admin, _ticketID, false);
-            LangMSG(_admin, "TickAcepAdm");
-            playerData.Info[_UserID].ticket = false;
-            ticketData.Info.Remove(_UserID);
-            ticketData.Link.Remove(_ticketID);
-            SaveAll();
-            UpdateAdminIndicator();
-            BasePlayer _player = basePlayerByID(_UserID);
-            if (_player != null && _player.isConnected)
-            {
-                LangMSG(_player, "TickDecl");
-                updatePvXIndicator(_player);
-            }
-            else ticketData.Notification.Add(_player.userID, "Declined");
-        }
-        void ticketCount(BasePlayer _player)
-        {
-            LangMSG(_player, "TickCnt", ticketData.Link.Count);
-            LangMSG(_player, "CompTickCnt", ticketLog.Log.Count);
-        }
-        void listTickets(BasePlayer _player)
-        {
-            if (ticketData.Link.Count > 0)
-            {
-                foreach (var ticket in ticketData.Info)
+                public static void AdminIndicator(BasePlayer Player)
                 {
-                    ulong _key = ticket.Key;
-                    PutsPlayerHandleLang(_player, "TickList", ticketData.Info[_key].TicketNumber, ticketData.Info[_key].Username);
+                    Vector2 dimension = new Vector2(0.174F, 0.028F);
+                    Vector2 posMin = new Vector2(instance.adminIndicatorMinWid, instance.adminIndicatorMinHei);
+                    Vector2 posMax = posMin + dimension;
+                    var adminCountContainer = QUI.CreateElementContainer(
+                        pvxAdminUI,
+                        UIColours.Black_050,
+                        $"{posMin.x} {posMin.y}",
+                        $"{posMax.x} {posMax.y}");
+                    QUI.CreateLabel(ref adminCountContainer, pvxAdminUI, UIColours.White_100, "PvX Tickets", 10, "0.0 0.1", "0.3 0.90");
+                    QUI.CreateLabel(ref adminCountContainer, pvxAdminUI, UIColours.White_100, string.Format("Open: {0}", ModeSwitch.Ticket.Data.ticketData.Tickets.Count.ToString()), 10, "0.301 0.1", "0.65 0.90");
+                    QUI.CreateLabel(ref adminCountContainer, pvxAdminUI, UIColours.White_100, string.Format("Closed: {0}", ModeSwitch.Ticket.Data.logData.Logs.Count.ToString()), 10, "0.651 0.1", "1 0.90");
+
+                    CuiHelper.AddUi(Player, adminCountContainer);
+                }
+                public static void PlayerIndicator(BasePlayer Player)
+                {
+                    Vector2 dimension = new Vector2(0.031F, 0.028F);
+                    Vector2 posMin = new Vector2(instance.playerIndicatorMinWid, instance.playerIndicatorMinHei);
+                    Vector2 posMax = posMin + dimension;
+                    var indicatorContainer = QUI.CreateElementContainer(
+                        pvxIndicator,
+                        UIColours.Black_050,
+                        "0.48 0.11",
+                        "0.52 0.14"
+                        );
+                    if (Players.Data.playerData.Info[Player.userID].mode == Mode.NA)
+                        indicatorContainer = QUI.CreateElementContainer(
+                            pvxIndicator,
+                            UIColours.Red_100,
+                            "0.48 0.11",
+                            "0.52 0.14");
+                    else if (ModeSwitch.Ticket.Data.ticketData.Tickets.ContainsKey(Player.userID))
+                        indicatorContainer = QUI.CreateElementContainer(
+                            pvxIndicator,
+                            UIColours.Yellow_015,
+                            "0.48 0.11",
+                            "0.52 0.14");
+                    if (Players.Adminmode.ContainsPlayer(Player.userID))
+                    {
+                        QUI.CreateLabel(
+                            ref indicatorContainer,
+                            pvxIndicator,
+                            UIColours.Green_100,
+                            Players.Data.playerData.Info[Player.userID].mode,
+                            15,
+                            "0.1 0.1",
+                            "0.90 0.99");
+                    }
+                    else
+                    {
+                        QUI.CreateLabel(ref indicatorContainer,
+                            pvxIndicator,
+                            UIColours.White_100,
+                            Players.Data.playerData.Info[Player.userID].mode,
+                            15,
+                            "0.1 0.1",
+                            "0.90 0.99");
+                    }
+                    CuiHelper.AddUi(Player, indicatorContainer);
+                }
+
+                public static void MenuButton(ref CuiElementContainer container, string panel, string color, string text, int size, int location, string command, float fadein = 1.0f, TextAnchor align = TextAnchor.MiddleCenter)
+                {
+                    float widthPadding = 0.108f;
+                    float heightPadding = 0.013f;
+
+                    float buttonWidth = 0.784f;
+                    float buttonHeight = 0.107f;
+
+                    float buttonPadding = 0.027f;
+
+                    float minWidth = widthPadding;
+                    float maxWidth = widthPadding + buttonWidth;
+                    float minHeight = 1.00f - (buttonHeight + heightPadding + ((buttonHeight + buttonPadding) * location));
+                    float maxHeight = 1.00f - (heightPadding + ((buttonHeight + buttonPadding) * location));
+
+                    QUI.CreateButton(ref container,
+                        panel,
+                        color,
+                        text,
+                        size,
+                        $"{minWidth} {minHeight}",
+                        $"{maxWidth} {maxHeight}",
+                        command,
+                        fadein,
+                        align);
+                }
+                public static void MenuText(ref CuiElementContainer container, string panel, string color, string text, int size, int location, float fadein = 1.0f, TextAnchor align = TextAnchor.LowerLeft)
+                {
+                    float widthPadding = 0.017f;
+                    float heightPadding = 0.013f;
+
+                    float textWidth = 0.966f;
+                    float textHeight = 0.040f;
+
+                    float textPadding = 0.001f;
+
+                    float minWidth = widthPadding;
+                    float maxWidth = widthPadding + textWidth;
+                    float minHeight = 1.00f - (textHeight + heightPadding + ((textHeight + textPadding) * location));
+                    float maxHeight = 1.00f - (heightPadding + ((textHeight + textPadding) * location));
+
+                    QUI.CreateLabel(ref container,
+                        panel,
+                        color,
+                        text,
+                        size,
+                        $"{minWidth} {minHeight}",
+                        $"{maxWidth} {maxHeight}",
+                        fadein,
+                        align);
+                }
+                public static void ContentButton(ref CuiElementContainer container, string panel, string color, string text, int size, int location, string command, float fadein = 1.0f, TextAnchor align = TextAnchor.MiddleCenter)
+                {
+                    float widthPadding = 0.017f;
+                    float heightPadding = 0.013f;
+
+                    float buttonWidth = 0.1724f;
+                    float buttonHeight = 0.068f;
+
+                    float buttonPadding = 0.017f;
+
+                    float minWidth = 1f - (buttonPadding + buttonWidth + ((buttonWidth + buttonPadding) * location));
+                    float maxWidth = 1f - (buttonPadding + ((buttonWidth + buttonPadding) * location));
+                    float minHeight = heightPadding;
+                    float maxHeight = widthPadding + buttonHeight;
+
+                    QUI.CreateButton(ref container,
+                        panel,
+                        color,
+                        text,
+                        size,
+                        $"{minWidth} {minHeight}",
+                        $"{maxWidth} {maxHeight}",
+                        command,
+                        fadein,
+                        align);
+                }
+
+                public static class Menu
+                {
+                    public static void Background(BasePlayer player)
+                    {
+                        var MainGui = QUI.CreateElementContainer(pvxMenuBack, UIColours.Black_100, "0.297 0.125", "0.703 0.958", true);
+                        CuiHelper.AddUi(player, MainGui);
+                    }
+                    public static void Title(BasePlayer player)
+                    {
+                        var BannerGui = QUI.CreateElementContainer(pvxMenuBanner, UIColours.Grey2_100, "0.297 0.824", "0.703 0.958", true);
+
+                        var BannerTitle = QUI.CreateElementContainer(pvxMenuBannerTitle, UIColours.Grey5_100, "0.302 0.833", "0.495 0.949");
+                        QUI.CreateLabel(ref BannerTitle, pvxMenuBannerTitle, UIColours.Black_100, "PvX Selector", 35, "0 0", "1 1", 1);
+
+                        var BannerVersion = QUI.CreateElementContainer(pvxMenuBannerVersion, UIColours.Grey5_100, "0.500 0.833", "0.594 0.949");
+                        QUI.CreateLabel(ref BannerVersion, pvxMenuBannerVersion, UIColours.Black_100, "Version", 25, "0.0 0.6", "1.0 1.0", 1);
+                        QUI.CreateLabel(ref BannerVersion, pvxMenuBannerVersion, UIColours.Black_100, instance.Version.ToString(), 21, "0.0 0.0", "1.0 0.6", 1);
+
+                        var BannerModType = QUI.CreateElementContainer(pvxMenuBannerModType, UIColours.Gold_100, "0.599 0.833", "0.698 0.949");
+                        QUI.CreateLabel(ref BannerModType, pvxMenuBannerModType, UIColours.Black_100,
+                            instance.PvXModtype, 25, "0.0 0.0", "1.0 1.0", 1);
+
+                        CuiHelper.AddUi(player, BannerGui);
+                        CuiHelper.AddUi(player, BannerTitle);
+                        CuiHelper.AddUi(player, BannerVersion);
+                        CuiHelper.AddUi(player, BannerModType);
+                    }
+                    public static void Selector(BasePlayer player)
+                    {
+                        var SideMenuGui = QUI.CreateElementContainer(pvxMenuSide, UIColours.Grey2_100, "0.607 0.125", "0.703 0.815", true);
+
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Welcome</color>", 15, 0, "PvX.Menu.Cmd Welcome");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Settings</color>", 15, 1, "pvx");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Character</color>", 15, 2, "PvX.Menu.Cmd Character");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Players</color>", 15, 3, "pvx");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Tickets</color>", 15, 4, "pvx");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Settings</color>", 15, 5, "pvx");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Debug</color>", 15, 6, "pvx");
+                        QUI.CreateButton(ref SideMenuGui, pvxMenuSide, UIColours.Red_100, "<color=black>X</color>", 15, "0.108 0.013", "0.892 0.047", "PvX.Menu.Cmd Close");
+                        CuiHelper.AddUi(player, SideMenuGui);
+                    }
+                    public static class Content
+                    {
+                        public static void WelcomePage1(BasePlayer Player)
+                        {
+                            var MenuGui = QUI.CreateElementContainer(
+                                pvxMenuMain,
+                                UIColours.Grey2_100,
+                                "0.297 0.125",
+                                "0.602 0.815",
+                                true);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L01), 16, 0);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L02), 16, 1);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L03), 16, 2);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L04), 16, 3);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L05), 16, 4);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L06), 16, 5);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L07), 16, 6);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L08), 16, 7);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L09), 16, 8);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L10), 16, 9);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L11), 16, 10);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L12), 16, 11);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L13), 16, 12);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L14), 16, 13);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L15), 16, 14);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L16), 16, 15);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L17), 16, 16);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L18), 16, 17);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L19), 16, 18);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L20), 16, 19);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L21), 16, 20);
+                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 1 Next");
+                            CuiHelper.AddUi(Player, MenuGui);
+                        }
+                        public static void WelcomePage2(BasePlayer Player)
+                        {
+                            var MenuGui = QUI.CreateElementContainer(
+                                pvxMenuMain,
+                                UIColours.Grey2_100,
+                                "0.297 0.125",
+                                "0.602 0.815",
+                                true);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L01), 16, 0);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L02), 16, 1);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L03), 16, 2);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L04), 16, 3);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L05), 16, 4);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L06), 16, 5);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L07), 16, 6);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L08), 16, 7);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L09), 16, 8);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L10), 16, 9);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L11), 16, 10);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L12), 16, 11);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L13), 16, 12);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L14), 16, 13);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L15), 16, 14);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L16), 16, 15);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L17), 16, 16);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L18), 16, 17);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L19), 16, 18);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L20), 16, 19);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L21), 16, 20);
+                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 2 Next");
+                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 2 Back");
+                            CuiHelper.AddUi(Player, MenuGui);
+                        }
+                        public static void WelcomePage3(BasePlayer Player)
+                        {
+                            var MenuGui = QUI.CreateElementContainer(
+                                pvxMenuMain,
+                                UIColours.Grey2_100,
+                                "0.297 0.125",
+                                "0.602 0.815",
+                                true);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L01), 16, 0);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L02), 16, 1);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L03), 16, 2);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L04), 16, 3);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L05), 16, 4);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L06), 16, 5);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L07), 16, 6);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L08), 16, 7);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L09), 16, 8);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L10), 16, 9);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L11), 16, 10);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L12), 16, 11);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L13), 16, 12);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L14), 16, 13);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L15), 16, 14);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L16), 16, 15);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L17), 16, 16);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L18), 16, 17);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L19), 16, 18);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L20), 16, 19);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L21), 16, 20);
+                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                            if (instance.IsMod(Player)) Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 3 Next");
+                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 3 Back");
+                            CuiHelper.AddUi(Player, MenuGui);
+                        }
+                        public static void WelcomePage4(BasePlayer Player)
+                        {
+                            var MenuGui = QUI.CreateElementContainer(
+                                pvxMenuMain,
+                                UIColours.Grey2_100,
+                                "0.297 0.125",
+                                "0.602 0.815",
+                                true);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L01), 16, 0);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L02), 16, 1);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L03), 16, 2);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L04), 16, 3);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L05), 16, 4);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L06), 16, 5);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L07), 16, 6);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L08), 16, 7);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L09), 16, 8);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L10), 16, 9);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L11), 16, 10);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L12), 16, 11);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L13), 16, 12);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L14), 16, 13);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L15), 16, 14);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L16), 16, 15);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L17), 16, 16);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L18), 16, 17);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L19), 16, 18);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L20), 16, 19);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L21), 16, 20);
+                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 4 Next");
+                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 4 Back");
+                            CuiHelper.AddUi(Player, MenuGui);
+                        }
+                        public static void WelcomePage5(BasePlayer Player)
+                        {
+                            var MenuGui = QUI.CreateElementContainer(
+                                pvxMenuMain,
+                                UIColours.Grey2_100,
+                                "0.297 0.125",
+                                "0.602 0.815",
+                                true);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L01), 16, 0);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L02), 16, 1);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L03), 16, 2);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L04), 16, 3);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L05), 16, 4);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L06), 16, 5);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L07), 16, 6);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L08), 16, 7);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L09), 16, 8);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L10), 16, 9);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L11), 16, 10);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L12), 16, 11);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L13), 16, 12);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L14), 16, 13);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L15), 16, 14);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L16), 16, 15);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L17), 16, 16);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L18), 16, 17);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L19), 16, 18);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L20), 16, 19);
+                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L21), 16, 20);
+                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 5 Back");
+                            CuiHelper.AddUi(Player, MenuGui);
+                        }
+
+                        public static void Serversettings(BasePlayer Player)
+                        {
+
+                        }
+                        public static void Character(BasePlayer Player)
+                        {
+                            var MenuGui = QUI.CreateElementContainer(
+                                pvxMenuMain,
+                                UIColours.Grey2_100,
+                                "0.297 0.125",
+                                "0.602 0.815",
+                                true);
+
+                            QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "Player Info", 50, "0.034 0.852", "0.966 0.973");
+
+                            QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.034 0.758", "0.379 0.826");
+                            QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Name:", 18, "0.052 0.758", "0.379 0.826", 1, TextAnchor.MiddleLeft);
+                            QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.397 0.758", "0.966 0.826");
+                            QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Black_100, Player.displayName, 18, "0.397 0.758", "0.966 0.826");
+
+                            QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.034 0.678", "0.379 0.745");
+                            QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Steam ID:", 18, "0.052 0.678", "0.379 0.745", 1, TextAnchor.MiddleLeft);
+                            QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.397 0.678", "0.966 0.745");
+                            QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Black_100, Player.UserIDString, 18, "0.397 0.678", "0.966 0.745");
+
+                            QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.034 0.597", "0.379 0.664");
+                            QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Current Mode:", 18, "0.052 0.597", "0.379 0.664", 1, TextAnchor.MiddleLeft);
+                            QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.397 0.597", "0.966 0.664");
+                            QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Black_100, Players.Data.playerData.Info[Player.userID].mode, 18, "0.397 0.597", "0.966 0.664");
+
+
+                            QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.034 0.027", "0.966 0.255");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Blue_100, "Set Shared Chest", 22, "0.052 0.188", "0.491 0.242", "PvX.Menu.Cmd AddToShared");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Blue_100, "remove Shared Chest", 22, "0.509 0.188", "0.948 0.242", "PvX.Menu.Cmd RemoveFromShared");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, Mode.PvE, 22, "0.052 0.040", "0.491 0.174", $"PvX.Menu.Cmd {Mode.PvE}");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Red_100, Mode.PvP, 22, "0.509 0.040", "0.948 0.174", $"PvX.Menu.Cmd {Mode.PvP}");
+
+                            CuiHelper.AddUi(Player, MenuGui);
+                        }
+                    }
+                }
+            }
+            public static class Destroy
+            {
+                public static void All(BasePlayer Player)
+                {
+                    CuiHelper.DestroyUi(Player, pvxMenuBack);
+                    CuiHelper.DestroyUi(Player, pvxMenuBanner);
+                    CuiHelper.DestroyUi(Player, pvxMenuBannerTitle);
+                    CuiHelper.DestroyUi(Player, pvxMenuBannerVersion);
+                    CuiHelper.DestroyUi(Player, pvxMenuBannerModType);
+                    CuiHelper.DestroyUi(Player, pvxMenuSide);
+                    CuiHelper.DestroyUi(Player, pvxMenuMain);
+                }
+                public static void Content(BasePlayer Player)
+                {
+                    CuiHelper.DestroyUi(Player, pvxMenuMain);
+                }
+            }
+            public static class Update
+            {
+                public static void AdminIndicator()
+                {
+                    if (Players.Adminmode.Online == null) return;
+                    else if (Players.Adminmode.Online.Count < 1) return;
+                    foreach (ulong PlayerID in Players.Adminmode.Online)
+                    {
+                        BasePlayer Player = Players.Find.BasePlayer(PlayerID);
+                        CuiHelper.DestroyUi(Player, pvxAdminUI);
+                        Create.AdminIndicator(Player);
+                    }
+                }
+                public static void PlayerIndicator(BasePlayer Player)
+                {
+                    CuiHelper.DestroyUi(Player, pvxIndicator);
+                    Create.PlayerIndicator(Player);
                 }
             }
         }
-        void displayTicket(BasePlayer _player, int _ticketID)
+        private void CreatePvXMenu(BasePlayer player)
         {
-            if (ticketData.Link.ContainsKey(_ticketID))
-            {
-                ulong _key = ticketData.Link[_ticketID];
-                //DateTime _date = DateTime.FromOADate(ticketData.Info[_key].timeStamp);
-                LangMSG(_player, "TickDet");
-                LangMSG(_player, "TickID", _ticketID);
-                LangMSG(_player, "TickName", ticketData.Info[_key].Username);
-                LangMSG(_player, "TickStmID", _key);
-                LangMSG(_player, "TickSelc", ticketData.Info[_key].requested);
-                LangMSG(_player, "TickRsn", ticketData.Info[_key].reason);
-                LangMSG(_player, "TickDate", ticketData.Info[_key].CreatedTimeStamp);
-            }
-            else LangMSG(_player, "TickNotAvail", _ticketID);
-        }
-        bool playerHasTicket(BasePlayer _player)
-        {
-            if (InfoCache[_player.userID].ticket == true) return true;
-            else return false;
-        }
-        bool playerHasTicket(ulong _userID)
-        {
-            if (InfoCache[_userID].ticket == true) return true;
-            else return false;
-        }
-
-        int GetNewID()
-        {
-            for (int _i = 1; _i <= 500; _i++)
-            {
-                if (ticketData.Link.ContainsKey(_i)) { }//Place Debug code in future
-                else
-                {
-                    //Puts("Key {0} doesnt exist, Returning ticket number", _i); //debug
-                    return _i;
-                }
-            }
-            return 0;
-        }
-        int NewLogID()
-        {
-            for (int _i = 1; _i <= 500; _i++)
-            {
-                if (ticketLog.Log.ContainsKey(_i)) { }
-                else
-                {
-                    //Puts("Key {0} doesnt exist, Returning ticket number", _i); //debug
-                    return _i;
-                }
-            }
-            return 0;
-        }
-
-        void consolListTickets()
-        {
-            foreach (ulong _ticket in ticketData.Info.Keys)
-            {
-                Puts("    ");
-                Puts("    ");
-                PutsLang("TickDet");
-                PutsLang("TickID", ticketData.Info[_ticket].TicketNumber);
-                PutsLang("TickName", ticketData.Info[_ticket].Username);
-                PutsLang("TickStmID", _ticket);
-                PutsLang("TickSelc", ticketData.Info[_ticket].requested);
-                PutsLang("TickRsn", ticketData.Info[_ticket].reason);
-                PutsLang("TickDate", ticketData.Info[_ticket].CreatedTimeStamp);
-            }
-        }
-        void consolListLog()
-        {
-            foreach (int _ticket in ticketLog.Log.Keys)
-            {
-                Puts("    ");
-                Puts("    ");
-                Puts("Log Ticket");
-                Puts("Accepted: {0}", ticketLog.Log[_ticket].Accepted);
-                Puts("CreatedTimeStamp: {0}", ticketLog.Log[_ticket].CreatedTimeStamp);
-                Puts("ClosedTimeStamp: {0}", ticketLog.Log[_ticket].ClosedTimeStamp);
-                Puts("Username: {0}", ticketLog.Log[_ticket].Username);
-                Puts("UserId: {0}", ticketLog.Log[_ticket].UserId);
-                Puts("AdminName: {0}", ticketLog.Log[_ticket].AdminName);
-                Puts("AdminId: {0}", ticketLog.Log[_ticket].AdminId);
-                Puts("Requested: {0}", ticketLog.Log[_ticket].requested);
-                Puts("Reason: {0}", ticketLog.Log[_ticket].reason);
-            }
+            GUI.Create.Menu.Background(player);
+            GUI.Create.Menu.Title(player);
+            GUI.Create.Menu.Selector(player);
+            GUI.Create.Menu.Content.WelcomePage1(player);
         }
 
         #endregion
 
         #region Looting Functions
-        ItemContainer.CanAcceptResult CanAcceptItem(ItemContainer container, Item item)
+
+        //ItemContainer.CanAcceptResult CanAcceptItem(ItemContainer container, Item item)
+        //{
+        //    //Puts(container.uid.ToString());
+        //    //Puts("Bla");
+        //    if (container.playerOwner != null)
+        //    {
+        //        BasePlayer Player = container.playerOwner;
+
+        //        if (Containers.IsInSharedChest(Player.userID))
+        //        {
+        //            item.ClearOwners();
+        //            return ItemContainer.CanAcceptResult.CanAccept;
+        //        }
+        //        List<Item.OwnerFraction> _itemOwners = item.owners;
+        //        if (_itemOwners == null) return ItemContainer.CanAcceptResult.CanAccept;
+        //        if (_itemOwners.Count < 1) return ItemContainer.CanAcceptResult.CanAccept;
+        //        ulong _ownerID = _itemOwners[0].userid;
+        //        if (_ownerID == 0) return ItemContainer.CanAcceptResult.CanAccept;
+        //        if (_ownerID == Player.userID) return ItemContainer.CanAcceptResult.CanAccept;
+        //        if (Players.State.IsNPC(_ownerID)) return ItemContainer.CanAcceptResult.CanAccept;
+        //        if (SameOnlyCheck(container.playerOwner.userID, _ownerID)) return ItemContainer.CanAcceptResult.CanAccept;
+        //        else
+        //        {
+        //            Messages.Chat(instance.covalence.Players.FindPlayerById(container.playerOwner.UserIDString), "notAllwPickup", Players.Data.playerData.Info[_ownerID].mode);
+        //            return ItemContainer.CanAcceptResult.CannotAccept;
+        //        }
+        //    }
+        //    else return ItemContainer.CanAcceptResult.CanAccept;
+        //}
+        private object CanLootPlayer(BasePlayer Target, BasePlayer Looter)
         {
-            if (container.playerOwner != null)
+            if (Players.State.IsNPC(Target)) return CanLootNPC(Looter);
+            if (IsGod(Target)) return null;
+            if (AreInEvent(Looter, Target)) return null;
+            return PvPOnlyCheck(Looter.userID, Target.userID) ? null : (object)false;
+        }
+        private void OnLootPlayer(BasePlayer Looter, BasePlayer Target)
+        {
+            if (Players.State.IsNPC(Target)) { NpcLootHandle(Looter); return; };
+            if (AreInEvent(Looter, Target)) return;
+            if (PvPOnlyCheck(Looter.userID, Target.userID)) return;
+            else NextTick(Looter.EndLooting);
+        }
+        private void OnLootEntity(BasePlayer Looter, BaseEntity Target)
+        {
+            if (Target is BaseCorpse)
             {
-                BasePlayer _player = container.playerOwner;
-                List<Item.OwnerFraction> _itemOwners = item.owners;
-                if (_itemOwners == null) return ItemContainer.CanAcceptResult.CanAccept;
-                if (_itemOwners.Count < 1) return ItemContainer.CanAcceptResult.CanAccept;
-                ulong _ownerID = _itemOwners[0].userid;
-                if (_ownerID == 0) return ItemContainer.CanAcceptResult.CanAccept;
-                if (isNPC(_ownerID)) return ItemContainer.CanAcceptResult.CanAccept;
-                if (SameOnlyCheck(container.playerOwner.userID, _ownerID)) return ItemContainer.CanAcceptResult.CanAccept;
-                else
+                var Corpse = Target?.GetComponent<PlayerCorpse>() ?? null;
+                if (Corpse != null)
                 {
-                    LangMSG(container.playerOwner, "notAllwPickup", InfoCache[_ownerID].mode);
-                    return ItemContainer.CanAcceptResult.CannotAccept;
-                }
-            }
-            else return ItemContainer.CanAcceptResult.CanAccept;
-        }
-        private object CanLootPlayer(BasePlayer _target, BasePlayer _looter)
-        {
-            if (isNPC(_target)) return canLootNPC(_looter);
-            if (isGod(_target)) return null;
-            if (areInEvent(_looter, _target)) return null;
-            return PvPOnlyCheck(_looter, _target) ? null : (object)false;
-        }
-        private void OnLootPlayer(BasePlayer _looter, BasePlayer _target)
-        {
-            if (isNPC(_target)) { npcLootHandle(_looter); return; };
-            if (areInEvent(_looter, _target)) return;
-            if (PvPOnlyCheck(_looter, _target)) return;
-            else NextTick(_looter.EndLooting);
-        }
-        private void OnLootEntity(BasePlayer _looter, BaseEntity _target)
-        {
-            if (_target is BaseCorpse)
-            {
-                var corpse = _target?.GetComponent<PlayerCorpse>() ?? null;
-                if (corpse != null)
-                {
-                    if (isNPC(corpse)) { npcLootHandle(_looter); return; }
-                    ulong _corpseID = corpse.playerSteamID;
-                    if (_corpseID == _looter.userID) return;
-                    BasePlayer _corpseBP = basePlayerByID(_corpseID);
+                    if (Players.State.IsNPC(Corpse)) { NpcLootHandle(Looter); return; }
+                    ulong CorpseID = Corpse.playerSteamID;
+                    if (CorpseID == Looter.userID) return;
+                    BasePlayer _corpseBP = Players.Find.BasePlayer(CorpseID);
                     if (_corpseBP != null)
-                        if (areInEvent(_looter, _corpseBP)) return;
-                        else if (PvPOnlyCheck(_looter.userID, _corpseID)) return;
-                        else NextTick(_looter.EndLooting);
+                        if (AreInEvent(Looter, _corpseBP)) return;
+                        else if (PvPOnlyCheck(Looter.userID, CorpseID)) return;
+                        else NextTick(Looter.EndLooting);
                 }
             }
-            else if (_target is StorageContainer)
+            else if (Target is StorageContainer)
             {
-                StorageContainer _container = (StorageContainer)_target;
-                if (_container.OwnerID == 0) return;
-                BasePlayer _containerBP = basePlayerByID(_container.OwnerID);
-                if (_container.OwnerID == _looter.userID) return;
-                if (_containerBP != null)
-                    if (areInEvent(_looter, _containerBP)) return;
-                if (SameOnlyCheck(_looter.userID, _container.OwnerID)) return;
-                else NextTick(_looter.EndLooting);
+                StorageContainer Containers = (StorageContainer)Target;
+                if (Containers.OwnerID == 0) return;
+                if (Containers.OwnerID == Looter.userID)
+                {
+                    if (PvXselector.Containers.AddContainer(Containers, Looter.userID))
+                        NextTick(Looter.EndLooting);
+                    else if (PvXselector.Containers.RemoveContainer(Containers, Looter.userID))
+                        NextTick(Looter.EndLooting);
+                    if (PvXselector.Containers.IsShared(Containers))
+                    {
+                        PvXselector.Containers.AddPlayerToInSharedChest(Looter.userID);
+                        return;
+                    }
+                }
+                if (PvXselector.Containers.IsShared(Containers))
+                {
+                    Puts("Adding Player to Shared list");
+                    PvXselector.Containers.AddPlayerToInSharedChest(Looter.userID);
+                    return;
+                }
+                BasePlayer ContainerBP = Players.Find.BasePlayer(Containers.OwnerID);
+                if (ContainerBP != null)
+                    if (AreInEvent(Looter, ContainerBP)) return;
+                if (SameOnlyCheck(Looter.userID, Containers.OwnerID)) return;
+                else NextTick(Looter.EndLooting);
             }
             else return;
         }
+        void OnItemRemovedFromContainer(ItemContainer container, Item item)
+        {
+            //Puts("Container is type {0}", container.GetType());
+            //Puts("Container is type {0}", container.entityOwner);
+            //Puts("Container is type {0}", container.playerOwner);
+            //Puts(container.GetType().ToString());
+            if (container.entityOwner != null) return;
+            if (container.playerOwner != null)
+            {
+                BasePlayer Player = container.playerOwner;
+                //if (Players.Adminmode.ContainsPlayer(Player.userID)) item.ClearOwners();
+            }
+        }
+        void OnPlayerLootEnd(PlayerLoot inventory)
+        {
+            BasePlayer player;
+            if ((player = inventory.GetComponent<BasePlayer>()) == null)
+                return;
+            if (Containers.IsInSharedChest(player.userID)) Containers.RemovePlayerFromInSharedChest(player.userID);
+        }
+
         #endregion
 
         #region Building Functions
@@ -1235,7 +1297,7 @@ namespace Oxide.Plugins
             {
                 BaseEntity _base = (BaseEntity)_entity;
                 if (_base.OwnerID == 0) return;
-                else if (AdminPlayerMode.Contains(basePlayerByID(_base.OwnerID)))
+                else if (Players.Adminmode.ContainsPlayer(_base.OwnerID))
                     _base.OwnerID = 0;
             }
         }
@@ -1249,10 +1311,10 @@ namespace Oxide.Plugins
         [PluginReference]
         Plugin Skills;
 
-        bool checkInvis(BasePlayer _player)
+        bool CheckInvis(BasePlayer Player)
         {
-            var isInvisible = Vanish?.Call("IsInvisible", _player);
-            var isStealthed = Skills?.Call("isStealthed", _player);
+            var isInvisible = Vanish?.Call("IsInvisible", Player);
+            var isStealthed = Skills?.Call("isStealthed", Player);
             if (isInvisible != null && (bool)isInvisible)
             {
                 return true;
@@ -1266,129 +1328,121 @@ namespace Oxide.Plugins
 
         [PluginReference]
         private Plugin BetterChat;
-        void RegisterGroups()
+
+        void UpdatePlayerChatTag(BasePlayer player) => SetChatTag(player);
+
+
+        public void SetChatTag(BasePlayer player)
         {
-            if (!BetterChat) return;
-            if (!GroupExists("PvP"))
-            {
-                NewGroup("PvP");
-                SetGroupTitle("PvP");
-                SetGroupColor("PvP");
-            }
-            if (!GroupExists("PvE"))
-            {
-                NewGroup("PvE");
-                SetGroupTitle("PvE");
-                SetGroupColor("PvE");
-            }
+            if (Players.GetMode(player.userID) == Mode.NA) CreateChatTag(player, Mode.NA);
+            else if (Players.GetMode(player.userID) == Mode.PvE) CreateChatTag(player, Mode.PvE);
+            else if (Players.GetMode(player.userID) == Mode.PvP) CreateChatTag(player, Mode.PvP);
+        }
+        private void CreateChatTag(BasePlayer player, string Mode)
+        {
+            mode1 = Mode;
+            IPlayer iplayer = covalence.Players.FindPlayerById(player.ToString());
+            BetterChat?.Call("API_RegisterThirdPartyTitle", new object[] { this, new Func<IPlayer, string>(bla) });
+        }
+        string colour1 = "orange";
+        string mode1 = "test";
+        private string bla(IPlayer iPlayer)
+        {
+            string test = $"[#{colour1}][{mode1}][/#]";
+            return test;
         }
 
-        void updatePlayerChatTag(BasePlayer _player)
-        {
-            if (!BetterChat) return;
-            ulong _userID = _player.userID;
-            string _userIDs = _player.UserIDString;
-            string _mode = InfoCache[_userID].mode;
-            if (_mode == "pvp")
-            {
-                if (!(UserInGroup(_userIDs, "PvP"))) AddToGroup(_userIDs, "PvP");
-                if (UserInGroup(_userIDs, "PvE")) RemoveFromGroup(_userIDs, "PvE");
-            }
-            else if (_mode == "pve")
-            {
-                if (!(UserInGroup(_userIDs, "PvE"))) AddToGroup(_userIDs, "PvE");
-                if (UserInGroup(_userIDs, "PvP")) RemoveFromGroup(_userIDs, "PvP");
-            }
-            else if (_mode == "NA")
-            {
-                if (UserInGroup(_userIDs, "PvE")) RemoveFromGroup(_userIDs, "PvE");
-                if (UserInGroup(_userIDs, "PvP")) RemoveFromGroup(_userIDs, "PvP");
-            }
-        }
+        //void VerifyColors() Will need to impliment for when I set colour in Config
+        //{
+        //    bool hasChanged = false;
+        //    if (configData.Messaging.ClanChat.StartsWith("<color="))
+        //    {
+        //        configData.Messaging.ClanChat = configData.Messaging.ClanChat.Replace("<color=", "").Replace(">", "");
+        //        hasChanged = true;
+        //    }
 
-        private bool GroupExists(string name) => (bool)BetterChat?.Call("API_GroupExists", (name.ToLower()));
-        private bool NewGroup(string name) => (bool)BetterChat?.Call("API_AddGroup", (name.ToLower()));
-        private bool UserInGroup(string ID, string name) => (bool)BetterChat?.Call("API_IsUserInGroup", ID, (name.ToLower()));
-        private bool AddToGroup(string ID, string name) => (bool)BetterChat?.Call("API_AddUserToGroup", ID, (name.ToLower()));
-        private bool RemoveFromGroup(string ID, string name) => (bool)BetterChat?.Call("API_RemoveUserFromGroup", ID, (name.ToLower()));
-        private object SetGroupTitle(string name) => BetterChat?.Call("API_SetGroupSetting", (name.ToLower()), "title", $"[{name}]");
-        private object SetGroupColor(string name) => BetterChat?.Call("API_SetGroupSetting", (name.ToLower()), "titlecolor", "orange");
+
+        //    if (configData.Messaging.Main.StartsWith("<color="))
+        //    {
+        //        configData.Messaging.Main = configData.Messaging.Main.Replace("<color=", "").Replace(">", "");
+        //        hasChanged = true;
+        //    }
+
+        //    if (configData.Messaging.MSG.StartsWith("<color="))
+        //    {
+        //        configData.Messaging.MSG = configData.Messaging.MSG.Replace("<color=", "").Replace(">", "");
+        //        hasChanged = true;
+        //    }
+
+        //    if (configData.Options.ClanTagColor.StartsWith("<color="))
+        //    {
+        //        configData.Options.ClanTagColor = configData.Options.ClanTagColor.Replace("<color=", "").Replace(">", "");
+        //        hasChanged = true;
+        //    }
+
+        //    if (!configData.Options.ClanTagColor.StartsWith("#"))
+        //    {
+        //        configData.Options.ClanTagColor = $"#{configData.Options.ClanTagColor}";
+        //        hasChanged = true;
+        //    }
+
+        //    if (hasChanged)
+        //        SaveConfig(configData);
+        //}
+
+        //private bool GroupExists(string name) => (bool)BetterChat?.Call("API_GroupExists", (name.ToLower()));
+        //private bool NewGroup(string name) => (bool)BetterChat?.Call("API_AddGroup", (name.ToLower()));
 
         [PluginReference]
-        private Plugin HumanNPC;
-        bool isNPC(ulong _test)
+        public Plugin HumanNPC;
+
+        void NpcDamageHandle(BasePlayer _NPC, HitInfo HitInfo)
         {
-            if (HumanNPC == null) return false;
-            else if (_test < 76560000000000000L) return true;
-            else return false;
+            BasePlayer _attacker = (BasePlayer)HitInfo.Initiator;
+            if (Players.State.IsNPC(_attacker)) return;
+            if ((Players.Data.playerData.Info[_attacker.userID].mode == Mode.PvP) && (PvPAttackNPC == true)) return;
+            if ((Players.Data.playerData.Info[_attacker.userID].mode == Mode.PvE) && (PvEAttackNPC == true)) return;
+            else ModifyDamage(HitInfo, 0);
         }
-        bool isNPC(BasePlayer _test)
+        void NpcAttackHandle(BasePlayer _target, HitInfo HitInfo)
         {
-            if (HumanNPC == null) return false;
-            else if (_test.userID < 76560000000000000L) return true;
-            else return false;
-        }
-        bool isNPC(BaseCombatEntity _player)
-        {
-            BasePlayer _test = (BasePlayer)_player;
-            if (HumanNPC == null) return false;
-            else if (_test.userID < 76560000000000000L) return true;
-            else return false;
-        }
-        bool isNPC(PlayerCorpse _test)
-        {
-            if (HumanNPC == null) return false;
-            else if (_test.playerSteamID < 76560000000000000L) return true;
-            else return false;
+            if (Players.State.IsNPC(_target)) return;
+            if ((Players.Data.playerData.Info[_target.userID].mode == Mode.PvP) && (NPCAttackPvP == true)) return;
+            if ((Players.Data.playerData.Info[_target.userID].mode == Mode.PvE) && (NPCAttackPvE == true)) return;
+            else ModifyDamage(HitInfo, 0);
         }
 
-        void npcDamageHandle(BasePlayer _NPC, HitInfo _hitInfo)
-        {
-            BasePlayer _attacker = (BasePlayer)_hitInfo.Initiator;
-            if (isNPC(_attacker)) return;
-            if ((InfoCache[_attacker.userID].mode == "pvp") && (PvPAttackNPC == true)) return;
-            if ((InfoCache[_attacker.userID].mode == "pve") && (PvEAttackNPC == true)) return;
-            else ModifyDamage(_hitInfo, 0);
-        }
-        void npcAttackHandle(BasePlayer _target, HitInfo _hitInfo)
-        {
-            if (isNPC(_target)) return;
-            if ((InfoCache[_target.userID].mode == "pvp") && (NPCAttackPvP == true)) return;
-            if ((InfoCache[_target.userID].mode == "pve") && (NPCAttackPvE == true)) return;
-            else ModifyDamage(_hitInfo, 0);
-        }
-
-        bool canLootNPC(BasePlayer _player)
+        bool CanLootNPC(BasePlayer Player)
         {
             if ((PvELootNPC == true) && (PvPLootNPC == true)) return true;
-            else if ((InfoCache[_player.userID].mode == "pvp") && (PvPLootNPC == true)) return true;
-            else if ((InfoCache[_player.userID].mode == "pve") && (PvELootNPC == true)) return true;
+            else if ((Players.Data.playerData.Info[Player.userID].mode == Mode.PvP) && (PvPLootNPC == true)) return true;
+            else if ((Players.Data.playerData.Info[Player.userID].mode == Mode.PvE) && (PvELootNPC == true)) return true;
             else return false;
         }
-        void npcLootHandle(BasePlayer _player)
+        void NpcLootHandle(BasePlayer Player)
         {
             if ((PvELootNPC == true) && (PvPLootNPC == true)) return;
-            if ((InfoCache[_player.userID].mode == "pvp") && (PvPLootNPC == true)) return;
-            if ((InfoCache[_player.userID].mode == "pve") && (PvELootNPC == true)) return;
-            BroadcastMessageHandle("Not allowed to loot");
-            NextTick(_player.EndLooting);
+            if ((Players.Data.playerData.Info[Player.userID].mode == Mode.PvP) && (PvPLootNPC == true)) return;
+            if ((Players.Data.playerData.Info[Player.userID].mode == Mode.PvE) && (PvELootNPC == true)) return;
+            Messages.Chat(Players.Find.Iplayer(Player.userID), "Not allowed to loot");
+            NextTick(Player.EndLooting);
         }
 
         [PluginReference]
         private Plugin EventManager;
-        bool isInEvent(BasePlayer _player1)
+        bool IsInEvent(BasePlayer Player1)
         {
             if (EventManager == null) return false;
-            bool _var = (bool)EventManager?.Call("isPlaying", _player1);
+            bool _var = (bool)EventManager?.Call("isPlaying", Player1);
             if (_var == true) return true;
             return false;
         }
 
-        bool areInEvent(BasePlayer _player1, BasePlayer _player2)
+        bool AreInEvent(BasePlayer Player1, BasePlayer Player2)
         {
             if (EventManager == null) return false;
-            bool _var1 = (bool)EventManager?.Call("isPlaying", _player1);
-            bool _var2 = (bool)EventManager?.Call("isPlaying", _player2);
+            bool _var1 = (bool)EventManager?.Call("isPlaying", Player1);
+            bool _var2 = (bool)EventManager?.Call("isPlaying", Player2);
             if (_var1 == true && _var1 == _var2) return true;
             return false;
         }
@@ -1396,29 +1450,37 @@ namespace Oxide.Plugins
 
         [PluginReference]
         private Plugin Godmode;
-        private bool checkIsGod(string _player) => (bool)Godmode?.Call("IsGod", _player);
+        private bool CheckIsGod(string Player) => (bool)Godmode?.Call("IsGod", Player);
 
-        private bool isGod(ulong _player)
+        private bool IsGod(ulong Player)
         {
             if (Godmode == null) return false;
-            return checkIsGod(_player.ToString());
+            return CheckIsGod(Player.ToString());
         }
-        private bool isGod(BasePlayer _player)
+        private bool IsGod(BasePlayer Player)
         {
-            if (Godmode == null) return false;
-            if (_player == null) return false;
-            return checkIsGod(_player.UserIDString);
+            if (Godmode == null)
+            {
+                return false;
+            }
+
+            if (Player == null)
+            {
+                return false;
+            }
+
+            return CheckIsGod(Player.UserIDString);
         }
 
 
         #endregion
 
         #region Door Functions
-        void OnDoorOpened(Door _door, BasePlayer _player)
+        void OnDoorOpened(Door _door, BasePlayer Player)
         {
             if (_door == null) return;
             if (_door.OwnerID == 0) return;
-            if (!(SameOnlyCheck(_player.userID, _door.OwnerID)))
+            if (!(SameOnlyCheck(Player.userID, _door.OwnerID)))
             {
                 _door.SetFlag(BaseEntity.Flags.Open, false);
                 _door.SendNetworkUpdateImmediate();
@@ -1427,174 +1489,37 @@ namespace Oxide.Plugins
         #endregion
 
         #region PvX Check/Find Functions
-        private bool PvPOnlyCheck(BasePlayer _player1, BasePlayer _player2)
+        private bool PvPOnlyCheck(ulong Player1, ulong Player2)
         {
-            if (isplayerNA(_player1)) return false;
-            if (isplayerNA(_player2)) return false;
-            if ((InfoCache[_player1.userID].mode == "pvp") && (InfoCache[_player2.userID].mode == "pvp"))
-                return true;
+            if (Players.State.IsNA(Player1)) return false;
+            if (Players.State.IsNA(Player2)) return false;
+            if ((Players.Data.playerData.Info[Player1].mode == Mode.PvP) && (Players.Data.playerData.Info[Player2].mode == Mode.PvP)) return true;
             return false;
         }
-        private bool PvPOnlyCheck(ulong _player1, ulong _player2)
+        private bool PvEOnlyCheck(ulong Player1, ulong Player2)
         {
-            if (isplayerNA(_player1)) return false;
-            if (isplayerNA(_player2)) return false;
-            if ((InfoCache[_player1].mode == "pvp") && (InfoCache[_player2].mode == "pvp")) return true;
+            if (Players.State.IsNA(Player1)) return false;
+            if (Players.State.IsNA(Player2)) return false;
+            if ((Players.Data.playerData.Info[Player1].mode == Mode.PvE) && (Players.Data.playerData.Info[Player2].mode == Mode.PvE)) return true;
             return false;
         }
-        private bool PvEOnlyCheck(BasePlayer _player1, BasePlayer _player2)
+        private bool SameOnlyCheck(ulong Player1, ulong Player2)
         {
-            if (isplayerNA(_player1)) return false;
-            if (isplayerNA(_player2)) return false;
-            if ((InfoCache[_player1.userID].mode == "pve") && (InfoCache[_player2.userID].mode == "pve"))
-                return true;
+            if (Players.State.IsNA(Player1)) return false;
+            if (Players.State.IsNA(Player2)) return false;
+            if (Players.Data.playerData.Info[Player1].mode == Players.Data.playerData.Info[Player2].mode) return true;
             return false;
         }
-        private bool PvEOnlyCheck(ulong _player1, ulong _player2)
-        {
-            if (isplayerNA(_player1)) return false;
-            if (isplayerNA(_player2)) return false;
-            if ((InfoCache[_player1].mode == "pve") && (InfoCache[_player2].mode == "pve")) return true;
-            return false;
-        }
-        private bool SameOnlyCheck(BasePlayer _player1, BasePlayer _player2)
-        {
-            if (isplayerNA(_player1)) return false;
-            if (isplayerNA(_player2)) return false;
-            if (InfoCache[_player1.userID].mode == InfoCache[_player2.userID].mode) return true;
-            return false;
-        }
-        private bool SameOnlyCheck(ulong _player1, ulong _player2)
-        {
-            if (isplayerNA(_player1)) return false;
-            if (isplayerNA(_player2)) return false;
-            if (InfoCache[_player1].mode == InfoCache[_player2].mode) return true;
-            return false;
-        }
+        
 
-        bool isplayerNA(BasePlayer _player)
-        {
-            ulong _playerID = _player.userID;
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                if (_player == null)
-                {
-                    addOffline(_playerID);
-                    BroadcastMessageHandle("Adding offline");
-                    SaveAll();
-                    return true;
-                }
-                addPlayer(_player);
-                return true;
-            }
-            if (InfoCache[_playerID].mode == "NA") return true;
-            else return false;
-        }
-        bool isplayerNA(ulong _playerID)
-        {
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                BasePlayer _player = basePlayerByID(_playerID);
-                if (_player == null)
-                {
-                    addOffline(_playerID);
-                    BroadcastMessageHandle("Adding offline");
-                    SaveAll();
-                    return true;
-                }
-                addPlayer(_player);
-                return true;
-            }
-            if (InfoCache[_playerID].mode == "NA") return true;
-            else return false;
-        }
-        bool isPvP(ulong _playerID)
-        {
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            BasePlayer _player = basePlayerByID(_playerID);
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                addPlayer(_player);
-                return false;
-            }
-            if (InfoCache[_playerID].mode == "pvp") return true;
-            else return false;
-        }
-        bool isPvP(BasePlayer _player)
-        {
-            ulong _playerID = _player.userID;
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                addPlayer(_player);
-                return false;
-            }
-            if (InfoCache[_playerID].mode == "pvp") return true;
-            else return false;
-        }
-        bool isPvP(BaseCombatEntity _BaseCombat)
-        {
-            BasePlayer _player = (BasePlayer)_BaseCombat;
-            ulong _playerID = _player.userID;
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                addPlayer(_player);
-                return false;
-            }
-            if (InfoCache[_playerID].mode == "pvp") return true;
-            else return false;
-        }
-        bool isPvE(ulong _playerID)
-        {
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            BasePlayer _player = basePlayerByID(_playerID);
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                addPlayer(_player);
-                return false;
-            }
-            if (InfoCache[_playerID].mode == "pve") return true;
-            else return false;
-        }
-        bool isPvE(BasePlayer _player)
-        {
-            ulong _playerID = _player.userID;
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                addPlayer(_player);
-                return false;
-            }
-            if (InfoCache[_playerID].mode == "pve") return true;
-            else return false;
-        }
-        bool isPvE(BaseCombatEntity _BaseCombat)
-        {
-            BasePlayer _player = (BasePlayer)_BaseCombat;
-            ulong _playerID = _player.userID;
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
-            {
-                addPlayer(_player);
-                return false;
-            }
-            if (InfoCache[_playerID].mode == "pve") return true;
-            else return false;
-        }
+
 
         bool BaseplayerCheck(BasePlayer _attacker, BasePlayer _victim)
         {
             if (_attacker == _victim) return true;
-            if (isGod(_victim)) return true;
-            if (isGod(_attacker)) return true;
-            if (areInEvent(_attacker, _victim)) return true;
+            if (IsGod(_victim)) return true;
+            if (IsGod(_attacker)) return true;
+            if (AreInEvent(_attacker, _victim)) return true;
             return false;
         }
 
@@ -1611,537 +1536,663 @@ namespace Oxide.Plugins
             //Puts("Detected no Characters Returning true");
             return true;
         }
-        BasePlayer basePlayerByID(ulong _ID)
+
+
+        class Mode
         {
-            BasePlayer _player = BasePlayer.FindByID(_ID);
-            if (_player == null) _player = BasePlayer.FindSleeping(_ID);
-            return _player;
+            public static readonly Mode PvP = new Mode("PvP");
+            public static readonly Mode PvE = new Mode("PvE");
+            public static readonly Mode NA = new Mode("NA");
+            
+            private Mode(string value)
+            {
+                Value = value;
+            }
+
+            public string Value;
+            public static implicit operator string(Mode mode)
+            {
+                return mode.Value;
+            }
         }
         #endregion
 
         #region Hooks
-        public void updatePvXPlayerData(BasePlayer _player)
+        public void UpdatePvXPlayerData(BasePlayer Player)
         {
-            playerData.Info[_player.userID].username = _player.displayName;
-            playerData.Info[_player.userID].LatestConnection = DateTimeStamp();
+            Players.Data.playerData.Info[Player.userID].username = Player.displayName;
+            Players.Data.playerData.Info[Player.userID].LatestConnection = DateTimeStamp();
         }
-        bool isPvEUlong(ulong _playerID)
+        bool IsPvEUlong(ulong PlayerID)
         {
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            BasePlayer _player = basePlayerByID(_playerID);
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
+            if (PlayerID == 0 || Players.State.IsNPC(PlayerID)) return false;
+            BasePlayer Player = Players.Find.BasePlayer(PlayerID);
+            if (Player == null) return false;
+            if (!Players.Data.playerData.Info.ContainsKey(PlayerID))
             {
-                addPlayer(_player);
+                Players.Add(Player);
                 return false;
             }
-            if (InfoCache[_playerID].mode == "pve") return true;
+            if (Players.Data.playerData.Info[PlayerID].mode == Mode.PvE) return true;
             else return false;
         }
-        bool isPvEBaseplayer(BasePlayer _player)
+        bool IsPvEBaseplayer(BasePlayer Player)
         {
-            ulong _playerID = _player.userID;
-            if (_playerID == 0 || isNPC(_playerID)) return false;
-            if (_player == null) return false;
-            if (!InfoCache.ContainsKey(_playerID))
+            ulong PlayerID = Player.userID;
+            if (PlayerID == 0 || Players.State.IsNPC(PlayerID)) return false;
+            if (Player == null) return false;
+            if (!Players.Data.playerData.Info.ContainsKey(PlayerID))
             {
-                addPlayer(_player);
+                Players.Add(Player);
                 return false;
             }
-            if (InfoCache[_playerID].mode == "pve") return true;
+            if (Players.Data.playerData.Info[PlayerID].mode == Mode.PvE) return true;
             else return false;
         }
         #endregion
 
         #region Chat/Console Handles
         [ChatCommand("pvx")]
-        void PvXChatCmd(BasePlayer _player, string cmd, string[] args)
+        void PvXChatCmd(BasePlayer Player, string cmd, string[] args)
         {
+            if (!Cooldowns.menuGui.Contains(Player.userID))
+            {
+                Cooldowns.menuGui.Add(Player.userID);
+                timer.Once(2f, () => Cooldowns.menuGui.Remove(Player.userID));
+            }
+            else return;
             if ((args == null) || (args.Length == 0))
             {
-                LangMSG(_player, "ComndList");
-                ChatMessageHandle(_player, "/pvx select, /pvx change, /pvx ticket /pvx gui");
-                if (hasPerm(_player, "admin")) ChatMessageHandle(_player, "/pvx select, /pvx admin");
+                CreatePvXMenu(Player);
                 return;
             }
             switch (args[0].ToLower())
             {
                 case "admin": //meed to transfer accept/dec;ome/list function
-                    adminFunction(_player, args);
+                    AdminFunction(Player, args);
                     return;
                 case "change": //Completed
-                    changeFunction(_player);
+                    ChangeFunction(Player);
                     return;
                 case "debug":
-                    debugFunction();
+                    DebugFunction();
                     return;
                 case "developer":
-                    developerFunction();
+                    DeveloperFunction();
                     return;
                 case "help":
-                    helpFunction(_player);
+                    HelpFunction(Player);
                     return;
                 case "select":
-                    selectFunction(_player, args);
+                    SelectFunction(Player, args);
                     return;
                 case "ticket":
-                    ticketFunction(_player, args);
+                    TicketFunction(Player, args);
                     return;
                 case "gui":
-                    guiFunction(_player, args);
+                    GuiFunction(Player, args);
                     return;
                 default:
-                    LangMSG(_player, "ComndList");
-                    ChatMessageHandle(_player, "/pvx select, /pvx change, /pvx ticket /pvx gui");
-                    if (hasPerm(_player, "admin")) ChatMessageHandle(_player, "/pvx select, /pvx admin");
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "ComndList");
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx select, /pvx change, /pvx ticket /pvx gui");
+                    if (HasPerm(Player, "admin")) Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx select, /pvx admin");
                     return;
             }
         }
 
+
+        //[ChatCommand("pvxaddlist")]
+        //void qwetryugsfdgvhjkfdsvjfdskhdfjkdsfhghkdfjksf(BasePlayer Player, string cmd, string[] args)
+        //{
+        //    Puts("Size of AddContainerMode: {0}", Containers.AddContainerMode.Count);
+        //    Puts("List of AddContainerMode:");
+        //    foreach (ulong test in Containers.AddContainerMode)
+        //    {
+        //        Puts(test.ToString());
+        //    }
+        //    Puts("End");
+        //}
+        [ChatCommand("pvxhide")]
+        void HideAllGui(BasePlayer Player, string cmd, string[] args)
+        {
+            DestroyAllPvXUI(Player);
+        }
+        [ChatCommand("pvxshow")]
+        void ShowGUI(BasePlayer Player, string cmd, string[] args)
+        {
+            GUI.Create.PlayerIndicator(Player);
+            if (HasPerm(Player, "admin")) GUI.Create.AdminIndicator(Player);
+        }
+
+
+        [ConsoleCommand("PvX.Menu.Cmd")]
+        void PvXGuiCmds(ConsoleSystem.Arg arg)
+        {
+            if (arg.connection == null) return;
+            if (arg.Args == null || arg.Args.Length == 0) return;
+            BasePlayer Player = (BasePlayer)arg.connection.player;
+            if (Player == null) return;
+            if (arg.Args[0] == "Close")
+            {
+                GUI.Destroy.All(Player);
+                return;
+            }
+            if (arg.Args[0] == "Welcome")
+            {
+                GUI.Destroy.Content(Player);
+                GUI.Create.Menu.Content.WelcomePage1(Player);
+                return;
+            }
+            if (arg.Args[0] == "WelcomeAdmin")
+            {
+                GUI.Destroy.Content(Player);
+                GUI.Create.Menu.Content.WelcomePage4(Player);
+                return;
+            }
+            if (arg.Args[0] == "WelcomePage")
+            {
+                int CurrentPage = Convert.ToInt32(arg.Args[1]);
+
+                GUI.Destroy.Content(Player);
+                if (arg.Args[2] == "Next")
+                {
+                    if (CurrentPage == 1) GUI.Create.Menu.Content.WelcomePage2(Player);
+                    if (CurrentPage == 2) GUI.Create.Menu.Content.WelcomePage3(Player);
+                    if (CurrentPage == 3) GUI.Create.Menu.Content.WelcomePage4(Player);
+                    if (CurrentPage == 4) GUI.Create.Menu.Content.WelcomePage5(Player);
+                }
+                if (arg.Args[2] == "Back")
+                {
+                    if (CurrentPage == 2) GUI.Create.Menu.Content.WelcomePage1(Player);
+                    if (CurrentPage == 3) GUI.Create.Menu.Content.WelcomePage2(Player);
+                    if (CurrentPage == 4) GUI.Create.Menu.Content.WelcomePage3(Player);
+                    if (CurrentPage == 5) GUI.Create.Menu.Content.WelcomePage4(Player);
+                }
+            }
+            if (arg.Args[0] == "Character")
+            {
+                GUI.Destroy.Content(Player);
+                GUI.Create.Menu.Content.Character(Player);
+                return;
+            }
+            if (arg.Args[0] == "AddToShared")
+            {
+                Containers.AddToAddContainerList(Player.userID);
+                GUI.Destroy.All(Player);
+            }
+            if (arg.Args[0] == "RemoveFromShared")
+            {
+                Containers.AddToRemoveContainerList(Player.userID);
+                GUI.Destroy.All(Player);
+            }
+            if (arg.Args[0] == Mode.PvE)
+            {
+                if (Players.State.IsNA(Player))
+                {
+                    string playermode = Mode.PvE;
+                    Players.Data.playerData.Info[Player.userID].mode = playermode;
+                    GUI.Update.PlayerIndicator(Player);
+                    UpdatePlayerChatTag(Player);
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "Selected: {0}", playermode);
+                }
+                else if (Players.HasTicket(Player) == true)
+                {
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.AlreadyExists); return;
+                }
+                else
+                {
+                    Players.ChangeMode.Check(Player, Mode.PvE);
+                }
+
+                GUI.Destroy.Content(Player);
+                GUI.Create.Menu.Content.Character(Player);
+                return;
+            }
+            if (arg.Args[0] == Mode.PvP)
+            {
+                if (Players.State.IsNA(Player))
+                {
+                    string playermode = Mode.PvP;
+                    Players.Data.playerData.Info[Player.userID].mode = playermode;
+                    GUI.Update.PlayerIndicator(Player);
+                    UpdatePlayerChatTag(Player);
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "Selected: {0}", playermode);
+                }
+                else if (Players.HasTicket(Player) == true)
+                {
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.AlreadyExists); return;
+                }
+                else Players.ChangeMode.Check(Player, Mode.PvP);
+                GUI.Destroy.Content(Player);
+                GUI.Create.Menu.Content.Character(Player);
+                return;
+            }
+        }
         [ConsoleCommand("pvx.cmd")]
         void PvXConsoleCmd(ConsoleSystem.Arg arg)
         {
             if (arg.connection != null) return;
-            if (arg.Args == null || arg.Args.Length == 0) Puts("Hello");
-            consolListTickets();
-            consolListLog();
-        }
-
-        [ConsoleCommand("PvXGuiCMD")]
-        void PvXGuiCMD(ConsoleSystem.Arg arg)
-        {
-            if (arg.Args.Length != 1)return;
-            if (arg.Args[0] != "pvp" && arg.Args[0] != "pve")return;
-            BasePlayer _player = (BasePlayer)arg.connection.player;
-            if (_player == null) return;
-            string cmdValue = arg.Args[0];
-            if (isplayerNA(_player))
-            {
-                InfoCache[_player.userID].mode = cmdValue;
-                saveCacheData();
-                updatePvXIndicator(_player);
-                updatePlayerChatTag(_player);
-                ChatMessageHandle(_player, "Selected: {0}", cmdValue);
-            }
-            DestroyPvXUI(_player, pvxPlayerSelectorUI);
-        }
-
-        [ChatCommand("pvxhide")]
-        void test1(BasePlayer _player, string cmd, string[] args)
-        {
-            DestroyAllPvXUI(_player);
-        }
-        [ChatCommand("pvxshow")]
-        void test(BasePlayer _player, string cmd, string[] args)
-        {
-            createPvXIndicator(_player);
-            createAdminIndicator(_player);
+            if (arg.Args == null || arg.Args.Length == 0) return;
+            ModeSwitch.Ticket.ConsoleList();
+            ModeSwitch.Ticket.ConsoleListLogs();
         }
         #endregion
 
         #region Chat Functions
         //chat
-        void adminFunction(BasePlayer _player, string[] args)
+        void AdminFunction(BasePlayer Player, string[] args)
         {
             if (args.Length < 2 || args.Length > 3)
             {
-                LangMSG(_player, "IncoFormPleaUse");
-                ChatMessageHandle(_player, "/pvx admin [list/accept/decline/display]");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "IncoFormPleaUse");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx admin [list/accept/decline/display]");
                 return;
             }
             string _cmd = args[1].ToLower(); // admin, accept, 1
-            if (!(hasPerm(_player, "admin", "MissPerm"))) return;
-            if (_cmd == "count") ticketCount(_player);
-            if (_cmd == "list") listTickets(_player);
-            if (_cmd == "mode") adminMode(_player);
+            if (!(HasPerm(Player, "admin", "MissPerm"))) return;
+            if (_cmd == "count") ModeSwitch.Ticket.Count(Player);
+            if (_cmd == "list") ModeSwitch.Ticket.List(Player);
+            if (_cmd == "mode") Players.Adminmode.Toggle(Player.userID);
             if ((_cmd == "display") && (args.Length == 3))
             {
                 if (IsDigitsOnly(args[2]))
-                    displayTicket(_player, Convert.ToInt32(args[2]));
+                    ModeSwitch.Ticket.Info(Player, Convert.ToInt32(args[2]));
             }
             if ((_cmd == "accept") && (args.Length == 3))
             {
-                if ((IsDigitsOnly(args[2])) && (ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
-                    ticketAccept(_player, Convert.ToInt32(args[2]));
-                else if (!(ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
-                    LangMSG(_player, "TickNotAvail", args[2]);
+                if ((IsDigitsOnly(args[2])) && (ModeSwitch.Ticket.Data.ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
+                    ModeSwitch.Ticket.Accept(Player, Convert.ToInt32(args[2]));
+                else if (!(ModeSwitch.Ticket.Data.ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "TickNotAvail", args[2]);
                 else
                 {
-                    LangMSG(_player, "IncoFormPleaUse");
-                    ChatMessageHandle(_player, "/pvx admin accept #");
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "IncoFormPleaUse");
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx admin accept #");
                 }
             }
             if ((_cmd == "decline") && (args.Length == 3))
             {
-                if ((IsDigitsOnly(args[2])) && (ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
-                    ticketDecline(_player, Convert.ToInt32(args[2]));
-                else if (!(ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
-                    LangMSG(_player, "TickNotAvail", args[2]);
+                if ((IsDigitsOnly(args[2])) && (ModeSwitch.Ticket.Data.ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
+                    ModeSwitch.Ticket.Decline(Player, Convert.ToInt32(args[2]));
+                else if (!(ModeSwitch.Ticket.Data.ticketData.Link.ContainsKey(Convert.ToInt32(args[2]))))
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "TickNotAvail", args[2]);
                 else
                 {
-                    LangMSG(_player, "IncoFormPleaUse");
-                    ChatMessageHandle(_player, "/pvx admin decline #");
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "IncoFormPleaUse");
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx admin decline #");
                 }
             }
         }
-        void changeFunction(BasePlayer _player)
+        void ChangeFunction(BasePlayer Player)
         {
-            if (playerHasTicket(_player) == true)
+            if (Players.HasTicket(Player) == true)
             {
-                ChatMessageHandle(_player, "AlreadySubmitted"); return;
+                Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.AlreadyExists); return;
             }
-            else if (isplayerNA(_player))
+            else if (Players.State.IsNA(Player))
             {
-                LangMSG(_player, "IncoFormPleaUse");
-                ChatMessageHandle(_player, "/pvx select [pvp/pve]");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "IncoFormPleaUse");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx select [pvp/pve]");
                 return;
             }
-            else if (isPvP(_player)) createTicket(_player, "pve");
-            else if (isPvE(_player)) createTicket(_player, "pvp");
-            else PutsPlayerHandle(_player, "Error: 27Q1 - Please inform Dev");
+            else if (Players.State.IsPvP(Player)) ModeSwitch.Ticket.Create(Player, Mode.PvE);
+            else if (Players.State.IsPvE(Player)) ModeSwitch.Ticket.Create(Player, Mode.PvP);
+            else Messages.PutsRcon("Error: 27Q1 - Please inform Dev");
             return;
         }
-        void selectFunction(BasePlayer _player, string[] args)
+        void SelectFunction(BasePlayer Player, string[] args)
         {
-            if ((args.Length != 2) && (args[1] != "pve") && (args[1] != "pvp"))
+            if ((args.Length != 2) && (args[1] != Mode.PvE) && (args[1] != Mode.PvP))
             {
-                LangMSG(_player, "IncoFormPleaUse");
-                ChatMessageHandle(_player, "/pvx select [pvp/pve]");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "IncoFormPleaUse");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx select [pvp/pve]");
             }
-            else if (InfoCache[_player.userID].mode == "NA")
+            else if (Players.Data.playerData.Info[Player.userID].mode == Mode.NA)
             {
-                InfoCache[_player.userID].mode = args[1].ToLower();
-                saveCacheData();
-                updatePvXIndicator(_player);
+                if (args[1].ToLower() == Mode.PvP) Players.Data.playerData.Info[Player.userID].mode = Mode.PvP;
+                if (args[1].ToLower() == Mode.PvE) Players.Data.playerData.Info[Player.userID].mode = Mode.PvE;
+                GUI.Update.PlayerIndicator(Player);
             }
         }
-        void ticketFunction(BasePlayer _player, string[] args)
+        void TicketFunction(BasePlayer Player, string[] args)
         {
             if (args.Length < 2 || args.Length > 3)
             {
-                LangMSG(_player, "IncoFormPleaUse");
-                ChatMessageHandle(_player, "/pvx ticket cancel");
-                ChatMessageHandle(_player, "/pvx ticket reason ''reason on ticket''");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "IncoFormPleaUse");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx ticket cancel");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx ticket reason ''reason on ticket''");
                 return;
             }
             string _cmd = args[1].ToLower();
-            if (InfoCache[_player.userID].ticket == false)
+            if (Players.Data.playerData.Info[Player.userID].ticket == false)
             {
-                LangMSG(_player, "NoActTick");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "NoActTick");
                 return;
             }
             if (_cmd == "cancel")
             {
-                cancelTicket(_player);
+                ModeSwitch.Ticket.Cancel(Player);
             }
             if ((_cmd == "reason") && (args.Length == 3))
             {
-                ticketData.Info[_player.userID].reason = args[2];
-                LangMSG(_player, "RSNChan");
-                ChatMessageHandle(_player, args[2]);
-                SaveAll();
+                ModeSwitch.Ticket.Data.ticketData.Tickets[Player.userID].reason = args[2];
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "RSNChan");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), args[2]);
+                SaveData.All();
                 return;
             }
         }
-        void guiFunction(BasePlayer _player, string[] args)
+        void GuiFunction(BasePlayer Player, string[] args)
         {
             if (args.Length == 1)
             {
-                LangMSG(_player, "ComndList");
-                ChatMessageHandle(_player, "/pvx gui pvx on/off");
-                if (hasPerm(_player, "admin")) ChatMessageHandle(_player, "/pvx gui admin on/off");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "ComndList");
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx gui pvx on/off");
+                if (HasPerm(Player, "admin")) Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx gui admin on/off");
                 return;
             }
             if (!(args.Length == 3)) return;
-            if ((args[1].ToLower() == "admin") && (hasPerm(_player, "admin")))
+            if ((args[1].ToLower() == "admin") && (HasPerm(Player, "admin")))
             {
-                if (args[2].ToLower() == "on") createAdminIndicator(_player);
-                else if (args[2].ToLower() == "off") DestroyPvXUI(_player, pvxAdminUI);
+                if (args[2].ToLower() == "on") GUI.Create.AdminIndicator(Player);
+                else if (args[2].ToLower() == "off") DestroyPvXUI(Player, pvxAdminUI);
                 return;
             }
             else if (args[1].ToLower() == "pvx")
             {
-                if (args[2].ToLower() == "on") createPvXIndicator(_player);
-                else if (args[2].ToLower() == "off") DestroyPvXUI(_player, pvxPlayerUI);
+                if (args[2].ToLower() == "on") GUI.Create.PlayerIndicator(Player);
+                else if (args[2].ToLower() == "off") DestroyPvXUI(Player, pvxPlayerUI);
                 return;
             }
             return;
         }
-        void debugFunction()
+        void DebugFunction()
         { }
-        void developerFunction()
+        void DeveloperFunction()
         { }
-        void helpFunction(BasePlayer _player)
+        void HelpFunction(BasePlayer Player)
         {
-            ChatMessageHandle(_player, "Plugin: PvX");
-            ChatMessageHandle(_player, "Description: {0}", Description); 
-            ChatMessageHandle(_player, "Version {0}", Version);
-            ChatMessageHandle(_player, "Mod Developer: Alphawar");
+            Messages.Chat(Players.Find.Iplayer(Player.userID), "Plugin: PvX");
+            Messages.Chat(Players.Find.Iplayer(Player.userID), "Description: {0}", Description);
+            Messages.Chat(Players.Find.Iplayer(Player.userID), "Version {0}", Version);
+            Messages.Chat(Players.Find.Iplayer(Player.userID), "Mod Developer: Alphawar");
+            Messages.Chat(Players.Find.Iplayer(Player.userID), " ");
+            Messages.Chat(Players.Find.Iplayer(Player.userID), "ComndList");
+            Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx select, /pvx change, /pvx ticket /pvx gui");
+            if (HasPerm(Player, "admin")) Messages.Chat(Players.Find.Iplayer(Player.userID), "/pvx select, /pvx admin");
         }
 
         //console
-
         #endregion
 
-
         #region OnEntityTakeDamage
-        void OnEntityTakeDamage(BaseCombatEntity _target, HitInfo hitinfo)
+        void OnEntityTakeDamage(BaseCombatEntity Target, HitInfo HitInfo)
         {
-            BaseEntity _attacker = hitinfo.Initiator;
-            object _n = _target.GetType();
+            BaseEntity _attacker = HitInfo.Initiator;
+            object _n = Target.GetType();
 
             /*
             if (_target is BasePlayer && 1 == 1){
                 BasePlayer _test = (BasePlayer)_target;
-                if (_test.userID == 76561198006265515) testvar(_target, hitinfo);}
+                if (_test.userID == 76561198006265515) testvar(_target, HitInfo);}
             else if (BuildEntityList.Contains(_n) && 1 == 1){
-                if (_target.OwnerID == 76561198006265515) testvar(_target, hitinfo);}
+                if (_target.OwnerID == 76561198006265515) testvar(_target, HitInfo);}
             */
 
-            if (_attacker is BasePlayer && _target is BasePlayer) PlayerVPlayer((BasePlayer)_target, (BasePlayer)_attacker, hitinfo);                               //Player V Player
-            else if (_attacker is BasePlayer && BuildEntityList.Contains(_n) && !(_n is AutoTurret)) PlayerVBuilding(_target, (BasePlayer)_attacker, hitinfo);      //Player V Building
+            if (_attacker is BasePlayer && Target is BasePlayer) PlayerVPlayer((BasePlayer)Target, (BasePlayer)_attacker, HitInfo);                               //Player V Player
+            else if (_attacker is BasePlayer && BuildEntityList.Contains(_n) && !(_n is AutoTurret)) PlayerVBuilding(Target, (BasePlayer)_attacker, HitInfo);      //Player V Building
 
-            else if (_attacker is BasePlayer && _target is BaseHelicopter) PlayerVHeli((BasePlayer)_attacker, hitinfo);                                             //Player V Heli
-            else if ((_attacker is BaseHelicopter||(_attacker is FireBall && _attacker.ShortPrefabName == "napalm")) && _target is BasePlayer) HeliVPlayer((BasePlayer)_target, hitinfo);
-            else if ((_attacker is BaseHelicopter || (_attacker is FireBall && _attacker.ShortPrefabName == "napalm")) && BuildEntityList.Contains(_n)) HeliVBuilding(_target, hitinfo);
-            else if ((_attacker is BaseHelicopter || (_attacker is FireBall && _attacker.ShortPrefabName == "napalm")) && _target is BaseNPC) HeliVAnimal((BaseNPC)_target, hitinfo);
-            
+            else if (_attacker is BasePlayer && Target is BaseHelicopter) PlayerVHeli((BasePlayer)_attacker, HitInfo);                                             //Player V Heli
+            else if ((_attacker is BaseHelicopter || (_attacker is FireBall && _attacker.ShortPrefabName == "napalm")) && Target is BasePlayer) HeliVPlayer((BasePlayer)Target, HitInfo);
+            else if ((_attacker is BaseHelicopter || (_attacker is FireBall && _attacker.ShortPrefabName == "napalm")) && BuildEntityList.Contains(_n)) HeliVBuilding(Target, HitInfo);
+            else if ((_attacker is BaseHelicopter || (_attacker is FireBall && _attacker.ShortPrefabName == "napalm")) && Target is BaseNPC) HeliVAnimal((BaseNPC)Target, HitInfo);
 
-            else if (_attacker is BasePlayer && _target is AutoTurret) PlayerVTurret((AutoTurret)_target, (BasePlayer)_attacker, hitinfo);                          //Player V Turret
-            else if (_attacker is AutoTurret && _target is BasePlayer) TurretVPlayer((BasePlayer)_target, (AutoTurret)_attacker, hitinfo);                          //Turret V Player
-            else if (_attacker is AutoTurret && _target is AutoTurret) TurretVTurret((AutoTurret)_target, (AutoTurret)_attacker, hitinfo);                          //Turret V Turret
-            else if (_attacker is AutoTurret && _target is BaseNPC) TurretVAnimal((BaseNPC)_target, (AutoTurret)_attacker, hitinfo);                                //Turret V Animal
 
-            else if (_attacker is BasePlayer && _target is BaseNPC) PlayerVAnimal((BasePlayer)_attacker, hitinfo);                                                  //Player V Animal
-            else if (_attacker is BaseNPC && _target is BasePlayer) AnimalVPlayer((BasePlayer)_target, hitinfo);
+            else if (_attacker is BasePlayer && Target is AutoTurret) PlayerVTurret((AutoTurret)Target, (BasePlayer)_attacker, HitInfo);                          //Player V Turret
+            else if (_attacker is AutoTurret && Target is BasePlayer) TurretVPlayer((BasePlayer)Target, (AutoTurret)_attacker, HitInfo);                          //Turret V Player
+            else if (_attacker is AutoTurret && Target is AutoTurret) TurretVTurret((AutoTurret)Target, (AutoTurret)_attacker, HitInfo);                          //Turret V Turret
+            else if (_attacker is AutoTurret && Target is BaseNPC) TurretVAnimal((BaseNPC)Target, (AutoTurret)_attacker, HitInfo);                                //Turret V Animal
+
+            else if (_attacker is BasePlayer && Target is BaseNPC) PlayerVAnimal((BasePlayer)_attacker, HitInfo);                                                  //Player V Animal
+            else if (_attacker is BaseNPC && Target is BasePlayer) AnimalVPlayer((BasePlayer)Target, HitInfo);
             else if (_attacker is FireBall)
             {
                 FireBall _fire = (FireBall)_attacker;
-                if (_target is BasePlayer) FireVPlayer((BasePlayer)_target, hitinfo);
-                else if (BuildEntityList.Contains(_n)) FireVBuilding(_target, hitinfo);
+                if (Target is BasePlayer) FireVPlayer((BasePlayer)Target, HitInfo);
+                else if (BuildEntityList.Contains(_n)) FireVBuilding(Target, HitInfo);
             }
 
-            
-            //if (hitinfo.Initiator is BaseTrap)
-            //if (hitinfo.Initiator is Barricade)
-            //if (hitinfo.WeaponPrefab.ShortPrefabName == "rocket_heli" ||
-            //hitinfo.WeaponPrefab.ShortPrefabName == "rocket_heli_napalm")
-            //if (hitinfo.Initiator != null && hitinfo.Initiator.ShortPrefabName == "napalm")
+
+            //if (HitInfo.Initiator is BaseTrap)
+            //if (HitInfo.Initiator is Barricade)
+            //if (HitInfo.WeaponPrefab.ShortPrefabName == "rocket_heli" ||
+            //HitInfo.WeaponPrefab.ShortPrefabName == "rocket_heli_napalm")
+            //if (HitInfo.Initiator != null && HitInfo.Initiator.ShortPrefabName == "napalm")
+        }
+        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity is StorageContainer)
+            {
+                if (Containers.IsShared((StorageContainer)entity))
+                {
+                    Containers.RemoveContainer((StorageContainer)entity);
+                }
+            }
         }
 
-        void testvar(BaseCombatEntity _target, HitInfo hitinfo)
-        {
-            //Type typeInformation = hitinfo.Initiator.GetType();
-            //BaseHelicopter
-            //_attacker is FireBall && _attacker.ShortPrefabName = fireball_small
-        }
-        void PlayerVPlayer(BasePlayer _victim, BasePlayer _attacker, HitInfo _hitinfo)
+        //void Testvar(BaseCombatEntity _target, HitInfo HitInfo)
+        //{
+        //    Type typeInformation = HitInfo.Initiator.GetType();
+        //    BaseHelicopter
+        //    _attacker is FireBall && _attacker.ShortPrefabName = fireball_small
+        //}
+        void PlayerVPlayer(BasePlayer Victim, BasePlayer Attacker, HitInfo HitInfo)
         {
             //Puts("Calling PvP");
-            if (BaseplayerCheck(_attacker, _victim)) return;
-            if (isNPC(_attacker))
+            if (BaseplayerCheck(Attacker, Victim)) return;
+            if (Players.State.IsNPC(Attacker))
             {
-                if (isNPC(_victim)) return;
-                else if (isPvE(_victim) && NPCAttackPvE) ModifyDamage(_hitinfo, NPCDamagePvE);
-                else if (isPvP(_victim) && NPCAttackPvP) ModifyDamage(_hitinfo, NPCDamagePvP);
-                else ModifyDamage(_hitinfo, 0);
+                if (Players.State.IsNPC(Victim)) return;
+                else if (Players.State.IsPvE(Victim) && NPCAttackPvE) ModifyDamage(HitInfo, NPCDamagePvE);
+                else if (Players.State.IsPvP(Victim) && NPCAttackPvP) ModifyDamage(HitInfo, NPCDamagePvP);
+                else ModifyDamage(HitInfo, 0);
             }
-            else if (isPvE(_attacker))
+            else if (Players.State.IsPvE(Attacker))
             {
-                if (isNPC(_victim)) if (PvEAttackNPC) ModifyDamage(_hitinfo, PvEDamageNPC); else ModifyDamage(_hitinfo, 0);
-                else if (isPvE(_victim) && PvEAttackPvE) ModifyDamage(_hitinfo, PvEDamagePvE);
-                else if (isPvP(_victim) && PvEAttackPvP) ModifyDamage(_hitinfo, PvEDamagePvP);
-                else ModifyDamage(_hitinfo, 0);
+                if (Players.State.IsNPC(Victim)) if (PvEAttackNPC) ModifyDamage(HitInfo, PvEDamageNPC); else ModifyDamage(HitInfo, 0);
+                else if (Players.State.IsPvE(Victim) && PvEAttackPvE) ModifyDamage(HitInfo, PvEDamagePvE);
+                else if (Players.State.IsPvP(Victim) && PvEAttackPvP) ModifyDamage(HitInfo, PvEDamagePvP);
+                else ModifyDamage(HitInfo, 0);
             }
-            else if (isPvP(_attacker))
+            else if (Players.State.IsPvP(Attacker))
             {
-                if (isNPC(_victim)) if (PvPAttackNPC) ModifyDamage(_hitinfo, PvPDamageNPC); else ModifyDamage(_hitinfo, 0);
-                else if (isPvE(_victim) && PvPAttackPvE) ModifyDamage(_hitinfo, PvPDamagePvE);
-                else if (isPvP(_victim) && PvPAttackPvP) ModifyDamage(_hitinfo, PvPDamagePvP);
-                else ModifyDamage(_hitinfo, 0);
+                if (Players.State.IsNPC(Victim)) if (PvPAttackNPC) ModifyDamage(HitInfo, PvPDamageNPC); else ModifyDamage(HitInfo, 0);
+                else if (Players.State.IsPvE(Victim) && PvPAttackPvE) ModifyDamage(HitInfo, PvPDamagePvE);
+                else if (Players.State.IsPvP(Victim) && PvPAttackPvP) ModifyDamage(HitInfo, PvPDamagePvP);
+                else ModifyDamage(HitInfo, 0);
             }
-            if (InfoCache[_victim.userID].mode == "pve")
+            if (Players.Data.playerData.Info[Victim.userID].mode == Mode.PvE)
             {
-                if (!antiChatSpam.Contains(_attacker.userID))
+                if (!Cooldowns.enemyOpModeWarning.Contains(Attacker.userID))
                 {
-                    antiChatSpam.Add(_attacker.userID);
-                    timer.Once(2f, () => antiChatSpam.Remove(_attacker.userID));
-                    LangMSG(_attacker, lang.GetMessage("PvETarget", this, _attacker.UserIDString));
+                    Cooldowns.enemyOpModeWarning.Add(Attacker.userID);
+                    timer.Once(2f, () => Cooldowns.enemyOpModeWarning.Remove(Attacker.userID));
+                    Messages.Chat(Players.Find.Iplayer(Attacker.userID), lang.GetMessage("PvETarget", this, Attacker.UserIDString));
                 }
-                _victim.EndLooting();
+                Victim.EndLooting();
             }
             //if (_victim.userID == 76561198006265515)
             //{
             //    Puts("AttackerBP: {0}", _attacker);
-            //    Puts("VARE: {0}", hitinfo.Initiator);
-            //    Puts("VARE: {0}", hitinfo.InitiatorPlayer);
+            //    Puts("VARE: {0}", HitInfo.Initiator);
+            //    Puts("VARE: {0}", HitInfo.InitiatorPlayer);
             //}
             return;
         }
-        void PlayerVBuilding(BaseEntity _target, BasePlayer _attacker, HitInfo _hitinfo)
+        void PlayerVBuilding(BaseEntity Target, BasePlayer Attacker, HitInfo Hitinfo)
         {
             //Puts("Calling PvB");
-            ulong _victim = _target.OwnerID;
-            if (_target.OwnerID == 0) return;
-            if (isInEvent(_attacker)) return;
-            if (_target.OwnerID == _attacker.userID) return;
-            if (isGod(_target.OwnerID)) return;
-            if (isGod(_attacker)) return;
-            if (isNPC(_attacker))
+            ulong _victim = Target.OwnerID;
+            if (Target.OwnerID == 0) return;
+            if (IsInEvent(Attacker)) return;
+            if (Target.OwnerID == Attacker.userID) return;
+            if (IsGod(Target.OwnerID)) return;
+            if (IsGod(Attacker)) return;
+            if (Players.State.IsNPC(Attacker))
             {
-                if (isNPC(_victim)) return;
-                else if (isPvE(_victim) && NPCAttackPvE) ModifyDamage(_hitinfo, NPCDamagePvE);
-                else if (isPvP(_victim) && NPCAttackPvP) ModifyDamage(_hitinfo, NPCDamagePvP);
-                else ModifyDamage(_hitinfo, 0);
+                if (Players.State.IsNPC(_victim)) return;
+                else if (Players.State.IsPvE(_victim) && NPCAttackPvE) ModifyDamage(Hitinfo, NPCDamagePvE);
+                else if (Players.State.IsPvP(_victim) && NPCAttackPvP) ModifyDamage(Hitinfo, NPCDamagePvP);
+                else ModifyDamage(Hitinfo, 0);
             }
-            else if (isPvE(_attacker))
+            else if (Players.State.IsPvE(Attacker))
             {
-                if (isNPC(_victim)) if (PvEAttackNPC) ModifyDamage(_hitinfo, PvEDamageNPC); else ModifyDamage(_hitinfo, 0);
-                else if (areInEvent(_attacker, _attacker)) return;
-                else if (isPvE(_victim) && PvEAttackPvE) ModifyDamage(_hitinfo, PvEDamagePvE);
-                else if (isPvP(_victim) && PvEAttackPvP) ModifyDamage(_hitinfo, PvEDamagePvP);
-                else ModifyDamage(_hitinfo, 0);
+                if (Players.State.IsNPC(_victim)) if (PvEAttackNPC) ModifyDamage(Hitinfo, PvEDamageNPC); else ModifyDamage(Hitinfo, 0);
+                else if (AreInEvent(Attacker, Attacker)) return;
+                else if (Players.State.IsPvE(_victim) && PvEAttackPvE) ModifyDamage(Hitinfo, PvEDamagePvE);
+                else if (Players.State.IsPvP(_victim) && PvEAttackPvP) ModifyDamage(Hitinfo, PvEDamagePvP);
+                else ModifyDamage(Hitinfo, 0);
             }
-            else if (isPvP(_attacker))
+            else if (Players.State.IsPvP(Attacker))
             {
-                if (isNPC(_victim)) if (PvPAttackNPC) ModifyDamage(_hitinfo, PvPDamageNPC); else ModifyDamage(_hitinfo, 0);
-                else if (areInEvent(_attacker, _attacker)) return;
-                else if (isPvE(_victim) && PvPAttackPvE) ModifyDamage(_hitinfo, PvPDamagePvE);
-                else if (isPvP(_victim) && PvPAttackPvP) ModifyDamage(_hitinfo, PvPDamagePvP);
-                else ModifyDamage(_hitinfo, 0);
+                if (Players.State.IsNPC(_victim)) if (PvPAttackNPC) ModifyDamage(Hitinfo, PvPDamageNPC); else ModifyDamage(Hitinfo, 0);
+                else if (AreInEvent(Attacker, Attacker)) return;
+                else if (Players.State.IsPvE(_victim) && PvPAttackPvE) ModifyDamage(Hitinfo, PvPDamagePvE);
+                else if (Players.State.IsPvP(_victim) && PvPAttackPvP) ModifyDamage(Hitinfo, PvPDamagePvP);
+                else ModifyDamage(Hitinfo, 0);
             }
-            if (InfoCache[_victim].mode == "pve")
+            if (Players.Data.playerData.Info[_victim].mode == Mode.PvE)
             {
-                if (!antiChatSpam.Contains(_attacker.userID))
+                if (!Cooldowns.enemyOpModeWarning.Contains(Attacker.userID))
                 {
-                    antiChatSpam.Add(_attacker.userID);
-                    timer.Once(2f, () => antiChatSpam.Remove(_attacker.userID));
-                    LangMSG(_attacker, lang.GetMessage("PvETarget", this, _attacker.UserIDString));
+                    Cooldowns.enemyOpModeWarning.Add(Attacker.userID);
+                    timer.Once(2f, () => Cooldowns.enemyOpModeWarning.Remove(Attacker.userID));
+                    Messages.Chat(Players.Find.Iplayer(Attacker.userID), lang.GetMessage("PvETarget", this, Attacker.UserIDString));
                 }
             }
         }
 
-        void PlayerVHeli(BasePlayer _attacker, HitInfo _hitinfo)
+        void PlayerVHeli(BasePlayer Attacker, HitInfo HitInfo)
         {
             //Puts("Calling PvH");
-            if (isNPC(_attacker)) return;
-            else if (isGod(_attacker)) return;
-            else if (isInEvent(_attacker)) return;
-            else if (isPvE(_attacker) && HeliTargetPvE) ModifyDamage(_hitinfo, HeliDamageByPvE);
-            else if (isPvP(_attacker) && HeliTargetPvP) ModifyDamage(_hitinfo, HeliDamageByPvP);
-            else ModifyDamage(_hitinfo, 0);
+            if (Players.State.IsNPC(Attacker)) return;
+            else if (IsGod(Attacker)) return;
+            else if (IsInEvent(Attacker)) return;
+            else if (Players.State.IsPvE(Attacker) && HeliTargetPvE) ModifyDamage(HitInfo, HeliDamageByPvE);
+            else if (Players.State.IsPvP(Attacker) && HeliTargetPvP) ModifyDamage(HitInfo, HeliDamageByPvP);
+            else ModifyDamage(HitInfo, 0);
         }
-        void HeliVPlayer(BasePlayer _victim, HitInfo _hitinfo)
+        void HeliVPlayer(BasePlayer Victim, HitInfo HitInfo)
         {
-            Puts("Calling HvP");
-            if (isNPC(_victim)) return;
-            else if (isGod(_victim)) return;
-            else if (isInEvent(_victim)) return;
-            else if (isPvE(_victim) && HeliTargetPvE) ModifyDamage(_hitinfo, HeliDamagePvE);
-            else if (isPvP(_victim) && HeliTargetPvP) ModifyDamage(_hitinfo, HeliDamagePvP);
-            else ModifyDamage(_hitinfo, 0);
+            //Puts("Calling HvP");
+            if (Players.State.IsNPC(Victim)) return;
+            else if (IsGod(Victim)) return;
+            else if (IsInEvent(Victim)) return;
+            else if (Players.State.IsPvE(Victim) && HeliTargetPvE) ModifyDamage(HitInfo, HeliDamagePvE);
+            else if (Players.State.IsPvP(Victim) && HeliTargetPvP) ModifyDamage(HitInfo, HeliDamagePvP);
+            else ModifyDamage(HitInfo, 0);
         }
-        void HeliVBuilding(BaseEntity _target, HitInfo _hitinfo)
+        void HeliVBuilding(BaseEntity Target, HitInfo HitInfo)
         {
             //Puts("Calling HvB");
-            ulong _ownerID = _target.OwnerID;
-            if (isNPC(_ownerID)) return;
-            else if (isGod(_ownerID)) return;
-            else if (isPvE(_ownerID) && HeliTargetPvE) ModifyDamage(_hitinfo, HeliDamagePvEStruct);
-            else if (isPvP(_ownerID) && HeliTargetPvP) ModifyDamage(_hitinfo, HeliDamagePvPStruct);
-            else ModifyDamage(_hitinfo, 0);
+            ulong _ownerID = Target.OwnerID;
+            if (Players.State.IsNPC(_ownerID)) return;
+            else if (IsGod(_ownerID)) return;
+            else if (Players.State.IsPvE(_ownerID) && HeliTargetPvE) ModifyDamage(HitInfo, HeliDamagePvEStruct);
+            else if (Players.State.IsPvP(_ownerID) && HeliTargetPvP) ModifyDamage(HitInfo, HeliDamagePvPStruct);
+            else ModifyDamage(HitInfo, 0);
         }
-        void HeliVAnimal(BaseNPC _target, HitInfo _hitinfo)
+        void HeliVAnimal(BaseNPC Target, HitInfo HitInfo)
         {
             //Puts("Calling HvA");
-            ModifyDamage(_hitinfo, HeliDamageAnimal);
+            ModifyDamage(HitInfo, HeliDamageAnimal);
         }
 
-        void PlayerVTurret(AutoTurret _target, BasePlayer _attacker, HitInfo _hitinfo)
+        void PlayerVTurret(AutoTurret Target, BasePlayer Attacker, HitInfo HitInfo)
         {
             //Puts("Calling PvT");
-            ulong _ownerID = _target.OwnerID;
-            if (isGod(_attacker)) return;
-            else if (isInEvent(_attacker)) return;
-            else if (isNPC(_attacker) && isPvE(_ownerID)) ModifyDamage(_hitinfo, TurretPvEDamageNPCAmnt);
-            else if (isNPC(_attacker) && isPvP(_ownerID)) ModifyDamage(_hitinfo, TurretPvPDamageNPCAmnt);
-            else if (isPvE(_attacker) && isPvE(_ownerID)) ModifyDamage(_hitinfo, TurretPvEDamagePvEAmnt);
-            else if (isPvE(_attacker) && isPvP(_ownerID)) ModifyDamage(_hitinfo, TurretPvEDamagePvPAmnt);
-            else if (isPvP(_attacker) && isPvE(_ownerID)) ModifyDamage(_hitinfo, TurretPvPDamagePvEAmnt);
-            else if (isPvP(_attacker) && isPvP(_ownerID)) ModifyDamage(_hitinfo, TurretPvPDamagePvPAmnt);
-            else ModifyDamage(_hitinfo, 0);
+            ulong _ownerID = Target.OwnerID;
+            if (IsGod(Attacker)) return;
+            else if (IsInEvent(Attacker)) return;
+            else if (Players.State.IsNPC(Attacker) && Players.State.IsPvE(_ownerID)) ModifyDamage(HitInfo, TurretPvEDamageNPCAmnt);
+            else if (Players.State.IsNPC(Attacker) && Players.State.IsPvP(_ownerID)) ModifyDamage(HitInfo, TurretPvPDamageNPCAmnt);
+            else if (Players.State.IsPvE(Attacker) && Players.State.IsPvE(_ownerID)) ModifyDamage(HitInfo, TurretPvEDamagePvEAmnt);
+            else if (Players.State.IsPvE(Attacker) && Players.State.IsPvP(_ownerID)) ModifyDamage(HitInfo, TurretPvEDamagePvPAmnt);
+            else if (Players.State.IsPvP(Attacker) && Players.State.IsPvE(_ownerID)) ModifyDamage(HitInfo, TurretPvPDamagePvEAmnt);
+            else if (Players.State.IsPvP(Attacker) && Players.State.IsPvP(_ownerID)) ModifyDamage(HitInfo, TurretPvPDamagePvPAmnt);
+            else ModifyDamage(HitInfo, 0);
         }
-        void TurretVPlayer(BasePlayer _target, AutoTurret _attacker, HitInfo _hitinfo)
+        void TurretVPlayer(BasePlayer Target, AutoTurret Attacker, HitInfo HitInfo)
         {
             //Puts("Calling TvP");
-            ulong _attackerID = _attacker.OwnerID;
-            if (isGod(_target)) return;
-            else if (isInEvent(_target)) return;
-            else if (isPvE(_attackerID) && isNPC(_target)) ModifyDamage(_hitinfo, TurretPvEDamageNPCAmnt);
-            else if (isPvP(_attackerID) && isNPC(_target)) ModifyDamage(_hitinfo, TurretPvPDamageNPCAmnt);
-            else if (isPvE(_attackerID) && isPvE(_target)) ModifyDamage(_hitinfo, TurretPvEDamagePvEAmnt);
-            else if (isPvE(_attackerID) && isPvP(_target)) ModifyDamage(_hitinfo, TurretPvEDamagePvPAmnt);
-            else if (isPvP(_attackerID) && isPvE(_target)) ModifyDamage(_hitinfo, TurretPvPDamagePvEAmnt);
-            else if (isPvP(_attackerID) && isPvP(_target)) ModifyDamage(_hitinfo, TurretPvPDamagePvPAmnt);
-            else ModifyDamage(_hitinfo, 0);
+            ulong _attackerID = Attacker.OwnerID;
+            if (IsGod(Target)) return;
+            else if (IsInEvent(Target)) return;
+            else if (Players.State.IsPvE(_attackerID) && Players.State.IsNPC(Target)) ModifyDamage(HitInfo, TurretPvEDamageNPCAmnt);
+            else if (Players.State.IsPvP(_attackerID) && Players.State.IsNPC(Target)) ModifyDamage(HitInfo, TurretPvPDamageNPCAmnt);
+            else if (Players.State.IsPvE(_attackerID) && Players.State.IsPvE(Target)) ModifyDamage(HitInfo, TurretPvEDamagePvEAmnt);
+            else if (Players.State.IsPvE(_attackerID) && Players.State.IsPvP(Target)) ModifyDamage(HitInfo, TurretPvEDamagePvPAmnt);
+            else if (Players.State.IsPvP(_attackerID) && Players.State.IsPvE(Target)) ModifyDamage(HitInfo, TurretPvPDamagePvEAmnt);
+            else if (Players.State.IsPvP(_attackerID) && Players.State.IsPvP(Target)) ModifyDamage(HitInfo, TurretPvPDamagePvPAmnt);
+            else ModifyDamage(HitInfo, 0);
         }
-        void TurretVTurret(AutoTurret _target, AutoTurret _attacker, HitInfo _hitinfo)
+        void TurretVTurret(AutoTurret Target, AutoTurret Attacker, HitInfo HitInfo)
         {
             //Puts("Calling TvT");
-            ulong _targetID = _target.OwnerID;
-            ulong _attackerID = _target.OwnerID;
-            if (isPvE(_attackerID) && isPvE(_targetID)) ModifyDamage(_hitinfo, TurretPvEDamagePvEAmnt);
-            else if (isPvE(_attackerID) && isPvP(_targetID)) ModifyDamage(_hitinfo, TurretPvEDamagePvPAmnt);
-            else if (isPvP(_attackerID) && isPvE(_targetID)) ModifyDamage(_hitinfo, TurretPvPDamagePvEAmnt);
-            else if (isPvP(_attackerID) && isPvP(_targetID)) ModifyDamage(_hitinfo, TurretPvPDamagePvPAmnt);
-            else ModifyDamage(_hitinfo, 0);
+            ulong _targetID = Target.OwnerID;
+            ulong _attackerID = Target.OwnerID;
+            if (Players.State.IsPvE(_attackerID) && Players.State.IsPvE(_targetID)) ModifyDamage(HitInfo, TurretPvEDamagePvEAmnt);
+            else if (Players.State.IsPvE(_attackerID) && Players.State.IsPvP(_targetID)) ModifyDamage(HitInfo, TurretPvEDamagePvPAmnt);
+            else if (Players.State.IsPvP(_attackerID) && Players.State.IsPvE(_targetID)) ModifyDamage(HitInfo, TurretPvPDamagePvEAmnt);
+            else if (Players.State.IsPvP(_attackerID) && Players.State.IsPvP(_targetID)) ModifyDamage(HitInfo, TurretPvPDamagePvPAmnt);
+            else ModifyDamage(HitInfo, 0);
         }
-        void TurretVAnimal(BaseNPC _target, AutoTurret _attacker, HitInfo _hitinfo)
+        void TurretVAnimal(BaseNPC Target, AutoTurret Attacker, HitInfo HitInfo)
         {
             //Puts("Calling TvA");
-            ulong _turretOwner = _attacker.OwnerID;
-            if (isPvE(_turretOwner) && TurretPvETargetAnimal) ModifyDamage(_hitinfo, TurretPvEDamageAnimalAmnt);
-            else if (isPvP(_turretOwner) && TurretPvPTargetAnimal) ModifyDamage(_hitinfo, TurretPvPDamageAnimalAmnt);
-            else ModifyDamage(_hitinfo, 0);
+            ulong _turretOwner = Attacker.OwnerID;
+            if (Players.State.IsPvE(_turretOwner) && TurretPvETargetAnimal) ModifyDamage(HitInfo, TurretPvEDamageAnimalAmnt);
+            else if (Players.State.IsPvP(_turretOwner) && TurretPvPTargetAnimal) ModifyDamage(HitInfo, TurretPvPDamageAnimalAmnt);
+            else ModifyDamage(HitInfo, 0);
         }
 
-        void PlayerVAnimal(BasePlayer _attacker, HitInfo _hitinfo)
+        void PlayerVAnimal(BasePlayer Attacker, HitInfo HitInfo)
         {
             //Puts("Calling PvA");
-            if (isGod(_attacker)) return;
-            else if (isInEvent(_attacker)) return;
-            else if (isNPC(_attacker)) ModifyDamage(_hitinfo, NPCDamageAnimals);
-            else if (isPvE(_attacker)) ModifyDamage(_hitinfo, PvEDamageAnimals);
-            else if (isPvP(_attacker)) ModifyDamage(_hitinfo, PvPDamageAnimals);
-            else ModifyDamage(_hitinfo, 0);
+            if (IsGod(Attacker)) return;
+            else if (IsInEvent(Attacker)) return;
+            else if (Players.State.IsNPC(Attacker)) ModifyDamage(HitInfo, NPCDamageAnimals);
+            else if (Players.State.IsPvE(Attacker)) ModifyDamage(HitInfo, PvEDamageAnimals);
+            else if (Players.State.IsPvP(Attacker)) ModifyDamage(HitInfo, PvPDamageAnimals);
+            else ModifyDamage(HitInfo, 0);
         }
-        void AnimalVPlayer(BasePlayer _target, HitInfo _hitinfo)
+        void AnimalVPlayer(BasePlayer Target, HitInfo HitInfo)
         {
             //Puts("Calling AvP");
-            if (isGod(_target)) return;
-            else if (isInEvent(_target)) return;
-            else if (isNPC(_target)) ModifyDamage(_hitinfo, AnimalsDamageNPC);
-            else if (isPvE(_target)) ModifyDamage(_hitinfo, AnimalsDamagePvE);
-            else if (isPvP(_target)) ModifyDamage(_hitinfo, AnimalsDamagePvP);
-            else if (isplayerNA(_target)) ModifyDamage(_hitinfo, 1);
-            else ModifyDamage(_hitinfo, 0);
+            if (IsGod(Target)) return;
+            else if (IsInEvent(Target)) return;
+            else if (Players.State.IsNPC(Target)) ModifyDamage(HitInfo, AnimalsDamageNPC);
+            else if (Players.State.IsPvE(Target)) ModifyDamage(HitInfo, AnimalsDamagePvE);
+            else if (Players.State.IsPvP(Target)) ModifyDamage(HitInfo, AnimalsDamagePvP);
+            else if (Players.State.IsNA(Target)) ModifyDamage(HitInfo, 1);
+            else ModifyDamage(HitInfo, 0);
         }
 
-        void FireVPlayer(BasePlayer _target, HitInfo _hitinfo)
+        void FireVPlayer(BasePlayer Target, HitInfo HitInfo)
         {
-            if (isNPC(_target)) return;
-            else if (isGod(_target)) return;
-            else if (isInEvent(_target)) return;
-            else if (isPvE(_target)) ModifyDamage(_hitinfo, FireDamagePvE);
-            else if (isPvP(_target)) ModifyDamage(_hitinfo, FireDamagePvP);
-            else ModifyDamage(_hitinfo, 0);
+            if (Players.State.IsNPC(Target)) return;
+            else if (IsGod(Target)) return;
+            else if (IsInEvent(Target)) return;
+            else if (Players.State.IsPvE(Target)) ModifyDamage(HitInfo, FireDamagePvE);
+            else if (Players.State.IsPvP(Target)) ModifyDamage(HitInfo, FireDamagePvP);
+            else ModifyDamage(HitInfo, 0);
         }
-        void FireVBuilding(BaseEntity _target, HitInfo _hitinfo)
+        void FireVBuilding(BaseEntity Target, HitInfo HitInfo)
         {
-            Puts("Calling FvB");
-            if (isPvE(_target.OwnerID)) ModifyDamage(_hitinfo, FireDamagePvEStruc);
-            else if (isPvP(_target.OwnerID)) ModifyDamage(_hitinfo, FireDamagePvPStruc);
-            else ModifyDamage(_hitinfo, 0);
+            //Puts("Calling FvB");
+            if (Players.State.IsPvE(Target.OwnerID)) ModifyDamage(HitInfo, FireDamagePvEStruc);
+            else if (Players.State.IsPvP(Target.OwnerID)) ModifyDamage(HitInfo, FireDamagePvPStruc);
+            else ModifyDamage(HitInfo, 0);
         }
         #endregion
 
@@ -2156,31 +2207,1160 @@ namespace Oxide.Plugins
 
         bool HeliTargetPlayer(BasePlayer _target)
         {
-            if (isNPC(_target) && HeliTargetNPC) return true;
-            else if (checkInvis(_target)) return true;
-            else if (isPvE(_target) && HeliTargetPvE) return true;
-            else if (isPvP(_target) && HeliTargetPvP) return true;
+            if (Players.State.IsNPC(_target) && HeliTargetNPC) return true;
+            else if (CheckInvis(_target)) return true;
+            else if (Players.State.IsPvE(_target) && HeliTargetPvE) return true;
+            else if (Players.State.IsPvP(_target) && HeliTargetPvP) return true;
             return false;
         }
         bool TurretTargetPlayer(BasePlayer _target, AutoTurret _attacker)
         {
             ulong _OwnerID = _attacker.OwnerID;
-            if (!isNPC(_target) && checkInvis(_target)) return true;
-            else if (isPvE(_OwnerID) && isNPC(_target) && TurretPvETargetNPC) return true;
-            else if (isPvE(_OwnerID) && isPvE(_target) && TurretPvETargetPvE) return true;
-            else if (isPvE(_OwnerID) && isPvP(_target) && TurretPvETargetPvP) return true;
-            else if (isPvP(_OwnerID) && isNPC(_target) && TurretPvPTargetNPC) return true;
-            else if (isPvP(_OwnerID) && isPvE(_target) && TurretPvPTargetPvE) return true;
-            else if (isPvP(_OwnerID) && isPvP(_target) && TurretPvPTargetPvP) return true;
+            if (!Players.State.IsNPC(_target) && CheckInvis(_target)) return true;
+            else if (Players.State.IsPvE(_OwnerID) && Players.State.IsNPC(_target) && TurretPvETargetNPC) return true;
+            else if (Players.State.IsPvE(_OwnerID) && Players.State.IsPvE(_target) && TurretPvETargetPvE) return true;
+            else if (Players.State.IsPvE(_OwnerID) && Players.State.IsPvP(_target) && TurretPvETargetPvP) return true;
+            else if (Players.State.IsPvP(_OwnerID) && Players.State.IsNPC(_target) && TurretPvPTargetNPC) return true;
+            else if (Players.State.IsPvP(_OwnerID) && Players.State.IsPvE(_target) && TurretPvPTargetPvE) return true;
+            else if (Players.State.IsPvP(_OwnerID) && Players.State.IsPvP(_target) && TurretPvPTargetPvP) return true;
             return false;
         }
         bool TurretTargetAnimals(BaseNPC _target, AutoTurret _attacker)
         {
             ulong _OwnerID = _attacker.OwnerID;
-            if (isPvE(_OwnerID) && TurretPvETargetAnimal) return true;
-            if (isPvP(_OwnerID) && TurretPvPTargetAnimal) return true;
+            if (Players.State.IsPvE(_OwnerID) && TurretPvETargetAnimal) return true;
+            if (Players.State.IsPvP(_OwnerID) && TurretPvPTargetAnimal) return true;
             return false;
         }
+        #endregion
+
+        #region Classes
+        public static class Messages
+        {
+            public static string Get(string langMsg, params object[] args)
+            {
+                return instance.lang.GetMessage(langMsg, instance);
+            }
+            public static void Chat(IPlayer player, string langMsg, params object[] args)
+            {
+                string message = instance.lang.GetMessage(langMsg, instance, player.Id);
+                player.Reply($"<color={instance.ChatPrefixColor}>{instance.ChatPrefix}</color>: <color={instance.ChatMessageColor}>{message}</color>", args);
+            }
+            public static void ChatGlobal(string langMsg, params object[] args)
+            {
+                string message = instance.lang.GetMessage(langMsg, instance);
+                instance.PrintToChat($"<color={instance.ChatPrefixColor}>{instance.ChatPrefix}</color>: <color={instance.ChatMessageColor}>{message}</color>", args);
+            }
+            public static void PutsRcon(string langMsg, params object[] args)
+            {
+                string message = instance.lang.GetMessage(langMsg, instance);
+                instance.Puts(string.Format(message, args));
+                
+            }
+        }
+        
+        public class Lang
+        {
+            public class Menu
+            {
+                public class WelcomePage
+                {
+                    public static readonly WelcomePage P1L01 = new WelcomePage("Page1Line1");
+                    public static readonly WelcomePage P1L02 = new WelcomePage("Page1Line2");
+                    public static readonly WelcomePage P1L03 = new WelcomePage("Page1Line3");
+                    public static readonly WelcomePage P1L04 = new WelcomePage("Page1Line4");
+                    public static readonly WelcomePage P1L05 = new WelcomePage("Page1Line5");
+                    public static readonly WelcomePage P1L06 = new WelcomePage("Page1Line6");
+                    public static readonly WelcomePage P1L07 = new WelcomePage("Page1Line7");
+                    public static readonly WelcomePage P1L08 = new WelcomePage("Page1Line8");
+                    public static readonly WelcomePage P1L09 = new WelcomePage("Page1Line9");
+                    public static readonly WelcomePage P1L10 = new WelcomePage("Page1Line10");
+                    public static readonly WelcomePage P1L11 = new WelcomePage("Page1Line11");
+                    public static readonly WelcomePage P1L12 = new WelcomePage("Page1Line12");
+                    public static readonly WelcomePage P1L13 = new WelcomePage("Page1Line13");
+                    public static readonly WelcomePage P1L14 = new WelcomePage("Page1Line14");
+                    public static readonly WelcomePage P1L15 = new WelcomePage("Page1Line15");
+                    public static readonly WelcomePage P1L16 = new WelcomePage("Page1Line16");
+                    public static readonly WelcomePage P1L17 = new WelcomePage("Page1Line17");
+                    public static readonly WelcomePage P1L18 = new WelcomePage("Page1Line18");
+                    public static readonly WelcomePage P1L19 = new WelcomePage("Page1Line19");
+                    public static readonly WelcomePage P1L20 = new WelcomePage("Page1Line20");
+                    public static readonly WelcomePage P1L21 = new WelcomePage("Page1Line21");
+
+                    public static readonly WelcomePage P2L01 = new WelcomePage("Page2Line1");
+                    public static readonly WelcomePage P2L02 = new WelcomePage("Page2Line2");
+                    public static readonly WelcomePage P2L03 = new WelcomePage("Page2Line3");
+                    public static readonly WelcomePage P2L04 = new WelcomePage("Page2Line4");
+                    public static readonly WelcomePage P2L05 = new WelcomePage("Page2Line5");
+                    public static readonly WelcomePage P2L06 = new WelcomePage("Page2Line6");
+                    public static readonly WelcomePage P2L07 = new WelcomePage("Page2Line7");
+                    public static readonly WelcomePage P2L08 = new WelcomePage("Page2Line8");
+                    public static readonly WelcomePage P2L09 = new WelcomePage("Page2Line9");
+                    public static readonly WelcomePage P2L10 = new WelcomePage("Page2Line10");
+                    public static readonly WelcomePage P2L11 = new WelcomePage("Page2Line11");
+                    public static readonly WelcomePage P2L12 = new WelcomePage("Page2Line12");
+                    public static readonly WelcomePage P2L13 = new WelcomePage("Page2Line13");
+                    public static readonly WelcomePage P2L14 = new WelcomePage("Page2Line14");
+                    public static readonly WelcomePage P2L15 = new WelcomePage("Page2Line15");
+                    public static readonly WelcomePage P2L16 = new WelcomePage("Page2Line16");
+                    public static readonly WelcomePage P2L17 = new WelcomePage("Page2Line17");
+                    public static readonly WelcomePage P2L18 = new WelcomePage("Page2Line18");
+                    public static readonly WelcomePage P2L19 = new WelcomePage("Page2Line19");
+                    public static readonly WelcomePage P2L20 = new WelcomePage("Page2Line20");
+                    public static readonly WelcomePage P2L21 = new WelcomePage("Page2Line21");
+
+                    public static readonly WelcomePage P3L01 = new WelcomePage("Page3Line1");
+                    public static readonly WelcomePage P3L02 = new WelcomePage("Page3Line2");
+                    public static readonly WelcomePage P3L03 = new WelcomePage("Page3Line3");
+                    public static readonly WelcomePage P3L04 = new WelcomePage("Page3Line4");
+                    public static readonly WelcomePage P3L05 = new WelcomePage("Page3Line5");
+                    public static readonly WelcomePage P3L06 = new WelcomePage("Page3Line6");
+                    public static readonly WelcomePage P3L07 = new WelcomePage("Page3Line7");
+                    public static readonly WelcomePage P3L08 = new WelcomePage("Page3Line8");
+                    public static readonly WelcomePage P3L09 = new WelcomePage("Page3Line9");
+                    public static readonly WelcomePage P3L10 = new WelcomePage("Page3Line10");
+                    public static readonly WelcomePage P3L11 = new WelcomePage("Page3Line11");
+                    public static readonly WelcomePage P3L12 = new WelcomePage("Page3Line12");
+                    public static readonly WelcomePage P3L13 = new WelcomePage("Page3Line13");
+                    public static readonly WelcomePage P3L14 = new WelcomePage("Page3Line14");
+                    public static readonly WelcomePage P3L15 = new WelcomePage("Page3Line15");
+                    public static readonly WelcomePage P3L16 = new WelcomePage("Page3Line16");
+                    public static readonly WelcomePage P3L17 = new WelcomePage("Page3Line17");
+                    public static readonly WelcomePage P3L18 = new WelcomePage("Page3Line18");
+                    public static readonly WelcomePage P3L19 = new WelcomePage("Page3Line19");
+                    public static readonly WelcomePage P3L20 = new WelcomePage("Page3Line20");
+                    public static readonly WelcomePage P3L21 = new WelcomePage("Page3Line21");
+
+                    public static readonly WelcomePage AP1L01 = new WelcomePage("AdminPage1Line1");
+                    public static readonly WelcomePage AP1L02 = new WelcomePage("AdminPage1Line2");
+                    public static readonly WelcomePage AP1L03 = new WelcomePage("AdminPage1Line3");
+                    public static readonly WelcomePage AP1L04 = new WelcomePage("AdminPage1Line4");
+                    public static readonly WelcomePage AP1L05 = new WelcomePage("AdminPage1Line5");
+                    public static readonly WelcomePage AP1L06 = new WelcomePage("AdminPage1Line6");
+                    public static readonly WelcomePage AP1L07 = new WelcomePage("AdminPage1Line7");
+                    public static readonly WelcomePage AP1L08 = new WelcomePage("AdminPage1Line8");
+                    public static readonly WelcomePage AP1L09 = new WelcomePage("AdminPage1Line9");
+                    public static readonly WelcomePage AP1L10 = new WelcomePage("AdminPage1Line10");
+                    public static readonly WelcomePage AP1L11 = new WelcomePage("AdminPage1Line11");
+                    public static readonly WelcomePage AP1L12 = new WelcomePage("AdminPage1Line12");
+                    public static readonly WelcomePage AP1L13 = new WelcomePage("AdminPage1Line13");
+                    public static readonly WelcomePage AP1L14 = new WelcomePage("AdminPage1Line14");
+                    public static readonly WelcomePage AP1L15 = new WelcomePage("AdminPage1Line15");
+                    public static readonly WelcomePage AP1L16 = new WelcomePage("AdminPage1Line16");
+                    public static readonly WelcomePage AP1L17 = new WelcomePage("AdminPage1Line17");
+                    public static readonly WelcomePage AP1L18 = new WelcomePage("AdminPage1Line18");
+                    public static readonly WelcomePage AP1L19 = new WelcomePage("AdminPage1Line19");
+                    public static readonly WelcomePage AP1L20 = new WelcomePage("AdminPage1Line20");
+                    public static readonly WelcomePage AP1L21 = new WelcomePage("AdminPage1Line21");
+
+                    public static readonly WelcomePage AP2L01 = new WelcomePage("AdminPage2Line1");
+                    public static readonly WelcomePage AP2L02 = new WelcomePage("AdminPage2Line2");
+                    public static readonly WelcomePage AP2L03 = new WelcomePage("AdminPage2Line3");
+                    public static readonly WelcomePage AP2L04 = new WelcomePage("AdminPage2Line4");
+                    public static readonly WelcomePage AP2L05 = new WelcomePage("AdminPage2Line5");
+                    public static readonly WelcomePage AP2L06 = new WelcomePage("AdminPage2Line6");
+                    public static readonly WelcomePage AP2L07 = new WelcomePage("AdminPage2Line7");
+                    public static readonly WelcomePage AP2L08 = new WelcomePage("AdminPage2Line8");
+                    public static readonly WelcomePage AP2L09 = new WelcomePage("AdminPage2Line9");
+                    public static readonly WelcomePage AP2L10 = new WelcomePage("AdminPage2Line10");
+                    public static readonly WelcomePage AP2L11 = new WelcomePage("AdminPage2Line11");
+                    public static readonly WelcomePage AP2L12 = new WelcomePage("AdminPage2Line12");
+                    public static readonly WelcomePage AP2L13 = new WelcomePage("AdminPage2Line13");
+                    public static readonly WelcomePage AP2L14 = new WelcomePage("AdminPage2Line14");
+                    public static readonly WelcomePage AP2L15 = new WelcomePage("AdminPage2Line15");
+                    public static readonly WelcomePage AP2L16 = new WelcomePage("AdminPage2Line16");
+                    public static readonly WelcomePage AP2L17 = new WelcomePage("AdminPage2Line17");
+                    public static readonly WelcomePage AP2L18 = new WelcomePage("AdminPage2Line18");
+                    public static readonly WelcomePage AP2L19 = new WelcomePage("AdminPage2Line19");
+                    public static readonly WelcomePage AP2L20 = new WelcomePage("AdminPage2Line20");
+                    public static readonly WelcomePage AP2L21 = new WelcomePage("AdminPage2Line21");
+
+                    public string Value;
+                    private WelcomePage(string welcomePage) { Value = this.ToString() + "-" + welcomePage; }
+                    public static implicit operator string(WelcomePage welcomePage) { return welcomePage.Value; }
+                }
+            }
+            public class ModInit
+            {
+                public static readonly ModInit CntFindData = new ModInit("CantFindData");
+                public static readonly ModInit LoadingData = new ModInit("CreateNewData");
+
+                public string Value;
+                private ModInit(string modInit) { Value = this.ToString() + "-" + modInit; }
+                public static implicit operator string(ModInit modInit) { return modInit.Value; }
+            }
+            public class Ticket
+            {
+                public static readonly Ticket Accepted = new Ticket("Accepted");
+                public static readonly Ticket Canceled = new Ticket("Canceled");
+                public static readonly Ticket Created = new Ticket("Created");
+                public static readonly Ticket Declined = new Ticket("Declined");
+                public static readonly Ticket AcceptedAdmin = new Ticket("AcceptedAdmin");
+                public static readonly Ticket DeclinedAdmin = new Ticket("DeclinedAdmin");
+                public static readonly Ticket AlreadyExists = new Ticket("AlreadyExists");
+
+                public string Value;
+                private Ticket(string ticket) { Value = this.ToString() + "-" + ticket; }
+                public static implicit operator string(Ticket ticket) { return ticket.Value; }
+            }
+            //public class Menu
+            //{
+            //    public static readonly Menu Accepted = new Menu("Accepted");
+
+            //    public string Value;
+            //    private Menu(string menu) { Value = this.ToString() + "-" + menu; }
+            //    public static implicit operator string(Menu menu) { return menu.Value; }
+            //}
+            public class Chat
+            {
+                public static readonly Chat Accepted = new Chat("Accepted");
+
+                public string Value;
+                private Chat(string chat) { Value = this.ToString() + "-" + chat; }
+                public static implicit operator string(Chat chat) { return chat.Value; }
+            }
+
+
+            public static readonly Dictionary<string, string> List = new Dictionary<string, string>()
+            {
+                { "xx", "xxx" },
+                { ModInit.CntFindData, "Couldn't load {0} File, creating new {0}"},
+                { ModInit.LoadingData, "Trying to load {0}"},
+                {"notAllwPickup", "You can't pick this item as owner is: {0}" },
+                {"AdmModeRem", "You have deactivated Admin Mode" },
+                {"AdmModeAdd", "You are now in Admin mode" },
+                {"lvlRedxpSav", "Your Level was reduced, Lost xp has been saved." },
+                {"lvlIncrxpRes", "Your Level has been increased, Lost xp Restored." },
+                {"numbonly", "Incorrect format: Included letter in ticketID" },
+                {Ticket.Created, "You have created a ticket" },
+                {Ticket.Canceled, "You have Canceled your ticket" },
+                {Ticket.Accepted, "Your Ticket has been accepted" },
+                {Ticket.Declined, "Your Ticket has been declined" },
+                {Ticket.AcceptedAdmin, "Your Ticket accepted the ticket" },
+                {Ticket.DeclinedAdmin, "Your Ticket decline the ticket" },
+                {Ticket.AlreadyExists, "You have already requested to change, Please conctact your admin" },
+                {"TickClosLogin", "Welcome back, Your ticket was {0}" },
+                {"TickList", "Ticket#: {0}, User: {1}" },
+                {"TickDet", "Ticket Details:" },
+                {"TickID", "Ticket ID: {0}" },
+                {"TickName", "Username: {0}" },
+                {"TickStmID", "SteamID: {0}" },
+                {"TickSelc", "Selected: {0}" },
+                {"TickRsn", "Reason: {0}" },
+                {"TickDate", "Ticket Created: {0}" },
+                {"TickCnt", "Open Tickets: {0}" },
+                {"TickNotAvail", "Ticket#:{0} Does not exist" },
+                {"ComndList", "PvX Command List:" },
+                {"CompTickCnt", "Closed Tickets: {0}" },
+                {"IncoForm", "Incorrect format" },
+                {"IncoFormPleaUse", "Incorrect format Please Use:" },
+                {"TicketDefaultReason", "Change Requested Via Chat" },
+                {"NoTicket", "There are no tickets to display" },
+                {"PvETarget", "You are attacking a PvE player" },
+                {"NoActTick", "You do not have an active ticket" },
+                {"RSNChan", "You have changed your tickets reason." },
+                {"PvEStructure", "That structure belongs to a PvE player" },
+                {"TargisGod", "You are attacking a god" },
+                {"YouisGod", "You are attacking a god" },
+                {"MissPerm", "You do not have the required permision" },
+                {Menu.WelcomePage.P1L01, "Welcome To PvX Selector." },
+                {Menu.WelcomePage.P1L02, "" },
+                {Menu.WelcomePage.P1L03, "This mod allows you to select either PvP or PvE, this" },
+                {Menu.WelcomePage.P1L04, "means you get to play on the server how you want to." },
+                {Menu.WelcomePage.P1L05, "" },
+                {Menu.WelcomePage.P1L06, "If you have not yet selected a mode please click on the" },
+                {Menu.WelcomePage.P1L07, "character button and choose your mode, you can always" },
+                {Menu.WelcomePage.P1L08, "change it later." },
+                {Menu.WelcomePage.P1L09, "" },
+                {Menu.WelcomePage.P1L10, "If you would like to see the servers configuration for the" },
+                {Menu.WelcomePage.P1L11, "mod please click on the Settings button." },
+                {Menu.WelcomePage.P1L12, "" },
+                {Menu.WelcomePage.P1L13, "The Players panel allows you to see online players and" },
+                {Menu.WelcomePage.P1L14, "what mode they are playing as." },
+                {Menu.WelcomePage.P1L15, "" },
+                {Menu.WelcomePage.P1L16, "If you have any questions please contact a server admin." },
+                {Menu.WelcomePage.P1L17, "" },
+                {Menu.WelcomePage.P1L18, "" },
+                {Menu.WelcomePage.P1L19, "" },
+                {Menu.WelcomePage.P1L20, "" },
+                {Menu.WelcomePage.P1L21, "" },
+
+                {Menu.WelcomePage.P2L01, "" },
+                {Menu.WelcomePage.P2L02, "" },
+                {Menu.WelcomePage.P2L03, "" },
+                {Menu.WelcomePage.P2L04, "" },
+                {Menu.WelcomePage.P2L05, "" },
+                {Menu.WelcomePage.P2L06, "" },
+                {Menu.WelcomePage.P2L07, "" },
+                {Menu.WelcomePage.P2L08, "" },
+                {Menu.WelcomePage.P2L09, "" },
+                {Menu.WelcomePage.P2L10, "" },
+                {Menu.WelcomePage.P2L11, "" },
+                {Menu.WelcomePage.P2L12, "" },
+                {Menu.WelcomePage.P2L13, "" },
+                {Menu.WelcomePage.P2L14, "" },
+                {Menu.WelcomePage.P2L15, "" },
+                {Menu.WelcomePage.P2L16, "" },
+                {Menu.WelcomePage.P2L17, "" },
+                {Menu.WelcomePage.P2L18, "" },
+                {Menu.WelcomePage.P2L19, "" },
+                {Menu.WelcomePage.P2L20, "" },
+                {Menu.WelcomePage.P2L21, "" },
+
+                {Menu.WelcomePage.P3L01, "" },
+                {Menu.WelcomePage.P3L02, "" },
+                {Menu.WelcomePage.P3L03, "" },
+                {Menu.WelcomePage.P3L04, "" },
+                {Menu.WelcomePage.P3L05, "" },
+                {Menu.WelcomePage.P3L06, "" },
+                {Menu.WelcomePage.P3L07, "" },
+                {Menu.WelcomePage.P3L08, "" },
+                {Menu.WelcomePage.P3L09, "" },
+                {Menu.WelcomePage.P3L10, "" },
+                {Menu.WelcomePage.P3L11, "" },
+                {Menu.WelcomePage.P3L12, "" },
+                {Menu.WelcomePage.P3L13, "" },
+                {Menu.WelcomePage.P3L14, "" },
+                {Menu.WelcomePage.P3L15, "" },
+                {Menu.WelcomePage.P3L16, "" },
+                {Menu.WelcomePage.P3L17, "" },
+                {Menu.WelcomePage.P3L18, "" },
+                {Menu.WelcomePage.P3L19, "" },
+                {Menu.WelcomePage.P3L20, "" },
+                {Menu.WelcomePage.P3L21, "" },
+
+                {Menu.WelcomePage.AP1L01, "Hello Admins and Moderators" },
+                {Menu.WelcomePage.AP1L02, "" },
+                {Menu.WelcomePage.AP1L03, "This page is here to provide you information about" },
+                {Menu.WelcomePage.AP1L04, "the admin and moderator buttons." },
+                {Menu.WelcomePage.AP1L05, "" },
+                {Menu.WelcomePage.AP1L06, "Moderators+" },
+                {Menu.WelcomePage.AP1L07, "Players Panel: This panel will be different from what" },
+                {Menu.WelcomePage.AP1L08, "regular players see, the main difference is this provides" },
+                {Menu.WelcomePage.AP1L09, "aditional information about a player including ticket count." },
+                {Menu.WelcomePage.AP1L10, "" },
+                {Menu.WelcomePage.AP1L11, "Tickets: This panel will allow you to view all tickets, from" },
+                {Menu.WelcomePage.AP1L12, "this menu you will be able to accept or decline them." },
+                {Menu.WelcomePage.AP1L13, "" },
+                {Menu.WelcomePage.AP1L14, "Admin" },
+                {Menu.WelcomePage.AP1L15, "Settings: Allows you to make changes to the mod on the fly," },
+                {Menu.WelcomePage.AP1L16, "these changes are then saved to the config." },
+                {Menu.WelcomePage.AP1L17, "" },
+                {Menu.WelcomePage.AP1L18, "Debug: At this time it does not have a function, but I plan" },
+                {Menu.WelcomePage.AP1L19, "to allow admins to fix and reset data files, possible I will" },
+                {Menu.WelcomePage.AP1L20, "add the capability to enable debug chat in that pannel" },
+                {Menu.WelcomePage.AP1L21, "" },
+
+                {Menu.WelcomePage.AP2L01, "" },
+                {Menu.WelcomePage.AP2L02, "" },
+                {Menu.WelcomePage.AP2L03, "" },
+                {Menu.WelcomePage.AP2L04, "" },
+                {Menu.WelcomePage.AP2L05, "" },
+                {Menu.WelcomePage.AP2L06, "" },
+                {Menu.WelcomePage.AP2L07, "" },
+                {Menu.WelcomePage.AP2L08, "" },
+                {Menu.WelcomePage.AP2L09, "" },
+                {Menu.WelcomePage.AP2L10, "" },
+                {Menu.WelcomePage.AP2L11, "" },
+                {Menu.WelcomePage.AP2L12, "" },
+                {Menu.WelcomePage.AP2L13, "" },
+                {Menu.WelcomePage.AP2L14, "" },
+                {Menu.WelcomePage.AP2L15, "" },
+                {Menu.WelcomePage.AP2L16, "" },
+                {Menu.WelcomePage.AP2L17, "" },
+                {Menu.WelcomePage.AP2L18, "" },
+                {Menu.WelcomePage.AP2L19, "" },
+                {Menu.WelcomePage.AP2L20, "" },
+                {Menu.WelcomePage.AP2L21, "" },
+            };
+        }
+
+        public class ModeSwitch//Ticket ReWrite Required??
+        {
+            public class Cooldown
+            {
+                public static bool Check(BasePlayer Player)
+                {
+                    if (Data.cooldownData.Cooldowns.ContainsKey(Player.userID))
+                        if (Passed(Player)) return true;
+                        else return false;
+                    else Add(Player);
+                    return true;
+                }
+                public static void Set(IPlayer Player)
+                {
+                    Data.cooldownData.Cooldowns[Convert.ToUInt32(Player.Id)] = Time();
+                }
+
+                static void Add(BasePlayer Player)
+                {
+                    Data.cooldownData.Cooldowns.Add(Player.userID, Time());
+                }
+                static bool Passed(BasePlayer Player)
+                {
+                    double CooldownValue = (Data.cooldownData.Cooldowns[Player.userID] + instance.CooldownTime);
+                    if (Time() > CooldownValue) return true;
+                    else return false;
+                }
+                static double Time()
+                {
+                    return (DateTime.Now.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
+                }
+                public static class Data
+                {
+                    public static CooldownStorage cooldownData;
+                    public static DynamicConfigFile CooldownData;
+
+                    public class CooldownStorage
+                    {
+                        public Dictionary<ulong, double> Cooldowns = new Dictionary<ulong, double>();
+                    }
+                    public static void Initiate()
+                    {
+                        Data.CooldownData = Interface.Oxide.DataFileSystem.GetFile("PvX/CooldownData");
+                    }
+                    public static void Load()
+                    {
+                        try
+                        {
+                            cooldownData = CooldownData.ReadObject<CooldownStorage>();
+                            Messages.PutsRcon(Lang.ModInit.LoadingData, "Cooldown Data");
+                        }
+                        catch
+                        {
+                            Messages.PutsRcon(Lang.ModInit.CntFindData, "Cooldown Data");
+                            cooldownData = new CooldownStorage();
+                        }
+                    }
+                    public static void Save()
+                    {
+                        CooldownData.WriteObject(cooldownData);
+                    }
+                }
+            }//Completed
+            public class Ticket
+            {
+                public static void Create(BasePlayer Player, string selection)
+                {
+                    int _TicketNumber = GetNewID();
+                    string _username = Player.displayName;
+                    string _requested = selection;
+                    string _reason = instance.lang.GetMessage("TicketDefaultReason", instance, Player.UserIDString);
+                    Data.ticketData.Link.Add(_TicketNumber, Player.userID);
+                    Data.ticketData.Tickets.Add(Player.userID, new Data.Ticket
+                    {
+                        CreatedTimeStamp = instance.DateTimeStamp(),
+                        reason = instance.lang.GetMessage("TicketDefaultReason", instance, Player.UserIDString),
+                        requested = selection,
+                        TicketNumber = _TicketNumber,
+                        UserId = Player.UserIDString,
+                        Username = Player.displayName
+                    });
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "TickCrea");
+                    Players.Data.playerData.Info[Player.userID].ticket = true;
+                    SaveData.All();
+                    GUI.Update.AdminIndicator();
+                    GUI.Update.PlayerIndicator(Player);
+                }
+                public static void Cancel(BasePlayer Player)
+                {
+                    if (Players.Data.playerData.Info[Player.userID].ticket == false) return;
+                    int _ticketNumber = Data.ticketData.Tickets[Player.userID].TicketNumber;
+                    Data.ticketData.Link.Remove(_ticketNumber);
+                    Data.ticketData.Tickets.Remove(Player.userID);
+                    Players.Data.playerData.Info[Player.userID].ticket = false;
+                    SaveData.All();
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "TickCanc");
+                    GUI.Update.PlayerIndicator(Player);
+                    GUI.Update.AdminIndicator();
+                    return;
+                }
+                public static void Accept(BasePlayer Admin, int TicketID)//Update required to fix Baseplayer NRE
+                {
+                    ulong _UserID = Data.ticketData.Link[TicketID];
+                    AddToLog(Admin, TicketID, true);
+                    Messages.Chat(Players.Find.Iplayer(Admin.userID), Lang.Ticket.AcceptedAdmin);
+                    Players.Data.playerData.Info[_UserID].ticket = false;
+                    Players.Data.playerData.Info[_UserID].mode = Data.ticketData.Tickets[_UserID].requested;
+                    SaveData.All();
+                    BasePlayer Player = Players.Find.BasePlayer(_UserID);
+                    if (Player != null && Player.isConnected)
+                    {
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.Accepted);
+                        GUI.Update.PlayerIndicator(Player);
+                        instance.UpdatePlayerChatTag(Player);
+                    }
+                    else if (Player != null && !Player.isConnected)
+                    {
+                        Data.ticketData.Notification.Add(Player.userID, "Accepted");
+                    }
+                    else
+                    {
+                        Data.ticketData.Notification.Add(Player.userID, "Accepted");
+                    }
+                    Data.ticketData.Tickets.Remove(_UserID);
+                    Data.ticketData.Link.Remove(TicketID);
+                    SaveData.All();
+                    GUI.Update.AdminIndicator();
+                    if (Player != null && Player.isConnected) GUI.Update.PlayerIndicator(Player);
+                }
+                public static void Decline(BasePlayer Admin, int TicketID)//updated: Fixed Baseplayer NRE
+                {
+                    ulong _UserID = Data.ticketData.Link[TicketID];
+                    AddToLog(Admin, TicketID, false);
+                    Messages.Chat(Players.Find.Iplayer(Admin.userID), Lang.Ticket.Accepted);
+                    Players.Data.playerData.Info[_UserID].ticket = false;
+                    Data.ticketData.Tickets.Remove(_UserID);
+                    Data.ticketData.Link.Remove(TicketID);
+                    SaveData.All();
+                    GUI.Update.AdminIndicator();
+                    BasePlayer Player = Players.Find.BasePlayer(_UserID);
+                    if (Player != null && Player.isConnected)
+                    {
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.Declined);
+                        GUI.Update.PlayerIndicator(Player);
+                    }
+                    else Data.ticketData.Notification.Add(Player.userID, "Declined");
+                }
+                public static void Count(BasePlayer Player)
+                {
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "TickCnt", Data.ticketData.Link.Count);
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "CompTickCnt", Data.logData.Logs.Count);
+                }
+                public static void Fix(BasePlayer Player)
+                {
+
+                }
+                public static void List(BasePlayer Player)
+                {
+                    if (Data.ticketData.Link.Count > 0)
+                    {
+                        foreach (var ticket in Data.ticketData.Tickets)
+                        {
+                            ulong _key = ticket.Key;
+                            Messages.Chat(Players.Find.Iplayer(Player.userID), "TickList", Data.ticketData.Tickets[_key].TicketNumber, Data.ticketData.Tickets[_key].Username);
+                        }
+                    }
+                }
+                public static void Info(BasePlayer Player, int TicketID)
+                {
+                    if (Data.ticketData.Link.ContainsKey(TicketID))
+                    {
+                        ulong _key = Data.ticketData.Link[TicketID];
+                        //DateTime _date = DateTime.FromOADate(Ticket.Data.ticketData.Tickets[_key].timeStamp);
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), "TickDet");
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), "TickID", TicketID);
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), "TickName", Data.ticketData.Tickets[_key].Username);
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), "TickStmID", _key);
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), "TickSelc", Data.ticketData.Tickets[_key].requested);
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), "TickRsn", Data.ticketData.Tickets[_key].reason);
+                        Messages.Chat(Players.Find.Iplayer(Player.userID), "TickDate", Data.ticketData.Tickets[_key].CreatedTimeStamp);
+                    }
+                    else Messages.Chat(Players.Find.Iplayer(Player.userID), "TickNotAvail", TicketID);
+                }
+                public static void AddToLog(BasePlayer _admin, int TicketID, bool Selection)
+                {
+                    ulong _UserID = Data.ticketData.Link[TicketID];
+                    int _logID = NewLogID();
+                    Data.logData.Logs.Add(_logID, new Data.Log
+                    {
+                        Accepted = Selection,
+                        ClosedTimeStamp = instance.DateTimeStamp(),
+                        AdminId = _admin.UserIDString,
+                        CreatedTimeStamp = Data.ticketData.Tickets[_UserID].CreatedTimeStamp,
+                        reason = Data.ticketData.Tickets[_UserID].reason,
+                        requested = Data.ticketData.Tickets[_UserID].requested,
+                        UserId = Data.ticketData.Tickets[_UserID].UserId,
+                        AdminName = _admin.displayName,
+                        Username = Data.ticketData.Tickets[_UserID].Username,
+                    });
+                }
+                public static void ConsoleList()
+                {
+                    foreach (ulong _ticket in Data.ticketData.Tickets.Keys)
+                    {
+                        instance.Puts("    ");
+                        instance.Puts("    ");
+                        Messages.PutsRcon("TickDet");
+                        Messages.PutsRcon("TickID", Data.ticketData.Tickets[_ticket].TicketNumber);
+                        Messages.PutsRcon("TickName", Data.ticketData.Tickets[_ticket].Username);
+                        Messages.PutsRcon("TickStmID", _ticket);
+                        Messages.PutsRcon("TickSelc", Data.ticketData.Tickets[_ticket].requested);
+                        Messages.PutsRcon("TickRsn", Data.ticketData.Tickets[_ticket].reason);
+                        Messages.PutsRcon("TickDate", Data.ticketData.Tickets[_ticket].CreatedTimeStamp);
+                    }
+                }
+                public static void ConsoleListLogs()
+                {
+                    foreach (int _ticket in Data.logData.Logs.Keys)
+                    {
+                        instance.Puts("    ");
+                        instance.Puts("    ");
+                        instance.Puts("Log Ticket");
+                        instance.Puts("Accepted: {0}", Data.logData.Logs[_ticket].Accepted);
+                        instance.Puts("CreatedTimeStamp: {0}", Data.logData.Logs[_ticket].CreatedTimeStamp);
+                        instance.Puts("ClosedTimeStamp: {0}", Data.logData.Logs[_ticket].ClosedTimeStamp);
+                        instance.Puts("Username: {0}", Data.logData.Logs[_ticket].Username);
+                        instance.Puts("UserId: {0}", Data.logData.Logs[_ticket].UserId);
+                        instance.Puts("AdminName: {0}", Data.logData.Logs[_ticket].AdminName);
+                        instance.Puts("AdminId: {0}", Data.logData.Logs[_ticket].AdminId);
+                        instance.Puts("Requested: {0}", Data.logData.Logs[_ticket].requested);
+                        instance.Puts("Reason: {0}", Data.logData.Logs[_ticket].reason);
+                    }
+                }
+
+                static int GetNewID()
+                {
+                    for (int _i = 1; _i <= 500; _i++)
+                    {
+                        if (Data.ticketData.Link.ContainsKey(_i)) { }//Place Debug code in future
+                        else
+                        {
+                            //Puts("Key {0} doesnt exist, Returning ticket number", _i); //debug
+                            return _i;
+                        }
+                    }
+                    return 0;
+                }
+                static int NewLogID()
+                {
+                    for (int _i = 1; _i <= 500; _i++)
+                    {
+                        if (Data.logData.Logs.ContainsKey(_i)) { }
+                        else
+                        {
+                            //Puts("Key {0} doesnt exist, Returning ticket number", _i); //debug
+                            return _i;
+                        }
+                    }
+                    return 0;
+                }
+
+                public static class Data
+                {
+                    public static TicketStorage ticketData;
+                    public static DynamicConfigFile TicketData;
+                    public static LogStorage logData;
+                    public static DynamicConfigFile LogData;
+
+                    public class TicketStorage
+                    {
+                        public Dictionary<int, ulong> Link = new Dictionary<int, ulong>();
+                        public Dictionary<ulong, Ticket> Tickets = new Dictionary<ulong, Ticket>();
+                        public Dictionary<ulong, string> Notification = new Dictionary<ulong, string>();
+                    }
+                    public class LogStorage
+                    {
+                        public Dictionary<int, Log> Logs = new Dictionary<int, Log>();
+                    }
+
+                    public class Ticket
+                    {
+                        public int TicketNumber;
+                        public string Username;
+                        public string UserId;
+                        public string requested;
+                        public string reason;
+                        public string CreatedTimeStamp;
+                    }
+                    public class Log
+                    {
+                        public string UserId;
+                        public string AdminId;
+                        public string Username;
+                        public string AdminName;
+                        public string requested;
+                        public string reason;
+                        public bool Accepted;
+                        public string CreatedTimeStamp;
+                        public string ClosedTimeStamp;
+                    }
+
+                    public static void Initiate()
+                    {
+                        Data.TicketData = Interface.Oxide.DataFileSystem.GetFile("PvX/TicketData");
+                        Data.LogData = Interface.Oxide.DataFileSystem.GetFile("PvX/TicketLog");
+                    }
+                    public static void Load()
+                    {
+                        try
+                        {
+                            ticketData = TicketData.ReadObject<TicketStorage>();
+                            Messages.PutsRcon(Lang.ModInit.LoadingData, "Ticket Data");
+                        }
+                        catch
+                        {
+                            Messages.PutsRcon(Lang.ModInit.CntFindData, "Ticket Data");
+                            ticketData = new TicketStorage();
+                        }
+                        try
+                        {
+                            logData = LogData.ReadObject<LogStorage>();
+                            Messages.PutsRcon(Lang.ModInit.LoadingData, "Log Data");
+                        }
+                        catch
+                        {
+                            Messages.PutsRcon(Lang.ModInit.CntFindData, "Log Data");
+                            logData = new LogStorage();
+                        }
+                    }
+                    public static void Save()
+                    {
+                        TicketData.WriteObject(Data.ticketData);
+                        LogData.WriteObject(logData);
+                    }
+                }
+
+
+
+            }
+        }
+
+        public class Players
+        {
+            public class Find
+            {
+                public static IPlayer Iplayer(ulong ID)
+                {
+                    return instance.covalence.Players.FindPlayerById(ID.ToString());
+                }
+                public static BasePlayer BasePlayer(ulong ID)
+                {
+                    BasePlayer BasePlayer = BasePlayer.FindByID(ID);
+                    if (BasePlayer == null) BasePlayer = BasePlayer.FindSleeping(ID);
+                    return BasePlayer;
+                }
+            }
+            public class ChangeMode
+            {
+                public static void Check(BasePlayer Player, string selection)
+                {
+                    bool tick = instance.TicketSystem;
+                    bool cool = instance.CooldownSystem;
+                    if (tick && !(cool))
+                    {
+                        if (ModeSwitch.Ticket.Data.ticketData.Tickets.ContainsKey(Player.userID)) return;
+                        ModeSwitch.Ticket.Create(Player, selection);
+                    }
+                    if (tick && cool)
+                    {
+                        if (ModeSwitch.Ticket.Data.ticketData.Tickets.ContainsKey(Player.userID)) return;
+                        if (ModeSwitch.Cooldown.Check(Player)) Change(Find.Iplayer(Player.userID), selection);
+                        else ModeSwitch.Ticket.Create(Player, selection);
+                    }
+                    if (!(tick) && cool)
+                    {
+                        if (ModeSwitch.Cooldown.Check(Player)) Change(Find.Iplayer(Player.userID), selection);
+                    }
+                }
+                public static void Change(IPlayer Player, string selection)
+                {
+                    ulong PlayerID = Convert.ToUInt32(Player.Id);
+                    Data.playerData.Info[PlayerID].mode = selection;
+                    ModeSwitch.Cooldown.Set(Player);
+                    SaveData.All();
+
+
+
+
+                    //Checks if connected, if so sends message and update gui
+                    if (Player != null && Player.IsConnected)
+                    {
+                        Messages.Chat(Player, Lang.Ticket.Accepted);
+                        GUI.Update.PlayerIndicator(Find.BasePlayer(Convert.ToUInt32(Player.Id)));
+                        instance.UpdatePlayerChatTag(Find.BasePlayer(Convert.ToUInt32(Player.Id)));
+                    }
+                    SaveData.All();
+                    if (Player != null && Player.IsConnected) GUI.Update.PlayerIndicator(Find.BasePlayer(Convert.ToUInt32(Player.Id)));
+                }
+            }
+            public static class Data
+            {
+                public static PlayerStorage playerData;
+                public static DynamicConfigFile PlayerData;
+
+                public class PlayerStorage
+                {
+                    public Hash<ulong, PlayerInfo> Info = new Hash<ulong, PlayerInfo>();
+                    public List<ulong> Sleepers = new List<ulong>();
+                    public List<ulong> UnknownUsers = new List<ulong>();
+                    public Dictionary<ulong, double> Cooldown = new Dictionary<ulong, double>();
+                }
+
+                public class PlayerInfo
+                {
+                    public string username;
+                    public string FirstConnection;
+                    public string LatestConnection;
+                    public string mode;
+                    public bool ticket;
+                }
+
+
+
+                public static void Initiate()
+                {
+                    Data.PlayerData = Interface.Oxide.DataFileSystem.GetFile("PvX/PlayerData");
+                }
+                public static void Load()
+                {
+                    try
+                    {
+                        playerData = PlayerData.ReadObject<PlayerStorage>();
+                        Messages.PutsRcon(Lang.ModInit.LoadingData, "Player Data");
+                    }
+                    catch
+                    {
+                        Messages.PutsRcon(Lang.ModInit.CntFindData, "Player Data");
+                        playerData = new PlayerStorage();
+                    }
+                }
+                public static void Save()
+                {
+                    PlayerData.WriteObject(Data.playerData);
+                }
+            }
+            public class State
+            {
+                //private readonly object HumanNPC;
+
+                public static bool IsNA(ulong Player)
+                {
+                    if (Data.playerData.Info[Player].mode == Mode.NA) return true;
+                    else return false;
+                }
+                public static bool IsNA(BaseCombatEntity _BaseCombat)
+                {
+                    BasePlayer Player = (BasePlayer)_BaseCombat;
+                    if (Data.playerData.Info[Player.userID].mode == Mode.NA) return true;
+                    else return false;
+                }
+                public static bool IsPvP(ulong Player)
+                {
+                    if (!Data.playerData.Info.ContainsKey(Player))
+                    {
+                        BasePlayer PlayerBP = Find.BasePlayer(Player);
+                        if (PlayerBP == null)
+                        {
+                            AddOffline(Player);
+                        }
+                        else Add(PlayerBP);
+                        return false;
+                    }
+                    if (Data.playerData.Info[Player].mode == Mode.PvP) return true;
+                    else return false;
+                }
+                public static bool IsPvP(BaseCombatEntity _BaseCombat)
+                {
+                    BasePlayer Player = (BasePlayer)_BaseCombat;
+                    if (!Data.playerData.Info.ContainsKey(Player.userID))
+                    {
+                        Add(Player);
+                        return false;
+                    }
+                    if (Data.playerData.Info[Player.userID].mode == Mode.PvP) return true;
+                    else return false;
+                }
+                public static bool IsPvE(ulong Player)
+                {
+                    if (!Data.playerData.Info.ContainsKey(Player))
+                    {
+                        BasePlayer PlayerBP = Find.BasePlayer(Player);
+                        if (PlayerBP == null)
+                        {
+                            AddOffline(Player);
+                        }
+                        else Add(PlayerBP);
+                        return false;
+                    }
+                    if (Data.playerData.Info[Player].mode == Mode.PvE) return true;
+                    else return false;
+                }
+                public static bool IsPvE(BasePlayer Player)
+                {
+                    if (!Data.playerData.Info.ContainsKey(Player.userID))
+                    {
+                        Add(Player);
+                        return false;
+                    }
+                    if (Data.playerData.Info[Player.userID].mode == Mode.PvE) return true;
+                    else return false;
+                }
+                public static bool IsPvE(BaseCombatEntity _BaseCombat)
+                {
+                    BasePlayer Player = (BasePlayer)_BaseCombat;
+                    if (!Data.playerData.Info.ContainsKey(Player.userID))
+                    {
+                        Add(Player);
+                        return false;
+                    }
+                    if (Data.playerData.Info[Player.userID].mode == Mode.PvE) return true;
+                    else return false;
+                }
+                public static bool IsNPC(ulong _test)
+                {
+                    if (instance.HumanNPC == null) return false;
+                    else if (_test < 76560000000000000L) return true;
+                    else return false;
+                }
+                public static bool IsNPC(BaseCombatEntity Player)
+                {
+                    BasePlayer _test = (BasePlayer)Player;
+                    if (instance.HumanNPC == null) return false;
+                    else if (_test.userID < 76560000000000000L) return true;
+                    else return false;
+                }
+                public static bool IsNPC(PlayerCorpse _test)
+                {
+                    if (instance.HumanNPC == null) return false;
+                    else if (_test.playerSteamID < 76560000000000000L) return true;
+                    else return false;
+                }
+            }
+            public static class Adminmode
+            {
+                public static List<ulong> Online = new List<ulong>();
+                private static List<ulong> AdminModeEnabled = new List<ulong>();
+
+                public static bool ContainsPlayer(ulong playerID)
+                {
+                    if (AdminModeEnabled.Contains(playerID)) return true;
+                    else return false;
+                }
+                public static bool AddPlayer(ulong playerID)
+                {
+                    if (AdminModeEnabled.Contains(playerID)) return false;
+                    else AdminModeEnabled.Add(playerID);
+                    Messages.Chat(Find.Iplayer(playerID), "AdmModeAdd");
+                    return true;
+                }
+                public static bool RemovePlayer(ulong playerID)
+                {
+                    if (!AdminModeEnabled.Contains(playerID)) return false;
+                    else AdminModeEnabled.Remove(playerID);
+                    Messages.Chat(Find.Iplayer(playerID), "AdmModeRem");
+                    return true;
+                }
+                public static bool Toggle(ulong playerID)
+                {
+                    if (ContainsPlayer(playerID))
+                        RemovePlayer(playerID);
+                    else AddPlayer(playerID);
+                    return true;
+                }
+            }
+
+            public static void Add(BasePlayer Player)
+            {
+                Data.playerData.Info.Add(Player.userID, new Data.PlayerInfo
+                {
+                    username = Player.displayName,
+                    mode = Mode.NA,
+                    ticket = false,
+                    FirstConnection = instance.DateTimeStamp(),
+                    LatestConnection = instance.DateTimeStamp(),
+                });
+                instance.PvxChatNotification(Player);
+            }
+            public static void AddSleeper(BasePlayer Player)
+            {
+                Data.playerData.Info.Add(Player.userID, new Data.PlayerInfo
+                {
+                    username = Player.displayName,
+                    mode = Mode.NA,
+                    ticket = false,
+                    FirstConnection = instance.DateTimeStamp(),
+                    LatestConnection = "Sleeper",
+                });
+                Data.playerData.Sleepers.Add(Player.userID);
+            }
+            public static void AddOffline(ulong _userID)
+            {
+                Data.playerData.Info.Add(_userID, new Data.PlayerInfo
+                {
+                    username = "UNKNOWN",
+                    mode = Mode.NA,
+                    ticket = false,
+                    FirstConnection = instance.DateTimeStamp(),
+                    LatestConnection = "UNKNOWN",
+                });
+                Data.playerData.UnknownUsers.Add(_userID);
+            }
+            public static bool HasTicket(BasePlayer Player)
+            {
+                if (Data.playerData.Info[Player.userID].ticket == true) return true;
+                else return false;
+            }
+            public static bool HasTicket(ulong Player)
+            {
+                if (Data.playerData.Info[Player].ticket == true) return true;
+                else return false;
+            }
+            public static string GetMode(ulong player)
+            {
+                return Data.playerData.Info[player].mode;
+            }
+            public static bool IsNewPlayer(ulong PlayerID)
+            {
+                if (Players.Data.playerData.Info.ContainsKey(PlayerID)) return false;
+                return true;
+            }
+        }
+
+
+        public class Permisions
+        {
+            bool ContainsPlayer(ulong Player, string Perm)
+            {
+                IPlayer iPlayer = instance.covalence.Players.FindPlayerById(Player.ToString());
+                return iPlayer.HasPermission(Perm);
+            }
+            void AddPlayer(ulong Player, string Perm)
+            {
+                IPlayer iPlayer = instance.covalence.Players.FindPlayerById(Player.ToString());
+                iPlayer.GrantPermission(Perm);
+            }
+            void RemovePlayer(ulong Player, string Perm)
+            {
+                IPlayer iPlayer = instance.covalence.Players.FindPlayerById(Player.ToString());
+                iPlayer.RevokePermission(Perm);
+            }
+        }
+
+
+        public class Containers
+        {
+            public static List<ulong> AddContainerMode = new List<ulong>();
+            private static List<ulong> RemoveContainerMode = new List<ulong>();
+            private static List<ulong> PlayersInSharedChest = new List<ulong>();
+            private static List<string> ValidChestTypes = new List<string>() { "box.wooden.large", "woodbox_deployed" };//"small_stash_deployed"
+
+            //Adding Removing Container Handle
+
+            public static bool AddContainer(StorageContainer _Container, ulong Player)
+            {
+                if (AddContainerMode.Count == 0)
+                    return false;
+                if (AddContainerMode.Contains(Player))
+                {
+                    if (Data.sharedContainerData.SharedContainers.ContainsKey(Player))
+                        ReplaceContainer(_Container, Player);
+                    else
+                        Data.sharedContainerData.SharedContainers.Add(Player, _Container.net.ID);
+                    //_Container.skinID = 20201;
+                    AddContainerMode.Remove(Player);
+                    SaveData.SharedContainer();
+                    return true;
+                }
+                return false;
+            }
+            public static bool RemoveContainer(StorageContainer _Container, ulong Player = 0)
+            {
+                if (RemoveContainerMode.Count == 0) return false;
+                else if (RemoveContainerMode.Contains(Player))
+                {
+                    if (Data.sharedContainerData.SharedContainers.ContainsKey(Player))
+                        Data.sharedContainerData.SharedContainers.Remove(Player);
+                    RemoveContainerMode.Remove(Player);
+                    SaveData.SharedContainer();
+                    return true;
+                }
+                return false;
+            }
+            public static bool ReplaceContainer(StorageContainer _Container, ulong Player)
+            {
+                if (Data.sharedContainerData.SharedContainers[Player] == _Container.net.ID)
+                    return false;
+                else
+                    Data.sharedContainerData.SharedContainers[Player] = _Container.net.ID;
+                return true;
+            }
+            public static bool AddToAddContainerList(ulong Player)
+            {
+                if (AddContainerMode.Contains(Player)) return false;
+                else AddContainerMode.Add(Player);
+                return true;
+            }
+            public static bool AddToRemoveContainerList(ulong Player)
+            {
+                if (RemoveContainerMode.Contains(Player)) return false;
+                else RemoveContainerMode.Add(Player);
+                return true;
+            }
+
+            //Using Shared Container Handle
+            public static bool IsShared(StorageContainer _Container)
+            {
+                if (IsChestValidType(_Container))
+                {
+                    if (Data.sharedContainerData.SharedContainers.ContainsKey(_Container.OwnerID))
+                    {
+                        if (Data.sharedContainerData.SharedContainers[_Container.OwnerID] == _Container.net.ID)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            public static bool IsInSharedChest(ulong Player)
+            {
+                if (PlayersInSharedChest.Contains(Player)) return true;
+                else return false;
+            }
+            public static void AddPlayerToInSharedChest(ulong Player)
+            {
+                PlayersInSharedChest.Add(Player);
+            }
+            public static void RemovePlayerFromInSharedChest(ulong Player)
+            {
+                PlayersInSharedChest.Remove(Player);
+            }
+
+
+            //Private
+            private static bool IsChestValidType(StorageContainer _container)
+            {
+                if (ValidChestTypes.Contains(_container.ShortPrefabName)) return true;
+                else return false;
+            }
+
+            public class Data
+            {
+
+                public static SharedContainerStorage sharedContainerData;
+                public static DynamicConfigFile SharedContainerData;
+
+                public class SharedContainerStorage
+                {
+                    public Dictionary<ulong, uint> SharedContainers = new Dictionary<ulong, uint>();
+                }
+                public static void Initiate()
+                {
+                    Data.SharedContainerData = Interface.Oxide.DataFileSystem.GetFile("PvX/SharedContainerData");
+                }
+                public static void Load()
+                {
+                    try
+                    {
+                        sharedContainerData = SharedContainerData.ReadObject<SharedContainerStorage>();
+                        Messages.PutsRcon(Lang.ModInit.LoadingData, "Shared Container Data");
+                    }
+                    catch
+                    {
+                        Messages.PutsRcon(Lang.ModInit.CntFindData, "Shared Container Data");
+                        sharedContainerData = new SharedContainerStorage();
+                    }
+                }
+                public static void Save()
+                {
+                    SharedContainerData.WriteObject(sharedContainerData);
+                }
+            }
+        }
+
+
+
         #endregion
 
         //void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
@@ -2194,57 +3374,31 @@ namespace Oxide.Plugins
         //    Puts("OnEntityLeave works!");
         //}
 
-        void adminMode(BasePlayer _player)
+        void PvxChatNotification(BasePlayer Player)
         {
-            if (AdminPlayerMode.Contains(_player))
+            if (Players.State.IsNA(Player))
             {
-                LangMSG(_player, "AdmModeRem");
-                AdminPlayerMode.Remove(_player);
-                updatePvXIndicator(_player);
-                return;
-            }
-            else AdminPlayerMode.Add(_player);
-            LangMSG(_player, "AdmModeAdd");
-            updatePvXIndicator(_player);
-        }
-        bool isInAdminMode(BasePlayer _player)
-        {
-            if (AdminPlayerMode.Contains(_player)) return true;
-            return false;
-        }
-        void OnItemRemovedFromContainer(ItemContainer container, Item item)
-        {
-            //Puts("Container is type {0}", container.GetType());
-            //Puts("Container is type {0}", container.entityOwner);
-            //Puts("Container is type {0}", container.playerOwner);
-            if (container.entityOwner != null) return;
-            if (container.playerOwner != null)
-            {
-                BasePlayer _player = container.playerOwner;
-                if (isInAdminMode(_player)) item.ClearOwners();
+                Messages.Chat(Players.Find.Iplayer(Player.userID), "This server is running PvX, Please type /pvx for more info");
+                timer.Once(10, () => PvxChatNotification(Player));
             }
         }
 
 
-        
-
-
-
-        void ModifyDamage(HitInfo hitinfo, float scale)
+        void ModifyDamage(HitInfo HitInfo, float scale)
         {
             if (scale == 0f)
             {
-                hitinfo.damageTypes = new DamageTypeList();
-                hitinfo.DoHitEffects = false;
-                hitinfo.HitMaterial = 0;
-                hitinfo.PointStart = Vector3.zero;
-                hitinfo.PointEnd = Vector3.zero;
+                HitInfo.damageTypes = new DamageTypeList();
+                HitInfo.DoHitEffects = false;
+                HitInfo.HitMaterial = 0;
+                HitInfo.PointStart = Vector3.zero;
+                HitInfo.PointEnd = Vector3.zero;
             }
             else if (scale == 1) return;
             else
             {
                 //Puts("Modify Damabe by: {0}", scale);
-                hitinfo.damageTypes.ScaleAll(scale);
+                HitInfo.damageTypes.ScaleAll(scale);
             }
         }
 
@@ -2258,10 +3412,10 @@ namespace Oxide.Plugins
         }
 
 
-
         //////////////////////////////////////////////////////////////////////////////////////
         // Debug /////////////////////////////////////////////////////////////////////////////
         //////////////////////////////////////////////////////////////////////////////////////
+
 
         int DebugLevel = 0;
         void DebugMessage(int _minDebuglvl, string _msg)
@@ -2288,4 +3442,5 @@ namespace Oxide.Plugins
 //Ticket accepted should be fixed for offline/dead players, now add update mechanism on playerinit
 // config color + opacity
 // Fix up/Shorten hooks eg: 
+
 

@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-     [Info("FauxClip", "Colon Blow", "1.3.6", ResourceId = 1299)]
+     [Info("FauxClip", "Colon Blow", "1.3.7", ResourceId = 1299)]
      class FauxClip : RustPlugin
      {
 	public float GracefulLandingTime => Config.Get<float>("GracefulLandingTime");
@@ -119,7 +119,6 @@ namespace Oxide.Plugins
                       if (newPos == playerData.oldPos) continue;
                       ForcePlayerPosition(player, newPos);
                       playerData.oldPos = newPos;
-                      player.TransformChanged();
                  }
              }
          }

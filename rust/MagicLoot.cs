@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 using Oxide.Core;
 namespace Oxide.Plugins
 {
-    [Info("MagicLoot", "Norn", "0.1.6", ResourceId = 2212)]
+    [Info("MagicLoot", "Norn", "0.1.8", ResourceId = 2212)]
     [Description("Basic loot multiplier.")]
 
     class MagicLoot : RustPlugin
@@ -15,7 +15,9 @@ namespace Oxide.Plugins
         int VANILLA_MULTIPLIER = 1;
         int MAX_LOOT_CONTAINER_SLOTS = 18;
         bool INIT = false;
-        Configuration exclude = new Configuration();
+        Configuration Exclude = new Configuration();
+        Configuration ExcludeFromMultiplication = new Configuration();
+        Configuration Components = new Configuration();
         MLData LootData = new MLData();
 
         class MLData
@@ -33,8 +35,9 @@ namespace Oxide.Plugins
         }
         void Loaded()
         {
-            if (Config["Developer", "ExtraItem"] == null) { Config["Developer", "ExtraItem"] = false; Config["Developer", "AmountChange"] = false; Config["Developer", "Skins"] = false; Config["Loot", "PreventDuplicates"] = false;  Config["Loot", "WorkshopSkins"] = true; SaveConfig(); Puts("Updating configuration..."); }
-            try { exclude = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(Config["exclude"]).ToString()); } catch { }
+            if (Config["Settings", "MultiplierComponents"] == null) { Config["Settings", "MultiplierComponents"] = VANILLA_MULTIPLIER;  SaveConfig(); Puts("Updating configuration..."); }
+            try { Exclude = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(Config["Exclude"]).ToString()); } catch { }
+            try { Components = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(Config["Components"]).ToString()); } catch { }
             LoadMagicLootData();
         }
         void Unload() { }
@@ -44,11 +47,12 @@ namespace Oxide.Plugins
             LootData = Interface.GetMod().DataFileSystem.ReadObject<MLData>(this.Title);
             if (LootData.ItemList.Count == 0) { Puts("Generating item list with limits..."); foreach (var item in ItemManager.itemList) { LootData.ItemList.Add(item.shortname, item.stackable); } SaveMagicLootData(); }
             Puts("Loaded " + LootData.ItemList.Count + " item limits from /data/" + this.Title + ".json");
+            Puts("Loaded " + Components.list.Count + " components from /config/" + this.Title + ".json");
         }
         void OnServerInitialized()
         {
             INIT = true; // Server has fully loaded.
-            Puts("Loaded at x" + Config["Settings", "Multiplier"].ToString() + " vanilla rate [Extra Loot: " + Config["Loot", "Enabled"].ToString() + "]");
+            Puts("Loaded at x" + Config["Settings", "Multiplier"].ToString() + " vanilla rate | components rate x" + Config["Settings", "MultiplierComponents"].ToString() +"  [Extra Loot: " + Config["Loot", "Enabled"].ToString() + " | X Only Components: "+ Config["Settings", "MultiplyOnlyComponents"].ToString()+"]");
             RefreshLootContainers();
         }
         private readonly Dictionary<string, List<ulong>> skinsCache = new Dictionary<string, List<ulong>>();
@@ -58,7 +62,7 @@ namespace Oxide.Plugins
             if (skinsCache.TryGetValue(def.shortname, out skins)) return skins;
             skins = new List<ulong> { 0 };
             skins.AddRange(ItemSkinDirectory.ForItem(def).Select(skin => (ulong)skin.id));
-            skins.AddRange(Rust.Workshop.Approved.All.Where(skin => skin.ItemType.ItemName == def.shortname).Select(skin => skin.WorkshopdId));
+            skins.AddRange(Rust.Workshop.Approved.All.Where(skin => skin.Skinnable.ItemName == def.shortname).Select(skin => skin.WorkshopdId));
             skinsCache.Add(def.shortname, skins);
             return skins;
         }
@@ -82,6 +86,9 @@ namespace Oxide.Plugins
             Puts("No configuration file found, generating...");
             // -- [ SETTINGS ] ---
             Config["Settings", "Multiplier"] = VANILLA_MULTIPLIER;
+            Config["Settings", "MultiplierComponents"] = VANILLA_MULTIPLIER;
+
+            Config["Settings", "MultiplyOnlyComponents"] = false;
 
             Config["Loot", "Enabled"] = true;
             Config["Loot", "ItemsMin"] = 1;
@@ -95,9 +102,16 @@ namespace Oxide.Plugins
             Config["Developer", "AmountChange"] = false;
             Config["Developer", "ExtraItem"] = false;
 
-            exclude.list.Add("supply.signal");
-            exclude.list.Add("ammo.rocket.smoke");
-            Config["exclude"] = exclude;
+            Exclude.list.Add("supply.signal");
+            Exclude.list.Add("ammo.rocket.smoke");
+            Config["Exclude"] = Exclude;
+
+            ExcludeFromMultiplication.list.Add("crude.oil");
+            Config["ExcludeFromMultiplication"] = ExcludeFromMultiplication;
+
+            foreach (ItemDefinition q in ItemManager.itemList.Where(p => p.category == ItemCategory.Component)) { Components.list.Add(q.shortname); }
+            Puts("Added " + Components.list.Count.ToString()+" components to configuration file.");
+            Config["Components"] = Components;
         }
         private IEnumerable<int> CalculateStacks(int amount, ItemDefinition item)
         {
@@ -138,30 +152,52 @@ namespace Oxide.Plugins
             List<Rarity> RaritiesUsed = new List<Rarity>();
             foreach (Item lootitem in e.inventory.itemList.ToList())
             {
-                if (exclude.list.Contains(lootitem.info.shortname)) { lootitem.RemoveFromContainer(); e.inventory.itemList.Remove(lootitem); break; }
-                if (Convert.ToInt16(Config["Settings", "Multiplier"]) != VANILLA_MULTIPLIER)
+                if (Exclude.list.Contains(lootitem.info.shortname)) { lootitem.RemoveFromContainer(); e.inventory.itemList.Remove(lootitem); break; }
+                if (ExcludeFromMultiplication.list.Contains(lootitem.info.shortname)) { break; }
+                var skins = GetSkins(ItemManager.FindItemDefinition(lootitem.info.itemid));
+                if (skins.Count > 1 && Convert.ToBoolean(Config["Loot", "WorkshopSkins"])) // If workshop skins enabled, randomise skin
                 {
-                    var skins = GetSkins(ItemManager.FindItemDefinition(lootitem.info.itemid));
-                    if (skins.Count > 1 && Convert.ToBoolean(Config["Loot", "WorkshopSkins"])) // If workshop skins enabled, randomise skin
+                    lootitem.skin = skins.GetRandom(); if (lootitem.GetHeldEntity() != null) { lootitem.GetHeldEntity().skinID = lootitem.skin; }
+                    if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "Skins"]))
+                    { string debugs = "[" + lootitem.info.displayName.english + "] Skin has been modified to: " + lootitem.skin; Puts(debugs); PrintToChat(debugs); }
+                }
+                if (Components.list.Contains(lootitem.info.shortname))
+                {
+                    if (Convert.ToInt16(Config["Settings", "MultiplierComponents"]) != VANILLA_MULTIPLIER)
                     {
-                        lootitem.skin = skins.GetRandom(); if (lootitem.info.category == ItemCategory.Weapon) { lootitem.GetHeldEntity().skinID = lootitem.skin; }
-                        if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "Skins"]))
-                        { string debugs = "[" + lootitem.info.displayName.english + "] Skin has been modified to: " + lootitem.skin; Puts(debugs); PrintToChat(debugs); }
-                    }
-                    if (lootitem.info.stackable > 1) // Detect whether to change Amounts
-                    {
-                        if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
-                        { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=yellow>" + lootitem.info.displayName.english + " : original amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }
+                        if (lootitem.info.stackable > 1) // Detect whether to change Amounts
+                        {
+                            if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
+                            { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=yellow>" + lootitem.info.displayName.english + " : original amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }
 
-                        int limit = 0;
-                        int ac = lootitem.amount * Convert.ToUInt16(Config["Settings", "Multiplier"]);
-                        if (LootData.ItemList.TryGetValue(lootitem.info.shortname, out limit)) { lootitem.amount = Math.Min(ac, Math.Min(limit, lootitem.info.stackable)); }
+                            int limit = 0;
+                            int ac = lootitem.amount * Convert.ToUInt16(Config["Settings", "MultiplierComponents"]);
+                            if (LootData.ItemList.TryGetValue(lootitem.info.shortname, out limit)) { lootitem.amount = Math.Min(ac, Math.Min(limit, lootitem.info.stackable)); }
 
-                        if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
-                        { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=white>" + lootitem.info.displayName.english + " : new amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }
+                            if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
+                            { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=white>" + lootitem.info.displayName.english + " : new amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }
+                        }
                     }
                 }
-                if (lootitem.info.rarity != Rarity.None && !RaritiesUsed.Contains(lootitem.info.rarity)) { RaritiesUsed.Add(lootitem.info.rarity); }
+                else
+                {
+                    if (Convert.ToInt16(Config["Settings", "Multiplier"]) != VANILLA_MULTIPLIER)
+                    {
+                        if (lootitem.info.stackable > 1 && !Convert.ToBoolean(Config["Settings", "MultiplyOnlyComponents"])) // Detect whether to change Amounts
+                        {
+                            if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
+                            { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=yellow>" + lootitem.info.displayName.english + " : original amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }
+
+                            int limit = 0;
+                            int ac = lootitem.amount * Convert.ToUInt16(Config["Settings", "Multiplier"]);
+                            if (LootData.ItemList.TryGetValue(lootitem.info.shortname, out limit)) { lootitem.amount = Math.Min(ac, Math.Min(limit, lootitem.info.stackable)); }
+
+                            if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
+                            { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=white>" + lootitem.info.displayName.english + " : new amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }
+                        }
+                    }
+                    if (lootitem.info.rarity != Rarity.None && !RaritiesUsed.Contains(lootitem.info.rarity)) { RaritiesUsed.Add(lootitem.info.rarity); }
+                }
             }
             if (Convert.ToBoolean(Config["Loot", "Enabled"])) // Extra Loot Items
             {
@@ -180,7 +216,7 @@ namespace Oxide.Plugins
                         { break; }
                         if (item != null)
                         {
-                            if (exclude.list.Contains(item.shortname)) { break; }
+                            if (Exclude.list.Contains(item.shortname)) { break; }
                             int limit = 0; int amounttogive = 0;
                             if (LootData.ItemList.TryGetValue(item.shortname, out limit) && item.stackable > 1) { amounttogive = UnityEngine.Random.Range(Convert.ToInt16(Config["Loot", "AmountMin"]), Math.Min(limit, item.stackable)); } else { amounttogive = item.stackable; }
                             var skins = GetSkins(item);

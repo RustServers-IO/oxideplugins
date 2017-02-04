@@ -1,0 +1,16 @@
+{
+    "name": "Magic Sets",
+    "description": "Gearset presets",
+    "author": "Norn",
+    "version": "0.1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/magic-sets.2290",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -15,7 +15,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Owner", "Calytic", "3.1.0", ResourceId = 1255)]
+    [Info("Entity Owner", "rustservers.io", "3.1.1", ResourceId = 1255)]
     [Description("Modify entity ownership and cupboard/turret authorization")]
     class EntityOwner : RustPlugin
     {
@@ -625,7 +625,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("authclean")]
         void ccAuthClean(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null && arg.connection.authLevel < 1)
+            if (arg.Connection != null && arg.Connection.authLevel < 1)
             {
                 SendReply(arg, "No permission");
                 return;

@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-     	[Info("FreezeArrows", "Colon Blow", "1.0.8", ResourceId = 1601)]
+     	[Info("FreezeArrows", "Colon Blow", "1.0.9", ResourceId = 1601)]
      	class FreezeArrows : RustPlugin
 	{
 
@@ -238,7 +238,6 @@ namespace Oxide.Plugins
 		{
                       	newPos = p.transform.position;
                       	ForcePlayerPosition(p, newPos);
-                      	p.TransformChanged();
 		}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////

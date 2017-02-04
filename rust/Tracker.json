@@ -1,9 +1,9 @@
 {
     "name": "Tracker",
-    "description": "Allows you to know who has the most of certain item or which container has certain item",
-    "author": "WolfsDarker",
-    "version": "1.0.1",
-    "configuration": false,
+    "description": "This plugins allows you to check the amount of an Item on the map and where it is stored.",
+    "author": "Maurice",
+    "version": "1.0.0",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/tracker.1278",
     "games": [

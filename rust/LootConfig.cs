@@ -18,15 +18,15 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.17")]
+    [Info("LootConfig", "Nogrod", "1.0.19")]
     internal class LootConfig : RustPlugin
     {
-        private const int VersionConfig = 9;
+        private const int VersionConfig = 10;
         private readonly FieldInfo ParentSpawnGroupField = typeof (SpawnPointInstance).GetField("parentSpawnGroup", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnGroupsField = typeof (SpawnHandler).GetField("SpawnGroups", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnPointsField = typeof(SpawnGroup).GetField("spawnPoints", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        private readonly Regex _findLoot = new Regex(@"(crate[\-_](mine|normal)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private readonly Regex _findLoot = new Regex(@"(crate[\-_](mine|normal|tools)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private ConfigData _config;
         private Dictionary<string, ItemDefinition> _itemsDict;
 
@@ -469,7 +469,7 @@ namespace Oxide.Plugins
                     Puts("Item amount too low: {0} for: {1}", itemAmountData.Shortname, parent);
                     continue;
                 }
-                amounts[i] = new ItemAmountRanged(def, itemAmountData.Amount);
+                amounts[i] = new ItemAmountRanged(def, itemAmountData.Amount, itemAmountData.MaxAmount);
             }
         }
 
@@ -633,7 +633,7 @@ namespace Oxide.Plugins
         {
             public string Shortname { get; set; }
             public float Amount { get; set; }
-            public float MaxAmount { get; set; }
+            public float MaxAmount { get; set; } = -1;
         }
 
         #endregion

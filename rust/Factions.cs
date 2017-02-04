@@ -11,7 +11,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Factions", "Absolut", "3.5.0", ResourceId = 1919)]
+    [Info("Factions", "Absolut", "3.5.2", ResourceId = 1919)]
 
     class Factions : RustPlugin
     {
@@ -783,7 +783,7 @@ namespace Oxide.Plugins
 
         private object OnPlayerChat(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return null;
             bool isCreatingFaction = false;
@@ -1619,7 +1619,6 @@ namespace Oxide.Plugins
 
             player.MovePosition(destination);
             player.ClientRPCPlayer(null, player, "ForcePositionTo", destination, null, null, null, null);
-            player.TransformChanged();
             player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
 
@@ -2686,7 +2685,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_SelectColor")]
         private void cmdSelectColor(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2715,7 +2714,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_SelectFactionType")]
         private void cmdSelectFactionType(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2751,7 +2750,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_SelectFactionKit")]
         private void cmdSelectFactionKit(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2781,7 +2780,7 @@ namespace Oxide.Plugins
         private void cmdNewFaction(ConsoleSystem.Arg arg)
         {
             ActiveCreations.Clear();
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyFactionMenu(player);
@@ -2809,7 +2808,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_TryDeleteFaction")]
         private void cmdTryDeleteFaction(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2830,7 +2829,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUI_LeaderEditing")]
         private void cmdCUI_LeaderEditing(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2845,7 +2844,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIUnassignLeader")]
         private void cmdCUI_UnassignLeader(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2872,7 +2871,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIAssignLeader")]
         private void cmdCUIAssignLeader(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2915,7 +2914,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_DeleteFaction")]
         private void cmdDeleteFaction(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args[0] == "reject")
@@ -2936,7 +2935,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_EditFaction")]
         private void cmdEditFaction(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2959,7 +2958,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_EditFactionVar")]
         private void cmdEditFactionVar(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -2997,7 +2996,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_SaveFaction")]
         private void cmdSaveFaction(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -3011,7 +3010,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_ExitFaction")]
         private void cmdExitFaction(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -3026,7 +3025,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_ExitFactionEditor")]
         private void cmdExitFactionEditor(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -3041,7 +3040,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_TryDeleteSpawn")]
         private void cmdTryDeleteSpawn(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -3079,7 +3078,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_DeleteSpawn")]
         private void cmdDeleteSpawn(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args[0] == "reject")
@@ -4635,7 +4634,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIChangeOption")]
         private void cmdCUIChangeOption(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var cmd = arg.Args[0];
@@ -4882,7 +4881,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionChatControl")]
         private void cmdChatConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionChatControl == true) configData.Use_FactionChatControl = false;
@@ -4894,7 +4893,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_FFDisabled")]
         private void cmdFFConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.FFDisabled == true) configData.FFDisabled = false;
@@ -4906,7 +4905,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BuildingProtectionEnabled")]
         private void cmdBuildingConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.BuildingProtectionEnabled == true) configData.BuildingProtectionEnabled = false;
@@ -4918,7 +4917,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_Trades")]
         private void cmdTradesConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_Trades == true) configData.Use_Trades = false;
@@ -4930,7 +4929,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_Taxes")]
         private void cmdTaxesConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_Taxes == true) configData.Use_Taxes = false;
@@ -4942,7 +4941,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_Ranks")]
         private void cmdRanks(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_Ranks == true) configData.Use_Ranks = false;
@@ -4954,7 +4953,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AllowTradesByPlayer")]
         private void cmdAllowTradesByPlayer(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.AllowTradesByPlayer == true) configData.AllowTradesByPlayer = false;
@@ -4971,7 +4970,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_Groups")]
         private void cmdGroups(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_Groups == true) configData.Use_Groups = false;
@@ -4983,7 +4982,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionsInfo")]
         private void cmdUse_FactionsInfo(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionsInfo == true) configData.Use_FactionsInfo = false;
@@ -4995,7 +4994,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_Kits")]
         private void cmdUse_Kits(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_Kits == true) configData.Use_Kits = false;
@@ -5008,7 +5007,7 @@ namespace Oxide.Plugins
              [ConsoleCommand("UI_AllowPlayerToLeaveFactions")]
         private void cmdAllowPlayerToLeaveFactions(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.AllowPlayerToLeaveFactions == true) configData.AllowPlayerToLeaveFactions = false;
@@ -5020,7 +5019,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionBalancing")]
         private void cmdUse_FactionBalancing(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionBalancing == true) configData.Use_FactionBalancing = false;
@@ -5032,7 +5031,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionNamesonChat")]
         private void cmdUse_FactionNamesonChat(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionNamesonChat == true) configData.Use_FactionNamesonChat = false;
@@ -5048,7 +5047,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_ChatTitles")]
         private void cmdUse_ChatTitles(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_ChatTitles == true) configData.Use_ChatTitles = false;
@@ -5064,7 +5063,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionLeaderByRank")]
         private void cmdUse_FactionLeaderByRank(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionLeaderByRank == true) configData.Use_FactionLeaderByRank = false;
@@ -5081,7 +5080,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionLeaderByTime")]
         private void cmdUse_FactionLeaderByTime(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionLeaderByTime == true) configData.Use_FactionLeaderByTime = false;
@@ -5101,7 +5100,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionLeaderByAdmin")]
         private void cmdUse_FactionLeaderByAdmin(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionLeaderByAdmin == true) configData.Use_FactionLeaderByAdmin = false;
@@ -5119,7 +5118,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_RevoltChallenge")]
         private void cmdUse_RevoltChallengeConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_RevoltChallenge == true) configData.Use_RevoltChallenge = false;
@@ -5131,7 +5130,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionZones")]
         private void cmdUI_Use_FactionZones(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionZones == true) configData.Use_FactionZones = false;
@@ -5143,7 +5142,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("Use_FactionSafeZones")]
         private void cmdUse_FactionSafeZones(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionSafeZones == true) configData.Use_FactionSafeZones = false;
@@ -5159,7 +5158,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_BattleZones")]
         private void cmdUI_Use_BattleZones(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_BattleZones == true) configData.Use_BattleZones = false;
@@ -5171,7 +5170,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_AutoAuthorization")]
         private void cmdUI_Use_AutoAuthorization(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_AutoAuthorization == true) configData.Use_AutoAuthorization = false;
@@ -5185,7 +5184,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_RallySpawns")]
         private void cmdUse_RallySpawnsConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_RallySpawns == true) configData.Use_RallySpawns = false;
@@ -5197,7 +5196,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionSpawns")]
         private void cmdUse_FactionSpawnsConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionSpawns == true) configData.Use_FactionSpawns = false;
@@ -5209,7 +5208,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_PersistentSpawns")]
         private void cmdUI_Use_PersistentSpawns(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_PersistantSpawns == true) configData.Use_PersistantSpawns = false;
@@ -5224,7 +5223,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionsByInvite")]
         private void cmdUI_Use_FactionsByInvite(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionsByInvite == true) configData.Use_FactionsByInvite = false;
@@ -5236,7 +5235,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_UseEconomics")]
         private void cmdUseEconomicsConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_EconomicsReward == true) configData.Use_EconomicsReward = false;
@@ -5248,7 +5247,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_UseRewards")]
         private void cmdUseRewardsConfig(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_ServerRewardsReward == true) configData.Use_ServerRewardsReward = false;
@@ -5261,7 +5260,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BroadcastDeath")]
         private void cmdBroadcastDeath(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.BroadcastDeath == true) configData.BroadcastDeath = false;
@@ -5273,7 +5272,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Use_FactionKillIncentives")]
         private void cmdUse_FactionKillIncentives(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (configData.Use_FactionKillIncentives == true) configData.Use_FactionKillIncentives = false;
@@ -5292,7 +5291,7 @@ namespace Oxide.Plugins
         //[ConsoleCommand("UI_AskLater")]
         //private void cmdAskLater(ConsoleSystem.Arg arg)
         //{
-        //    var player = arg.connection.player as BasePlayer;
+        //    var player = arg.Connection.player as BasePlayer;
         //    if (player == null)
         //        return;
         //    AskLater(player);
@@ -5309,7 +5308,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIFactionLists")]
         private void cmdCUIFactionLists(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIFactionLists(player);
@@ -5324,7 +5323,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIFactionList")]
         private void cmdCUIFactionList(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             ushort FactionID = Convert.ToUInt16(arg.Args[0]);
             if (player == null)
                 return;
@@ -5342,7 +5341,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIScoreBoard")]
         private void cmdCUIScoreBoard(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int count = Convert.ToInt16(arg.Args[0]);
@@ -5359,7 +5358,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIInstructions")]
         private void cmdCUIInstructions(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIInstructions(player);
@@ -5374,7 +5373,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUILeader")]
         private void cmdCUILeader(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUILeader(player);
@@ -5390,7 +5389,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIAdmin")]
         private void cmdCUIAdmin(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIAdmin(player);
@@ -5405,7 +5404,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUITrades")]
         private void cmdCUITrades(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUITradesdmin(player);
@@ -5420,7 +5419,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUITradeAssignmentMenu")]
         private void cmdCUITradeAssignmentMenu(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             Trade trade;
@@ -5437,7 +5436,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CreateZone")]
         private void cmdUI_CreateZone(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             string type = arg.Args[0];
@@ -5448,7 +5447,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_EraseZone")]
         private void cmdUI_EraseZone(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort ID = Convert.ToUInt16(arg.Args[0]);
@@ -5459,7 +5458,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CancelBZ")]
         private void cmdUI_CancelBZ(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort ID = Convert.ToUInt16(arg.Args[0]);
@@ -5472,7 +5471,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUISpawnManager")]
         private void cmdCUISpawnManager(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args.Contains("admin"))
@@ -5484,7 +5483,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIZoneManager")]
         private void cmdCUIZoneManager(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args.Contains("admin"))
@@ -5508,7 +5507,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIFactionManager")]
         private void cmdCUIFactionManager(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIFactionManager(player);
@@ -5523,7 +5522,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUI_FactionLeaders")]
         private void cmdCUI_FactionLeaders(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUI_FactionLeaders(player);
@@ -5540,7 +5539,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUI_FactionEditor")]
         private void cmdCUI_FactionEditor(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null) return;
             CUI_FactionEditor(player);
         }
@@ -5556,7 +5555,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIPlayer")]
         private void cmdCUIPlayer(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIPlayer(player);
@@ -5573,7 +5572,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_FactionSelection")]
         private void cmdUI_FactionSelection(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var page = Convert.ToInt16(arg.Args[0]);
@@ -5586,7 +5585,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIFactionInvite")]
         private void cmdCUIFactionInvite(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var faction = Convert.ToUInt16(arg.Args[0]);
@@ -5604,7 +5603,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIKickPlayerMenu")]
         private void cmdUI_CUIKickPlayerMenu(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort faction = 0;
@@ -5627,7 +5626,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIOptions")]
         private void cmdCUIOptions(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIOptions(player);
@@ -5643,7 +5642,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_PlayerTradeUnassignment")]
         private void cmdPlayerTradeUnassignment(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             Trade trade = playerData.playerFactions[player.userID].trade;
@@ -5656,7 +5655,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIUnassignTradeSkill")]
         private void cmdCUIUnassignTradeSkill(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort UID = Convert.ToUInt16(arg.Args[0]);
@@ -5687,7 +5686,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIAssignTradeSkill")]
         private void cmdCUIAssignTradeSkill(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort UID = Convert.ToUInt16(arg.Args[0]);
@@ -5718,7 +5717,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RallyMovePlayerPosition")]
         private void cmdCUIRallyMovePlayer(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort SpawnID = Convert.ToUInt16(arg.Args[0]);
@@ -5749,7 +5748,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_FactionMovePlayerPosition")]
         private void cmdCUISpawnMovePlayer(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort SpawnID = Convert.ToUInt16(arg.Args[0]);
@@ -5779,7 +5778,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIRemoveRallySpawn")]
         private void cmdCUIRemoveRallySpawn(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort SpawnID = Convert.ToUInt16(arg.Args[0]);
@@ -5801,7 +5800,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUISetSpawnPoint")]
         private void cmdCUISetSpawnPoint(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyFactionMenu(player);
@@ -5862,7 +5861,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_TryInvitePlayerToFaction")]
         private void cmdUI_TryInvitePlayerToFaction(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort UID = Convert.ToUInt16(arg.Args[0]);
@@ -5879,7 +5878,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_PlayerTradeMenu")]
         private void cmdUI_PlayerTradeMenu(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             PlayerTradeMenu(player);
@@ -5889,7 +5888,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_PlayerTradeAssignment")]
         private void cmdPlayerTradeAssignment(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             Trade trade;
@@ -5922,7 +5921,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_TradeAssignment")]
         private void cmdUI_TradeAssignment(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             Trade trade;
@@ -5942,7 +5941,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUILeaveFaction")]
         private void cmdCUILeaveFaction(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var faction = GetPlayerFaction(player);
@@ -5958,7 +5957,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ConfirmKickPlayer")]
         private void cmdUI_ConfirmKickPlayer(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args[0].Contains("yes"))
@@ -6015,7 +6014,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BzButton")]
         private void cmdUI_BzButton(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort ID = Convert.ToUInt16(arg.Args[0]);
@@ -6025,7 +6024,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BzConfirmation")]
         private void cmdUI_BzConfirmation(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort ID = Convert.ToUInt16(arg.Args[0]);
@@ -6036,7 +6035,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_BZYes")]
         private void cmdUI_BZYes(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyBZ(player);
@@ -6053,7 +6052,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_AcceptInvite")]
         private void cmdCUI_AcceptInvite(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             foreach (var entry in FactionInvites)
@@ -6071,7 +6070,7 @@ namespace Oxide.Plugins
        [ConsoleCommand("CUI_DeclineInvite")]
         private void cmdCUI_DeclineInvite(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             foreach (var entry in FactionInvites)
@@ -6092,7 +6091,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_SaveSpawn")]
         private void cmdSaveSpawn(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -6106,7 +6105,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("CUI_ExitSpawn")]
         private void cmdExitSpawn(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (player.IsAdmin())
@@ -6159,7 +6158,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIRemoveFactionSpawn")]
         private void cmdCUIRemoveFactionSpawn(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort SpawnID = Convert.ToUInt16(arg.Args[0]);
@@ -6181,7 +6180,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUISetTaxBox")]
         private void cmdCUISetTaxBox(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUISetTaxBox(player);
@@ -6206,7 +6205,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIRemoveTaxBox")]
         private void cmdCUIRemoveTaxBox(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIRemoveTaxBox(player);
@@ -6227,7 +6226,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIChallengeLeader")]
         private void cmdCUIChallengeLeader(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIChallengeLeader(player);
@@ -6272,7 +6271,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIResetTicker")]
         private void cmdCUIResetTicker(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ResetTicker();
@@ -6297,7 +6296,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyBZPanel")]
         private void cmdDestroyBZPanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyBZ(player);
@@ -6311,7 +6310,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyFS")]
         private void cmdDestroyFS(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyFS(player);
@@ -6325,7 +6324,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyTicker")]
         private void cmdDestroyTicker(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyTicker(player);
@@ -6346,7 +6345,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroySP")]
         private void cmdDestroySP(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyFactionsUIPanel(player);
@@ -6360,7 +6359,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyFactionMenu")]
         private void cmdDestroyFM(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyFactionMenu(player);
@@ -6376,7 +6375,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_OpenFactions")]
         private void cmdOpenFactions(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             OpenFactions(player);
@@ -6402,7 +6401,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIRequestFactionTax")]
         private void cmdCUIRequestFactionTax(ConsoleSystem.Arg arg)
         {
-        var player = arg.connection.player as BasePlayer;
+        var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             string msg = lang.GetMessage("TaxRequestMessage", this);
@@ -6413,7 +6412,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUISetFactionTax")]
         private void cmdCUISetFactionTax(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyFactionsUIPanel(player);
@@ -6427,7 +6426,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("DestroyAll")]
         private void cmdDestroyAll(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyAll(player);
@@ -6436,7 +6435,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_OpenMemberStatus")]
         private void cmdOpenMemberStatus(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             FactionMemberStatus(player);
@@ -6446,7 +6445,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("DestroyMemberStatus")]
         private void cmdDestroyMemberStatus(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CuiHelper.DestroyUi(player, PanelMemberStatus);
@@ -6470,7 +6469,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("DestroySpawnButtons")]
         private void cmdDestroySpawnButtons(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroySpawnButtons(player);
@@ -6583,10 +6582,10 @@ namespace Oxide.Plugins
 
         bool isAuthCon(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                var player = arg.connection.player as BasePlayer;
-                if (arg.connection.authLevel < 1)
+                var player = arg.Connection.player as BasePlayer;
+                if (arg.Connection.authLevel < 1)
                 {
                     SendMSG(player, lang.GetMessage("NotAuth", this));
                     return false;
@@ -6601,7 +6600,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUI_FactionInfo")]
         private void cmdCUI_FactionInfo(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort faction = Convert.ToUInt16(arg.Args[0]);
@@ -6613,7 +6612,7 @@ namespace Oxide.Plugins
         private void cmdFactionSelection(ConsoleSystem.Arg arg)
         {
 
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ushort faction = Convert.ToUInt16(arg.Args[0]);
@@ -6661,7 +6660,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CUIPlayerManager")]
         private void cmdUI_CUIPlayerManager(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CUIPlayerManager(player);

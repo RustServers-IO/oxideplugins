@@ -16,7 +16,7 @@ using System.Drawing;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.81", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.83", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -294,7 +294,7 @@ namespace Oxide.Plugins
                     DestroyUI();
                     currentX = newX;
                     currentZ = newZ;
-                    var container = LustyUI.StaticComplex[mapZoom][newX, newZ];
+                    //var container = LustyUI.StaticComplex[mapZoom][newX, newZ];
                     instance.OpenComplexMap(player);
                 }
             }
@@ -603,8 +603,8 @@ namespace Oxide.Plugins
         {
             instance = this;
 
-            worldSize = ConsoleSystem.ConVar.GetString("worldsize");
-            mapSeed = ConsoleSystem.ConVar.GetString("seed");
+            worldSize = ConVar.Server.worldsize.ToString();
+            mapSeed = ConVar.Server.seed.ToString();
             level = ConVar.Server.level;
             mapSize = TerrainMeta.Size.x;
 
@@ -1281,7 +1281,7 @@ namespace Oxide.Plugins
         private void cmdLustyControl(ConsoleSystem.Arg arg)
         {
             if (!activated) return;
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var user = GetUser(player);
@@ -1321,7 +1321,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("resetmap")]
         void ccmdResetmap(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null) return;
+            if (arg.Connection != null) return;
             SendReply(arg, "ResetMap Confirmed! Removing stored images and reloading the plugin to re-download your map image");
             storedImages.data.Clear();
             SaveData();
@@ -1503,14 +1503,14 @@ namespace Oxide.Plugins
                     }
                     if(monument.name.Contains("harbor_1"))
                     {
-                        mon.name = msg("big harbor");
+                        mon.name = msg("small harbor");
                         mon.icon = "harbor";
                         staticMarkers.Add(mon);
                         continue;
                     }
                     if (monument.name.Contains("harbor_2"))
                     {
-                        mon.name = msg("small harbor");
+                        mon.name = msg("big harbor");
                         mon.icon = "harbor";
                         staticMarkers.Add(mon);
                         continue;

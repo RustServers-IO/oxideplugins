@@ -9,7 +9,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("UniversalUI", "Absolut", "2.1.0", ResourceId = 2226)]
+    [Info("UniversalUI", "Absolut", "2.1.3", ResourceId = 2226)]
 
     class UniversalUI : RustPlugin
     {
@@ -79,7 +79,7 @@ namespace Oxide.Plugins
             GetAllImages();
             //foreach (var entry in configData.buttons)
             //    messages.Add(entry.Value.name, entry.Value.name);
-            timers.Add("info", timer.Once(configData.InfoInterval, () => InfoLoop()));
+            timers.Add("info", timer.Once(configData.InfoInterval * 60, () => InfoLoop()));
         }
 
         private void OnPlayerInit(BasePlayer player)
@@ -95,6 +95,8 @@ namespace Oxide.Plugins
                     if (configData.MenuKeyBinding != "")
                         GetSendMSG(player, "UIInfo", configData.MenuKeyBinding.ToString());
                     else GetSendMSG(player, "UIInfo1");
+                if (configData.ForceOpenOnJoin)
+                    OpenUniversalUI(player);
             }
         }
 
@@ -110,10 +112,10 @@ namespace Oxide.Plugins
 
         object OnServerCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection?.player as BasePlayer;
+            var player = arg.Connection?.player as BasePlayer;
             if (player == null)
                 return null;
-            if (OnDelay.ContainsKey(player.userID) && arg.cmd?.namefull == "chat.say")
+            if (OnDelay.ContainsKey(player.userID) && arg.cmd?.FullName == "chat.say")
             {
                 if (arg.Args.Contains("quit"))
                 {
@@ -151,7 +153,7 @@ namespace Oxide.Plugins
     [ConsoleCommand("UI_OpenUniversalUI")]
         private void cmdUI_OpenUniversalUI(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (UniversalUIInfo.ContainsKey(player.userID))
@@ -169,7 +171,7 @@ namespace Oxide.Plugins
         private void OpenUniversalUI(BasePlayer player)
         {
             if (!UniversalUIInfo.ContainsKey(player.userID))
-                UniversalUIInfo.Add(player.userID, new screen { page = 0, section = 0, showSection = 0 });
+                UniversalUIInfo.Add(player.userID, new screen { page = 0, section = 0, showSection = 0, open = true });
             UniversalUIPanel(player);
             if (!NoInfo.Contains(player.userID))
                 UIInfoPanel(player);
@@ -179,7 +181,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyUniversalUI")]
         private void cmdUI_DestroyUniversalUI(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyUniversalUI(player);
@@ -188,7 +190,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_OpenInfoUI")]
         private void cmdUI_OpenInfoUI(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (NoInfo.Contains(player.userID))
@@ -199,7 +201,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_HideInfo")]
         private void cmdUI_HideInfo(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!NoInfo.Contains(player.userID))
@@ -313,7 +315,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetPageType")]
         private void cmdUI_SetPageType(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!UniversalUIInfo.ContainsKey(player.userID)) return;
@@ -344,7 +346,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AddNewSection")]
         private void cmdUI_AddNewSection(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!UniversalUIInfo.ContainsKey(player.userID)) return;
@@ -362,7 +364,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RemoveSection")]
         private void cmdUI_RemoveSection(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!UniversalUIInfo.ContainsKey(player.userID)) return;
@@ -376,7 +378,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AddNewPage")]
         private void cmdUI_AddNewPage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!UniversalUIInfo.ContainsKey(player.userID)) return;
@@ -392,7 +394,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RemovePage")]
         private void cmdUI_RemovePage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!UniversalUIInfo.ContainsKey(player.userID)) return;
@@ -412,7 +414,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RunConsoleCommand")]
         private void cmdUI_RunConsoleCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             //Puts(string.Join(" ",arg.Args));
@@ -450,7 +452,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_PageTurn")]
         private void cmdUI_PageTurn(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int page = Convert.ToInt32(arg.Args[0]);
@@ -461,7 +463,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SwitchSection")]
         private void cmdUI_SwitchSection(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var section = Convert.ToInt32(arg.Args[0]);
@@ -494,7 +496,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_InfoSectionButtonChange")]
         private void cmdUI_InfoSectionButtonChange(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var section = Convert.ToInt32(arg.Args[0]);
@@ -1022,10 +1024,11 @@ namespace Oxide.Plugins
             if (Debugging) Puts($"Max Section: {configData.sections.Max(kvp => kvp.Key) - 1}");
             if (UniversalUIInfo[player.userID].showSection + 5 < configData.sections.Max(kvp => kvp.Key))
                 UI.CreateButton(ref element, PanelInfo, UIColors["black"], "-->", 12, "0.95 0.9", "0.98 0.975", $"UI_InfoSectionButtonChange {UniversalUIInfo[player.userID].showSection + 1}");
+            UI.CreateButton(ref element, PanelInfo, UIColors["red"], GetLang("Close"), 12, "0.03 0.03", "0.13 0.085", "UI_DestroyUniversalUI");
             if (configData.UseButtonPanel)
-                UI.CreateButton(ref element, PanelInfo, UIColors["red"], GetLang("HideInfoPanel"), 12, "0.03 0.03", "0.13 0.085", "UI_HideInfo");
+                UI.CreateButton(ref element, PanelInfo, UIColors["red"], GetLang("HideInfoPanel"), 12, "0.14 0.03", "0.24 0.085", "UI_HideInfo");
             if (isAuth(player))
-                UI.CreateButton(ref element, PanelInfo, UIColors["buttonred"], GetLang("ToggleAdmin"), 13, "0.14 0.03", "0.24 0.085", $"UI_AdminView");
+                UI.CreateButton(ref element, PanelInfo, UIColors["buttonred"], GetLang("ToggleAdmin"), 13, "-0.13 0.03", "-0.03 0.085", $"UI_AdminView");
             if (UniversalUIInfo[player.userID].admin)
             {
                 UI.CreateButton(ref element, PanelInfo, UIColors["green"], GetLang("AddSection"), 12, "0.25 0.03", "0.35 0.085", "UI_AddNewSection");
@@ -1109,7 +1112,7 @@ namespace Oxide.Plugins
                     n++;
                 }
             }
-            UI.CreateButton(ref element, PanelInfo, UIColors["buttonred"], GetLang("Quit"), 16, "0.87 0.02", "0.97 0.075", $"UI_DestroyKitsPanel");
+            UI.CreateButton(ref element, PanelInfo, UIColors["buttonred"], GetLang("Quit"), 16, "0.87 0.02", "0.97 0.075", $"UI_DestroyUniversalUI");
             CuiHelper.AddUi(player, element);
         }
 
@@ -1122,7 +1125,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectKitToAdd")]
         private void cmdUI_SelectKitToAdd(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int page;
@@ -1133,7 +1136,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AddKit")]
         private void cmdUI_AddKit(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var kit = arg.Args[0];
@@ -1145,7 +1148,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RedeemKit")]
         private void cmdUI_RedeemKit(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var kit = arg.Args[0];
@@ -1161,7 +1164,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RemoveKit")]
         private void cmdUI_RemoveKit(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var kit = arg.Args[0];
@@ -1400,7 +1403,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AdminView")]
         private void cmdUI_AdminView(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (UniversalUIInfo[player.userID].admin == true)
@@ -1509,6 +1512,7 @@ namespace Oxide.Plugins
             public bool UseInfoPanel { get; set; }
             public bool UseButtonPanel { get; set; }
             public int InfoInterval { get; set; }
+            public bool ForceOpenOnJoin { get; set; }
         }
         private void LoadVariables()
         {
@@ -1530,6 +1534,7 @@ namespace Oxide.Plugins
                 UseInfoPanel = true,
                 UseButtonPanel = true,
                 InfoInterval = 15,
+                ForceOpenOnJoin = false,
                 HomePage = new Page
                 {
                     PageImage = "http://i.imgur.com/ygJ6m7w.png",

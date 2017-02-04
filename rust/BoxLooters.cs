@@ -8,7 +8,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("BoxLooters", "4seti / k1lly0u", "0.3.1", ResourceId = 989)]
+    [Info("BoxLooters", "4seti / k1lly0u", "0.3.2", ResourceId = 989)]
     class BoxLooters : RustPlugin
     {
         #region Fields
@@ -186,7 +186,7 @@ namespace Oxide.Plugins
             }
             return null;            
         }
-        void ReplyInfo(BasePlayer player, string Id, int replies = 10, bool isPlayer = false, string additional = "")
+        void ReplyInfo(BasePlayer player, string Id, bool isPlayer = false, string additional = "")
         {
             var entId = Id;
             if (!string.IsNullOrEmpty(additional))
@@ -197,22 +197,23 @@ namespace Oxide.Plugins
                 if (boxCache.ContainsKey(uint.Parse(Id)))
                 {
                     var box = boxCache[uint.Parse(Id)];
-                    SendReply(player, string.Format(lang.GetMessage("BoxData", this, player.UserIDString), entId));
+                    SendReply(player, string.Format(lang.GetMessage("BoxInfo", this, player.UserIDString), entId));
 
                     if (!string.IsNullOrEmpty(box.destroyName))
                         SendReply(player, string.Format(lang.GetMessage("DetectDestr", this, player.UserIDString), box.destroyName, box.destroyId));
 
                     int i = 1;
-                    string response = "";
-                    foreach (var data in box.Looters.OrderByDescending(x => x.Value.LastInit))
+                    string response1 = string.Empty;
+                    string response2 = string.Empty;
+                    foreach (var data in box.Looters.OrderByDescending(x => x.Value.LastInit).Take(10))
                     {
-                        if (i > replies) return;
-                        response += string.Format(lang.GetMessage("DetectedLooter", this, player.UserIDString), i, data.Value.Name, data.Key, data.Value.FirstLoot, data.Value.LastLoot);
-                        i++;
-                        if (i > replies)
-                            response += "/n";
+                        var respString = string.Format(lang.GetMessage("DetectedLooters", this, player.UserIDString), i, data.Value.Name, data.Key, data.Value.FirstLoot, data.Value.LastLoot);
+                        if (i < 6) response1 += respString;
+                        else response2 += respString;
+                        i++;                        
                     }
-                    SendReply(player, response);
+                    SendReply(player, response1);
+                    SendReply(player, response2);
                 }
                 else SendReply(player, string.Format(lang.GetMessage("NoLooters", this, player.UserIDString), entId));
             }
@@ -221,16 +222,19 @@ namespace Oxide.Plugins
                 if (playerCache.ContainsKey(ulong.Parse(Id)))
                 {
                     SendReply(player, string.Format(lang.GetMessage("PlayerData", this, player.UserIDString), entId));
+
                     int i = 1;
-                    string response = "";
-                    foreach (var data in playerCache[ulong.Parse(Id)].Looters.OrderByDescending(x => x.Value.LastInit))
+                    string response1 = string.Empty;
+                    string response2 = string.Empty;
+                    foreach (var data in playerCache[ulong.Parse(Id)].Looters.OrderByDescending(x => x.Value.LastInit).Take(10))
                     {
-                        if (i > replies) return;
-                        response += string.Format(lang.GetMessage("DetectedLooter", this, player.UserIDString), i, data.Value.Name, data.Key, data.Value.FirstLoot, data.Value.LastLoot);
+                        var respString = string.Format(lang.GetMessage("DetectedLooters", this, player.UserIDString), i, data.Value.Name, data.Key, data.Value.FirstLoot, data.Value.LastLoot);
+                        if (i < 6) response1 += respString;
+                        else response2 += respString;
                         i++;
-                        if (i > replies)
-                            response += "/n";
                     }
+                    SendReply(player, response1);
+                    SendReply(player, response2);
                 }
                 else SendReply(player, string.Format(lang.GetMessage("NoLootersPlayer", this, player.UserIDString), entId));
             }
@@ -261,7 +265,7 @@ namespace Oxide.Plugins
                         {
                             if (child.GetComponent<StorageContainer>())
                             {
-                                ReplyInfo(player, child.net.ID.ToString(), 5, false, child.ShortPrefabName);
+                                ReplyInfo(player, child.net.ID.ToString(), false, child.ShortPrefabName);
                             }
                         }
                     }
@@ -320,7 +324,7 @@ namespace Oxide.Plugins
                     {
                         var target = covalence.Players.FindPlayer(args[1]);
                         if (target != null)                        
-                            ReplyInfo(player, target.Id, 10, true);
+                            ReplyInfo(player, target.Id, true);
                         else SendReply(player, lang.GetMessage("NoPlayer", this, player.UserIDString));
                         return;
                     }
@@ -384,9 +388,9 @@ namespace Oxide.Plugins
                 {
                     { player.userID, new LootEntry
                     {
-                        FirstLoot = DateTime.Now.ToString("d/M HH:mm:ss"),
+                        FirstLoot = DateTime.Now.ToString("d/M @ HH:mm:ss"),
                         LastInit = time,
-                        LastLoot = DateTime.Now.ToString("d/M HH:mm:ss"),
+                        LastLoot = DateTime.Now.ToString("d/M @ HH:mm:ss"),
                         Name = player.displayName
                     }}
                 };
@@ -511,9 +515,9 @@ namespace Oxide.Plugins
         #region Localization
         Dictionary<string, string> messages = new Dictionary<string, string>()
         {
-            {"BoxData", "List of looters for this Box[<color=#F5D400>{0}</color>]:"},
+            {"BoxInfo", "List of looters for this Box [<color=#F5D400>{0}</color>]:"},
             {"PlayerData", "List of looters for this Player [<color=#F5D400>{0}</color>]:"},            
-            {"DetectedLooter", "<color=#F5D400>[{0}]</color><color=#4F9BFF>{1}</color>({2}) F:<color=#F80>{3}</color> L:<color=#F80>{4}</color>"},
+            {"DetectedLooters", "<color=#F5D400>[{0}]</color><color=#4F9BFF>{1}</color> ({2})\nF:<color=#F80>{3}</color> L:<color=#F80>{4}</color>\n"},
             {"DetectDestr", "Destoyed by: <color=#4F9BFF>{0}</color> ID:{1}"},
             {"NoLooters", "<color=#4F9BFF>The box [{0}] is clear!</color>"},
             {"NoLootersPlayer", "<color=#4F9BFF>The player [{0}] is clear!</color>"},

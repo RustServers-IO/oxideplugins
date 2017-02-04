@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("HeliVote", "k1lly0u", "0.1.31", ResourceId = 1665)]
+    [Info("HeliVote", "k1lly0u", "0.1.32", ResourceId = 1665)]
     class HeliVote : RustPlugin
     {
         bool Changed;
@@ -335,9 +335,9 @@ namespace Oxide.Plugins
         }
         bool isAuthCon(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < 1)
+                if (arg.Connection.authLevel < 1)
                 {
                     SendReply(arg, lang.GetMessage("noPerms", this));
                     return false;

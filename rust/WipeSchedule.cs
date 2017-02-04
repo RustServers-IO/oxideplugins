@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("WipeSchedule", "k1lly0u", "2.0.3", ResourceId = 1451)]
+    [Info("WipeSchedule", "k1lly0u", "2.0.31", ResourceId = 1451)]
     class WipeSchedule : RustPlugin
     {
         #region Fields
@@ -104,7 +104,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("setwipe")]
         private void ccmdSetWipe(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 if (arg.Args == null || arg.Args.Length == 0)
                 {
@@ -146,7 +146,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("setnextwipe")]
         private void ccmdSetNextWipe(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 if (arg.Args == null || arg.Args.Length == 0)
                 {

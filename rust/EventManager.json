@@ -2,7 +2,7 @@
     "name": "Event Manager",
     "description": "A versitile arena event plugin",
     "author": "k1lly0u",
-    "version": "3.0.3",
+    "version": "3.0.4",
     "configuration": true,
     "suggest": {
         "ServerRewards": "*",

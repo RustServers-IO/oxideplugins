@@ -4,7 +4,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Give", "Reneb", "2.1.3", ResourceId = 666)]
+    [Info("Give", "Reneb", "2.1.5", ResourceId = 666)]
     class Give : RustPlugin
     {
         private bool Changed;
@@ -437,30 +437,30 @@ namespace Oxide.Plugins
                 SendReply(arg, "inv.giveplayer \"Name/SteamID\" \"Item/Kit\" \"Amount\"");
                 return;
             }
-            if (hasKit(arg.ArgsStr))
+            if (hasKit(arg.FullString))
             {
                 GiveKit(arg, arg.Args, "player");
                 return;
             }
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < giveBasic)
+                if (arg.Connection.authLevel < giveBasic)
                 {
                     SendReply(arg, noAccess);
                     return;
                 }
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", ((BasePlayer)arg.connection.player).displayName, arg.ArgsStr));
+                    Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", ((BasePlayer)arg.Connection.player).displayName, arg.FullString));
             }
             else
                 if (logAdmins)
-                Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", "CONSOLE", arg.ArgsStr));
+                Puts(string.Format("GIVE: {0} used inv.giveplayer {1}", "CONSOLE", arg.FullString));
             GivePlayer(arg, arg.Args);
         }
         [ConsoleCommand("inv.give")]
         void cmdConsoleGive(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 SendReply(arg, "You can't use this command from the console");
                 return;
@@ -470,22 +470,22 @@ namespace Oxide.Plugins
                 SendReply(arg, "inv.give \"Item/Kit\" \"Amount\"");
                 return;
             }
-            if (hasKit(arg.ArgsStr))
+            if (hasKit(arg.FullString))
             {
                 GiveKit(arg, arg.Args, "self");
                 return;
             }
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < giveBasic)
+                if (arg.Connection.authLevel < giveBasic)
                 {
                     SendReply(arg, noAccess);
                     return;
                 }
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.give {1}", ((BasePlayer)arg.connection.player).displayName, arg.ArgsStr));
+                    Puts(string.Format("GIVE: {0} used inv.give {1}", ((BasePlayer)arg.Connection.player).displayName, arg.FullString));
             }
-            GiveSelf(arg, (BasePlayer)arg.connection.player, arg.Args);
+            GiveSelf(arg, (BasePlayer)arg.Connection.player, arg.Args);
         }
         [ConsoleCommand("inv.giveall")]
         void cmdConsoleGiveAll(ConsoleSystem.Arg arg)
@@ -495,24 +495,24 @@ namespace Oxide.Plugins
                 SendReply(arg, "inv.giveall \"Item/Kit\" \"Amount\"");
                 return;
             }
-            if (hasKit(arg.ArgsStr))
+            if (hasKit(arg.FullString))
             {
                 GiveKit(arg, arg.Args, "all");
                 return;
             }
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < giveAll)
+                if (arg.Connection.authLevel < giveAll)
                 {
                     SendReply(arg, noAccess);
                     return;
                 }
                 if (logAdmins)
-                    Puts(string.Format("GIVE: {0} used inv.giveall {1}", ((BasePlayer)arg.connection.player).displayName, arg.ArgsStr));
+                    Puts(string.Format("GIVE: {0} used inv.giveall {1}", ((BasePlayer)arg.Connection.player).displayName, arg.FullString));
             }
             else
                 if (logAdmins)
-                Puts(string.Format("GIVE: {0} used inv.giveall {1}", "CONSOLE", arg.ArgsStr));
+                Puts(string.Format("GIVE: {0} used inv.giveall {1}", "CONSOLE", arg.FullString));
             GiveToAll(arg);
         }
     }

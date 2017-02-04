@@ -9,7 +9,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Kits", "Reneb", "3.1.12", ResourceId =668)]
+    [Info("Kits", "Reneb", "3.1.14", ResourceId =668)]
     class Kits : RustPlugin
     {
         readonly int playerLayer = LayerMask.GetMask("Player (Server)");
@@ -991,7 +991,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("kit.gui")]
         void cmdConsoleKitGui(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 SendReply(arg, "You can't use this command from the server console");
                 return;
@@ -1010,7 +1010,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("kit.close")]
         void cmdConsoleKitClose(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 SendReply(arg, "You can't use this command from the server console");
                 return;
@@ -1021,7 +1021,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("kit.show")]
         void cmdConsoleKitShow(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 SendReply(arg, "You can't use this command from the server console");
                 return;

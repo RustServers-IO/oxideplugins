@@ -5,7 +5,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("RGive", "LaserHydra", "2.0.2", ResourceId = 929)]
+    [Info("RGive", "LaserHydra", "2.0.3", ResourceId = 929)]
     [Description("Random item giving")]
 
     class RGive : RustPlugin
@@ -215,7 +215,7 @@ namespace Oxide.Plugins
 
             string[] args = arg.HasArgs() ? arg.Args : new string[0];
 
-            cmdRGive(player, arg.cmd.name, args);
+            cmdRGive(player, arg.cmd.Name, args);
         }
 
         #endregion

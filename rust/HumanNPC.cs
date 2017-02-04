@@ -18,10 +18,11 @@ using Oxide.Core.Plugins;
 using Rust;
 using UnityEngine;
 using Convert = System.Convert;
+using Oxide.Game.Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("HumanNPC", "Reneb/Nogrod/Calytic", "0.3.11", ResourceId = 856)]
+    [Info("HumanNPC", "Reneb/Nogrod/Calytic", "0.3.15", ResourceId = 856)]
     public class HumanNPC : RustPlugin
     {
         //////////////////////////////////////////////////////
@@ -32,7 +33,6 @@ namespace Oxide.Plugins
         private static Vector3 Vector3Down;
         private static int groundLayer;
 
-        private static readonly FieldInfo modelStateField = typeof(BasePlayer).GetField("modelState", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
         private static readonly FieldInfo viewangles = typeof(BasePlayer).GetField("viewAngles", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
         private static readonly FieldInfo displayName = typeof(BasePlayer).GetField("_displayName", (BindingFlags.Instance | BindingFlags.NonPublic));
@@ -199,7 +199,6 @@ namespace Oxide.Plugins
 
             public List<Vector3> pathFinding;
 
-            private ModelState model = null;
             private HeldEntity firstWeapon = null;
 
             public void Awake()
@@ -207,8 +206,7 @@ namespace Oxide.Plugins
                 npc = GetComponent<HumanPlayer>();
                 UpdateWaypoints();
 
-                model = GetModel();
-                model.onground = true;
+                npc.player.modelState.onground = true;
             }
             public void UpdateWaypoints()
             {
@@ -285,19 +283,16 @@ namespace Oxide.Plugins
                 nextPos = Vector3.Lerp(StartPos, EndPos, waypointDone);
                 nextPos.y = GetMoveY(nextPos);
                 npc.player.MovePosition(nextPos);
-                npc.player.eyes.position = nextPos + new Vector3(0, 1.6f, 0);
-                npc.player.TransformChanged();
-                npc.player.UpdatePlayerCollider(true, false);
+                //npc.player.eyes.position = nextPos + new Vector3(0, 1.6f, 0);
+                var newEyesPos = nextPos + new Vector3(0, 1.6f, 0);
+                npc.player.eyes.position.Set(newEyesPos.x, newEyesPos.y, newEyesPos.z);
+                npc.player.UpdatePlayerCollider(true);
 
-                model.onground = !IsSwimming();
+                npc.player.modelState.onground = !IsSwimming();
             }
 
             public bool IsSwimming() {
                 return WaterLevel.Test(npc.player.transform.position + new Vector3(0,0.65f,0));
-            }
-
-            public ModelState GetModel() {
-                return (ModelState)modelStateField.GetValue(npc.player);
             }
 
             float GetSpeed(float speed = -1)
@@ -559,9 +554,11 @@ namespace Oxide.Plugins
                 }
                 npc.LookTowards(target.transform.position);
 
-                var source = npc.player.transform.position + npc.player.GetOffset() + Quaternion.LookRotation(target.transform.position - npc.player.transform.position)*baseProjectile.ikHold_max.position;
+                var source = npc.player.transform.position + npc.player.GetOffset();
+                if (baseProjectile.MuzzlePoint != null)
+                    source += Quaternion.LookRotation(target.transform.position - npc.player.transform.position) * baseProjectile.MuzzlePoint.position;
                 var dir = (target.transform.position + npc.player.GetOffset() - source).normalized;
-                var vector32 = dir*(component.projectileVelocity * baseProjectile.projectileVelocityScale);
+                var vector32 = dir * (component.projectileVelocity * baseProjectile.projectileVelocityScale);
 
                 Vector3 hit;
                 RaycastHit raycastHit;
@@ -736,7 +733,9 @@ namespace Oxide.Plugins
                     player.UserIDString = player.userID.ToString();
                     player.MovePosition(info.spawnInfo.position);
                     player.eyes = player.eyes ?? player.GetComponent<PlayerEyes>();
-                    player.eyes.position = info.spawnInfo.position + new Vector3(0, 1.6f, 0);
+                    //player.eyes.position = info.spawnInfo.position + new Vector3(0, 1.6f, 0);
+                    var newEyes = info.spawnInfo.position + new Vector3(0, 1.6f, 0);
+                    player.eyes.position.Set(newEyes.x, newEyes.y, newEyes.z);
                     player.EndSleeping();
                     if (info.minstrel != null) PlayTune();
                     protection.Clear();
@@ -1030,9 +1029,10 @@ namespace Oxide.Plugins
                 player.SignalBroadcast(BaseEntity.Signal.Attack, string.Empty, null);
             }
 
-            public void SetViewAngle(Quaternion ViewAngles)
+            public void SetViewAngle(Quaternion viewAngles)
             {
-                viewangles.SetValue(player, ViewAngles.eulerAngles);
+                if (viewAngles.eulerAngles == default(Vector3)) return;
+                viewangles.SetValue(player, viewAngles.eulerAngles);
                 player.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
             }
         }
@@ -1208,6 +1208,10 @@ namespace Oxide.Plugins
         void Loaded()
         {
             LoadData();
+
+            var filter = RustExtension.Filter.ToList();
+            filter.Add("Look rotation viewing vector is zero");
+            RustExtension.Filter = filter.ToArray();
         }
 
 
@@ -1302,7 +1306,7 @@ namespace Oxide.Plugins
 
             foreach (var info in ItemManager.itemList)
             {
-                var baseProjectile = info.GetComponent<ItemModEntity>()?.entityPrefab?.Get()?.GetComponent<BaseProjectile>();
+                var baseProjectile = info.GetComponent<ItemModEntity>()?.entityPrefab.Get().GetComponent<BaseProjectile>();
                 if (baseProjectile == null) continue;
                 weaponProjectile.Add(info.shortname, baseProjectile);
 
@@ -1665,8 +1669,8 @@ namespace Oxide.Plugins
             var source = npc.player;
             var weapon = source.GetActiveItem()?.GetHeldEntity() as BaseProjectile;
             var pos = source.transform.position + source.GetOffset();
-            if (weapon != null)
-                pos += Quaternion.LookRotation(target.transform.position - source.transform.position)*weapon.ikHold_max.position;
+            if (weapon?.MuzzlePoint != null)
+                pos += Quaternion.LookRotation(target.transform.position - source.transform.position) * weapon.MuzzlePoint.position;
             RaycastHit raycastHit;
             return Vector3.Distance(source.transform.position, target.transform.position) < 0.75
                 || Physics.SphereCast(new Ray(pos, (target.transform.position + source.GetOffset(true) - pos).normalized), .5f, out raycastHit, float.MaxValue, Physics.AllLayers)

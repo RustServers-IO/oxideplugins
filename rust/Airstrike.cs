@@ -10,7 +10,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Airstrike", "k1lly0u", "0.2.4", ResourceId = 1489)]
+    [Info("Airstrike", "k1lly0u", "0.2.41", ResourceId = 1489)]
     class Airstrike : RustPlugin
     {
         #region fields
@@ -503,9 +503,9 @@ namespace Oxide.Plugins
         }
         bool isAuth(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < auth)
+                if (arg.Connection.authLevel < auth)
                 {
                     SendReply(arg, lang.GetMessage("noPerms", this));
                     return false;

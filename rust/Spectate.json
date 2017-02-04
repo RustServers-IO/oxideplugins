@@ -2,7 +2,7 @@
     "name": "Spectate",
     "description": "Allows only players with permission to spectate",
     "author": "Wulf",
-    "version": "0.2.0",
+    "version": "0.4.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/spectate.1426",

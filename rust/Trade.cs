@@ -5,10 +5,11 @@ using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Newtonsoft.Json;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Trade", "Calytic", "1.0.6", ResourceId = 1242)]
+    [Info("Trade", "Calytic", "1.0.9", ResourceId = 1242)]
     class Trade : RustPlugin
     {
         #region Configuration Data
@@ -183,6 +184,11 @@ namespace Oxide.Plugins
 
         #region Initialization
 
+        void Init()
+        {
+            Unsubscribe(nameof(CanNetworkTo));
+        }
+
         void Loaded() {
             permission.RegisterPermission("trade.use", this);
             permission.RegisterPermission("trade.accept", this);
@@ -301,6 +307,26 @@ namespace Oxide.Plugins
         #endregion
 
         #region Oxide Hooks
+
+        object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
+        {
+            if (entity == null || target == null || entity == target) return null;
+            if (target.IsAdmin()) return null;
+
+            OnlinePlayer onlinePlayer;
+            bool IsMyBox = false;
+            if (onlinePlayers.TryGetValue(target, out onlinePlayer))
+            {
+                if (onlinePlayer.View != null && onlinePlayer.View.net.ID == entity.net.ID)
+                {
+                    IsMyBox = true;
+                }
+            }
+
+            if (IsTradeBox(entity) && !IsMyBox) return false;
+
+            return null;
+        }
 
         void OnPlayerInit(BasePlayer player)
         {
@@ -504,13 +530,13 @@ namespace Oxide.Plugins
         [ConsoleCommand("trade")]
         void ccTrade(ConsoleSystem.Arg arg)
         {
-            cmdTrade(arg.connection.player as BasePlayer, arg.cmd.name, arg.Args);
+            cmdTrade(arg.Connection.player as BasePlayer, arg.cmd.Name, arg.Args);
         }
 
         [ConsoleCommand("trade.decline")]
         void ccTradeDecline(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
 
             OnlinePlayer onlinePlayer;
             if (onlinePlayers.TryGetValue(player, out onlinePlayer) && onlinePlayer.Trade != null)
@@ -527,7 +553,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("trade.accept")]
         void ccTradeAccept(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
 
             OnlinePlayer onlinePlayer;
             if (onlinePlayers.TryGetValue(player, out onlinePlayer) && onlinePlayer.Trade != null)
@@ -848,6 +874,7 @@ namespace Oxide.Plugins
 
         void OpenBox(BasePlayer player, BaseEntity target)
         {
+            Subscribe(nameof(CanNetworkTo));
             var ply = onlinePlayers[player];
             if (ply.View == null)
             {
@@ -944,6 +971,11 @@ namespace Oxide.Plugins
             onlinePlayer.Clear();
 
             view.KillMessage();
+
+            if (onlinePlayers.Values.Count(p => p.View != null) <= 0)
+            {
+                Unsubscribe(nameof(CanNetworkTo));
+            }
         }
 
         bool CanPlayerTrade(BasePlayer player, string perm) {
@@ -1004,6 +1036,19 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helper methods
+
+        private bool IsTradeBox(BaseNetworkable entity)
+        {
+            foreach (KeyValuePair<BasePlayer, OnlinePlayer> kvp in onlinePlayers)
+            {
+                if (kvp.Value.View != null && kvp.Value.View.net.ID == entity.net.ID)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         bool hasAccess(BasePlayer player, string permissionname)
         {

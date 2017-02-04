@@ -9,7 +9,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomCommands", "Absolut", "1.1.0", ResourceId = 2158)]
+    [Info("CustomCommands", "Absolut", "1.1.2", ResourceId = 2158)]
 
     class CustomCommands : RustPlugin
     {
@@ -129,10 +129,10 @@ namespace Oxide.Plugins
 
         object OnServerCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection?.player as BasePlayer;
+            var player = arg.Connection?.player as BasePlayer;
             if (player == null)
                 return null;
-            if (cmdCreation.ContainsKey(player.userID) && arg.cmd?.namefull == "chat.say")
+            if (cmdCreation.ContainsKey(player.userID) && arg.cmd?.FullName == "chat.say")
             {
                 CommandCreationChat(player, arg.Args);
                 return false;
@@ -651,7 +651,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("MouseFreeLookUI")]
         private void cmdMouseUI(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             MousePanel(player);
@@ -675,7 +675,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyMouse")]
         private void cmdUI_DestroyMouse(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (Mouse.Contains(player.userID))
@@ -686,7 +686,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyCC")]
         private void cmdUI_DestroyCC(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (UIOpen.Contains(player.userID))
@@ -748,7 +748,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("any")]
         private void cmdchat(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var i = 0;
@@ -780,7 +780,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CCPanel")]
         private void cmdUI_CCPanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args[0] == "yes")
@@ -792,7 +792,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RemoveCommand")]
         private void cmdUI_RemoveCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int index = Convert.ToInt16(arg.Args[0]);
@@ -812,7 +812,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SavePanel")]
         private void cmdUI_SavePanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ccData.ForceCommands.Clear();
@@ -825,7 +825,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ForcePanel")]
         private void cmdUI_ForcePanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (ForceBar)
@@ -844,7 +844,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CreateCommand")]
         private void cmdUI_CreateCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CreateCommand(player);
@@ -853,7 +853,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AddCommand")]
         private void cmdUI_AddCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CreateCommand(player, 10);
@@ -862,7 +862,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AddPlayerCommand")]
         private void cmdUI_AddPlayerCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int index = Convert.ToInt16(arg.Args[0]);
@@ -882,7 +882,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetType")]
         private void cmdUI_SetType(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             cmdCreation[player.userID].cmd.type = arg.Args[0];
@@ -893,7 +893,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetImg")]
         private void cmdUI_SetImg(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var img = arg.Args[0];
@@ -911,7 +911,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SaveCommand")]
         private void cmdUI_SaveCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ccData.PlayerCommands[player.userID].Add(cmdCreation[player.userID].cmd);
@@ -924,7 +924,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SavePlayerCommand")]
         private void cmdUI_SavePlayerCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ccData.AdminCommands.Add(cmdCreation[player.userID].cmd);
@@ -935,7 +935,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CancelCommand")]
         private void cmdUI_CancelCommand(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (cmdCreation.ContainsKey(player.userID))
