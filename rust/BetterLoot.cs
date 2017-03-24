@@ -12,10 +12,13 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("BetterLoot", "Fujikura/dcode", "2.11.6", ResourceId = 828)]
+	[Info("BetterLoot", "Fujikura/dcode", "2.12.0", ResourceId = 828)]
 	[Description("A complete re-implementation of the drop system")]
 	public class BetterLoot : RustPlugin
 	{
+		[PluginReference]
+		Plugin CustomLootSpawns;
+		
 		bool Changed = false;
 		int populatedContainers;
 
@@ -214,6 +217,15 @@ namespace Oxide.Plugins
 			}
 			UpdateInternals(listUpdatesOnLoaded);
 		}
+		
+		void Unload()
+        {
+            var lootContainers = Resources.FindObjectsOfTypeAll<LootContainer>().Where(c => c.isActiveAndEnabled && !c.IsInvoking("SpawnLoot")).ToList();
+			foreach (var container in lootContainers)
+			{
+				try { container.Invoke("SpawnLoot", UnityEngine.Random.Range(container.minSecondsBetweenRefresh, container.maxSecondsBetweenRefresh)); } catch{}
+			}
+        }
 
 		void OnTick()
 		{
@@ -478,14 +490,15 @@ namespace Oxide.Plugins
 				if (useCustomTableSupply && includeSupplyDrop) { totalItemWeightSupply += (itemWeightsSupply[i] = ItemWeight(baseItemRarity, i) * itemsSupply[i].Count); }
 				}
 			populatedContainers = 0;
-			timer.Once( 0.1f, () => {
-				if (removeStackedContainers) FixLoot();
-				foreach (var container in UnityEngine.Object.FindObjectsOfType<LootContainer>()) {
-					try {
-						PopulateContainer(container);
-					} catch (Exception ex) {
-						PrintWarning("Failed to populate container " + ContainerName(container) + ": " + ex.Message + "\n" + ex.StackTrace);
-					}
+			timer.Once( 0.1f, () =>
+			{
+				if (removeStackedContainers)
+					FixLoot();
+				foreach (var container in UnityEngine.Object.FindObjectsOfType<LootContainer>())
+				{
+					if (container == null) continue;
+					if (CustomLootSpawns && (bool)CustomLootSpawns?.Call("IsLootBox", container.GetComponent<BaseEntity>())) continue;
+					PopulateContainer(container);
 				}
 				Puts($"Internals have been updated. Populated '{populatedContainers}' supported containers.");
 				initialized = true;
@@ -756,10 +769,14 @@ namespace Oxide.Plugins
 			container.CancelInvoke("SpawnLoot");
 		}
 
+
 		void PopulateContainer(LootContainer container)
 		{
-			if (container.inventory == null) {
-				return;
+			if (container.inventory == null)
+			{
+				container.inventory = new ItemContainer();
+                container.inventory.ServerInitialize(null, container.inventorySlots);
+                container.inventory.GiveUID();
 			}
 			int min = 1;
 			int max = 0;
@@ -890,19 +907,14 @@ namespace Oxide.Plugins
 		}
 
 		void OnEntitySpawned(BaseNetworkable entity) {
-			if (!initialized)
-				return;
-			try {
+			if (!initialized || entity == null) return;
+			NextTick(() => {
+				if (entity == null) return;
+				if (CustomLootSpawns && (bool)CustomLootSpawns?.Call("IsLootBox", entity.GetComponent<BaseEntity>())) return;
 				var container = entity as LootContainer;
-				if (container == null)
-					return;
-				if (container.inventory == null || container.inventory.itemList == null) {
-					return;
-				}
+				if (container == null) return;
 				PopulateContainer(container);
-			} catch (Exception ex) {
-				PrintError("OnEntitySpawned failed: " + ex.Message);
-			}
+			});
 		}
 
 		[ChatCommand("blacklist")]
@@ -1329,19 +1341,5 @@ namespace Oxide.Plugins
 		void SaveBlacklist() => Interface.GetMod().DataFileSystem.WriteObject("BetterLoot\\Blacklist", storedBlacklist);
 
 		#endregion Blacklist
-
-		#region Reload
-
-		[ConsoleCommand("betterloot.reload")]
-		void consoleReload(ConsoleSystem.Arg arg)
-		{
-			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
-			try { Config.Load(); }
-			catch { LoadDefaultConfig(); }
-			LoadVariables();
-			UpdateInternals(true);
-		}
-
-		#endregion Reload
 	}
 }

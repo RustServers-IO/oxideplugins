@@ -2,7 +2,7 @@
     "name": "Random Deployables",
     "description": "Randomize deployable skins",
     "author": "Norn",
-    "version": "0.1.7",
+    "version": "0.1.9",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/random-deployables.2187",

@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bank", "rustservers.io", "0.0.6", ResourceId = 2116)]
+    [Info("Bank", "rustservers.io", "0.0.9", ResourceId = 2116)]
     [Description("Safe player storage")]
     class Bank : RustPlugin
     {
@@ -29,12 +29,13 @@ namespace Oxide.Plugins
         private float cooldownMinutes;
         private bool npconly;
         private List<object> npcids;
+        private float radiationMax;
 
         public static DataFileSystem datafile;
         public static DataFileSystem configFile;
         FieldInfo keyCodeField = typeof(KeyLock).GetField("keyCode", (BindingFlags.Instance | BindingFlags.NonPublic));
 
-        private Dictionary<string, ItemLimit> itemLimits = new Dictionary<string,ItemLimit>();
+        private Dictionary<string, object> itemLimits = new Dictionary<string,object>();
 
         [PluginReference]
         Plugin MasterKey;
@@ -337,7 +338,7 @@ namespace Oxide.Plugins
 
         void Loaded() { 
             configFile = new DataFileSystem(Interface.Oxide.ConfigDirectory);
-            itemLimits = configFile.ReadObject<Dictionary<string, ItemLimit>>("Bank_ItemLimits");
+            itemLimits = configFile.ReadObject<Dictionary<string, object>>("Bank_ItemLimits");
             permission.RegisterPermission("bank.use", this);
 
             CheckConfig();
@@ -353,6 +354,7 @@ namespace Oxide.Plugins
             defaultSlots = GetConfig("Settings", "defaultSlots", 4);
 
             cooldownMinutes = GetConfig("Settings", "cooldownMinutes", 5f);
+            radiationMax = GetConfig("Settings", "radiationMax", 1f);
 
 
             npconly = GetConfig("Settings", "NPCBankersOnly", false);
@@ -387,6 +389,7 @@ namespace Oxide.Plugins
                 {"Denied: Falling", "You cannot do that while falling"},
                 {"Denied: Wounded", "You cannot do that while wounded"},
                 {"Denied: Generic", "You cannot do that right now"},
+                {"Denied: Irradiated", "You cannot do that while irradiated"},
                 {"Cooldown: Seconds", "You are doing that too often, try again in a {0} seconds(s)."},
                 {"Cooldown: Minutes", "You are doing that too often, try again in a {0} minute(s)."},
                 {"Limit: Return", "Some items were returned to your inventory"}
@@ -407,8 +410,8 @@ namespace Oxide.Plugins
             };
         }
 
-        private Dictionary<string, ItemLimit> GetDefaultItemLimits() {
-            return new Dictionary<string,ItemLimit>() {
+        private Dictionary<string, object> GetDefaultItemLimits() {
+            return new Dictionary<string,object>() {
                 {"explosive.timed", new ItemLimit(false, 0, 1)}
             };
         }
@@ -421,10 +424,14 @@ namespace Oxide.Plugins
             Config["Settings", "defaultSlots"] = 4;
             Config["Settings", "keyring"] = true;
             Config["Settings", "cooldownMinutes"] = 5;
+            Config["Settings", "radiationMax"] = 1;
             Config["Settings", "NPCBankersOnly"] = false;
             Config["Settings", "NPCIDs"] = new List<object>();
 
-            configFile.WriteObject<Dictionary<string, ItemLimit>>("Bank_ItemLimits", GetDefaultItemLimits());
+            if(configFile == null)
+                configFile = new DataFileSystem(Interface.Oxide.ConfigDirectory);
+
+            configFile.WriteObject<Dictionary<string, object>>("Bank_ItemLimits", GetDefaultItemLimits());
 
             Config["VERSION"] = Version.ToString();
         }
@@ -465,12 +472,13 @@ namespace Oxide.Plugins
             Config["VERSION"] = Version.ToString();
 
             // NEW CONFIGURATION OPTIONS HERE
+            Config["Settings", "radiationMax"] = GetConfig("Settings", "radiationMax", 1f);
             Config["Settings", "NPCBankersOnly"] = GetConfig("Settings", "NPCBankersOnly", false);
             Config["Settings", "NPCIDs"] = GetConfig("Settings", "NPCIDs", new List<object>());
             if(itemLimits.Count == 0) {
                 itemLimits = GetDefaultItemLimits();
             }
-            configFile.WriteObject<Dictionary<string, ItemLimit>>("Bank_ItemLimits", itemLimits);
+            configFile.WriteObject<Dictionary<string, object>>("Bank_ItemLimits", itemLimits);
             // END NEW CONFIGURATION OPTIONS
 
             PrintWarning("Upgrading configuration file");
@@ -569,7 +577,7 @@ namespace Oxide.Plugins
         object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
         {
             if (entity == null || target == null || entity == target) return null;
-            if (target.IsAdmin()) return null;
+            if (target.IsAdmin) return null;
 
             OnlinePlayer onlinePlayer;
             bool IsMyBank = false;
@@ -777,9 +785,9 @@ namespace Oxide.Plugins
         #region Core methods
 
         ItemLimit GetItemLimit(Item item) {
-            ItemLimit limit;
+            object limit;
             if(itemLimits.TryGetValue(item.info.shortname, out limit)) {
-                return limit;
+                return (ItemLimit)limit;
             }
 
             return null;
@@ -828,6 +836,12 @@ namespace Oxide.Plugins
                 SendReply(player, GetMsg("Denied: Privilege", player));
                 return false;
             }
+
+            if(radiationMax > 0 && player.radiationLevel > radiationMax) {
+                SendReply(player, GetMsg("Denied: Irradiated", player));
+                return false;
+            }
+
             if (player.IsSwimming())
             {
                 SendReply(player, GetMsg("Denied: Swimming", player));
@@ -838,7 +852,7 @@ namespace Oxide.Plugins
                 SendReply(player, GetMsg("Denied: Falling", player));
                 return false;
             }
-            if (player.IsFlying())
+            if (player.IsFlying)
             {
                 SendReply(player, GetMsg("Denied: Falling", player));
                 return false;
@@ -1028,7 +1042,8 @@ namespace Oxide.Plugins
             onlinePlayers[player].View = null;
             onlinePlayers[player].Target = null;
 
-            view.KillMessage();
+            view.Kill(BaseNetworkable.DestroyMode.None);
+            //view.KillMessage();
             if (onlinePlayers.Values.Count(p => p.View != null) <= 0) {
                 Unsubscribe(nameof(CanNetworkTo));
                 Unsubscribe(nameof(OnEntityTakeDamage));
@@ -1075,7 +1090,7 @@ namespace Oxide.Plugins
                .Append("Bank by <color=#ce422b>http://rustservers.io</color>\n")
                .Append("  ").Append("<color=\"#ffd479\">/bank</color> - Open your bank box").Append("\n");
 
-            if(player.IsAdmin()) {
+            if(player.IsAdmin) {
                sb.Append("  ").Append("<color=\"#ffd479\">/viewbank \"Player Name\"</color> - View any players bank").Append("\n");
             }
             player.ChatMessage(sb.ToString());
@@ -1120,7 +1135,7 @@ namespace Oxide.Plugins
 
         bool IsAllowed(BasePlayer player)
         {
-            if(player.IsAdmin()) return true;
+            if(player.IsAdmin) return true;
             SendReply(player, GetMsg("Denied: Permission", player));
             return false;
         }

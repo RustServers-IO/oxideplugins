@@ -1,0 +1,16 @@
+{
+    "name": "NoDeathScreen",
+    "description": "Disables the death screen by automatically respawning players",
+    "author": "Wulf",
+    "version": "0.1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nodeathscreen.2332",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

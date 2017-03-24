@@ -8,7 +8,7 @@ using ConVar;
 
 namespace Oxide.Plugins
 {
-    [Info("IGather", "DylanSMR", "1.0.9", ResourceId = 1763)]
+    [Info("IGather", "DylanSMR", "1.0.10", ResourceId = 1763)]
     [Description("A GUI timer.")]
     class IGather : RustPlugin
     {  
@@ -286,7 +286,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("igGrabPermissions")]
         void PermissionGrab(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 SendReply(arg, lang.GetMessage("NoPermission", this));
                 return;
@@ -471,7 +471,7 @@ namespace Oxide.Plugins
             var quarry = float.Parse(arg.Args[2]);
             var pickup = float.Parse(arg.Args[3]);
 
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 SendReply(arg, lang.GetMessage("NoPermission", this));
                 return;
@@ -521,7 +521,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("igcollectstats")]
         void CollectStatsC(ConsoleSystem.Arg arg)  
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 SendReply(arg, lang.GetMessage("NoPermission", this));
                 return;
@@ -540,7 +540,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("igwipegroups")]
         void WipeGroupsC(ConsoleSystem.Arg arg)  
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 SendReply(arg, lang.GetMessage("NoPermission", this));
                 return;
@@ -561,7 +561,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("igconfirm")]
         void ConfirmC(ConsoleSystem.Arg arg)  
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 SendReply(arg, lang.GetMessage("NoPermission", this));
                 return;

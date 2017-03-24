@@ -7,18 +7,16 @@ using Oxide.Core;
 using Oxide.Core.Plugins;
 using System.Reflection;
 using Newtonsoft.Json;
-using Facepunch.Steamworks;
 
 namespace Oxide.Plugins
 {
-    [Info("MagicCraft", "Norn", "0.2.8", ResourceId = 1347)]
+    [Info("MagicCraft", "Norn", "0.3.0", ResourceId = 1347)]
     [Description("An alternative crafting system.")]
     public class MagicCraft : RustPlugin
     {
         int MaxB = 999;
         int MinB = 1;
         int MAX_INV_SLOTS = 30;
-        private readonly FieldInfo skins2 = typeof(ItemDefinition).GetField("_skins2", BindingFlags.NonPublic | BindingFlags.Instance);
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
         [PluginReference]
         Plugin PopupNotifications;
@@ -64,29 +62,14 @@ namespace Oxide.Plugins
             storedData = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(this.Title);
             ConfigurationCheck();
             webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", PullWorkshopIDS, this);
-            int config_protocol = Convert.ToInt32(Config["Internal", "Protocol"]);
             if (Config["Messages", "ItemFailed"] == null) { Puts("Updating configuration..."); LoadDefaultConfig(); }
-            if (Config["Internal", "Protocol"] == null) { Config["Internal", "Protocol"] = Protocol.network; }
-            else if (Convert.ToInt32(Config["Internal", "Protocol"]) != Protocol.network && !Convert.ToBoolean(Config["Settings", "IgnoreProtocolChanges"]))
-            {
-                Config["Internal", "Protocol"] = Protocol.network;
-                Puts("Updating item list from protocol " + config_protocol.ToString() + " to protocol " + Config["Internal", "Protocol"].ToString() + ".");
-                GenerateItems(true);
-                SaveConfig();
-            }
-            else
-            {
-                GenerateItems(false);
-            }
+            GenerateItems();
         }
         protected override void LoadDefaultConfig()
         {
             Puts("Generating Magic Craft configuration...");
             Config.Clear();
-            // --- [ INTERNAL CONFIG ] ---
-            Config["Internal", "Protocol"] = Protocol.network;
             // --- [ SETTINGS ] ---
-            Config["Settings", "IgnoreProtocolChanges"] = false;
             Config["Settings", "BypassInvFull"] = true;
             // --- [ COOLDOWN ] ---
             Config["Cooldown", "Enabled"] = true;
@@ -98,18 +81,12 @@ namespace Oxide.Plugins
             Config["Messages", "Enabled"] = true;
             Config["Messages", "ItemCrafted"] = false;
             Config["Messages", "ItemFailed"] = true;
-            timer.Once(10, () => GenerateItems(true));
+            timer.Once(10, () => GenerateItems());
             SaveConfig();
         }
 
-        void GenerateItems(bool reset = false)
+        void GenerateItems()
         {
-            if (reset)
-            {
-                Interface.GetMod().DataFileSystem.WriteObject(this.Title + ".old", storedData);
-                storedData.CraftList.Clear();
-                Puts("Generating new item list...");
-            }
             mcITEMS = ItemManager.itemList.ToDictionary(i => i.shortname);
             int loaded = 0, enabled = 0;
             foreach (var definition in mcITEMS)
@@ -239,7 +216,7 @@ namespace Oxide.Plugins
         private bool SAFEGiveItem(BasePlayer player, int itemid, ulong skinid, int amount)
         {
             Item i;
-            if (!player.isConnected) return false;
+            if (!player.IsConnected) return false;
             if (skinid != 0 && SkinFromInventoryID.ContainsKey(skinid) && SkinFromInventoryID[skinid] != 0) { i = ItemManager.CreateByItemID(itemid, amount, SkinFromInventoryID[skinid]); }
             else { i = ItemManager.CreateByItemID(itemid, amount, skinid); }
             if (i != null) if (!i.MoveToContainer(player.inventory.containerMain) && !i.MoveToContainer(player.inventory.containerBelt)) { i.Drop(player.eyes.position, player.eyes.BodyForward() * 2f); }

@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("FancyDrop", "Fujikura", "2.6.3", ResourceId = 1934)]
+	[Info("FancyDrop", "Fujikura", "2.6.15", ResourceId = 1934)]
 	[Description("The Next Level of a fancy airdrop-toolset")]
 	class FancyDrop : RustPlugin
 	{
@@ -29,9 +29,6 @@ namespace Oxide.Plugins
 
 		[PluginReference]
 		Plugin AlphaLoot;
-		
-		[PluginReference]
-		Plugin Airstrike;
 
 		static FancyDrop fd = null;
 		bool Changed = false;
@@ -237,6 +234,7 @@ namespace Oxide.Plugins
 		FieldInfo dropPlanedropped = typeof(CargoPlane).GetField("dropped", (BindingFlags.Instance | BindingFlags.NonPublic));
 		FieldInfo _isSpawned = typeof(BaseNetworkable).GetField("isSpawned", (BindingFlags.Instance | BindingFlags.NonPublic));
 		FieldInfo _creationFrame = typeof(BaseNetworkable).GetField("creationFrame", (BindingFlags.Instance | BindingFlags.NonPublic));
+		static FieldInfo _parachute = typeof(SupplyDrop).GetField("parachute", (BindingFlags.Instance | BindingFlags.NonPublic));		
 		
 		List<Regex> regexTags = new List<Regex>
 		{
@@ -281,6 +279,8 @@ namespace Oxide.Plugins
 		static string supplyDropEffect;
 		string supplyDropEffectSpawn;
 		bool disableRandomSupplyPos;
+		bool shootDownDrops;
+		int shootDownCount;
 
 		bool supplyDropLight;
 		float dropLightFrequency;
@@ -299,6 +299,7 @@ namespace Oxide.Plugins
 		int neededAuthLvl;
 		bool lockDirectDrop;
 		bool lockSignalDrop;
+		bool unlockDropAfterLoot;
 		string version;
 
 		bool useRealtimeTimers;
@@ -392,6 +393,14 @@ namespace Oxide.Plugins
 									{"msgConsoleDropSpawn", "SupplyDrop spawned at (X:{0} Y:{1} Z:{2})"},
 									{"msgConsoleDropLanded", "SupplyDrop landed at (X:{0} Y:{1} Z:{2})"},
 									{"msgCrateLocked", "This crate is locked until being looted by the owner"},
+									{"msgNorth", "North"},
+									{"msgNorthEast", "NorthEast"},
+									{"msgEast", "East"},
+									{"msgSouthEast", "SouthEast"},
+									{"msgSouth", "South"},
+									{"msgSouthWest", "SouthWest"},
+									{"msgWest", "West"},
+									{"msgNorthWest", "NorthWest"},
 								  },this);
 		}
 
@@ -410,6 +419,8 @@ namespace Oxide.Plugins
 			airdropMassdropRadiusDefault = Convert.ToSingle(GetConfig("Airdrop", "Default radius for location based massdrop", 100));
 			signalRocketSpeed = Convert.ToSingle(GetConfig("Airdrop", "signal rocket speed", 15));
 			signalRocketExplosionTime = Convert.ToSingle(GetConfig("Airdrop", "signal rocket explosion timer", 15));
+			shootDownDrops = Convert.ToBoolean(GetConfig("Airdrop", "Players can shoot down the drop", false));
+			shootDownCount = Convert.ToInt32(GetConfig("Airdrop", "Players can shoot down the drop - needed hits", 5));
 
 			airdropTimerEnabled = Convert.ToBoolean(GetConfig("Timer", "Use Airdrop timer", true));
 			airdropRemoveInBuilt = Convert.ToBoolean(GetConfig("Timer", "Remove builtIn Airdrop", true));
@@ -420,7 +431,7 @@ namespace Oxide.Plugins
 			airdropTimerResetAfterRandom = Convert.ToBoolean(GetConfig("Timer", "Reset Timer after manual random drop", false));
 
 			planeOffSetXMultiply = Convert.ToSingle(GetConfig("Airdrop", "Multiplier for overall flight distance; lower means faster at map", 1.25));
-			planeOffSetYMultiply = Convert.ToSingle(GetConfig("Airdrop", "Multiplier for (plane height * highest point on Map); Default 1.0", 2.0));
+			planeOffSetYMultiply = Convert.ToSingle(GetConfig("Airdrop", "Multiplier for (plane height * highest point on Map); Default 1.0", 1.0));
 			disableRandomSupplyPos = Convert.ToBoolean(GetConfig("Airdrop", "Disable SupplySignal randomization", false));
 
 			Prefix = Convert.ToString(GetConfig("Generic", "Chat/Message prefix", "Air Drop"));
@@ -434,6 +445,8 @@ namespace Oxide.Plugins
 			colorTextMsg = Convert.ToString(GetConfig("Generic", "Broadcast messages color", "white"));
 			lockDirectDrop = Convert.ToBoolean(GetConfig("Generic", "Lock DirectDrop to be looted only by target player", true));
 			lockSignalDrop = Convert.ToBoolean(GetConfig("Generic", "Lock SignalDrop to be looted only by target player", false));
+			unlockDropAfterLoot = Convert.ToBoolean(GetConfig("Generic", "Unlock crates only after player stopped looting", false));
+			
 			version = Convert.ToString(GetConfig("Generic", "version", this.Version.ToString()));
 						
 			if (version != this.Version.ToString())
@@ -512,13 +525,42 @@ namespace Oxide.Plugins
 
 		#region ColliderCheck
 
+		void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
+		{
+			if (!shootDownDrops || info == null)
+				return;
+			if (entity is SupplyDrop)
+			{
+				var drop = entity as SupplyDrop;
+				if (drop == null || drop.IsDestroyed) return;
+
+				BaseEntity parachute = _parachute.GetValue(drop) as BaseEntity;
+				if (parachute == null || parachute.IsDestroyed) return;               
+				
+				var col = drop.GetComponent<ColliderCheck>();
+				if (col == null) return;
+				if (col.hitCounter < shootDownCount)
+				{
+					col.hitCounter++;
+					return;
+				}
+				parachute.Kill();
+				parachute = null;
+				drop.GetComponent<Rigidbody>().drag = 0.6f;
+				col.wasHit = true;
+			}			
+		}
+		
 		sealed class ColliderCheck : MonoBehaviour
 		{
+
 			public bool notifyEnabled = true;
 			public bool notifyConsole;
 			public Dictionary<string,object> cratesettings;
 			public bool landed = false;
-
+			public int hitCounter = 0;
+			public bool wasHit;
+			
 			private void Awake()
 			{
 				fd.NextTick(() => {
@@ -528,12 +570,26 @@ namespace Oxide.Plugins
 						Awake();
 				});
 			}
+			
+			void PlayerStoppedLooting(BasePlayer player)
+			{
+				if (!fd.unlockDropAfterLoot || GetComponent<BaseEntity>().OwnerID == 0uL || player.userID != GetComponent<BaseEntity>().OwnerID) return;
+				GetComponent<BaseEntity>().OwnerID = 0uL;
+				fd.LootedDrops.Add(GetComponent<BaseEntity>() as SupplyDrop);
+			}
 
 			void OnCollisionEnter(Collision col)
 			{
-				if (GetComponent<BaseEntity>() is SupplyDrop && !landed)
+				if (!landed)
 				{
 					landed = true;
+					if (wasHit)
+					{
+						if (useSupplyDropEffectLanded)
+							Effect.server.Run(supplyDropEffect, GetComponent<BaseEntity>().transform.position);
+						StartCoroutine( HitRemove() );
+						return;
+					}
 					if (cratesettings.ContainsKey("fireSignalRocket") && (bool)cratesettings["fireSignalRocket"])
 						fd.CreateRocket(GetComponent<BaseEntity>().transform.position);
 					if (notifyEnabled && notifyDropPlayersOnLanded && (string)cratesettings["droptype"] != "dropdirect" && (((fd.lastDropRadius*2)*1.2) - Vector3.Distance(fd.lastDropPos, GetComponent<BaseEntity>().transform.position) <= 0 && !(UnityEngine.CollisionEx.GetEntity(col) is SupplyDrop)))
@@ -547,12 +603,21 @@ namespace Oxide.Plugins
 				}
 			}
 
+			IEnumerator HitRemove()
+			{
+				yield return new WaitForSeconds( 0.1f );
+				DropUtil.DropItems(GetComponent<StorageContainer>().inventory, GetComponent<BaseEntity>().transform.position, 1f);
+				fd.SupplyDrops.Remove(GetComponent<SupplyDrop>());
+				cratesettings.Clear();
+				GetComponent<BaseEntity>().Kill(BaseNetworkable.DestroyMode.Gib);
+			}			
+
 			IEnumerator DeSpawn()
 			{
 				yield return new WaitForSeconds( (int)cratesettings["despawnMinutes"] * 60 );
 				yield return new WaitWhile(() => GetComponent<BaseEntity>().IsOpen());
 				cratesettings.Clear();
-				GetComponent<BaseEntity>().Kill();
+				GetComponent<BaseEntity>().Kill(BaseNetworkable.DestroyMode.Gib);
 			}
 
 			void OnDestroy()
@@ -885,9 +950,11 @@ namespace Oxide.Plugins
 				if(notifyDropServerSignal)
 					if(notifyDropGUI && SimpleUI_Enable)
 						if (notifyDropServerSignalCoords)
-							MessageToAllSimpleUI(string.Format(lang.GetMessage("msgDropSignalCoords", this), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayerUI(player, string.Format(lang.GetMessage("msgDropSignalCoords", this, player.UserIDString), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
 						else
-							MessageToAllSimpleUI(lang.GetMessage("msgDropSignal", this));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayerUI(player, string.Format(lang.GetMessage("msgDropSignal", this, player.UserIDString)));
 					else if(notifyDropGUI && GUIAnnouncements)
 						if (notifyDropServerSignalCoords)
 							MessageToAllGui(string.Format(lang.GetMessage("msgDropSignalCoords", this), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
@@ -895,9 +962,11 @@ namespace Oxide.Plugins
 							MessageToAllGui(lang.GetMessage("msgDropSignal", this));
 					else
 						if (notifyDropServerSignalCoords)
-							MessageToAll(string.Format(lang.GetMessage("msgDropSignalCoords", this), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayer(player, string.Format(lang.GetMessage("msgDropSignalCoords", this, player.UserIDString), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
 						else
-							MessageToAll(lang.GetMessage("msgDropSignal", this));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayer(player, lang.GetMessage("msgDropSignal", this, player.UserIDString));
 				return;
 			}
 			else if(dropType == "regular")
@@ -905,9 +974,11 @@ namespace Oxide.Plugins
 				if(notifyDropServerRegular)
 					if(notifyDropGUI && SimpleUI_Enable)
 						if (notifyDropServerRegularCoords)
-							MessageToAllSimpleUI(string.Format(lang.GetMessage("msgDropRegularCoords", this), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayerUI(player, string.Format(lang.GetMessage("msgDropRegularCoords", this, player.UserIDString), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
 						else
-							MessageToAllSimpleUI(lang.GetMessage("msgDropRegular", this));	
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayerUI(player, lang.GetMessage("msgDropRegular", this, player.UserIDString));	
 					else if(notifyDropGUI && GUIAnnouncements)
 						if (notifyDropServerRegularCoords)
 							MessageToAllGui(string.Format(lang.GetMessage("msgDropRegularCoords", this), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
@@ -915,20 +986,24 @@ namespace Oxide.Plugins
 							MessageToAllGui(lang.GetMessage("msgDropRegular", this));
 					else
 						if (notifyDropServerRegularCoords)
-							MessageToAll(string.Format(lang.GetMessage("msgDropRegularCoords", this), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayer(player, string.Format(lang.GetMessage("msgDropRegularCoords", this, player.UserIDString), dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
 						else
-							MessageToAll(lang.GetMessage("msgDropRegular", this));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayer(player, lang.GetMessage("msgDropRegular", this, player.UserIDString));
 				return;
 			}
 			else if(dropType == "massdrop")
 			{
 				if(notifyDropServerMass)
 					if(notifyDropGUI && SimpleUI_Enable)
-						MessageToAllSimpleUI(lang.GetMessage("msgDropMass", this));
+						foreach(var player in BasePlayer.activePlayerList)
+							MessageToPlayerUI(player, lang.GetMessage("msgDropMass", this, player.UserIDString));
 					else if(notifyDropGUI && GUIAnnouncements)
 						MessageToAllGui(lang.GetMessage("msgDropMass", this));
 					else
-						MessageToAll(lang.GetMessage("msgDropMass", this));
+						foreach(var player in BasePlayer.activePlayerList)
+							MessageToPlayer(player, lang.GetMessage("msgDropMass", this, player.UserIDString));
 				return;
 			}
 			else
@@ -936,9 +1011,11 @@ namespace Oxide.Plugins
 				if(notifyDropServerCustom)
 					if(notifyDropGUI && SimpleUI_Enable)
 						if (notifyDropServerCustomCoords && _massDropTimer != null && _massDropTimer.Repetitions == 0)
-							MessageToAllSimpleUI(string.Format(lang.GetMessage("msgDropCustomCoords", this), notificationInfo, dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayerUI(player, string.Format(lang.GetMessage("msgDropCustomCoords", this, player.UserIDString), notificationInfo, dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
 						else
-							MessageToAllSimpleUI(string.Format(lang.GetMessage("msgDropCustom", this), notificationInfo));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayerUI(player, string.Format(lang.GetMessage("msgDropCustom", this, player.UserIDString), notificationInfo));
 					else if(notifyDropGUI && GUIAnnouncements)
 						if (notifyDropServerCustomCoords && _massDropTimer != null && _massDropTimer.Repetitions == 0)
 							MessageToAllGui(string.Format(lang.GetMessage("msgDropCustomCoords", this), notificationInfo, dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
@@ -946,9 +1023,11 @@ namespace Oxide.Plugins
 							MessageToAllGui(string.Format(lang.GetMessage("msgDropCustom", this), notificationInfo));
 					else
 						if (notifyDropServerCustomCoords && _massDropTimer != null && _massDropTimer.Repetitions == 0)
-							MessageToAll(string.Format(lang.GetMessage("msgDropCustomCoords", this), notificationInfo, dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayer(player, string.Format(lang.GetMessage("msgDropCustomCoords", this, player.UserIDString), notificationInfo, dropToPos.x.ToString("0"), dropToPos.z.ToString("0")));
 						else
-							MessageToAll(string.Format(lang.GetMessage("msgDropCustom", this), notificationInfo));
+							foreach(var player in BasePlayer.activePlayerList)
+								MessageToPlayer(player, string.Format(lang.GetMessage("msgDropCustom", this, player.UserIDString), notificationInfo));
 			}
 		}
 
@@ -962,56 +1041,39 @@ namespace Oxide.Plugins
 			if (entity.net == null)
 				entity.net = Network.Net.sv.CreateNetworkable();
 			if (activeSignals.Contains(entity))
-			{
-				activeSignals.Remove(entity);
 				return;
-			}
 			activeSignals.Add(entity);
-			SupplyThrown(player, entity, true);
+			SupplyThrown(player, entity);
 		}
-
-		void OnEntitySpawned(BaseEntity entity)
+		
+		void OnExplosiveDropped(BasePlayer player, BaseEntity entity)
 		{
 			if (!initialized || entity == null || !(entity is SupplySignal)) return;
 			if (activeSignals.Contains(entity))
-			{
-				activeSignals.Remove(entity);
 				return;
-			}
 			activeSignals.Add(entity);
-			SupplyThrown(entity.creatorEntity as BasePlayer, entity, false);
-		}
+			SupplyThrown(player, entity);
+		}	
 
-		void SupplyThrown(BasePlayer player, BaseEntity entity, bool left)
+		void SupplyThrown(BasePlayer player, BaseEntity entity)
 		{
-			if (!initialized) return;
-			Vector3 position = new Vector3();
-			if (left)
-				position = entity.transform.position;
-			else
-			{
-				if (disableRandomSupplyPos)
-					position = player.transform.position;
-				else
-					position = entity.transform.position;
-			}
-			timer.Once(3.1f, () => {
+			Vector3 playerposition = player.GetEstimatedWorldPosition();
+			timer.Once(3.0f, () => {
 				if (entity == null)
 				{
-					
 					activeSignals.Remove(entity);
 					return;
 				}
 				entity.CancelInvoke("Explode");
 			});
-			timer.Once(3.5f, () => {
+			timer.Once(3.3f, () => {
 				if (entity == null) return;
 				activeSignals.Remove(entity);
-
-				if (disableRandomSupplyPos)
-					if (left)
-						position = entity.transform.position;
-
+				Vector3 position = new Vector3();
+				if (!disableRandomSupplyPos)
+					position = entity.GetEstimatedWorldPosition() + new Vector3(UnityEngine.Random.Range(-20f, 20f), 0f, UnityEngine.Random.Range(-20f, 20f));
+				else
+					position = entity.GetEstimatedWorldPosition();
 				entity.Invoke("FinishUp", supplySignalSmokeTime);
 				entity.SetFlag(BaseEntity.Flags.On, true, false);
 				entity.SendNetworkUpdateImmediate(false);
@@ -1022,12 +1084,12 @@ namespace Oxide.Plugins
 					startCargoPlane(position, false, null, "supplysignal");
 
 				if (notifyDropConsoleSignal)
-					Puts($"SupplySignal thrown by '{player.displayName}' at: {position}");
+					Puts($"SupplySignal thrown by '{player.displayName}' at: {playerposition}");
 
 				if (notifyDropAdminSignal)
 				{
-					foreach(var admin in BasePlayer.activePlayerList.Where(p => p.IsAdmin()).ToList())
-					SendReply(admin, $"<color={colorAdmMsg}>"+ string.Format(lang.GetMessage("msgDropSignalAdmin", this, player.UserIDString), player.displayName, position) + "</color>");
+					foreach(var admin in BasePlayer.activePlayerList.Where(p => p.IsAdmin).ToList())
+					SendReply(admin, $"<color={colorAdmMsg}>"+ string.Format(lang.GetMessage("msgDropSignalAdmin", this, player.UserIDString), player.displayName, playerposition) + "</color>");
 				}
 
 				if (notifyDropSignalByPlayer)
@@ -1040,33 +1102,34 @@ namespace Oxide.Plugins
 
 		void OnLootEntity(BasePlayer player, BaseEntity entity)
 		{
-			if (!initialized) return;
-			if (entity != null && entity is SupplyDrop && !LootedDrops.Contains(entity as SupplyDrop))
+			if (!initialized || entity == null || !(entity is SupplyDrop) || LootedDrops.Contains(entity as SupplyDrop)) return;
+			if ((lockSignalDrop || lockDirectDrop) && entity.OwnerID != 0uL && entity.OwnerID != player.userID)
 			{
-				if ((lockSignalDrop || lockDirectDrop) && entity.OwnerID != 0uL && entity.OwnerID != player.userID)
+				NextTick(() => player.EndLooting());
+				MessageToPlayer(player, lang.GetMessage("msgCrateLocked", this, player.UserIDString));
+				return;
+			}
+			if (entity.OwnerID == player.userID)
+			{
+				if (notifyDropConsoleLooted)
+					Puts($"{player.displayName} ({player.UserIDString}) looted his Drop at: {entity.GetEstimatedWorldPosition()}");
+				if (!unlockDropAfterLoot)
 				{
-	                NextTick(() => player.EndLooting());
-					MessageToPlayer(player, lang.GetMessage("msgCrateLocked", this, player.UserIDString));
-					return;
-				}
-				if (entity.OwnerID == player.userID)
-				{
-					if (notifyDropConsoleLooted) Puts($"{player.displayName} ({player.UserIDString}) looted his Drop at: {entity.GetEstimatedWorldPosition()}");
 					entity.OwnerID = 0uL;
 					LootedDrops.Add(entity as SupplyDrop);
-					return;
 				}
-				if (Vector3.Distance(lastLootPos, entity.transform.position) > ((lastDropRadius*2)*1.2))
-				{
-					bool direct = false;
-					if (entity.GetComponent<ColliderCheck>() != null && entity.GetComponent<ColliderCheck>().cratesettings != null && Convert.ToString(entity.GetComponent<ColliderCheck>().cratesettings["droptype"]) == "dropdirect")
-						direct = true;
-					if (notifyDropServerLooted && !direct) NotifyOnDropLooted(entity,player);
-					if (notifyDropConsoleLooted) Puts($"{player.displayName} ({player.UserIDString}) looted the Drop at: {entity.GetEstimatedWorldPosition()}");
-					LootedDrops.Add(entity as SupplyDrop);
-					lastLootPos = entity.transform.position;
-					return;
-				}
+				return;
+			}
+			if (Vector3.Distance(lastLootPos, entity.transform.position) > ((lastDropRadius*2)*1.2))
+			{
+				bool direct = false;
+				if (entity.GetComponent<ColliderCheck>() != null && entity.GetComponent<ColliderCheck>().cratesettings != null && Convert.ToString(entity.GetComponent<ColliderCheck>().cratesettings["droptype"]) == "dropdirect")
+					direct = true;
+				if (notifyDropServerLooted && !direct) NotifyOnDropLooted(entity,player);
+				if (notifyDropConsoleLooted) Puts($"{player.displayName} ({player.UserIDString}) looted the Drop at: {entity.GetEstimatedWorldPosition()}");
+				LootedDrops.Add(entity as SupplyDrop);
+				lastLootPos = entity.transform.position;
+				return;
 			}
 		}
 
@@ -1078,6 +1141,7 @@ namespace Oxide.Plugins
 			LoadDefaultMessages();
 			msgConsoleDropSpawn = lang.GetMessage("msgConsoleDropSpawn", this);
 			msgConsoleDropLanded = lang.GetMessage("msgConsoleDropLanded", this);
+			GameManager.server.FindPrefab("assets/prefabs/tools/supply signal/grenade.smoke.deployed.prefab").GetComponent<TimedExplosive>().stickEffect = GameManager.server.FindPrefab("assets/prefabs/tools/supply signal/grenade.smoke.deployed.prefab").GetComponent<TimedExplosive>().bounceEffect;
 
 			bool saveNeeded = false;
 			foreach ( var defaults in setupItemList)
@@ -1203,7 +1267,7 @@ namespace Oxide.Plugins
 				string runCmd = (string)realTimers[DateTime.Now.ToString("HH:mm")];
 				if (logTimersToConsole)
 					Puts($"Run real timer: ({DateTime.Now.ToString("HH:mm")}) {runCmd}");
-				ConsoleSystem.Run.Server.Quiet("ad." + runCmd);
+				ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "ad." + runCmd);
 			}
 		}
 
@@ -1216,7 +1280,7 @@ namespace Oxide.Plugins
 				string runCmd = (string)serverTimers[lastHour.ToString()];
 				if (logTimersToConsole)
 					Puts($"Run server timer: ({lastHour}) {runCmd}");
-				ConsoleSystem.Run.Server.Quiet("ad." + runCmd);
+				ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "ad." + runCmd);
 			}
 		}
 
@@ -1448,13 +1512,16 @@ namespace Oxide.Plugins
 			if (arg.Args[0] == "*")
 			{
 				foreach( BasePlayer target in BasePlayer.activePlayerList)
+				{
+					if (target.IsAdmin) continue;
 					NextTick(() => {
 						var newpos = new Vector3();
 						newpos = target.transform.position;
 						startCargoPlane(newpos, false, null, "dropdirect");
 						if (notifyDropPlayer)
-							MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this));
+							MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this, target.UserIDString));
 					});
+				}
 				SendReply(arg, string.Format($"Started Airdrop to each active player"));
 			}
 			else
@@ -1470,7 +1537,7 @@ namespace Oxide.Plugins
 				startCargoPlane(newpos, false, null, "dropdirect");
 				SendReply(arg, string.Format($"Starting Airdrop to Player '{target.displayName}' at: {newpos.ToString("0")}"));
 				if (notifyDropPlayer)
-					MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this));
+					MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this, target.UserIDString));
 			}
 		}
 
@@ -1517,7 +1584,7 @@ namespace Oxide.Plugins
 			setting.Clear();
 			SendReply(arg, string.Format($"Direct Drop to Player '{target.displayName}' at: {target.transform.position.ToString("0")}"));
 			if (notifyDropDirect)
-				MessageToPlayer(target, lang.GetMessage("msgDropDirect", this));
+				MessageToPlayer(target, lang.GetMessage("msgDropDirect", this, target.UserIDString));
 
 		}
 
@@ -1625,13 +1692,16 @@ namespace Oxide.Plugins
 			if (args[0] == "*")
 			{
 				foreach( BasePlayer target in BasePlayer.activePlayerList)
+				{
+					if (target.IsAdmin) continue;
 					NextTick(() => {
 						var newpos = new Vector3();
 						newpos = target.transform.position;
 						startCargoPlane(newpos, false, null, "dropdirect");
 						if (notifyDropPlayer)
-							MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this));
+							MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this, target.UserIDString));
 					});
+				}
 				if (notifyByChatAdminCalls)
 					SendReply(player, $"<color={colorAdmMsg}>Started Airdrop to each active player</color>");
 			}
@@ -1649,7 +1719,7 @@ namespace Oxide.Plugins
 				if (notifyByChatAdminCalls)
 					SendReply(player, $"<color={colorAdmMsg}>Airdrop called to player '{target.displayName}' at: {newpos.ToString("0")}</color>");
 				if (notifyDropPlayer)
-					MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this));
+					MessageToPlayer(target, lang.GetMessage("msgDropPlayer", this, target.UserIDString));
 			}
 		}
 
@@ -1701,7 +1771,7 @@ namespace Oxide.Plugins
 			if (notifyByChatAdminCalls)
 				SendReply(player, $"<color={colorAdmMsg}>Direct Drop to Player '{target.displayName}' at: {target.transform.position.ToString("0")}</color>");
 			if (notifyDropDirect)
-				MessageToPlayer(target, lang.GetMessage("msgDropDirect", this));
+				MessageToPlayer(target, lang.GetMessage("msgDropDirect", this, target.UserIDString));
 		}
 
 		[ChatCommand("dropmass")]
@@ -1877,22 +1947,15 @@ namespace Oxide.Plugins
 
 		#region Messaging
 
-		void MessageToAll(string message)
-		{
-			PrintToChat(string.Format(Format, Color, Prefix) + $"<color={colorTextMsg}>"+ message +"</color>");
-		}
-
 		void MessageToAllGui(string message)
 		{
 			var msg = string.Format(Format, Color, Prefix) + message;
 			rust.RunServerCommand(guiCommand+" "+msg.Quote());
 		}
 
-		void MessageToAllSimpleUI(string message)
+		void MessageToPlayerUI(BasePlayer player, string message)
 		{
-			var msg = string.Format(Format, Color, Prefix) + message;
-			foreach (BasePlayer player in BasePlayer.activePlayerList)
-				UIMessage(player, msg);
+			UIMessage(player, string.Format(Format, Color, Prefix) + message);
 		}		
 
 		void MessageToPlayer(BasePlayer player, string message)
@@ -1900,24 +1963,24 @@ namespace Oxide.Plugins
 			PrintToChat(player, string.Format(Format,Color, Prefix) + $"<color={colorTextMsg}>"+ message +"</color>");
 		}
 
-		string GetDirectionAngle(float angle)
+		string GetDirectionAngle(float angle, string UserIDString)
 		{
 			if (angle > 337.5 || angle < 22.5)
-				return "North";
+				return lang.GetMessage("msgNorth", this, UserIDString);
 			else if (angle > 22.5 && angle < 67.5)
-				return "NorthEast";
+				return lang.GetMessage("msgNorthEast", this, UserIDString);
 			else if (angle > 67.5 && angle < 112.5)
-				return "East";
+				return lang.GetMessage("msgEast", this, UserIDString);
 			else if (angle > 112.5 && angle < 157.5)
-				return "SouthEast";
+				return lang.GetMessage("msgSouthEast", this, UserIDString);
 			else if (angle > 157.5 && angle < 202.5)
-				return "South";
+				return lang.GetMessage("msgSouth", this, UserIDString);
 			else if (angle > 202.5 && angle < 247.5)
-				return "SouthWest";
+				return lang.GetMessage("msgSouthWest", this, UserIDString);
 			else if (angle > 247.5 && angle < 292.5)
-				return "West";
+				return lang.GetMessage("msgWest", this, UserIDString);
 			else if (angle > 292.5 && angle < 337.5)
-				return "NorthWest";
+				return lang.GetMessage("msgNorthWest", this, UserIDString);
 			return "";
 		}
 
@@ -1925,7 +1988,7 @@ namespace Oxide.Plugins
 		{
 			foreach (var player in BasePlayer.activePlayerList.Where(p => Vector3.Distance(p.transform.position, drop.transform.position) < supplyDropNotifyDistance).ToList())
 			{
-				var msg = string.Format(lang.GetMessage("msgDropLanded", this, player.UserIDString), Vector3.Distance(player.transform.position, drop.transform.position), GetDirectionAngle(Quaternion.LookRotation((drop.transform.position - player.eyes.position).normalized).eulerAngles.y));
+				var msg = string.Format(lang.GetMessage("msgDropLanded", this, player.UserIDString), Vector3.Distance(player.transform.position, drop.transform.position), GetDirectionAngle(Quaternion.LookRotation((drop.transform.position - player.eyes.position).normalized).eulerAngles.y, player.UserIDString));
 				MessageToPlayer(player, msg);
 			}
 		}

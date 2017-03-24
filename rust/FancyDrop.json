@@ -2,10 +2,11 @@
     "name": "FancyDrop",
     "description": "The \"Next Level\" of a fancy airdrop-toolset",
     "author": "Fujikura",
-    "version": "2.6.3",
+    "version": "2.6.15",
     "configuration": true,
     "suggest": {
-        "GUIAnnouncements": "*"
+        "GUIAnnouncements": "*",
+        "BetterLoot": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/fancydrop.1934",

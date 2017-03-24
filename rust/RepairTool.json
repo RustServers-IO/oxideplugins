@@ -2,7 +2,7 @@
     "name": "Repair Tool",
     "description": "Repair any entity that has health",
     "author": "k1lly0u",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/repair-tool.1833",

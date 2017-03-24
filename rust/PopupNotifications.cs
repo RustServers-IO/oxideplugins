@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Popup Notifications", "emu / k1lly0u", "0.1.0", ResourceId = 1252)]
+    [Info("Popup Notifications", "emu / k1lly0u", "0.1.2", ResourceId = 1252)]
     public class PopupNotifications : RustPlugin
     {
         private static Vector2 position;
@@ -70,7 +70,7 @@ namespace Oxide.Plugins
         [ChatCommand("popupmsg")]
         private void SendPopupMessage(BasePlayer player, string command, string[] args)
         {
-			if(!player.IsAdmin())
+			if(!player.IsAdmin)
 				return;
 		
 			if(args.Length == 1)
@@ -95,7 +95,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("popupmsg.global")]
         private void ConPopupMessageGlobal(ConsoleSystem.Arg arg)
         {
-			if(!arg.isAdmin)
+			if(!arg.IsAdmin)
 				return;
 		
 			if(arg.Args.Length == 1)
@@ -118,7 +118,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("popupmsg.toplayer")]
         private void ConPopupMessageToPlayer(ConsoleSystem.Arg arg)
         {
-            if (!arg.isAdmin)
+            if (!arg.IsAdmin)
                 return;
 
             if (arg.Args.Length >= 1)
@@ -131,7 +131,7 @@ namespace Oxide.Plugins
                 }
                 if (arg.Args.Length == 2)
                 {
-                    if (player as BasePlayer != null && (player as BasePlayer).isConnected)
+                    if (player as BasePlayer != null && (player as BasePlayer).IsConnected)
                         CreatePopupOnPlayer(arg.Args[0], player as BasePlayer);
                     else
                         Puts(msg("Couldn't send popup notification to player"));
@@ -139,7 +139,7 @@ namespace Oxide.Plugins
                 else if (arg.Args.Length == 3)
                 {
 
-                    if (player as BasePlayer != null && (player as BasePlayer).isConnected)
+                    if (player as BasePlayer != null && (player as BasePlayer).IsConnected)
                     {
                         float duration;
                         if (float.TryParse(arg.Args[2], out duration))
@@ -167,7 +167,7 @@ namespace Oxide.Plugins
                     return msg("Multiple players found with that name");
                 else if (players.ToArray()[0].Object is BasePlayer)
                 {
-                    if (!(players.ToArray()[0].Object as BasePlayer).isConnected)
+                    if (!(players.ToArray()[0].Object as BasePlayer).IsConnected)
                         return string.Format(msg("{0} is not online"), players.ToArray()[0].Name);
                     return players.ToArray()[0].Object as BasePlayer;
                 }            

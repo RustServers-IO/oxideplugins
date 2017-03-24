@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BlockBugPrevent", "sami37", "1.0.0", ResourceId = 2166)]
+    [Info("BlockBugPrevent", "sami37", "1.1.0", ResourceId = 2166)]
     [Description("Prevent foundation block build on another foundation.")]
     public class BlockBugPrevent : RustPlugin
     {
@@ -13,27 +13,44 @@ namespace Oxide.Plugins
 				["NotAllowed"] = "<color='#DD0000'>Your are not allowed to build foundation here.</color>"
 			}, this);
         }
-        static int colisionentity = LayerMask.GetMask("Construction");
-        void OnEntityBuilt(Planner planner, UnityEngine.GameObject gameObject)
+
+        private object RaycastAll<T>(Ray ray) where T : BaseEntity
         {
+            var hits = Physics.RaycastAll(ray);
+            GamePhysics.Sort(hits);
+            var distance = 100f;
+            object target = false;
+            foreach (var hit in hits)
+            {
+                var ent = hit.GetEntity();
+                if (ent is T && hit.distance < distance)
+                {
+                    target = ent;
+                    break;
+                }
+            }
+
+            return target;
+        }
+
+        void OnEntityBuilt(Planner planner, GameObject gameObject)
+        {
+            bool destroy = false;
             var player = planner.GetOwnerPlayer();
             if (player == null) return;
-			BuildingBlock block = gameObject.GetComponent<BuildingBlock>();
-			if (block == null) return;
-			Vector3 sourcepos = block.transform.position;
-			RaycastHit initial_hit;
-			if (Physics.Raycast(sourcepos, Vector3.down, out initial_hit, colisionentity))
-			{
-				var entity = initial_hit.collider.GetComponentInParent<BuildingBlock>();
-				if (entity != null)
-				{
-					if (block.LookupPrefab().name.Contains("foundation"))
-					{
-						block.KillMessage();
-						SendReply(player, lang.GetMessage("NotAllowed", this));
-					}
-				}
-			}
+            BuildingBlock block = gameObject.GetComponent<BuildingBlock>();
+            if (block == null) return;
+            if (!block.PrefabName.Contains("foundation"))
+                return;
+            Vector3 sourcepos = block.transform.position;
+            var entities = RaycastAll<BaseEntity>(new Ray(sourcepos + new Vector3(0f, 1.5f, 0f), Vector3.up));
+            if (entities.ToString() != "False")
+                destroy = true;
+            if (destroy)
+            {
+                block.Kill();
+                SendReply(player, lang.GetMessage("NotAllowed", this));
+            }
         }
     }
 }

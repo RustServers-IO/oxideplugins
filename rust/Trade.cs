@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Trade", "Calytic", "1.0.9", ResourceId = 1242)]
+    [Info("Trade", "Calytic", "1.1.1", ResourceId = 1242)]
     class Trade : RustPlugin
     {
         #region Configuration Data
@@ -19,6 +19,7 @@ namespace Oxide.Plugins
         private float cooldownMinutes;
         private float maxRadius;
         private float pendingSeconds;
+        private float radiationMax;
 
         [PluginReference]
         private Plugin Ignore;
@@ -144,7 +145,7 @@ namespace Oxide.Plugins
 
             public bool IsSourceValid()
             {
-                if (sourcePlayer != null && sourcePlayer.IsConnected())
+                if (sourcePlayer != null && sourcePlayer.IsConnected)
                     return true;
 
                 return false;
@@ -152,7 +153,7 @@ namespace Oxide.Plugins
 
             public bool IsTargetValid()
             {
-                if (targetPlayer != null && targetPlayer.IsConnected())
+                if (targetPlayer != null && targetPlayer.IsConnected)
                     return true;
 
                 return false;
@@ -202,6 +203,7 @@ namespace Oxide.Plugins
             cooldownMinutes = GetConfig("Settings","cooldownMinutes", 5f);
             maxRadius = GetConfig("Settings","maxRadius", 5000f);
             pendingSeconds = GetConfig("Settings", "pendingSeconds", 25f);
+            radiationMax = GetConfig("Settings", "radiationMax", 1f);
         }
 
         void Unloaded()
@@ -230,6 +232,7 @@ namespace Oxide.Plugins
             Config["Settings", "cooldownMinutes"] = 5;
             Config["Settings", "maxRadius"] = 5000f;
             Config["Settings", "pendingSeconds"] = 25f;
+            Config["Settings", "radiationMax"] = 1;
             Config["VERSION"] = Version.ToString();
         }
 
@@ -252,6 +255,7 @@ namespace Oxide.Plugins
             Config["VERSION"] = Version.ToString();
 
             // NEW CONFIGURATION OPTIONS HERE
+            Config["Settings", "radiationMax"] = GetConfig("Settings", "radiationMax", 1f);
             // END NEW CONFIGURATION OPTIONS
 
             PrintToConsole("Upgrading configuration file");
@@ -289,6 +293,7 @@ namespace Oxide.Plugins
                 {"Denied: Swimming", "You cannot do that while swimming"},
                 {"Denied: Falling", "You cannot do that while falling"},
                 {"Denied: Wounded", "You cannot do that while wounded"},
+                {"Denied: Irradiated", "You cannot do that while irradiated"},
                 {"Denied: Generic", "You cannot do that right now"},
                 {"Denied: They Busy", "That player is busy"},
                 {"Denied: They Ignored You", "They ignored you"},
@@ -311,7 +316,7 @@ namespace Oxide.Plugins
         object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
         {
             if (entity == null || target == null || entity == target) return null;
-            if (target.IsAdmin()) return null;
+            if (target.IsAdmin) return null;
 
             OnlinePlayer onlinePlayer;
             bool IsMyBox = false;
@@ -716,7 +721,7 @@ namespace Oxide.Plugins
         }
 
         private void HideTrade(BasePlayer player) {
-            if (player.IsConnected())
+            if (player.IsConnected)
             {
                 var obj = new Facepunch.ObjectList("TradeMsg");
                 CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", obj);
@@ -798,7 +803,7 @@ namespace Oxide.Plugins
 
         void PlayerCooldown(BasePlayer player)
         {
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 return;
             }
@@ -970,7 +975,7 @@ namespace Oxide.Plugins
 
             onlinePlayer.Clear();
 
-            view.KillMessage();
+            view.Kill(BaseNetworkable.DestroyMode.None);
 
             if (onlinePlayers.Values.Count(p => p.View != null) <= 0)
             {
@@ -987,6 +992,11 @@ namespace Oxide.Plugins
                 SendReply(player, GetMsg("Denied: Privilege", player));
                 return false;
             }
+            if (radiationMax > 0 && player.radiationLevel > radiationMax)
+            {
+                SendReply(player, GetMsg("Denied: Irradiated", player));
+                return false;
+            }
             if(player.IsSwimming()) {
                 SendReply(player, GetMsg("Denied: Swimming", player));
                 return false;
@@ -995,7 +1005,7 @@ namespace Oxide.Plugins
                 SendReply(player, GetMsg("Denied: Falling", player));
                 return false;
             }
-            if (player.IsFlying())
+            if (player.IsFlying)
             {
                 SendReply(player, GetMsg("Denied: Falling", player));
                 return false;
@@ -1052,7 +1062,7 @@ namespace Oxide.Plugins
 
         bool hasAccess(BasePlayer player, string permissionname)
         {
-            if (player.IsAdmin()) return true;
+            if (player.IsAdmin) return true;
             return permission.UserHasPermission(player.UserIDString, permissionname);
         }
 

@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using Rust;
 using System.Reflection;
 using Oxide.Core.Plugins;
 using Oxide.Core.Configuration;
@@ -10,7 +9,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Airstrike", "k1lly0u", "0.2.41", ResourceId = 1489)]
+    [Info("Airstrike", "k1lly0u", "0.2.51", ResourceId = 1489)]
     class Airstrike : RustPlugin
     {
         #region fields
@@ -151,7 +150,7 @@ namespace Oxide.Plugins
                     {
                         entity.GetComponent<TimedExplosive>().timerAmountMin = 30f;                        
                         if (useCooldown)                        
-                            if (!CheckPlayerData(player))
+                            if (!CheckPlayerData(player, false))
                                 return;
                         var pos = entity.GetEstimatedWorldPosition();
                         timer.Once(2.8f, () => 
@@ -176,7 +175,7 @@ namespace Oxide.Plugins
         #region Plugin Init
         private void RegisterPermissions()
         {
-            permission.RegisterPermission("airstrike.admin", this);
+            permission.RegisterPermission("airstrike.chat", this);
             permission.RegisterPermission("airstrike.canuse", this);
             permission.RegisterPermission("airstrike.buystrike", this);
             permission.RegisterPermission("airstrike.mass", this);
@@ -329,7 +328,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        private bool CheckPlayerData(BasePlayer player)
+        private bool CheckPlayerData(BasePlayer player, bool isSquad)
         {
             if (noAdminCooldown)
                 if (player.net.connection.authLevel >= auth) return true;
@@ -340,13 +339,17 @@ namespace Oxide.Plugins
             
             if (!d.ContainsKey(ID))
             {
-                d.Add(ID, new PCDInfo((long)timeStamp + cooldownTime));
+                d.Add(ID, new PCDInfo()
+                {
+                    squadCD = isSquad ? timeStamp + cooldownTime : 0,
+                    strikeCD = !isSquad ? timeStamp + cooldownTime : 0
+                }); 
                 SaveData();
                 return true;
             }
             else
             {
-                long time = d[ID].Cooldown;
+                double time = isSquad ? d[ID].squadCD : d[ID].strikeCD;
                 if (time > timeStamp && time != 0.0)
                 {
                     SendReply(player, string.Format(lang.GetMessage("title", this) + lang.GetMessage("cdTime", this, player.UserIDString), (int)(time - timeStamp) / 60));
@@ -354,7 +357,9 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    d[ID].Cooldown = (long)timeStamp + cooldownTime;
+                    if (isSquad)
+                        d[ID].squadCD = timeStamp + cooldownTime;
+                    else d[ID].strikeCD = timeStamp + cooldownTime;
                     SaveData();
                     return true;
                 }
@@ -479,7 +484,7 @@ namespace Oxide.Plugins
         #region Chat/Console Commands and Perms       
         bool canChatStrike(BasePlayer player)
         {
-            if (permission.UserHasPermission(player.userID.ToString(), "airstrike.admin")) return true;
+            if (permission.UserHasPermission(player.userID.ToString(), "airstrike.chat")) return true;
             else if (player.net.connection.authLevel >= auth) return true;
             return false;
         }
@@ -520,7 +525,7 @@ namespace Oxide.Plugins
             if (!canChatStrike(player)) return;
 
             if (useCooldown)
-                if (!CheckPlayerData(player)) return;
+                if (!CheckPlayerData(player, false)) return;
 
             if (args.Length == 0)
             {
@@ -551,7 +556,11 @@ namespace Oxide.Plugins
         [ChatCommand("squadstrike")]
         private void chatsquadStrike(BasePlayer player, string command, string[] args)
         {
-            if (!canChatStrike(player)) return;
+            if (!canSquadStrike(player)) return;
+
+            if (useCooldown)
+                if (!CheckPlayerData(player, true)) return;
+
             if (args.Length == 0)
             {
                 squadStrikeOnPlayer(player);
@@ -586,7 +595,7 @@ namespace Oxide.Plugins
                 if (!canBuyStrike(player)) return;
 
                 if (useCooldown)
-                    if (!CheckPlayerData(player)) return;
+                    if (!CheckPlayerData(player, false)) return;
 
                 if (args.Length == 0)
                 {
@@ -836,17 +845,12 @@ namespace Oxide.Plugins
         #region Classes and Data Management       
         class PlayerCooldown
         {
-            public Dictionary<ulong, PCDInfo> pCooldown = new Dictionary<ulong, PCDInfo>();
-            public PlayerCooldown() { }
+            public Dictionary<ulong, PCDInfo> pCooldown = new Dictionary<ulong, PCDInfo>();            
         }
         class PCDInfo
         {
-            public long Cooldown;
-            public PCDInfo() { }
-            public PCDInfo(long cd)
-            {
-                Cooldown = cd;
-            }
+            public double strikeCD;
+            public double squadCD;            
         }
         void SaveData()
         {

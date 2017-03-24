@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoveAAA", "Tuntenfisch", "0.4.5", ResourceId = 1645)]
+    [Info("RemoveAAA", "Tuntenfisch", "0.4.6", ResourceId = 1645)]
     [Description("Removes admin abuse announcements!")]
     class RemoveAAA : RustPlugin
     {
@@ -658,7 +658,7 @@ namespace Oxide.Plugins
         /// <returns> A bool specifying whether the user has the given permission or not.</returns>
         bool HasPermission(ConsoleSystem.Arg arg, string permission)
         {
-            if (arg.cmd.Admin && arg.Connection == null) return true;
+            if (arg.cmd.ServerAdmin && arg.Connection == null) return true;
             if (arg.Connection != null) return this.permission.UserHasPermission(arg.Connection.userid.ToString(), Title.ToLower() + "." + permission);
             return false;
         }

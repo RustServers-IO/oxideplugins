@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("RustNotifications", "seanbyrne88", "0.8.2")]
+    [Info("RustNotifications", "seanbyrne88", "0.8.3")]
     [Description("Configurable Notifications for Rust Events")]
     class RustNotifications : RustPlugin
     {
@@ -49,7 +49,7 @@ namespace Oxide.Plugins
         [ChatCommand("rustNotifyResetConfig")]
         void CommandResetConfig(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 LoadDefaultConfig();
                 LoadDefaultMessages();
@@ -64,7 +64,7 @@ namespace Oxide.Plugins
         [ChatCommand("rustNotifyResetMessages")]
         void CommandResetMessages(BasePlayer player, string command, string[] args)
         {
-            if(player.IsAdmin())
+            if(player.IsAdmin)
             {
                 LoadDefaultMessages();
             }
@@ -78,7 +78,7 @@ namespace Oxide.Plugins
         [ChatCommand("rustNotifySetHealthThreshold")]
         void CommandSetHealthThreshold(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 if (args.Length == 2)
                 {

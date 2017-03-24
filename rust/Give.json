@@ -2,7 +2,7 @@
     "name": "Give",
     "description": "Give a player or yourself",
     "author": "Reneb",
-    "version": "2.1.5",
+    "version": "2.1.6",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/give.666",

@@ -10,7 +10,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("TrollTax", "Absolut", "1.0.0", ResourceId = 000000)]
+    [Info("TrollTax", "Absolut", "1.1.0", ResourceId = 000000)]
 
     class TrollTax : RustPlugin
     {
@@ -27,6 +27,7 @@ namespace Oxide.Plugins
 
         private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
         private Dictionary<ulong, Coords> BoxPrep = new Dictionary<ulong, Coords>();
+        private List<ulong> VoidSelection = new List<ulong>();
 
         #endregion
 
@@ -38,16 +39,50 @@ namespace Oxide.Plugins
             lang.RegisterMessages(messages, this);
         }
 
+        void InitializeTaxTimer(ulong taxer, ulong payer)
+        {
+            if (!ttData.VictimLimit.ContainsKey(payer))
+                ttData.VictimLimit.Add(payer, new Dictionary<ulong, Timer>());
+            if (ttData.VictimLimit[payer].ContainsKey(taxer))
+                ttData.VictimLimit[payer].Remove(taxer);
+            if (!ttData.TaxCollector.ContainsKey(taxer))
+                ttData.TaxCollector.Add(taxer, new List<ulong>());
+            ttData.TaxCollector[taxer].Add(payer);
+            ttData.VictimLimit[payer].Add(taxer, timer.Once(configData.TaxTimeLimit * 3600, () => RemoveTax(payer, taxer)));
+        }
+
+        void RemoveTax(ulong payer, ulong taxer)
+        {
+            if (ttData.VictimLimit.ContainsKey(payer))
+                if (ttData.VictimLimit[payer].ContainsKey(taxer))
+                    ttData.VictimLimit[payer].Remove(taxer);
+            if (ttData.TaxCollector.ContainsKey(taxer))
+                if (ttData.TaxCollector[taxer].Contains(payer))
+                {
+                    ttData.TaxCollector[taxer].Remove(payer);
+                    GetSendMSG(BasePlayer.FindByID(payer), "TaxRemoved");
+                }
+        }
+
         void Unload()
         {
             BoxPrep.Clear();
+            VoidSelection.Clear();
             foreach (var entry in timers)
                 entry.Value.Destroy();
             timers.Clear();
             SaveData();
         }
 
-        void OnServerInitialized()
+        private void OnPlayerDisconnected(BasePlayer player)
+        {
+            if (VoidSelection.Contains(player.userID))
+                VoidSelection.Remove(player.userID);
+            if (BoxPrep.ContainsKey(player.userID))
+                BoxPrep.Remove(player.userID);
+        }
+
+            void OnServerInitialized()
         {
             LoadVariables();
             LoadData();
@@ -84,7 +119,7 @@ namespace Oxide.Plugins
                 Vector3 ContPosition = entity.transform.position;
                 if (ttData.TaxBox.ContainsKey(entity.OwnerID))
                 {
-                    if (ContPosition == new Vector3 ( ttData.TaxBox[entity.OwnerID].x, ttData.TaxBox[entity.OwnerID].y, ttData.TaxBox[entity.OwnerID].z))
+                    if (ContPosition == new Vector3(ttData.TaxBox[entity.OwnerID].x, ttData.TaxBox[entity.OwnerID].y, ttData.TaxBox[entity.OwnerID].z))
                     {
                         ttData.TaxBox.Remove(entity.OwnerID);
                         BasePlayer owner = BasePlayer.FindByID(entity.OwnerID);
@@ -100,7 +135,8 @@ namespace Oxide.Plugins
                 var victim = entity.ToPlayer();
                 if (ttData.TaxCollector.ContainsKey(victim.userID))
                 {
-                    ttData.TaxCollector.Remove(victim.userID);
+                    foreach (var entry in ttData.TaxCollector[victim.userID])
+                        RemoveTax(entry, victim.userID);
                     SaveData();
                 }
                 if (entity is BasePlayer && hitInfo.Initiator is BasePlayer)
@@ -109,9 +145,7 @@ namespace Oxide.Plugins
                     if (entity as BasePlayer == null || hitInfo == null) return;
                     if (victim.userID != attacker.userID)
                     {
-                        if (!ttData.TaxCollector.ContainsKey(attacker.userID))
-                            ttData.TaxCollector.Add(attacker.userID, new List<ulong>());
-                        ttData.TaxCollector[attacker.userID].Add(victim.userID);
+                        InitializeTaxTimer(attacker.userID, victim.userID);
                         SaveData();
                     }
                 }
@@ -398,9 +432,10 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, PanelTax);
             var element = UI.CreateElementContainer(PanelTax, UIColors["dark"], "0.425 0.45", "0.575 0.55", true);
             UI.CreatePanel(ref element, PanelTax, UIColors["light"], "0.01 0.02", "0.99 0.98");
-            UI.CreateLabel(ref element, PanelTax, MsgColor, GetLang("TaxBoxCreation"), 14, "0.05 0.5", "0.95 0.9");
-            UI.CreateButton(ref element, PanelTax, UIColors["buttongreen"], GetLang("Yes"), 14, "0.05 0.1", "0.475 0.4", $"UI_SaveTaxBox");
-            UI.CreateButton(ref element, PanelTax, UIColors["buttonred"], GetLang("No"), 14, "0.525 0.1", "0.95 0.4", $"UI_DestroyTaxPanel");
+            UI.CreateLabel(ref element, PanelTax, MsgColor, GetLang("TaxBoxCreation"), 14, "0.05 0.56", "0.95 0.9");
+            UI.CreateButton(ref element, PanelTax, UIColors["buttongreen"], GetLang("Yes"), 14, "0.05 0.25", "0.475 0.55", $"UI_SaveTaxBox");
+            UI.CreateButton(ref element, PanelTax, UIColors["buttonred"], GetLang("No"), 14, "0.525 0.25", "0.95 0.55", $"UI_DestroyTaxPanel");
+            UI.CreateButton(ref element, PanelTax, UIColors["CSorange"], GetLang("VOID"), 14, "0.25 0.05", "0.75 0.24", $"UI_DontAsk");
             CuiHelper.AddUi(player, element);
         }
         #endregion
@@ -410,7 +445,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SaveTaxBox")]
         private void cmdUI_SaveTaxBox(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyTaxPanel(player);
@@ -426,11 +461,23 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyTaxPanel")]
         private void cmdUI_DestroyTaxPanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyTaxPanel(player);
         }
+
+        [ConsoleCommand("UI_DontAsk")]
+        private void cmdUI_DontAsk(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Connection.player as BasePlayer;
+            if (player == null)
+                return;
+            DestroyTaxPanel(player);
+            if (VoidSelection.Contains(player.userID)) return;
+            VoidSelection.Add(player.userID);
+        }
+
         #endregion
 
         #region Timers
@@ -453,11 +500,12 @@ namespace Oxide.Plugins
                 timers["info"].Destroy();
                 timers.Remove("info");
             }
+            if (configData.InfoInterval == 0) return;
             foreach (BasePlayer p in BasePlayer.activePlayerList)
             {
                 GetSendMSG(p, "TrollTaxInfo");
             }
-            timers.Add("info", timer.Once(900, () => InfoLoop()));
+            timers.Add("info", timer.Once(configData.InfoInterval * 60, () => InfoLoop()));
         }
 
         private void SetBoxFullNotification(string ID)
@@ -472,6 +520,8 @@ namespace Oxide.Plugins
         {
             public Dictionary<ulong, List<ulong>> TaxCollector = new Dictionary<ulong, List<ulong>>();
             public Dictionary<ulong, Coords> TaxBox = new Dictionary<ulong, Coords>();
+            public Dictionary<ulong, Dictionary<ulong, Timer>> VictimLimit = new Dictionary<ulong, Dictionary<ulong, Timer>>();
+
         }
 
         class Coords
@@ -509,6 +559,8 @@ namespace Oxide.Plugins
         {
             //--------//General Settings//--------//
             public double TaxRate { get; set; }
+            public int TaxTimeLimit { get; set; }
+            public int InfoInterval { get; set; }
         }
         private void LoadVariables()
         {
@@ -520,6 +572,7 @@ namespace Oxide.Plugins
             var config = new ConfigData
             {
                 TaxRate = 5,
+                TaxTimeLimit = 8,
             };
             SaveConfig(config);
         }
@@ -537,7 +590,8 @@ namespace Oxide.Plugins
             {"TaxBoxFull", "Your tax box is full! Clear room to generate taxes." },
             {"TaxBoxCreation", "Would like to make this your tax box?" },
             {"Yes", "Yes?" },
-            {"No", "No?" }
+            {"No", "No?" },
+            {"TaxRemoved", "You are no longering being taxed by one of your taxers!" }
         };
         #endregion
     }

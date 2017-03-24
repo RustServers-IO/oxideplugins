@@ -6,7 +6,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("RotatingBillboards", "k1lly0u", "0.1.1", ResourceId = 2199)]
+    [Info("RotatingBillboards", "k1lly0u", "0.1.2", ResourceId = 2199)]
     class RotatingBillboards : RustPlugin
     {
         #region Fields
@@ -67,21 +67,15 @@ namespace Oxide.Plugins
         {
             private Signage entity;
             private float secsToTake;
-            private float secsTaken;
 
-            private float initialRot;
-            private Vector3 startRot;
-            private Vector3 endRot;
-
+            private float initialRot; 
             private bool isRotating;
 
             void Awake()
             {
                 entity = GetComponent<Signage>();                
                 initialRot = entity.transform.eulerAngles.y;
-                secsToTake = instance.configData.RotationSpeed;
-                startRot = new Vector3(entity.transform.eulerAngles.x, 0.01f, entity.transform.eulerAngles.z);
-                endRot = new Vector3(entity.transform.eulerAngles.x, 359.99f, entity.transform.eulerAngles.z);
+                secsToTake = instance.configData.RotationSpeed;               
                 isRotating = false;
             }            
             void Destroy()
@@ -93,15 +87,8 @@ namespace Oxide.Plugins
             }
             void FixedUpdate()
             {
-                if (!isRotating) return;                
-                secsTaken = secsTaken + UnityEngine.Time.deltaTime;
-                float single = Mathf.InverseLerp(0f, secsToTake, secsTaken);
-                entity.transform.eulerAngles = Vector3.Lerp(startRot, endRot, single);
-                if (single >= 1)
-                {
-                    entity.transform.eulerAngles = startRot;
-                    secsTaken = 0;
-                }
+                if (!isRotating) return;
+                entity.transform.RotateAround(entity.transform.position, Vector3.up, secsToTake);
                 entity.transform.hasChanged = true;
                 entity.SendNetworkUpdateImmediate();
             }
@@ -153,7 +140,7 @@ namespace Oxide.Plugins
         [ChatCommand("rot")]
         void cmdRot(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             if (args.Length == 0)
             {
                 SendReply(player, msg("/rot add - Adds a rotator to the sign you are looking at", player.UserIDString));

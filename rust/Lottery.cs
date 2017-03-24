@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lottery", "Sami37", "1.1.0", ResourceId = 2145)]
+    [Info("Lottery", "Sami37", "1.1.5", ResourceId = 2145)]
     internal class Lottery : RustPlugin
     {
         #region Economy Support
@@ -77,7 +77,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region general_variable
-        private bool newConfig, UseSR, UseNPC;
+        private bool newConfig, UseSR, UseNPC, AutoCloseAfterPlaceingBet;
         public Dictionary<ulong, playerinfo> Currentbet = new Dictionary<ulong, playerinfo>();
         private string container, containerwin, BackgroundUrl, BackgroundColor, WinBackgroundUrl, WinBackgroundColor;
         private DynamicConfigFile data;
@@ -91,6 +91,7 @@ namespace Oxide.Plugins
         private List<object> DefaultBasePoint = null;
 		private FieldInfo serverinput;
         private Vector3 eyesAdjust;
+        private string MainContainer = "MainContainer";
         #endregion
 
         #region config
@@ -144,6 +145,7 @@ namespace Oxide.Plugins
             DefaultMinRange = GetConfigValue("Global", "RollMinRange", 1000);
             DefaultMaxRange = GetConfigValue("Global", "RollMaxRange", 9999);
             UseSR = GetConfigValue("ServerRewards", "Enabled", false);
+            AutoCloseAfterPlaceingBet = GetConfigValue("Global", "Place Bet Auto-close", false);
             UseNPC = GetConfigValue("HumanNPC", "Enabled", false);
             NPCID = GetConfigValue("HumanNPC", "npcID", new List<object>());
             BackgroundUrl = GetConfigValue("UI", "BackgroundMainURL",
@@ -340,12 +342,25 @@ namespace Oxide.Plugins
             element.Components.Add(rectTransform);
             element.Name = CuiHelper.GetGuid();
             element.Parent = panelName;
-
             return element;
+        }
+
+        void RefreshUI(BasePlayer player, string[] args)
+        {
+            CuiHelper.DestroyUi(player, "containerLotery");
+            CuiHelper.DestroyUi(player, "containerwinLotery");
+            CuiHelper.DestroyUi(player, "ButtonBackLotery");
+            CuiHelper.DestroyUi(player, "ButtonForwardLotery");
+
+            if(Economy.IsLoaded && !UseSR)
+                ShowLotery(player, args);
+            else if(ServerRewards.IsLoaded)
+                ShowSrLotery(player,  args);
         }
 
         void GUIDestroy(BasePlayer player)
         {
+            CuiHelper.DestroyUi(player, "MainContainer");
             CuiHelper.DestroyUi(player, "containerLotery");
             CuiHelper.DestroyUi(player, "containerwinLotery");
             CuiHelper.DestroyUi(player, "ButtonBackLotery");
@@ -720,7 +735,6 @@ namespace Oxide.Plugins
                     Button =
                     {
                         Command = "cmdBet 10000 Eco",
-                        Close = container,
                         Color = "0.8 0.8 0.8 0.2"
                     },
                     Text =
@@ -735,27 +749,53 @@ namespace Oxide.Plugins
                         AnchorMax = "0.255 0.48"
                     }
                 }, container);
-                elements.Add(new CuiButton
+                if (AutoCloseAfterPlaceingBet)
                 {
-                    Button =
+                    elements.Add(new CuiButton
                     {
-                        Command = "cmdPlaceBet Eco",
-                        Close = container,
-                        Color = "0.8 0.8 0.8 0.2"
-                    },
-                    Text =
+                        Button =
+                        {
+                            Command = "cmdPlaceBet Eco",
+                            Close = container,
+                            Color = "0.8 0.8 0.8 0.2"
+                        },
+                        Text =
+                        {
+                            Text = "Place Bet",
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
+                        {
+                            AnchorMin = "0.05 0.31",
+                            AnchorMax = "0.255 0.38"
+                        }
+                    }, container);
+                }
+                else
+                {
+                    elements.Add(new CuiButton
                     {
-                        Text = "Place Bet",
-                        FontSize = 18,
-                        Align = TextAnchor.MiddleCenter
-                    },
-                    RectTransform =
-                    {
-                        AnchorMin = "0.05 0.31",
-                        AnchorMax = "0.255 0.38"
-                    }
-                }, container);
-            #endregion
+                        Button =
+                        {
+                            Command = "cmdPlaceBet Eco",
+                            Color = "0.8 0.8 0.8 0.2"
+                        },
+                        Text =
+                        {
+                            Text = "Place Bet",
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
+                        {
+                            AnchorMin = "0.05 0.31",
+                            AnchorMax = "0.255 0.38"
+                        }
+                    }, container);
+                }
+
+                #endregion
         #region winpart
                 elements.Add(new CuiLabel
                 {
@@ -1151,26 +1191,52 @@ namespace Oxide.Plugins
                         AnchorMax = "0.255 0.48"
                     }
                 }, container);
-                elements.Add(new CuiButton
+                if (AutoCloseAfterPlaceingBet)
                 {
-                    Button =
+                    elements.Add(new CuiButton
                     {
-                        Command = "cmdPlaceBet",
-                        Close = container,
-                        Color = "0.8 0.8 0.8 0.2"
-                    },
-                    Text =
+                        Button =
+                        {
+                            Command = "cmdPlaceBet",
+                            Close = container,
+                            Color = "0.8 0.8 0.8 0.2"
+                        },
+                        Text =
+                        {
+                            Text = "Place Bet",
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
+                        {
+                            AnchorMin = "0.05 0.31",
+                            AnchorMax = "0.255 0.38"
+                        }
+                    }, container);
+                }
+                else
+                {
+                    elements.Add(new CuiButton
                     {
-                        Text = "Place Bet",
-                        FontSize = 18,
-                        Align = TextAnchor.MiddleCenter
-                    },
-                    RectTransform =
-                    {
-                        AnchorMin = "0.05 0.31",
-                        AnchorMax = "0.255 0.38"
-                    }
-                }, container);
+                        Button =
+                        {
+                            Command = "cmdPlaceBet",
+                            Color = "0.8 0.8 0.8 0.2"
+                        },
+                        Text =
+                        {
+                            Text = "Place Bet",
+                            FontSize = 18,
+                            Align = TextAnchor.MiddleCenter
+                        },
+                        RectTransform =
+                        {
+                            AnchorMin = "0.05 0.31",
+                            AnchorMax = "0.255 0.38"
+                        }
+                    }, container);
+                }
+
                 #endregion
                 #region winpart
                 elements.Add(new CuiLabel
@@ -1406,7 +1472,7 @@ namespace Oxide.Plugins
                 if (reference == JackpotNumber)
                 {
                     int jackpots = (int) Math.Round(Currentbet.Sum(v => v.Value.totalbet));
-                    return bet * multiplicator + jackpots + jackpot;
+                    return bet * multiplicator + jackpots + Convert.ToInt32(jackpot);
                 }
                 #endregion
 
@@ -1573,10 +1639,40 @@ namespace Oxide.Plugins
             }
             if (Economy != null && Economy.IsLoaded && !UseSR)
             {
+                var win = new CuiElementContainer();
+                win.Add(new CuiPanel
+                {
+                    Image =
+                    {
+                        Color = WinBackgroundColor
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.8 0.2",
+                        AnchorMax = "1 0.8"
+                    },
+                    CursorEnabled = true
+                }, "Hud", MainContainer);
+                CuiHelper.AddUi(player, win);
                 ShowLotery(player, null);
             }
-            else if (ServerRewards != null && ServerRewards.IsLoaded)
+            else if (ServerRewards != null && ServerRewards.IsLoaded && UseSR)
             {
+                var win = new CuiElementContainer();
+                win.Add(new CuiPanel
+                {
+                    Image =
+                    {
+                        Color = WinBackgroundColor
+                    },
+                    RectTransform =
+                    {
+                        AnchorMin = "0.8 0.2",
+                        AnchorMax = "1 0.8"
+                    },
+                    CursorEnabled = true
+                }, "Hud", MainContainer);
+                CuiHelper.AddUi(player, win);
                 ShowSrLotery(player, null);
             }
             else
@@ -1589,12 +1685,7 @@ namespace Oxide.Plugins
         {
             if (NPCID != null && NPCID.Contains(npc.UserIDString))
             {
-                if(Economy.IsLoaded && !UseSR)
-                    ShowLotery(player, null);
-                else if(ServerRewards.IsLoaded)
-                    ShowSrLotery(player, null);
-                else
-                    SendReply(player, lang.GetMessage("CantOpen", this, player.UserIDString));
+                RefreshUI(player, null);
             }
         }
         [ConsoleCommand("cmdDestroyUI")]
@@ -1608,55 +1699,41 @@ namespace Oxide.Plugins
         void cmdLess(ConsoleSystem.Arg arg)
         {
             if (arg.Player() == null) return;
-            GUIDestroy(arg.Player());
-            if(arg.Args != null && arg.Args.Length > 0)
-            ShowLotery(arg.Player(), new[] {"less", "-1"});
-            else
-            ShowSrLotery(arg.Player(), new[] {"less", "-1"});
+            RefreshUI(arg.Player(), new[] {"less", "-1"});
         }
 
         [ConsoleCommand("cmdBet")]
         void cmdBet(ConsoleSystem.Arg arg)
         {
             if (arg.Player() == null) return;
-            GUIDestroy(arg.Player());
-            if(arg.Args != null && arg.Args.Length > 1)
-            ShowLotery(arg.Player(), new[] {"bet", arg.Args[0]});
-            else
-            ShowSrLotery(arg.Player(), new[] {"bet", arg.Args[0]});
+            RefreshUI(arg.Player(), new[] {"bet", arg.Args[0]});
         }
 
         [ConsoleCommand("cmdPlus")]
         void cmdPlus(ConsoleSystem.Arg arg)
         {
             if (arg.Player() == null) return;
-            GUIDestroy(arg.Player());
-            if(arg.Args != null && arg.Args.Length > 0)
-            ShowLotery(arg.Player(), new[] {"plus", "1"});
-            else
-            ShowSrLotery(arg.Player(), new[] {"plus", "1"});
+            RefreshUI(arg.Player(), new[] {"plus", "1"});
         }
 
         [ConsoleCommand("cmdPage")]
         void cmdPage(ConsoleSystem.Arg arg)
         {
             if (arg.Player() == null) return;
-            GUIDestroy(arg.Player());
-            if(arg.Args != null && arg.Args.Length > 1)
-            ShowLotery(arg.Player(), new[] {"page", arg.Args[1]});
-            else
-            ShowSrLotery(arg.Player(), new[] {"page", arg.Args[1]});
+            RefreshUI(arg.Player(), new[] {"page", arg.Args[1]});
         }
 
         [ConsoleCommand("cmdPlaceBet")]
         void cmdPlaceBet(ConsoleSystem.Arg arg)
         {
             Dictionary<ulong, playerinfo> playerinfos = new Dictionary<ulong, playerinfo>();
-            GUIDestroy(arg.Player());
             if (arg.Player() == null) return;
-
+            if (AutoCloseAfterPlaceingBet)
+                GUIDestroy(arg.Player());
             playerinfo playerbet = new playerinfo();
-            if (!Currentbet.ContainsKey(arg.Player().userID))
+            if (Currentbet == null)
+                return;
+           if (!Currentbet.ContainsKey(arg.Player().userID))
             {
                 Currentbet.Add(arg.Player().userID, new playerinfo());
             }
@@ -1673,60 +1750,68 @@ namespace Oxide.Plugins
             int rwd;
             if (UseSR && ServerRewards.IsLoaded)
             {
-                if (playerbet != null && SRMinBet <= playerbet.currentbet*playerbet.multiplicator)
+                if (playerbet != null)
                 {
                     var reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
-                    if (reward != null && Convert.ToInt32(reward) != 0)
+                    if (SRMinBet <= playerbet.currentbet*playerbet.multiplicator)
                     {
-                        rwd = (int)reward;
-                        if (playerbet.currentbet*playerbet.multiplicator >= MinBetjackpot)
-                            if (random == SRJackpotNumber)
-                            {
-                                foreach (var resetbet in Currentbet)
+                        if (reward != null && Convert.ToInt32(reward) != 0)
+                        {
+                            rwd = (int)reward;
+                            if (playerbet.currentbet*playerbet.multiplicator >= MinBetjackpot)
+                                if (random == SRJackpotNumber)
                                 {
-                                    resetbet.Value.totalbet = 0;
-                                    resetbet.Value.multiplicator = 1;
-                                    playerinfos.Add(resetbet.Key, resetbet.Value);
+                                    foreach (var resetbet in Currentbet)
+                                    {
+                                        resetbet.Value.totalbet = 0;
+                                        resetbet.Value.multiplicator = 1;
+                                        playerinfos.Add(resetbet.Key, resetbet.Value);
+                                    }
+                                    Currentbet.Clear();
+                                    Currentbet = playerinfos;
+                                    ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
+                                    SendReply(arg.Player(),
+                                        string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random,
+                                            rwd));
+                                    return;
                                 }
-                                Currentbet.Clear();
-                                Currentbet = playerinfos;
+                            if (Math.Abs(rwd) > 0 && random != SRJackpotNumber)
+                            {
+                                Currentbet.Remove(arg.Player().userID);
+                                Currentbet.Add(arg.Player().userID, playerbet);
                                 ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
                                 SendReply(arg.Player(),
-                                    string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random,
+                                    string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random,
                                         rwd));
-                                return;
                             }
-                        if (Math.Abs(rwd) > 0 && random != SRJackpotNumber)
-                        {
-                            Currentbet.Remove(arg.Player().userID);
-                            Currentbet.Add(arg.Player().userID, playerbet);
-                            ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
-                            SendReply(arg.Player(),
-                                string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random,
-                                    rwd));
+                            else
+                            {
+                                ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
+                                SendReply(arg.Player(),
+                                    string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random,
+                                        rwd));
+                            }
+
+                            playerbet.totalbet += playerbet.currentbet*(10/100.0);
+                            ServerRewards?.Call("TakePoints",
+                                new object[] {arg.Player().userID, playerbet.currentbet*playerbet.multiplicator});
+                            playerbet.currentbet = 0;
+                            playerbet.multiplicator = 1;
                         }
                         else
                         {
-                            ServerRewards?.Call("AddPoints", new object[] {arg.Player().userID, rwd});
-                            SendReply(arg.Player(),
-                                string.Format(lang.GetMessage("WinPoints", this, arg.Player().UserIDString), random,
-                                    rwd));
+                            playerbet.totalbet += playerbet.currentbet*(10/100.0);
+                            ServerRewards?.Call("TakePoints",
+                                new object[] {arg.Player().userID, playerbet.currentbet*playerbet.multiplicator});
+                            playerbet.currentbet = 0;
+                            playerbet.multiplicator = 1;
+                            SendReply(arg.Player(), string.Format(lang.GetMessage("NoWin", this, arg.Player().UserIDString), random));
                         }
-
-                        playerbet.totalbet += playerbet.currentbet*(10/100.0);
-                        ServerRewards?.Call("TakePoints",
-                            new object[] {arg.Player().userID, playerbet.currentbet*playerbet.multiplicator});
-                        playerbet.currentbet = 0;
-                        playerbet.multiplicator = 1;
                     }
                     else
                     {
-                        SendReply(arg.Player(), string.Format(lang.GetMessage("NoWin", this, arg.Player().UserIDString), random));
+                        SendReply(arg.Player(), string.Format(lang.GetMessage("MiniSRBet", this, arg.Player().UserIDString), SRMinBet));
                     }
-                }
-                else
-                {
-                    SendReply(arg.Player(), string.Format(lang.GetMessage("MiniSRBet", this, arg.Player().UserIDString), SRMinBet));
                 }
             }
             else if(!UseSR && Economy.IsLoaded)
@@ -1773,12 +1858,23 @@ namespace Oxide.Plugins
                     }
                     else
                     {
+                        playerbet.totalbet += playerbet.currentbet*(10/100.0);
+                        Economy?.CallHook("Withdraw", arg.Player().userID, playerbet.currentbet*playerbet.multiplicator);
+                        playerbet.currentbet = 0;
+                        playerbet.multiplicator = 1;
                         SendReply(arg.Player(),
                             string.Format(lang.GetMessage("NoWin", this, arg.Player().UserIDString), random));
                     }
                 }
             }
             SaveData(Currentbet);
+            if (AutoCloseAfterPlaceingBet)
+            {
+                if (arg.Args != null && arg.Args.Length > 1)
+                    ShowLotery(arg.Player(), new[] {"bet", arg.Args[0]});
+                else
+                    ShowSrLotery(arg.Player(), new[] {"bet", arg.Args[0]});
+            }
         }
 
         #endregion

@@ -1,0 +1,16 @@
+{
+    "name": "BedShare",
+    "description": "Allow beds to be shared with other players",
+    "author": "ignignokt84",
+    "version": "0.0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/bedshare.2343",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

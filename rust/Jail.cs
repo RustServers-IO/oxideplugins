@@ -11,7 +11,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Jail", "Reneb / k1lly0u", "3.0.31", ResourceId = 794)]
+    [Info("Jail", "Reneb / k1lly0u", "3.0.32", ResourceId = 794)]
     class Jail : RustPlugin
     {
         [PluginReference] Plugin ZoneManager;
@@ -418,7 +418,7 @@ namespace Oxide.Plugins
         }
         private bool CheckPlayerExpireTime(BasePlayer player)
         {
-            if (!player.IsConnected()) return false;
+            if (!player.IsConnected) return false;
             if (player.IsDead()) return false;
 
             double time = jailData.Prisoners[player.userID].expireTime;

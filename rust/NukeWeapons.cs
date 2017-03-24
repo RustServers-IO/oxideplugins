@@ -13,7 +13,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NukeWeapons", "k1lly0u", "0.1.61", ResourceId = 2044)]
+    [Info("NukeWeapons", "k1lly0u", "0.1.62", ResourceId = 2044)]
     class NukeWeapons : RustPlugin
     {
         #region Fields
@@ -1131,7 +1131,7 @@ namespace Oxide.Plugins
         private bool canMine(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.mine") || canAll(player);
         private bool canExplosive(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.explosive") || canAll(player);
         private bool canGrenade(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.grenade") || canAll(player);
-        private bool canAll(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.all") || player.IsAdmin();
+        private bool canAll(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.all") || player.IsAdmin;
         private bool hasUnlimited(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.unlimited");
         #endregion
 

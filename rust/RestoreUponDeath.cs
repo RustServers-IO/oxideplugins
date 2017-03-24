@@ -5,7 +5,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("RestoreUponDeath", "k1lly0u", "0.1.4", ResourceId = 1859)]
+    [Info("RestoreUponDeath", "k1lly0u", "0.1.5", ResourceId = 1859)]
     class RestoreUponDeath : RustPlugin
     {
         #region Fields
@@ -78,7 +78,7 @@ namespace Oxide.Plugins
         [ChatCommand("rod")]
         private void cmdRod(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 if (args == null || args.Length == 0)
                 {
@@ -232,12 +232,22 @@ namespace Oxide.Plugins
         }
         private void RestoreInventory(BasePlayer player)
         {
+            if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+            {
+                timer.In(1, () => RestoreInventory(player));
+                return;
+            }
             List<SavedItem> items = new List<SavedItem>();
             if (playerInv.ContainsKey(player.userID))
             {
                 items = playerInv[player.userID];
-                GivePlayerInventory(player, items);
-                playerInv.Remove(player.userID);
+                if (items.Count == 0) return;
+                player.inventory.Strip();
+                timer.In(2, () =>
+                {
+                    GivePlayerInventory(player, items);
+                    playerInv.Remove(player.userID);
+                });                
             }
         }
         #endregion

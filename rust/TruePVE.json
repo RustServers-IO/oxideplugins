@@ -1,8 +1,8 @@
 {
     "name": "TruePVE",
-    "description": "Better PVE implementation",
+    "description": "Better PVE\/PVP implementation",
     "author": "ignignokt84",
-    "version": "0.5.3",
+    "version": "0.7.11",
     "configuration": true,
     "suggest": {
         "ZoneManager": "*"

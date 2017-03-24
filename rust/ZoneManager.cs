@@ -20,7 +20,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneManager", "Reneb / Nogrod", "2.4.10", ResourceId = 739)]
+    [Info("ZoneManager", "Reneb / Nogrod", "2.4.11", ResourceId = 739)]
     public class ZoneManager : RustPlugin
     {
         private const string PermZone = "zonemanager.zone";
@@ -170,7 +170,7 @@ namespace Oxide.Plugins
 
             private bool lightsOn;
 
-            private readonly FieldInfo InstancesField = typeof(MeshColliderBatch).GetField("instances", BindingFlags.Instance | BindingFlags.NonPublic);
+            private readonly FieldInfo meshLookupField = typeof(MeshColliderBatch).GetField("meshLookup", BindingFlags.Instance | BindingFlags.NonPublic);
 
             private void Awake()
             {
@@ -294,7 +294,7 @@ namespace Oxide.Plugins
                 players = new HashSet<BasePlayer>();
                 int entities;
                 if (Info.Size != Vector3.zero)
-                    entities = Physics.OverlapBoxNonAlloc(Info.Location, Info.Size, colBuffer, Quaternion.Euler(Info.Rotation), playersMask);
+                    entities = Physics.OverlapBoxNonAlloc(Info.Location, Info.Size/2, colBuffer, Quaternion.Euler(Info.Rotation), playersMask);
                 else
                     entities = Physics.OverlapSphereNonAlloc(Info.Location, Info.Radius, colBuffer, playersMask);
                 for (var i = 0; i < entities; i++)
@@ -499,9 +499,11 @@ namespace Oxide.Plugins
                 {
                     var colliderBatch = col.GetComponent<MeshColliderBatch>();
                     if (colliderBatch == null) return;
-                    var colliders = (ListDictionary<Component, ColliderCombineInstance>) InstancesField.GetValue(colliderBatch);
-                    foreach (var instance in colliders.Values)
-                        CheckCollisionEnter(instance.collider);
+                    var colliders = ((MeshColliderLookup) meshLookupField.GetValue(colliderBatch)).src.data;
+                    var bounds = gameObject.GetComponent<Collider>().bounds;
+                    foreach (var instance in colliders)
+                        if (instance.collider && instance.collider.bounds.Intersects(bounds))
+                            CheckCollisionEnter(instance.collider);
                 }
             }
 
@@ -520,9 +522,11 @@ namespace Oxide.Plugins
                 {
                     var colliderBatch = col.GetComponent<MeshColliderBatch>();
                     if (colliderBatch == null) return;
-                    var colliders = (ListDictionary<Component, ColliderCombineInstance>) InstancesField.GetValue(colliderBatch);
-                    foreach (var instance in colliders.Values)
-                        CheckCollisionLeave(instance.collider);
+                    var colliders = ((MeshColliderLookup)meshLookupField.GetValue(colliderBatch)).src.data;
+                    var bounds = gameObject.GetComponent<Collider>().bounds;
+                    foreach (var instance in colliders)
+                        if (instance.collider && instance.collider.bounds.Intersects(bounds))
+                            CheckCollisionLeave(instance.collider);
                 }
             }
         }

@@ -9,7 +9,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiChatFlood", "DylanSMR", "1.0.1")]
+    [Info("AntiChatFlood", "DylanSMR", "1.0.2", ResourceId = 1759)]
     [Description("Data test stuff.")]
 
     class AntiChatFlood : RustPlugin
@@ -51,10 +51,10 @@ namespace Oxide.Plugins
         
         private void LoadConfigVariables()
         {
-            CheckCfg("Time untill a player can chat again.", ref WaitTillMsg);
+            CheckCfg("Time until a player can chat again.", ref WaitTillMsg);
             CheckCfg("If the warning system is enabled", ref WarningEnabled);
-            CheckCfg("How many warnings untill a player is kicked.", ref MaxWarnings);
-            CheckCfg("If the plugin disables betterchat when this loades", ref DisableBetterChat);
+            CheckCfg("How many warnings until a player is kicked.", ref MaxWarnings);
+            CheckCfg("If the plugin disables betterchat when this loads", ref DisableBetterChat);
         }
         
         void Loaded() 
@@ -81,7 +81,7 @@ namespace Oxide.Plugins
                 if(!DisableBetterChat)
                 {
                     rust.RunServerCommand("oxide.unload AntiChatFlood");
-                    PrintWarning("PLUGIN UNLOADED DUE TO BETTERCHAT EXISTING!!!");  
+                    PrintWarning("PLUGIN UNLOADED DUE TO BETTERCHAT INSTALLED!!!");  
                 }
                 else
                 {
@@ -236,8 +236,7 @@ namespace Oxide.Plugins
         object OnPlayerChat(ConsoleSystem.Arg arg)
         {
             
-			BasePlayer player = (BasePlayer)arg.connection.player;	
-    		BasePlayer target = (BasePlayer)arg.connection.player;          
+            var player = arg.Connection.player as BasePlayer;            
             if(player.net.connection.authLevel >= AuthToBypass && AdminBypass == true)
             {
                 return null;

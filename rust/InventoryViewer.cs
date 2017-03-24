@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Inventory Viewer", "Mughisi", "2.0.2", ResourceId = 871)]
+    [Info("Inventory Viewer", "Mughisi", "2.0.3", ResourceId = 871)]
     public class InventoryViewer : RustPlugin
     {
 
@@ -78,7 +78,7 @@ namespace Oxide.Plugins
                     instance.SendChatMessage(player, instance.GetTranslation("TargetDied", player.UserIDString));
                     StopInspecting();
                 }
-                if (!player.isConnected) return;
+                if (!player.IsConnected) return;
                 player.inventory.loot.SendImmediate();
                 player.SendNetworkUpdate();
             }
@@ -304,7 +304,7 @@ namespace Oxide.Plugins
             return permission.UserHasPermission(id, Permission);
         }
 
-        private void SendChatMessage(BasePlayer player, string message, string arguments = null)
+        private void SendChatMessage(BasePlayer player, string message)
         {
             PrintToChat(player, $"<color={prefixColor}>{prefix}</color>: {message}");
         }

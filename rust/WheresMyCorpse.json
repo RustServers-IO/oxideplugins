@@ -1,8 +1,8 @@
 {
     "name": "Where's My Corpse?",
-    "description": "Displays an arrow and distance to corpse after respawn or on command",
-    "author": "LeoCurtss",
-    "version": "0.5",
+    "description": "Displays direction and distance to corpse after respawn or on command",
+    "author": "Fujikura",
+    "version": "0.6.0",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/wheres-my-corpse.1777",

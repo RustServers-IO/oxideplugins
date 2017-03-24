@@ -23,7 +23,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg", "0.3.5", ResourceId = 1420)]
+    [Info("Vanish", "Wulf/lukespragg", "0.3.6", ResourceId = 1420)]
     [Description("Allows players with permission to become truly invisible.")]
 
     class Vanish : RustPlugin
@@ -155,7 +155,7 @@ namespace Oxide.Plugins
             var connections = new List<Connection>();
             foreach (var basePlayer in BasePlayer.activePlayerList)
             {
-                if (player == basePlayer || !basePlayer.IsConnected()) continue;
+                if (player == basePlayer || !basePlayer.IsConnected) continue;
                 if (visibleToAdmin && IsAdmin(basePlayer)) continue;
                 connections.Add(basePlayer.net.connection);
             }
@@ -294,7 +294,7 @@ namespace Oxide.Plugins
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
             var player = (info?.Initiator as BasePlayer) ?? entity as BasePlayer;
-            if (player == null || !player.IsConnected() || !onlinePlayers[player].IsInvisible) return null;
+            if (player == null || !player.IsConnected || !onlinePlayers[player].IsInvisible) return null;
 
             // Block damage to animals
             if (entity is BaseNPC)

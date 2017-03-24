@@ -3,9 +3,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using Newtonsoft.Json;
+using System.Reflection;
+
+using Facepunch.Steamworks;
+using Rust;
 namespace Oxide.Plugins
 {
-    [Info("RandomDeployables", "Norn", "0.1.7", ResourceId = 2187)]
+    [Info("RandomDeployables", "Norn", "0.1.9", ResourceId = 2187)]
     [Description("Randomize deployable skins")]
 
     class RandomDeployables : RustPlugin
@@ -13,32 +18,48 @@ namespace Oxide.Plugins
         void Loaded()
         {
             permission.RegisterPermission("randomdeployables.able", this);
-            InitializeTable();
-            if (Config["Enabled", "ArmouredDoor"] == null)
-            {
-                Puts("Updating configuration...");
-                Config["Enabled", "ArmouredDoor"] = true;
-                SaveConfig();
-            }
-            Puts("[Enabled] Bags: " + Config["Enabled", "SleepingBags"].ToString() + " | Boxes: " + Config["Enabled", "Boxes"].ToString() + " | Armoured Doors: " + Config["Enabled", "ArmouredDoor"].ToString());
         }
         private static Dictionary<string, int> deployedToItem = new Dictionary<string, int>();
-        private static List<ulong> SkinList = new List<ulong>();
+        private readonly FieldInfo skins2 = typeof(ItemDefinition).GetField("_skins2", BindingFlags.NonPublic | BindingFlags.Instance);
         private void InitializeTable()
         {
             deployedToItem.Clear();
-            SkinList.Clear();
             List<ItemDefinition> ItemsDefinition = ItemManager.GetItemDefinitions() as List<ItemDefinition>;
-            foreach (ItemDefinition itemdef in ItemsDefinition)
+            foreach (ItemDefinition itemdef in ItemsDefinition) { if (itemdef.GetComponent<ItemModDeployable>() != null && !deployedToItem.ContainsKey(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath)) deployedToItem.Add(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath, itemdef.itemid); }
+        }
+        private void OnServerInitialized()
+        {
+            InitializeTable();
+            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", PullWorkshopIDS, this);
+        }
+        Dictionary<ulong, ulong> SkinFromInventoryID = new Dictionary<ulong, ulong>();
+        private void PullWorkshopIDS(int code, string response)
+        {
+            if (response != null && code == 200)
             {
-                if (itemdef.GetComponent<ItemModDeployable>() != null && !deployedToItem.ContainsKey(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath)) deployedToItem.Add(itemdef.GetComponent<ItemModDeployable>().entityPrefab.resourcePath, itemdef.itemid);
-                foreach(ItemSkinDirectory.Skin skin in itemdef.skins)
+                SkinFromInventoryID.Clear();
+                ulong wsdl;
+                var schema = JsonConvert.DeserializeObject<Rust.Workshop.ItemSchema>(response);
+                var defs = new List<Inventory.Definition>();
+                foreach (var item in schema.items)
                 {
-                    var ws = Rust.Workshop.Approved.FindByInventoryId((ulong)skin.id);
-                    if (skin.id != 0 && ws != null) { SkinList.Add(ws.WorkshopdId); } else { SkinList.Add((ulong)skin.id); }
+                    if (string.IsNullOrEmpty(item.itemshortname)) continue;
+                    if (item.workshopdownload == null) { wsdl = 0; } else { wsdl = Convert.ToUInt64(item.workshopdownload); } SkinFromInventoryID.Add(item.itemdefid, wsdl);
+                    var steamItem = Global.SteamServer.Inventory.CreateDefinition((int)item.itemdefid);
+                    steamItem.Name = item.name;
+                    steamItem.SetProperty("itemshortname", item.itemshortname);
+                    steamItem.SetProperty("workshopid", item.workshopid);
+                    steamItem.SetProperty("workshopdownload", item.workshopdownload);
+                    defs.Add(steamItem);
                 }
+                Global.SteamServer.Inventory.Definitions = defs.ToArray();
+                foreach (var item in ItemManager.itemList) skins2.SetValue(item, Global.SteamServer.Inventory.Definitions.Where(x => (x.GetStringProperty("itemshortname") == item.shortname) && !string.IsNullOrEmpty(x.GetStringProperty("workshopdownload"))).ToArray());
+                Puts($"Pulled {SkinFromInventoryID.Count} skins.");
             }
-            Puts(SkinList.Count.ToString() + " skins verified.");
+            else
+            {
+                PrintWarning($"Failed to pull skins... Error {code}");
+            }
         }
         protected override void LoadDefaultConfig()
         {
@@ -48,28 +69,15 @@ namespace Oxide.Plugins
             Config.Clear();
 
             // --- [ SETTINGS ] ---
-            Config["Settings", "AllDeployables"] = false;
-            Config["Settings", "UseAllSkins"] = false;
             Config["Settings", "AllowDefaultSkin"] = false;
-
-            // --- [ CONFIG ] ---
-
-            Config["Enabled", "SleepingBags"] = true;
-            Config["Enabled", "Boxes"] = true;
-            Config["Enabled", "ArmouredDoor"] = true;
-
-            // --- [ PREFABS ] ---
-
-            Config["PrefabID", "SleepingBag"] = "assets/prefabs/deployable/sleeping bag/sleepingbag_leather_deployed.prefab";
-            Config["PrefabID", "LargeBox"] = "assets/prefabs/deployable/large wood storage/box.wooden.large.prefab";
-            Config["PrefabID", "ArmouredDoor"] = "assets/prefabs/building/door.hinged/door.hinged.toptier.prefab";
         }
         private List<int> GetSkins(ItemDefinition def)
         {
-            List<int> skins = new List<int> { 0 };
-            skins.AddRange(ItemSkinDirectory.ForItem(def).Select(skin => skin.id));
-            skins.AddRange(Rust.Workshop.Approved.All.Where(skin => skin.Skinnable.ItemName == def.shortname).Select(skin => (int)skin.WorkshopdId));
-            if (!Convert.ToBoolean(Config["Settings", "AllowDefaultSkin"])) { if (skins.Contains(0)) { skins.Remove(0); } }
+            List<int> skins;
+            skins = new List<int>();
+            if(Convert.ToBoolean(Config["Settings", "AllowDefaultSkin"])) { skins.Add(0); }
+            if (def.skins != null) skins.AddRange(def.skins.Select(skin => skin.id));
+            if (def.skins2 != null) skins.AddRange(def.skins2.Select(skin => skin.Id));
             return skins;
         }
         private void OnEntityBuilt(Planner planner, GameObject gameObject)
@@ -79,48 +87,15 @@ namespace Oxide.Plugins
             if (permission.UserHasPermission(player.net.connection.userid.ToString(), "randomdeployables.able"))
             {
                 if (!(e is BaseEntity) || player == null) { return; }
-                //Puts(gameObject.name);
-                if (Convert.ToBoolean(Config["Settings", "AllDeployables"]))
+                if (deployedToItem.ContainsKey(e.PrefabName))
                 {
-                    if (deployedToItem.ContainsKey(e.PrefabName))
-                    {
-                        var skin = 0;
-                        var def = ItemManager.FindItemDefinition(deployedToItem[e.PrefabName]);
-                        if (!Convert.ToBoolean(Config["Settings", "UseAllSkins"])) { skin = GetSkins(def).GetRandom(); }
-                        else { skin = (int)SkinList.GetRandom(); }
-                        e.skinID = Convert.ToUInt64(skin);
-                        e.SendNetworkUpdate();
-                    }
-                }
-                else
-                {
-                    if (gameObject.name == Config["PrefabID", "SleepingBag"].ToString() && Convert.ToBoolean(Config["Enabled", "SleepingBags"])) // Fire Up
-                    {
-                        var skin = 0;
-                        var def = ItemManager.FindItemDefinition(deployedToItem[Config["PrefabID", "SleepingBag"].ToString()]);
-                        if (!Convert.ToBoolean(Config["Settings", "UseAllSkins"])) { skin = GetSkins(def).GetRandom(); }
-                        else { skin = (int)SkinList.GetRandom(); }
-                        e.skinID = Convert.ToUInt64(skin);
-                        e.SendNetworkUpdate();
-                    }
-                    else if (gameObject.name == Config["PrefabID", "LargeBox"].ToString() && Convert.ToBoolean(Config["Enabled", "Boxes"])) // Fire Up
-                    {
-                        var skin = 0;
-                        var def = ItemManager.FindItemDefinition(deployedToItem[Config["PrefabID", "LargeBox"].ToString()]);
-                        if (!Convert.ToBoolean(Config["Settings", "UseAllSkins"])) { skin = GetSkins(def).GetRandom(); }
-                        else { skin = (int)SkinList.GetRandom(); }
-                        e.skinID = Convert.ToUInt64(skin);
-                        e.SendNetworkUpdate();
-                    }
-                    else if (gameObject.name == Config["PrefabID", "ArmouredDoor"].ToString() && Convert.ToBoolean(Config["Enabled", "ArmouredDoor"])) // Fire Up
-                    {
-                        var skin = 0;
-                        var def = ItemManager.FindItemDefinition(deployedToItem[Config["PrefabID", "ArmouredDoor"].ToString()]);
-                        if (!Convert.ToBoolean(Config["Settings", "UseAllSkins"])) { skin = GetSkins(def).GetRandom(); }
-                        else { skin = (int)SkinList.GetRandom(); }
-                        e.skinID = Convert.ToUInt64(skin);
-                        e.SendNetworkUpdate();
-                    }
+                    var def = ItemManager.FindItemDefinition(deployedToItem[e.PrefabName]);
+                    var skins = GetSkins(def);
+                    if (skins.Count == 0) return;
+                    ulong skinid = Convert.ToUInt64(skins.GetRandom());
+                    if (skinid != 0 && SkinFromInventoryID.ContainsKey(skinid) && SkinFromInventoryID[skinid] != 0) { e.skinID = SkinFromInventoryID[skinid]; }
+                    else { e.skinID = skinid; }
+                    e.SendNetworkUpdate();
                 }
             }
         }

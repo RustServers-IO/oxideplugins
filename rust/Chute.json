@@ -2,7 +2,7 @@
     "name": "Chute",
     "description": "Allowed Authorized Players to Parchute",
     "author": "Colon Blow",
-    "version": "1.0.4",
+    "version": "1.0.6",
     "configuration": true,
     "suggest": {
         "FauxAdmin": "*"

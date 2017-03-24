@@ -1,58 +1,105 @@
+
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Oxide.Core.Configuration;
+using Newtonsoft.Json.Converters;
 using Oxide.Core.Plugins;
 using Rust;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.5.3", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.7.11", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
-		private TruePVEData data = new TruePVEData();
-		private Hurtable global;
-		
-		static FieldInfo serverinput;
-		
+		#region Variables
+
+		// config/data container
+		TruePVEData data = new TruePVEData();
+
+		// ZoneManager plugin
 		[PluginReference]
 		Plugin ZoneManager;
+
+		// LiteZone plugin (private)
+		[PluginReference]
+		Plugin LiteZones;
 		
 		// usage information string with formatting
 		public string usageString;
 		// valid commands
-		private enum Command { usage, set, get, list, version, def };
-		// valid options
-		public enum Option { allowSuicide, authDamage, corpseLooting, handleDamage, handleLooting, heliDamage, heliDamageLocked, heliDamagePlayer, humanNPCDamage, immortalLocks, sleeperAdminDamage, sleeperLooting, sleeperProtection, useZones };
+		enum Command { def, sched, usage };
+		// valid configuration options
+		public enum Option {
+			handleDamage,		// (true)	enable TruePVE damage handling hooks
+			handleLooting,		// (true)	enable TruePVE looting handling hooks
+			useZones			// (true)	use ZoneManager/LiteZones for zone-specific damage behavior (requires modification of ZoneManager.cs)
+		};
 		// default values array
-		private bool[] def = { true, false, false, true, true, true, false, true, true, true, false, false, false, false };
+		bool[] defaults = {
+			true,	// handleDamage
+			true,	// handleLooting
+			true	// useZones
+		};
+
+		// flags for RuleSets
+		[Flags]
+		enum RuleFlags
+		{
+			None = 0,
+			SuicideBlocked = 1,
+			AuthorizedDamage = 1 << 1,
+			LootableCorpses = 1 << 2,
+			NoHeliDamage = 1 << 3,
+			HeliDamageLocked = 1 << 4,
+			NoHeliDamagePlayer = 1 << 5,
+			HumanNPCDamage = 1 << 6,
+			LockedBoxesImmortal = 1 << 7,
+			LockedDoorsImmortal = 1 << 8,
+			AdminsHurtSleepers = 1 << 9,
+			LootableSleepers = 1 << 10,
+			ProtectedSleepers = 1 << 11,
+			TrapsIgnorePlayers = 1 << 12,
+			TurretsIgnorePlayers = 1 << 13
+		}
 		// layer mask for finding authorization
-        private readonly int triggerMask = LayerMask.GetMask("Trigger");
-        
+		readonly int triggerMask = LayerMask.GetMask("Trigger");
+		// timer to check for schedule updates
+		Timer scheduleUpdateTimer;
+		// current ruleset
+		RuleSet currentRuleSet;
+		// current broadcast message
+		string currentBroadcastMessage;
+		// internal useZones flag
+		bool useZones = false;
+		// constant "any" string for rules
+		const string Any = "any";
+		// flag to prevent certain things from happening before server initialized
+		bool serverInitialized = false;
+
+		#endregion
+
+		#region Lang
+
 		// load default messages to Lang
 		void LoadDefaultMessages()
 		{
 			var messages = new Dictionary<string, string>
 			{
-				{"ConsoleCommand", "tpve"},
-				
+				{"Prefix", "<color=#FFA500>[ TruePVE ]</color>" },
+
 				{"Header_Usage", "---- TruePVE usage ----"},
-				{"Cmd_Usage_set", "Set value of specified option"},
-				{"Cmd_Usage_get", "Get value of specified option"},
-				{"Cmd_Usage_list", "Lists available options"},
-				{"Cmd_Usage_def", "Loads default configuration and/or mapping data"},
-				{"Cmd_Usage_version", "Prints version information"},
+				{"Cmd_Usage_def", "Loads default configuration and data"},
+				{"Cmd_Usage_sched", "Enable or disable the schedule" },
 				{"Cmd_Usage_prod", "Show the prefab name and type of the entity being looked at"},
-				{"Cmd_Usage_OptionString", "[option]"},
-				{"Cmd_Usage_ValueString", "[value]"},
-				{"Cmd_Usage_DefaultsOptions", "[all|config|data]"},
-				
+
 				{"Warning_PveMode", "Server is set to PVE mode!  TruePVE is designed for PVP mode, and may cause unexpected behavior in PVE mode."},
+				{"Warning_OldConfig", "Old config detected - moving to {0}" },
+				{"Warning_NoRuleSet", "No RuleSet found for \"{0}\"" },
+				{"Warning_DuplicateRuleSet", "Multiple RuleSets found for \"{0}\"" },
 				
 				{"Error_InvalidParameter", "Invalid parameter: {0}"},
 				{"Error_InvalidParamForCmd", "Invalid parameters for command \"{0}\""},
@@ -62,78 +109,108 @@ namespace Oxide.Plugins
 				{"Error_NoLootSleeper", "You are not allowed to loot sleeping players"},
 				{"Error_NoEntityFound", "No entity found"},
 				
-				{"Notify_Version", "TruePVE v. {0}"},
 				{"Notify_AvailOptions", "Available Options: {0}"},
-				{"Notify_SetSuccess", "Successfully set \"{0}\" to \"{1}\""},
 				{"Notify_DefConfigLoad", "Loaded default configuration"},
 				{"Notify_DefDataLoad", "Loaded default mapping data"},
 				{"Notify_ProdResult", "Prod results: type={0}, prefab={1}"},
+				{"Notify_SchedSetEnabled", "Schedule enabled" },
+				{"Notify_SchedSetDisabled", "Schedule disabled" },
+				{"Notify_InvalidSchedule", "Schedule is not valid" },
 				
-				{"Format_Wrapper", "<size={0}><color=\"{1}\">{2}</color></size>"},
 				{"Format_NotifyColor", "#00FFFF"}, // cyan
 				{"Format_NotifySize", "12"},
 				{"Format_HeaderColor", "#FFA500"}, // orange
 				{"Format_HeaderSize", "14"},
 				{"Format_ErrorColor", "#FF0000"}, // red
 				{"Format_ErrorSize", "12"},
-				{"Format_ColorWrapper", "<color=\"{0}\">{1}</color>"},
-				{"Format_SizeWrapper", "<size={0}>{1}</size>"}
 			};
 			lang.RegisterMessages(messages, this);
         }
         
         // get message from Lang
         string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
-        
-        void warnPve() => PrintWarning(GetMessage("Warning_PveMode"));
-		
+
+		#endregion
+
+		#region Loading/Unloading
+
+		// load things
 		void Loaded()
 		{
 			LoadDefaultMessages();
-			
-			string baseCommand = GetMessage("ConsoleCommand");
-			// register console commands
+			string baseCommand = "tpve";
+			// register console commands automagically
 			foreach(Command command in Enum.GetValues(typeof(Command)))
-				cmd.AddConsoleCommand((baseCommand + "." + command.ToString()), this, "ccmdDelegator");
-			// register chat commands
-			cmd.AddChatCommand(baseCommand + "_prod", this, "handleProd");
-			// check for server pve setting
-			if(ConVar.Server.pve)
-				warnPve();
-			// load configuration
-			LoadConfig();
+				cmd.AddConsoleCommand((baseCommand + "." + command.ToString()), this, "CommandDelegator");
+			// register chat command
+			cmd.AddChatCommand(baseCommand + "_prod", this, "HandleProd");
 			// build usage string
-			usageString = wrapSize(14, wrapColor("orange", GetMessage("Header_Usage"))) + "\n" +
-						  wrapSize(12, wrapColor("cyan", baseCommand + "." + Command.set.ToString() + " " + GetMessage("Cmd_Usage_OptionString") + " " + GetMessage("Cmd_Usage_ValueString")) + " - " + GetMessage("Cmd_Usage_set") + "\n" +
-									   wrapColor("cyan", baseCommand + "." + Command.get.ToString() + " " + GetMessage("Cmd_Usage_OptionString")) + " - " + GetMessage("Cmd_Usage_get") + "\n" +
-									   wrapColor("cyan", baseCommand + "." + Command.def.ToString() + " " + GetMessage("Cmd_Usage_DefaultsOptions")) + " - " + GetMessage("Cmd_Usage_def") + "\n" +
-									   wrapColor("cyan", "/" + baseCommand + "_prod") + " - " + GetMessage("Cmd_Usage_prod") + "\n" +
-									   wrapColor("cyan", baseCommand + "." + Command.list.ToString()) + " - " + GetMessage("Cmd_Usage_list") + "\n" +
-									   wrapColor("cyan", baseCommand + "." + Command.version.ToString()) + " - " + GetMessage("Cmd_Usage_version"));
-			
-			serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+			usageString = WrapSize(14, WrapColor("orange", GetMessage("Header_Usage"))) + "\n" +
+						  WrapSize(12, WrapColor("cyan", baseCommand + "." + Command.def.ToString()) + " - " + GetMessage("Cmd_Usage_def") + "\n" +
+									   WrapColor("cyan", baseCommand + "." + Command.sched.ToString() + " [enable|disable]") + " - " + GetMessage("Cmd_Usage_sched") + "\n" +
+									   WrapColor("cyan", "/" + baseCommand + "_prod") + " - " + GetMessage("Cmd_Usage_prod"));
+		}
+
+		// on unloaded
+		void Unload()
+		{
+			if(scheduleUpdateTimer != null)
+				scheduleUpdateTimer.Destroy();
 		}
 		
 		// plugin loaded
-		private void OnPluginLoaded(Plugin plugin)
+		void OnPluginLoaded(Plugin plugin)
 		{
 			if(plugin.Name == "ZoneManager")
 				ZoneManager = plugin;
+			if (plugin.Name == "LiteZones")
+				LiteZones = plugin;
+			if (!serverInitialized) return;
+			if (ZoneManager != null || LiteZones != null)
+				useZones = data.config[Option.useZones];
 		}
 
 		// plugin unloaded
-		private void OnPluginUnloaded(Plugin plugin)
+		void OnPluginUnloaded(Plugin plugin)
 		{
-			if(plugin.Name == "ZoneManager")
+			if (plugin.Name == "ZoneManager")
 				ZoneManager = null;
+			if (plugin.Name == "LiteZones")
+				LiteZones = null;
+			if (!serverInitialized) return;
+			if (ZoneManager == null && LiteZones == null)
+				useZones = false;
 		}
-		
+
+		// server initialized
+		void OnServerInitialized()
+		{
+			// check for server pve setting
+			if (ConVar.Server.pve)
+				WarnPve();
+			// load configuration
+			LoadConfiguration();
+			data.Init();
+			currentRuleSet = data.GetDefaultRuleSet();
+			if (currentRuleSet == null)
+				PrintWarning(GetMessage("Warning_NoRuleSet"), data.defaultRuleSet);
+			useZones = data.config[Option.useZones] && (LiteZones != null || ZoneManager != null);
+			if (useZones && data.mappings.Count == 1 && data.mappings.First().Key.Equals(data.defaultRuleSet))
+				useZones = false;
+			if (data.schedule.enabled)
+				TimerLoop(true);
+			serverInitialized = true;
+		}
+
+		#endregion
+
+		#region Command Handling
+
 		// delegation method for console commands
-		//[ConsoleCommand("tpve")]
-		void ccmdDelegator(ConsoleSystem.Arg arg)
+		void CommandDelegator(ConsoleSystem.Arg arg)
 		{
 			// return if user doesn't have access to run console command
-			if(!hasAccess(arg)) return;
+			if(!HasAccess(arg)) return;
 			
 			string cmd = arg.cmd.Name;
 			if(!Enum.IsDefined(typeof(Command), cmd))
@@ -145,216 +222,116 @@ namespace Oxide.Plugins
 			{
 				switch((Command) Enum.Parse(typeof(Command), cmd))
 				{
-					case Command.version:
-						SendMessage(arg, "Notify_Version", new string[] { this.Version.ToString()});
-						return;
 					case Command.def:
-						if(handleDef(arg)) return; // set defaults
-						break;
-					case Command.list:
-						handleList(arg); // display list options
+						HandleDef(arg);
 						return;
-					case Command.set:
-						if(handleSet(arg)) return;
-						break;
-					case Command.get:
-						if(handleGet(arg)) return;
-						break;
+					case Command.sched:
+						HandleScheduleSet(arg);
+						return;
 					case Command.usage:
-						showUsage(arg);
+						ShowUsage(arg);
 						return;
 				}
 				SendMessage(arg, "Error_InvalidParamForCmd", new object[] {cmd});
 			}
-			showUsage(arg);
+			ShowUsage(arg);
 		}
-		
-		// show usage information
-		void showUsage(ConsoleSystem.Arg arg)
-		{
-			SendReply(arg, usageString);
-		}
-		
-		// check user access
-		bool hasAccess(ConsoleSystem.Arg arg)
-		{
-			if (arg.Connection != null)
-			{
-				if (arg.Connection.authLevel < 1)
-				{
-					SendMessage(arg, "Error_NoPermission");
-					return false;
-				}
-			}
-			return true;
-		}
-		
+
 		// handle setting defaults
-		private bool handleDef(ConsoleSystem.Arg arg)
+		void HandleDef(ConsoleSystem.Arg arg)
 		{
-			bool success = false;
-			if(arg.Args == null || arg.Args[0] == null)
-			{
-				SendMessage(arg, "Error_InvalidParameter", new object[] {"null"});
-				return false;
-			}
-			string flag = arg.Args[0];
-			if(flag == "all" || flag == "config")
-			{
-				LoadDefaultConfig();
-				SendMessage(arg, "Notify_DefConfigLoad");
-				success = true;
-			}
-			if(flag == "all" || flag == "data")
-			{
-				LoadDefaultData();
-				SaveData();
-				SendMessage(arg, "Notify_DefDataLoad");
-				success = true;
-			}
-			return success;
+			LoadDefaultConfiguration();
+			SendMessage(arg, "Notify_DefConfigLoad");
+			LoadDefaultData();
+			SendMessage(arg, "Notify_DefDataLoad");
+			
+			SaveData();
 		}
 		
 		// handle prod command (raycast to determine what player is looking at)
-		private void handleProd(BasePlayer player, string command, string[] args)
+		void HandleProd(BasePlayer player, string command, string[] args)
 		{
-			if(!isAdmin(player))
+			if(!IsAdmin(player))
 				SendMessage(player, "Error_NoPermission");
 			
 			object entity;
 			if(!GetRaycastTarget(player, out entity) || entity == null)
 			{
-				SendReply(player, wrapSize(12, wrapColor("red", GetMessage("Error_NoEntityFound"))));
+				SendReply(player, WrapSize(12, WrapColor("red", GetMessage("Error_NoEntityFound", player.UserIDString))));
 				return;
 			}
 			SendMessage(player, "Notify_ProdResult", new object[] { entity.GetType(), (entity as BaseEntity).ShortPrefabName });
 		}
-		
-		// handle raycast from player
-		bool GetRaycastTarget(BasePlayer player, out object closestEntity)
+
+		// handles schedule enable/disable
+		void HandleScheduleSet(ConsoleSystem.Arg arg)
 		{
-			closestEntity = false;
-			var input = serverinput.GetValue(player) as InputState;
-			if (input == null || input.current == null || input.current.aimAngles == Vector3.zero)
-				return false;
-			
-			Vector3 sourceEye = player.transform.position + new Vector3(0f, 1.6f, 0f);
-			Ray ray = new Ray(sourceEye, Quaternion.Euler(input.current.aimAngles) * Vector3.forward);
-			
-			var hits = Physics.RaycastAll(ray);
-			float closestdist = 100f;
-			foreach (var hit in hits)
+			if (arg == null || arg.Args == null || arg.Args.Length == 0)
 			{
-				if (hit.collider.isTrigger)
-					continue;
-				if (hit.distance < closestdist)
-				{
-					closestdist = hit.distance;
-					closestEntity = hit.GetEntity();
-				}
+				SendMessage(arg, "Error_InvalidParamForCmd");
+				return;
 			}
-			if (closestEntity is bool)
-				return false;
-			return true;
-		}
-		
-		// handle list command
-		private void handleList(ConsoleSystem.Arg arg)
-		{
-			string str = "";//wrapColor("orange", GetMessage("AvailOptions"));
-			foreach(Option opt in Enum.GetValues(typeof(Option)))
+			string message = "";
+			if(!data.schedule.valid)
 			{
-				str += opt.ToString() + ", ";
+				message = "Notify_InvalidSchedule";
 			}
-			str = str.Trim(new char[] {',',' '});
-			SendMessage(arg, "Notify_AvailOptions" , new object[] {str});
-		}
-		
-		// handle set command
-		private bool handleSet(ConsoleSystem.Arg arg)
-		{
-			if(!Enum.IsDefined(typeof(Option), arg.Args[0]))
+			else if(arg.Args[0] == "enable")
 			{
-				SendMessage(arg, "Error_InvalidParameter", new object[] {arg.Args[0]});
-				return false;
+				if(data.schedule.enabled) return;
+				data.schedule.enabled = true;
+				TimerLoop();
+				message = "Notify_SchedSetEnabled";
 			}
-			
-			Option opt = (Option) Enum.Parse(typeof(Option), arg.Args[0]);
-			bool value;
-			try {
-				value = Convert.ToBoolean(arg.Args[1]);
-			} catch(FormatException e) {
-				SendMessage(arg, "Error_InvalidParameter", new object[] {arg.Args[1]});
-				return false;
-			}
-			
-			SaveEntry(opt,value);
-			SendMessage(arg, "Notify_SetSuccess", new object[] {opt, value});
-			return true;
-		}
-		
-		// save updated entry to config
-		private void SaveEntry(Option opt, bool value)
-		{
-			string optstr = opt.ToString();
-			data.config[opt] = value;
-			SaveConfig();
-			SaveData();
-		}
-		
-		// handle get command
-		private bool handleGet(ConsoleSystem.Arg arg)
-		{
-			if(arg.Args[0] == "all")
+			else if(arg.Args[0] == "disable")
 			{
-				foreach(Option option in Enum.GetValues(typeof(Option)))
-				{
-					printValue(arg, option);
-				}
-				return true;
+				if (!data.schedule.enabled) return;
+				data.schedule.enabled = false;
+				if (scheduleUpdateTimer != null)
+					scheduleUpdateTimer.Destroy();
+				message = "Notify_SchedSetDisabled";
 			}
-			if(!Enum.IsDefined(typeof(Option), arg.Args[0]))
+			object[] opts = new object[] { };
+			if(message == "")
 			{
-				SendMessage(arg, "Error_InvalidParameter", new object[] {arg.Args[0]});
-				return false;
+				message = "Error_InvalidParameter";
+				opts = new object[] { arg.Args[0] };
 			}
-			Option opt = (Option) Enum.Parse(typeof(Option), arg.Args[0]);
-			printValue(arg, opt);
-			return true;
+			SendMessage(arg, message, opts);
 		}
-		
-		// prints the value of an Option
-		private void printValue(ConsoleSystem.Arg arg, Option opt)
-		{
-			SendReply(arg, wrapSize(GetMessage("Format_NotifySize"), wrapColor(GetMessage("Format_NotifyColor"), opt + ": ") + data.config[opt]));
-		}
-		
+
+		#endregion
+
+		#region Configuration/Data
+
 		// load config
-		void LoadConfig()
+		void LoadConfiguration()
 		{
+			CheckVersion();
 			Config.Settings.NullValueHandling = NullValueHandling.Include;
+			bool dirty = false;
 			try {
-				data = Config.ReadObject<TruePVEData>();
-			} catch (Exception e) {
+				data = Config.ReadObject<TruePVEData>() ?? null;
+			} catch (Exception) {
 				data = new TruePVEData();
 			}
-			Config.Settings.NullValueHandling = NullValueHandling.Include;
-			bool dirty = CheckConfig();
-			if(data.data == null || data.data.Count == 0)
-				dirty = LoadDefaultData();
+			if (data == null)
+				LoadDefaultConfig();
 			
-			global = data.LookupByName("global");
-			if(global == null)
-				dirty = CreateDefaultGlobal();
-			if(dirty)
+			dirty |= CheckConfig();
+			dirty |= CheckData();
+			// check config version, update version to current version
+			if (data.configVersion == null || !data.configVersion.Equals(Version.ToString()))
+			{
+				data.configVersion = Version.ToString();
+				dirty |= true;
+			}
+			if (dirty)
 				SaveData();
 		}
 		
 		// save data
-		void SaveData()
-		{
-			Config.WriteObject(data);
-		}
+		void SaveData() => Config.WriteObject(data);
 		
 		// verify/update configuration
 		bool CheckConfig()
@@ -363,83 +340,152 @@ namespace Oxide.Plugins
 			foreach(Option option in Enum.GetValues(typeof(Option)))
 				if(!data.config.ContainsKey(option))
 				{
-					data.config[option] = def[(int)option];
+					data.config[option] = defaults[(int)option];
 					dirty = true;
 				}
 			return dirty;
 		}
-		
-		// loads default configuration entries
-		bool LoadDefaultConfig()
+
+		// check rulesets and groups
+		bool CheckData()
 		{
-			foreach(Option option in Enum.GetValues(typeof(Option)))
-				data.config[option] = def[(int)option];
+			bool dirty = false;
+			if ((data.ruleSets == null || data.ruleSets.Count == 0) ||
+				(data.groups == null || data.groups.Count == 0))
+				dirty = LoadDefaultData();
+			if (data.schedule == null)
+			{
+				data.schedule = new Schedule();
+				dirty = true;
+			}
+			dirty |= CheckMappings();
+			return dirty;
+		}
+
+		// rebuild mappings
+		bool CheckMappings()
+		{
+			bool dirty = false;
+			foreach (RuleSet rs in data.ruleSets)
+				if (!data.mappings.ContainsValue(rs.name))
+				{
+					data.mappings[rs.name] = rs.name;
+					dirty = true;
+				}
+			return dirty;
+		}
+
+		// default config creation
+		protected override void LoadDefaultConfig()
+		{
+			data = new TruePVEData();
+			data.configVersion = Version.ToString();
+			LoadDefaultConfiguration();
+			LoadDefaultData();
+			SaveData();
+		}
+
+		void CheckVersion()
+		{
+			if (Config["configVersion"] == null) return;
+			Version config = new Version(Config["configVersion"].ToString());
+			if (config < new Version("0.7.0"))
+			{
+				string fname = Config.Filename.Replace(".json", ".old.json");
+				Config.Save(fname);
+				PrintWarning(string.Format(GetMessage("Warning_OldConfig"), fname));
+				Config.Clear();
+			}
+		}
+
+		// populates default configuration entries
+		bool LoadDefaultConfiguration()
+		{
+			foreach (Option option in Enum.GetValues(typeof(Option)))
+				data.config[option] = defaults[(int)option];
 			return true;
 		}
-		
-		// loads default data entries
+
+		// load default data to mappings, rulesets, and groups
 		bool LoadDefaultData()
 		{
-			data.data.Clear();
-			CreateDefaultGlobal();
-			
-			Hurtable dispenser = data.CreateHurtable("dispenser");
-			dispenser.description = "Entities with ResourceDispenser";
-			dispenser.types.Add(typeof(TreeEntity).Name);
-			dispenser.types.Add(typeof(BaseResource).Name);
-			dispenser.types.Add(typeof(BaseCorpse).Name);
-			dispenser.types.Add(typeof(HelicopterDebris).Name);
-			global.links[dispenser.name] = true; // anything hurts dispensers
-			
-			Hurtable player = data.CreateHurtable("player");
-			player.description = "Players";
-			player.types.Add(typeof(BasePlayer).Name);
-			player.links[player.name] = false; // no player-vs-player damage
-			global.links[player.name] = true; // anything hurts player
-			
-			Hurtable traps = data.CreateHurtable("traps");
-			traps.description = "Traps, landmines, and spikes";
-			traps.types.Add(typeof(AutoTurret).Name);
-			traps.types.Add(typeof(BearTrap).Name);
-			traps.types.Add(typeof(FlameTurret).Name);
-			traps.types.Add(typeof(Landmine).Name);
-			traps.prefabs.Add("spikes.floor");
-			global.links[traps.name] = true; // anything can damage traps
-			traps.links[player.name] = false; // traps don't damage players
-			
-			Hurtable barricades = data.CreateHurtable("barricades");
-			barricades.description = "Barricades";
-			barricades.types.Add(typeof(Barricade).Name);
-			player.links[barricades.name] = true; // players can damage barricade
-			barricades.links[player.name] = false; // barricades cannot hurt players
-			
-			Hurtable highwalls = data.CreateHurtable("highwalls");
-			highwalls.description = "High external walls";
-			highwalls.prefabs.Add("wall.external.high.stone");
-			highwalls.prefabs.Add("wall.external.high.wood");
-			highwalls.links[player.name] = false; // high external walls cannot hurt players
-			
-			Hurtable heli = data.CreateHurtable("heli");
-			heli.description = "Heli";
-			heli.types.Add(typeof(BaseHelicopter).Name);
-			global.links[heli.name] = true; // heli can take damage
-			
-			data.zoneData["testzone"] = new Dictionary<string,Hurtable>();
+			data.mappings.Clear();
+			data.ruleSets.Clear();
+			data.groups.Clear();
+			data.schedule = new Schedule();
+			data.defaultRuleSet = "default";
+
+			// build groups first
+			EntityGroup dispenser = new EntityGroup("dispensers");
+			dispenser.Add(typeof(TreeEntity).Name);
+			dispenser.Add(typeof(BaseResource).Name);
+			dispenser.Add(typeof(BaseCorpse).Name);
+			dispenser.Add(typeof(HelicopterDebris).Name);
+			data.groups.Add(dispenser);
+
+			EntityGroup players = new EntityGroup("players");
+			players.Add(typeof(BasePlayer).Name);
+			data.groups.Add(players);
+
+			EntityGroup traps = new EntityGroup("traps");
+			traps.Add(typeof(AutoTurret).Name);
+			traps.Add(typeof(BearTrap).Name);
+			traps.Add(typeof(FlameTurret).Name);
+			traps.Add(typeof(Landmine).Name);
+			traps.Add(typeof(ReactiveTarget).Name); // include targets with traps, since behavior is the same
+			traps.Add("spikes.floor");
+			data.groups.Add(traps);
+
+			EntityGroup barricades = new EntityGroup("barricades");
+			barricades.Add(typeof(Barricade).Name);
+			data.groups.Add(barricades);
+
+			EntityGroup highwalls = new EntityGroup("highwalls");
+			highwalls.Add("wall.external.high.stone");
+			highwalls.Add("wall.external.high.wood");
+			highwalls.Add("gates.external.high.wood");
+			highwalls.Add("gates.external.high.wood");
+			data.groups.Add(highwalls);
+
+			EntityGroup heli = new EntityGroup("heli");
+			heli.Add(typeof(BaseHelicopter).Name);
+			data.groups.Add(heli);
+
+			// create default ruleset
+			RuleSet defaultRuleSet = new RuleSet(data.defaultRuleSet);
+			defaultRuleSet.flags = RuleFlags.HumanNPCDamage | RuleFlags.LockedBoxesImmortal | RuleFlags.LockedDoorsImmortal;
+
+			// create rules and add to ruleset
+			defaultRuleSet.AddRule("anything can hurt " + dispenser.name); // anything hurts dispensers
+			defaultRuleSet.AddRule("anything can hurt " + players.name); // anything hurts players
+			defaultRuleSet.AddRule(players.name + " cannot hurt " + players.name); // players cannot hurt other players
+			defaultRuleSet.AddRule("anything can hurt " + traps.name); // anything hurts traps
+			defaultRuleSet.AddRule(traps.name + " cannot hurt " + players.name); // traps cannot hurt players
+			defaultRuleSet.AddRule(players.name + " can hurt " + barricades.name); // players can hurt barricades
+			defaultRuleSet.AddRule(barricades.name + " cannot hurt " + players.name); // barricades cannot hurt players
+			defaultRuleSet.AddRule(highwalls.name + " cannot hurt " + players.name); // highwalls cannot hurt players
+			defaultRuleSet.AddRule("anything can hurt " + heli.name); // anything can hurt heli
+
+			data.ruleSets.Add(defaultRuleSet); // add ruleset to rulesets list
+
+			data.mappings[data.defaultRuleSet] = data.defaultRuleSet; // create mapping for ruleset
 			
 			return true;
 		}
-		
-		// creates default "global" container
-		bool CreateDefaultGlobal() {
-			global = data.CreateHurtable("global");
-			global.description = "Global damage handling";
-			global.links[global.name] = false; // map global to itself - default no damage
-			return true;
+
+		#endregion
+
+		#region Hooks/Handler Procedures
+
+		void OnPlayerInit(BasePlayer player)
+		{
+			if (data.schedule.enabled && data.schedule.broadcast && currentBroadcastMessage != null)
+				SendReply(player, GetMessage("Prefix") + currentBroadcastMessage);
 		}
-		
+
 		// handle damage - if another mod must override TruePVE damages or take priority,
 		// comment out this method and reference HandleDamage from the other mod(s)
-		private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
+		void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
 		{
 			if(!data.config[Option.handleDamage])
 				return;
@@ -447,49 +493,27 @@ namespace Oxide.Plugins
 		}
 		
 		// handle damage
-		[HookMethod("HandleDamage")]
-		private void HandleDamage(BaseCombatEntity entity, HitInfo hitinfo)
+		void HandleDamage(BaseCombatEntity entity, HitInfo hitinfo)
 		{
 			if(!AllowDamage(entity, hitinfo))
 				CancelDamage(hitinfo);
 		}
 		
 		// determines if an entity is "allowed" to take damage
-		[HookMethod("AllowDamage")]
-		private bool AllowDamage(BaseCombatEntity entity, HitInfo hitinfo)
+		bool AllowDamage(BaseCombatEntity entity, HitInfo hitinfo)
 		{
-			if(!global.enabled)
+			// if default global is not enabled, return true (allow all damage)
+			if(currentRuleSet == null || currentRuleSet.IsEmpty() || !currentRuleSet.enabled)
 				return true;
 			
 			if (entity == null || hitinfo == null) return true;
 			
 			// allow decay
-			if(hitinfo.damageTypes.Get(DamageType.Decay) > 0)
-				return true;
-			
-			// check heli
-			object heli = CheckHeliInitiator(hitinfo);
-			if(heli != null)
-			{
-				if(entity is BasePlayer)
-					return data.config[Option.heliDamagePlayer];
-				return (bool)heli;
-			}
-			
-			// after heli check, return true if initiator is null
-			if(hitinfo.Initiator == null)
+			if (hitinfo.damageTypes.Get(DamageType.Decay) > 0)
 				return true;
 			
 			// allow NPCs to take damage
 			if (entity is BaseNPC)
-				return true;
-			
-			// check for sleeper protection - return false if sleeper protection is on (true)
-			if(data.config[Option.sleeperProtection] && hitinfo.Initiator is BaseNPC && entity is BasePlayer && (entity as BasePlayer).IsSleeping())
-				return false;
-			
-			// allow NPC damage to other entities if sleeper protection is off
-			if(hitinfo.Initiator is BaseNPC)
 				return true;
 			
 			// allow damage to door barricades and covers
@@ -498,173 +522,101 @@ namespace Oxide.Plugins
 			
 			// if entity is a barrel, trash can, or giftbox, allow damage (exclude water barrels)
 			if(entity.ShortPrefabName.Contains("barrel") ||
-			   entity.ShortPrefabName == "loot_trash" ||
-			   entity.ShortPrefabName == "giftbox_loot")
-				if(entity.ShortPrefabName != "waterbarrel")
+			   entity.ShortPrefabName.Equals("loot_trash") ||
+			   entity.ShortPrefabName.Equals("giftbox_loot"))
+				if(!entity.ShortPrefabName.Equals("waterbarrel"))
 					return true;
 			
+			// get entity and initiator locations (zones)
+			List<string> entityLocations = GetLocationKeys(entity);
+			List<string> initiatorLocations = GetLocationKeys(hitinfo.Initiator);
+			// check for exclusion zones (zones with no rules mapped)
+			if (CheckExclusion(entityLocations, initiatorLocations)) return true;
+
+			// process location rules
+			RuleSet ruleSet = GetRuleSet(entityLocations, initiatorLocations);
+
 			// handle suicide
-			if(hitinfo.damageTypes.Get(DamageType.Suicide) > 0)
+			if (hitinfo.damageTypes.Get(DamageType.Suicide) > 0)
 			{
-				if(data.config[Option.allowSuicide])
-					return true;
-				else
+				if (ruleSet.HasFlag(RuleFlags.SuicideBlocked))
 				{
 					SendMessage(entity as BasePlayer, "Error_NoSuicide");
 					return false;
 				}
+				return true;
 			}
-			
-			// check for exclusion zones (zones with no rules mapped)
-			List<string> entityZoneIds = null;
-			List<string> initZoneIds = null;
-			List<string> zones = null;
-			if(data.config[Option.useZones] && data.HasZones() && ZoneManager != null && hitinfo.Initiator != null)
-			{
-				entityZoneIds = getZoneIDs(entity);
-				initZoneIds = getZoneIDs(hitinfo.Initiator);
-				if(entityZoneIds != null && initZoneIds != null)
-				{
-					zones = entityZoneIds.Where(str => initZoneIds.Contains(str) && data.HasZone(str)).ToList();
-					if(zones != null && zones.Count > 0)
-						if(data.HasEmptyZone(zones[0]))
-							return true;
-				}
-			}
-			
+
 			// Check storage containers and doors for locks
-			if((entity is StorageContainer || entity is Door) && data.config[Option.immortalLocks])
+			if ((entity is StorageContainer && ruleSet.HasFlag(RuleFlags.LockedBoxesImmortal)) ||
+			   (entity is Door && ruleSet.HasFlag(RuleFlags.LockedDoorsImmortal)))
 			{
 				// check for lock
-				object hurt = CheckLock(entity,hitinfo);
-				if(hurt != null)
-					return (bool) hurt;
+				object hurt = CheckLock(ruleSet, entity, hitinfo);
+				if (hurt != null)
+					return (bool)hurt;
 			}
+
+			// check heli
+			object heli = CheckHeliInitiator(ruleSet, hitinfo);
+			if(heli != null)
+			{
+				if(entity is BasePlayer)
+					return !ruleSet.HasFlag(RuleFlags.NoHeliDamagePlayer);
+				return (bool)heli;
+			}
+			// after heli check, return true if initiator is null
+			if (hitinfo.Initiator == null)
+				return true;
+
+			// check for sleeper protection - return false if sleeper protection is on (true)
+			if (ruleSet.HasFlag(RuleFlags.ProtectedSleepers) && hitinfo.Initiator is BaseNPC && entity is BasePlayer && (entity as BasePlayer).IsSleeping())
+				return false;
+			
+			// allow NPC damage to other entities if sleeper protection is off
+			if (hitinfo.Initiator is BaseNPC)
+				return true;
 			
 			// ignore checks if authorized damage enabled (except for players)
-			if(data.config[Option.authDamage] && !(entity is BasePlayer) && (hitinfo.Initiator is BasePlayer) && CheckAuthDamage(entity, hitinfo.Initiator as BasePlayer))
+			if (ruleSet.HasFlag(RuleFlags.AuthorizedDamage) && !(entity is BasePlayer) && hitinfo.Initiator is BasePlayer && CheckAuthDamage(entity, hitinfo.Initiator as BasePlayer))
 				return true;
 			
 			// allow sleeper damage by admins if configured
-			if(data.config[Option.sleeperAdminDamage] && entity is BasePlayer && hitinfo.Initiator is BasePlayer)
-				if((entity as BasePlayer).IsSleeping() && isAdmin(hitinfo.Initiator as BasePlayer))
+			if (ruleSet.HasFlag(RuleFlags.AdminsHurtSleepers) && entity is BasePlayer && hitinfo.Initiator is BasePlayer)
+				if((entity as BasePlayer).IsSleeping() && IsAdmin(hitinfo.Initiator as BasePlayer))
 					return true;
 			
 			// allow Human NPC damage if configured
-			if(data.config[Option.humanNPCDamage] && entity is BasePlayer && hitinfo.Initiator is BasePlayer)
-				if(isHumanNPC(entity as BasePlayer) || isHumanNPC(hitinfo.Initiator as BasePlayer))
+			if (ruleSet.HasFlag(RuleFlags.HumanNPCDamage) && entity is BasePlayer && hitinfo.Initiator is BasePlayer)
+				if(IsHumanNPC(entity as BasePlayer) || IsHumanNPC(hitinfo.Initiator as BasePlayer))
 					return true;
 			
-			// process zone rules
-			if(data.config[Option.useZones] && data.HasZones() && ZoneManager != null)
-			{
-				if(zones != null && zones.Count > 0)
-					return processZoneRules(entity, hitinfo, zones[0]);
-			}
-			return processRules(entity, hitinfo);
+			return EvaluateRules(entity, hitinfo, ruleSet);
 		}
 		
-		private bool processRules(BaseCombatEntity entity, HitInfo hitinfo)
+		// process rules to determine whether to allow damage
+		bool EvaluateRules(BaseCombatEntity entity, HitInfo hitinfo, RuleSet ruleSet)
 		{
-			// handle rules
-			List<Hurtable> hurtableList = new List<Hurtable>();
-			hurtableList = data.Lookup(hitinfo.Initiator);
-			List<Hurtable> otherList = new List<Hurtable>();
-			otherList = data.Lookup(entity);
-			if(hurtableList != null && hurtableList.Count > 0 && otherList != null && otherList.Count > 0)
-			{
-				// check direct assignment (hurtable mapped to hurtable)
-				foreach(Hurtable h1 in hurtableList)
-					foreach(Hurtable h2 in otherList)
-					{
-						object r = h1.CanHurt(h2);
-						if(r != null)
-							return (bool)r;
-					}
-			}
-			if(hurtableList != null && hurtableList.Count > 0)
-			{
-				// check if initiator can hurt anything (hurtable mapped to global)
-				foreach(Hurtable h1 in hurtableList)
-				{
-					object r = h1.CanHurt(global);
-					if(r != null)
-						return (bool)r;
-				}
-			}
-			if(otherList != null && otherList.Count > 0)
-			{
-				// check if anything can hurt entity (global mapped to hurtable)
-				foreach(Hurtable h2 in otherList)
-				{
-					object r = global.CanHurt(h2);
-					if(r != null)
-						return (bool)r;
-				}
-			}
-			
-			// handle global damage (global mapped to global)
-			return global.links[global.name];
-		}
-		
-		private bool processZoneRules(BaseCombatEntity entity, HitInfo hitinfo, string zoneId)
-		{
-			// handle rules
-			List<Hurtable> hurtableList = new List<Hurtable>();
-			hurtableList = data.Lookup(hitinfo.Initiator, zoneId);
-			List<Hurtable> otherList = new List<Hurtable>();
-			otherList = data.Lookup(entity, zoneId);
-			if(hurtableList != null && hurtableList.Count > 0 && otherList != null && otherList.Count > 0)
-			{
-				// check direct assignment (hurtable mapped to hurtable)
-				foreach(Hurtable h1 in hurtableList)
-					foreach(Hurtable h2 in otherList)
-					{
-						object r = h1.CanHurt(h2);
-						if(r != null)
-							return (bool)r;
-					}
-			}
-			if(hurtableList != null && hurtableList.Count > 0)
-			{
-				// check if initiator can hurt anything (hurtable mapped to global)
-				foreach(Hurtable h1 in hurtableList)
-				{
-					object r = h1.CanHurt(global);
-					if(r != null)
-						return (bool)r;
-				}
-			}
-			if(otherList != null && otherList.Count > 0)
-			{
-				// check if anything can hurt entity (global mapped to hurtable)
-				foreach(Hurtable h2 in otherList)
-				{
-					object r = global.CanHurt(h2);
-					if(r != null)
-						return (bool)r;
-				}
-			}
-			
-			// handle global damage (global mapped to global)
-			return global.links[global.name];
+			List<string> e0Groups = data.ResolveEntityGroups(hitinfo.Initiator);
+			List<string> e1Groups = data.ResolveEntityGroups(entity);
+			return ruleSet.Evaluate(e0Groups, e1Groups);
 		}
 		
 		// checks for a lock
-		object CheckLock(BaseCombatEntity entity, HitInfo hitinfo)
+		object CheckLock(RuleSet ruleSet, BaseCombatEntity entity, HitInfo hitinfo)
 		{
 			// exclude deployed items in storage container lock check (since they can't have locks)
-			if(entity.ShortPrefabName == "lantern.deployed" ||
-			   entity.ShortPrefabName == "ceilinglight.deployed" ||
-			   entity.ShortPrefabName == "furnace.large" ||
-			   entity.ShortPrefabName == "campfire" ||
-			   entity.ShortPrefabName == "furnace" ||
-			   entity.ShortPrefabName == "refinery_small_deployed" ||
-			   entity.ShortPrefabName == "waterbarrel" ||
-			   entity.ShortPrefabName == "jackolantern.angry" ||
-			   entity.ShortPrefabName == "jackolantern.happy" ||
-			   entity.ShortPrefabName == "repairbench_deployed" ||
-			   entity.ShortPrefabName == "researchtable_deployed" ||
+			if(entity.ShortPrefabName.Equals("lantern.deployed") ||
+			   entity.ShortPrefabName.Equals("ceilinglight.deployed") ||
+			   entity.ShortPrefabName.Equals("furnace.large") ||
+			   entity.ShortPrefabName.Equals("campfire") ||
+			   entity.ShortPrefabName.Equals("furnace") ||
+			   entity.ShortPrefabName.Equals("refinery_small_deployed") ||
+			   entity.ShortPrefabName.Equals("waterbarrel") ||
+			   entity.ShortPrefabName.Equals("jackolantern.angry") ||
+			   entity.ShortPrefabName.Equals("jackolantern.happy") ||
+			   entity.ShortPrefabName.Equals("repairbench_deployed") ||
+			   entity.ShortPrefabName.Equals("researchtable_deployed") ||
 			   entity.ShortPrefabName.Contains("shutter"))
 				return null;
 			
@@ -675,8 +627,8 @@ namespace Oxide.Plugins
 			if (alock.IsLocked()) // is locked, cancel damage except heli
 			{
 				// if heliDamageLocked option is false or heliDamage is false, all damage is cancelled
-				if(!data.config[Option.heliDamageLocked] || !data.config[Option.heliDamage]) return false;
-				object heli = CheckHeliInitiator(hitinfo);
+				if(!ruleSet.HasFlag(RuleFlags.HeliDamageLocked) || ruleSet.HasFlag(RuleFlags.NoHeliDamage)) return false;
+				object heli = CheckHeliInitiator(ruleSet, hitinfo);
 				if(heli != null)
 					return (bool) heli;
 				return false;
@@ -685,20 +637,19 @@ namespace Oxide.Plugins
 		}
 		
 		// check for heli
-		object CheckHeliInitiator(HitInfo hitinfo)
+		object CheckHeliInitiator(RuleSet ruleSet, HitInfo hitinfo)
 		{
 			// Check for heli initiator
 			if(hitinfo.Initiator is BaseHelicopter ||
-			   hitinfo.Initiator is HelicopterTurret ||
 			   (hitinfo.Initiator != null && (
-				   hitinfo.Initiator.ShortPrefabName == "oilfireballsmall" ||
-				   hitinfo.Initiator.ShortPrefabName == "napalm")))
-				return data.config[Option.heliDamage];
+				   hitinfo.Initiator.ShortPrefabName.Equals("oilfireballsmall") ||
+				   hitinfo.Initiator.ShortPrefabName.Equals("napalm"))))
+				return !ruleSet.HasFlag(RuleFlags.NoHeliDamage);
 			else if(hitinfo.WeaponPrefab != null) // prevent null spam
 			{
-				if(hitinfo.WeaponPrefab.ShortPrefabName == "rocket_heli" ||
-				   hitinfo.WeaponPrefab.ShortPrefabName == "rocket_heli_napalm")
-					return data.config[Option.heliDamage];
+				if(hitinfo.WeaponPrefab.ShortPrefabName.Equals("rocket_heli") ||
+				   hitinfo.WeaponPrefab.ShortPrefabName.Equals("rocket_heli_napalm"))
+					return !ruleSet.HasFlag(RuleFlags.NoHeliDamage);
 			}
 			return null;
 		}
@@ -707,7 +658,7 @@ namespace Oxide.Plugins
 		bool CheckAuthDamage(BaseCombatEntity entity, BasePlayer player)
 		{
 			// check if the player is the owner of the entity
-			if(player.userID == entity.OwnerID)
+			if (player.userID == entity.OwnerID)
 				return true; // player is the owner, allow damage
 			
 			// assume no authorization by default
@@ -726,21 +677,19 @@ namespace Oxide.Plugins
 					else
 						authed = true; // set authed to true to indicate player is authorized on at least one cupboard
 			}
-            return authed;
+			return authed;
 		}
 		
 		// handle player attacking an entity - specifically, checks resource dispensers
 		// to determine whether to prevent gathering, based on rules
-		private void OnPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
+		void OnPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
 		{
-			if(hitinfo.HitEntity?.GetComponent<ResourceDispenser>() == null)
-				return;
 			if(!AllowDamage(hitinfo.HitEntity as BaseCombatEntity, hitinfo))
             	CancelDamage(hitinfo);
         }
 		
 		// cancel damage
-		private static void CancelDamage(HitInfo hitinfo)
+		void CancelDamage(HitInfo hitinfo)
 		{
 			hitinfo.damageTypes = new DamageTypeList();
             hitinfo.DoHitEffects = false;
@@ -750,17 +699,17 @@ namespace Oxide.Plugins
 		
 		// handle looting - if another mod must override TruePVE looting behavior,
 		// comment out this method and reference AllowLoot from the other mod(s)
-		private object CanLootPlayer(BasePlayer target, BasePlayer player)
+		object CanLootPlayer(BasePlayer target, BasePlayer player)
 		{
 			if(!data.config[Option.handleLooting]) // let other mods handle looting and hook to HandleLoot if necessary
 				return null;
 			if(!HandleLoot(player, target))
-				return (object) false; // non-null allows looting
+				return false; // non-null allows looting
 			return null;
 		}
 		
 		// handle looting players
-        private void OnLootPlayer(BasePlayer player, BasePlayer target)
+        void OnLootPlayer(BasePlayer player, BasePlayer target)
         {
 			if(!data.config[Option.handleLooting]) // let other mods handle looting and hook to HandleLoot if necessary
 				return;
@@ -768,7 +717,7 @@ namespace Oxide.Plugins
 		}
 		
 		// handle looting entities
-		private void OnLootEntity(BasePlayer player, BaseEntity target)
+		void OnLootEntity(BasePlayer player, BaseEntity target)
 		{
 			if(!data.config[Option.handleLooting]) // let other mods handle looting and hook to HandleLoot if necessary
 				return;
@@ -776,8 +725,7 @@ namespace Oxide.Plugins
 		}
 		
 		// handle looting players
-		[HookMethod("HandleLoot")]
-		public bool HandleLoot(BasePlayer player, BaseEntity target)
+		bool HandleLoot(BasePlayer player, BaseEntity target)
 		{
 			if(target == null)
 				return true;
@@ -790,33 +738,24 @@ namespace Oxide.Plugins
 		}
 		
 		// determine whether to allow looting sleepers and other players' corpses
-		[HookMethod("AllowLoot")]
-		private bool AllowLoot(BasePlayer player, BaseEntity target)
+		bool AllowLoot(BasePlayer player, BaseEntity target)
 		{
-			if(isAdmin(player))
+			if(IsAdmin(player))
 				return true;
-				
-			// check for exclusion zones (zones with no rules mapped)
-			List<string> playerZoneIds = null;
-			List<string> targetZoneIds = null;
-			List<string> zones = null;
-			if(data.config[Option.useZones] && data.HasZones() && ZoneManager != null)
-			{
-				playerZoneIds = getZoneIDs(player);
-				targetZoneIds = getZoneIDs(target);
-				if(playerZoneIds != null && targetZoneIds != null)
-				{
-					zones = playerZoneIds.Where(str => targetZoneIds.Contains(str) && data.HasZone(str)).ToList();
-					if(zones != null && zones.Count > 0)
-						if(data.HasEmptyZone(zones[0]))
-							return true;
-				}
-			}
 			
-			if(target is BasePlayer && (target as BasePlayer).IsSleeping())
-				return data.config[Option.sleeperLooting];
-			else if(target is LootableCorpse && (Convert.ToString(player.userID) != Convert.ToString((target as LootableCorpse).playerSteamID)))
-				return data.config[Option.corpseLooting];
+			// check for exclusion zones (zones with no rules mapped)
+			if(CheckExclusion(player, target)) return true;
+
+			// if target is not player or corpse, allow looting
+			if (!(target is BasePlayer || target is LootableCorpse))
+				return true;
+
+			RuleSet ruleSet = GetRuleSet(player, target);
+
+			if (target is BasePlayer && (target as BasePlayer).IsSleeping())
+				return ruleSet.HasFlag(RuleFlags.LootableSleepers);
+			else if(target is LootableCorpse && player.userID != (target as LootableCorpse).playerSteamID)
+				return ruleSet.HasFlag(RuleFlags.LootableCorpses);
 			return true;
 		}
 		
@@ -835,56 +774,157 @@ namespace Oxide.Plugins
 				SendMessage(player, message);
 			});
 		}
-		
-		// send message to player
-		void SendMessage(BasePlayer player, string key, object[] options = null)
+
+		// check if entity can be targeted
+		object CanBeTargeted(BaseCombatEntity target, object turret)
 		{
-			SendReply(player, BuildMessage(key, options));
+			if (target == null || turret == null) return null;
+			if (turret as HelicopterTurret)
+				return null;
+			BasePlayer player = target as BasePlayer;
+			if (player == null) return null;
+			RuleSet ruleSet = GetRuleSet(player, turret as BaseCombatEntity);
+			if (ruleSet.HasFlag(RuleFlags.TurretsIgnorePlayers))
+				return false;
+			return null;
+		}
+
+		// ignore players stepping on traps if configured
+		object OnTrapTrigger(BaseTrap trap, GameObject go)
+		{
+			BasePlayer player = go.GetComponent<BasePlayer>();
+			if (player == null || trap == null) return null;
+			RuleSet ruleSet = GetRuleSet(trap, player);
+			if(ruleSet.HasFlag(RuleFlags.TrapsIgnorePlayers))
+				return false;
+			return null;
 		}
 		
-		// send message to player
-		void SendMessage(ConsoleSystem.Arg arg, string key, object[] options = null)
+		// Check exclusion for entities
+		bool CheckExclusion(BaseEntity entity0, BaseEntity entity1)
 		{
-			SendReply(arg, BuildMessage(key, options));
+			// check for exclusion zones (zones with no rules mapped)
+			List<string> e0Locations = GetLocationKeys(entity0);
+			List<string> e1Locations = GetLocationKeys(entity1);
+			return CheckExclusion(e0Locations, e1Locations);
+		}
+
+		RuleSet GetRuleSet(List<string> e0Locations, List<string> e1Locations)
+		{
+			RuleSet ruleSet = currentRuleSet;
+			if (e0Locations != null && e1Locations != null && e0Locations.Count() > 0 && e1Locations.Count() > 0)
+			{
+				List<string> locations = GetSharedLocations(e0Locations, e1Locations);
+				if (locations != null && locations.Count > 0 && data.HasMapping(locations[0]))
+				{
+					try
+					{
+						ruleSet = data.ruleSets.SingleOrDefault(r => r.name == data.mappings[locations[0]]);
+					}
+					catch (Exception)
+					{
+						PrintWarning(GetMessage("Warning_DuplicateRuleSet"), data.mappings[locations[0]]);
+						ruleSet = data.ruleSets.FirstOrDefault(r => r.name == data.mappings[locations[0]]);
+					}
+				}
+			}
+			if (ruleSet == null)
+				ruleSet = currentRuleSet;
+			return ruleSet;
+		}
+
+		RuleSet GetRuleSet(BaseEntity e0, BaseEntity e1)
+		{
+			List<string> e0Locations = GetLocationKeys(e0);
+			List<string> e1Locations = GetLocationKeys(e1);
+
+			return GetRuleSet(e0Locations, e1Locations);
+		}
+
+		// get locations shared between the two passed location lists
+		List<string> GetSharedLocations(List<string> e0Locations, List<string> e1Locations)
+		{
+			return e0Locations.Intersect(e1Locations).Where(s => data.HasMapping(s)).ToList();
 		}
 		
-		string BuildMessage(string key, object[] options = null)
+		// Check exclusion for given entity locations
+		bool CheckExclusion(List<string> e0Locations, List<string> e1Locations)
 		{
-			string message = GetMessage(key);
+			if (e0Locations == null || e1Locations == null) return false;
+			List<string> locations = GetSharedLocations(e0Locations, e1Locations);
+			if (locations != null && locations.Count > 0)
+				foreach(string loc in locations)
+					if(data.HasEmptyMapping(loc))
+						return true;
+			
+			return false;
+		}
+
+		#endregion
+
+		#region Messaging
+
+		// send message to player (chat)
+		void SendMessage(BasePlayer player, string key, object[] options = null) => SendReply(player, BuildMessage(player, key, options));
+		
+		// send message to player (console)
+		void SendMessage(ConsoleSystem.Arg arg, string key, object[] options = null) => SendReply(arg, BuildMessage(null, key, options));
+		
+		// build message string
+		string BuildMessage(BasePlayer player, string key, object[] options = null)
+		{
+			string message = player == null ? GetMessage(key) : GetMessage(key, player.UserIDString);
 			if(options != null && options.Length > 0)
 				message = String.Format(message, options);
 			string type = key.Split('_')[0];
 			string size = GetMessage("Format_"+type+"Size");
 			string color = GetMessage("Format_"+type+"Color");
-			return String.Format(GetMessage("Format_Wrapper"), new object[] {size, color, message});
+			return WrapSize(size, WrapColor(color, message));
 		}
-		
-		string wrapSize(string size, string input)
+
+		// prints the value of an Option
+		private void PrintValue(ConsoleSystem.Arg arg, Option opt)
+		{
+			SendReply(arg, WrapSize(GetMessage("Format_NotifySize"), WrapColor(GetMessage("Format_NotifyColor"), opt + ": ") + data.config[opt]));
+		}
+
+		// wrap string in <size> tag, handles parsing size string to integer
+		string WrapSize(string size, string input)
 		{
 			int i = 0;
 			if(Int32.TryParse(size, out i))
-				return wrapSize(i, input);
+				return WrapSize(i, input);
 			return input;
 		}
 		
 		// wrap a string in a <size> tag with the passed size
-		string wrapSize(int size, string input)
+		string WrapSize(int size, string input)
 		{
-			if(input == null || input == "")
+			if(input == null || input.Equals(""))
 				return input;
-			return String.Format(GetMessage("Format_SizeWrapper"), new object[] {size, input});
+			return "<size=" + size + ">" + input + "</size>";
 		}
 		
 		// wrap a string in a <color> tag with the passed color
-		string wrapColor(string color, string input)
+		string WrapColor(string color, string input)
 		{
-			if(input == null || input == "" || color == null || color == "")
+			if(input == null || input.Equals("") || color == null || color.Equals(""))
 				return input;
-			return String.Format(GetMessage("Format_ColorWrapper"), new object[] {color, input});
+			return "<color=" + color + ">" + input + "</color>";
 		}
-		
+
+		// show usage information
+		void ShowUsage(ConsoleSystem.Arg arg) => SendReply(arg, usageString);
+
+		// warn that the server is set to PVE mdoe
+		void WarnPve() => PrintWarning(GetMessage("Warning_PveMode"));
+
+		#endregion
+
+		#region Helper Procedures
+
 		// is admin
-		private bool isAdmin(BasePlayer player)
+		private bool IsAdmin(BasePlayer player)
 		{
 			if (player == null) return false;
 			if (player?.net?.connection == null) return true;
@@ -892,92 +932,457 @@ namespace Oxide.Plugins
 		}
 		
 		// is player a HumanNPC
-		private bool isHumanNPC(BasePlayer player)
+		private bool IsHumanNPC(BasePlayer player)
 		{
 			return player.userID < 76560000000000000L && player.userID > 0L && !player.IsDestroyed;
 		}
 		
-		private List<string> getZoneIDs(BaseEntity entity)
+		// get location keys from ZoneManager (zone IDs) or LiteZones (zone names)
+		private List<string> GetLocationKeys(BaseEntity entity)
 		{
-			if(ZoneManager == null || data.zoneData == null) return null;
-			List<string> zones = (List<string>) ZoneManager.Call("GetEntityZones", new object[] {entity});
-			if(zones == null || zones.Count == 0) return null;
-			return zones;
+			if(!useZones || entity == null) return null;
+			List<string> locations = new List<string>();
+			if (ZoneManager != null)
+			{
+				List<string> zmloc = (List<string>)ZoneManager.Call("GetEntityZones", new object[] { entity });
+				if (zmloc != null && zmloc.Count > 0)
+					locations.AddRange(zmloc);
+			}
+			if (LiteZones != null)
+			{
+				List<string> lzloc = (List<string>) LiteZones?.Call("GetEntityZones", new object[] { entity });
+				if (lzloc != null && lzloc.Count > 0)
+					locations.AddRange(lzloc);
+			}
+			if (locations == null || locations.Count == 0) return null;
+			return locations;
+		}
+
+		// check user access
+		bool HasAccess(ConsoleSystem.Arg arg)
+		{
+			if (arg.Connection != null)
+			{
+				if (arg.Connection.authLevel < 1)
+				{
+					SendMessage(arg, "Error_NoPermission");
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// handle raycast from player (for prodding)
+		bool GetRaycastTarget(BasePlayer player, out object closestEntity)
+		{
+			closestEntity = false;
+
+			RaycastHit hit;
+			if(Physics.Raycast(player.eyes.HeadRay(), out hit, 10f))
+			{
+				closestEntity = hit.GetEntity();
+				return true;
+			}
+			return false;
+		}
+
+		// loop to update current ruleset
+		void TimerLoop(bool firstRun = false)
+		{
+			string ruleSetName;
+			data.schedule.ClockUpdate(out ruleSetName, out currentBroadcastMessage);
+			if (currentRuleSet.name != ruleSetName || firstRun)
+			{
+				currentRuleSet = data.ruleSets.FirstOrDefault(r => r.name == ruleSetName);
+				if (currentRuleSet == null)
+					currentRuleSet = new RuleSet(ruleSetName); // create empty ruleset to hold name
+				if (data.schedule.broadcast && currentBroadcastMessage != null)
+					Server.Broadcast(currentBroadcastMessage, GetMessage("Prefix"));
+			}
+
+			if (data.schedule.enabled)
+				scheduleUpdateTimer = timer.Once(data.schedule.useRealtime ? 30f : 3f, () => TimerLoop());
+		}
+
+		#endregion
+
+		#region Subclasses
+
+		// configuration and data storage container
+		class TruePVEData
+		{
+			[JsonProperty(PropertyName="Config Version")]
+			public string configVersion = null;
+			[JsonProperty(PropertyName="Default RuleSet")]
+			public string defaultRuleSet = "default";
+			[JsonProperty(PropertyName="Configuration Options")]
+			public Dictionary<Option,bool> config = new Dictionary<Option,bool>();
+			[JsonProperty(PropertyName="Mappings")]
+			public Dictionary<string,string> mappings = new Dictionary<string,string>();
+			[JsonProperty(PropertyName="Schedule")]
+			public Schedule schedule = new Schedule();
+			[JsonProperty(PropertyName = "RuleSets")]
+			public List<RuleSet> ruleSets = new List<RuleSet>();
+			[JsonProperty(PropertyName = "Entity Groups")]
+			public List<EntityGroup> groups = new List<EntityGroup>();
+
+			Dictionary<uint, List<string>> groupCache = new Dictionary<uint, List<string>>();
+			
+			public void Init()
+			{
+				schedule.Init();
+				foreach (RuleSet rs in ruleSets)
+					rs.Build();
+				ruleSets.Remove(null);
+			}
+
+			public List<string> ResolveEntityGroups(BaseEntity entity)
+			{
+				List<string> groupList;
+				if (!groupCache.TryGetValue(entity.net.ID, out groupList))
+				{
+					groupList = groups.Where(g => g.Contains(entity)).Select(g => g.name).ToList();
+					groupCache[entity.net.ID] = groupList;
+				}
+				return groupList;
+			}
+
+			public bool HasMapping(string key)
+			{
+				return mappings.ContainsKey(key);
+			}
+
+			public bool HasEmptyMapping(string key)
+			{
+				if (!mappings.ContainsKey(key)) return false;
+				if (mappings[key].Equals("exclude")) return true;
+				RuleSet r = ruleSets.First(rs => rs.name.Equals(mappings[key]));
+				if (r == null) return true;
+				return r.IsEmpty();
+			}
+			
+			public RuleSet GetDefaultRuleSet()
+			{
+				try
+				{
+					return ruleSets.Single(r => r.name == defaultRuleSet);
+				}
+				catch (Exception)
+				{
+					Console.WriteLine("Warning - duplicate ruleset found for default RuleSet: \"" + defaultRuleSet + "\"");
+					return ruleSets.FirstOrDefault(r => r.name == defaultRuleSet);
+				}
+			}
 		}
 		
-		// configuration and data storage container
-		private class TruePVEData
+		class RuleSet
 		{
-			public Dictionary<Option,bool> config = new Dictionary<Option,bool>();
-			public Dictionary<string,Hurtable> data = new Dictionary<string,Hurtable>();
-			public Dictionary<string,Dictionary<string,Hurtable>> zoneData = new Dictionary<string,Dictionary<string,Hurtable>>();
+			public string name;
+			public bool enabled = true;
+			public bool defaultAllowDamage = false;
+			[JsonConverter(typeof(StringEnumConverter))]
+			public RuleFlags flags = RuleFlags.None;
+			public HashSet<string> rules = new HashSet<string>();
+			HashSet<Rule> parsedRules = new HashSet<Rule>();
+
+			public RuleSet() { }
+			public RuleSet(string name) { this.name = name; }
 			
-			public bool HasZones() {
-				return zoneData != null && zoneData.Count > 0;
-			}
-			
-			public bool HasZone(string zoneId) {
-				return HasZones() && zoneData.ContainsKey(zoneId);
-			}
-			
-			public bool HasEmptyZone(string zoneId) {
-				return HasZone(zoneId) && (zoneData[zoneId] == null || zoneData[zoneId].Count == 0);
-			}
-			
-			public Hurtable LookupByName(string name) {
-				return data.ContainsKey(name) ? data[name] : null;
-			}
-			
-			public Hurtable LookupByName(string name, string zone) {
-				if(!zoneData.ContainsKey(zone))
-					return null;
-				return zoneData[zone].ContainsKey(name) ? zoneData[zone][name] : null;
-			}
-			
-			public List<Hurtable> Lookup(BaseEntity entity) {
-				return data.Values.ToList().Where(h => (h.prefabs != null && h.prefabs.Contains(entity.ShortPrefabName)) || (h.types != null && h.types.Contains(entity.GetType().Name))).ToList();
-			}
-			
-			public List<Hurtable> Lookup(BaseEntity entity, string zone) {
-				if(!zoneData.ContainsKey(zone))
-					return null;
-				return zoneData[zone].Values.ToList().Where(h => (h.prefabs != null && h.prefabs.Contains(entity.ShortPrefabName)) || (h.types != null && h.types.Contains(entity.GetType().Name))).ToList();
-			}
-			
-			public Hurtable CreateHurtable(string name)
+			// evaluate the passed lists of entity groups against rules
+			public bool Evaluate(List<string> eg1, List<string> eg2)
 			{
-				Hurtable h = new Hurtable();
-				h.name = name;
-				data[h.name] = h;
-				return h;
+				if (parsedRules == null || parsedRules.Count == 0) return defaultAllowDamage;
+				bool? res;
+				// check all direct links
+				if(eg1 != null && eg1.Count > 0 && eg2 != null && eg2.Count > 0)
+					foreach (string s1 in eg1)
+						foreach (string s2 in eg2)
+							if ((res = Evaluate(s1, s2)).HasValue) return res.Value;
+
+				if(eg1 != null && eg1.Count > 0)
+					// check group -> any
+					foreach (string s1 in eg1)
+						if ((res = Evaluate(s1, Any)).HasValue) return res.Value;
+
+				if(eg2 != null && eg2.Count > 0)
+					// check any -> group
+					foreach (string s2 in eg2)
+						if ((res = Evaluate(Any, s2)).HasValue) return res.Value;
+				
+				return defaultAllowDamage;
 			}
 			
-			public Hurtable CreateHurtable(string name, string zone)
+			// evaluate two entity groups against rules
+			public bool? Evaluate(string eg1, string eg2)
 			{
-				Hurtable h = new Hurtable();
-				h.name = name;
-				zoneData[zone][h.name] = h;
-				return h;
+				if (eg1 == null || eg2 == null || parsedRules == null || parsedRules.Count == 0) return null;
+				Rule rule = parsedRules.FirstOrDefault(r => r.valid && r.key.Equals(eg1 + "->" + eg2));
+				if (rule != null)
+					return rule.hurt;
+				return null;
+			}
+
+			// build rule strings to rules
+			public void Build()
+			{
+				foreach (string ruleText in rules)
+					parsedRules.Add(new Rule(ruleText));
+				parsedRules.Remove(null);
+				ValidateRules();
+			}
+
+			public void ValidateRules()
+			{
+				foreach(Rule rule in parsedRules)
+					if(!rule.valid)
+						Console.WriteLine("Warning - invalid rule: " + rule.ruleText);
+			}
+
+			// add a rule
+			public void AddRule(string ruleText)
+			{
+				rules.Add(ruleText);
+				parsedRules.Add(new Rule(ruleText));
+			}
+			
+			public bool HasAnyFlag(RuleFlags flags) { return (this.flags | flags) != RuleFlags.None; }
+			public bool HasFlag(RuleFlags flag) { return (flags & flag) == flag; }
+			public bool IsEmpty() { return (rules == null || rules.Count == 0) && flags == RuleFlags.None; }
+		}
+		
+		class Rule
+		{
+			public string ruleText;
+			[JsonIgnore]
+			public string key;
+			[JsonIgnore]
+			public bool hurt;
+			[JsonIgnore]
+			public bool valid;
+
+			public Rule() { }
+			public Rule(string ruleText)
+			{
+				this.ruleText = ruleText;
+				valid = RuleTranslator.Translate(this);
+			}
+
+			public override int GetHashCode() { return key.GetHashCode(); }
+
+			public override bool Equals(object obj)
+			{
+				if (obj == null) return false;
+				if (obj == this) return true;
+				if (obj is Rule)
+					return key.Equals((obj as Rule).key);
+				return false;
+			}
+		}
+
+		// helper class to translate rule text to rules
+		class RuleTranslator
+		{
+			static readonly Regex regex = new Regex(@"\s+");
+			static readonly List<string> synonyms = new List<string>() { "anything", "nothing", "all", "any", "none", "everything" };
+			public static bool Translate(Rule rule)
+			{
+				if (rule.ruleText == null || rule.ruleText.Equals("")) return false;
+				string str = rule.ruleText;
+				string[] splitStr = regex.Split(str);
+				// first and last words should be ruleset names
+				string rs0 = splitStr[0];
+				string rs1 = splitStr[splitStr.Length - 1];
+				string[] mid = splitStr.Skip(1).Take(splitStr.Length-2).ToArray();
+				if (mid == null || mid.Length == 0) return false;
+
+				bool canHurt = true;
+				foreach(string s in mid)
+					if (s.Equals("cannot") || s.Equals("can't"))
+						canHurt = false;
+
+				// rs0 and rs1 shouldn't ever be "nothing" simultaneously
+				if (rs0.Equals("nothing") || rs1.Equals("nothing") || rs0.Equals("none") || rs1.Equals("none")) canHurt = !canHurt;
+
+				if (synonyms.Contains(rs0)) rs0 = Any;
+				if (synonyms.Contains(rs1)) rs1 = Any;
+
+				rule.key = rs0 + "->" + rs1;
+				rule.hurt = canHurt;
+				return true;
 			}
 		}
 		
 		// container for mapping entities
-		private class Hurtable
+		class EntityGroup
 		{
 			public string name;
-			public string description;
-			public List<string> prefabs = new List<string>();
-			public List<string> types = new List<string>();
-			public Dictionary<string,bool> links = new Dictionary<string,bool>();
-			public bool enabled = true;
-			
-			public object CanHurt(Hurtable other) {
-				if(!enabled || !other.enabled)
-					return null;
-				if(links != null && links.Count > 0 && links.ContainsKey(other.name))
-					return links[other.name];
-				return null;
+			public string members
+			{
+				get {
+					if (memberList == null || memberList.Count == 0) return "";
+					return string.Join(", ", memberList.ToArray());
+				}
+				set {
+					if (value == null || value.Equals("")) return;
+					memberList = value.Split(',').Select(s => s.Trim()).ToList();
+				}
+			}
+			List<string> memberList = new List<string>();
+			public string exclusions
+			{
+				get {
+					if (exclusionList == null || exclusionList.Count == 0) return "";
+					return string.Join(", ", exclusionList.ToArray());
+				}
+				set {
+					if (value == null || value.Equals("")) return;
+					memberList = value.Split(',').Select(s => s.Trim()).ToList();
+				}
+			}
+			List<string> exclusionList = new List<string>();
+
+			public EntityGroup() { }
+			public EntityGroup(string name) { this.name = name; }
+			public void Add(string prefabOrType)
+			{
+				memberList.Add(prefabOrType);
+			}
+			public bool Contains(BaseEntity entity)
+			{
+				if (entity == null) return false;
+				return (memberList.Contains(entity.GetType().Name) || memberList.Contains(entity.ShortPrefabName)) &&
+					  !(exclusionList.Contains(entity.GetType().Name) || exclusionList.Contains(entity.ShortPrefabName));
 			}
 		}
+
+		// scheduler
+		class Schedule
+		{
+			public bool enabled = false;
+			public bool useRealtime = false;
+			public bool broadcast = false;
+			public List<string> entries = new List<string>();
+			List<ScheduleEntry> parsedEntries = new List<ScheduleEntry>();
+			[JsonIgnore]
+			public bool valid = false;
+
+			public void Init()
+			{
+				foreach (string str in entries)
+					parsedEntries.Add(new ScheduleEntry(str));
+				// schedule not valid if entries are empty, there are less than 2 entries, or there are less than 2 rulesets defined
+				if (parsedEntries == null || parsedEntries.Count == 0 || parsedEntries.Count(e => e.valid) < 2 || parsedEntries.Select(e => e.ruleSet).Distinct().Count() < 2)
+					enabled = false;
+				else
+					valid = true;
+			}
+
+			// returns delta between current time and next schedule entry
+			public void ClockUpdate(out string currentRuleSet, out string message)
+			{
+				TimeSpan time = useRealtime ? new TimeSpan((int)DateTime.Now.DayOfWeek, 0, 0, 0).Add(DateTime.Now.TimeOfDay) : TOD_Sky.Instance.Cycle.DateTime.TimeOfDay;
+
+				try
+				{
+					// get the most recent schedule entry
+					ScheduleEntry se = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && t.time <= time && ((useRealtime && !t.isDaily) || !useRealtime)).Max(t => t.time));
+					// if realtime, check for daily
+					if (useRealtime)
+					{
+						ScheduleEntry daily = null;
+						try
+						{
+							daily = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && t.time <= time && t.isDaily).Max(t => t.time));
+						} catch(Exception)
+						{ // no daily entries
+						}
+						if (daily != null && se == null)
+							se = daily;
+						if (daily != null && daily.time.Add(new TimeSpan((int)DateTime.Now.DayOfWeek, 0, 0, 0)) > se.time)
+							se = daily;
+					}
+					currentRuleSet = se.ruleSet;
+					message = se.message;
+
+				}
+				catch (Exception)
+				{
+					// if time is earlier than all schedule entries, use max time
+					ScheduleEntry se = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && ((useRealtime && !t.isDaily) || !useRealtime)).Max(t => t.time));
+					if (useRealtime)
+					{
+						ScheduleEntry daily = null;
+						try
+						{
+							daily = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && t.isDaily).Max(t => t.time));
+						} catch (Exception)
+						{ // no daily entries
+						}
+						if (daily != null && se == null)
+							se = daily;
+						if (daily != null && daily.time.Add(new TimeSpan((int)DateTime.Now.DayOfWeek, 0, 0, 0)) > se.time)
+							se = daily;
+					}
+					currentRuleSet = se.ruleSet;
+					message = se.message;
+				}
+			}
+			
+		}
+
+		// helper class to translate schedule text to schedule entries
+		class ScheduleTranslator
+		{
+			static readonly Regex regex = new Regex(@"\s+");
+			public static bool Translate(ScheduleEntry entry)
+			{
+				if (entry.scheduleText == null || entry.scheduleText.Equals("")) return false;
+				string str = entry.scheduleText;
+				string[] splitStr = regex.Split(str, 3); // split into 3 parts
+				// first word should be a timespan
+				string ts = splitStr[0];
+				// second word should be a ruleset name
+				string rs = splitStr[1];
+				// remaining should be message
+				string message = splitStr.Length > 2 ? splitStr[2] : null;
+
+				try
+				{
+					if (ts.StartsWith("*."))
+					{
+						entry.isDaily = true;
+						ts = ts.Substring(2);
+					}
+					entry.time = TimeSpan.Parse(ts);
+					entry.ruleSet = rs;
+					entry.message = message;
+					return true;
+				}
+				catch (Exception)
+				{ }
+
+				return false;
+			}
+		}
+		
+		class ScheduleEntry
+		{
+			public string ruleSet;
+			public string message;
+			public string scheduleText;
+			public bool valid;
+			public TimeSpan time;
+			[JsonIgnore]
+			public bool isDaily = false;
+
+			public ScheduleEntry() { }
+			public ScheduleEntry(string scheduleText)
+			{
+				this.scheduleText = scheduleText;
+				valid = ScheduleTranslator.Translate(this);
+			}
+		}
+
+		#endregion
 	}
 }

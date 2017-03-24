@@ -2,7 +2,7 @@
     "name": "AbsolutGifts",
     "description": "Daily Gift Reward System - PlayTimeRewards.. Time Resets Daily",
     "author": "Absolut",
-    "version": "1.2.0",
+    "version": "1.4.1",
     "configuration": true,
     "suggest": {
         "Economics": "*",

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Oxide.Core;
 namespace Oxide.Plugins
 {
-    [Info("ConnectionDB", "Norn", 0.2, ResourceId = 1459)]
+    [Info("ConnectionDB", "Norn", "0.2.1", ResourceId = 1459)]
     [Description("Connection database for devs.")]
     public class ConnectionDB : RustPlugin
     {
@@ -39,7 +39,7 @@ namespace Oxide.Plugins
         }
         private bool InitPlayer(BasePlayer player)
         {
-            if (player == null || !player.isConnected) return false;
+            if (player == null || !player.IsConnected) return false;
             PlayerInfo p = null;
             if (!DB_Connection.PlayerInfo.TryGetValue(player.userID, out p))
             {
@@ -74,7 +74,7 @@ namespace Oxide.Plugins
         }
         private void SyncAlive(BasePlayer player)
         {
-            if (player != null && player.IsConnected())
+            if (player != null && player.IsConnected)
             {
                 if (ConnectionDataExists(player))
                 {
@@ -91,7 +91,7 @@ namespace Oxide.Plugins
             if (ConnectionDataExistsFromID(steamid))
             {
                 BasePlayer player = BasePlayer.FindByID(steamid);
-                if(player != null && player.IsConnected())
+                if(player != null && player.IsConnected)
                 {
                     DB_Connection.PlayerInfo[steamid].tLastName = player.displayName;
                     DB_Connection.PlayerInfo[steamid].tLastIP = player.net.connection.ipaddress;
@@ -281,7 +281,7 @@ namespace Oxide.Plugins
         }
         private bool ConnectionDataExists(BasePlayer player)
         {
-            if (player == null || !player.isConnected) return false;
+            if (player == null || !player.IsConnected) return false;
             if (DB_Connection.PlayerInfo.ContainsKey(player.userID)) { return true; }
             return false;
         }

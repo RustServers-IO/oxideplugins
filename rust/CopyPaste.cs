@@ -9,7 +9,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("Copy Paste", "Reneb", "3.0.20", ResourceId = 5981)]
+    [Info("Copy Paste", "Reneb", "3.0.21", ResourceId = 5981)]
     class CopyPaste : RustPlugin
     {
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -209,7 +209,7 @@ namespace Oxide.Plugins
             if (!ulong.TryParse(steamid, out userid)) { return "First argument isn't a steamid"; }
             var player = BasePlayer.FindByID(userid);
             if (player == null) return "Couldn't find the player";
-            if (!player.IsConnected()) return "Player is not connected?";
+            if (!player.IsConnected) return "Player is not connected?";
 
             return TryCopyFromPlayer(player, filename, args);
         }
@@ -217,7 +217,7 @@ namespace Oxide.Plugins
         object TryCopyFromPlayer(BasePlayer player, string filename, string[] args)
         {
             if (player == null) return "Player is null?";
-            if (!player.IsConnected()) return "Player is not connected?";
+            if (!player.IsConnected) return "Player is not connected?";
 
             var ViewAngles = Quaternion.Euler(player.GetNetworkRotation());
             BaseEntity sourceEntity;
@@ -485,7 +485,7 @@ namespace Oxide.Plugins
             if (!ulong.TryParse(steamid, out userid)) { return "First argument isn't a steamid"; }
             var player = BasePlayer.FindByID(userid);
             if(player == null) return "Couldn't find the player";
-            if (!player.IsConnected()) return "Player is not connected?";
+            if (!player.IsConnected) return "Player is not connected?";
 
             return TryPasteFromPlayer(player, filename, args);
         }
@@ -493,7 +493,7 @@ namespace Oxide.Plugins
         object TryPasteFromPlayer(BasePlayer player, string filename, string[] args)
         {
             if (player == null) return "Player is null?";
-            if (!player.IsConnected()) return "Player is not connected?";
+            if (!player.IsConnected) return "Player is not connected?";
 
             var ViewAngles = Quaternion.Euler(player.GetNetworkRotation());
             BaseEntity sourceEntity;

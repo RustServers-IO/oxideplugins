@@ -2,7 +2,7 @@
     "name": "Inventory Viewer",
     "description": "Look into a player's inventory",
     "author": "Mughisi",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/inventory-viewer.871",

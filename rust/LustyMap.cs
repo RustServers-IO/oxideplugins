@@ -16,7 +16,7 @@ using System.Drawing;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.83", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.0.93", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -26,7 +26,6 @@ namespace Oxide.Plugins
 
         static GameObject webObject;
         static ImageAssets assets;
-        static GameObject mapObject;
         static MapSplitter mapSplitter;
 
         static LustyMap instance;
@@ -104,6 +103,7 @@ namespace Oxide.Plugins
                 inEvent = false;
                 mapOpen = false;
                 afkDisabled = false;
+                enabled = false;
                 mode = MapMode.None;
                 lastMode = MapMode.None;
                 adminMode = false;
@@ -119,9 +119,7 @@ namespace Oxide.Plugins
                 if (MapSettings.friends)
                 {
                     FillFriendList();
-                }
-                if (MapSettings.forcedzoom)
-                    mapZoom = MapSettings.zoomlevel;
+                }                
 
                 if (!instance.configData.MapOptions.StartOpen)
                 {
@@ -133,6 +131,9 @@ namespace Oxide.Plugins
                 {
                     mapZoom = 1;
                     ToggleMapType(MapMode.Complex);
+
+                    if (MapSettings.forcedzoom)
+                        mapZoom = MapSettings.zoomlevel;
                 }
 
                 else if (MapSettings.minimap)
@@ -294,7 +295,6 @@ namespace Oxide.Plugins
                     DestroyUI();
                     currentX = newX;
                     currentZ = newZ;
-                    //var container = LustyUI.StaticComplex[mapZoom][newX, newZ];
                     instance.OpenComplexMap(player);
                 }
             }
@@ -345,7 +345,7 @@ namespace Oxide.Plugins
 
             #region Other
             public bool InEvent() => inEvent;
-            public bool IsAdmin() => adminMode;
+            public bool IsAdmin => adminMode;
             public void ToggleEvent(bool isPlaying) => inEvent = isPlaying;
             public void ToggleAdmin(bool enabled) => adminMode = enabled;
             public void DestroyUI() => LustyUI.DestroyUI(player);
@@ -433,13 +433,14 @@ namespace Oxide.Plugins
         {
             public BaseEntity entity;
             private MapMarker marker;
-            private AEType type;
+            public AEType type;
             private string icon;
 
             void Awake()
             {
                 entity = GetComponent<BaseEntity>();
-                marker = new MapMarker();              
+                marker = new MapMarker();
+                enabled = false;             
             }
             void OnDestroy()
             {
@@ -468,6 +469,10 @@ namespace Oxide.Plugins
                         icon = "debris";
                         marker.name = instance.msg("Debris");
                         break;
+                    case AEType.Vending:
+                        icon = "vending";
+                        marker.name = instance.msg("Vending");
+                        break;
                 }
                 InvokeRepeating("UpdatePosition", 0.1f, 1f);
             }
@@ -482,6 +487,8 @@ namespace Oxide.Plugins
                 else marker.icon = $"{icon}";
                 marker.x = GetPosition(entity.transform.position.x);
                 marker.z = GetPosition(entity.transform.position.z);
+                if (type == AEType.Vending || type == AEType.SupplyDrop || type == AEType.Debris)
+                    CancelInvoke();
             }
         }
         class MapMarker
@@ -494,7 +501,7 @@ namespace Oxide.Plugins
         }
         static class MapSettings
         {
-            static public bool minimap, complexmap, monuments, names, compass, caves, plane, heli, supply, debris, player, allplayers, friends, forcedzoom;
+            static public bool minimap, complexmap, monuments, names, compass, caves, plane, heli, supply, debris, player, allplayers, friends, vending, forcedzoom;
             static public int zoomlevel;       
         }
         public enum MapMode
@@ -510,7 +517,8 @@ namespace Oxide.Plugins
             Plane,
             SupplyDrop,
             Helicopter,
-            Debris            
+            Debris,
+            Vending            
         }
         #endregion
 
@@ -610,16 +618,14 @@ namespace Oxide.Plugins
 
             webObject = new GameObject("WebObject");
             assets = webObject.AddComponent<ImageAssets>();
-
-            mapObject = new GameObject("MapGenObject");
-            mapSplitter = mapObject.AddComponent<MapSplitter>();
+            mapSplitter = new MapSplitter();
 
             LoadVariables();
             LoadData();            
             LoadSettings();
-
+                       
             FindStaticMarkers();
-
+            FindVendingMachines();
             ValidateImages();
 
             CheckFriends();
@@ -672,12 +678,12 @@ namespace Oxide.Plugins
         {
             if (!activated) return;
             if (entity == null) return;
-            if (entity is CargoPlane || entity is SupplyDrop || entity is BaseHelicopter || entity is HelicopterDebris)
+            if (entity is CargoPlane || entity is SupplyDrop || entity is BaseHelicopter || entity is HelicopterDebris || entity is VendingMachine)
                 AddTemporaryMarker(entity);
         }
         void OnEntityKill(BaseNetworkable entity)
         {
-            var activeEntity = entity.GetComponent<ActiveEntity>();
+            var activeEntity = entity?.GetComponent<ActiveEntity>();
             if (activeEntity == null) return;
             if (entity?.net?.ID == null) return;
             if (temporaryMarkers.ContainsKey(entity.net.ID))
@@ -685,14 +691,19 @@ namespace Oxide.Plugins
             UnityEngine.Object.Destroy(activeEntity);
         }
         void Unload()
-        {
-            foreach (var player in BasePlayer.activePlayerList)
-                OnPlayerDisconnected(player);
+        {            
+            foreach (var player in BasePlayer.activePlayerList)                            
+                OnPlayerDisconnected(player);            
 
-            var components = UnityEngine.Object.FindObjectsOfType<MapUser>();
-            if (components != null)
-                foreach (var component in components)
-                    UnityEngine.Object.DestroyImmediate(component);
+            var mapUsers = UnityEngine.Object.FindObjectsOfType<MapUser>();
+            if (mapUsers != null)
+                foreach (var user in mapUsers)
+                    UnityEngine.Object.DestroyImmediate(user);
+
+            var tempMarkers = UnityEngine.Object.FindObjectsOfType<ActiveEntity>();
+            if (tempMarkers != null)
+                foreach (var marker in tempMarkers)
+                    UnityEngine.Object.DestroyImmediate(marker);
         }
         #endregion
 
@@ -786,11 +797,7 @@ namespace Oxide.Plugins
                     }
                 }
                 catch
-                {
-                    
-                    //var user = instance.GetUser(player);
-                    //if (user == null) return;
-                    //instance.PrintError($"Error adding base map UI to {player.displayName}. Type: {type}, Zoom: {user.Zoom()}, X: {user.Current(true)}, Z: {user.Current(false)}");
+                {  
                 }
             }
             private static void AddElementIds(BasePlayer player, ref CuiElementContainer container)
@@ -849,7 +856,7 @@ namespace Oxide.Plugins
             var mapimage = GetImage("mapimage");
             if (string.IsNullOrEmpty(mapimage))
             {
-                PrintError("Unable to load the map image from file storage. This may be caused by slow processing of the images being uploaded to your server. If this problem persists unload the plugin and delete your ImageData.json data file");
+                PrintError("Unable to load the map image from file storage. This may be caused by slow processing of the images being uploaded to your server. Wait for 5 minutes and reload the plugin. \nIf this problem persists after multiple attempts then unload the plugin and delete your ImageData.json data file or run the 'resetmap' command");
                 activated = false;
                 return;
             }
@@ -881,7 +888,7 @@ namespace Oxide.Plugins
             var mapimage = GetImage("mapimage");
             if (string.IsNullOrEmpty(mapimage))
             {
-                PrintError("Unable to load the map image from file storage. This may be caused by slow processing of the images being uploaded to your server. If this problem persists unload the plugin and delete your ImageData.json data file");
+                PrintError("Unable to load the map image from file storage. This may be caused by slow processing of the images being uploaded to your server. Wait for 5 minutes and reload the plugin. \nIf this problem persists after multiple attempts then unload the plugin and delete your ImageData.json data file or run the 'resetmap' command");
                 activated = false;
                 return;
             }
@@ -928,7 +935,7 @@ namespace Oxide.Plugins
                         PrintError($"The plugin will now clear all image data and reload itself to re-initialize the map splitter.");
                         storedImages.data.Clear();
                         SaveData();
-                        rust.RunServerCommand("oxide.reload", new object[] { "LustyMap" });
+                        Interface.Oxide.ReloadPlugin("LustyMap");
                         return;
                     }
 
@@ -1099,10 +1106,10 @@ namespace Oxide.Plugins
                 var marker = entity.Value.GetMarker();
                 if (marker == null) continue;
                 var image = GetImage(marker.icon);
-                if (string.IsNullOrEmpty(image)) continue;
-                AddIconToMap(ref mapContainer, panel, image, "", iconsize * 1.4f, marker.x, marker.z);
+                if (string.IsNullOrEmpty(image)) continue;                
+                AddIconToMap(ref mapContainer, panel, image, "", entity.Value.type == AEType.Vending ? iconsize : iconsize * 1.4f, marker.x, marker.z);
             }            
-            if (user.IsAdmin() || MapSettings.allplayers)
+            if (user.IsAdmin || MapSettings.allplayers)
             {
                 foreach (var mapuser in mapUsers)
                 {
@@ -1210,9 +1217,9 @@ namespace Oxide.Plugins
                 if (marker == null) continue;
                 var image = GetImage(marker.icon);
                 if (string.IsNullOrEmpty(image)) continue;
-                AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.6f, marker.x, marker.z, colStart, colEnd, rowStart, rowEnd);
+                AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", entity.Value.type == AEType.Vending ? iconsize : iconsize * 1.6f, marker.x, marker.z, colStart, colEnd, rowStart, rowEnd);
             }
-            if (user.IsAdmin() || MapSettings.allplayers)
+            if (user.IsAdmin || MapSettings.allplayers)
             {
                 foreach (var mapuser in mapUsers)
                 {
@@ -1325,7 +1332,7 @@ namespace Oxide.Plugins
             SendReply(arg, "ResetMap Confirmed! Removing stored images and reloading the plugin to re-download your map image");
             storedImages.data.Clear();
             SaveData();
-            rust.RunServerCommand("oxide.reload", new object[] { "LustyMap " });
+            Interface.Oxide.ReloadPlugin("LustyMap");            
         }
         [ChatCommand("map")]
         void cmdOpenMap(BasePlayer player, string command, string[] args)
@@ -1350,8 +1357,8 @@ namespace Oxide.Plugins
                     user.ToggleMapType(MapMode.Minimap);
                 if (args[0].ToLower() == "admin")
                 {
-                    if (!player.IsAdmin() && !permission.UserHasPermission(player.UserIDString, "lustymap.admin")) return;
-                    if (user.IsAdmin())
+                    if (!player.IsAdmin && !permission.UserHasPermission(player.UserIDString, "lustymap.admin")) return;
+                    if (user.IsAdmin)
                     {
                         user.ToggleAdmin(false);
                         SendReply(player, "Admin mode disabled");
@@ -1368,7 +1375,7 @@ namespace Oxide.Plugins
         [ChatCommand("marker")]
         void cmdMarker(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin() && !permission.UserHasPermission(player.UserIDString, "lustymap.admin")) return;
+            if (!player.IsAdmin && !permission.UserHasPermission(player.UserIDString, "lustymap.admin")) return;
             if (args.Length == 0)
             {
                 SendReply(player, "Add and remove markers / custom icons to the map. See the overview for information regarding using custom icons");
@@ -1437,7 +1444,13 @@ namespace Oxide.Plugins
             {
                 if (!configData.MapMarkers.ShowDebris) return;
                 type = AEType.Debris;                
-            }           
+            }  
+            else if (entity is VendingMachine)
+            {
+                if (!configData.MapMarkers.ShowPublicVendingMachines) return;
+                if (!(entity as VendingMachine).IsBroadcasting()) return;
+                type = AEType.Vending;
+            }         
             var actEnt = entity.gameObject.AddComponent<ActiveEntity>();
             actEnt.SetType(type);
 
@@ -1457,6 +1470,7 @@ namespace Oxide.Plugins
             MapSettings.friends = configData.MapMarkers.ShowFriends;
             MapSettings.names = configData.MapMarkers.ShowMarkerNames;
             MapSettings.minimap = configData.MapOptions.MinimapOptions.UseMinimap;
+            MapSettings.vending = configData.MapMarkers.ShowPublicVendingMachines;
             MapSettings.complexmap = configData.MapOptions.MinimapOptions.ComplexOptions.UseComplexMap;
             MapSettings.forcedzoom = configData.MapOptions.MinimapOptions.ComplexOptions.ForceMapZoom;
             MapSettings.zoomlevel = configData.MapOptions.MinimapOptions.ComplexOptions.ForcedZoomLevel;
@@ -1582,6 +1596,19 @@ namespace Oxide.Plugins
                 }
             }                      
         }
+        private void FindVendingMachines()
+        {
+            if (!MapSettings.vending) return;
+            var machines = UnityEngine.Object.FindObjectsOfType<VendingMachine>();
+            foreach (var vendor in machines)
+            {
+                if (!vendor.IsBroadcasting()) continue;
+                var actEnt = vendor.gameObject.AddComponent<ActiveEntity>();
+                actEnt.SetType(AEType.Vending);
+
+                temporaryMarkers.Add(vendor.net.ID, actEnt);
+            }
+        }
         static double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
         #endregion
 
@@ -1629,10 +1656,14 @@ namespace Oxide.Plugins
                 r = r
             };
             if (r > 0) marker.r = GetDirection(r);
-
             customMarkers.Add(name, marker);
             if (!string.IsNullOrEmpty(icon) && icon != "special")
-                assets.Add(icon, $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}");            
+            {
+                string filename = icon;
+                if (!filename.StartsWith("http") && !filename.StartsWith("www"))
+                    filename = $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}";
+                assets.Add(icon, filename);
+            }
             SaveMarkers();
             return true;
         }
@@ -1651,7 +1682,12 @@ namespace Oxide.Plugins
             customMarkers[name] = marker;
 
             if (!string.IsNullOrEmpty(icon) && icon != "special")
-                assets.Add(icon, $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}");
+            {
+                string filename = icon;
+                if (!filename.StartsWith("http") && !filename.StartsWith("www"))
+                    filename = $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}";
+                assets.Add(icon, filename);
+            }
             SaveMarkers();
         }
         bool RemoveMarker(string name)
@@ -1722,6 +1758,22 @@ namespace Oxide.Plugins
             return true;
         }
         #endregion
+               
+        string GetMap() => GetImage("mapimage");  
+        Dictionary<string, string> GetMapPieces(int splices)
+        {
+            Dictionary<string, string> pieces = new Dictionary<string, string>();
+            foreach (var entry in storedImages.data.Where(k => k.Key.Substring(0, 2) == splices.ToString("00")))
+                if (splices >= 10)
+                    pieces.Add(entry.Key.Substring(entry.Key.Length - 5), entry.Value.ToString());
+                else pieces.Add(entry.Key.Substring(entry.Key.Length - 3), entry.Value.ToString());
+            return pieces;
+        }
+        bool SplitMap(int splices)
+        {
+            mapSplitter.SplitMap(Convert.ToUInt32(GetImage("mapimage")), splices);
+            return true;
+        }
 
         #endregion
 
@@ -1876,6 +1928,7 @@ namespace Oxide.Plugins
             public bool ShowPlanes { get; set; }
             public bool ShowPlayer { get; set; }
             public bool ShowSupplyDrops { get; set; }
+            public bool ShowPublicVendingMachines { get; set; }
         }
         class MapOptions
         {
@@ -1951,7 +2004,8 @@ namespace Oxide.Plugins
                     ShowMonuments = true,
                     ShowPlanes = true,
                     ShowPlayer = true,
-                    ShowSupplyDrops = true
+                    ShowSupplyDrops = true,
+                    ShowPublicVendingMachines = true
                 },
                 MapOptions = new MapOptions
                 {           
@@ -2013,8 +2067,7 @@ namespace Oxide.Plugins
         {
             try
             {
-                storedImages = imageData.ReadObject<ImageStore>();
-                
+                storedImages = imageData.ReadObject<ImageStore>();                
             }
             catch
             {
@@ -2054,8 +2107,7 @@ namespace Oxide.Plugins
             LustyMap filehandler;
             private Queue<QueueItem> QueueList = new Queue<QueueItem>();
             private MemoryStream stream = new MemoryStream();
-            const int MaxActiveLoads = 3;            
-            static byte activeLoads;            
+            private bool isLoading;           
 
             private void Awake() => filehandler = (LustyMap)Interface.Oxide.RootPluginManager.GetPlugin(nameof(LustyMap));                        
             private void OnDestroy()
@@ -2063,55 +2115,71 @@ namespace Oxide.Plugins
                 QueueList.Clear();
                 filehandler = null;
             }
-            public void Add(string name, string url)
+            public void Add(string name, string url = null, byte[] bytes = null)
             {
-                QueueList.Enqueue(new QueueItem(url, name));
-                if (activeLoads < MaxActiveLoads) Next();
+                QueueList.Enqueue(new QueueItem(name, url, bytes));
+                if (!isLoading) Next();
             }
-            void Next()
+            private void Next()
             {
                 if (QueueList.Count <= 0) return;
-                activeLoads++;
-                StartCoroutine(WaitForRequest(QueueList.Dequeue()));
+                isLoading = true;
+
+                QueueItem queueItem = QueueList.Dequeue();
+                if (!string.IsNullOrEmpty(queueItem.url))
+                    StartCoroutine(DownloadImage(queueItem));
+                else StoreByteArray(queueItem.bytes, queueItem.name);
             }
             private void ClearStream()
             {
                 stream.Position = 0;
                 stream.SetLength(0);
             }
-
-            IEnumerator WaitForRequest(QueueItem info)
+                       
+            IEnumerator DownloadImage(QueueItem info)
             {
                 using (var www = new WWW(info.url))
                 {
                     yield return www;
                     if (filehandler == null) yield break;
-                    if (www.error != null)
+                    if (info.bytes == null && www.error != null)
                     {
                         print(string.Format("Image loading fail! Error: {0}", www.error));
                     }
                     else
                     {
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);                        
-                        ClearStream();
-                        if (!filehandler.storedImages.data.ContainsKey(info.name))
-                            filehandler.storedImages.data.Add(info.name, textureID);
-                        else
-                            filehandler.storedImages.data[info.name] = textureID;
+                        var tex = www.texture;
+                        byte[] bytes = tex.EncodeToPNG();
+                        DestroyImmediate(tex);
+                        StoreByteArray(bytes, info.name);
+                        yield break;
                     }
-                    activeLoads--;
+                    isLoading = false;
                     if (QueueList.Count > 0) Next();
                     else if (QueueList.Count <= 0) filehandler.SaveData();
                 }
             }
+            internal void StoreByteArray(byte[] bytes, string name)
+            {
+                ClearStream();
+                stream.Write(bytes, 0, bytes.Length);
+                if (!filehandler.storedImages.data.ContainsKey(name))
+                    filehandler.storedImages.data.Add(name, 0);
+                filehandler.storedImages.data[name] = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
+                ClearStream();
+
+                isLoading = false;
+                if (QueueList.Count > 0) Next();
+                else if (QueueList.Count <= 0) filehandler.SaveData();                       
+            }
             internal class QueueItem
             {
+                public byte[] bytes;
                 public string url;
                 public string name;
-                public QueueItem(string url, string name)
+                public QueueItem(string name, string url = null, byte[] bytes = null)
                 {
+                    this.bytes = bytes;
                     this.url = url;
                     this.name = name;
                 }
@@ -2120,21 +2188,11 @@ namespace Oxide.Plugins
         void ValidateImages()
         {
             PrintWarning("Validating imagery");
-            if (isNewSave || storedImages.data.Count < 194)
+            if (isNewSave || storedImages.data.Count < 196 || storedImages.instanceId != CommunityEntity.ServerInstance.net.ID)            
                 LoadImages();
-            else
-            {
-                PrintWarning("Exisiting images and icons found in server storage.");
-                if (storedImages.instanceId != CommunityEntity.ServerInstance.net.ID)
-                {                    
-                    RelocateImages();
-                    return;
-                }
-            }
-            if (string.IsNullOrEmpty(GetImage("mapimage")))
-            {
-                LoadMapImage();
-            }
+                                   
+            if (string.IsNullOrEmpty(GetImage("mapimage")))            
+                LoadMapImage();            
             else GenerateMaps(true, MapSettings.minimap, MapSettings.complexmap);
         }
                 
@@ -2190,9 +2248,8 @@ namespace Oxide.Plugins
 
             foreach (string file in files)
             {                
-                string ext = ".png";
                 for (int i = 0; i <= 360; i = i + 10)                
-                    assets.Add(file + i, path + file + i + ext);                
+                    assets.Add($"{file}{i}", $"{path}{file}{i}.png");                
             }
             
             assets.Add("lighthouse", $"{path}lighthouse.png");
@@ -2205,6 +2262,7 @@ namespace Oxide.Plugins
             assets.Add("special", $"{path}special.png");
             assets.Add("supply", $"{path}supply.png");
             assets.Add("debris", $"{path}debris.png");
+            assets.Add("vending", $"{path}vending.png");
 
             foreach (var image in customMarkers)
             {
@@ -2322,7 +2380,13 @@ namespace Oxide.Plugins
             if (storedImages.data.ContainsKey("mapimage"))
             {
                 var imageId = storedImages.data["mapimage"];
-                if (mapSplitter.SplitMap(imageId))
+                bool hasSplit = true;
+                foreach (var amount in new int[] { 6, 12, 26 })
+                {
+                    if (!mapSplitter.SplitMap(imageId, amount))
+                        hasSplit = false;
+                }
+                if (hasSplit)
                 {
                     PrintWarning("Map split was successful!");
                     GenerateMaps(true, MapSettings.minimap, true);
@@ -2339,69 +2403,45 @@ namespace Oxide.Plugins
                 timer.Once(10, () => AttemptSplit(attempts + 1));
             }
         }        
-        class MapSplitter : MonoBehaviour
+        class MapSplitter
         {
-            LustyMap filehandler;
-            private Queue<QueueItem> QueueList = new Queue<QueueItem>();
-            private MemoryStream stream = new MemoryStream();
-            const int MaxActiveLoads = 3;
-            static byte activeLoads;
+            private MemoryStream stream = new MemoryStream();                
 
-            internal class QueueItem
-            {
-                public byte[] bmp;
-                public string name;
-                public QueueItem(byte[] bmp, string name)
-                {
-                    this.bmp = bmp;
-                    this.name = name;
-                }
-            }
-            private void Awake() => filehandler = (LustyMap)Interface.Oxide.RootPluginManager.GetPlugin(nameof(LustyMap));
-            private void OnDestroy()
-            {
-                QueueList.Clear();
-                filehandler = null;
-            }
-
-            public bool SplitMap(uint imageId)
+            public bool SplitMap(uint imageId, int amount)
             {
                 System.Drawing.Image img = ImageFromStorage(imageId);
                 if (img == null)
                 {
-                    instance.PrintError("There was a error retrieving the map image from file storage. This may be caused by slow processing of the images being uploaded to your server. Please wait a few minutes and try again");
+                    instance.PrintError("Unable to load the map image from file storage. This may be caused by slow processing of the images being uploaded to your server. Wait for 5 minutes and reload the plugin. \nIf this problem persists after multiple attempts then unload the plugin and delete your ImageData.json data file or run the 'resetmap' command");
                     return false;
-                }
-                foreach (var amount in new List<int> { 6, 12, 26 })//, 32 })
-                {
+                }                
                     int width = (int)(img.Width / (double)amount);
                     int height = (int)(img.Height / (double)amount);
 
                     int rowCount = 0;
                     int colCount = 0;
-                    for (int r = 0; r < amount; r++)
+                for (int r = 0; r < amount; r++)
+                {
+                    colCount = 0;
+                    for (int c = 0; c < amount; c++)
                     {
-                        colCount = 0;
-                        for (int c = 0; c < amount; c++)
-                        {
-                            var column = colCount;
-                            var row = rowCount;
-                            if (column < 1) column = 1;
-                            if (column > amount - 2) column = amount - 2;
-                            if (row < 1) row = 1;
-                            if (row > amount - 2) row = amount - 2;
-                            
-                            Bitmap cutPiece = new Bitmap(width * 3, height * 3);
-                            System.Drawing.Graphics graphic = System.Drawing.Graphics.FromImage(cutPiece);
-                            graphic.DrawImage(img, new Rectangle(0, 0, width * 3, height * 3), new Rectangle((width * column) - width, (height * row) - height, width * 3, height * 3), GraphicsUnit.Pixel);
-                            graphic.Dispose();
-                            colCount++;
+                        var column = colCount;
+                        var row = rowCount;
+                        if (column < 1) column = 1;
+                        if (column > amount - 2) column = amount - 2;
+                        if (row < 1) row = 1;
+                        if (row > amount - 2) row = amount - 2;
 
-                            StoreImagePiece(cutPiece, $"map-{amount}-{r}-{c}");                            
-                        }
-                        rowCount++;
+                        Bitmap cutPiece = new Bitmap(width * 3, height * 3);
+                        System.Drawing.Graphics graphic = System.Drawing.Graphics.FromImage(cutPiece);
+                        graphic.DrawImage(img, new Rectangle(0, 0, width * 3, height * 3), new Rectangle((width * column) - width, (height * row) - height, width * 3, height * 3), GraphicsUnit.Pixel);
+                        graphic.Dispose();
+                        colCount++;
+
+                        StoreImagePiece(cutPiece, $"map-{amount}-{r}-{c}");
                     }
-                }                
+                    rowCount++;
+                }            
                 return true;
             }            
             private System.Drawing.Image ImageFromStorage(uint imageId)
@@ -2422,49 +2462,14 @@ namespace Oxide.Plugins
             {
                 System.Drawing.ImageConverter converter = new System.Drawing.ImageConverter();
                 byte[] array = (byte[])converter.ConvertTo(bmp, typeof(byte[]));
-                Add(name, array);
+                assets.Add(name, null, array);
             }
-
-            internal void Add(string name, byte[] bmp)
-            {
-                QueueList.Enqueue(new QueueItem(bmp, name));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-            internal void Next()
-            {
-                if (QueueList.Count <= 0) return;
-                activeLoads++;
-                StartCoroutine(StoreNextSplit(QueueList.Dequeue()));
-            }
+            
             internal void ClearStream()
             {
                 stream.Position = 0;
                 stream.SetLength(0);
-            }            
-            
-            IEnumerator StoreNextSplit(QueueItem info)
-            {
-                if (filehandler == null) yield break;
-                if (info.bmp == null)
-                {
-                    instance.PrintError($"Error whilst storing map piece to file storage : {info.name}");                    
-                }
-                else
-                {
-                    ClearStream();
-                    stream.Write(info.bmp, 0, info.bmp.Length);
-                    uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
-                    ClearStream();
-
-                    if (!filehandler.storedImages.data.ContainsKey(info.name))
-                        filehandler.storedImages.data.Add(info.name, textureID);
-                    else filehandler.storedImages.data[info.name] = textureID;
-                }
-                activeLoads--;
-                if (QueueList.Count > 0) Next();
-                else if (QueueList.Count <= 0) filehandler.SaveData();
-
-            }            
+            }
         }
         #endregion
 
@@ -2485,6 +2490,7 @@ namespace Oxide.Plugins
             {"Supply Drop", "Supply Drop" },
             {"Helicopter", "Helicopter" },
             {"Debris", "Debris" },
+            {"Vending", "Vending Machine" },
             {"lighthouse", "lighthouse" },
             {"radtown", "radtown" },
             {"spheretank", "spheretank" },

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+
 using Rust;
 
 namespace Oxide.Plugins
 {
 
-    [Info("Explosives Modifier", "Mughisi", 1.3, ResourceId = 832)]
+    [Info("Explosives Modifier", "Mughisi", "1.3.1", ResourceId = 832)]
     class ExplosivesModifier : RustPlugin
     {
 

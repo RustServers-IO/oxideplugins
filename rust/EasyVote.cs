@@ -19,7 +19,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "1.2.6", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "1.2.7", ResourceId = 2102)]
     [Description("Making voting super easy and smooth!")]
     class EasyVote : RustPlugin
     {
@@ -672,7 +672,7 @@ namespace Oxide.Plugins
         }
         public bool hasPermission(BasePlayer player, string perm)
         {
-            if (player.IsAdmin()) return true;
+            if (player.IsAdmin) return true;
             if (permission.UserHasPermission(player.UserIDString, perm)) return true;
             return false;
         }

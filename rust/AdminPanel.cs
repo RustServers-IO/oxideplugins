@@ -1,39 +1,94 @@
-﻿using System.Collections.Generic;
-using System;
-using Oxide.Game.Rust.Cui;
+﻿using Oxide.Core;
 using Oxide.Core.Plugins;
-using UnityEngine;
-using Oxide.Core;
-using System.IO;
-using System.Net;
+using Oxide.Game.Rust.Cui;
+using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine;
 using System.Linq;
 using Rust;
+using RustNative;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminPanel", "austinv900", "1.2.2", ResourceId = 2034)]
-    class AdminPanel : RustPlugin
+    [Info("AdminPanel", "austinv900", "1.2.5", ResourceId = 2034)]
+    internal class AdminPanel : RustPlugin
     {
-
         [PluginReference]
-        Plugin Vanish;
+        private Plugin AdminRadar, EnhancedBanSystem, Godmode, NTeleportation, Vanish;
 
-        [PluginReference]
-        Plugin Godmode;
+        private const string permAP = "adminpanel.allowed";
 
-        [PluginReference]
-        Plugin AdminRadar;
+        #region Integrations
 
-        [PluginReference]
-        Plugin NTeleportation;
+        #region GodMode
 
-        [PluginReference]
-        Plugin EnhancedBanSystem;
+        private bool IsGod(string UserID)
+        {
+            if (Godmode == null)
+                return false;
+            return Godmode.Call<bool>("IsGod", UserID);
+        }
 
-        const string permAP = "adminpanel.allowed";
+        private void ToggleGodmode(string UserID)
+        {
+            if (Godmode == null)
+                return;
+            if (IsGod(UserID))
+                Godmode.Call("DisableGodmode", covalence.Players.FindPlayer(UserID));
+            else
+                Godmode.Call("EnableGodmode", covalence.Players.FindPlayer(UserID));
 
-        void Init()
+            AdminGui(BasePlayer.Find(UserID));
+        }
+
+        #endregion GodMode
+
+        #region Vanish
+
+        private bool IsInvisable(string UserID)
+        {
+            if (Vanish == null)
+                return false;
+            return Vanish.Call<bool>("IsInvisible", BasePlayer.Find(UserID));
+        }
+
+        private void ToggleVanish(string UserID)
+        {
+            if (Vanish == null)
+                return;
+            if (!IsInvisable(UserID))
+                Vanish.Call("Disappear", BasePlayer.Find(UserID));
+            else
+                Vanish.Call("Reappear", BasePlayer.Find(UserID));
+            AdminGui(BasePlayer.Find(UserID));
+        }
+
+        #endregion Vanish
+
+        #region AdminRadar
+
+        private bool IsRadar(string UserID)
+        {
+            if (AdminRadar == null)
+                return false;
+            return AdminRadar.Call<bool>("IsRadar", UserID);
+        }
+
+        private void ToggleRadar(string UserID)
+        {
+            if (AdminRadar == null)
+                return;
+            AdminRadar.Call("ToggleRadar", BasePlayer.Find(UserID));
+            AdminGui(BasePlayer.Find(UserID));
+        }
+
+        #endregion AdminRadar
+
+        #endregion Integrations
+
+        private void Init()
         {
             LoadDefaultConfig();
             LoadDefaultMessages();
@@ -43,29 +98,32 @@ namespace Oxide.Plugins
 
         #region Configuration
 
-        string serverBanner;
-        string adminZoneCords;
-        string PanelPosMin;
-        string PanelPosMax;
-        string btnInactColor;
-        string btnActColor;
-        bool ToggleMode;
+        private string serverBanner;
+        private string adminZoneCords;
+        private string PanelPosMin;
+        private string PanelPosMax;
+        private string btnInactColor;
+        private string btnActColor;
+        private bool ToggleMode;
 
         protected override void LoadDefaultConfig()
         {
             Config["ServerBannerImage"] = serverBanner = GetConfig("ServerBannerImage", "banner.png");
-            Config["AdminZoneCoordinates"] = adminZoneCords = GetConfig("AdminZoneCoordinates", "-392 22.9 -312.3");
+            Config["AdminZoneCoordinates"] = adminZoneCords = GetConfig("AdminZoneCoordinates", "0;0;0;");
             Config["AdminPanelPosMin"] = PanelPosMin = GetConfig("AdminPanelPosMin", "0.838 0.14");
             Config["AdminPanelPosMax"] = PanelPosMax = GetConfig("AdminPanelPosMax", "0.986 0.36");
             Config["PanelButtonInactiveColor"] = btnInactColor = GetConfig("PanelButtonInactiveColor", "2.55 0 0 0.3");
             Config["PanelButtonActiveColor"] = btnActColor = GetConfig("PanelButtonActiveColor", "0 2.55 0 0.3");
             Config["AdminPanelToggleMode"] = ToggleMode = GetConfig("AdminPanelToggleMode", false);
+            
             SaveConfig();
         }
-        #endregion
+
+        #endregion Configuration
 
         #region Localization
-        void LoadDefaultMessages()
+
+        private void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -85,38 +143,40 @@ namespace Oxide.Plugins
                 ["AdminTP"] = "AdminTP"
             }, this, "es");
         }
-        #endregion
+
+        #endregion Localization
 
         #region Hooks
 
-        void OnPlayerSleepEnded(BasePlayer player)
+        private void OnPlayerSleepEnded(BasePlayer player)
         {
             if (ToggleMode == false)
             {
                 if (IsAllowed(player.UserIDString, permAP))
                 {
-                 CuiHelper.DestroyUi(player, "GUIBackground");
-                 AdminGui(player);
-            }
+                    CuiHelper.DestroyUi(player, "GUIBackground");
+                    AdminGui(player);
+                }
             }
         }
 
-        void OnPlayerInit(BasePlayer player)
+        private void OnPlayerInit(BasePlayer player)
         {
             if (ToggleMode == true)
             {
                 if (IsAllowed(player.UserIDString, permAP))
                 {
-                    player.SendConsoleCommand("bind backquote +adminpanel toggle");
+                    player.SendConsoleCommand("bind", "backquote", "+adminpanel", "toggle");
                 }
             }
         }
 
-        #endregion
+        #endregion Hooks
 
         #region Command Structure
+
         [ConsoleCommand("adminpanel")]
-        void ccmdAdminPanel(ConsoleSystem.Arg arg)
+        private void ccmdAdminPanel(ConsoleSystem.Arg arg)
         {
             var player = arg.Player();
             if (player == null) return;
@@ -128,19 +188,21 @@ namespace Oxide.Plugins
                     case "action":
                         if (args[1] == "vanish")
                         {
-                            if (Vanish) { Vanish?.Call("VanishChatCmd", player); AdminGui(player); };
+                            if (Vanish) ToggleVanish(player.UserIDString);
                         }
                         else if (args[1] == "admintp")
                         {
-                            rust.RunServerCommand("teleport.topos " + player.UserIDString + " " + adminZoneCords);
+                            var pos = adminZoneCords.Split(';');
+                            var loc = new Vector3(float.Parse(pos[0]), float.Parse(pos[1]), float.Parse(pos[2]));
+                            covalence.Players.FindPlayer(player.UserIDString).Teleport(loc.x, loc.y, loc.z);
                         }
                         else if (args[1] == "radar")
                         {
-                            if (AdminRadar) { AdminRadar?.Call("ToggleRadar", player); AdminGui(player); }
+                            if (AdminRadar) ToggleRadar(player.UserIDString);
                         }
                         else if (args[1] == "god")
                         {
-                            if (Godmode) { if (Godmode.Call<bool>("IsGod", player.UserIDString)) { Godmode.Call("DisableGodmode", player); } else { Godmode.Call("EnableGodmode", player); } AdminGui(player); };
+                            if (Godmode) ToggleGodmode(player.UserIDString);
                         }
                         break;
 
@@ -167,9 +229,9 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("adminpanel")]
-        void cmdAdminPanel(BasePlayer player, string command, string[] args)
+        private void cmdAdminPanel(BasePlayer player, string command, string[] args)
         {
-            if(!IsAllowed(player.UserIDString, permAP))
+            if (!IsAllowed(player.UserIDString, permAP))
             {
                 SendReply(player, $"Unknown command: {command}");
                 return;
@@ -181,28 +243,38 @@ namespace Oxide.Plugins
                 return;
             }
 
-            switch(args[0])
+            switch (args[0])
             {
                 case "hide":
                     CuiHelper.DestroyUi(player, "GUIBackground");
-                        Reply(player, "Admin Panel Hidden");
+                    Reply(player, "Admin Panel Hidden");
                     break;
 
                 case "show":
                     AdminGui(player);
-                        Reply(player, "Admin Panel Refreshed/Shown");
-                        break;
+                    Reply(player, "Admin Panel Refreshed/Shown");
+                    break;
 
-               default:
-                   SendReply(player, $"[<color=#6275a4>{Name}</color>]: Invalid Syntax /{command} {args[0]}");
-                       return;
-                }
+                case "settp":
+                    Vector3 coord = (player.transform.position + new Vector3(0, 1, 0));
+                    Config["AdminZoneCoordinates"] = adminZoneCords = $"{coord.x};{coord.y};{coord.z}";
+                    Config.Save();
+                    Reply(player, string.Format("Admin Zone Coordinents set to current position {0}", (player.transform.position + new Vector3(0, 1, 0)).ToString()));
+                    break;
+
+                default:
+                    SendReply(player, $"[<color=#6275a4>{Name}</color>]: Invalid Syntax /{command} {args[0]}");
+                    return;
+            }
         }
-        #endregion
+
+        #endregion Command Structure
 
         #region ImageSaving
-        ImageCache ImageAssets;
-        GameObject AdminPanelObject;
+
+        private ImageCache ImageAssets;
+        private GameObject AdminPanelObject;
+
         private void cacheImage()
         {
             AdminPanelObject = new GameObject();
@@ -243,7 +315,7 @@ namespace Oxide.Plugins
                 });
             }
 
-            IEnumerator WaitForRequest(Queue queue)
+            private IEnumerator WaitForRequest(Queue queue)
             {
                 using (var www = new WWW(queue.url))
                 {
@@ -257,8 +329,8 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        Debug.Log("Error downloading banner.png . It must be in your oxide/data/");
-                        ConsoleSystem.Run.Server.Normal("oxide.unload AdminPanel");
+                        Debug.Log("Error downloading banner.png . It must be in your oxide/data/AdminPanel/img/banner.png");
+                        ConsoleSystem.Run(ConsoleSystem.Option.Server, "oxide.unload AdminPanel");
                     }
                 }
             }
@@ -269,7 +341,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void download()
+        private void download()
         {
             ImageAssets.process();
         }
@@ -281,11 +353,12 @@ namespace Oxide.Plugins
                 return result;
             return string.Empty;
         }
-        #endregion
+
+        #endregion ImageSaving
 
         #region GUI Panel
 
-        void AdminGui(BasePlayer player)
+        private void AdminGui(BasePlayer player)
         {
             // Destroy existing UI
             CuiHelper.DestroyUi(player, "GUIBackground");
@@ -294,169 +367,171 @@ namespace Oxide.Plugins
             var BTNColorGod = btnInactColor;
             var BTNColorRadar = btnInactColor;
 
-            if (Godmode) { if (Godmode.Call<bool>("IsGod", player.UserIDString)) { BTNColorGod = btnActColor; }; };
-            if (Vanish) { if (Vanish.Call<bool>("IsInvisible", player)) { BTNColorVanish = btnActColor; }; };
-            if (AdminRadar) { if (AdminRadar.Call<bool>("IsRadar", player.UserIDString)) { BTNColorRadar = btnActColor; }; };
-
-
+            if (Godmode) { if (IsGod(player.UserIDString)) { BTNColorGod = btnActColor; }; };
+            if (Vanish) { if (IsInvisable(player.UserIDString)) { BTNColorVanish = btnActColor; }; };
+            if (AdminRadar) { if (IsRadar(player.UserIDString)) { BTNColorRadar = btnActColor; }; };
 
             var GUIElement = new CuiElementContainer();
 
-                var GUIBackground = GUIElement.Add(new CuiPanel
-                {
-                    Image =
+            var GUIBackground = GUIElement.Add(new CuiPanel
+            {
+                Image =
                 {
                     Color = "1 1 1 0.02"
                 },
-                    RectTransform =
+                RectTransform =
                 {
                     AnchorMin = PanelPosMin,
                     AnchorMax = PanelPosMax
                 },
-                    CursorEnabled = ToggleMode
-                }, "Hud", "GUIBackground");
-                GUIElement.Add(new CuiLabel
-                {
-                    Text =
+                CursorEnabled = ToggleMode
+            }, "Hud", "GUIBackground");
+            GUIElement.Add(new CuiLabel
+            {
+                Text =
                 {
                     Text = Lang("Title", player.UserIDString),
                     FontSize = 10,
                     Align = TextAnchor.MiddleCenter,
                     Color = "1.0 1.0 1.0 1.0"
                 },
-                    RectTransform =
+                RectTransform =
                 {
                     AnchorMin = "0.00 0.36",
                     AnchorMax = "1.00 0.51"
                 }
-                }, GUIBackground);
-                if (AdminRadar && permission.UserHasPermission(player.UserIDString, "adminradar.allowed"))
+            }, GUIBackground);
+            if (AdminRadar && permission.UserHasPermission(player.UserIDString, "adminradar.allowed"))
+            {
+                GUIElement.Add(new CuiButton
                 {
-                    GUIElement.Add(new CuiButton
-                    {
-                        Button =
+                    Button =
                     {
                         Command = "adminpanel action radar",
                         Color = BTNColorRadar
                     },
-                        Text =
+                    Text =
                 {
                     Text = Lang("Radar", player.UserIDString),
                     FontSize = 8,
                     Align = TextAnchor.MiddleCenter,
                     Color = "1.0 1.0 1.0 1.0"
                 },
-                        RectTransform =
+                    RectTransform =
                 {
                     AnchorMin = "0.05 0.21",
                     AnchorMax = "0.48 0.37"
                 }
-                    }, GUIBackground);
-                }
-                    GUIElement.Add(new CuiButton
-                    {
-                        Button =
+                }, GUIBackground);
+            }
+            GUIElement.Add(new CuiButton
+            {
+                Button =
                     {
                         Command = "adminpanel action admintp",
                         Color = "1.28 0 1.28 0.3"
                     },
-                        Text =
+                Text =
                 {
                     Text = Lang("AdminTP", player.UserIDString),
                     FontSize = 8,
                     Align = TextAnchor.MiddleCenter,
                     Color = "1.0 1.0 1.0 1.0"
                 },
-                        RectTransform =
+                RectTransform =
                 {
                     AnchorMin = "0.52 0.21",
                     AnchorMax = "0.95 0.37"
                 }
-                    }, GUIBackground);
-                if (Vanish && permission.UserHasPermission(player.UserIDString, "vanish.allowed"))
+            }, GUIBackground);
+            if (Vanish && permission.UserHasPermission(player.UserIDString, "vanish.allowed"))
+            {
+                GUIElement.Add(new CuiButton
                 {
-                    GUIElement.Add(new CuiButton
-                    {
-                        Button =
+                    Button =
                     {
                         Command = "adminpanel action vanish",
                         Color = BTNColorVanish
                     },
-                        Text =
+                    Text =
                 {
                     Text = Lang("Vanish", player.UserIDString),
                     FontSize = 8,
                     Align = TextAnchor.MiddleCenter,
                     Color = "1.0 1.0 1.0 1.0"
                 },
-                        RectTransform =
+                    RectTransform =
                 {
                     AnchorMin = "0.05 0.02",
                     AnchorMax = "0.48 0.19"
                 }
-                    }, GUIBackground);
-                }
-                if (Godmode && permission.UserHasPermission(player.UserIDString, "godmode.allowed"))
+                }, GUIBackground);
+            }
+            if (Godmode && permission.UserHasPermission(player.UserIDString, "godmode.allowed"))
+            {
+                GUIElement.Add(new CuiButton
                 {
-                    GUIElement.Add(new CuiButton
-                    {
-                        Button =
+                    Button =
                     {
                         Command = "adminpanel action god",
                         Color = BTNColorGod
                     },
-                        Text =
+                    Text =
                 {
                     Text = Lang("GodMode", player.UserIDString),
                     FontSize = 8,
                     Align = TextAnchor.MiddleCenter,
                     Color = "1.0 1.0 1.0 1.0"
                 },
-                        RectTransform =
+                    RectTransform =
                 {
                     AnchorMin = "0.52 0.02",
                     AnchorMax = "0.95 0.19"
                 }
-                    }, GUIBackground);
-                }
+                }, GUIBackground);
+            }
 
-                GUIElement.Add(new CuiElement
-                {
-                    Name = "Logo",
-                    Parent = "GUIBackground",
-                    Components =
+            GUIElement.Add(new CuiElement
+            {
+                Name = "Logo",
+                Parent = "GUIBackground",
+                Components =
                     {
                         new CuiRawImageComponent { Color = "1.00 1.00 1.00 1", Png = fetchImage("AdminPanalImage"), FadeIn = 0 },
                         new CuiRectTransformComponent { AnchorMin = "0.03 0.49",  AnchorMax = "0.97 0.99" }
                     }
-                });
+            });
 
-                CuiHelper.AddUi(player, GUIElement);
+            CuiHelper.AddUi(player, GUIElement);
         }
 
-        void Unload()
+        private void Unload()
         {
             foreach (var player in BasePlayer.activePlayerList)
             {
                 CuiHelper.DestroyUi(player, "GUIBackground");
             }
         }
-        #endregion
+
+        #endregion GUI Panel
 
         #region Helpers
-        T GetConfig<T>(string name, T defaultValue)
+
+        private T GetConfig<T>(string name, T defaultValue)
         {
             if (Config[name] == null) return defaultValue;
             return (T)Convert.ChangeType(Config[name], typeof(T));
         }
 
-        bool IsAdmin(string id) => permission.UserHasGroup(id, "admin");
+        private bool IsAdmin(string id) => permission.UserHasGroup(id, "admin");
 
-        bool IsAllowed(string id, string perm) => permission.UserHasPermission(id, perm) || IsAdmin(id);
+        private bool IsAllowed(string id, string perm) => permission.UserHasPermission(id, perm) || IsAdmin(id);
 
-        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        void Reply(BasePlayer player, string Getmessage) { rust.SendChatMessage(player, "[<color=red>AdminPanel</color>]", Getmessage); } 
-        #endregion
+        private void Reply(BasePlayer player, string Getmessage)
+        { rust.SendChatMessage(player, "[<color=red>AdminPanel</color>]", Getmessage); }
+
+        #endregion Helpers
     }
 }

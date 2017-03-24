@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.0.5", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.0.7", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -226,7 +226,7 @@ namespace Oxide.Plugins
 				{
 					if (!simulationActive)
 					{
-						ConVar.Global.quit(new ConsoleSystem.Arg(null));
+						ConVar.Global.quit(null);
 						return;
 					}
 					else
@@ -324,7 +324,7 @@ namespace Oxide.Plugins
 						{
 							Puts(StripTags(string.Format(lang.GetMessage("DevblogDetected", this), currentDevblog)));
 							if (notifyOnlineAdmins)
-								foreach (var player in BasePlayer.activePlayerList.Where(p => p.IsAdmin()).ToList())
+								foreach (var player in BasePlayer.activePlayerList.Where(p => p.IsAdmin).ToList())
 									SendReply(player, string.Format(lang.GetMessage("DevblogDetected", this), currentDevblog));
 							newDevblogDetected = true;
 							if ( _blogTimer == null || _blogTimer.Destroyed)
@@ -385,7 +385,7 @@ namespace Oxide.Plugins
 				{
 					Puts(StripTags(string.Format(lang.GetMessage("OxideBuildDetected", this), currentOxideBuild)));
 					if (notifyOnlineAdmins)
-						foreach (var player in BasePlayer.activePlayerList.Where(p => p.IsAdmin()).ToList())
+						foreach (var player in BasePlayer.activePlayerList.Where(p => p.IsAdmin).ToList())
 							SendReply(player, string.Format(lang.GetMessage("OxideBuildDetected", this), currentOxideBuild));
 					newOxideBuildDetected = true;
 					if ( _oxideTimer == null || _oxideTimer.Destroyed)

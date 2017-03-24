@@ -6,1740 +6,1263 @@ using System.Linq;
 using System.Reflection;
 using Facepunch;
 using System;
-
+using Oxide.Core.Plugins;
+using Oxide.Core.Libraries.Covalence;
+ 
 namespace Oxide.Plugins
 {
-    [Info("SmartHomes", "k1lly0u & DylanSMR", "0.1.6", ResourceId = 2051)]
+    [Info("Smart Homes", "DylanSMR", 0.5)]
+    [Description("A pretty cool plugin ;)")]
+ 
     class SmartHomes : RustPlugin
     {
-        // / ////// / //   
-        // / Fields / //
-        // / ////// / //    
-        static MethodInfo updatelayer;
+        static int constructionColl = UnityEngine.LayerMask.GetMask(new string[] { "Construction", "Deployable", "Prevent Building", "Deployed" });
+        static FieldInfo serverinput;
+        public InputState inputState;
 
-        List<ulong> setupUI = new List<ulong>();
-        List<ulong> barUI = new List<ulong>();
-        List<ulong> isEditing = new List<ulong>();
-        Dictionary<ulong, newData> newD = new Dictionary<ulong, newData>();
-        class newData
-        {
-            public uint entKey;
-            public string entName;
-            public bool entStatus;
-            public string entType;
-            public Vector3 entLocation;
+        Dictionary<string, string> messages = new Dictionary<string, string>(){
+            {"TitleMenu","Smart Menu"},
+            {"HomeBtn","Home Menu"},
+            {"ObjectBtn", "Object Menu"},
+            {"SetupBtn","Setup Menu"},
+            {"CloseBtn","Close Menu"},
+            {"created", "<color=#1586db>Smart Home Created!!!</color>"},
+            {"createhome", "Create S-Home"},
+            {"createfurnace","Create Furnace"},
+            {"createdoor","Create Door"},
+            {"createlight","Create Light"},
+            {"createturret","Create Turret"},
+            {"awaitname","Please type the name you wish to grant your object."},
+            {"createdobject","You have created a new object! Please check your object menu ;)"},
+            {"alreadycreated","That object has already been added ;)"},
+            {"notafurnace","The object you have tried to add is not of type [Furnace]."},
+            {"notadoor","The object you have tried to add is not of type [Door]."},
+            {"notinrange","You are not within range of your smart home!"},
+            {"notaturret","The object you have tried to add is not of type [Turret]"},
+            {"notalight","The object you have tried to add is not of type [Light]"},
+            {"furnacelist","Your Furnaces"},
+            {"lightlist","Your Lights"},
+            {"doorlist","Your Doors"},
+            {"turretlist","Your Turrets"},
+            {"invalidobject","You have pointed at no object? Please try aiming a object you wish to create!"},
+            {"objdestoryed","One of your objects has been destroyed!"},
+            {"cannotcreatehome","You cannot create a home here!"},
+            {"noperm","You do not have permission to view this page!"},
+            {"newhome","Create New Home"},
+            {"OpenAll","Open All Doors"},
+            {"CloseAll","Close All Doors"},
+            {"TurnAllOff","Turn Off Turrets"},
+            {"TurnOnAll","Turn On Turrets"},
+            {"TurnOffAllF","Turn Off Furnaces"},
+            {"TurnOnAllF","Turn On Furnaces"},
+            {"TurnLightsOn","Turn On Lights"},
+            {"TurnLightsOff","Turn Off Lights"},
+        };
 
-            public newData() { }
+        private string msg(string msg, BasePlayer player){
+            return lang.GetMessage(msg, this, player.UserIDString);
         }
 
-        // / ////// / //   
-        // / OxideH / //
-        // / ////// / //    
-        void Loaded()
-        {
-            homeData = Interface.GetMod().DataFileSystem.ReadObject<HomeData>(this.Title);
-            lang.RegisterMessages(messages, this);
+        static string MainGUIVar = "SmartGUI";
+        static string MainNotVar = "fk9a80sfues52893nf";
+        static List<BasePlayer> openedUI = new List<BasePlayer>();
+
+        void Unload(){
+            foreach(BasePlayer player in BasePlayer.activePlayerList){
+                SmartManager.DestroyUI(player);
+            }    
+            Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData);  
         }
-        void Unload()
-        {
-            foreach (var player in BasePlayer.activePlayerList)
-            {
-                CuiHelper.DestroyUi(player, PublicSideBar);
-                CuiHelper.DestroyUi(player, PublicSetupName);
-                CuiHelper.DestroyUi(player, PublicObjectSetup);
-                CuiHelper.DestroyUi(player, PublicControlSetup);
-                CuiHelper.DestroyUi(player, PublicControlSetupTurret);
-                CuiHelper.DestroyUi(player, PublicControlSetupDoor);
-                CuiHelper.DestroyUi(player, PublicControlSetupLight);
-                barUI.Remove(player.userID);
-                setupUI.Remove(player.userID);
-            }
-            SaveData();
-        }
-        void OnServerSave()
-        {
-            SaveData();
-        }
-        void OnPlayerInit(BasePlayer player)
-        {
-            if (Homes.Find(player) == null)
-            {
-                var info = new Homes()
-                {
-                    locx = 0.0f,
-                    locy = 0.0f,
-                    locz = 0.0f,
-                    playerID = player.userID
-                };
-                homeData.homeD.Add(player.userID, info);
-                SaveData();
-            }
-        }
-        void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(this.Title, homeData);
-        bool HasPerm(string uid, string permissions) => permission.UserHasPermission(uid, permissions);
-        void OnServerInitialized()
-        {
-            updatelayer = typeof(BuildingBlock).GetMethod("UpdateLayer", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+
+        void Loaded(){
             LoadVariables();
-
-            permission.RegisterPermission(configData.Permissions.DoorPermissions, this);
-            permission.RegisterPermission(configData.Permissions.LightPermissions, this);
-            permission.RegisterPermission(configData.Permissions.TurretPermissions, this); 
-        }
-        // / ////// / //   
-        // / data s / //
-        // / ////// / // 
-
-        static HomeData homeData;
-
-        class HomeData
-        {
-            public Dictionary<ulong, Homes> homeD = new Dictionary<ulong, Homes>();
+            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+            lang.RegisterMessages(messages, this);
+            smartData = Interface.Oxide.DataFileSystem.ReadObject<SmartData>("SmartData");
+            Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData);  
+            LoadAllSmart();
+            permission.RegisterPermission(configData.Variables.turretPagePerm, this);
+            permission.RegisterPermission(configData.Variables.furnacePagePerm, this);
+            permission.RegisterPermission(configData.Variables.lightPagePerm, this);
+            permission.RegisterPermission(configData.Variables.doorPagePerm, this);
         }
 
-        class Homes
-        {
-            public float locx;
-            public float locy;
-            public float locz;
+        void OnServerSave(){
+            Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData);  
+        }
 
-            public ulong playerID;
-
-            public Dictionary<string, TurretData> tData = new Dictionary<string, TurretData>();
-            public Dictionary<string, LightData> lData = new Dictionary<string, LightData>();
-            public Dictionary<string, DoorData> dData = new Dictionary<string, DoorData>();
-
-            public List<float> objectX = new List<float>();
-            public Homes() { }
-            internal static Homes Find(BasePlayer player)
+        #region Main
+        
+            static ConfigData configData;
+            class Variables
             {
-                return homeData.homeD.Values.ToList().Find((d) => d.playerID == player.userID);
+                public int ActivationDistance {get; set;}
+                public string turretPagePerm {get; set;}
+                public string furnacePagePerm {get; set;}
+                public string lightPagePerm {get; set;}
+                public string doorPagePerm {get; set;}
             }
-        }
-        public class TurretData
-        {
-            public float locx;
-            public float locy;
-            public float locz;
-            public uint key;
-            public bool status;
-            public string name;
-            public TurretData() { }
-        }
-        public class LightData
-        {
-            public float locx;
-            public float locy;
-            public float locz;
-            public uint key;
-            public bool status;
-            public string name;
-            public LightData() { }
-        }
-        public class DoorData
-        {
-            public float locx;
-            public float locy;
-            public float locz;
-            public uint key;
-            public bool status;
-            public string name;
-            public DoorData() { }
-        }
-
-        // / ////// / //   
-        // / Config / //
-        // / ////// / //       
-        private ConfigData configData;
-        class Options
-        {
-            public float ActivationDistance { get; set; }
-        }
-        class Permissions
-        {
-            public string TurretPermissions { get; set; }
-            public string DoorPermissions { get; set; }
-            public string LightPermissions { get; set; }
-        }
-        class ConfigData
-        {
-            public Options Options { get; set; }
-            public Permissions Permissions { get; set; }
-        }
-        private void LoadVariables()
-        {
-            LoadConfigVariables();
-            SaveConfig();
-        }
-        protected override void LoadDefaultConfig()
-        {
-            var config = new ConfigData
-            {
-                Options = new Options
-                {
-                    ActivationDistance = 30
-                },
-                Permissions = new Permissions
-                {
-                    TurretPermissions = "smarthomes.useturrets",
-                    DoorPermissions = "smarthomes.usedoors",
-                    LightPermissions = "smarthomes.uselights"
-                }
-            };
-            SaveConfig(config);
-        }
-        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
-        // / ////// / //   
-        // / GUIMai / //
-        // / ////// / //    
-
-        [ConsoleCommand("CloseCUIMain")]
-        private void destroyUI(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            CuiHelper.DestroyUi(player, PublicSideBar);
-            CuiHelper.DestroyUi(player, PublicSetupName);
-            CuiHelper.DestroyUi(player, PublicObjectSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetupTurret);
-            CuiHelper.DestroyUi(player, PublicControlSetupDoor);
-            CuiHelper.DestroyUi(player, PublicControlSetupLight);
-            barUI.Remove(player.userID);
-            setupUI.Remove(player.userID);
-        }
-
-        void destroyUIN(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            CuiHelper.DestroyUi(player, PublicSetupName);
-            CuiHelper.DestroyUi(player, PublicObjectSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetupTurret);
-            CuiHelper.DestroyUi(player, PublicControlSetupDoor);
-            CuiHelper.DestroyUi(player, PublicControlSetupLight);
-            barUI.Remove(player.userID);
-            setupUI.Remove(player.userID);
-        }
-
-        [ChatCommand("rem")]
-        void openUI(BasePlayer player)
-        {
-            barUI.Add(player.userID);
-            RemoteBar(player);
-        }
-
-        // / ////// / //   
-        // / GUI Co / //
-        // / ////// / //    
-
-        [ConsoleCommand("CUI_ControlMenu")]
-        void ControlMenu(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-
-            var element = UI.CreateElementContainer(PublicControlSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicControlSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicControlSetup, UIColors["header"], lang.GetMessage("CtrlMenu", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicControlSetup, UIColors["dark"], lang.GetMessage("SelectMenu", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicControlSetup, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
-            UI.CreateButton(ref element, PublicControlSetup, UIColors["buttongreen"], lang.GetMessage("OpenTurret", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ControlOpen Turret");
-            UI.CreatePanel(ref element, PublicControlSetup, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicControlSetup, UIColors["buttongreen"], lang.GetMessage("OpenLight", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_ControlOpen Light");
-            UI.CreatePanel(ref element, PublicControlSetup, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
-            UI.CreateButton(ref element, PublicControlSetup, UIColors["buttongreen"], lang.GetMessage("OpenDoor", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ControlOpen Door");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_ControlOpen")]
-        void ControlOpen(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            switch (arg.Args[0])
-            {
-                case "Turret":
-                    if(!HasPerm(player.UserIDString, configData.Permissions.TurretPermissions)){
-                        destroyUIN(arg);
-                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
-                        return;
-                    }
-
-                    destroyUIN(arg);
-                    player.SendConsoleCommand("CUI_OpenTurret");
-                    break;
-                case "Light":
-                    if(!HasPerm(player.UserIDString, configData.Permissions.LightPermissions)){
-                        destroyUIN(arg);
-                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
-                        return;
-                    }
-
-                    destroyUIN(arg);
-                    player.SendConsoleCommand("CUI_OpenLight");
-                    break;
-                case "Door":
-                    if(!HasPerm(player.UserIDString, configData.Permissions.DoorPermissions)){
-                        destroyUIN(arg);
-                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
-                        return;
-                    }
-                
-                    destroyUIN(arg);
-                    player.SendConsoleCommand("CUI_OpenDoor");
-                    break;
+            class ConfigData
+            {          
+                public Variables Variables { get; set; }     
             }
-        }
-
-        [ConsoleCommand("CUI_ChangeElement")]
-        private void ChangeElement(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            var panelName = arg.GetString(0);
-            switch (panelName)
+            private void LoadVariables()
             {
-                case "listpage":
+                LoadConfigVariables();
+                SaveConfig();            
+            }
+            private void LoadConfigVariables()
+            {
+                configData = Config.ReadObject<ConfigData>();
+            }
+            protected override void LoadDefaultConfig()
+            {
+                Puts("Creating a new config file");
+                ConfigData config = new ConfigData
+                {
+                    Variables = new Variables
                     {
-                        if (arg.GetString(1) == "turret")
-                        {
-                            var pageNumber = arg.GetString(2);
-                            ControlTurret(arg, int.Parse(pageNumber));
-                        }
-                        if (arg.GetString(1) == "light")
-                        {
-                            var pageNumber = arg.GetString(2);
-                            ControlLight(arg, int.Parse(pageNumber));
-                        }
-                        if (arg.GetString(1) == "door")
-                        {
-                            var pageNumber = arg.GetString(2);
-                            ControlDoor(arg, int.Parse(pageNumber));
+                        ActivationDistance = 30,
+                        turretPagePerm = "smarthomes.turret",
+                        furnacePagePerm = "smarthomes.furnace",
+                        lightPagePerm = "smarthomes.light",
+                        doorPagePerm = "smarthomes.door",
+                    },
+                };
+                SaveConfig(config);            
+            }
+            void SaveConfig(ConfigData config)
+            {
+                Config.WriteObject(config, true);
+            }
+
+            public Dictionary<Vector3, BaseEntity> ents = new Dictionary<Vector3, BaseEntity>();
+
+            void LoadAllSmart(){
+                var i = 0;
+                var time = DateTime.Now;
+                if(smartData == null) return;
+                if(smartData.data == null) return;
+                if(smartData.data.Count == 0) return;
+                PrintWarning("Loading all smart home entities/objects");
+                foreach(var d in smartData.data){
+                    if(smartData.data[d.Key].turrets.Count >= 1){
+                        foreach(var s in smartData.data[d.Key].turrets){
+                            var ss = smartData.data[d.Key].turrets[s.Key];
+                            List<BaseEntity> x = new List<BaseEntity>();
+                            Vis.Entities(new Vector3(ss.x, ss.y, ss.z), 0.6f, x);
+                            foreach(var z in x){
+                                if(z.ToString().Contains("turret")){
+                                    if(!ents.ContainsKey(z.transform.position)) ents.Add(z.transform.position, z); i++;
+                                    break;
+                                }
+                            }
                         }
                     }
-                    return;
-            }
-        }
-
-        [ConsoleCommand("CUI_OpenTurret")]
-        void ControlTurret(ConsoleSystem.Arg arg, int page = 0)
-        {
-            destroyUIN(arg);
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-
-            var i = homeData.homeD[player.userID].tData.Count;
-            var element = UI.CreateElementContainer(PublicControlSetupTurret, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicControlSetupTurret, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicControlSetupTurret, UIColors["header"], lang.GetMessage("TList", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            if (i >= 18)
-            {
-                var maxpages = (i - 1) / 18 + 1;
-                if (page < maxpages - 1)
-                {
-                    UI.CreatePanel(ref element, PublicControlSetupTurret, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
-                    UI.CreateButton(ref element, PublicControlSetupTurret, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage turret {page + 1}");
-                }
-                if (page > 0)
-                {
-                    UI.CreatePanel(ref element, PublicControlSetupTurret, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
-                    UI.CreateButton(ref element, PublicControlSetupTurret, UIColors["buttongreen"], lang.GetMessage("Back", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ChangeElement listpage turret {page - 1}");
-                }
-            }
-
-            int maxentries = (18 * (page + 1));
-            if (maxentries > i)
-                maxentries = i;
-
-            int rewardcount = 18 * page;
-
-            var k = 0;
-            var entries = homeData.homeD[player.userID].tData;
-
-            List<string> questNames = new List<string>();
-            foreach (var entry in homeData.homeD[player.userID].tData)
-                questNames.Add(entry.Key);
-
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                CreateTurretButton(ref element, PublicControlSetupTurret, entries[questNames[n]], player, k); k++;
-            }
-            CuiHelper.AddUi(player, element);
-        }
-
-        private void CreateTurretButton(ref CuiElementContainer container, string panelName, TurretData data, BasePlayer player, int num)
-        {
-
-            string name = homeData.homeD[player.userID].tData[data.name].name;
-            var status = "<color='#818884'>Disabled</color>";
-            if (homeData.homeD[player.userID].tData[name].status) status = "<color='#818884'>Enabled</color>";
-            else status = "<color='#818884'>Disabled</color>";
-            var color = "";
-            if (homeData.homeD[player.userID].tData[data.name].status) color = "0.06 0.47 0.39 1.0";
-            else color = "0.91 0.0 0.0 1.0";
-            string cmd = $"CUI_ToggleTurret {homeData.homeD[player.userID].tData[data.name].name}";
-            var pos = CalcButtonPos(num);
-            UI.CreatePanel(ref container, panelName, UIColors["dark"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", true);
-            UI.CreateButton(ref container, panelName, color, $"<color='#818884'>{name}</color>\n{status}", 13, $"{pos[0] + 0.01} {pos[1] + 0.01}", $"{pos[2] - 0.01} {pos[3] - 0.01}", cmd);
-        }
-
-        [ConsoleCommand("CUI_ToggleTurret")]
-        void toggle(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            var name = arg.Args[0];
-            if (player == null)
-                return;
-            if (homeData.homeD[player.userID].tData[name].status)
-            {
-                var newLocation = new Vector3(homeData.homeD[player.userID].tData[name].locx, homeData.homeD[player.userID].tData[name].locy, homeData.homeD[player.userID].tData[name].locz);
-                homeData.homeD[player.userID].tData[name].status = false;
-                List<BaseEntity> turretnear = new List<BaseEntity>();
-                Vis.Entities(newLocation, 0.2f, turretnear);
-                var i = 0;
-                foreach (var turret in turretnear)
-                {
-                    if (turret.ToString().Contains("turret"))
-                    {
-                        if (turret is AutoTurret) turret.GetComponent<AutoTurret>().target = null;
-                        i++;
-                        turret.SetFlag(BaseEntity.Flags.On, false);
-                        turret.SendNetworkUpdateImmediate();
+                    if(smartData.data[d.Key].doors.Count >= 1){
+                        foreach(var s in smartData.data[d.Key].doors){
+                            var ss = smartData.data[d.Key].doors[s.Key];
+                            List<BaseEntity> x = new List<BaseEntity>();
+                            Vis.Entities(new Vector3(ss.x, ss.y, ss.z), 0.6f, x);
+                            foreach(var z in x){
+                                if(z.ToString().Contains("hing") || z.ToString().Contains("hatch")){
+                                    if(!ents.ContainsKey(z.transform.position)) ents.Add(z.transform.position, z); i++;
+                                    break;
+                                }
+                            }
+                        }
                     }
-                    else { }
+                    if(smartData.data[d.Key].furnaces.Count >= 1){
+                        foreach(var s in smartData.data[d.Key].furnaces){
+                            var ss = smartData.data[d.Key].furnaces[s.Key];
+                            List<BaseEntity> x = new List<BaseEntity>();
+                            Vis.Entities(new Vector3(ss.x, ss.y, ss.z), 0.6f, x);
+                            foreach(var z in x){
+                                if(z.ToString().Contains("furnace") || z.ToString().Contains("camp")){
+                                    if(!ents.ContainsKey(z.transform.position)) ents.Add(z.transform.position, z); i++;
+                                    break;
+                                }
+                            }
+                        }
+                    } 
+                    if(smartData.data[d.Key].lights.Count >= 1){
+                        foreach(var s in smartData.data[d.Key].lights){
+                            var ss = smartData.data[d.Key].lights[s.Key];
+                            List<BaseEntity> x = new List<BaseEntity>();
+                            Vis.Entities(new Vector3(ss.x, ss.y, ss.z), 0.6f, x);
+                            foreach(var z in x){
+                                if(z.ToString().Contains("lantern") || z.ToString().Contains("tuna") || z.ToString().Contains("ceiling")){
+                                    if(!ents.ContainsKey(z.transform.position)) ents.Add(z.transform.position, z); i++;
+                                    break;
+                                }
+                            }
+                        }
+                    }      
                 }
-                if (i == 0)
-                {
-                    homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].tData[name].locx);
-                    homeData.homeD[player.userID].tData.Remove(name);
-                    SaveData();
-                    SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }
+                var now = DateTime.Now;
+                System.TimeSpan timer = now - time;
+                PrintWarning("Entities loaded : Total Amount {0} : Time Taken {1}", i, timer);
             }
-            else
-            {
-                var newLocation = new Vector3(homeData.homeD[player.userID].tData[name].locx, homeData.homeD[player.userID].tData[name].locy, homeData.homeD[player.userID].tData[name].locz);
-                homeData.homeD[player.userID].tData[name].status = true;
-                List<BaseEntity> turretnear = new List<BaseEntity>();
-                Vis.Entities(newLocation, 0.2f, turretnear);
-                var i = 0;
-                foreach (var turret in turretnear)
-                {
-                    if (turret.ToString().Contains("turret"))
-                    {
-                        if (turret is AutoTurret) turret.GetComponent<AutoTurret>().target = null;
-                        i++;
-                        turret.SetFlag(BaseEntity.Flags.On, true);
-                        turret.SendNetworkUpdateImmediate();
-                    }
-                    else { }
-                }
-                if (i == 0)
-                {
-                    homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].tData[name].locx);
-                    homeData.homeD[player.userID].tData.Remove(name);
-                    SaveData();
-                    SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }
+
+            SmartData smartData;
+            public class SmartData{
+                public Dictionary<ulong, SmartHome> data = new Dictionary<ulong, SmartHome>();
             }
-            ControlTurret(arg);
-            SaveData();
-        }
 
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            if (entity is BasePlayer) return;
-            if (entity.OwnerID == null) return;
-            if (entity.ToString().Contains("autoturret"))
-            {
-                foreach (var entry in homeData.homeD[entity.OwnerID].tData)
-                {
-                    if (homeData.homeD[entity.OwnerID].tData[entry.Key] == null) return;
-                    if (homeData.homeD[entity.OwnerID].tData[entry.Key].locx == entity.transform.position.x)
-                    {
-                        var namen = homeData.homeD[entity.OwnerID].tData[entry.Key].name;
-                        homeData.homeD[entity.OwnerID].objectX.Remove(entity.transform.position.x);
-                        homeData.homeD[entity.OwnerID].tData.Remove(homeData.homeD[entity.OwnerID].tData[entry.Key].name);
-                        SaveData();
-                        SendReply(BasePlayer.FindByID(entity.OwnerID), lang.GetMessage("LostObject", this, BasePlayer.FindByID(entity.OwnerID).UserIDString).Replace("0", namen).Replace("1", info.Initiator.ToPlayer().displayName));
-                        return;
-                    }
-                    else continue;
-                }
-            }
-            else if (entity.ToString().Contains("hinged"))
-            {
-                foreach (var entry2 in homeData.homeD[entity.OwnerID].dData)
-                {
-                    if (homeData.homeD[entity.OwnerID].dData[entry2.Key] == null) return;
-                    if (homeData.homeD[entity.OwnerID].dData[entry2.Key].locx == entity.transform.position.x)
-                    {
-                        var namenew = homeData.homeD[entity.OwnerID].dData[entry2.Key].name;
-                        homeData.homeD[entity.OwnerID].objectX.Remove(entity.transform.position.x);
-                        homeData.homeD[entity.OwnerID].dData.Remove(homeData.homeD[entity.OwnerID].dData[entry2.Key].name);
-                        SaveData();
-                        SendReply(BasePlayer.FindByID(entity.OwnerID), lang.GetMessage("LostObject", this, BasePlayer.FindByID(entity.OwnerID).UserIDString).Replace("0", namenew).Replace("1", info.Initiator.ToPlayer().displayName));
-                        return;
-                    }
-                    else continue;
-                }
-            }
-            else if (entity.ToString().Contains("lantern") || entity.ToString().Contains("ceilinglight"))
-            {
-                foreach (var entry3 in homeData.homeD[entity.OwnerID].lData)
-                {
-                    if (homeData.homeD[entity.OwnerID].lData[entry3.Key] == null) return;
-                    if (homeData.homeD[entity.OwnerID].lData[entry3.Key].locx == entity.transform.position.x)
-                    {
-                        var namenew = homeData.homeD[entity.OwnerID].lData[entry3.Key].name;
-                        homeData.homeD[entity.OwnerID].objectX.Remove(entity.transform.position.x);
-                        homeData.homeD[entity.OwnerID].lData.Remove(homeData.homeD[entity.OwnerID].lData[entry3.Key].name);
-                        SaveData();
-                        SendReply(BasePlayer.FindByID(entity.OwnerID), lang.GetMessage("LostObject", this, BasePlayer.FindByID(entity.OwnerID).UserIDString).Replace("0", namenew).Replace("1", info.Initiator.ToPlayer().displayName));
-                        return;
-                    }
-                    else continue;
-                }
-            }
-            else return;
-        }
+            public class SmartHome{
+                public bool hashome;
+                public float x;
+                public float y;
+                public float z;
+                public Dictionary<int, SmartTurret>    turrets    = new Dictionary<int, SmartTurret>();
+                public Dictionary<int, SmartLight>     lights     = new Dictionary<int, SmartLight>();
+                public Dictionary<int, SmartFurnace>   furnaces   = new Dictionary<int, SmartFurnace>();
+                public Dictionary<int, SmartDoor>      doors      = new Dictionary<int, SmartDoor>();
 
-        // / ////// / //   
-        // / Light / //
-        // / ////// / //   
-
-        [ConsoleCommand("CUI_OpenLight")]
-        void ControlLight(ConsoleSystem.Arg arg, int page = 0)
-        {
-            destroyUIN(arg);
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-
-            var i = homeData.homeD[player.userID].lData.Count;
-            var element = UI.CreateElementContainer(PublicControlSetupLight, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicControlSetupLight, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicControlSetupLight, UIColors["header"], lang.GetMessage("LList", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            if (i >= 18)
-            {
-                var maxpages = (i - 1) / 18 + 1;
-                if (page < maxpages - 1)
-                {
-                    UI.CreatePanel(ref element, PublicControlSetupLight, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
-                    UI.CreateButton(ref element, PublicControlSetupLight, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage light {page + 1}");
-                }
-                if (page > 0)
-                {
-                    UI.CreatePanel(ref element, PublicControlSetupLight, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
-                    UI.CreateButton(ref element, PublicControlSetupLight, UIColors["buttongreen"], lang.GetMessage("Back", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ChangeElement listpage light {page - 1}");
+                public Vector3 GetPosition(){
+                    return new Vector3(x, y, z);
                 }
             }
 
-            int maxentries = (18 * (page + 1));
-            if (maxentries > i)
-                maxentries = i;
-
-            int rewardcount = 18 * page;
-
-            var k = 0;
-            var entries2 = homeData.homeD[player.userID].lData;
-
-            List<string> questNames = new List<string>();
-            foreach (var entry in homeData.homeD[player.userID].lData)
-                questNames.Add(entry.Key);
-
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                CreateLightButton(ref element, PublicControlSetupLight, entries2[questNames[n]], player, k); k++;
+            public class SmartTurret{
+                public string name;
+                public float x;
+                public float y;
+                public float z;
             }
-            CuiHelper.AddUi(player, element);
-        }
 
-        private void CreateLightButton(ref CuiElementContainer container, string panelName, LightData light, BasePlayer player, int num)
-        {
-            string name = light.name;
-            var status = "<color='#818884'>Disabled</color>";
-            if (homeData.homeD[player.userID].lData[name].status) status = "<color='#818884'>Enabled</color>";
-            else status = "<color='#818884'>Disabled</color>";
-            var color = "";
-            if (homeData.homeD[player.userID].lData[light.name].status) color = "0.06 0.47 0.39 1.0";
-            else color = "0.91 0.0 0.0 1.0";
-            string cmd = $"CUI_ToggleLight {homeData.homeD[player.userID].lData[light.name].name}";
-            var pos = CalcButtonPos(num);
-            UI.CreatePanel(ref container, panelName, UIColors["dark"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", true);
-            UI.CreateButton(ref container, panelName, color, $"<color='#818884'>{name}</color>\n{status}", 13, $"{pos[0] + 0.01} {pos[1] + 0.01}", $"{pos[2] - 0.01} {pos[3] - 0.01}", cmd);
-        }
+            public class SmartDoor{
+                public string name;
+                public float x;
+                public float y;
+                public float z;
+            }
 
-        [ConsoleCommand("CUI_ToggleLight")]
-        void toggleLight(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            var name = arg.Args[0];
-            if (player == null)
-                return;
-            if (homeData.homeD[player.userID].lData[name].status)
+            public class SmartLight{
+                public string name;
+                public float x;
+                public float y;
+                public float z;
+            }
+
+            public class SmartFurnace{
+                public string name;
+                public float x;
+                public float y;
+                public float z;
+            }
+
+			public Vector3 GetVector(float x, float y, float z) => new Vector3(x, y, z);
+			
+			
+        #endregion 
+
+
+        #region MainElement
+
+            static BaseEntity GetEntity(Ray ray, float distance)
             {
-                var newLocation = new Vector3(homeData.homeD[player.userID].lData[name].locx, homeData.homeD[player.userID].lData[name].locy, homeData.homeD[player.userID].lData[name].locz);
-                homeData.homeD[player.userID].lData[name].status = false;
-                List<BaseEntity> lightnear = new List<BaseEntity>();
-                Vis.Entities(newLocation, 0.2f, lightnear);
-                var i = 0;
-                foreach (var light in lightnear)
-                {
-                    if (light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight"))
-                    {
-                        i++;
-                        light.SetFlag(BaseEntity.Flags.On, false);
-                        light.SendNetworkUpdateImmediate();
-                    }
-                    else { }
+                RaycastHit hit;
+                if (!UnityEngine.Physics.Raycast(ray, out hit, distance, constructionColl))
+                    return null;
+                return hit.GetEntity();
+            }
+
+            bool InRange(BasePlayer player){
+                List<BaseEntity> entities = new List<BaseEntity>();
+                var d = smartData.data[player.userID];
+                Vis.Entities(new Vector3(d.x, d.y, d.z), configData.Variables.ActivationDistance, entities);
+                if(entities.Contains(player)){
+                    return true;
                 }
-                if (i == 0)
-                {
-                    homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].lData[name].locx);
-                    homeData.homeD[player.userID].lData.Remove(name);
-                    SaveData();
-                    SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }
-            }
-            else
-            {
-                var newLocation = new Vector3(homeData.homeD[player.userID].lData[name].locx, homeData.homeD[player.userID].lData[name].locy, homeData.homeD[player.userID].lData[name].locz);
-                homeData.homeD[player.userID].lData[name].status = true;
-                List<BaseEntity> lightnear = new List<BaseEntity>();
-                Vis.Entities(newLocation, 0.2f, lightnear);
-                var i = 0;
-                foreach (var light in lightnear)
-                {
-                    if (light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight"))
-                    {
-                        i++;
-                        light.SetFlag(BaseEntity.Flags.On, true);
-                        light.SendNetworkUpdateImmediate();
-                    }
-                    else { }
-                }
-                if (i == 0)
-                {
-                    homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].lData[name].locx);
-                    homeData.homeD[player.userID].lData.Remove(name);
-                    SaveData();
-                    SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }
-            }
-            ControlLight(arg);
-            SaveData();
-        }
-
-        // / ////// / //   
-        // / Doors / //
-        // / ////// / //   
-
-        [ConsoleCommand("CUI_OpenDoor")]
-        void ControlDoor(ConsoleSystem.Arg arg, int page = 0)
-        {
-            destroyUIN(arg);
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-
-            var i = homeData.homeD[player.userID].dData.Count;
-            var element = UI.CreateElementContainer(PublicControlSetupDoor, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicControlSetupDoor, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicControlSetupDoor, UIColors["header"], lang.GetMessage("DList", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            if (i >= 18)
-            {
-                var maxpages = (i - 1) / 18 + 1;
-                if (page < maxpages - 1)
-                {
-                    UI.CreatePanel(ref element, PublicControlSetupDoor, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
-                    UI.CreateButton(ref element, PublicControlSetupDoor, UIColors["buttongreen"], lang.GetMessage("Next", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ChangeElement listpage door{page + 1}");
-                }
-                if (page > 0)
-                {
-                    UI.CreatePanel(ref element, PublicControlSetupDoor, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
-                    UI.CreateButton(ref element, PublicControlSetupDoor, UIColors["buttongreen"], lang.GetMessage("Back", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ChangeElement listpage door {page - 1}");
-                }
+                return false;
             }
 
-            int maxentries = (18 * (page + 1));
-            if (maxentries > i)
-                maxentries = i;
-
-            int rewardcount = 18 * page;
-
-            var k = 0;
-            var entries3 = homeData.homeD[player.userID].dData;
-
-            List<string> questNames = new List<string>();
-            foreach (var entry in homeData.homeD[player.userID].dData)
-                questNames.Add(entry.Key);
-
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                CreateDoorButton(ref element, PublicControlSetupDoor, entries3[questNames[n]], player, k); k++;
-            }
-            CuiHelper.AddUi(player, element);
-        }
-
-        private void CreateDoorButton(ref CuiElementContainer container, string panelName, DoorData door, BasePlayer player, int num)
-        {
-            string name = door.name;
-            var status = "<color='#818884'>Disabled</color>";
-            if (homeData.homeD[player.userID].dData[name].status) status = "<color='#818884'>Enabled</color>";
-            else status = "<color='#818884'>Disabled</color>";
-            var color = "";
-            if (homeData.homeD[player.userID].dData[door.name].status) color = "0.06 0.47 0.39 1.0";
-            else color = "0.91 0.0 0.0 1.0";
-            string cmd = $"CUI_ToggleDoor {homeData.homeD[player.userID].dData[door.name].name}";
-            var pos = CalcButtonPos(num);
-            UI.CreatePanel(ref container, panelName, UIColors["dark"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", true);
-            UI.CreateButton(ref container, panelName, color, $"<color='#818884'>{name}</color>\n{status}", 13, $"{pos[0] + 0.01} {pos[1] + 0.01}", $"{pos[2] - 0.01} {pos[3] - 0.01}", cmd);
-        }
-
-        [ConsoleCommand("CUI_ToggleDoor")]
-        void toggleDoor(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            var name = arg.Args[0];
-            if (player == null)
-                return;
-            if (homeData.homeD[player.userID].dData[name].status)
-            {
-                var newLocation = new Vector3(homeData.homeD[player.userID].dData[name].locx, homeData.homeD[player.userID].dData[name].locy, homeData.homeD[player.userID].dData[name].locz);
-                homeData.homeD[player.userID].dData[name].status = false;
-                List<BaseEntity> doornear = new List<BaseEntity>();
-                Vis.Entities(newLocation, 1.0f, doornear);
-                var i = 0;
-                foreach (var door in doornear)
-                {
-                    if (door.ToString().Contains("hinged"))
-                    {
-                        i++;
-                        door.SetFlag(BaseEntity.Flags.Open, false);
-                        door.SendNetworkUpdateImmediate();
-                    }
-                    else { }
-                }
-                if (i == 0)
-                {
-                    homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].dData[name].locx);
-                    homeData.homeD[player.userID].dData.Remove(name);
-                    SaveData();
-                    SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }
-            }
-            else
-            {
-                var newLocation = new Vector3(homeData.homeD[player.userID].dData[name].locx, homeData.homeD[player.userID].dData[name].locy, homeData.homeD[player.userID].dData[name].locz);
-                homeData.homeD[player.userID].dData[name].status = true;
-                List<BaseEntity> doornear = new List<BaseEntity>();
-                Vis.Entities(newLocation, 1.0f, doornear);
-                var i = 0;
-                foreach (var door in doornear)
-                {
-                    if (door.ToString().Contains("hinged"))
-                    {
-                        i++;
-                        door.SetFlag(BaseEntity.Flags.Open, true);
-                        door.SendNetworkUpdateImmediate();
-                    }
-                    else { }
-                }
-                if (i == 0)
-                {
-                    homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].dData[name].locx);
-                    homeData.homeD[player.userID].dData.Remove(name);
-                    SaveData();
-                    SendReply(player, lang.GetMessage("LostObject", this, player.UserIDString).Replace("0", name).Replace("1", "World"));
-                }
-            }
-            ControlDoor(arg);
-            SaveData();
-        }
-
-        // / ////// / //   
-        // / calcbt / //
-        // / ////// / //   
-
-        private float[] CalcButtonPos(int number)
-        {
-            Vector2 position = new Vector2(0.05f, 0.8f);
-            Vector2 dimensions = new Vector2(0.125f, 0.125f);
-            float offsetY = 0;
-            float offsetX = 0;
-            if (number >= 0 && number < 6)
-            {
-                offsetX = (0.03f + dimensions.x) * number;
-            }
-            if (number > 5 && number < 12)
-            {
-                offsetX = (0.03f + dimensions.x) * (number - 6);
-                offsetY = (-0.05f - dimensions.y) * 1;
-            }
-            if (number > 11 && number < 18)
-            {
-                offsetX = (0.03f + dimensions.x) * (number - 12);
-                offsetY = (-0.05f - dimensions.y) * 2;
-            }
-            Vector2 offset = new Vector2(offsetX, offsetY);
-            Vector2 posMin = position + offset;
-            Vector2 posMax = posMin + dimensions;
-            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
-        }
-
-        // / ////// / //   
-        // / GUIOth / //
-        // / ////// / //    
-
-        [ConsoleCommand("CUI_Homes")]
-        void SetUP(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            if (!player.CanBuild())
-            {
-                SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString));
-                return;
-            }
-            if (setupUI.Contains(player.userID))
-            {
-                destroyUIN(arg);
-                setupUI.Remove(player.userID);
-            }
-            setupUI.Add(player.userID);
-
-            var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["header"], lang.GetMessage("SHomes", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("WalkThrough", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("BeginProcess", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_Homesetup2");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_HomesNew")]
-        void SetUPB(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            if (!player.CanBuild())
-            {
-                SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString).Replace("0", configData.Options.ActivationDistance.ToString()));
-                return;
-            }
-            List<BaseEntity> nearby = new List<BaseEntity>();
-            Vis.Entities(player.transform.position, configData.Options.ActivationDistance, nearby);
-            foreach (BaseEntity entity in nearby)
-            {
-                if (entity is BuildingPrivlidge)
-                {
-                    List<string> authedPlayers = new List<string>();
-                    var tc = entity.GetComponent<BuildingPrivlidge>();
-                    if (tc != null)
-                    {
-                        if (tc.IsAuthed(player)) break;
-                        else
-                        {
-                            SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString).Replace("0", configData.Options.ActivationDistance.ToString()));
+            [ConsoleCommand("SUI_OpenElement")]
+            private void SwitchElement(ConsoleSystem.Arg arg){
+                var d = smartData.data[arg.Player().userID];
+                var player = arg.Player();
+                switch(arg.Args[0]){
+                    case "Close":
+                        SmartManager.DestroyUI(player);
+                    break;
+                    case "Home":
+                        CreateHomeMenu(player);
+                    break;
+                    case "Create":
+                        CreateHome(player);
+                    break;
+                    case "CreateNew":
+                        CreateHome(player);
+                    break;
+                    case "Setup":
+                        CreateSetup(player);
+                    break;
+                    case "Object":
+                        CreateObjects(player);
+                    break;
+                    case "showfurnaces":
+                        ShowFurnaceMenu(player);
+                    break;
+                    case "showdoors":
+                        ShowDoorMenu(player);
+                    break;
+                    case "showlights":
+                        ShowLightMenu(player);
+                    break;
+                    case "showturrets":
+                        ShowTurretMenu(player);
+                    break;
+                    case "createfurnace":
+                        inputState = serverinput.GetValue(player) as InputState;
+                        Ray ray = new Ray(player.eyes.position, Quaternion.Euler(inputState.current.aimAngles) * Vector3.forward);
+                        BaseEntity entity = GetEntity(ray, 3f);
+                        if(entity == null){
+                            SendReply(player, msg("invalidobject", player));
+                            return;                
+                        }
+                        if(!InRange(player)){
+                            SendReply(player, msg("notinrange", player));
                             return;
                         }
-                    }
+                        if(!entity.ToString().Contains("furnace") && !entity.ToString().Contains("camp")){
+                            SendReply(player, msg("notafurnace", player));
+                            return;
+                        }
+                        if(ents.ContainsKey(entity.transform.position)){
+                            SendReply(player, msg("alreadycreated", player));
+                            return;
+                        }
+                        var n = new SmartFurnace(){
+                            x = entity.transform.position.x,
+                            y = entity.transform.position.y,
+                            z = entity.transform.position.z,
+                            name = "",
+                        };
+                        awaitingNamef.Add(player.userID, n);
+                        ents.Add(new Vector3(n.x, n.y, n.z), entity);
+                        SendReply(player, msg("awaitname", player));
+                        SmartManager.DestroyUI(player);
+                    break;
+                    case "createdoor":
+                        inputState = serverinput.GetValue(player) as InputState;
+                        Ray ray2 = new Ray(player.eyes.position, Quaternion.Euler(inputState.current.aimAngles) * Vector3.forward);
+                        BaseEntity entity2 = GetEntity(ray2, 3f);
+                        if(entity2 == null){
+                            SendReply(player, msg("invalidobject", player));
+                            return;                
+                        }
+                        if(!InRange(player)){
+                            SendReply(player, msg("notinrange", player));
+                            return;
+                        }
+                        if(!entity2.ToString().Contains("hing") && !entity2.ToString().Contains("hatch")){
+                            SendReply(player, msg("notadoor", player));
+                            return;
+                        }
+                        if(ents.ContainsKey(entity2.transform.position)){
+                            SendReply(player, msg("alreadycreated", player));
+                            return;
+                        }
+                        var f = new SmartDoor(){
+                            x = entity2.transform.position.x,
+                            y = entity2.transform.position.y,
+                            z = entity2.transform.position.z,
+                            name = "",
+                        };
+                        awaitingNamed.Add(player.userID, f);
+                        ents.Add(new Vector3(f.x, f.y, f.z), entity2);
+                        SendReply(player, msg("awaitname", player));
+                        SmartManager.DestroyUI(player);
+                    break;
+                    case "createturret":
+                        inputState = serverinput.GetValue(player) as InputState;
+                        Ray ray3 = new Ray(player.eyes.position, Quaternion.Euler(inputState.current.aimAngles) * Vector3.forward);
+                        BaseEntity entity3 = GetEntity(ray3, 3f);
+                        if(entity3 == null){
+                            SendReply(player, msg("invalidobject", player));
+                            return;                
+                        }     
+                        if(!InRange(player)){
+                            SendReply(player, msg("notinrange", player));
+                            return;
+                        }
+                        if(!entity3.ToString().Contains("turret")){
+                            SendReply(player, msg("notaturret", player));
+                            return;
+                        }
+                        if(ents.ContainsKey(entity3.transform.position)){
+                            SendReply(player, msg("alreadycreated", player));
+                            return;
+                        }
+                        var g = new SmartTurret(){
+                            x = entity3.transform.position.x,
+                            y = entity3.transform.position.y,
+                            z = entity3.transform.position.z,
+                            name = "",
+                        };
+                        awaitingNamet.Add(player.userID, g);
+                        ents.Add(new Vector3(g.x, g.y, g.z), entity3);
+                        SendReply(player, msg("awaitname", player));
+                        SmartManager.DestroyUI(player);
+                    break; 
+                    case "createlight":
+                        inputState = serverinput.GetValue(player) as InputState;
+                        Ray ray4 = new Ray(player.eyes.position, Quaternion.Euler(inputState.current.aimAngles) * Vector3.forward);
+                        BaseEntity entity4 = GetEntity(ray4, 3f);
+                        if(entity4 == null){
+                            SendReply(player, msg("invalidobject", player));
+                            return;                
+                        }
+                        if(!InRange(player)){
+                            SendReply(player, msg("notinrange", player));
+                            return;
+                        }
+                        if(!entity4.ToString().Contains("lantern") && !entity4.ToString().Contains("ceiling") && !entity4.ToString().Contains("tuna")){
+                            SendReply(player, msg("notalight", player));
+                            return;
+                        }
+                        if(ents.ContainsKey(entity4.transform.position)){
+                            SendReply(player, msg("alreadycreated", player));
+                            return;
+                        }
+                        var r = new SmartLight(){
+                            x = entity4.transform.position.x,
+                            y = entity4.transform.position.y,
+                            z = entity4.transform.position.z,
+                            name = "",
+                        };
+                        awaitingNamel.Add(player.userID, r);
+                        ents.Add(new Vector3(r.x, r.y, r.z), entity4);
+                        SendReply(player, msg("awaitname", player));
+                        SmartManager.DestroyUI(player);
+                    break;  
+                    case "togglefurnace":
+                        var fid = Convert.ToInt32(arg.Args[1]);
+                        var fidd = d.furnaces[fid];
+                        var furn = ents[new Vector3(fidd.x, fidd.y, fidd.z)] as BaseOven;
+                        if(!furn.IsOn()){
+                            furn.CancelInvoke("Cook");
+                            furn.InvokeRepeating("Cook", 0.5f, 0.5f);
+                            furn.SetFlag(BaseEntity.Flags.On, true);
+                        }else{
+                            furn.CancelInvoke("Cook");
+                            furn.SetFlag(BaseEntity.Flags.On, false);
+                        }
+                        ShowFurnaceMenu(player);
+                    break;
+                    case "toggledoor":
+                        var did = Convert.ToInt32(arg.Args[1]);
+                        var didd = d.doors[did];
+                        var door = ents[new Vector3(didd.x, didd.y, didd.z)];
+                        if(!door.IsOpen()){
+                            door.SetFlag(BaseEntity.Flags.Open, true);
+                            door.SendNetworkUpdateImmediate();
+                        }else{
+                            door.SetFlag(BaseEntity.Flags.Open, false);
+                            door.SendNetworkUpdateImmediate();
+                        }
+                        ShowDoorMenu(player);
+                    break;  
+                    case "togglelight":
+                        var lid = Convert.ToInt32(arg.Args[1]);
+                        var lidd = d.lights[lid];
+                        var light = ents[new Vector3(lidd.x, lidd.y, lidd.z)];
+                        if(!light.IsOn()){
+                            light.SetFlag(BaseEntity.Flags.On, true);
+                        }else{
+                            light.SetFlag(BaseEntity.Flags.On, false);
+                        }
+                        ShowLightMenu(player);
+                    break; 
+                    case "toggleturret":
+                        var tid = Convert.ToInt32(arg.Args[1]);
+                        var tidd = d.turrets[tid];
+                        var turret = ents[new Vector3(tidd.x, tidd.y, tidd.z)];
+                        if(!turret.IsOn()){
+                            turret.SetFlag(BaseEntity.Flags.On, true);
+                            turret.GetComponent<AutoTurret>().target = null;
+                            turret.SendNetworkUpdateImmediate();
+                        }else{
+                            turret.SetFlag(BaseEntity.Flags.On, false);
+                            turret.GetComponent<AutoTurret>().target = null;
+                            turret.SendNetworkUpdateImmediate();
+                        }
+                        ShowTurretMenu(player);
+                    break;  
+                    case "ToggleAllLights":
+                        switch(arg.Args[1]){
+                            case "1":
+                                foreach(var da5 in d.lights){
+                                    var didd11 = d.lights[da5.Key];
+                                    var door11 = ents[new Vector3(didd11.x, didd11.y, didd11.z)];
+                                    door11.SetFlag(BaseEntity.Flags.On, true);
+                                }
+                            break;
+                            case "2":
+                                foreach(var da6 in d.lights){
+                                    var didd99 = d.lights[da6.Key];
+                                    var door99 = ents[new Vector3(didd99.x, didd99.y, didd99.z)];
+                                    door99.SetFlag(BaseEntity.Flags.On, false);
+                                }
+                            break;
+                        }
+                    break;
+                    case "ToggleAllTurrets":
+                        switch(arg.Args[1]){
+                            case "1":
+                                foreach(var da3 in d.turrets){
+                                    var didd4 = d.turrets[da3.Key];
+                                    var door4 = ents[new Vector3(didd4.x, didd4.y, didd4.z)];
+                                    door4.SetFlag(BaseEntity.Flags.On, true);
+                                    door4.GetComponent<AutoTurret>().target = null;
+                                    door4.SendNetworkUpdateImmediate();
+                                }
+                            break;
+                            case "2":
+                                foreach(var da4 in d.turrets){
+                                    var didd15 = d.turrets[da4.Key];
+                                    var door15 = ents[new Vector3(didd15.x, didd15.y, didd15.z)];
+                                    door15.SetFlag(BaseEntity.Flags.On, false);
+                                    door15.GetComponent<AutoTurret>().target = null;
+                                    door15.SendNetworkUpdateImmediate();
+                                }
+                            break;
+                        }
+                    break;
+                    case "ToggleAllFurnaces":
+                        switch(arg.Args[1]){
+                            case "1":
+                                foreach(var da2 in d.furnaces){
+                                    var didd3 = d.furnaces[da2.Key];
+                                    var door3 = ents[new Vector3(didd3.x, didd3.y, didd3.z)];
+                                    door3.CancelInvoke("Cook");
+                                    door3.InvokeRepeating("Cook", 0.5f, 0.5f);
+                                    door3.SetFlag(BaseEntity.Flags.On, true);
+                                }
+                            break;
+                            case "2":
+                                foreach(var da3 in d.doors){
+                                    var didd13 = d.furnaces[da3.Key];
+                                    var door13 = ents[new Vector3(didd13.x, didd13.y, didd13.z)];
+                                    door13.CancelInvoke("Cook");
+                                    door13.SetFlag(BaseEntity.Flags.On, false);
+                                }
+                            break;
+                        }
+                    break;
+                    case "ToggleAllDoors":
+                        switch(arg.Args[1]){
+                            case "1":
+                                foreach(var da in d.doors){
+                                    var didd1 = d.doors[da.Key];
+                                    var door1 = ents[new Vector3(didd1.x, didd1.y, didd1.z)];
+                                    door1.SetFlag(BaseEntity.Flags.Open, true);
+                                    door1.SendNetworkUpdateImmediate();
+                                }
+                            break;
+                            case "2":
+                                foreach(var da1 in d.doors){
+                                    var didd12 = d.doors[da1.Key];
+                                    var door12 = ents[new Vector3(didd12.x, didd12.y, didd12.z)];
+                                    door12.SetFlag(BaseEntity.Flags.Open, false);
+                                    door12.SendNetworkUpdateImmediate();
+                                }
+                            break;
+                        }
+                    break;
+                    case "nop":
+                        SendReply(player, msg("noperm", player));
+                        return;
+                    break;
                 }
             }
-            if (setupUI.Contains(player.userID))
-            {
-                destroyUIN(arg);
-                setupUI.Remove(player.userID);
-            }
-            setupUI.Add(player.userID);
 
-            var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["header"], lang.GetMessage("SHomes", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
+            Dictionary<ulong, SmartFurnace> awaitingNamef = new Dictionary<ulong, SmartFurnace>();
+            Dictionary<ulong, SmartDoor> awaitingNamed = new Dictionary<ulong, SmartDoor>();
+            Dictionary<ulong, SmartTurret> awaitingNamet = new Dictionary<ulong, SmartTurret>();
+            Dictionary<ulong, SmartLight> awaitingNamel = new Dictionary<ulong, SmartLight>();
 
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("WalkThroughNew", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("BeginProcessNew", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_HomeNew2");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_HomeNew2")]
-        void SetUP2B(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-
-            var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["header"], lang.GetMessage("SHomes", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("StandWhereNew", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("NextRe", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_HomeNew3");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_Homesetup2")]
-        void SetUP2(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-
-            var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["header"], lang.GetMessage("SHomes", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("StandWhere", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("NextNext", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_Homesetup3");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_HomeNew3")]
-        void SetUP3B(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-            Homes playerData = Homes.Find(player);
-            playerData.locx = player.transform.position.x;
-            playerData.locy = player.transform.position.y;
-            playerData.locz = player.transform.position.z;
-
-            playerData.tData.Clear();
-            playerData.dData.Clear();
-            playerData.lData.Clear();
-            playerData.objectX.Clear();
-
-            SaveData();
-
-            var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["header"], lang.GetMessage("SHomes", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("SmartHomeNew", this, player.UserIDString).Replace("0", configData.Options.ActivationDistance.ToString()), 20, "0 .9", "1 1");
-
-            CuiHelper.DestroyUi(player, PublicSideBar);
-            barUI.Remove(player.userID);
-            barUI.Add(player.userID);
-            RemoteBar(player);
-
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_Homesetup3")]
-        void SetUP3(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-            Homes playerData = Homes.Find(player);
-            playerData.locx = player.transform.position.x;
-            playerData.locy = player.transform.position.y;
-            playerData.locz = player.transform.position.z;
-            SaveData();
-
-            var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["header"], "Smart Homes", 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            CuiHelper.DestroyUi(player, PublicSideBar);
-            barUI.Remove(player.userID);
-            barUI.Add(player.userID);
-            RemoteBar(player);
-
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("SmartHome", this, player.UserIDString).Replace("0", configData.Options.ActivationDistance.ToString()), 20, "0 .9", "1 1");
-            CuiHelper.AddUi(player, element);
-        }
-        [ConsoleCommand("CUI_ObjectSetup")]
-        void ObjectSetup(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            if (!player.CanBuild())
-            {
-                SendReply(player, lang.GetMessage("BuildingAuth", this, player.UserIDString));
-                return;
-            }
-            destroyUIN(arg);
-
-            var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["header"], lang.GetMessage("ObjConfig", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["dark"], lang.GetMessage("InstructAdd", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], $"0.14 0.05", $"0.38 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "<color='#818884'>Add</color>", 20, "0.15 0.06", "0.37 0.14", $"CUI_ObjectSetup2");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], $"0.64 0.05", $"0.88 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "<color='#818884'>Remove</color>", 20, "0.65 0.06", "0.87 0.14", $"CUI_ObjectRemove1");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_ObjectRemove1")]
-        void ObjectRemove(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-
-            var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["header"], lang.GetMessage("ObjConfig", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["dark"], lang.GetMessage("OnceNear", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "Remove Turret", 20, "0.15 0.06", "0.37 0.14", $"CUI_ObjectRemove2 Turret");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "Remove Light", 20, "0.40 0.06", "0.62 0.14", $"CUI_ObjectRemove2 Light");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], "Remove Door", 20, "0.65 0.06", "0.87 0.14", $"CUI_ObjectRemove2 Door");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_ObjectRemove2")]
-        void ObjectRemove2(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-            switch (arg.Args[0])
-            {
-                case "Turret":
-                    if (homeData.homeD[player.userID].tData.Count == 0)
-                    {
-                        SendReply(player, "You have no turrets.");
-                        return;
-                    }
-                    List<BaseEntity> turretnear = new List<BaseEntity>();
-                    Vis.Entities(player.transform.position, 1.5f, turretnear);
-                    var locationT = new Vector3();
-                    foreach (var turret in turretnear)
-                    {
-                        if (turret.ToString().Contains("auto"))
-                        {
-                            locationT = turret.transform.position;
-                            break;
+            ulong GetOwner(BaseEntity e){
+                var p = e.transform.position;
+                foreach(var x in smartData.data){
+                    if(e.ToString().Contains("turret")){
+                        foreach(var y in smartData.data[x.Key].turrets){
+                            var t = smartData.data[x.Key].turrets[y.Key];
+                            if(t.x == p.x && t.y == p.y && t.z == p.z){
+                                smartData.data[x.Key].turrets.Remove(y.Key);
+                                var xt = x.Key;
+                                return xt;
+                            }
                         }
                     }
-                    if (locationT == new Vector3())
-                    {
-                        SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
-                        return;
-                    }
-                    var i = 0;
-                    var ent2 = "";
-                    foreach (var entry in homeData.homeD[player.userID].tData)
-                    {
-                        if (homeData.homeD[player.userID].tData[entry.Key].locx == locationT.x)
-                        {
-                            i++;
-                            player.SendConsoleCommand("CUI_ObjectRemove3");
-                            SendReply(player, lang.GetMessage("DeletedTurret", this, player.UserIDString).Replace("0", entry.Key));
-                            homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].tData[entry.Key].locx);
-                            ent2 = entry.Key;
-                            CuiHelper.DestroyUi(player, PublicSideBar);
-                            CuiHelper.DestroyUi(player, PublicSetupName);
-                            CuiHelper.DestroyUi(player, PublicObjectSetup);
-                            isEditing.Remove(player.userID);
-                            barUI.Remove(player.userID);
-                            setupUI.Remove(player.userID);
-                            openUI(player);
+                    if(e.ToString().Contains("ceiling") || e.ToString().Contains("tuna") || e.ToString().Contains("lantern")){
+                        foreach(var y in smartData.data[x.Key].lights){
+                            var t = smartData.data[x.Key].lights[y.Key];
+                            if(t.x == p.x && t.y == p.y && t.z == p.z){
+                                smartData.data[x.Key].lights.Remove(y.Key);
+                                var xt = x.Key;
+                                return xt;
+                            }                 
                         }
                     }
-                    if (i == 0)
-                    {
-                        SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
-                        return;
-                    }
-                    if (i != 0)
-                    {
-                        homeData.homeD[player.userID].tData.Remove(homeData.homeD[player.userID].tData[ent2].name);
-                        SaveData();
-                    }
-                    break;
-                case "Light":
-                    if (homeData.homeD[player.userID].lData.Count == 0)
-                    {
-                        SendReply(player, "You have no lights.");
-                        return;
-                    }
-                    List<BaseEntity> lightnear = new List<BaseEntity>();
-                    Vis.Entities(player.transform.position, 1.5f, lightnear);
-                    var locationL = new Vector3();
-                    foreach (var light in lightnear)
-                    {
-                        if (light.ToString().Contains("lantern") || light.ToString().Contains("ceilinglight"))
-                        {
-                            locationL = light.transform.position;
-                            break;
+                    if(e.ToString().Contains("hing") || e.ToString().Contains("hatch")){
+                        foreach(var y in smartData.data[x.Key].doors){
+                            var t = smartData.data[x.Key].doors[y.Key];
+                            if(t.x == p.x && t.y == p.y && t.z == p.z){
+                                smartData.data[x.Key].doors.Remove(y.Key);
+                                var xt = x.Key;
+                                return xt;
+                            }                 
                         }
-                    }
-                    if (locationL == new Vector3())
-                    {
-                        SendReply(player, lang.GetMessage("NoLightInRange", this, player.UserIDString));
-                        return;
-                    }
-                    var n = 0;
-                    var ent4 = "";
-                    foreach (var entry2 in homeData.homeD[player.userID].lData)
-                    {
-                        if (homeData.homeD[player.userID].lData[entry2.Key].locx == locationL.x)
-                        {
-                            n++;
-                            player.SendConsoleCommand("CUI_ObjectRemove3");
-                            SendReply(player, lang.GetMessage("DeletedLight", this, player.UserIDString).Replace("0", entry2.Key));
-                            homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].lData[entry2.Key].locx);
-                            ent4 = entry2.Key;
-                            CuiHelper.DestroyUi(player, PublicSideBar);
-                            CuiHelper.DestroyUi(player, PublicSetupName);
-                            CuiHelper.DestroyUi(player, PublicObjectSetup);
-                            isEditing.Remove(player.userID);
-                            barUI.Remove(player.userID);
-                            setupUI.Remove(player.userID);
-                            openUI(player);
+                    }  
+                    if(e.ToString().Contains("furnace") || e.ToString().Contains("camp")){
+                        foreach(var y in smartData.data[x.Key].furnaces){
+                            var t = smartData.data[x.Key].furnaces[y.Key];
+                            if(t.x == p.x && t.y == p.y && t.z == p.z){
+                                smartData.data[x.Key].furnaces.Remove(y.Key);
+                                var xt = x.Key;
+                                return xt;
+                            }                 
                         }
-                    }
-                    if (n == 0)
-                    {
-                        SendReply(player, lang.GetMessage("NoLightInRange", this, player.UserIDString));
-                        return;
-                    }
-                    if (n != 0)
-                    {
-                        homeData.homeD[player.userID].lData.Remove(homeData.homeD[player.userID].lData[ent4].name);
-                        SaveData();
-                    }
-                    break;
-                case "Door":
-                    if (homeData.homeD[player.userID].dData.Count == 0)
-                    {
-                        SendReply(player, "You have no doors.");
-                        return;
-                    }
-                    List<BaseEntity> doornear = new List<BaseEntity>();
-                    Vis.Entities(player.transform.position, 1.5f, doornear);
-                    var locationD = new Vector3();
-                    foreach (var door in doornear)
-                    {
-                        if (door.ToString().Contains("hinged"))
-                        {
-                            locationD = door.transform.position;
-                            break;
-                        }
-                    }
-                    if (locationD == new Vector3())
-                    {
-                        SendReply(player, lang.GetMessage("NoDoorInRange", this, player.UserIDString));
-                        return;
-                    }
-                    var k = 0;
-                    var ent3 = "";
-                    foreach (var entry1 in homeData.homeD[player.userID].dData)
-                    {
-                        if (homeData.homeD[player.userID].dData[entry1.Key].locx == locationD.x)
-                        {
-                            k++;
-                            player.SendConsoleCommand("CUI_ObjectRemove3");
-                            SendReply(player, lang.GetMessage("DeletedDoor", this, player.UserIDString).Replace("0", entry1.Key));
-                            homeData.homeD[player.userID].objectX.Remove(homeData.homeD[player.userID].dData[entry1.Key].locx);
-                            ent3 = entry1.Key;
-                            CuiHelper.DestroyUi(player, PublicSideBar);
-                            CuiHelper.DestroyUi(player, PublicSetupName);
-                            CuiHelper.DestroyUi(player, PublicObjectSetup);
-                            isEditing.Remove(player.userID);
-                            barUI.Remove(player.userID);
-                            setupUI.Remove(player.userID);
-                            openUI(player);
-                        }
-                    }
-                    if (k == 0)
-                    {
-                        SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
-                        return;
-                    }
-                    if (k != 0)
-                    {
-                        homeData.homeD[player.userID].dData.Remove(homeData.homeD[player.userID].dData[ent3].name);
-                        SaveData();
-                    }
-                    break;
-            }
-        }
-
-        [ConsoleCommand("CUI_ObjectSetup2")]
-        void ObjectSetup2(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-
-            var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["header"], lang.GetMessage("ObjConfig", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["dark"], lang.GetMessage("OnceNear", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.14 0.05", "0.38 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], lang.GetMessage("AddTurret", this, player.UserIDString), 20, "0.15 0.06", "0.37 0.14", $"CUI_ObjectSetup3 Turret");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], lang.GetMessage("AddLight", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_ObjectSetup3 Light");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.64 0.05", "0.88 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], lang.GetMessage("AddDoor", this, player.UserIDString), 20, "0.65 0.06", "0.87 0.14", $"CUI_ObjectSetup3 Door");
-            CuiHelper.AddUi(player, element);
-        }
-
-        List<T> FindEntities<T>(Vector3 position, float distance) where T : BaseEntity
-        {
-            var list = Pool.GetList<T>();
-            Vis.Entities(position, distance, list, LayerMask.GetMask("Construction", "Construction Trigger", "Trigger", "Deployed"));
-            return list;
-        }
-
-        [ConsoleCommand("CUI_ObjectSetup3")]
-        void ObjectSetup3(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-            switch (arg.Args[0])
-            {
-                case "Turret":
-                    if(!HasPerm(player.UserIDString, configData.Permissions.TurretPermissions)){
-                        destroyUIN(arg);
-                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
-                        return;
-                    }
-
-                    List<BaseEntity> turretnear = new List<BaseEntity>();
-                    Vis.Entities(player.transform.position, 1.5f, turretnear);
-                    var newKeyT = (uint)(5);
-                    var locationT = new Vector3();
-                    foreach (var turret in turretnear)
-                    {
-                        if (turret.ToString().Contains("auto"))
-                        {
-                            newKeyT = turret.net.ID;
-                            locationT = turret.transform.position;
-                            break;
-                        }
-                    }
-                    if (locationT == new Vector3())
-                    {
-                        SendReply(player, lang.GetMessage("NoTurretInRange", this, player.UserIDString));
-                        return;
-                    }
-                    if (homeData.homeD[player.userID].objectX.Contains(locationT.x))
-                    {
-                        SendReply(player, lang.GetMessage("AlreadyAddedTurret", this, player.UserIDString));
-                        return;
-                    }
-                    isEditing.Add(player.userID);
-                    var tinfo = new newData()
-                    {
-                        entKey = newKeyT,
-                        entName = "",
-                        entStatus = false,
-                        entType = "Turret",
-                        entLocation = locationT,
-                    };
-                    newD.Add(player.userID, tinfo);
-                    break;
-                case "Light":
-                    if(!HasPerm(player.UserIDString, configData.Permissions.LightPermissions)){
-                        destroyUIN(arg);
-                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
-                        return;
-                    }
-
-                    var newKeyL = (uint)(5);
-                    var locationL = new Vector3();
-                    List<BaseEntity> nearby = new List<BaseEntity>();
-                    Vis.Entities(player.transform.position, 4.5f, nearby);
-                    foreach (var lantern in nearby)
-                    {
-                        if (lantern.ToString().Contains("lantern") || lantern.ToString().Contains("ceilinglight"))
-                        {
-                            newKeyL = lantern.net.ID;
-                            locationL = lantern.transform.position;
-                            break;
-                        }
-                    }
-                    if (locationL == new Vector3())
-                    {
-                        SendReply(player, lang.GetMessage("NoLightInRange", this, player.UserIDString));
-                        return;
-                    }
-                    if (homeData.homeD[player.userID].objectX.Contains(locationL.x))
-                    {
-                        SendReply(player, lang.GetMessage("AlreadyAddedLight", this, player.UserIDString));
-                        return;
-                    }
-                    isEditing.Add(player.userID);
-                    var linfo = new newData()
-                    {
-                        entKey = newKeyL,
-                        entType = "Light",
-                        entName = "",
-                        entStatus = false,
-                        entLocation = locationL,
-                    };
-                    newD.Add(player.userID, linfo);
-                    break;
-                case "Door":
-                    if(!HasPerm(player.UserIDString, configData.Permissions.DoorPermissions)){
-                        destroyUIN(arg);
-                        SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
-                        return;
-                    }
-
-                    var newKeyD = (uint)(5);
-                    var locationD = new Vector3();
-                    List<BaseEntity> nearby2 = new List<BaseEntity>();
-                    Vis.Entities(player.transform.position, 1.5f, nearby2);
-                    foreach (var door in nearby2)
-                    {
-                        if (door.ToString().Contains("hinged"))
-                        {
-                            newKeyD = door.net.ID;
-                            locationD = door.transform.position;
-                            break;
-                        }
-                    }
-                    if (locationD == new Vector3())
-                    {
-                        SendReply(player, lang.GetMessage("NoDoorInRange", this, player.UserIDString));
-                        return;
-                    }
-                    if (homeData.homeD[player.userID].objectX.Contains(locationD.x))
-                    {
-                        SendReply(player, lang.GetMessage("AlreadyAddedDoor", this, player.UserIDString));
-                        return;
-                    }
-                    isEditing.Add(player.userID);
-                    var Dinfo = new newData()
-                    {
-                        entKey = newKeyD,
-                        entType = "Door",
-                        entName = "",
-                        entStatus = false,
-                        entLocation = locationD,
-                    };
-                    newD.Add(player.userID, Dinfo);
-                    break;
+                    }      
+                }
+                return 0;
             }
 
-            var element = UI.CreateElementContainer(PublicSetupName, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["header"], lang.GetMessage("ObjConfig", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicSetupName, UIColors["dark"], lang.GetMessage("NameObje", this), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicSetupName, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicSetupName, UIColors["buttongreen"], lang.GetMessage("Exit", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CloseCUIMain");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_ObjectSetup4")]
-        void ObjectSetup4(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            destroyUIN(arg);
-
-            var element = UI.CreateElementContainer(PublicObjectSetup, UIColors["dark"], "0.21 0.1", "0.9 0.9", true);
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["header"], lang.GetMessage("ObjConfig", this, player.UserIDString), 100, "0.01 0.01", "0.99 0.99", TextAnchor.MiddleCenter);
-
-            UI.CreateLabel(ref element, PublicObjectSetup, UIColors["dark"], lang.GetMessage("Completed", this, player.UserIDString), 20, "0 .9", "1 1");
-            UI.CreatePanel(ref element, PublicObjectSetup, UIColors["dark"], "0.39 0.05", "0.63 0.15", true);
-            UI.CreateButton(ref element, PublicObjectSetup, UIColors["buttongreen"], lang.GetMessage("Save", this, player.UserIDString), 20, "0.40 0.06", "0.62 0.14", $"CUI_SaveNewObject");
-            CuiHelper.AddUi(player, element);
-        }
-
-        [ConsoleCommand("CUI_SaveNewObject")]
-        void ObjectSetup5(ConsoleSystem.Arg arg)
-        {
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-            SaveData();
-            CuiHelper.DestroyUi(player, PublicSideBar);
-            CuiHelper.DestroyUi(player, PublicSetupName);
-            CuiHelper.DestroyUi(player, PublicObjectSetup);
-            isEditing.Remove(player.userID);
-            barUI.Remove(player.userID);
-            setupUI.Remove(player.userID);
-            openUI(player);
-        }
-
-        void OnPlayerChat(ConsoleSystem.Arg arg)
-        {
-            try
-            {
-                var player = arg.connection.player as BasePlayer;
-                if (player == null)
+            void OnEntityDeath(BaseEntity entity){
+                if(!ents.ContainsValue(entity)) return;
+                var owner = GetOwner(entity);
+                if(owner == 0) return;
+                if(BasePlayer.FindByID(owner) == null){
                     return;
-                if (isEditing.Contains(player.userID))
+                }
+                BasePlayer player = BasePlayer.FindByID(owner);
+                SendReply(player, msg("objdestoryed", player));
+                ents.Remove(entity.transform.position);
+            }
+
+            object OnPlayerChat(ConsoleSystem.Arg arg){
+                var player = arg.Player();
+                var message = arg.Args[0];
+                if(awaitingNamef.ContainsKey(player.userID)){
+                    SendReply(player, msg("createdobject", player));
+                    var n = awaitingNamef[player.userID];
+                    n.name = message;
+                    var newid = 0;
+                    if(smartData.data[player.userID].furnaces.Count == 0){
+                        newid = 1;
+                    }else{
+                        var id = smartData.data[player.userID].furnaces.Last();
+                        newid = id.Key + 1;
+                    }
+                    smartData.data[player.userID].furnaces.Add(newid, n);
+                    awaitingNamef.Remove(player.userID);
+                    Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData); 
+                    return true;
+                }
+                if(awaitingNamed.ContainsKey(player.userID)){
+                    SendReply(player, msg("createdobject", player));
+                    var n = awaitingNamed[player.userID];
+                    n.name = message;
+                    var newid = 0;
+                    if(smartData.data[player.userID].doors.Count == 0){
+                        newid = 1;
+                    }else{
+                        var id = smartData.data[player.userID].doors.Last();
+                        newid = id.Key + 1;
+                    }
+                    smartData.data[player.userID].doors.Add(newid, n);
+                    awaitingNamed.Remove(player.userID);
+                    Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData); 
+                    return true;
+                }
+                if(awaitingNamet.ContainsKey(player.userID)){
+                    SendReply(player, msg("createdobject", player));
+                    var n = awaitingNamet[player.userID];
+                    n.name = message;
+                    var newid = 0;
+                    if(smartData.data[player.userID].turrets.Count == 0){
+                        newid = 1;
+                    }else{
+                        var id = smartData.data[player.userID].turrets.Last();
+                        newid = id.Key + 1;
+                    }
+                    smartData.data[player.userID].turrets.Add(newid, n);
+                    awaitingNamet.Remove(player.userID);
+                    Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData); 
+                    return true;
+                }
+                if(awaitingNamel.ContainsKey(player.userID)){
+                    SendReply(player, msg("createdobject", player));
+                    var n = awaitingNamel[player.userID];
+                    n.name = message;
+                    var newid = 0;
+                    if(smartData.data[player.userID].lights.Count == 0){
+                        newid = 1;
+                    }else{
+                        var id = smartData.data[player.userID].lights.Last();
+                        newid = id.Key + 1;
+                    }
+                    smartData.data[player.userID].lights.Add(newid, n);
+                    awaitingNamel.Remove(player.userID);
+                    Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData); 
+                    return true;
+                }
+                return null;   
+            }
+
+            void CheckData(BasePlayer player){
+                if(smartData.data.ContainsKey(player.userID)) return;
+                var n = new SmartHome(){
+                    x = 0,
+                    y = 0,
+                    z = 0,
+                    turrets    = new Dictionary<int, SmartTurret>(),
+                    lights     = new Dictionary<int, SmartLight>(),
+                    furnaces   = new Dictionary<int, SmartFurnace>(),
+                    doors      = new Dictionary<int, SmartDoor>(),
+                    hashome = false,
+                };  
+                smartData.data.Add(player.userID, n);
+                Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData); 
+            }
+
+        #endregion
+
+        #region UI
+
+            [ChatCommand("rem")]
+            void CreateMain(BasePlayer player){  
+                CreateHomeMenu(player);
+            }
+
+            bool hasAuth(BasePlayer player){
+                List<BaseEntity> list = new List<BaseEntity>();
+                Vis.Entities(player.transform.position, 1f, list);
+                foreach (var cupboard in list)
                 {
-                    if (Homes.Find(player) == null)
-                        OnPlayerInit(player);
-                    Homes playerData = Homes.Find(player);
-                    newD[player.userID].entName = arg.Args[0];
-
-                    switch (newD[player.userID].entType)
+                    if (!cupboard.ToString().Contains("cupboard")) continue;
+                    if (cupboard.GetComponent<BuildingPrivlidge>() != null)
                     {
-                        case "Turret":
-                            foreach (var entry in homeData.homeD[player.userID].tData)
+                        var priv = cupboard.GetComponent<BuildingPrivlidge>();
+                        foreach (var ply in priv.authorizedPlayers)
+                        {
+                            if (ply.userid == player.userID)
                             {
-                                if (entry.Key.ToString() == arg.Args[0])
-                                {
-                                    isEditing.Remove(player.userID);
-                                    newD.Remove(player.userID);
-                                    SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
-                                    return;
-                                }
+                                return true;
                             }
-                            var infoT = new TurretData()
+                            else
                             {
-                                locx = newD[player.userID].entLocation.x,
-                                locy = newD[player.userID].entLocation.y,
-                                locz = newD[player.userID].entLocation.z,
-                                key = newD[player.userID].entKey,
-                                status = newD[player.userID].entStatus,
-                                name = newD[player.userID].entName,
-                            };
-                            homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
-                            playerData.tData.Add(newD[player.userID].entName, infoT);
-                            player.SendConsoleCommand("CUI_ObjectSetup4");
-                            newD.Remove(player.userID);
-                            break;
-                        case "Light":
-                            foreach (var entry in homeData.homeD[player.userID].lData)
-                            {
-                                if (entry.Key.ToString() == arg.Args[0])
-                                {
-                                    isEditing.Remove(player.userID);
-                                    newD.Remove(player.userID);
-                                    SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
-                                    return;
-                                }
+                                continue;
                             }
-                            var infoL = new LightData()
-                            {
-                                locx = newD[player.userID].entLocation.x,
-                                locy = newD[player.userID].entLocation.y,
-                                locz = newD[player.userID].entLocation.z,
-                                key = newD[player.userID].entKey,
-                                status = newD[player.userID].entStatus,
-                                name = newD[player.userID].entName,
+                        }
+                    }
+                    continue;
+                }
+                return false;
+            }
 
-                            };
-                            homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
-                            playerData.lData.Add(newD[player.userID].entName, infoL);
-                            player.SendConsoleCommand("CUI_ObjectSetup4");
-                            newD.Remove(player.userID);
-                            break;
-                        case "Door":
-                            foreach (var entry in homeData.homeD[player.userID].dData)
-                            {
-                                if (entry.Key.ToString() == arg.Args[0])
-                                {
-                                    isEditing.Remove(player.userID);
-                                    newD.Remove(player.userID);
-                                    SendReply(player, lang.GetMessage("AlreadyName", this, player.UserIDString).Replace("0", arg.Args[0]));
-                                    return;
-                                }
-                            }
-                            var infoD = new DoorData()
-                            {
-                                locx = newD[player.userID].entLocation.x,
-                                locy = newD[player.userID].entLocation.y,
-                                locz = newD[player.userID].entLocation.z,
-                                key = newD[player.userID].entKey,
-                                status = newD[player.userID].entStatus,
-                                name = newD[player.userID].entName,
-
-                            };
-                            homeData.homeD[player.userID].objectX.Add(newD[player.userID].entLocation.x);
-                            playerData.dData.Add(newD[player.userID].entName, infoD);
-                            player.SendConsoleCommand("CUI_ObjectSetup4");
-                            newD.Remove(player.userID);
-                            break;
+            bool canCreateHome(BasePlayer player){
+                foreach(var h in smartData.data){
+                    var v = new Vector3(smartData.data[h.Key].x, smartData.data[h.Key].y, smartData.data[h.Key].z);
+                    List<BaseEntity> entities = new List<BaseEntity>();
+                    Vis.Entities(v, configData.Variables.ActivationDistance, entities);
+                    if(entities.Contains(player) && !(h.Key == player.userID)){
+                        return false;
                     }
                 }
+                if(!hasAuth(player)) return false;
+                return true;
             }
-            catch (System.Exception)
-            {
-                return;
+
+            [ChatCommand("remconfirm")]
+            void ConfirmChat(BasePlayer player){
+                if(!confirm.Contains(player)) return;
+                var t1 = player.transform.position;
+                var d = smartData.data[player.userID];
+				foreach(var t in d.turrets){
+					var p = GetVector(d.turrets[t.Key].x, d.turrets[t.Key].y, d.turrets[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				}
+				foreach(var t in d.lights){
+					var p = GetVector(d.lights[t.Key].x, d.lights[t.Key].y, d.lights[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				}
+				foreach(var t in d.furnaces){
+					var p = GetVector(d.furnaces[t.Key].x, d.furnaces[t.Key].y, d.furnaces[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				}
+				foreach(var t in d.doors){
+					var p = GetVector(d.doors[t.Key].x, d.doors[t.Key].y, d.doors[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				} 
+                d.turrets.Clear();
+                d.lights.Clear();
+                d.furnaces.Clear();
+                d.doors.Clear();
+                d.x = t1.x;
+                d.y = t1.y;
+                d.z = t1.z;
+                d.hashome = true;  
+                CreateHomeMenu(player);
+				Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData);      
             }
-        }
 
-
-        // / ////// / //   
-        // / OtherC / //
-        // / ////// / //    
-
-        [ConsoleCommand("CUI_RemoteBar")]
-        void RemoteBar(BasePlayer player)
-        {
-            if (Homes.Find(player) == null)
-                OnPlayerInit(player);
-            Homes playerData = Homes.Find(player);
-            var location = new Vector3(playerData.locx, playerData.locy, playerData.locz);
-            var element = UI.CreateElementContainer(PublicSideBar, UIColors["dark"], "0.1 0.1", "0.205 0.5", true);
-            UI.CreatePanel(ref element, PublicSideBar, UIColors["light"], "0.05 0.03", "0.95 0.97", true);
-            UI.CreateButton(ref element, PublicSideBar, UIColors["blue"], lang.GetMessage("HomeMenu", this, player.UserIDString), 20, "0.1 0.86", "0.9 0.96", $"");
-
-            if (playerData.locx == 0.0f)
-            {
-                UI.CreateButton(ref element, PublicSideBar, UIColors["green"], lang.GetMessage("HomeSetup", this, player.UserIDString), 16, "0.1 0.73", "0.9 0.83", "CUI_Homes");
+            List<BasePlayer> confirm = new List<BasePlayer>();
+            void CreateHome(BasePlayer player){
+                if(!canCreateHome(player)){
+                    SendReply(player, msg("cannotcreatehome", player));
+                    return;
+                }
+                var d = smartData.data[player.userID];
+                if(d.hashome){
+                    player.SendConsoleCommand("bind l", "chat.say /remconfirm");
+                    confirm.Add(player);
+                    SmartManager.DestroyUI(player);
+                    SendReply(player, "Simply press L if you wish to create a new home. - You have five seconds to preform this action!");
+                    timer.Once(5f, () => player.SendConsoleCommand("bind l l"));
+                    return;
+                }
+                var t1 = player.transform.position;
+				foreach(var t in d.turrets){
+					var p = GetVector(d.turrets[t.Key].x, d.turrets[t.Key].y, d.turrets[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				}
+				foreach(var t in d.lights){
+					var p = GetVector(d.lights[t.Key].x, d.lights[t.Key].y, d.lights[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				}
+				foreach(var t in d.furnaces){
+					var p = GetVector(d.furnaces[t.Key].x, d.furnaces[t.Key].y, d.furnaces[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				}
+				foreach(var t in d.doors){
+					var p = GetVector(d.doors[t.Key].x, d.doors[t.Key].y, d.doors[t.Key].z);
+					if(ents.ContainsKey(p)) ents.Remove(p);
+				} 
+                d.turrets.Clear();
+                d.lights.Clear();
+                d.furnaces.Clear();
+                d.doors.Clear();
+                d.x = t1.x;
+                d.y = t1.y;
+                d.z = t1.z;
+                d.hashome = true;  
+                CreateHomeMenu(player);
+				Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData);
+SendReply(player, msg("created", player));				
             }
-            else { UI.CreateButton(ref element, PublicSideBar, UIColors["green"], lang.GetMessage("HomeSetup", this, player.UserIDString), 16, "0.1 0.73", "0.9 0.83", "CUI_HomesNew"); }
 
-            List<BaseEntity> nearby = new List<BaseEntity>();
-            Vis.Entities(location, configData.Options.ActivationDistance, nearby);
-            var dotrue = false;
-            foreach (var ent in nearby)
-            {
-                if (ent is BasePlayer)
-                {
-                    BasePlayer newplayer = ent.ToPlayer();
-                    if (newplayer != player) break;
-                    else
-                    {
-                        dotrue = true;
-                        break;
+            [ConsoleCommand("sh.wipe")]
+            void InitWipe(ConsoleSystem.Arg arg){
+                if(arg.Player() != null) return;
+                smartData.data.Clear();
+                Interface.Oxide.DataFileSystem.WriteObject("SmartData", smartData); 
+                PrintWarning("Smart Home Data WIPED!!!");
+            }
+
+            [ChatCommand("sh_remove")]
+            void Player(BasePlayer player){
+                foreach(var p in BasePlayer.activePlayerList){
+                    if(p == player) continue;
+                    var worldEntity = p as BaseEntity;
+                    Rigidbody component = worldEntity.GetComponent<Rigidbody>();
+                    component.constraints = RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezePositionZ;
+                }
+            }
+
+            void CreateSetup(BasePlayer player){
+                CheckData(player);
+                var d = smartData.data[player.userID];
+                if(!d.hashome)
+                    CreateHomeMenu(player);
+
+                SmartManager.DestroyUI(player);
+                openedUI.Add(player);
+                var S = SmartManager.AUI.CreateElementContainer(MainGUIVar, UIColors["dark"], "0 0", "1 1", true);
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.92", "0.99 0.99", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("HomeBtn", player)}</color></b>", 16, "0.13 0.935", "0.23 0.975", "SUI_OpenElement Home", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("ObjectBtn", player)}</color></b>", 16, "0.26 0.935", "0.36 0.975", "SUI_OpenElement Object", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("SetupBtn", player)}</color></b>", 16, "0.39 0.935", "0.49 0.975", "SUI_OpenElement Setup", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseBtn", player)}</color></b>", 16, "0.52 0.935", "0.62 0.975", "SUI_OpenElement Close", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>{msg("TitleMenu", player)}</color></b>", 20, "0.0210 0.930", "0.1 0.980", TextAnchor.MiddleCenter);
+                //Server Statistics
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.01", "0.99 0.910", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("createfurnace", player)}</color></b>", 16, "0.88 0.845", "0.98 0.885", $"SUI_OpenElement createfurnace", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("createturret", player)}</color></b>", 16, "0.88 0.780", "0.98 0.820", $"SUI_OpenElement createturret", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("createlight", player)}</color></b>", 16, "0.88 0.715", "0.98 0.755", $"SUI_OpenElement createlight", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("createdoor", player)}</color></b>", 16, "0.88 0.650", "0.98 0.690", $"SUI_OpenElement createdoor", TextAnchor.MiddleCenter);
+                CuiHelper.AddUi(player, S); 
+            }
+
+            void ShowTurretMenu(BasePlayer player){
+                CheckData(player);
+                var h = smartData.data[player.userID];
+                if(!h.hashome){
+                    CreateHomeMenu(player);
+                }
+                if(h.turrets.Count == 0){
+                    SendReply(player, "You do not have any turrets!");  
+                    return;
+                }
+
+                SmartManager.DestroyUI(player);
+                openedUI.Add(player);
+                var S = SmartManager.AUI.CreateElementContainer(MainGUIVar, UIColors["dark"], "0 0", "1 1", true);
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.92", "0.99 0.99", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("HomeBtn", player)}</color></b>", 16, "0.13 0.935", "0.23 0.975", "SUI_OpenElement Home", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("ObjectBtn", player)}</color></b>", 16, "0.26 0.935", "0.36 0.975", "SUI_OpenElement Object", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("SetupBtn", player)}</color></b>", 16, "0.39 0.935", "0.49 0.975", "SUI_OpenElement Setup", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseBtn", player)}</color></b>", 16, "0.52 0.935", "0.62 0.975", "SUI_OpenElement Close", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>{msg("TitleMenu", player)}</color></b>", 20, "0.0210 0.930", "0.1 0.980", TextAnchor.MiddleCenter);
+                //Stuff
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.01", "0.99 0.910", true);
+                var i = 0;
+                foreach(var d in smartData.data[player.userID].turrets){
+                    i++;
+                    var nonePos = SmartManager.CalcBttnPos(i - 1);
+                    var data = smartData.data[player.userID].turrets[d.Key];
+                    var name = data.name;
+                    var pos = data;
+                    var color = "";
+                    if(ents[new Vector3(pos.x, pos.y, pos.z)].IsOn()){
+                        color = "green";
+                    }else{
+                        color = "red";
                     }
+                    SmartManager.AUI.CreateButton(ref S, MainGUIVar, UIColors["buttonbg"], $"<b><color={color}>{name}</color></b>", 18, $"{nonePos[0]} {nonePos[1]}", $"{nonePos[2]} {nonePos[3]}", $"SUI_OpenElement toggleturret {d.Key}", TextAnchor.MiddleCenter);
                 }
-                else dotrue = false;
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("TurnOnAll", player)}</color></b>", 16, "0.41 0.075", "0.55 0.115", "SUI_OpenElement ToggleAllTurrets 1", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("TurnOffAll", player)}</color></b>", 16, "0.60 0.075", "0.74 0.115", "SUI_OpenElement ToggleAllTurrets 2", TextAnchor.MiddleCenter);
+                CuiHelper.AddUi(player, S);   
             }
-            if (dotrue) UI.CreateButton(ref element, PublicSideBar, UIColors["orange"], lang.GetMessage("ObjectSet", this, player.UserIDString), 16, "0.1 0.59", "0.9 0.69", "CUI_ObjectSetup");
-            else UI.CreateButton(ref element, PublicSideBar, UIColors["orange"], lang.GetMessage("ObjectSet", this, player.UserIDString), 16, "0.1 0.59", "0.9 0.69", "");
-            UI.CreateButton(ref element, PublicSideBar, UIColors["lightblue"], lang.GetMessage("CtrlMenu", this, player.UserIDString), 16, "0.1 0.45", "0.9 0.55", "CUI_ControlMenu");
-            UI.CreateButton(ref element, PublicSideBar, UIColors["yellow"], lang.GetMessage("RadiusOpen", this, player.UserIDString), 16, "0.1 0.31", "0.9 0.41", "remsphere");
-            UI.CreateButton(ref element, PublicSideBar, UIColors["buttonred"], lang.GetMessage("Close", this, player.UserIDString), 16, "0.1 0.04", "0.9 0.14", "CloseCUIMain");
-            CuiHelper.AddUi(player, element);
-        }
-
-        // / ////// / //
-        // / Sphere / //
-        // / ////// / //
-
-        [ConsoleCommand("remsphere")]
-        private void ActiveSphere(ConsoleSystem.Arg arg){
-            var player = arg.connection.player as BasePlayer;
-            if (player == null)
-                return;
-
-            SendReply(player, "Your radius for your home will show for around 30 seconds, if you need more time simply click it again.");
-
-            CuiHelper.DestroyUi(player, PublicSideBar);
-            CuiHelper.DestroyUi(player, PublicSetupName);
-            CuiHelper.DestroyUi(player, PublicObjectSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetup);
-            CuiHelper.DestroyUi(player, PublicControlSetupTurret);
-            CuiHelper.DestroyUi(player, PublicControlSetupDoor);
-            CuiHelper.DestroyUi(player, PublicControlSetupLight);
-
-            Homes playerData = Homes.Find(player);
-            var location = new Vector3(playerData.locx, playerData.locy, playerData.locz);
-            if(location == null || playerData.locx == null || playerData.locy == null || playerData.locz == null)
-                return;
-
-			BaseEntity sphere;
-			BaseEntity entity;
-
-			Vector3 pos = new Vector3(0, 0, 0);
-			Quaternion rot = new Quaternion();
-			string strPrefab = "assets/prefabs/visualization/sphere.prefab";
-            string strPrefab2 = "assets/prefabs/weapons/f1 grenade/grenade.f1.entity.prefab";
-
-            sphere = GameManager.server.CreateEntity(strPrefab, pos, rot, true);
-            entity = GameManager.server.CreateEntity(strPrefab2, location, rot, true);
-            entity?.Spawn();
-
-            SphereEntity ball = sphere.GetComponent<SphereEntity>();
-            ball.currentRadius = 1f;
-            ball.lerpRadius = 2.0f*configData.Options.ActivationDistance;
-            ball.lerpSpeed = 250f;
-
-            sphere.SetParent(entity, "");
-            sphere?.Spawn();
-
-            timer.Once(30f, () =>
-            {
-                if(sphere == null) return;
-                sphere.Kill(BaseNetworkable.DestroyMode.None);
-                entity.Kill(BaseNetworkable.DestroyMode.None);
-            });
-        }
-
-        // / ////// / //   
-        // / CUIMai / //
-        // / ////// / //    
-
-        static string PublicSetupName = "PublicSetupName";
-        static string PublicSideBar = "PublicSideBar";
-        static string PublicObjectSetup = "PublicObjectSetup";
-        static string PublicControlSetup = "PublicControlSetup";
-        static string PublicControlSetupTurret = "PublicControlSetupTurret";
-        static string PublicControlSetupLight = "PublicControlSetupLight";
-        static string PublicControlSetupDoor = "PublicControlSetupDoor";
-
-        public class UI
-        {
-            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
-            {
-                var NewElement = new CuiElementContainer()
-            {
-                {
-                    new CuiPanel
-                    {
-                        Image = {Color = color},
-                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
-                        CursorEnabled = cursor
-                    },
-                    new CuiElement().Parent,
-                    panelName
+            
+            void ShowLightMenu(BasePlayer player){
+                CheckData(player);
+                var d = smartData.data[player.userID];
+                if(!d.hashome){
+                    CreateHomeMenu(player);
                 }
+                if(d.lights.Count == 0){
+                    SendReply(player, "You do not have any lights!");  
+                    return;
+                }
+
+                SmartManager.DestroyUI(player);
+                openedUI.Add(player);
+                var S = SmartManager.AUI.CreateElementContainer(MainGUIVar, UIColors["dark"], "0 0", "1 1", true);
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.92", "0.99 0.99", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("HomeBtn", player)}</color></b>", 16, "0.13 0.935", "0.23 0.975", "SUI_OpenElement Home", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("ObjectBtn", player)}</color></b>", 16, "0.26 0.935", "0.36 0.975", "SUI_OpenElement Object", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("SetupBtn", player)}</color></b>", 16, "0.39 0.935", "0.49 0.975", "SUI_OpenElement Setup", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseBtn", player)}</color></b>", 16, "0.52 0.935", "0.62 0.975", "SUI_OpenElement Close", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>{msg("TitleMenu", player)}</color></b>", 20, "0.0210 0.930", "0.1 0.980", TextAnchor.MiddleCenter);
+                //Stuff
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.01", "0.99 0.910", true);
+                var i = 0;
+                foreach(var entry in smartData.data[player.userID].lights){
+                    i++;
+                    var nonePos = SmartManager.CalcBttnPos(i - 1);
+                    var data = smartData.data[player.userID].lights[entry.Key];
+                    var name = data.name;
+                    var pos = data;
+                    var color = "";
+                    if(ents[new Vector3(pos.x, pos.y, pos.z)].IsOn()){
+                        color = "green";
+                    }else{
+                        color = "red";
+                    }
+                    SmartManager.AUI.CreateButton(ref S, MainGUIVar, UIColors["buttonbg"], $"<b><color={color}>{name}</color></b>", 18, $"{nonePos[0]} {nonePos[1]}", $"{nonePos[2]} {nonePos[3]}", $"SUI_OpenElement togglelight {entry.Key}", TextAnchor.MiddleCenter);
+                }
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("TurnLightsOn", player)}</color></b>", 16, "0.41 0.075", "0.55 0.115", "SUI_OpenElement ToggleAllLights 1", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("TurnLightsOff", player)}</color></b>", 16, "0.60 0.075", "0.74 0.115", "SUI_OpenElement ToggleAllLights 2", TextAnchor.MiddleCenter);              
+                CuiHelper.AddUi(player, S);   
+            }
+
+            void ShowDoorMenu(BasePlayer player){
+                CheckData(player);
+                var h = smartData.data[player.userID];
+                if(!h.hashome){
+                    CreateHomeMenu(player);
+                }
+                if(h.doors.Count == 0){
+                    SendReply(player, "You do not have any doors!");  
+                    return;
+                }
+
+                SmartManager.DestroyUI(player);
+                openedUI.Add(player);
+                var S = SmartManager.AUI.CreateElementContainer(MainGUIVar, UIColors["dark"], "0 0", "1 1", true);
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.92", "0.99 0.99", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("HomeBtn", player)}</color></b>", 16, "0.13 0.935", "0.23 0.975", "SUI_OpenElement Home", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("ObjectBtn", player)}</color></b>", 16, "0.26 0.935", "0.36 0.975", "SUI_OpenElement Object", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("SetupBtn", player)}</color></b>", 16, "0.39 0.935", "0.49 0.975", "SUI_OpenElement Setup", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseBtn", player)}</color></b>", 16, "0.52 0.935", "0.62 0.975", "SUI_OpenElement Close", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>{msg("TitleMenu", player)}</color></b>", 20, "0.0210 0.930", "0.1 0.980", TextAnchor.MiddleCenter);
+                //Stuff
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.01", "0.99 0.910", true);
+                var i = 0;
+                foreach(var d in smartData.data[player.userID].doors){
+                    i++;
+                    var nonePos = SmartManager.CalcBttnPos(i - 1);
+                    var data = smartData.data[player.userID].doors[d.Key];
+                    var name = data.name;
+                    var pos = data;
+                    var color = "";
+                    if(ents[new Vector3(pos.x, pos.y, pos.z)].IsOpen()){
+                        color = "green";
+                    }else{
+                        color = "red";
+                    }
+                    SmartManager.AUI.CreateButton(ref S, MainGUIVar, UIColors["buttonbg"], $"<b><color={color}>{name}</color></b>", 18, $"{nonePos[0]} {nonePos[1]}", $"{nonePos[2]} {nonePos[3]}", $"SUI_OpenElement toggledoor {d.Key}", TextAnchor.MiddleCenter);
+                }
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("OpenAll", player)}</color></b>", 16, "0.41 0.075", "0.55 0.115", "SUI_OpenElement ToggleAllDoors 1", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseAll", player)}</color></b>", 16, "0.60 0.075", "0.74 0.115", "SUI_OpenElement ToggleAllDoors 2", TextAnchor.MiddleCenter);
+                CuiHelper.AddUi(player, S);   
+            }
+            void ShowFurnaceMenu(BasePlayer player){
+                CheckData(player);
+                var d = smartData.data[player.userID];
+                if(!d.hashome){
+                    CreateHomeMenu(player);
+                }
+                if(d.furnaces.Count == 0){
+                    SendReply(player, "You do not have any furnaces!");  
+                    return;
+                }
+
+                SmartManager.DestroyUI(player);
+                openedUI.Add(player);
+                var S = SmartManager.AUI.CreateElementContainer(MainGUIVar, UIColors["dark"], "0 0", "1 1", true);
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.92", "0.99 0.99", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("HomeBtn", player)}</color></b>", 16, "0.13 0.935", "0.23 0.975", "SUI_OpenElement Home", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("ObjectBtn", player)}</color></b>", 16, "0.26 0.935", "0.36 0.975", "SUI_OpenElement Object", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("SetupBtn", player)}</color></b>", 16, "0.39 0.935", "0.49 0.975", "SUI_OpenElement Setup", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseBtn", player)}</color></b>", 16, "0.52 0.935", "0.62 0.975", "SUI_OpenElement Close", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>{msg("TitleMenu", player)}</color></b>", 20, "0.0210 0.930", "0.1 0.980", TextAnchor.MiddleCenter);
+                //Stuff
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.01", "0.99 0.910", true);
+                var i= 0;
+                foreach(var e in smartData.data[player.userID].furnaces){
+                    i++;
+                    var nonePos = SmartManager.CalcBttnPos(i - 1);
+                    var data = smartData.data[player.userID].furnaces[e.Key];
+                    var name = data.name;
+                    var pos = data;
+                    var color = "";
+                    if(ents[new Vector3(pos.x, pos.y, pos.z)].IsOn()){
+                        color = "green";
+                    }else{
+                        color = "red";
+                    }
+                    SmartManager.AUI.CreateButton(ref S, MainGUIVar, UIColors["buttonbg"], $"<b><color={color}>{name}</color></b>", 18, $"{nonePos[0]} {nonePos[1]}", $"{nonePos[2]} {nonePos[3]}", $"SUI_OpenElement togglefurnace {e.Key}", TextAnchor.MiddleCenter);
+                }
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("TurnOnAllF", player)}</color></b>", 16, "0.41 0.075", "0.55 0.115", "SUI_OpenElement ToggleAllFurnaces 1", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("TurnOffAllF", player)}</color></b>", 16, "0.60 0.075", "0.74 0.115", "SUI_OpenElement ToggleAllFurnaces 2", TextAnchor.MiddleCenter);
+                CuiHelper.AddUi(player, S);   
+            }
+
+            void CreateObjects(BasePlayer player){
+                CheckData(player);
+                var d = smartData.data[player.userID];
+                if(!d.hashome)
+                    CreateHomeMenu(player);
+
+                SmartManager.DestroyUI(player);
+                openedUI.Add(player);
+                var S = SmartManager.AUI.CreateElementContainer(MainGUIVar, UIColors["dark"], "0 0", "1 1", true);
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.92", "0.99 0.99", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("HomeBtn", player)}</color></b>", 16, "0.13 0.935", "0.23 0.975", "SUI_OpenElement Home", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("ObjectBtn", player)}</color></b>", 16, "0.26 0.935", "0.36 0.975", "SUI_OpenElement Object", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("SetupBtn", player)}</color></b>", 16, "0.39 0.935", "0.49 0.975", "SUI_OpenElement Setup", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseBtn", player)}</color></b>", 16, "0.52 0.935", "0.62 0.975", "SUI_OpenElement Close", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>{msg("TitleMenu", player)}</color></b>", 20, "0.0210 0.930", "0.1 0.980", TextAnchor.MiddleCenter);
+                //Stuff
+                var sf = permission.UserHasPermission(player.UserIDString, configData.Variables.furnacePagePerm   )  ? "showfurnaces"  :   "nop";
+                var st = permission.UserHasPermission(player.UserIDString, configData.Variables.turretPagePerm    )  ? "showturrets"   :   "nop";
+                var sl = permission.UserHasPermission(player.UserIDString, configData.Variables.turretPagePerm    )  ? "showlights"    :   "nop";
+                var sd = permission.UserHasPermission(player.UserIDString, configData.Variables.turretPagePerm    )  ? "showdoors"     :   "nop";
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.01", "0.99 0.910", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("furnacelist", player)}</color></b>", 16, "0.88 0.845", "0.98 0.885", $"SUI_OpenElement {sf}", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("turretlist", player)}</color></b>", 16, "0.88 0.780", "0.98 0.820", $"SUI_OpenElement {st}", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("lightlist", player)}</color></b>", 16, "0.88 0.715", "0.98 0.755", $"SUI_OpenElement {sl}", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("doorlist", player)}</color></b>", 16, "0.88 0.650", "0.98 0.690", $"SUI_OpenElement {sd}", TextAnchor.MiddleCenter);
+                CuiHelper.AddUi(player, S);         
+            }
+
+            void CreateHomeMenu(BasePlayer player){
+                CheckData(player);
+                SmartManager.DestroyUI(player);
+                openedUI.Add(player);
+                var S = SmartManager.AUI.CreateElementContainer(MainGUIVar, UIColors["dark"], "0 0", "1 1", true);
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.92", "0.99 0.99", true);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("HomeBtn", player)}</color></b>", 16, "0.13 0.935", "0.23 0.975", "SUI_OpenElement Home", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("ObjectBtn", player)}</color></b>", 16, "0.26 0.935", "0.36 0.975", "SUI_OpenElement Object", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("SetupBtn", player)}</color></b>", 16, "0.39 0.935", "0.49 0.975", "SUI_OpenElement Setup", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("CloseBtn", player)}</color></b>", 16, "0.52 0.935", "0.62 0.975", "SUI_OpenElement Close", TextAnchor.MiddleCenter);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>{msg("TitleMenu", player)}</color></b>", 20, "0.0210 0.930", "0.1 0.980", TextAnchor.MiddleCenter);
+                //Server Statistics
+                SmartManager.AUI.CreatePanel(ref S,  MainGUIVar,  UIColors["grey1"],    "0.01 0.01", "0.99 0.910", true);
+                var d = smartData.data[player.userID];
+                if(!d.hashome){
+                    SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=red>{msg("createhome", player)}</color></b>", 16, "0.025 0.845", "0.125 0.885", $"SUI_OpenElement Create", TextAnchor.MiddleCenter);
+                    CuiHelper.AddUi(player, S);
+                    return;
+                }
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>Smart-Home XYZ: {"(" + d.x + " , " + d.y + " , " + d.z + ")"}</color></b>", 20, "0.0210 0.800", "0.500 0.950", TextAnchor.MiddleLeft);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>Smart Turrets: {d.turrets.Count}</color></b>", 20, "0.0210 0.600", "0.150 0.950", TextAnchor.MiddleLeft);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>Smart Lights: {d.lights.Count}</color></b>", 20, "0.0210 0.500", "0.150 0.950", TextAnchor.MiddleLeft);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>Smart Doors: {d.doors.Count}</color></b>", 20, "0.0210 0.400", "0.150 0.950", TextAnchor.MiddleLeft);
+                SmartManager.AUI.CreateLabel(ref S,  MainGUIVar,  UIColors["dark"],     $"<b><color=#1586db>Smart Furnaces: {d.furnaces.Count}</color></b>", 20, "0.0210 0.700", "0.150 0.950", TextAnchor.MiddleLeft);
+                SmartManager.AUI.CreateButton(ref S, MainGUIVar,  UIColors["buttonbg"], $"<b><color=#1586db>{msg("newhome", player)}</color></b>", 16, "0.88 0.845", "0.98 0.885", $"SUI_OpenElement CreateNew", TextAnchor.MiddleCenter);
+                CuiHelper.AddUi(player, S);   
+            }
+
+            private Dictionary<string, string> UIColors = new Dictionary<string, string>
+            {
+                {"dark", "0 0 0 0.94" },
+                {"header", "0 0 0 0.6" },
+                {"light", ".85 .85 .85 0.3" },
+                {"grey1", "0 0 0 0.8" },
+                {"brown", "0.3 0.16 0.0 1.0" },
+                {"yellow", "0.9 0.9 0.0 1.0" },
+                {"#1586db", "1.0 0.65 0.0 1.0" },
+                {"blue", "0.2 0.6 1.0 1.0" },
+                {"red", "1.0 0.1 0.1 1.0" },
+                {"green", "0.28 0.82 0.28 1.0" },
+                {"grey", "0.85 0.85 0.85 1.0" },
+                {"lightblue", "0.6 0.86 1.0 1.0" },
+                {"buttonbg", "0.2 0.2 0.2 0.7" },
+                {"buttongreen", "0.133 0.965 0.133 0.9" },
+                {"buttonred", "0.964 0.133 0.133 0.9" },
+                {"buttongrey", "0.8 0.8 0.8 0.9" },
+                {"invis", "0 0 0 0.0"}
             };
-                return NewElement;
-            }
-            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
-            {
-                container.Add(new CuiPanel
-                {
-                    Image = { Color = color },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
-                    CursorEnabled = cursor
-                },
-                panel);
-            }
-            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
-            {
-                container.Add(new CuiLabel
-                {
-                    Text = { Color = color, FontSize = size, Align = align, FadeIn = 1.0f, Text = text },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
-                },
-                panel);
-            }
-            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
-            {
-                container.Add(new CuiButton
-                {
-                    Button = { Color = color, Command = command, FadeIn = 1.0f },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
-                    Text = { Text = text, FontSize = size, Align = align }
-                },
-                panel);
-            }
-        }
 
-        private Dictionary<string, string> UIColors = new Dictionary<string, string>
-        {
-            {"dark", "0.1 0.1 0.1 0.98" },
-            {"header", "0 0 0 0.6" },
-            {"light", ".85 .85 .85 1.0" },
-            {"grey1", "0.6 0.6 0.6 1.0" },
-            {"brown", "0.3 0.16 0.0 1.0" },
-            {"yellow", "0.9 0.9 0.0 1.0" },
-            {"orange", "1.0 0.65 0.0 1.0" },
-            {"blue", "0.2 0.6 1.0 1.0" },
-            {"red", "1.0 0.1 0.1 1.0" },
-            {"green", "0.28 0.82 0.28 1.0" },
-            {"grey", "0.85 0.85 0.85 1.0" },
-            {"lightblue", "0.6 0.86 1.0 1.0" },
-            {"buttonbg", "0.2 0.2 0.2 0.7" },
-            {"buttongreen", "0.133 0.965 0.133 0.9" },
-            {"buttonred", "0.964 0.133 0.133 0.9" },
-            {"buttongrey", "0.8 0.8 0.8 0.9" }
-        };
+        #endregion
 
-        // / ////// / //   
-        // / Langua / //
-        // / ////// / // 
+        #region MainClass
 
-        Dictionary<string, string> messages = new Dictionary<string, string>()
-        {
-            {"SelectMenu", "<color='#818884'>Select a menu you wish to open. With these menu's you can edit any registered objects.</color>"},
-            {"OpenTurret", "<color='#818884'>Open Turret Menu</color>"},
-            {"OpenLight", "<color='#818884'>Open Light Menu</color>"},
-            {"OpenDoor", "<color='#818884'>Open Door Menu</color>"},
-            {"TList", "<color='#818884'>Turret List</color>"},
-            {"LList", "<color='#818884'>Lights List</color>"},
-            {"DList", "<color='#818884'>Door List</color>"},
-            {"SHomes", "<color='#818884'>Smart Homes</color>"},
-            {"WalkThrough", "<color='#818884'>Smart Home will walk you through how to setup your home!</color>"},
-            {"BeginProcess", "<color='#818884'>Begin Processing Home</color>"},
-            {"WalkThroughNew", "<color='#818884'>Smart Home will walk you through how to setup your new home!</color>"},
-            {"BeginProcessNew", "<color='#818884'>Begin Reprocessing Home!</color>"},
-            {"StandWhereNew", "<color='#818884'>Go ahead and stand where you wish your new home to be and hit next(Suggestion is in middle of base)(WARNING-THIS WILL REMOVE ALL OBJECT DATA!!!!)!</color>"},
-            {"NextRe", "<color='#818884'>Begin Next Reprocessing Stage</color>"},
-            {"StandWhere", "<color='#818884'>Go ahead and stand where you wish your home to be and hit next(Suggestion is in middle of base)!</color>"},
-            {"NextNext", "<color='#818884'>Next Processing Stage</color>"},
-            {"SmartHomeNew", "<color='#818884'>Smart Home has just finished your new home! You may now add objects within 0m!</color>"},
-            {"SmartHome", "<color='#818884'>Smart Home has just finished your home! You may now add objects within 0m!</color>"},
-            {"ObjConfig", "<color='#818884'>Object Configuration</color>"},
-            {"InstructAdd", "<color='#818884'>Follow the instructions to add/remove a object. Press Remove or Add to start!</color>"},
-            {"OnceNear", "<color='#818884'>One near the correct object. Click the appropriate selection below!</color>"},
-            {"AddTurret", "<color='#818884'>Add Turret</color>"},
-            {"AddLight", "<color='#818884'>Add Light</color>"},
-            {"AddDoor", "<color='#818884'>Add Door</color>"},
-            {"NameObje", "<color='#818884'>You must now name your object. Type your new name in chat(without any command)!</color>"},
-            {"Exit", "<color='#818884'>Exit</color>"},
-            {"Completed", "<color='#818884'>You have completed the process and created a new object! Click Save New Object to finish!</color>"},
-            {"CompletedRemove", "<color='#818884'>You have completed the process and removed a object! Click Save New Object to finish!</color>"},
-            {"Save", "<color='#818884'>Save New Object</color>"},
-            {"HomeMenu", "<color='#818884'>*Home Menu*</color>"},
-            {"HomeSetup", "<color='#818884'>Home Setup</color>"},
-            {"ObjectSet", "<color='#818884'>Object Setup</color>"},
-            {"Close", "<color='#818884'>Close</color>"},
-            {"AlreadyName", "There is already a object with the name of 0!"},
-            {"BuildingAuth", "You must have all cupboard access within 0m."},
-            {"LostObject", "You have lost your object: 0 to player/object 1."},
-            {"DeletedTurret", "You have deleted the turret with the name of 0."},
-            {"DeletedLight", "You have deleted the light with the name of 0."},
-            {"DeletedDoor", "You have deleted the door with the name of 0."},
-            {"NoDoorInRange", "There is no door within 1m of you!"},
-            {"NoLightInRange", "There is no light within 5m of you!"},
-            {"NoTurretInRange", "There is no turret within 1m of you!"},
-            {"AlreadyAddedDoor", "You have already added this door!"},
-            {"AlreadyAddedTurret", "You have already added this turret!"},
-            {"AlreadyAddedLight", "You have already added this light!"},
-            {"CtrlMenu", "<color='#818884'>Control Menu</color>"},
-            {"Next", "Next"},
-            {"Back", "Back"},
-            {"NoAccess", "Im sorry. You do not have access to that page. Feel free to contact a server admin about this issue!"},
-            {"RadiusOpen", "<color='#818884'>Radius View</color>"},
-        };
+            public class SmartManager
+            {
+                static public void DestroyUI(BasePlayer player){
+                    CuiHelper.DestroyUi(player, MainGUIVar); 
+                    if(openedUI.ToList().Contains(player)){openedUI.Remove(player);}
+                }
+
+                static public float[] CalcBttnPos(int number)
+                {
+                    Vector2 position = new Vector2(0.0200f, 0.8250f);
+                    Vector2 dimensions = new Vector2(0.100f, 0.07f);
+                    float offsetY = 0;
+                    float offsetX = 0;
+                    if (number >= 0 && number < 9)
+                    {
+                        offsetX = (0.0080f + dimensions.x) * number;
+                    }
+                    if (number > 8 && number < 18)
+                    {
+                        offsetX = (0.008f + dimensions.x) * (number - 9);
+                        offsetY = (-0.0120f - dimensions.y) * 1;
+                    }
+                    if (number > 17 && number < 27)
+                    {
+                        offsetX = (0.008f + dimensions.x) * (number - 18);
+                        offsetY = (-0.0120f - dimensions.y) * 2;
+                    } 
+                    if (number > 26 && number < 36)
+                    {
+                        offsetX = (0.008f + dimensions.x) * (number - 27);
+                        offsetY = (-0.0120f - dimensions.y) * 3;
+                    } 
+                    if (number > 35 && number < 45)
+                    {
+                        offsetX = (0.008f + dimensions.x) * (number - 36);
+                        offsetY = (-0.0120f - dimensions.y) * 4;
+                    } 
+                    if (number > 44 && number < 54)
+                    {
+                        offsetX = (0.008f + dimensions.x) * (number - 45);
+                        offsetY = (-0.0120f - dimensions.y) * 5;
+                    } 
+                    if (number > 53 && number < 63)
+                    {
+                        offsetX = (0.008f + dimensions.x) * (number - 54);
+                        offsetY = (-0.0120f - dimensions.y) * 6;
+                    } 
+                    if (number > 62 && number < 72)
+                    {
+                        offsetX = (0.008f + dimensions.x) * (number - 63);
+                        offsetY = (-0.0120f - dimensions.y) * 7;
+                    }        
+                    Vector2 offset = new Vector2(offsetX, offsetY);
+                    Vector2 posMin = position + offset;
+                    Vector2 posMax = posMin + dimensions;
+                    return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
+                }
+
+                public class AUI
+                {
+                    static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor = false, string parent = "Overlay")
+                    {
+                        var NewElement = new CuiElementContainer()
+                        {
+                            {
+                                new CuiPanel
+                                {
+                                    Image = {Color = color},
+                                    RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                                    CursorEnabled = useCursor
+                                },
+                                new CuiElement().Parent = parent,
+                                panelName
+                            }
+                        };
+                        return NewElement;
+                    }
+                    static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
+                    {
+                        container.Add(new CuiPanel
+                        {
+                            Image = { Color = color },
+                            RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                            CursorEnabled = cursor
+                        },
+                        panel);
+                    }
+                    static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+                    {
+                        container.Add(new CuiLabel
+                        {
+                            Text = { Color = color, FontSize = size, Align = align, Text = text },
+                            RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
+                        },
+                        panel);
+
+                    }
+                    static public void CreateClose(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
+                    {
+                        container.Add(new CuiButton
+                        {
+                            Button = { Color = color, Command = command, FadeIn = 1.0f },
+                            RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                            Text = { Text = text, FontSize = size, Align = align }
+                        },
+                        panel);
+                    }
+                    static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleLeft)
+                    {
+                        container.Add(new CuiButton
+                        {
+                            Button = { Color = color, Command = command, FadeIn = 1.0f },
+                            RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                            Text = { Text = text, FontSize = size, Align = align }
+                        },
+                        panel);
+                    }
+                }
+            }   
+        #endregion
     }
 }

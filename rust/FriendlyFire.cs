@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info(FF, "Nogrod", "2.0.2", ResourceId = 687)]
+    [Info(FF, "Nogrod", "2.0.3", ResourceId = 687)]
     public class FriendlyFire : RustPlugin
     {
         private const string FF = "FriendlyFire";
@@ -136,7 +136,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("ff.toggle")]
         private void ccmdFFToggle(ConsoleSystem.Arg arg)
         {
-            if (arg.Connection != null && (arg.Player() == null || !arg.Player().IsAdmin())) return;
+            if (arg.Connection != null && (arg.Player() == null || !arg.Player().IsAdmin)) return;
             configData.FriendlyFire = !configData.FriendlyFire;
             Config.WriteObject(configData, true);
         }

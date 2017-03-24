@@ -1,13 +1,21 @@
-﻿using System;
+﻿/*
+ * TODO:
+ * 
+ * - finish /cancelturbo
+ * - add GUI start / finish to other methods other than just StartTurbo for the /turbo command (admin given turbo, Global turbo and animal turbo)
+ */
+
+using System;
 using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using System.Globalization;
 using UnityEngine;
+using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("TurboGather", "redBDGR", "1.1.5", ResourceId = 2221)]
+    [Info("TurboGather", "redBDGR", "1.1.9", ResourceId = 2221)]
     [Description("Lets players activate a resouce gather boost for a certain amount of time")]
 
     class TurboGather : RustPlugin
@@ -22,6 +30,7 @@ namespace Oxide.Plugins
         StoredData storedData;
 
         Dictionary<string, Information> cacheDictionary = new Dictionary<string, Information>();
+        Dictionary<string, bool> GUIinfo = new Dictionary<string, bool>();
 
         static List<object> Animals()
         {
@@ -58,6 +67,10 @@ namespace Oxide.Plugins
         void Unload()
         {
             SaveData();
+            foreach(BasePlayer player in BasePlayer.activePlayerList)
+            {
+                EndGUI(player);
+            }
         }
 
         void OnServerSave()
@@ -126,8 +139,8 @@ namespace Oxide.Plugins
         public string PrefixName = "[<color=#0080ff>TurboGather</color>]";
 
         public bool effectEnabled = true;
-
         public const string effect = "assets/prefabs/locks/keypad/effects/lock.code.shock.prefab";
+        public bool GUIEnabled = true;
 
         protected override void LoadDefaultConfig()
         {
@@ -164,6 +177,8 @@ namespace Oxide.Plugins
 
             activateTurboOnAnimalKill = Convert.ToBoolean(GetConfig("Settings", "Activate Turbo on Animal Kill", false));
 
+            GUIEnabled = Convert.ToBoolean(GetConfig("Settings", "GUI Enabled", GUIEnabled));
+
             if (!Changed) return;
             SaveConfig();
             Changed = false;
@@ -195,22 +210,6 @@ namespace Oxide.Plugins
             }, this);
 
             turboGatherData = Interface.Oxide.DataFileSystem.GetFile("TurboGather");
-
-            /*
-            foreach (string key in cacheDictionary.Keys)
-            {
-                if (cacheDictionary[key].turboEndTime < GrabCurrentTime())
-                {
-                    BasePlayer player = FindPlayer(key);
-                    if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN) || permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP) || permission.UserHasPermission(player.UserIDString, permissionNameANIMAL))
-                        cacheDictionary[key].turboEnabled = false;
-                    else
-                        cacheDictionary.Remove(key);
-                }
-                else
-                    cacheDictionary[key].turboEnabled = true;
-            }
-            */
         }
 
         #endregion
@@ -226,6 +225,22 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permissionNameANIMAL, this);
             LoadData();
             AddWeapons();
+
+            foreach (var key in cacheDictionary.Keys)
+            {
+                if (cacheDictionary[key].turboEndTime < GrabCurrentTime())
+                {
+                    BasePlayer player = BasePlayer.Find(key);
+                    if (player == null) return;
+                    if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN) || permission.UserHasPermission(player.UserIDString, permissionName) || permission.UserHasPermission(player.UserIDString, permissionNameVIP) || permission.UserHasPermission(player.UserIDString, permissionNameANIMAL))
+                        cacheDictionary[key].turboEnabled = false;
+                    else
+                        cacheDictionary.Remove(key);
+                }
+                else
+                    cacheDictionary[key].turboEnabled = true;
+
+            }
         }
 
         void AddWeapons()
@@ -246,32 +261,33 @@ namespace Oxide.Plugins
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             if (!activateTurboOnAnimalKill) return;
-            if (entity == null || info == null || info.Initiator == null || !(info.Initiator is BasePlayer) || !(entity.isActiveAndEnabled)) return;
-            if (permission.UserHasPermission(info.InitiatorPlayer.UserIDString, permissionNameANIMAL))
+            if (info == null || !(info.Initiator is BasePlayer)) return;
+            BasePlayer player = info.InitiatorPlayer;
+            if (!permission.UserHasPermission(info.InitiatorPlayer.UserIDString, permissionNameANIMAL)) return;
+            if (cacheDictionary.ContainsKey(info.InitiatorPlayer.UserIDString))
             {
-                if (cacheDictionary.ContainsKey(info.InitiatorPlayer.UserIDString))
+                if (TurboAnimals.Contains(entity.ShortPrefabName))
+                    StartAnimalTurbo(player);
+            }
+            else
+            {
+                if (TurboAnimals.Contains(entity.ShortPrefabName))
                 {
-                    if (TurboAnimals.Contains(entity.ShortPrefabName))
-                    {
-                        BasePlayer player = info.InitiatorPlayer;
-                        StartAnimalTurbo(player);
-                    }
-                }
-                else
-                {
-                    if (TurboAnimals.Contains(entity.ShortPrefabName))
-                    {
-                        cacheDictionary.Add(info.InitiatorPlayer.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
-                        StartAnimalTurbo(info.InitiatorPlayer);
-                    }
+                    cacheDictionary.Add(info.InitiatorPlayer.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
+                    StartAnimalTurbo(info.InitiatorPlayer);
                 }
             }
         }
 
+        void OnPlayerDie(BasePlayer player, HitInfo info)
+        {
+            EndGUI(player);
+        }
+
         void OnPlayerAttack(BasePlayer attacker, HitInfo info)
         {
-            if (info.HitEntity == null || info == null) return;
             if (!effectEnabled) return;
+            if (info?.HitEntity == null) return;
             if (cacheDictionary.ContainsKey(attacker.UserIDString))
                 if (cacheDictionary[attacker.UserIDString].turboEnabled || cacheDictionary[attacker.UserIDString].adminTurboGiven || globalBoostEnabled)
                     if (turboweapons.Contains(info.Weapon.ShortPrefabName))
@@ -290,9 +306,12 @@ namespace Oxide.Plugins
         void DoGather(BasePlayer player, Item item)
         {
             if (player == null) return;
-            if (!globalBoostEnabled)
+            if (globalBoostEnabled)
             {
-                if (cacheDictionary.ContainsKey(player.UserIDString))
+                item.amount = (int)(item.amount * boostMultiplierGLOBAL);
+                return;
+            }
+            if (cacheDictionary.ContainsKey(player.UserIDString))
                 {
                     if (cacheDictionary[player.UserIDString].adminTurboGiven == true)
                     {
@@ -332,19 +351,14 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-            }
-            else
-                item.amount = (int)(item.amount * boostMultiplierGLOBAL);
         }
 
         // Dispensers
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             if (dispenserEnabled)
-            {
                 if (entity.ToPlayer() is BasePlayer)
                     DoGather(entity.ToPlayer(), item);
-            }
         }
 
         // collectables / pickups
@@ -396,6 +410,8 @@ namespace Oxide.Plugins
             cacheDictionary[player.UserIDString].turboEnabled = true;
             cacheDictionary[player.UserIDString].activeAgain = endTime;
             cacheDictionary[player.UserIDString].turboEndTime = GrabCurrentTime() + activeTime;
+            if (GUIEnabled)
+                StartGui(player);
 
             if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
             {
@@ -406,12 +422,13 @@ namespace Oxide.Plugins
                     if (player == null) return;
                     cacheDictionary[player.UserIDString].turboEnabled = false;
                     SendReply(player, PrefixName + " " + string.Format(msg("BoostEnd", player.UserIDString), cooldownTimeVIP));
+                    EndGUI(player);
                     float cooldownFloat = Convert.ToSingle(cooldownTimeVIP);
 
                     timer.Once(cooldownFloat, () =>
                     {
-                        if (player == null) return;
-                        SendReply(player, PrefixName + " " + msg("CooldownEnded", player.UserIDString));
+                        if (player != null)
+                            SendReply(player, PrefixName + " " + msg("CooldownEnded", player.UserIDString));
                     });
                 });
             }
@@ -424,12 +441,13 @@ namespace Oxide.Plugins
                     if (player == null) return;
                     cacheDictionary[player.UserIDString].turboEnabled = false;
                     SendReply(player, PrefixName + " " + string.Format(msg("BoostEnd", player.UserIDString), cooldownTime));
+                    EndGUI(player);
                     float cooldownFloat = Convert.ToSingle(cooldownTime);
 
                     timer.Once(cooldownFloat, () =>
                     {
-                        if (player == null) return;
-                        SendReply(player, PrefixName + " " + msg("CooldownEnded", player.UserIDString));
+                        if (player != null)
+                            SendReply(player, PrefixName + " " + msg("CooldownEnded", player.UserIDString));
                     });
                 });
             }
@@ -447,7 +465,6 @@ namespace Oxide.Plugins
                     SendReply(player, msg("NoPermissions", player.UserIDString));
                     return;
                 }
-                else if (permission.UserHasPermission(player.UserIDString, permissionNameVIP)) { }
             }
 
             if (cacheDictionary.ContainsKey(player.UserIDString))
@@ -477,6 +494,36 @@ namespace Oxide.Plugins
                 StartTurbo(player);
             }
             return;
+        }
+
+        // chat command for cancelling your own, or another players turbo
+
+            //
+            // WORK ON THIS
+            //
+        [ChatCommand("cancelturbo")]
+        void cancelturboCMD(BasePlayer player, string command, string[] args)
+        {
+            if (args.Length > 0)
+            {
+                if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN)) return;
+
+                BasePlayer targetplayer = FindPlayer(args[0]);
+                if (cacheDictionary.ContainsKey(targetplayer.UserIDString))
+                {
+                    cacheDictionary[targetplayer.UserIDString].adminTurboGiven = false;
+                    cacheDictionary[targetplayer.UserIDString].turboEnabled = false;
+                }
+            }
+            else
+            {
+                if (cacheDictionary.ContainsKey(player.UserIDString))
+                {
+                    cacheDictionary[player.UserIDString].adminTurboGiven = false;
+                    cacheDictionary[player.UserIDString].turboEnabled = false;
+                    // do other things with setting time and cancelling
+                }
+            }
         }
 
         //chat command /giveturbo
@@ -511,9 +558,9 @@ namespace Oxide.Plugins
 
                     timer.Once(Convert.ToSingle(playerActiveLengthInput), () =>
                     {
-                        if (targetPlayer == null) return;
-                        targetPlayer.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostEnd", targetPlayer.UserIDString)));
                         cacheDictionary[dictionaryPlayerName].adminTurboGiven = false;
+                        if (targetPlayer == null || !targetPlayer.IsConnected) return;
+                        targetPlayer.ChatMessage(PrefixName + " " + string.Format(msg("AdminBoostEnd", targetPlayer.UserIDString)));
                     });
                 }
                 else
@@ -562,7 +609,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("globalturbo")]
         void globalturboconsoleCMD(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null) return;
+            if (arg.Connection != null) return;
             //start
             if (arg.Args != null && arg.Args[0] == "start")
             {
@@ -632,7 +679,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("giveturbo")]
         void giveturboconsoleCMD(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null) return;
+            if (arg.Connection != null) return;
             if (arg.Args == null || arg.Args.Length != 3)
             {
                 Puts("Invalid syntax! giveturbo <playername> <length> <multiplier>");
@@ -674,7 +721,91 @@ namespace Oxide.Plugins
 
         #endregion
 
+        #region UI
+
+        private string PanelOnScreen = "OnScreen";
+        private string Panel = "TGPanel";
+
+        public class UI
+        {
+            static public CuiElementContainer CreateElementContainer(string panel, string color, string aMin, string aMax, bool cursor = false)
+            {
+                var NewElement = new CuiElementContainer()
+            {
+                {
+                    new CuiPanel
+                    {
+                        Image = {Color = color},
+                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                        CursorEnabled = cursor
+                    },
+                    new CuiElement().Parent,
+                    panel
+                }
+            };
+                return NewElement;
+            }
+
+            static public void CreateImage(ref CuiElementContainer element, string panel, string imageURL, string aMin, string aMax)
+            {
+                element.Add(new CuiElement
+                {
+                    Parent = panel,
+                    Components =
+                    {
+                        new CuiRawImageComponent { Url = imageURL, Color = "1 1 1 1" },
+                        new CuiRectTransformComponent {AnchorMax = aMax, AnchorMin = aMin }
+                    }
+                });
+            }
+        }
+
+        #endregion
+
         #region Extras
+
+        void StartGui(BasePlayer player)
+        {
+            if (GUIinfo.ContainsKey(player.UserIDString))
+            {
+                if (!GUIinfo[player.UserIDString])
+                {
+                    var element = UI.CreateElementContainer(Panel, "1 1 1 0", "0 0", "1 1", false);
+                    UI.CreateImage(ref element, Panel, "http://i.imgur.com/eLFi2Gd.png", "0.77 0.025", "0.85 0.13");
+                    CuiHelper.AddUi(player, element);
+                    GUIinfo[player.UserIDString] = true;
+                }
+                return;
+            }
+            else
+            {
+                var element = UI.CreateElementContainer(Panel, "1 1 1 0", "0 0", "1 1", false);
+                UI.CreateImage(ref element, Panel, "http://i.imgur.com/eLFi2Gd.png", "0.77 0.025", "0.85 0.13");
+                CuiHelper.AddUi(player, element);
+                GUIinfo[player.UserIDString] = true;
+            }
+            return;
+        }
+
+        void EndGUI(BasePlayer player)
+        {
+            if (GUIinfo.ContainsKey(player.UserIDString))
+            {
+                if (GUIinfo[player.UserIDString])
+                {
+                    CuiHelper.DestroyUi(player, Panel);
+                    GUIinfo[player.UserIDString] = false;
+                }
+            }
+        }
+
+        /*
+        [ChatCommand("dogui")]
+        void doguiCMD(BasePlayer player, string command, string[] args)
+        {
+            StartGui(player);
+        }
+        */
 
         object GetConfig(string menu, string datavalue, object defaultValue)
         {

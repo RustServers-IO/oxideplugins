@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.0.4", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.0.5", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -113,7 +113,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                entity = SpawnContainer(Configuration.BackpackSize, player.transform.position - new Vector3(0, 100, 0));
+                entity = SpawnContainer(Configuration.BackpackSize, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
 
                 foreach (var backpackItem in Inventory.Items)
                     backpackItem.ToItem().MoveToContainer(container.inventory);

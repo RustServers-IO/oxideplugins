@@ -1,0 +1,16 @@
+{
+    "name": "NoFallDamage",
+    "description": "Removes fall damage",
+    "author": "redBDGR",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nofalldamage.2369",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

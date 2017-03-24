@@ -1,8 +1,8 @@
 {
     "name": "SleeperGuard",
-    "description": "Protects sleeping players from being killed, with optional loot protection",
+    "description": "Protects sleeping players from being hurt, killed, or looted",
     "author": "Wulf",
-    "version": "0.1.0",
+    "version": "0.4.0",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/sleeperguard.1454",

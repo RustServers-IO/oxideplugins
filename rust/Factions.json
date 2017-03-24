@@ -2,7 +2,7 @@
     "name": "Factions",
     "description": "A Faction system with Leaders, Taxes, Trades, Ranks, Kill Rewards, and MORE!",
     "author": "Absolut",
-    "version": "3.5.2",
+    "version": "3.5.4",
     "configuration": true,
     "suggest": {
         "Economics": "*",

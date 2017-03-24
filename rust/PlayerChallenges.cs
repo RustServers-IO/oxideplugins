@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerChallenges", "k1lly0u", "2.0.7", ResourceId = 1442)]
+    [Info("PlayerChallenges", "k1lly0u", "2.0.9", ResourceId = 1442)]
     class PlayerChallenges : RustPlugin
     {
         #region Fields
@@ -23,7 +23,6 @@ namespace Oxide.Plugins
         ChallengeData chData;
         private DynamicConfigFile data;
 
-        private Dictionary<int, Challenges> uiOrder = new Dictionary<int, Challenges>();
         private Dictionary<ulong, StatData> statCache = new Dictionary<ulong, StatData>();
         private Dictionary<Challenges, LeaderData> titleCache = new Dictionary<Challenges, LeaderData>();
         private Dictionary<ulong, WoundedData> woundedData = new Dictionary<ulong, WoundedData>();
@@ -105,60 +104,37 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, UIPanel);
             var MenuElement = PCUI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 1", true);
             PCUI.CreatePanel(ref MenuElement, UIMain, UIColors["light"], "0.005 0.93", "0.995 0.99");
-            var vNum = Version;
-            PCUI.CreateLabel(ref MenuElement, UIMain, "", $"<color={configData.Colors.MSG_ColorMain}>{MSG("UITitle").Replace("{Version}", vNum.ToString())}</color>", 22, "0.05 0.93", "0.6 0.99", TextAnchor.MiddleLeft);           
+            PCUI.CreateLabel(ref MenuElement, UIMain, "", $"<color={configData.Colors.MSG_ColorMain}>{MSG("UITitle").Replace("{Version}", Version.ToString())}</color>", 22, "0.05 0.93", "0.6 0.99", TextAnchor.MiddleLeft);
             
             CuiHelper.AddUi(player, MenuElement);
             CreateMenuContents(player, 0);
         }
         private void CreateMenuContents(BasePlayer player, int page = 0)
         {
-            var MenuElement = PCUI.CreateElementContainer(UIPanel, "0 0 0 0", "0 0", "1 1");           
-            switch (page)
+            var MenuElement = PCUI.CreateElementContainer(UIPanel, "0 0 0 0", "0 0", "1 1");
+            var elements = configData.ChallengeSettings.Where(x => x.Value.Enabled).OrderByDescending(x => x.Value.UIPosition).Reverse().ToArray();
+            int count = page * 5;
+            int number = 0;
+            float dimension = 0.19f;
+            for (int i = count; i < count + 5; i++)
             {
-                case 0:
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[0], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[1], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[2], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[3], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[4], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");                    
-                    break;
-                case 1:
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[5], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[6], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[7], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[8], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[9], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
-                    break;
-                case 2:
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[10], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[11], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[12], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[13], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[14], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
-                    break;
-                case 3:
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[15], "0.005 0.01", "0.195 0.92", "0.01 0.01", "0.19 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[16], "0.205 0.01", "0.395 0.92", "0.21 0.01", "0.39 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[17], "0.405 0.01", "0.595 0.92", "0.41 0.01", "0.59 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[18], "0.605 0.01", "0.795 0.92", "0.61 0.01", "0.79 0.91");
-                    AddMenuStats(ref MenuElement, UIPanel, uiOrder[19], "0.805 0.01", "0.995 0.92", "0.81 0.01", "0.99 0.91");
-                    break;
-                default:
-                    break;
+                if (elements.Length < i + 1) continue;
+                float leftPos = 0.005f + (number * (dimension + 0.01f));
+                AddMenuStats(ref MenuElement, UIPanel, elements[i].Key, leftPos, 0.01f, leftPos + dimension, 0.92f);
+                number++;
             }
 
             if (page > 0) PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Previous", 16, "0.63 0.94", "0.73 0.98", $"PCUI_ChangePage {page - 1}");
-            if (page < 3) PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Next", 16, "0.74 0.94", "0.84 0.98", $"PCUI_ChangePage {page + 1}");
+            if (page < 3 && elements.Length > count + 5) PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Next", 16, "0.74 0.94", "0.84 0.98", $"PCUI_ChangePage {page + 1}");
             PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Close", 16, "0.85 0.94", "0.95 0.98", "PCUI_DestroyAll");
             CuiHelper.AddUi(player, MenuElement);
         }
-        private void AddMenuStats(ref CuiElementContainer MenuElement, string panel, Challenges type, string posMinA, string posMaxA, string posMinB, string posMaxB)
+        private void AddMenuStats(ref CuiElementContainer MenuElement, string panel, Challenges type, float left, float bottom, float right, float top)
         {
             if (configData.ChallengeSettings[type].Enabled)
             {
-                PCUI.CreatePanel(ref MenuElement, UIPanel, UIColors["light"], posMinA, posMaxA);
-                PCUI.CreateLabel(ref MenuElement, UIPanel, "", GetLeaders(type), 16, posMinB, posMaxB, TextAnchor.UpperLeft);
+                PCUI.CreatePanel(ref MenuElement, UIPanel, UIColors["light"], $"{left} {bottom}", $"{right} {top}");
+                PCUI.CreateLabel(ref MenuElement, UIPanel, "", GetLeaders(type), 16, $"{left + 0.005f} {bottom + 0.01f}", $"{right - 0.005f} {top - 0.01f}", TextAnchor.UpperLeft);
             }       
         }
 
@@ -285,7 +261,6 @@ namespace Oxide.Plugins
             LoadVariables();
             LoadData();
             CheckValidData();
-            SortUIOrder();
 
             RegisterTitles();
             RegisterGroups();
@@ -297,20 +272,7 @@ namespace Oxide.Plugins
                 CheckUpdateTimer();
             foreach (var player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);                   
-        }
-        void SortUIOrder()
-        {
-            foreach(var entry in configData.ChallengeSettings)
-            {
-                if (uiOrder.ContainsKey(entry.Value.UIPosition))
-                {
-                    PrintError("Duplicate UI position registered in the config! Make sure each challenge type has a unique UI position number between 0 and 19");
-                    UIDisabled = true;
-                    continue;
-                }
-                uiOrder.Add(entry.Value.UIPosition, entry.Key);
-            }
-        }
+        }        
         void Unload()
         {
             SaveData();
@@ -451,7 +413,9 @@ namespace Oxide.Plugins
         }
         void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
-            if (player == null || !configData.ChallengeSettings[Challenges.ExplosivesThrown].Enabled) return;
+            if (player == null || entity == null || !configData.ChallengeSettings[Challenges.ExplosivesThrown].Enabled) return;
+            if (entity.ShortPrefabName == "survey_charge.deployed" && configData.Options.IgnoreSurveyCharges) return;
+            if (entity.ShortPrefabName == "grenade.smoke.deployed" && configData.Options.IgnoreSupplySignals) return;
             AddPoints(player, Challenges.ExplosivesThrown, 1);
         }
         void OnStructureRepair(BaseCombatEntity block, BasePlayer player)
@@ -473,14 +437,14 @@ namespace Oxide.Plugins
         #region Functions        
         private void AddPoints(BasePlayer player, Challenges type, int amount)
         {
-            if (configData.Options.IgnoreAdmins && player.IsAdmin()) return;
+            if (configData.Options.IgnoreAdmins && player.IsAdmin) return;
             CheckEntry(player);
             statCache[player.userID].Stats[type] += amount;            
             CheckForUpdate(player, type);
         }
         private void AddDistance(BasePlayer player, Challenges type, int amount)
         {
-            if (configData.Options.IgnoreAdmins && player.IsAdmin()) return;
+            if (configData.Options.IgnoreAdmins && player.IsAdmin) return;
             CheckEntry(player);
             if (statCache[player.userID].Stats[type] < amount)
                 statCache[player.userID].Stats[type] = amount;
@@ -582,7 +546,7 @@ namespace Oxide.Plugins
         [ChatCommand("pc_wipe")]
         private void cmdPCWipe(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             RemoveAllUsergroups();
             titleCache = new Dictionary<Challenges, LeaderData>();
             statCache = new Dictionary<ulong, StatData>();            
@@ -660,7 +624,7 @@ namespace Oxide.Plugins
                 if (title.Value.UserID == 0U) continue;
                 if (title.Value.UserID.ToString() == player.Id)
                 {
-                    playerTitle += $"{(count > 0 ? " " : "")}[{GetGroupName(title.Key)}]";
+                    playerTitle += $"{(count > 0 ? " " : "")}{configData.Options.TagFormat.Replace("{TAG}", GetGroupName(title.Key))}";
                     count++;
                     if (count >= configData.Options.MaximumTags)
                         break;
@@ -722,12 +686,15 @@ namespace Oxide.Plugins
             public bool UseBetterChat;
             public bool IgnoreAdmins;
             public bool IgnoreEventKills;
+            public bool IgnoreSupplySignals;
+            public bool IgnoreSurveyCharges;
             public bool AnnounceNewLeaders;
             public bool UseUpdateTimer;
             public bool UseOxideGroups;
             public int UpdateTimer;
             public int MaximumTags;
             public int SaveTimer;
+            public string TagFormat;
         }
         class Colors
         {
@@ -925,17 +892,20 @@ namespace Oxide.Plugins
                             UIPosition = 19,
                             Priority = 20
                         }
-                    }                  
-                },             
-               
+                    }
+                },
+
                 Options = new Options
                 {
-                    AnnounceNewLeaders = false,                    
+                    AnnounceNewLeaders = false,
                     IgnoreAdmins = true,
                     IgnoreSleepers = true,
+                    IgnoreSupplySignals = false,
+                    IgnoreSurveyCharges = false,
                     IgnoreEventKills = true,
                     MaximumTags = 2,
                     SaveTimer = 600,
+                    TagFormat = "[{TAG}]",
                     UseBetterChat = true,
                     UseOxideGroups = false,
                     UseUpdateTimer = false,

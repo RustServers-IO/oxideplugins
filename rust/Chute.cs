@@ -5,13 +5,14 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Chute", "ColonBlow", "1.0.4", ResourceId = 2279)]
+    [Info("Chute", "ColonBlow", "1.0.6", ResourceId = 2279)]
     class Chute : RustPlugin
     {
-        static readonly FieldInfo serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Instance | BindingFlags.NonPublic));
+        static FieldInfo serverinput;
 
         void Loaded()
         {
+		serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
 		LoadVariables();
 		layerMask = (1 << 29);
  		layerMask |= (1 << 18);
@@ -148,7 +149,7 @@ namespace Oxide.Plugins
                 direction = Quaternion.Euler(input.current.aimAngles) * direction * Time.fixedDeltaTime * parachuteSpeed;
                 direction.y = parachuteDownSpeed * Time.fixedDeltaTime;
 
-                if ((!player.IsFlying()) || Physics.Raycast(new Ray(player.transform.position, Vector3.down), 1f, layerMask))
+                if ((!player.IsFlying) || Physics.Raycast(new Ray(player.transform.position, Vector3.down), 1f, layerMask))
                 {
 			if (parachute == null) return;
 			instance.RemoveParachute(player);    
@@ -225,7 +226,7 @@ namespace Oxide.Plugins
 			}
 			if (playerchute == null)
 			{
-				if (!player.IsFlying()) { rust.RunClientCommand(player, "noclip"); }
+				if (!player.IsFlying) { rust.RunClientCommand(player, "noclip"); }
 				if (!isUp) timer.Once(0.5f, () => ExternalAddPlayerChute(player, chutecolor));
 				if (isUp) timer.Once(0.5f, () => AddPlayerChute(player, chutecolor));
 				return;
@@ -235,7 +236,7 @@ namespace Oxide.Plugins
 
 	void AddPlayerChute(BasePlayer player, string chutecolor)
 	{
-		if (!player.IsFlying()) return;
+		if (!player.IsFlying) return;
 		SendReply(player, lang.GetMessage("addchute", this, SteamID));
             	player.transform.position += new Vector3(0, parachuteFromHeight, 0);
             	player.ClientRPCPlayer(null, player, "ForcePositionTo", player.transform.position + new Vector3(0, parachuteFromHeight, 0));
@@ -250,7 +251,7 @@ namespace Oxide.Plugins
 		var playerchute = player.GetComponent<PlayerParachute>();
 		if (playerchute == null) return;
 		GameObject.Destroy(playerchute);
-		if (player.IsFlying()) { rust.RunClientCommand(player, "noclip"); }
+		if (player.IsFlying) { rust.RunClientCommand(player, "noclip"); }
 		SendReply(player, lang.GetMessage("removechute", this, SteamID));
 		return;
 	}
@@ -259,7 +260,7 @@ namespace Oxide.Plugins
 	private void ExternalAddPlayerChute(BasePlayer player, string chutecolor)
 	{
 		SteamID = player.userID.ToString();
-		if (!player.IsFlying()) { rust.RunClientCommand(player, "noclip"); }
+		if (!player.IsFlying) { rust.RunClientCommand(player, "noclip"); }
 		SendReply(player, lang.GetMessage("addchute", this, SteamID));
             	var mychute = player.gameObject.AddComponent<PlayerParachute>();
 		mychute.AddChute(chutecolor);

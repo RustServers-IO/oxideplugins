@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerCounter", "Bamabo", "1.5.1")]
+    [Info("PlayerCounter", "Bamabo", "1.5.2", ResourceId = 2005)]
     [Description("Adds a discrete player counter to the HUD")]
 
     class PlayerCounter : RustPlugin
@@ -84,7 +84,7 @@ namespace Oxide.Plugins
                 if(!preferences.ContainsKey(player.userID))
                     preferences.Add(player.userID, new PlayerPreferences(defaultPos, true, fontSize, color));
 
-                if (preferences[player.userID].toggle && (permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms || player.IsAdmin()) || !usePerms)
+                if (preferences[player.userID].toggle && (permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms || player.IsAdmin) || !usePerms)
                     CuiHelper.AddUi(player, preferences[player.userID].elements);
             }
         }
@@ -109,7 +109,7 @@ namespace Oxide.Plugins
         }
         void OnPlayerInit(BasePlayer player)
         {
-            if (!preferences.ContainsKey(player.userID) && ((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin() || !usePerms))
+            if (!preferences.ContainsKey(player.userID) && ((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin || !usePerms))
             {
                 preferences.Add(player.userID, new PlayerPreferences(defaultPos, true, fontSize, color));
             }
@@ -125,7 +125,7 @@ namespace Oxide.Plugins
         [ChatCommand("playercounter")]
         void cmdPlayerCounter(BasePlayer sender, string command, String[] args)
         {
-            if ((permission.UserHasPermission(sender.UserIDString, "playercounter.toggle") && usePerms) || sender.IsAdmin() || !usePerms)
+            if ((permission.UserHasPermission(sender.UserIDString, "playercounter.toggle") && usePerms) || sender.IsAdmin || !usePerms)
             {
                 if (preferences.ContainsKey(sender.userID))
                 {
@@ -181,7 +181,7 @@ namespace Oxide.Plugins
             if (preferences.ContainsKey(player.userID))
                 CuiHelper.DestroyUi(player, preferences[player.userID].container);
 
-            if ((!preferences.ContainsKey(player.userID)) && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin()) || !usePerms))
+            if ((!preferences.ContainsKey(player.userID)) && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin) || !usePerms))
                 preferences.Add(player.userID, new PlayerPreferences("right", true, fontSize, color));
 
             preferences[player.userID].elements = new CuiElementContainer();
@@ -198,7 +198,7 @@ namespace Oxide.Plugins
             {
                 AlignRight(player.userID);
             }
-            if (preferences[player.userID].toggle && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin()) || !usePerms))
+            if (preferences[player.userID].toggle && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin) || !usePerms))
                 CuiHelper.AddUi(player, preferences[player.userID].elements);
         }
 
@@ -209,7 +209,7 @@ namespace Oxide.Plugins
                 if(preferences.ContainsKey(player.userID))
                     CuiHelper.DestroyUi(player, preferences[player.userID].container);
 
-                if ((!preferences.ContainsKey(player.userID)) && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin()) || !usePerms))
+                if ((!preferences.ContainsKey(player.userID)) && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin) || !usePerms))
                     preferences.Add(player.userID, new PlayerPreferences(defaultPos, true, fontSize, color));
                 preferences[player.userID].elements = new CuiElementContainer(); 
 
@@ -225,7 +225,7 @@ namespace Oxide.Plugins
                 {
                     AlignRight(player.userID);
                 }
-                if (preferences[player.userID].toggle && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin()) || !usePerms))
+                if (preferences[player.userID].toggle && (((permission.UserHasPermission(player.UserIDString, "playercounter.display") && usePerms) || player.IsAdmin) || !usePerms))
                     CuiHelper.AddUi(player, preferences[player.userID].elements);
             }
         }

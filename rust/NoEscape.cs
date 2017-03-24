@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "Calytic", "0.4.2", ResourceId = 1394)]
+    [Info("NoEscape", "Calytic", "0.4.4", ResourceId = 1394)]
     [Description("Prevent commands while raid/combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -47,6 +47,7 @@ namespace Oxide.Plugins
         private bool blockOnDestroy;
 
         // RAID-ONLY SETTINGS
+        private bool blockUnowned;
         private bool blockAll; // IGNORES ALL OTHER CHECKS
         private bool ownerBlock;
         private bool cupboardShare;
@@ -144,6 +145,7 @@ namespace Oxide.Plugins
             Config["combatOnHitPlayer"] = true;
             Config["combatOnTakeDamage"] = true;
 
+            Config["blockUnowned"] = false;
             Config["ownerBlock"] = true;
             Config["cupboardShare"] = false;
             Config["clanShare"] = false;
@@ -235,6 +237,8 @@ namespace Oxide.Plugins
             Config["blockOnDamage"] = GetConfig("blockOnDamage", true);
             Config["blockOnDestroy"] = GetConfig("blockOnDestroy", false);
 
+            Config["blockUnowned"] = GetConfig("blockUnowned", false);
+
             Config["raidBlock"] = GetConfig("raidBlock", true);
             Config["raidDuration"] = GetConfig("duration", 300f); // 5 minutes
             Config["raidDistance"] = GetConfig("distance", 100f);
@@ -281,6 +285,7 @@ namespace Oxide.Plugins
             raidBlock = GetConfig("raidBlock", true);
             raidDuration = GetConfig("raidDuration", 50f);
             raidDistance = GetConfig("raidDistance", 100f);
+            blockUnowned = GetConfig("blockUnowned", false);
 
             blockOnDamage = GetConfig("blockOnDamage", true);
             blockOnDestroy = GetConfig("blockOnDestroy", false);
@@ -480,7 +485,7 @@ namespace Oxide.Plugins
 
         void StructureAttack(BaseEntity targetEntity, BaseEntity sourceEntity, string weapon, Vector3 hitPosition)
         {
-            string source;
+            string source = null;
 
             if (sourceEntity.ToPlayer() is BasePlayer)
                 source = sourceEntity.ToPlayer().UserIDString;
@@ -489,7 +494,7 @@ namespace Oxide.Plugins
                 string ownerID = FindOwner(sourceEntity);
                 if (!string.IsNullOrEmpty(ownerID))
                     source = ownerID;
-                else
+                else 
                 {
                     return;
                 }
@@ -501,10 +506,18 @@ namespace Oxide.Plugins
             }
 
             string targetID = FindOwner(targetEntity);
-            if (!string.IsNullOrEmpty(targetID))
+            List<string> sourceMembers = null;
+
+            if (string.IsNullOrEmpty(targetID) && blockUnowned && blockAll)
+            {
+                if (clanCheck || friendCheck)
+                    sourceMembers = getFriends(source);
+
+                BlockAll(source, targetEntity.transform.position, sourceMembers);
+            }
+            else if (!string.IsNullOrEmpty(targetID))
             {
                 var target = covalence.Players.FindPlayerById(targetID);
-                List<string> sourceMembers = null;
 
                 if (clanCheck || friendCheck)
                     sourceMembers = getFriends(source);
@@ -517,10 +530,14 @@ namespace Oxide.Plugins
                 }
 
                 if (ownerBlock)
+                {
                     OwnerBlock(source, sourceEntity, target.Id, targetEntity.transform.position, sourceMembers);
+                }
 
                 if (raiderBlock)
+                {
                     RaiderBlock(source, target.Id, targetEntity.transform.position, sourceMembers);
+                }
             }
         }
 
@@ -746,8 +763,8 @@ namespace Oxide.Plugins
                     {
                         nearbyZone.Value.ResetTimer().timer = timer.In(raidDuration, delegate()
                         {
-                            ZoneManager.CallHook("EraseZone", zoneid);
-                            zones.Remove(zoneid);
+                            ZoneManager.CallHook("EraseZone", nearbyZone.Value.zoneid);
+                            zones.Remove(nearbyZone.Value.zoneid);
                         });
                         return;
                     }
@@ -808,7 +825,7 @@ namespace Oxide.Plugins
                 if (raidBlockNotify)
                 {
                     var targetPlayer = BasePlayer.Find(target);
-                    if (targetPlayer is BasePlayer && targetPlayer.IsConnected())
+                    if (targetPlayer is BasePlayer && targetPlayer.IsConnected)
                         SendReply(targetPlayer, GetPrefix(targetPlayer.UserIDString) + GetMsg("Raid Block Complete", targetPlayer.UserIDString));
                 }
             }));
@@ -866,7 +883,7 @@ namespace Oxide.Plugins
                 if (combatBlockNotify)
                 {
                     BasePlayer targetPlayer = BasePlayer.Find(target);
-                    if (targetPlayer is BasePlayer && targetPlayer.IsConnected())
+                    if (targetPlayer is BasePlayer && targetPlayer.IsConnected)
                         SendReply(targetPlayer, GetPrefix(targetPlayer.UserIDString) + GetMsg("Combat Block Complete", targetPlayer.UserIDString));
                 }
             }));
@@ -1234,7 +1251,7 @@ namespace Oxide.Plugins
             return CanTeleport(player);
         }
 
-        object CanRecycle(BasePlayer player)
+        object CanRecycleCommand(BasePlayer player)
         {
             return CanDo("recycle", player);
         }

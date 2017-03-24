@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
+using System.Text;
+
+using System.Collections;
 
 using UnityEngine;
 
@@ -10,7 +13,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("GUIAnnouncements", "JoeSheep", "1.17.49", ResourceId = 1222)]
+    [Info("GUIAnnouncements", "JoeSheep", "1.22.69", ResourceId = 1222)]
     [Description("Creates announcements with custom messages by command across the top of every player's screen in a banner.")]
 
     public class GUIAnnouncements : RustPlugin
@@ -20,10 +23,9 @@ namespace Oxide.Plugins
         #region Permissions
         const string PermAnnounce = "GUIAnnouncements.announce";
         const string PermAnnounceToggle = "GUIAnnouncements.toggle";
+        const string PermAnnounceJoinLeave = "GUIAnnouncements.AnnounceJoinLeave";
         #endregion
         #region Global Declerations
-        private string AnnouncementGUI = String.Empty;
-        private string AnnouncementText = String.Empty;
         private Dictionary<ulong, string> Exclusions = new Dictionary<ulong, string>();
         private List<ulong> JustJoined = new List<ulong>();
         private List<ulong> GlobalTimerList = new List<ulong>();
@@ -37,9 +39,11 @@ namespace Oxide.Plugins
         private Timer RealTimeTimer;
         private Timer SixtySecondsTimer;
         private Timer AutomaticAnnouncementsTimer;
+        private Timer GetNextRestartTimer;
         private string LastHitPlayer = String.Empty;
+        private List<uint> HeliNetIDs = new List<uint>();
         private bool ConfigUpdated;
-        private List<DateTime> RestartTimes;
+        private List<DateTime> RestartTimes = new List<DateTime>();
         private Dictionary<DateTime, TimeSpan> CalcNextRestartDict = new Dictionary<DateTime, TimeSpan>();
         private DateTime NextRestart;
         private int LastHour;
@@ -48,49 +52,56 @@ namespace Oxide.Plugins
         private IEnumerator<string> ATALEnum;
         private bool RestartJustScheduled = false;
         private bool RestartScheduled = false;
+        private string RestartReason = String.Empty;
         private List<string> RestartAnnouncementsWhenStrings;
         private DateTime ScheduledRestart;
         private TimeSpan AutomaticTimedAnnouncementsRepeat;
         private bool RestartSuspended = false;
+        private bool DontCheckNextRestart = false;
+        private bool MuteBans = false;
 
         string BannerTintGrey = "0.1 0.1 0.1 0.7";
         string BannerTintRed = "0.5 0.1 0.1 0.7";
+        string BannerTintOrange = "0.95294 0.37255 0.06275 0.7";
+        string BannerTintYellow = "1 0.92 0.016 0.7";
         string BannerTintGreen = "0.1 0.4 0.1 0.5";
-        string TextYellow = "0.7 0.7 0.1";
+        string BannerTintCyan = "0 1 1 0.7";
+        string BannerTintBlue = "0.09020 0.07843 0.71765 0.7";
+        string BannerTintPurple = "0.53333 0.07843 0.77647 0.7";
+        string TextRed = "0.5 0.2 0.2";
         string TextOrange = "0.8 0.5 0.1";
+        string TextYellow = "1 0.92 0.016";
+        string TextGreen = "0 1 0";
+        string TextCyan = "0 1 1";
+        string TextBlue = "0.09020 0.07843 0.71765";
+        string TextPurple = "0.53333 0.07843 0.77647";
         string TextWhite = "1 1 1";
-        string BannerAnchorMaxX()
-        {
-            if (doNotOverlayLustyMap == true)
-                if (lustyMapPosition.ToLower() == "right")
-                    return "0.868 ";
-            return "1.026 ";
-        }
-        string BannerAnchorMaxY = "0.9643";
-        string BannerAnchorMinX()
-        {
-            if (doNotOverlayLustyMap == true)
-                if (lustyMapPosition.ToLower() == "left")
-                    return "0.131 ";
-            return "-0.027 ";
-        }
-        string BannerAnchorMinY = "0.92";
+        string BannerAnchorMaxX = "1.026 ";
+        string BannerAnchorMaxY = "0.9743";
+        string BannerAnchorMinX = "-0.027 ";
+        string BannerAnchorMinY = "0.915";
         string TextAnchorMaxX = "0.868 ";
-        string TextAnchorMaxY = "0.9643";
+        string TextAnchorMaxY = "0.9743";
         string TextAnchorMinX = "0.131 ";
-        string TextAnchorMinY = "0.92";
+        string TextAnchorMinY = "0.915";
+
         #endregion
         //============================================================================================================
         #region Config Option Declerations
-        #region Formatting
-        public float announcementDuration { get; private set; } = 10f;
-        public float welcomeAnnouncementDuration { get; private set; } = 20f;
-        public int fontSize { get; private set; } = 18;
-        public float fadeOutTime { get; private set; } = 0.5f;
-        public float fadeInTime { get; private set; } = 0.5f;
-        #endregion
-        //============================================================================================================
-        #region Automatic Announcements
+
+        //Color List
+        public string bannerColorList { get; private set; } = "Grey, Red, Orange, Yellow, Green, Cyan, Blue, Purple";
+        public string textColorList { get; private set; } = "White, Red, Orange, Yellow, Green, Cyan, Blue, Purple";
+
+        //Airdrop Announcements
+        public bool airdropAnnouncement { get; private set; } = true;
+        public bool airdropAnnouncementLocation { get; private set; } = true;
+        public string airdropAnnouncementText { get; private set; } = "Airdrop en route!";
+        public string airdropAnnouncementTextWithCoords { get; private set; } = "Airdrop en route to x{x}, z{z}";
+        public string airdropAnnouncementBannerColor { get; private set; } = "Green";
+        public string airdropAnnouncementTextColor { get; private set; } = "Yellow";
+
+        //Automatic Timed Announcements
         public bool automaticTimedAnnouncements { get; private set; } = false;
         public static List<object> automaticTimedAnnouncementsList { get; private set; } = new List<object>
         {
@@ -99,29 +110,83 @@ namespace Oxide.Plugins
             "Automatic Timed Announcement 3"
         };
         public string automaticTimedAnnouncementsRepeat { get; private set; } = "00:30:00";
-        public bool helicopterAnnouncement { get; private set; } = true;
-        public bool helicopterDeathAnnouncement { get; private set; } = true;
-        public bool helicopterDeathAnnouncementWithKiller { get; private set; } = true;
-        public bool airdropAnnouncement { get; private set; } = true;
-        public bool airdropAnnouncementLocation { get; private set; } = true;
-        public bool welcomeAnnouncement { get; private set; } = true;
-        public bool welcomeBackAnnouncement { get; private set; } = true;
+        public string automaticTimedAnnouncementsBannerColor { get; private set; } = "Grey";
+        public string automaticTimedAnnouncementsTextColor { get; private set; } = "White";
+
+        //Christmas Stocking Refill Announcement
+        public bool stockingRefillAnnouncement { get; private set; } = false;
+        public string stockingRefillAnnouncementText { get; private set; } = "Santa has refilled your stockings. Go check what you've got!";
+        public string stockingRefillAnnouncementBannerColor { get; private set; } = "Green";
+        public string stockingRefillAnnouncementTextColor { get; private set; } = "Red";
+
+        //General Settings
+        public float announcementDuration { get; private set; } = 10f;
+        public int fontSize { get; private set; } = 18;
+        public float fadeOutTime { get; private set; } = 0.5f;
+        public float fadeInTime { get; private set; } = 0.5f;
+        public static float adjustVPosition { get; private set; } = 0.0f;
+
+        //Global Join/Leave Announcements
+        public bool globalLeaveAnnouncements { get; private set; } = false;
+        public bool globalJoinAnnouncements { get; private set; } = false;
+        public bool globalJoinLeavePermissionOnly { get; private set; } = true;
+        public string globalLeaveText { get; private set; } = "{rank} {playername} has left.";
+        public string globalJoinText { get; private set; } = "{rank} {playername} has joined.";
+        public string globalLeaveAnnouncementBannerColor { get; private set; } = "Grey";
+        public string globalLeaveAnnouncementTextColor { get; private set; } = "White";
+        public string globalJoinAnnouncementBannerColor { get; private set; } = "Grey";
+        public string globalJoinAnnouncementTextColor { get; private set; } = "White";
+
+
+        //Helicopter Announcements
+        public bool helicopterSpawnAnnouncement { get; private set; } = true;
+        public bool helicopterDespawnAnnouncement { get; private set; } = false;
+        public bool helicopterDestroyedAnnouncement { get; private set; } = true;
+        public bool helicopterDestroyedAnnouncementWithDestroyer { get; private set; } = true;
+        public string helicopterSpawnAnnouncementText { get; private set; } = "Patrol Helicopter Inbound!";
+        public string helicopterDespawnAnnouncementText { get; private set; } = "The patrol helicopter has left.";
+        public string helicopterDestroyedAnnouncementText { get; private set; } = "The patrol helicopter has been taken down!";
+        public string helicopterDestroyedAnnouncementWithDestroyerText { get; private set; } = "{playername} got the last shot on the helicopter taking it down!";
+        public string helicopterSpawnAnnouncementBannerColor { get; private set; } = "Red";
+        public string helicopterSpawnAnnouncementTextColor { get; private set; } = "Orange";
+        public string helicopterDestroyedAnnouncementBannerColor { get; private set; } = "Red";
+        public string helicopterDestroyedAnnouncementTextColor { get; private set; } = "White";
+        public string helicopterDespawnAnnouncementBannerColor { get; private set; } = "Red";
+        public string helicopterDespawnAnnouncementTextColor { get; private set; } = "White";
+
+        //New Player Announcements
         public bool newPlayerAnnouncements { get; private set; } = true;
-        public int newPlayerAnnouncementsShowTimes { get; private set; } = 4;
-        public List<object> newPlayerAnnouncementsList { get; private set; } = new List<object>
+        public string newPlayerAnnouncementsBannerColor { get; private set; } = "Grey";
+        public string newPlayerAnnouncementsTextColor { get; private set; } = "White";
+        public Dictionary<int, List<object>> newPlayerAnnouncementsList { get; private set; } = new Dictionary<int, List<object>>
         {
-                    "New player announcement 1.",
-                    "New player announcement 2.",
-                    "New player announcement 3."
+            {1, new List<object>{ "1st Join {rank} {playername} New player announcement 1.", "1st Join {rank} {playername} New player announcement 2.", "1st Join {rank} {playername} New player announcement 3." } },
+            {2, new List<object>{ "2nd Join {rank} {playername} New player announcement 1.", "2nd Join {rank} {playername} New player announcement 2.", "2nd Join {rank} {playername} New player announcement 3." } },
+            {3, new List<object>{ "3rd Join {rank} {playername} New player announcement 1.", "3rd Join {rank} {playername} New player announcement 2.", "3rd Join {rank} {playername} New player announcement 3." } },
         };
+
+        //Player Banned Announcement
+        public bool playerBannedAnnouncement { get; private set; } = false;
+        public string playerBannedAnnouncmentText { get; private set; } = "{playername} has been banned. {reason}.";
+        public string playerBannedAnnouncementBannerColor { get; private set; } = "Grey";
+        public string playerBannedAnnouncementTextColor { get; private set; } = "Red";
+
+        //Respawn Announcements
         public bool respawnAnnouncements { get; private set; } = false;
+        public string respawnAnnouncementsBannerColor { get; private set; } = "Grey";
+        public string respawnAnnouncementsTextColor { get; private set; } = "White";
         public List<object> respawnAnnouncementsList { get; private set; } = new List<object>
         {
-                    "Respawn announcement 1.",
-                    "Respawn announcement 2.",
-                    "Respawn announcement 3."
+                    "{playername} Respawn announcement 1.",
+                    "{playername} Respawn announcement 2.",
+                    "{playername} Respawn announcement 3."
         };
+
+        //Restart Announcements
         public bool restartAnnouncements { get; private set; } = false;
+        public string restartAnnouncementsFormat { get; private set; } = "Restarting in {time}";
+        public string restartAnnouncementsBannerColor { get; private set; } = "Grey";
+        public string restartAnnouncementsTextColor { get; private set; } = "White";
         public List<object> restartTimes { get; private set; } = new List<object>
         {
             "08:00:00",
@@ -147,88 +212,188 @@ namespace Oxide.Plugins
             "00:05:00"
         };
         public bool restartServer { get; private set; } = false;
-        #endregion
-        //============================================================================================================
-        #region Third Party Plugin Support
+
+        //Third Party Plugin Support
         public bool doNotOverlayLustyMap { get; private set; } = false;
         public string lustyMapPosition { get; private set; } = "Left";
-        #endregion
+
+        //Welcome Announcement
+        public string welcomeAnnouncementText { get; private set; } = "Welcome {playername}";
+        public string welcomeBackAnnouncementText { get; private set; } = "Welcome back {playername}";
+        public string welcomeAnnouncementBannerColor { get; private set; } = "Grey";
+        public string welcomeAnnouncementTextColor { get; private set; } = "White";
+        public float welcomeAnnouncementDuration { get; private set; } = 20f;
+        public bool welcomeAnnouncement { get; private set; } = true;
+        public bool welcomeBackAnnouncement { get; private set; } = true;
         #endregion
 
+        //============================================================================================================
+        #region LoadConfig
         private void LoadGUIAnnouncementsConfig()
         {
-            announcementDuration = GetConfig("Formatting", "AnnouncementShowDuration", 10f);
+            bannerColorList = GetConfig("A List Of Available Colors To Use (DO NOT CHANGE)", "Banner Colors", bannerColorList);
+            if (bannerColorList != "Grey, Red, Orange, Yellow, Green, Cyan, Blue, Purple")
+            {
+                PrintWarning("Banner color list changed. Reverting changes.");
+                Config["A List Of Available Colors To Use(DO NOT CHANGE)", "Banner Colors"] = "Grey, Red, Orange, Yellow, Green, Cyan, Blue, Purple";
+                ConfigUpdated = true;
+            }
+            textColorList = GetConfig("A List Of Available Colors To Use (DO NOT CHANGE)", "Text Colors", textColorList);
+            if (textColorList != "White, Red, Orange, Yellow, Green, Cyan, Blue, Purple")
+            {
+                PrintWarning("Text color list changed. Reverting changes.");
+                Config["A List Of Available Colors To Use(DO NOT CHANGE)", "Text Colors"] = "White, Red, Orange, Yellow, Green, Cyan, Blue, Purple";
+                ConfigUpdated = true;
+            }
+
+            //Airdrop Announcements
+            airdropAnnouncementText = GetConfig("Public Airdrop Announcements", "Text", airdropAnnouncementText);
+            airdropAnnouncementTextWithCoords = GetConfig("Public Airdrop Announcements", "Text With Coords", airdropAnnouncementTextWithCoords);
+            airdropAnnouncementBannerColor = GetConfig("Public Airdrop Announcements", "Banner Color", airdropAnnouncementBannerColor);
+            airdropAnnouncementTextColor = GetConfig("Public Airdrop Announcements", "Text Color", airdropAnnouncementTextColor);
+            airdropAnnouncement = GetConfig("Public Airdrop Announcements", "Enabled", true);
+            airdropAnnouncementLocation = GetConfig("Public Airdrop Announcements", "Show Location", false);
+
+            //Automatic Timed Announcements
+            automaticTimedAnnouncements = GetConfig("Public Automatic Timed Announcements", "Enabled", false);
+            automaticTimedAnnouncementsList = GetConfig("Public Automatic Timed Announcements", "Announcement List", automaticTimedAnnouncementsList);
+            automaticTimedAnnouncementsBannerColor = GetConfig("Public Automatic Timed Announcements", "Banner Color", automaticTimedAnnouncementsBannerColor);
+            automaticTimedAnnouncementsTextColor = GetConfig("Public Automatic Timed Announcements", "Text Color", automaticTimedAnnouncementsTextColor);
+            automaticTimedAnnouncementsRepeat = GetConfig("Public Automatic Timed Announcements", "Show Every (HH:MM:SS)", automaticTimedAnnouncementsRepeat);
+            if (!TimeSpan.TryParse(automaticTimedAnnouncementsRepeat, out AutomaticTimedAnnouncementsRepeat))
+            {
+                PrintWarning("Config: \"Automatic Timed Announcements - Show Every (HH:MM:SS)\" is not of the correct format HH:MM:SS, or has numbers out of range and should not be higher than 23:59:59. Resetting to default.");
+                Config["Automatic Timed Announcements", "Show Every (HH:MM:SS)"] = "00:30:00";
+                ConfigUpdated = true;
+            }
+
+            //Christmas Stocking Refill Announcement
+            stockingRefillAnnouncement = GetConfig("Public Christmas Stocking Refill Announcement", "Enabled", false);
+            stockingRefillAnnouncementText = GetConfig("Public Christmas Stocking Refill Announcement", "Text", stockingRefillAnnouncementText);
+            stockingRefillAnnouncementBannerColor = GetConfig("Public Christmas Stocking Refill Announcement", "Banner Color", stockingRefillAnnouncementBannerColor);
+            stockingRefillAnnouncementTextColor = GetConfig("Public Christmas Stocking Refill Announcement", "Text Color", stockingRefillAnnouncementTextColor);
+
+            //General Settings:
+            announcementDuration = GetConfig("General Settings", "Announcement Duration", 10f);
             if (announcementDuration == 0)
             {
-                PrintWarning("Config AnnouncementShowDuration set to 0, resetting to 10f.");
+                PrintWarning("Config: \"General Settings - Announcement Duration\" set to 0, resetting to 10f.");
                 Config["Formatting", "AnnouncementShowDuration"] = 10f;
                 ConfigUpdated = true;
             }
-
-            welcomeAnnouncementDuration = GetConfig("Formatting", "WelcomeAnnouncementDuration", 20f);
-            if (welcomeAnnouncementDuration == 0)
-            {
-                PrintWarning("Config WelcomeAnnouncementDuration set to 0, resetting to 20f.");
-                Config["Formatting", "WelcomeAnnouncementDuration"] = 20f;
-                ConfigUpdated = true;
-            }
-
-            fontSize = GetConfig("Formatting", "FontSize", 18);
+            fontSize = GetConfig("General Settings", "Font Size", 18);
             if (fontSize > 33 | fontSize == 0)
             {
-                PrintWarning("Config FontSize greater than 28 or 0, resetting to 18.");
-                Config["Formatting", "FontSize"] = 18;
+                PrintWarning("Config: \"General Settings - Font Size\" greater than 28 or 0, resetting to 18.");
+                Config["General Settings", "Font Size"] = 18;
                 ConfigUpdated = true;
             }
-
-            fadeInTime = GetConfig("Formatting", "FadeInTime", 0.5f);
+            fadeInTime = GetConfig("General Settings", "Fade In Time", 0.5f);
             if (fadeInTime > announcementDuration / 2)
             {
-                PrintWarning("Config FadeInTime is greater than half of AnnouncementShowDuration, resetting to half of AnnouncementShowDuration.");
-                Config["Formatting", "FadeInTime"] = announcementDuration / 2;
+                PrintWarning("Config: \"General Settings - Fade In Time\" is greater than half of AnnouncementShowDuration, resetting to half of AnnouncementShowDuration.");
+                Config["General Settings", "Fade In Time"] = announcementDuration / 2;
                 ConfigUpdated = true;
             }
-
-            fadeOutTime = GetConfig("Formatting", "FadeOutTime", 0.5f);
+            fadeOutTime = GetConfig("General Settings", "Fade Out Time", 0.5f);
             if (fadeOutTime > announcementDuration / 2)
             {
-                PrintWarning("Config FadeOutTime is greater than half of AnnouncementShowDuration, resetting to half of AnnouncementShowDuration.");
-                Config["Formatting", "FadeOutTime"] = announcementDuration / 2;
+                PrintWarning("Config: \"General Settings - Fade Out Time\" is greater than half of AnnouncementShowDuration, resetting to half of AnnouncementShowDuration.");
+                Config["General Settings", "Fade Out Time"] = announcementDuration / 2;
                 ConfigUpdated = true;
             }
-
-            automaticTimedAnnouncements = GetConfig("Automatic Announcements", "AutomaticTimedAnnouncements", false);
-            automaticTimedAnnouncementsList = GetConfig("Automatic Announcements", "AutomaticTimedAnnouncementsList", automaticTimedAnnouncementsList);
-            automaticTimedAnnouncementsRepeat = GetConfig("Automatic Announcements", "AutomaticTimedAnnouncementsRepeat", automaticTimedAnnouncementsRepeat);
-            try
+            adjustVPosition = GetConfig("General Settings", "Adjust Vertical Position", 0.0f);
+            if (adjustVPosition != 0f)
             {
-                AutomaticTimedAnnouncementsRepeat = TimeSpan.Parse(automaticTimedAnnouncementsRepeat);
+                BannerAnchorMaxY = (float.Parse("0.9743") + adjustVPosition).ToString();
+                BannerAnchorMinY = (float.Parse("0.915") + adjustVPosition).ToString();
+                TextAnchorMaxY = (float.Parse("0.9743") + adjustVPosition).ToString();
+                TextAnchorMinY = (float.Parse("0.915") + adjustVPosition).ToString();
             }
-            catch (FormatException) { PrintWarning("Config AutomaticTimedAnnouncementsRepeat is not of the correct format ie. HH:MM:SS. Resetting to default"); }
-            catch (OverflowException) { PrintWarning("Config AutomaticTimedAnnouncementsRepeat has numbers out of range and should not be higher than: 23:59:59. Resetting to default"); }
-            helicopterAnnouncement = GetConfig("Automatic Announcements", "HelicopterAnnouncement", true);
-            helicopterDeathAnnouncement = GetConfig("Automatic Announcements", "HelicopterDeathAnnouncement", true);
-            helicopterDeathAnnouncementWithKiller = GetConfig("Automatic Announcements", "HelicopterDeathAnnouncementWithKiller", true);
-            airdropAnnouncement = GetConfig("Automatic Announcements", "AirdropAnnouncement", true);
-            airdropAnnouncementLocation = GetConfig("Automatic Announcements", "AirdropAnnouncementLocation", false);
-            welcomeAnnouncement = GetConfig("Automatic Announcements", "WelcomeAnnouncement", true);
-            welcomeBackAnnouncement = GetConfig("Automatic Announcements", "WelcomeBackAnnouncement", true);
-            newPlayerAnnouncements = GetConfig("Automatic Announcements", "NewPlayerAnnouncements", false);
-            newPlayerAnnouncementsShowTimes = GetConfig("Automatic Announcements", "NewPlayerAnnouncementsShowTimes", 4);
-            newPlayerAnnouncementsList = GetConfig("Automatic Announcements", "NewPlayerAnnouncementsList", newPlayerAnnouncementsList);
-            respawnAnnouncements = GetConfig("Automatic Announcements", "RespawnAnnouncements", false);
-            respawnAnnouncementsList = GetConfig("Automatic Announcements", "RespawnAnnouncementsList", respawnAnnouncementsList);
-            restartAnnouncements = GetConfig("Automatic Announcements", "RestartAnnouncements", restartAnnouncements);
-            restartTimes = GetConfig("Automatic Announcements", "RestartTimes", restartTimes);
-            restartAnnouncementsWhen = GetConfig("Automatic Announcements", "RestartAnnouncementsWhen", restartAnnouncementsWhen);
-            restartServer = GetConfig("Automatic Announcements", "RestartServer", restartServer);
-            doNotOverlayLustyMap = GetConfig("Third Party Plugin Support", "DoNotOverlayLustyMap", false);
 
-            lustyMapPosition = GetConfig("Third Party Plugin Support", "LustyMapPosition", "Left");
+            //Global Join/Leave Announcements
+            globalLeaveAnnouncements = GetConfig("Public Join/Leave Announcements", "Leave Enabled", false);
+            globalLeaveText = GetConfig("Public Join/Leave Announcements", "Leave Text", globalLeaveText);
+            globalLeaveAnnouncementBannerColor = GetConfig("Public Join/Leave Announcements", "Leave Banner Color", globalLeaveAnnouncementBannerColor);
+            globalLeaveAnnouncementTextColor = GetConfig("Public Join/Leave Announcements", "Leave Text Color", globalLeaveAnnouncementTextColor);
+            globalJoinAnnouncements = GetConfig("Public Join/Leave Announcements", "Join Enabled", false);
+            globalJoinText = GetConfig("Public Join/Leave Announcements", "Join Text", globalJoinText);
+            globalJoinAnnouncementBannerColor = GetConfig("Public Join/Leave Announcements", "Join Banner Color", globalJoinAnnouncementBannerColor);
+            globalJoinAnnouncementTextColor = GetConfig("Public Join/Leave Announcements", "Join Text Color", globalJoinAnnouncementTextColor);
+            globalJoinLeavePermissionOnly = GetConfig("Public Join/Leave Announcements", "Announce Only Players With Permission", globalJoinLeavePermissionOnly);
+
+            //Helicopter Announcements
+            helicopterSpawnAnnouncement = GetConfig("Public Helicopter Announcements", "Spawn", true);
+            helicopterSpawnAnnouncementText = GetConfig("Public Helicopter Announcements", "Spawn Text", helicopterSpawnAnnouncementText);
+            helicopterSpawnAnnouncementBannerColor = GetConfig("Public Helicopter Announcements", "Spawn Banner Color", helicopterSpawnAnnouncementBannerColor);
+            helicopterSpawnAnnouncementTextColor = GetConfig("Public Helicopter Announcements", "Spawn Text Color", helicopterSpawnAnnouncementTextColor);
+            helicopterDespawnAnnouncement = GetConfig("Public Helicopter Announcements", "Despawn", helicopterDespawnAnnouncement);
+            helicopterDespawnAnnouncementText = GetConfig("Public Helicopter Announcements", "Despawn Text", helicopterDespawnAnnouncementText);
+            helicopterDespawnAnnouncementBannerColor = GetConfig("Public Helicopter Announcements", "Despawn Banner Color", helicopterDespawnAnnouncementBannerColor);
+            helicopterDespawnAnnouncementTextColor = GetConfig("Public Helicopter Announcements", "Despawn Text Color", helicopterDespawnAnnouncementTextColor);
+            helicopterDestroyedAnnouncement = GetConfig("Public Helicopter Announcements", "Destroyed", true);
+            helicopterDestroyedAnnouncementWithDestroyer = GetConfig("Public Helicopter Announcements", "Show Destroyer", true);
+            helicopterDestroyedAnnouncementText = GetConfig("Public Helicopter Announcements", "Destroyed Text", helicopterDestroyedAnnouncementText);
+            helicopterDestroyedAnnouncementWithDestroyerText = GetConfig("Public Helicopter Announcements", "Destroyed Text With Destroyer", helicopterDestroyedAnnouncementWithDestroyerText);
+            helicopterDestroyedAnnouncementBannerColor = GetConfig("Public Helicopter Announcements", "Destroyed Banner Color", helicopterDestroyedAnnouncementBannerColor);
+            helicopterDestroyedAnnouncementTextColor = GetConfig("Public Helicopter Announcements", "Destroyed Text Color", helicopterDestroyedAnnouncementTextColor);
+
+            //New Player Announcements
+            newPlayerAnnouncements = GetConfig("Private New Player Announcements", "Enabled", false);
+            newPlayerAnnouncementsBannerColor = GetConfig("Private New Player Announcements", "Banner Color", newPlayerAnnouncementsBannerColor);
+            newPlayerAnnouncementsTextColor = GetConfig("Private New Player Announcements", "Text Color", newPlayerAnnouncementsTextColor);
+            newPlayerAnnouncementsList = GetConfig("Private New Player Announcements", "Announcements List (Show On This Many Joins : List To Show)", newPlayerAnnouncementsList);
+
+            //Player Banned Announcement
+            playerBannedAnnouncement = GetConfig("Public Player Banned Announcement", "Enabled", false);
+            playerBannedAnnouncmentText = GetConfig("Public Player Banned Announcement", "Text", playerBannedAnnouncmentText);
+            playerBannedAnnouncementBannerColor = GetConfig("Public Player Banned Announcement", "Banner Color", playerBannedAnnouncementBannerColor);
+            playerBannedAnnouncementTextColor = GetConfig("Public Player Banned Announcement", "Text Color", playerBannedAnnouncementTextColor);
+
+            //Respawn Announcements
+            respawnAnnouncements = GetConfig("Private Respawn Announcements", "Enabled", false);
+            respawnAnnouncementsBannerColor = GetConfig("Private Respawn Announcements", "Banner Color", respawnAnnouncementsBannerColor);
+            respawnAnnouncementsTextColor = GetConfig("Private Respawn Announcements", "Text Color", respawnAnnouncementsTextColor);
+            respawnAnnouncementsList = GetConfig("Private Respawn Announcements", "Announcements List", respawnAnnouncementsList);
+
+            //Restart Announcements
+            restartAnnouncements = GetConfig("Public Restart Announcements", "Enabled", restartAnnouncements);
+            restartTimes = GetConfig("Public Restart Announcements", "Restart At (HH:MM:SS)", restartTimes);
+            restartAnnouncementsBannerColor = GetConfig("Public Restart Announcements", "Banner Color", restartAnnouncementsBannerColor);
+            restartAnnouncementsTextColor = GetConfig("Public Restart Announcements", "Text Color", restartAnnouncementsTextColor);
+            restartAnnouncementsWhen = GetConfig("Public Restart Announcements", "Announce With Time Left (HH:MM:SS)", restartAnnouncementsWhen);
+            restartServer = GetConfig("Public Restart Announcements", "Restart My Server", false);
+            restartAnnouncementsFormat = GetConfig("Public Restart Announcements", "Text", restartAnnouncementsFormat);
+
+            //Third Party Plugin Support
+            doNotOverlayLustyMap = GetConfig("Third Party Plugin Support", "Do Not Overlay LustyMap", false);
+            lustyMapPosition = GetConfig("Third Party Plugin Support", "LustyMap Position (Left/Right)", "Left");
             if (lustyMapPosition.ToLower() != "left" && lustyMapPosition.ToLower() != "right" || lustyMapPosition == string.Empty || lustyMapPosition == null)
             {
                 PrintWarning("Config LustyMapPosition is not left or right, resetting to left.");
                 Config["Third Party Plugin Support", "LustyMapPosition"] = "Left";
+                ConfigUpdated = true;
+            }
+            if (doNotOverlayLustyMap == true)
+            {
+                if (lustyMapPosition.ToLower() == "left")
+                    BannerAnchorMinX = "0.131 ";
+                if (lustyMapPosition.ToLower() == "right")
+                    BannerAnchorMaxX = "0.868 ";
+            }
+
+            //Welcome Announcements
+            welcomeAnnouncement = GetConfig("Private Welcome Announcements", "Enabled", true);
+            welcomeBackAnnouncement = GetConfig("Private Welcome Announcements", "Show Welcome Back If Player Has Been Here Before", true);
+            welcomeAnnouncementText = GetConfig("Private Welcome Announcements", "Welcome Text", welcomeAnnouncementText);
+            welcomeBackAnnouncementText = GetConfig("Private Welcome Announcements", "Welcome Back Text", welcomeBackAnnouncementText);
+            welcomeAnnouncementBannerColor = GetConfig("Private Welcome Announcements", "Banner Color", welcomeAnnouncementBannerColor);
+            welcomeAnnouncementTextColor = GetConfig("Private Welcome Announcements", "Text Color", welcomeAnnouncementTextColor);
+            welcomeAnnouncementDuration = GetConfig("Private Welcome Announcements", "Duration", 20f);
+            if (welcomeAnnouncementDuration == 0)
+            {
+                PrintWarning("Config: \"Welcome Announcement - Duration\" set to 0, resetting to 20f.");
+                Config["Formatting", "WelcomeAnnouncementDuration"] = 20f;
                 ConfigUpdated = true;
             }
 
@@ -249,14 +414,28 @@ namespace Oxide.Plugins
                 Config[category] = data;
                 ConfigUpdated = true;
             }
-            if (data.TryGetValue(setting, out value)) return (T)Convert.ChangeType(value, typeof(T));
+            if (data.TryGetValue(setting, out value))
+            {
+                if (setting == "Announcements List (Show On This Many Joins : List To Show)")
+                {
+                    var keyType = typeof(T).GetGenericArguments()[0];
+                    var valueType = typeof(T).GetGenericArguments()[1];
+                    var dict = (IDictionary)Activator.CreateInstance(typeof(T));
+                    foreach (var key in ((IDictionary)value).Keys)
+                    {
+                        dict.Add(Convert.ChangeType(key, keyType), Convert.ChangeType(((IDictionary)value)[key], valueType));
+                    }
+                    return (T)dict;
+                }
+                return (T)Convert.ChangeType(value, typeof(T));
+            }
             value = defaultValue;
             data[setting] = value;
             ConfigUpdated = true;
             return (T)Convert.ChangeType(value, typeof(T));
         }
 
-        private List<string> ConvertList(object value)
+        private List<string> ConvertObjectListToString(object value)
         {
             if (value is List<object>)
             {
@@ -264,9 +443,9 @@ namespace Oxide.Plugins
                 List<string> strings = list.Select(s => (string)s).ToList();
                 return strings;
             }
-            else { return (List<string>)value; }
+            else return (List<string>)value;
         }
-
+        #endregion
         #endregion
         //============================================================================================================
         #region PlayerData
@@ -284,7 +463,7 @@ namespace Oxide.Plugins
                 timer.Once(5, () =>
                 {
                     PrintWarning("Reloading...");
-                    ConsoleSystem.Run.Server.Normal("reload GUIAnnouncements");
+                    ConsoleSystem.Run(ConsoleSystem.Option.Server, "reload GUIAnnouncements");
                 });
             }
         }
@@ -307,7 +486,7 @@ namespace Oxide.Plugins
             {
             }
         }
-
+        
         void CreatePlayerData(BasePlayer player)
         {
             var Data = new PlayerData();
@@ -321,6 +500,27 @@ namespace Oxide.Plugins
         StoredData storedData;
         void OnServerSave() => SaveData();
 
+        private Dictionary<ulong, AnnouncementInfo> AnnouncementsData = new Dictionary<ulong, AnnouncementInfo>();
+
+        class AnnouncementInfo
+        {
+            public string BannerTintColor;
+            public string TextColor;
+            public string AnnouncementType;
+            public AnnouncementInfo()
+            {
+            }
+        }
+
+        void StoreAnnouncementData(BasePlayer player, string BannerTintColor, string TextColor, string AnnouncementType = null)
+        {
+            var Data = new AnnouncementInfo();
+            Data.BannerTintColor = BannerTintColor;
+            Data.TextColor = TextColor;
+            Data.AnnouncementType = AnnouncementType;
+            AnnouncementsData.Add(player.userID, Data);
+        }
+
         #endregion
         //============================================================================================================
         #region Localization
@@ -331,8 +531,10 @@ namespace Oxide.Plugins
                 {
                     {"ChatCommandAnnounce", "announce"},
                     {"ChatCommandAnnounceTo", "announceto"},
+                    {"ChatCommandAnnounceToGroup", "announcetogroup"},
                     {"ChatCommandAnnounceTest", "announcetest"},
                     {"ChatCommandDestroyAnnouncement", "destroyannouncement"},
+                    {"ChatCommandMuteBans", "announcemutebans" },
                     {"ChatCommandAnnouncementsToggle", "announcementstoggle" },
                     {"ChatCommandScheduleRestart", "announceschedulerestart" },
                     {"ChatCommandSuspendRestart", "announcesuspendrestart" },
@@ -343,7 +545,9 @@ namespace Oxide.Plugins
                     {"ChatCommandHelp", "announcehelp"},
                     {"ConsoleCommandAnnounce", "announce.announce"},
                     {"ConsoleCommandAnnounceTo", "announce.announceto"},
+                    {"ConsoleCommandAnnounceToGroup", "announce.announcetogroup" },
                     {"ConsoleCommandDestroyAnnouncement", "announce.destroy"},
+                    {"ConsoleCommandMuteBans", "announce.mutebans" },
                     {"ConsoleCommandAnnouncementsToggle", "announce.toggle"},
                     {"ConsoleCommandScheduleRestart", "announce.schedulerestart" },
                     {"ConsoleCommandSuspendRestart", "announce.suspendrestart" },
@@ -352,20 +556,23 @@ namespace Oxide.Plugins
                     {"ConsoleCommandCancelScheduledRestart", "announce.cancelscheduledrestart" },
                     {"ConsoleCommandCancelRestart", "announce.cancelrestart" },
                     {"ConsoleCommandHelp", "announce.help"},
-                    {"PlayerNotFound", "Player not found, check the name and if they are online."},
+                    {"PlayerNotFound", "Player {playername} not found, check the name and if they are online."},
+                    {"GroupNotFound", "Group {group} not found, check the name." },
                     {"NoPermission", "You do not possess the required permissions."},
                     {"ChatCommandAnnounceUsage", "Usage: /announce <message>."},
                     {"ChatCommandAnnounceToUsage", "Usage: /announceto <player> <message>."},
+                    {"ChatCommandAnnounceToGroupUsage", "Usage: /announcetogroup <group> <message>"},
                     {"ChatCommandAnnouncementsToggleUsage", "Usage: /announcementstoggle [player]."},
                     {"ChatCommandScheduleRestartUsage", "Usage: /announceschedulerestart <hh:mm:ss>." },
                     {"ChatCommandCancelScheduledRestartUsage", "Usage: /announcecancelscheduledrestart" },
                     {"ConsoleCommandAnnounceUsage", "Usage: announce.announce <message>."},
                     {"ConsoleCommandAnnounceToUsage", "Usage: announce.announceto <player> <message>."},
+                    {"ConsoleCommandAnnounceToGroupUsage", "Usage: announce.announcetogroup <group> <message>." },
                     {"ConsoleCommandAnnouncementsToggleUsage", "Usage: announce.toggle <player>."},
                     {"ConsoleCommandScheduleRestartUsage", "Usage: announce.schedulerestart <hh:mm:ss>." },
                     {"ConsoleCommandCancelScheduledRestartUsage", "Usage: announce.cancelscheduledrestart." },
-                    {"RestartAlreadyScheduled", "A restart has already been scheduled for {time}, please cancel that restart first with /announcecancelscheduledrestart or announce.cancelscheduledrestart" },
-                    {"LaterThanNextRestart", "Your time will be scheduled later than the next restart at {time}, please make sure you schedule a restart before the aforementioned time." },
+                    {"RestartAlreadyScheduled", "A restart has already been scheduled for {time}, please cancel that restart first with /announcecancelscheduledrestart or announce.cancelscheduledrestart." },
+                    {"LaterThanNextRestart", "Restart not scheduled. Your time will be scheduled later than the next restart at {time}, please make sure you schedule a restart before {time}." },
                     {"RestartNotScheduled", "A restart has not been scheduled for you to cancel." },
                     {"ScheduledRestartCancelled", "A manually scheduled restart for {time} has been cancelled." },
                     {"Excluded", "{playername} has been excluded from announcements."},
@@ -374,21 +581,21 @@ namespace Oxide.Plugins
                     {"IncludedTo", "You are being included in announcements."},
                     {"IsExcluded", "{playername} is currently excluded from announcements."},
                     {"YouAreExcluded", "You are excluded from announcements and cannot see that test announcement"},
+                    {"BansMuted", "Ban announcements have been muted." },
+                    {"BansUnmuted", "Ban announcements have been unmuted." },
                     {"PlayerHelp", "Chat commands: /announcementstoggle"},
-                    {"AnnounceHelp", "Chat commands: /announce <message>, /announceto <player> <message>, /announcementstoggle [player], /destroyannouncement, /announcecancelrestart | Console commands: announce.announce <message>, announce.announceto <player> <message>, announce.toggle <player>, announce.destroy, announce.cancelrestart"},
-                    {"HelicopterAnnouncement", "Patrol helicopter inbound!"},
-                    {"HelicopterDeathAnnouncement", "The patrol helicopter has been taken down!"},
-                    {"HelicopterDeathAnnouncementWithPlayer", "{playername} got the last shot on the helicopter taking it down!"},
-                    {"AirdropAnnouncement", "Airdrop en route!"},
-                    {"AirdropAnnouncementWithLocation", "Airdrop en route to x{x}, z{z}!"},
-                    {"WelcomeAnnouncement", "Welcome {playername}!"},
-                    {"WelcomeBackAnnouncement", "Welcome back {playername}!"},
-                    {"RestartAnnouncementsFormat", "Restarting in {time}."},
+                    {"AnnounceHelp", "Chat commands: /announce <message>, /announceto <player> <message>, /announcetogroup <group> <message>, /announcementstoggle [player], /destroyannouncement, /announceschedulerestart <time> [reason], /announcecancelscheduledrestart, /announcesuspendrestart, /announceresumerestart, /announcecancelrestart | Console commands: announce.announce <message>, announce.announceto <player> <message>, announce.announcetogroup <group> <message>, announce.toggle <player>, announce.destroy, announce.schedulerestart <time> [reason], announce.cancelscheduledrestart, announce.suspendrestart, announce.resumerestart, announce.cancelrestart."},
                     {"GetNextRestart", "Next restart is in {time1} at {time2}" },
                     {"RestartSuspendedChat", "The next restart at {time} has been suspended. Type /announceresumerestart to resume that restart." },
                     {"RestartSuspendedConsole", "The next restart at {time} has been suspended. Type announce.resumerestart to resume that restart." },
                     {"RestartResumed", "The previously suspended restart at {time} has been resumed." },
                     {"SuspendedRestartPassed", "The previously suspended restart at {time} has passed." },
+                    {"NoRestartCountdown", "No 60 second restart countdown is currently active." },
+                    {"Hours", "hours" },
+                    {"Hour", "hour" },
+                    {"Minutes", "minutes" },
+                    {"Seconds", "seconds" },
+                    {"Second", "second" },
             }, this);
         }
 
@@ -407,7 +614,8 @@ namespace Oxide.Plugins
             LoadDefaultMessages();
             permission.RegisterPermission(PermAnnounce, this);
             permission.RegisterPermission(PermAnnounceToggle, this);
-
+            permission.RegisterPermission(PermAnnounceJoinLeave, this);
+            
             foreach (BasePlayer activePlayer in BasePlayer.activePlayerList)
             {
                 if (!storedData.PlayerData.ContainsKey(activePlayer.userID))
@@ -426,10 +634,10 @@ namespace Oxide.Plugins
                     SaveData();
                 }
             }
-
+            
             if (automaticTimedAnnouncements)
             {
-                List<string> automaticTimedAnnouncementsList = ConvertList(Config.Get("Automatic Announcements", "AutomaticTimedAnnouncementsList"));
+                List<string> automaticTimedAnnouncementsList = ConvertObjectListToString(Config.Get("Public Automatic Timed Announcements", "Announcement List"));
                 ATALEnum = automaticTimedAnnouncementsList.GetEnumerator();
                 AutomaticAnnouncementsTimer = timer.Repeat((float)AutomaticTimedAnnouncementsRepeat.TotalSeconds, 0, () =>
                 {
@@ -442,8 +650,10 @@ namespace Oxide.Plugins
 
             cmd.AddChatCommand(Lang("ChatCommandAnnounce"), this, "cmdAnnounce");
             cmd.AddChatCommand(Lang("ChatCommandAnnounceTo"), this, "cmdAnnounceTo");
+            cmd.AddChatCommand(Lang("ChatCommandAnnounceToGroup"), this, "cmdAnnounceToGroup");
             cmd.AddChatCommand(Lang("ChatCommandAnnounceTest"), this, "cmdAnnounceTest");
             cmd.AddChatCommand(Lang("ChatCommandDestroyAnnouncement"), this, "cmdDestroyAnnouncement");
+            cmd.AddChatCommand(Lang("ChatCommandMuteBans"), this, "cmdMuteBans");
             cmd.AddChatCommand(Lang("ChatCommandAnnouncementsToggle"), this, "cmdAnnouncementsToggle");
             cmd.AddChatCommand(Lang("ChatCommandScheduleRestart"), this, "cmdScheduleRestart");
             cmd.AddChatCommand(Lang("ChatCommandSuspendRestart"), this, "cmdSuspendRestart");
@@ -454,7 +664,9 @@ namespace Oxide.Plugins
             cmd.AddChatCommand(Lang("ChatCommandHelp"), this, "cmdAnnounceHelp");
             cmd.AddConsoleCommand(Lang("ConsoleCommandAnnounce"), this, "ccmdAnnounce");
             cmd.AddConsoleCommand(Lang("ConsoleCommandAnnounceTo"), this, "ccmdAnnounceTo");
+            cmd.AddConsoleCommand(Lang("ConsoleCommandAnnounceToGroup"), this, "ccmdAnnounceToGroup");
             cmd.AddConsoleCommand(Lang("ConsoleCommandDestroyAnnouncement"), this, "ccmdAnnounceDestroy");
+            cmd.AddConsoleCommand(Lang("ConsoleCommandMuteBans"), this, "ccmdMuteBans");
             cmd.AddConsoleCommand(Lang("ConsoleCommandAnnouncementsToggle"), this, "ccmdAnnouncementsToggle");
             cmd.AddConsoleCommand(Lang("ConsoleCommandScheduleRestart"), this, "ccmdScheduleRestart");
             cmd.AddConsoleCommand(Lang("ConsoleCommandSuspendRestart"), this, "ccmdSuspendRestart");
@@ -468,39 +680,89 @@ namespace Oxide.Plugins
         //============================================================================================================
         #region GUI
 
-        public void CreateMsgGUI(string Msg, string bannerTintColor, string textColor, BasePlayer player = null, bool isWelcomeAnnouncement = false, bool isRestartAnnouncement = false)
+        public void CreateAnnouncement(string Msg, string bannerTintColor, string textColor, BasePlayer player = null, bool isWelcomeAnnouncement = false, bool isRestartAnnouncement = false, string group = null)
         {
-            var GUI = new CuiElementContainer();
-            GUI.Add(new CuiElement
+            var GUIBANNER = new CuiElementContainer();
+            GUIBANNER.Add(new CuiElement
             {
-                Name = AnnouncementGUI,
+                Name = "AnnouncementBanner",
                 Components =
                         {
-                            new CuiImageComponent {Color = bannerTintColor, FadeIn = fadeInTime},
-                            new CuiRectTransformComponent {AnchorMin = BannerAnchorMinX() + BannerAnchorMinY, AnchorMax = BannerAnchorMaxX() + BannerAnchorMaxY}
+                            new CuiImageComponent {Color = ConvertBannerColor(bannerTintColor), FadeIn = fadeInTime},
+                            new CuiRectTransformComponent {AnchorMin = BannerAnchorMinX + BannerAnchorMinY, AnchorMax = BannerAnchorMaxX + BannerAnchorMaxY}
                         },
                 FadeOut = fadeOutTime
             });
-            GUI.Add(new CuiElement
+
+            var GUITEXT = new CuiElementContainer();
+            GUITEXT.Add(new CuiElement
             {
-                Name = AnnouncementText,
+                Name = "AnnouncementText",
                 Components =
                         {
-                             new CuiTextComponent {Text = Msg, FontSize = fontSize, Align = TextAnchor.MiddleCenter, FadeIn = fadeInTime, Color = textColor},
+                             new CuiTextComponent {Text = Msg, FontSize = fontSize, Align = TextAnchor.MiddleCenter, FadeIn = fadeInTime, Color = ConvertTextColor(textColor)},
                              new CuiRectTransformComponent {AnchorMin = TextAnchorMinX + TextAnchorMinY, AnchorMax = TextAnchorMaxX + TextAnchorMaxY}
                         },
                 FadeOut = fadeOutTime
             });
             if (player == null)
             {
-                destroyAllGUI();
                 var e = BasePlayer.activePlayerList.GetEnumerator();
                 for (var i = 0; e.MoveNext(); i++)
                 {
                     if (!Exclusions.ContainsKey(e.Current.userID))
                     {
-                        GlobalTimerList.Add(e.Current.userID);
-                        CuiHelper.AddUi(e.Current, GUI);
+                        if (group == null)
+                        {
+                            destroyAllTimers(e.Current);
+                            GlobalTimerList.Add(e.Current.userID);
+                            if (AnnouncementsData.ContainsKey(e.Current.userID))
+                            {
+                                if (AnnouncementsData[e.Current.userID].BannerTintColor != bannerTintColor)
+                                {
+                                    CuiHelper.DestroyUi(e.Current, "AnnouncementBanner");
+                                    CuiHelper.AddUi(e.Current, GUIBANNER);
+                                }
+                                CuiHelper.DestroyUi(e.Current, "AnnouncementText");
+                                CuiHelper.AddUi(e.Current, GUITEXT);
+                                AnnouncementsData.Remove(e.Current.userID);
+                            }
+                            else
+                            {
+                                CuiHelper.DestroyUi(e.Current, "AnnouncementBanner");
+                                CuiHelper.DestroyUi(e.Current, "AnnouncementText");
+                                CuiHelper.AddUi(e.Current, GUIBANNER);
+                                CuiHelper.AddUi(e.Current, GUITEXT);
+                            }
+                            StoreAnnouncementData(e.Current, bannerTintColor, textColor);
+                        }
+                        else if (group != null)
+                        {
+                            if (permission.GetUserGroups(e.Current.UserIDString).Any(group.ToLower().Contains))
+                            {
+                                destroyAllTimers(e.Current);
+                                GlobalTimerList.Add(e.Current.userID);
+                                if (AnnouncementsData.ContainsKey(e.Current.userID))
+                                {
+                                    if (AnnouncementsData[e.Current.userID].BannerTintColor != bannerTintColor)
+                                    {
+                                        CuiHelper.DestroyUi(e.Current, "AnnouncementBanner");
+                                        CuiHelper.AddUi(e.Current, GUIBANNER);
+                                    }
+                                    CuiHelper.DestroyUi(e.Current, "AnnouncementText");
+                                    CuiHelper.AddUi(e.Current, GUITEXT);
+                                    AnnouncementsData.Remove(e.Current.userID);
+                                }
+                                else
+                                {
+                                    CuiHelper.DestroyUi(e.Current, "AnnouncementBanner");
+                                    CuiHelper.DestroyUi(e.Current, "AnnouncementText");
+                                    CuiHelper.AddUi(e.Current, GUIBANNER);
+                                    CuiHelper.AddUi(e.Current, GUITEXT);
+                                }
+                                StoreAnnouncementData(e.Current, bannerTintColor, textColor);
+                            }
+                        }
                     }
                     else if (isRestartAnnouncement)
                     {
@@ -512,15 +774,35 @@ namespace Oxide.Plugins
             }
             if (player != null)
             {
-                destroyPrivateGUI(player);
-                CuiHelper.AddUi(player, GUI);
+                destroyPrivateTimer(player);
+                if (AnnouncementsData.ContainsKey(player.userID))
+                {
+                    if (AnnouncementsData[player.userID].BannerTintColor != bannerTintColor)
+                    {
+                        CuiHelper.DestroyUi(player, "AnnouncementBanner");
+                        CuiHelper.AddUi(player, GUIBANNER);
+                    }
+                    CuiHelper.DestroyUi(player, "AnnouncementText");
+                    CuiHelper.AddUi(player, GUITEXT);
+                    AnnouncementsData.Remove(player.userID);
+                }
+                else
+                {
+                    CuiHelper.DestroyUi(player, "AnnouncementBanner");
+                    CuiHelper.DestroyUi(player, "AnnouncementText");
+                    CuiHelper.AddUi(player, GUIBANNER);
+                    CuiHelper.AddUi(player, GUITEXT);
+                }
                 if (JustJoined.Contains(player.userID) && welcomeAnnouncement && isWelcomeAnnouncement)
                 {
                     JustJoined.Remove(player.userID);
                     PrivateTimers[player] = timer.Once(welcomeAnnouncementDuration, () => destroyPrivateGUI(player));
-                    return;
                 }
-                PrivateTimers[player] = timer.Once(announcementDuration, () => destroyPrivateGUI(player));
+                else
+                {
+                    PrivateTimers[player] = timer.Once(announcementDuration, () => destroyPrivateGUI(player));
+                }
+                StoreAnnouncementData(player, bannerTintColor, textColor);
             }
         }
 
@@ -542,6 +824,14 @@ namespace Oxide.Plugins
             {
                 storedData.PlayerData[player.userID].TimesJoined = storedData.PlayerData[player.userID].TimesJoined + 1;
                 SaveData();
+            }
+            if (JustJoined.Contains(player.userID) && globalJoinAnnouncements)
+            {
+                string Group = permission.GetUserGroups(player.UserIDString)[0];
+                if (globalJoinLeavePermissionOnly && hasPermission(player, PermAnnounceJoinLeave))
+                    CreateAnnouncement(globalJoinText.Replace("{playername}", player.displayName).Replace("{rank}", char.ToUpper(Group[0]) + Group.Substring(1)), globalJoinAnnouncementBannerColor, globalJoinAnnouncementTextColor);
+                else if (!globalJoinLeavePermissionOnly)
+                    CreateAnnouncement(globalJoinText.Replace("{playername}", player.displayName).Replace("{rank}", char.ToUpper(Group[0]) + Group.Substring(1)), globalJoinAnnouncementBannerColor, globalJoinAnnouncementTextColor);
             }
         }
 
@@ -589,7 +879,7 @@ namespace Oxide.Plugins
                 }
                 if (newPlayerAnnouncements)
                 {
-                    if (storedData.PlayerData[player.userID].TimesJoined <= newPlayerAnnouncementsShowTimes)
+                    if (newPlayerAnnouncementsList.ContainsKey(storedData.PlayerData[player.userID].TimesJoined) || newPlayerAnnouncementsList.ContainsKey(0))
                     {
                         if (welcomeAnnouncement)
                         {
@@ -632,23 +922,32 @@ namespace Oxide.Plugins
 
         void destroyAllGUI()
         {
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
+            {
+                if (AnnouncementsData.ContainsKey(player.userID))
+                {
+                    AnnouncementsData.Remove(player.userID);
+                }
+                destroyAllTimers(player);
+				CuiHelper.DestroyUi(player, "AnnouncementBanner");
+                CuiHelper.DestroyUi(player, "AnnouncementText");
+            }
+        }
+
+        void destroyAllTimers(BasePlayer player)
+        {
             if (GlobalTimer != null && !GlobalTimer.Destroyed)
             {
                 GlobalTimer.Destroy();
             }
-            foreach (BasePlayer player in BasePlayer.activePlayerList)
+            if (GlobalTimerList.Contains(player.userID))
             {
-                if (GlobalTimerList.Contains(player.userID))
-                {
-                    GlobalTimerList.Remove(player.userID);
-                }
-                PrivateTimers.TryGetValue(player, out PlayerTimer);
-                if (PlayerTimer != null && !PlayerTimer.Destroyed)
-                {
-                    PlayerTimer.Destroy();
-                }
-				CuiHelper.DestroyUi(player, AnnouncementGUI);
-                CuiHelper.DestroyUi(player, AnnouncementText);
+                GlobalTimerList.Remove(player.userID);
+            }
+            PrivateTimers.TryGetValue(player, out PlayerTimer);
+            if (PlayerTimer != null && !PlayerTimer.Destroyed)
+            {
+                PlayerTimer.Destroy();
             }
         }
 
@@ -660,16 +959,31 @@ namespace Oxide.Plugins
             }
             foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
+                if (AnnouncementsData.ContainsKey(player.userID))
+                {
+                    AnnouncementsData.Remove(player.userID);
+                }
                 if (GlobalTimerList.Contains(player.userID))
                 {
                     GlobalTimerList.Remove(player.userID);
-					CuiHelper.DestroyUi(player, AnnouncementGUI);
-                    CuiHelper.DestroyUi(player, AnnouncementText);
+					CuiHelper.DestroyUi(player, "AnnouncementBanner");
+                    CuiHelper.DestroyUi(player, "AnnouncementText");
                 }
             }
         }
 
         void destroyPrivateGUI(BasePlayer player)
+        {
+            if (AnnouncementsData.ContainsKey(player.userID))
+            {
+                AnnouncementsData.Remove(player.userID);
+            }
+            destroyPrivateTimer(player);
+			CuiHelper.DestroyUi(player, "AnnouncementBanner");
+            CuiHelper.DestroyUi(player, "AnnouncementText");
+        }
+
+        void destroyPrivateTimer(BasePlayer player)
         {
             if (GlobalTimerList.Contains(player.userID))
             {
@@ -680,8 +994,6 @@ namespace Oxide.Plugins
             {
                 PlayerTimer.Destroy();
             }
-			CuiHelper.DestroyUi(player, AnnouncementGUI);
-            CuiHelper.DestroyUi(player, AnnouncementText);
         }
 
         void Unload()
@@ -707,10 +1019,52 @@ namespace Oxide.Plugins
 
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            if (helicopterDeathAnnouncementWithKiller && entity is BaseHelicopter && info.Initiator is BasePlayer)
-            {
-                LastHitPlayer = info.Initiator.ToPlayer().displayName;
-            }
+            if (entity is BaseHelicopter && info.Initiator is BasePlayer && helicopterDestroyedAnnouncementWithDestroyer)
+                    LastHitPlayer = info.Initiator.ToPlayer().displayName;
+        }
+
+        string ConvertBannerColor(string BColor)
+        {
+            if (BColor.ToLower() == "grey")
+                return BannerTintGrey;
+            if (BColor.ToLower() == "red")
+                return BannerTintRed;
+            if (BColor.ToLower() == "orange")
+                return BannerTintOrange;
+            if (BColor.ToLower() == "yellow")
+                return BannerTintYellow;
+            if (BColor.ToLower() == "green")
+                return BannerTintGreen;
+            if (BColor.ToLower() == "cyan")
+                return BannerTintCyan;
+            if (BColor.ToLower() == "blue")
+                return BannerTintBlue;
+            if (BColor.ToLower() == "purple")
+                return BannerTintPurple;
+            PrintWarning("Banner color not found. Please check config");
+            return BannerTintGrey;
+        }
+
+        string ConvertTextColor(string TColor)
+        {
+            if (TColor.ToLower() == "red")
+                return TextRed;
+            if (TColor.ToLower() == "orange")
+                return TextOrange;
+            if (TColor.ToLower() == "yellow")
+                return TextYellow;
+            if (TColor.ToLower() == "green")
+                return TextGreen;
+            if (TColor.ToLower() == "cyan")
+                return TextCyan;
+            if (TColor.ToLower() == "blue")
+                return TextBlue;
+            if (TColor.ToLower() == "purple")
+                return TextPurple;
+            if (TColor.ToLower() == "white")
+                return TextWhite;
+            PrintWarning("Text color not found. Please check config");
+            return TextWhite;
         }
 
         private static BasePlayer FindPlayer(string IDName)
@@ -739,9 +1093,12 @@ namespace Oxide.Plugins
 		{
             if (RealTimeTimer != null && !RealTimeTimer.Destroyed)
                 RealTimeTimer.Destroy();
-            List<string> restartTimes = ConvertList(Config.Get("Automatic Announcements", "RestartTimes"));
-            RestartTimes = restartTimes.Select(date => DateTime.Parse(date)).ToList();
-            RestartAnnouncementsWhenStrings = ConvertList(Config.Get("Automatic Announcements", "RestartAnnouncementsWhen"));
+            if (restartAnnouncements)
+            {
+                List<string> restartTimesList = ConvertObjectListToString(restartTimes);
+                RestartTimes = restartTimesList.Select(date => DateTime.Parse(date)).ToList();
+            }
+            RestartAnnouncementsWhenStrings = ConvertObjectListToString(restartAnnouncementsWhen);
             List<TimeSpan> RestartAnnouncementsWhen = RestartAnnouncementsWhenStrings.Select(date => TimeSpan.Parse(date)).ToList();
             GetNextRestart(RestartTimes);
             RealTimeTimer = timer.Repeat(0.5f, 0, () => RestartAnnouncements(RestartAnnouncementsWhen));
@@ -764,8 +1121,7 @@ namespace Oxide.Plugins
             }
             NextRestart = CalcNextRestartDict.Aggregate((l, r) => l.Value < r.Value ? l : r).Key;
             CalcNextRestartDict.Clear();
-            Puts("Next restart is at " + NextRestart.ToLongTimeString());
-            Puts("Time until next restart is " + NextRestart.Subtract(DateTime.Now).ToShortString());
+            Puts("Next restart is in " + NextRestart.Subtract(DateTime.Now).ToShortString() + " at " + NextRestart.ToLongTimeString());
         }
 		
 		string Lang(string key, string userId = null) => lang.GetMessage(key, this, userId);
@@ -784,7 +1140,15 @@ namespace Oxide.Plugins
                     Puts(Lang("SuspendedRestartPassed").Replace("{time}", NextRestart.ToLongTimeString()));
                     RestartSuspended = false;
                 }
-                RestartAnnouncementsStart();
+                if (GetNextRestartTimer == null && GetNextRestartTimer.Destroyed && DontCheckNextRestart == false)
+                {
+                    DontCheckNextRestart = true;
+                    GetNextRestartTimer = timer.Once(3f, () =>
+                    {
+                        RestartAnnouncementsStart();
+                        DontCheckNextRestart = false;
+                    });
+                }
                 return;
             }
             if (!RestartSuspended)
@@ -799,67 +1163,131 @@ namespace Oxide.Plugins
                     string timeLeftString = String.Empty;
                     if (RestartJustScheduled)
                         RestartJustScheduled = false;
-                    if (hoursLeft > 0)
+                    if (hoursLeft > 1)
                     {
-                        timeLeftString = timeLeftString + hoursLeft + " hours";
+                        timeLeftString = timeLeftString + hoursLeft + " " + Lang("Hours");
                         LastHour = currentTime.Hour;
                     }
                     if (hoursLeft == 1)
                     {
-                        timeLeftString = timeLeftString + hoursLeft + " hour";
+                        timeLeftString = timeLeftString + hoursLeft + " " + Lang("Hour");
                         LastHour = currentTime.Hour;
                     }
                     if (minutesLeft > 0)
                     {
-                        timeLeftString = timeLeftString + minutesLeft + " minutes";
+                        timeLeftString = timeLeftString + minutesLeft + " " + Lang("Minutes");
                         LastMinute = currentTime.Minute;
                     }
-                    Puts(Lang("RestartAnnouncementsFormat").Replace("{time}", timeLeftString));
-                    CreateMsgGUI(Lang("RestartAnnouncementsFormat").Replace("{time}", timeLeftString), BannerTintGrey, TextWhite, null, false, true);
+                    if (String.IsNullOrEmpty(RestartReason))
+                    {
+                        Puts(restartAnnouncementsFormat.Replace("{time}", timeLeftString));
+                        CreateAnnouncement(restartAnnouncementsFormat.Replace("{time}", timeLeftString), restartAnnouncementsBannerColor, restartAnnouncementsTextColor, isRestartAnnouncement: true);
+                    }
+                    else
+                    {
+                        Puts(restartAnnouncementsFormat.Replace("{time}", timeLeftString) + " " + RestartReason);
+                        CreateAnnouncement(restartAnnouncementsFormat.Replace("{time}", timeLeftString) + " " + RestartReason, restartAnnouncementsBannerColor, restartAnnouncementsTextColor, isRestartAnnouncement: true);
+                    }
                 }
                 if (timeLeft <= new TimeSpan(00, 01, 00) && !RestartCountdown)
                 {
                     int countDown = timeLeft.Seconds;
                     RestartCountdown = true;
-                    CreateMsgGUI(Lang("RestartAnnouncementsFormat").Replace("{time}", countDown.ToString() + " seconds"), BannerTintGrey, TextWhite);
+                    if (String.IsNullOrEmpty(RestartReason))
+                    {
+                        CreateAnnouncement(restartAnnouncementsFormat.Replace("{time}", countDown.ToString() + " seconds"), restartAnnouncementsBannerColor, restartAnnouncementsTextColor);
+                    }
+                    else
+                    {
+                        CreateAnnouncement(restartAnnouncementsFormat.Replace("{time}", countDown.ToString() + " seconds" + " : " + RestartReason), restartAnnouncementsBannerColor, restartAnnouncementsTextColor);
+                    }
                     SixtySecondsTimer = timer.Repeat(1, countDown + 1, () =>
                         {
                             if (countDown == 1)
-                                secondsString = " second";
+                                secondsString = " " + Lang("Second");
                             else
-                                secondsString = " seconds";
-                            CreateMsgGUI(Lang("RestartAnnouncementsFormat").Replace("{time}", countDown.ToString() + secondsString), BannerTintGrey, TextWhite);
-                            countDown = countDown - 1;
-                            if (countDown == 0 && restartServer)
+                                secondsString = " " + Lang("Seconds");
+                            if (String.IsNullOrEmpty(RestartReason))
                             {
-                                rust.RunServerCommand("saveall");
-                                timer.Once(3, () => rust.RunServerCommand("restart 0"));
+                                CreateAnnouncement(restartAnnouncementsFormat.Replace("{time}", countDown.ToString() + secondsString), restartAnnouncementsBannerColor, restartAnnouncementsTextColor);
+                            }
+                            else
+                            {
+                                CreateAnnouncement(restartAnnouncementsFormat.Replace("{time}", countDown.ToString() + secondsString + " seconds" + " : " + RestartReason), restartAnnouncementsBannerColor, restartAnnouncementsTextColor);
+                            }
+                            countDown = countDown - 1;
+                            if (countDown == 0)
+                            {
+                                Puts("Restart countdown finished.");
+                                if (RestartScheduled && RealTimeTimer != null && RealTimeTimer.Destroyed)
+                                {
+                                    RestartScheduled = false;
+                                    RealTimeTimer.Destroy();
+                                }
+                                if (restartServer)
+                                {
+                                    rust.RunServerCommand("save");
+                                    timer.Once(3, () => rust.RunServerCommand("restart 0"));
+                                }
                             }
                         });
                 }
             }
         }
 
+        void OnUserBanned(string id, string name, string IP, string reason)
+        {
+            if (playerBannedAnnouncement && !MuteBans)
+            {
+                CreateAnnouncement(playerBannedAnnouncmentText.Replace("{playername}", name).Replace("{reason}", reason), playerBannedAnnouncementBannerColor, playerBannedAnnouncementTextColor);
+            }
+        }
+
+
+        void OnPlayerDisconnect(BasePlayer player)
+        {
+            if (globalLeaveAnnouncements)
+            {
+                string Group = permission.GetUserGroups(player.UserIDString)[0];
+                if (globalJoinLeavePermissionOnly && hasPermission(player, PermAnnounceJoinLeave))
+                {
+                    CreateAnnouncement(globalLeaveText.Replace("{playername}", player.displayName).Replace("{rank}", char.ToUpper(Group[0]) + Group.Substring(1)), globalJoinAnnouncementBannerColor, globalJoinAnnouncementTextColor);
+                }
+                else
+                {
+                    CreateAnnouncement(globalLeaveText.Replace("{playername}", player.displayName).Replace("{rank}", char.ToUpper(Group[0]) + Group.Substring(1)), globalLeaveAnnouncementBannerColor, globalLeaveAnnouncementTextColor);
+                }
+            }
+        }
+
         void OnEntitySpawned(BaseNetworkable entity)
         {
-            if (helicopterAnnouncement && entity is BaseHelicopter)
+            if (helicopterSpawnAnnouncement && entity is BaseHelicopter)
             {
-                CreateMsgGUI(Lang("HelicopterAnnouncement"), BannerTintRed, TextOrange);
+                CreateAnnouncement(helicopterSpawnAnnouncementText, helicopterSpawnAnnouncementBannerColor, helicopterSpawnAnnouncementTextColor);
+            }
+            
+            if (stockingRefillAnnouncement && entity is XMasRefill)
+            {
+                CreateAnnouncement(stockingRefillAnnouncementText, stockingRefillAnnouncementBannerColor, stockingRefillAnnouncementTextColor);
             }
         }
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
-            if (helicopterDeathAnnouncement && entity is BaseHelicopter)
+            if (helicopterDestroyedAnnouncement && entity is BaseHelicopter)
             {
-                if (helicopterDeathAnnouncementWithKiller)
+                var entityNetID = entity.net.ID;
+                if (helicopterDespawnAnnouncement)
+                    HeliNetIDs.Add(entityNetID);
+                if (helicopterDestroyedAnnouncementWithDestroyer)
                 {
-                    CreateMsgGUI(Lang("HelicopterDeathAnnouncementWithPlayer").Replace("{playername}", LastHitPlayer), BannerTintRed, TextWhite);
+                    CreateAnnouncement(helicopterDestroyedAnnouncementWithDestroyerText.Replace("{playername}", LastHitPlayer), helicopterDestroyedAnnouncementBannerColor, helicopterDestroyedAnnouncementTextColor);
                     LastHitPlayer = String.Empty;
                 }
                 else
                 {
-                    CreateMsgGUI(Lang("HelicopterDeathAnnouncement"), BannerTintRed, TextWhite);
+                    CreateAnnouncement(helicopterDestroyedAnnouncementText, helicopterDestroyedAnnouncementBannerColor, helicopterDestroyedAnnouncementTextColor);
                 }
             }
             if (entity is BasePlayer)
@@ -872,6 +1300,21 @@ namespace Oxide.Plugins
             }
         }
 
+        void OnEntityKill(BaseNetworkable entity)
+        {
+            if (entity is BaseHelicopter)
+            {
+                var entityNetID = entity.net.ID;
+                timer.Once(2, () =>
+                {
+                    if (HeliNetIDs.Contains(entityNetID))
+                        HeliNetIDs.Remove(entityNetID);
+                    else if (helicopterDespawnAnnouncement)
+                        CreateAnnouncement(helicopterDespawnAnnouncementText, helicopterDespawnAnnouncementBannerColor, helicopterDespawnAnnouncementTextColor);
+                });
+            }
+        }
+
         void OnAirdrop(CargoPlane plane, Vector3 location)
         {
             if (airdropAnnouncement)
@@ -879,9 +1322,9 @@ namespace Oxide.Plugins
                 if (airdropAnnouncementLocation)
                 {
                     string x = location.x.ToString(), z = location.z.ToString();
-                    CreateMsgGUI(Lang("AirdropAnnouncementWithLocation").Replace("{x}", x).Replace("{z}", z), BannerTintGreen, TextYellow);
+                    CreateAnnouncement(airdropAnnouncementTextWithCoords.Replace("{x}", x).Replace("{z}", z), airdropAnnouncementBannerColor, airdropAnnouncementTextColor);
                 }
-                else CreateMsgGUI(Lang("AirdropAnnouncement"), BannerTintGreen, TextYellow);
+                else CreateAnnouncement(airdropAnnouncementText, airdropAnnouncementBannerColor, airdropAnnouncementTextColor);
             }
         }
 
@@ -891,11 +1334,11 @@ namespace Oxide.Plugins
             {
                 if (welcomeBackAnnouncement && storedData.PlayerData[player.userID].TimesJoined > 1)
                 {
-                    CreateMsgGUI(Lang("WelcomeBackAnnouncement").Replace("{playername}", player.displayName), BannerTintGrey, TextWhite, player, true);
+                    CreateAnnouncement(welcomeBackAnnouncementText.Replace("{playername}", player.displayName), welcomeAnnouncementBannerColor, welcomeAnnouncementTextColor, player, true);
                 }
                 else
                 {
-                    CreateMsgGUI(Lang("WelcomeAnnouncement").Replace("{playername}", player.displayName), BannerTintGrey, TextWhite, player, true);
+                    CreateAnnouncement(welcomeAnnouncementText.Replace("{playername}", player.displayName), welcomeAnnouncementBannerColor, welcomeAnnouncementTextColor, player, true);
                 }
             }
         }
@@ -906,21 +1349,41 @@ namespace Oxide.Plugins
             {
                 JustJoined.Remove(player.userID);
             }
-			List<string> newPlayerAnnouncementsList = ConvertList(Config.Get("Automatic Announcements", "NewPlayerAnnouncementsList"));
-			List<string>.Enumerator e = newPlayerAnnouncementsList.GetEnumerator();
-			if (storedData.PlayerData[player.userID].Dead == true && respawnAnnouncements)
+            if (newPlayerAnnouncementsList.ContainsKey(storedData.PlayerData[player.userID].TimesJoined) || newPlayerAnnouncementsList.ContainsKey(0))
             {
-                PlayerRespawnedTimers[player] = timer.Once(announcementDuration * newPlayerAnnouncementsList.Count, () => RespawnedAnnouncements(player));
-                storedData.PlayerData[player.userID].Dead = false;
-                SaveData();
+                List<string> AnnouncementList = new List<string>();
+                if (newPlayerAnnouncementsList.ContainsKey(storedData.PlayerData[player.userID].TimesJoined) && !newPlayerAnnouncementsList.ContainsKey(0))
+                    AnnouncementList = ConvertObjectListToString(newPlayerAnnouncementsList[storedData.PlayerData[player.userID].TimesJoined]);
+                if (newPlayerAnnouncementsList.ContainsKey(0))
+                    AnnouncementList = ConvertObjectListToString(newPlayerAnnouncementsList[0]);
+                if (AnnouncementList.Count > 0)
+                {
+                    string Group = permission.GetUserGroups(player.UserIDString)[0];
+                    List<string>.Enumerator e = AnnouncementList.GetEnumerator();
+                    if (storedData.PlayerData[player.userID].Dead == true && respawnAnnouncements)
+                    {
+                        PlayerRespawnedTimers[player] = timer.Once(announcementDuration * AnnouncementList.Count, () => RespawnedAnnouncements(player));
+                        storedData.PlayerData[player.userID].Dead = false;
+                        SaveData();
+                    }
+                    if (e.MoveNext())
+                    {
+                        Puts(e.Current);
+                        CreateAnnouncement(e.Current.Replace("{playername}", player.displayName).Replace("{rank}", char.ToUpper(Group[0]) + Group.Substring(1)), newPlayerAnnouncementsBannerColor, newPlayerAnnouncementsTextColor, player);
+                        if (AnnouncementList.Count > 1)
+                        {
+                            NewPlayerPrivateTimers[player] = timer.Repeat(announcementDuration, AnnouncementList.Count - 1, () =>
+                            {
+                                if (e.MoveNext())
+                                {
+                                    Puts(e.Current);
+                                    CreateAnnouncement(e.Current.Replace("{playername}", player.displayName).Replace("{rank}", char.ToUpper(Group[0]) + Group.Substring(1)), newPlayerAnnouncementsBannerColor, newPlayerAnnouncementsTextColor, player);
+                                }
+                            });
+                        }
+                    }
+                }
             }
-            e.MoveNext();
-            CreateMsgGUI(e.Current, BannerTintGrey, TextWhite, player);
-            NewPlayerPrivateTimers[player] = timer.Repeat(announcementDuration, newPlayerAnnouncementsList.Count - 1, () =>
-            {
-                e.MoveNext();
-                CreateMsgGUI(e.Current, BannerTintGrey, TextWhite, player);
-            });
         }
 
         void RespawnedAnnouncements(BasePlayer player)
@@ -929,14 +1392,14 @@ namespace Oxide.Plugins
             {
                 JustJoined.Remove(player.userID);
             }
-            List<string> respawnAnnouncementsList = ConvertList(Config.Get("Automatic Announcements", "RespawnAnnouncementsList"));
+            List<string> respawnAnnouncementsList = ConvertObjectListToString(Config.Get("Automatic Announcements", "RespawnAnnouncementsList"));
             List<string>.Enumerator e = respawnAnnouncementsList.GetEnumerator();
             e.MoveNext();
-            CreateMsgGUI(e.Current, BannerTintGrey, TextWhite, player);
+            CreateAnnouncement(e.Current, respawnAnnouncementsBannerColor, respawnAnnouncementsTextColor, player);
             PlayerRespawnedTimers[player] = timer.Repeat(announcementDuration, respawnAnnouncementsList.Count - 1, () =>
             {
                 e.MoveNext();
-                CreateMsgGUI(e.Current, BannerTintGrey, TextWhite, player);
+                CreateAnnouncement(e.Current.Replace("{playername}", player.displayName), respawnAnnouncementsBannerColor, respawnAnnouncementsTextColor, player);
             });
         }
 
@@ -947,7 +1410,7 @@ namespace Oxide.Plugins
                 ATALEnum.Reset();
                 ATALEnum.MoveNext();
             }
-            CreateMsgGUI(ATALEnum.Current, BannerTintGrey, TextWhite);
+            CreateAnnouncement(ATALEnum.Current, automaticTimedAnnouncementsBannerColor, automaticTimedAnnouncementsTextColor);
         }
 
         #endregion
@@ -958,12 +1421,12 @@ namespace Oxide.Plugins
         {
             if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounce))
             {
-                if (args.Length >= 1)
+                if (args?.Length > 0)
                 {
                     string Msg = "";
                     for (int i = 0; i < args.Length; i++)
                         Msg = Msg + " " + args[i];
-                    CreateMsgGUI(Msg, BannerTintGrey, TextWhite);
+                    CreateAnnouncement(Msg, "Grey", "White");
                 }
                 else SendReply(player, Lang("ChatCommandAnnounceUsage", player.UserIDString));
             }
@@ -971,20 +1434,16 @@ namespace Oxide.Plugins
 
         void ccmdAnnounce(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
-                if (arg.Args == null || arg?.Args?.Length <= 0)
-                {
-                    SendReply(arg, Lang("ConsoleCommandAnnounceUsage"));
-                    return;
-                }
-                if (arg.Args.Length >= 1)
+                if (arg?.Args?.Length > 0)
                 {
                     string Msg = "";
                     for (int i = 0; i < arg.Args.Length; i++)
                         Msg = Msg + " " + arg.Args[i];
-                    CreateMsgGUI(Msg, BannerTintGrey, TextWhite);
+                    CreateAnnouncement(Msg, "Grey", "White");
                 }
+                else SendReply(arg, Lang("ConsoleCommandAnnounceUsage", arg.Connection?.userid.ToString()));
             }
         }
 
@@ -992,7 +1451,7 @@ namespace Oxide.Plugins
         {
             if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounce))
             {
-                if (args.Length >= 2)
+                if (args?.Length > 1)
                 {
                     string targetPlayer = args[0].ToLower(), Msg = "";
                     for (int i = 1; i < args.Length; i++)
@@ -1002,38 +1461,76 @@ namespace Oxide.Plugins
                     {
                         if (!Exclusions.ContainsKey(targetedPlayer.userID))
                         {
-                            CreateMsgGUI(Msg, BannerTintGrey, TextWhite, targetedPlayer);
+                            CreateAnnouncement(Msg, "Grey", "White", targetedPlayer);
                         }
                         else SendReply(player, Lang("IsExcluded", player.UserIDString).Replace("{playername}", targetedPlayer.displayName));
                     }
-                    else SendReply(player, Lang("PlayerNotFound", player.UserIDString));
+                    else SendReply(player, Lang("PlayerNotFound", player.UserIDString).Replace("{playername}", targetPlayer));
                 }
                 else SendReply(player, Lang("ChatCommandAnnounceToUsage", player.UserIDString));
             }
         }
 
-        void ccmdAnnounceTo(ConsoleSystem.Arg arg, string[] args)
+        void ccmdAnnounceTo(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
-                if (arg.Args == null || arg?.Args?.Length <= 1)
+                if (arg?.Args?.Length > 1)
                 {
-                    SendReply(arg, Lang("ConsoleCommandAnnounceToUsage"));
-                    return;
-                }
-                string targetPlayer = arg.Args[0].ToLower(), Msg = "";
-                for (int i = 1; i < arg.Args.Length; i++)
-                    Msg = Msg + " " + arg.Args[i];
-                BasePlayer targetedPlayer = FindPlayer(targetPlayer);
-                if (targetedPlayer != null)
-                {
-                    if (!Exclusions.ContainsKey(targetedPlayer.userID))
+                    string targetPlayer = arg.Args[0].ToLower(), Msg = "";
+                    for (int i = 1; i < arg.Args.Length; i++)
+                        Msg = Msg + " " + arg.Args[i];
+                    BasePlayer targetedPlayer = FindPlayer(targetPlayer);
+                    if (targetedPlayer != null)
                     {
-                        CreateMsgGUI(Msg, BannerTintGrey, TextWhite, targetedPlayer);
+                        if (!Exclusions.ContainsKey(targetedPlayer.userID))
+                        {
+                            CreateAnnouncement(Msg, "Grey", "White", targetedPlayer);
+                        }
+                        else SendReply(arg, Lang("IsExcluded", arg.Connection?.userid.ToString()).Replace("{playername}", targetedPlayer.displayName));
                     }
-                    else SendReply(arg, Lang("IsExcluded").Replace("{playername}", targetedPlayer.displayName));
+                    else SendReply(arg, Lang("PlayerNotFound", arg.Connection?.userid.ToString()).Replace("{playername}", targetPlayer));
                 }
-                else SendReply(arg, Lang("PlayerNotFound"));
+                else SendReply(arg, Lang("ConsoleCommandAnnounceToUsage", arg.Connection?.userid.ToString()));
+            }
+        }
+
+        void cmdAnnounceToGroup(BasePlayer player, string cmd, string[] args)
+        {
+            if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounce))
+            {
+                if (args?.Length > 1)
+                {
+                    string targetGroup = args[0].ToLower(), Msg = "";
+                    if (permission.GroupExists(targetGroup))
+                    {
+                        for (int i = 1; i < args.Length; i++)
+                            Msg = Msg + " " + args[i];
+                        CreateAnnouncement(Msg, "Grey", "White", group: targetGroup);
+                    }
+                    else SendReply(player, Lang("GroupNotFound", player.UserIDString).Replace("{group}", targetGroup));
+                }
+                else SendReply(player, Lang("ChatCommandAnnounceToGroupUsage", player.UserIDString));
+            }
+        }
+
+        void ccmdAnnounceToGroup(ConsoleSystem.Arg arg)
+        {
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            {
+                if (arg?.Args?.Length > 1)
+                {
+                    string targetGroup = arg.Args[0].ToLower(), Msg = "";
+                    Puts(arg.Args.Length.ToString());
+                    if (permission.GroupExists(targetGroup))
+                    {
+                        for (int i = 1; i < arg.Args.Length; i++)
+                            Msg = Msg + " " + arg.Args[i];
+                        CreateAnnouncement(Msg, "Grey", "White", group:targetGroup);
+                    }
+                    else SendReply(arg, Lang("GroupNotFound", arg.Connection?.userid.ToString()).Replace("{group}", targetGroup));
+                }
+                else SendReply(arg, Lang("ConsoleCommandAnnounceToGroupUsage", arg.Connection?.userid.ToString()));
             }
         }
 
@@ -1043,10 +1540,9 @@ namespace Oxide.Plugins
             {
                 if (!Exclusions.ContainsKey(player.userID))
                 {
-                    string Msg = "GUIAnnouncements Test Announcement";
-                    CreateMsgGUI(Msg, BannerTintGrey, TextWhite, player);
+                    CreateAnnouncement("GUIAnnouncements Test Announcement", "Grey", "White", player);
                 }
-                else SendReply(player, Lang("YouAreExcluded"), player.displayName);
+                else SendReply(player, Lang("YouAreExcluded", player.UserIDString));
             }
         }
 
@@ -1060,17 +1556,55 @@ namespace Oxide.Plugins
 
         void ccmdAnnounceDestroy(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 destroyAllGUI();
             }
         }
 
+        void cmdMuteBans(BasePlayer player, string cmd)
+        {
+            if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounce))
+            {
+                if (MuteBans)
+                {
+                    MuteBans = false;
+                    SendReply(player, Lang("BansUnmuted", player.UserIDString));
+                    return;
+                }
+                if (!MuteBans)
+                {
+                    MuteBans = true;
+                    SendReply(player, Lang("BansMuted", player.UserIDString));
+                    return;
+                }
+            }
+        }
+
+        void ccmdMuteBans(ConsoleSystem.Arg arg)
+        {
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            {
+                if (MuteBans)
+                {
+                    MuteBans = false;
+                    SendReply(arg, Lang("BansUnmuted", arg.Connection?.userid.ToString()));
+                    return;
+                }
+                if (!MuteBans)
+                {
+                    MuteBans = true;
+                    SendReply(arg, Lang("BansMuted", arg.Connection?.userid.ToString()));
+                    return;
+                }
+            }
+        }
+
         void cmdAnnouncementsToggle(BasePlayer player, string cmd, string[] args)
         {
-            if (args == null || args.Length < 1)
+            if (args == null) //Self
             {
-                if (Exclusions.ContainsKey(player.userID))
+                if (Exclusions.ContainsKey(player.userID)) //Include
                 {
                     Exclusions.Remove(player.userID);
                     SendReply(player, Lang("IncludedTo", player.UserIDString));
@@ -1078,14 +1612,15 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounceToggle) || hasPermission(player, PermAnnounce))
+                    if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounceToggle) || hasPermission(player, PermAnnounce)) //Exclude
                     {
                         Exclusions.Add(player.userID, player.displayName);
                         SendReply(player, Lang("ExcludedTo", player.UserIDString));
+                        return;
                     }
                 }
             }
-            if (args.Length > 0)
+            if (args.Length > 0) //Not Self
             {
                 if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounce))
                 {
@@ -1093,7 +1628,7 @@ namespace Oxide.Plugins
                     ulong targetPlayerUID64; ulong.TryParse(targetPlayer, out targetPlayerUID64);
                     BasePlayer targetedPlayer = FindPlayer(targetPlayer);
                     var GetKey = Exclusions.FirstOrDefault(x => x.Value.Contains(targetPlayer, CompareOptions.OrdinalIgnoreCase)).Key;
-                    if (Exclusions.ContainsKey(GetKey) || Exclusions.ContainsKey(targetPlayerUID64))
+                    if (Exclusions.ContainsKey(GetKey) || Exclusions.ContainsKey(targetPlayerUID64)) //Include
                     {
                         string PlayerName = Exclusions[GetKey];
                         Exclusions.Remove(GetKey); Exclusions.Remove(targetPlayerUID64);
@@ -1104,7 +1639,7 @@ namespace Oxide.Plugins
                         }
                     }
                     else
-                    if (targetedPlayer != null)
+                    if (targetedPlayer != null) //Exclude
                     {
                         Exclusions.Add(targetedPlayer.userID, targetedPlayer.displayName);
                         SendReply(player, Lang("Excluded", player.UserIDString).Replace("{playername}", targetedPlayer.displayName));
@@ -1117,42 +1652,42 @@ namespace Oxide.Plugins
 
         void ccmdAnnouncementsToggle(ConsoleSystem.Arg arg, string[] args)
         {
-            if (arg?.Args?.Length > 0)
+            if (arg?.Args?.Length > 0) //Not Self
             {
-                if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+                if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
                 {
                     string targetPlayer = arg.Args[0].ToLower();
                     ulong targetPlayerUID64; ulong.TryParse(targetPlayer, out targetPlayerUID64);
                     BasePlayer targetedPlayer = FindPlayer(targetPlayer);
                     var GetKey = Exclusions.FirstOrDefault(x => x.Value.Contains(targetPlayer, CompareOptions.OrdinalIgnoreCase)).Key;
-                    if (Exclusions.ContainsKey(GetKey) || Exclusions.ContainsKey(targetPlayerUID64))
+                    if (Exclusions.ContainsKey(GetKey) || Exclusions.ContainsKey(targetPlayerUID64)) //Include
                     {
                         string PlayerName = Exclusions[GetKey];
                         Exclusions.Remove(GetKey); Exclusions.Remove(targetPlayerUID64);
-                        SendReply(arg, Lang("Included").Replace("{playername}", PlayerName));
+                        SendReply(arg, Lang("Included", arg.Connection?.userid.ToString()).Replace("{playername}", PlayerName));
                         if (targetedPlayer != null)
                         {
                             SendReply(targetedPlayer, Lang("IncludedTo", targetedPlayer.UserIDString));
                         }
                     }
                     else
-                        if (targetedPlayer != null)
+                        if (targetedPlayer != null) //Exclude
                     {
                         Exclusions.Add(targetedPlayer.userID, targetedPlayer.displayName);
-                        SendReply(arg, Lang("Excluded").Replace("{playername}", targetedPlayer.displayName));
+                        SendReply(arg, Lang("Excluded", arg.Connection?.userid.ToString()).Replace("{playername}", targetedPlayer.displayName));
                         SendReply(targetedPlayer, Lang("ExcludedTo", targetedPlayer.UserIDString));
                     }
-                    else SendReply(arg, Lang("PlayerNotFound"));
+                    else SendReply(arg, Lang("PlayerNotFound", arg.Connection?.userid.ToString()));
                 }
             }
-            else SendReply(arg, Lang("ConsoleCommandAnnouncementsToggleUsage"));
+            else SendReply(arg, Lang("ConsoleCommandAnnouncementsToggleUsage", arg.Connection?.userid.ToString()));
         }
 
         void cmdScheduleRestart(BasePlayer player, string cmd, string[] args)
         {
             if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounce))
             {
-                if (args.Length == 1)
+                if (args?.Length > 0)
                 {
                     if (!RestartCountdown)
                     {
@@ -1162,16 +1697,32 @@ namespace Oxide.Plugins
                             TimeSpan scheduleRestart;
                             if (TimeSpan.TryParse(args[0], out scheduleRestart))
                             {
-                                if (restartAnnouncements && currentTime.Add(scheduleRestart) < NextRestart)
+                                if (restartAnnouncements && currentTime.Add(scheduleRestart) > NextRestart)
+                                {
+                                    SendReply(player, Lang("LaterThanNextRestart", player.UserIDString).Replace("{time}", NextRestart.ToShortTimeString()));
+                                    return;
+                                }
+                                if (args.Length > 1)
+                                {
+                                    RestartReason = "";
+                                    for (int i = 1; i < args.Length; i++)
+                                        RestartReason = RestartReason + " " + args[i];
+                                }
+                                if (String.IsNullOrEmpty(RestartReason))
                                 {
                                     Puts("Restart scheduled in " + scheduleRestart.ToShortString());
-                                    RestartTimes.Add(currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01)));
-                                    ScheduledRestart = currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01));
-                                    RestartScheduled = true;
-                                    RestartJustScheduled = true;
-                                    GetNextRestart(RestartTimes);
                                 }
-                                else SendReply(player, Lang("LaterThanNextRestart", player.UserIDString).Replace("{time}", NextRestart.ToShortTimeString()));
+                                else
+                                {
+                                    Puts("Restart scheduled in " + scheduleRestart.ToShortString() + ": " + RestartReason.ToString());
+                                }
+                                RestartTimes.Add(currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01)));
+                                ScheduledRestart = currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01));
+                                RestartScheduled = true;
+                                RestartJustScheduled = true;
+                                if (!restartAnnouncements)
+                                    RestartAnnouncementsStart();
+                                else GetNextRestart(RestartTimes);
                             }
                             else SendReply(player, Lang("ChatCommandScheduleRestartUsage", player.UserIDString));
                         }
@@ -1182,11 +1733,11 @@ namespace Oxide.Plugins
             }
         }
 
-        void ccmdScheduleRestart(ConsoleSystem.Arg arg, string[] args)
+        void ccmdScheduleRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
-                if (arg?.Args?.Length == 1)
+                if (arg?.Args?.Length > 0)
                 {
                     if (!RestartCountdown)
                     {
@@ -1194,21 +1745,37 @@ namespace Oxide.Plugins
                         {
                             var currentTime = DateTime.Now;
                             TimeSpan scheduleRestart; TimeSpan.TryParse(arg.Args[0], out scheduleRestart);
-                            if (restartAnnouncements && currentTime.Add(scheduleRestart) < NextRestart)
+                            if (restartAnnouncements && currentTime.Add(scheduleRestart) > NextRestart)
                             {
-                                Puts("Restart scheduled in" + scheduleRestart.ToShortString());
-                                RestartTimes.Add(currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01)));
-                                ScheduledRestart = currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01));
-                                RestartScheduled = true;
-                                RestartJustScheduled = true;
-                                GetNextRestart(RestartTimes);
+                                SendReply(arg, Lang("LaterThanNextRestart", arg.Connection?.userid.ToString()).Replace("{time}", NextRestart.ToShortTimeString()));
+                                return;
                             }
-                            else SendReply(arg, Lang("LaterThanNextRestart").Replace("{time}", NextRestart.ToShortTimeString()));
+                            if (arg?.Args?.Length > 1)
+                            {
+                                RestartReason = "";
+                                for (int i = 1; i < arg.Args.Length; i++)
+                                    RestartReason = RestartReason + " " + arg.Args[i];
+                            }
+                            if (String.IsNullOrEmpty(RestartReason))
+                            {
+                                Puts("Restart scheduled in " + scheduleRestart.ToShortString());
+                            }
+                            else
+                            {
+                                Puts("Restart scheduled in " + scheduleRestart.ToShortString() + ": " + RestartReason.ToString());
+                            }
+                            RestartTimes.Add(currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01)));
+                            ScheduledRestart = currentTime.Add(scheduleRestart + new TimeSpan(00, 00, 01));
+                            RestartScheduled = true;
+                            RestartJustScheduled = true;
+                            if (!restartAnnouncements)
+                                RestartAnnouncementsStart();
+                            else GetNextRestart(RestartTimes);
                         }
-                        else SendReply(arg, Lang("RestartAlreadyScheduled").Replace("{time}", NextRestart.ToShortTimeString()));
+                        else SendReply(arg, Lang("RestartAlreadyScheduled", arg.Connection?.userid.ToString()).Replace("{time}", NextRestart.ToShortTimeString()));
                     }
                 }
-                else SendReply(arg, Lang("ChatCommandScheduleRestartUsage"));
+                else SendReply(arg, Lang("ChatCommandScheduleRestartUsage", arg.Connection?.userid.ToString()));
             }
         }
 
@@ -1218,8 +1785,11 @@ namespace Oxide.Plugins
             {
                 if (RestartScheduled)
                 {
+                    RestartReason = String.Empty;
                     RestartTimes.Remove(ScheduledRestart);
-                    GetNextRestart(RestartTimes);
+                    RestartScheduled = false;
+                    if (restartAnnouncements)
+                        GetNextRestart(RestartTimes);
                     Puts(Lang("ScheduledRestartCancelled").Replace("{time}", ScheduledRestart.ToShortTimeString()));
                     SendReply(player, (Lang("ScheduledRestartCancelled", player.UserIDString).Replace("{time}", ScheduledRestart.ToShortTimeString())));
                 }
@@ -1227,17 +1797,20 @@ namespace Oxide.Plugins
             }
         }
 
-        void ccmdCancelScheduledRestart(ConsoleSystem.Arg arg, string cmd)
+        void ccmdCancelScheduledRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 if (RestartScheduled)
                 {
+                    RestartReason = String.Empty;
                     RestartTimes.Remove(ScheduledRestart);
-                    GetNextRestart(RestartTimes);
-                    SendReply(arg, (Lang("ScheduledRestartCancelled").Replace("{time}", ScheduledRestart.ToShortTimeString())));
+                    RestartScheduled = false;
+                    if (restartAnnouncements)
+                        GetNextRestart(RestartTimes);
+                    SendReply(arg, (Lang("ScheduledRestartCancelled", arg.Connection?.userid.ToString()).Replace("{time}", ScheduledRestart.ToShortTimeString())));
                 }
-                else SendReply(arg, Lang("RestartNotScheduled"));
+                else SendReply(arg, Lang("RestartNotScheduled", arg.Connection?.userid.ToString()));
             }
         }
 
@@ -1250,12 +1823,12 @@ namespace Oxide.Plugins
             }
         }
 
-        void ccmdSuspendRestart(ConsoleSystem.Arg arg, string cmd)
+        void ccmdSuspendRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 RestartSuspended = true;
-                SendReply(arg, Lang("RestartSuspendedConsole").Replace("{time}", NextRestart.ToLongTimeString()));
+                SendReply(arg, Lang("RestartSuspendedConsole", arg.Connection?.userid.ToString()).Replace("{time}", NextRestart.ToLongTimeString()));
             }
         }
 
@@ -1268,12 +1841,12 @@ namespace Oxide.Plugins
             }
         }
 
-        void ccmdResumeRestart(ConsoleSystem.Arg arg, string cmd)
+        void ccmdResumeRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 RestartSuspended = false;
-                SendReply(arg, Lang("RestartResumed").Replace("{time}", NextRestart.ToLongTimeString()));
+                SendReply(arg, Lang("RestartResumed", arg.Connection?.userid.ToString()).Replace("{time}", NextRestart.ToLongTimeString()));
             }
         }
 
@@ -1286,12 +1859,12 @@ namespace Oxide.Plugins
             }
         }
 
-        void ccmdGetNextRestart(ConsoleSystem.Arg arg, string cmd)
+        void ccmdGetNextRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 var timeLeft = NextRestart.Subtract(DateTime.Now);
-                SendReply(arg, Lang("GetNextRestart").Replace("{time1}", timeLeft.ToShortString()).Replace("{time2}", NextRestart.ToLongTimeString()));
+                SendReply(arg, Lang("GetNextRestart", arg.Connection?.userid.ToString()).Replace("{time1}", timeLeft.ToShortString()).Replace("{time2}", NextRestart.ToLongTimeString()));
             }
         }
 
@@ -1304,22 +1877,24 @@ namespace Oxide.Plugins
                     SixtySecondsTimer.Destroy();
                     SendReply(player, Lang("RestartTimerCanceled", player.UserIDString));
                     PrintWarning(Lang("RestartTimeCanceled"));
-					timer.Once(60, () => RestartCountdown = false);
+                    timer.Once(60, () => RestartCountdown = false);
                 }
+                else SendReply(player, Lang("NoRestartCountdown", player.UserIDString));
             }
         }
 
         void ccmdCancelRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
                 if (SixtySecondsTimer != null && !SixtySecondsTimer.Destroyed)
                 {
                     SixtySecondsTimer.Destroy();
-                    SendReply(arg, Lang("RestartTimerCanceled"));
+                    SendReply(arg, Lang("RestartTimerCanceled", arg.Connection?.userid.ToString()));
                     PrintWarning(Lang("RestartTimeCanceled"));
 					timer.Once(60, () => RestartCountdown = false);
                 }
+                else SendReply(arg, Lang("NoRestartCountdown", arg.Connection?.userid.ToString()));
             }
         }
 
@@ -1330,7 +1905,7 @@ namespace Oxide.Plugins
                 SendReply(player, Lang("AnnounceHelp", player.UserIDString));
             }
             else
-                if (player.net.connection.authLevel > 0 || hasPermission(player, PermAnnounceToggle))
+                if (hasPermission(player, PermAnnounceToggle))
             {
                 SendReply(player, Lang("PlayerHelp", player.UserIDString));
             }
@@ -1338,14 +1913,14 @@ namespace Oxide.Plugins
 
         void ccmdAnnounceHelp(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
+            if (arg.IsAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounce))
             {
-                SendReply(arg, Lang("AnnounceHelp"));
+                SendReply(arg, Lang("AnnounceHelp", arg.Connection?.userid.ToString()));
             }
             else
-                if (arg.isAdmin || hasPermission(arg.Connection.player as BasePlayer, PermAnnounceToggle))
+                if (hasPermission(arg.Connection.player as BasePlayer, PermAnnounceToggle))
             {
-                SendReply(arg, Lang("PlayerHelp"));
+                SendReply(arg, Lang("PlayerHelp", arg.Connection?.userid.ToString()));
             }
         }
         #endregion

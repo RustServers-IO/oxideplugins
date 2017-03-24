@@ -4,7 +4,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Give", "Reneb", "2.1.5", ResourceId = 666)]
+    [Info("Give", "Reneb", "2.1.6", ResourceId = 666)]
     class Give : RustPlugin
     {
         private bool Changed;
@@ -252,7 +252,7 @@ namespace Oxide.Plugins
             if (Args[Args.Length - 1].ToLower() == "online")
             {
                 var targetPlayer = target as BasePlayer;
-                if (!targetPlayer.IsConnected())
+                if (!targetPlayer.IsConnected)
                 {
                     SendTheReply(source, "Player needs to be online to receive the item!");
                     return;
@@ -331,7 +331,7 @@ namespace Oxide.Plugins
             if (Args[Args.Length - 1].ToLower() == "online")
             {
                 var targetPlayer = target as BasePlayer;
-                if (!targetPlayer.IsConnected())
+                if (!targetPlayer.IsConnected)
                 {
                     SendTheReply(source, "Player needs to be online to receive the item!");
                     return;

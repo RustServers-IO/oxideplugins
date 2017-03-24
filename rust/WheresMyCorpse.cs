@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Where's My Corpse", "LeoCurtss", 0.5)]
+    [Info("Where's My Corpse", "Fuji/LeoCurtss", "0.6.0", ResourceId = 1777)]
     [Description("Points a player to their corpse when they type a command.")]
 
     class WheresMyCorpse : RustPlugin
@@ -22,7 +22,16 @@ namespace Oxide.Plugins
 			lang.RegisterMessages(new Dictionary<string,string>{
 				["WMC_NoData"] = "No data was found on your last death.  The WheresMyCorpse plugin may have been reloaded or you have not died yet.",
 				["WMC_LastSeen"] = "Your corpse was last seen {0} meters from here.",
-				["WMC_NoPermission"] = "You do not have permission to use that command."
+				["WMC_LastSeenDirection"] = "Your corpse was last seen <color=yellow>{0}m</color> away in direction <color=yellow>{1}</color>.",
+				["WMC_Dir_North"] = "North",
+				["WMC_Dir_NorthEast"] = "NorthEast",
+				["WMC_Dir_East"] = "East",
+				["WMC_Dir_SouthEast"] = "SouthEast",
+				["WMC_Dir_South"] = "South",
+				["WMC_Dir_SouthWest"] = "SouthWest",
+				["WMC_Dir_West"] = "West",
+				["WMC_Dir_NorthWest"] = "NorthWest"
+				
 			}, this);
         }
 		
@@ -71,6 +80,27 @@ namespace Oxide.Plugins
 			}
 		}
 		
+		string GetDirectionAngle(float angle, string UserIDString)
+		{
+			if (angle > 337.5 || angle < 22.5)
+				return lang.GetMessage("WMC_Dir_North", this, UserIDString);
+			else if (angle > 22.5 && angle < 67.5)
+				return lang.GetMessage("WMC_Dir_NorthEast", this, UserIDString);
+			else if (angle > 67.5 && angle < 112.5)
+				return lang.GetMessage("WMC_Dir_East", this, UserIDString);
+			else if (angle > 112.5 && angle < 157.5)
+				return lang.GetMessage("WMC_Dir_SouthEast", this, UserIDString);
+			else if (angle > 157.5 && angle < 202.5)
+				return lang.GetMessage("WMC_Dir_South", this, UserIDString);
+			else if (angle > 202.5 && angle < 247.5)
+				return lang.GetMessage("WMC_Dir_SouthWest", this, UserIDString);
+			else if (angle > 247.5 && angle < 292.5)
+				return lang.GetMessage("WMC_Dir_West", this, UserIDString);
+			else if (angle > 292.5 && angle < 337.5)
+				return lang.GetMessage("WMC_Dir_NorthWest", this, UserIDString);
+			return "";
+		}
+		
 		void OnPlayerRespawned(BasePlayer player)
 		{
             if (permission.UserHasPermission(player.userID.ToString(), "wheresmycorpse.canuse"))
@@ -79,16 +109,10 @@ namespace Oxide.Plugins
 				{
 					Vector3 lastDeathPosition = getVector3(deathInfo[player.UserIDString]);
 					Vector3 currentPosition = player.transform.position;
-					
-					float distanceToCorpse = Vector3.Distance(lastDeathPosition,currentPosition);
-					
-					SendReply(player,string.Format(GetMessage("WMC_LastSeen",player.UserIDString),distanceToCorpse.ToString("0")));
-					drawArrow(player,60.0f);
+					SendReply(player,string.Format(GetMessage("WMC_LastSeenDirection",player.UserIDString),(int)Vector3.Distance(player.transform.position, lastDeathPosition), GetDirectionAngle(Quaternion.LookRotation((lastDeathPosition - player.eyes.position).normalized).eulerAngles.y, player.UserIDString)  ));
 				}
 				else
-				{
-					SendReply(player,GetMessage("WMC_NoData",player.UserIDString));
-				}
+					SendReply(player,GetMessage("WMC_DirNoData",player.UserIDString));
 			}
 		}
 		
@@ -101,43 +125,14 @@ namespace Oxide.Plugins
 				{
 					Vector3 lastDeathPosition = getVector3(deathInfo[player.UserIDString]);
 					Vector3 currentPosition = player.transform.position;
-					
-					float distanceToCorpse = Vector3.Distance(lastDeathPosition,currentPosition);
-					
-					SendReply(player,string.Format(GetMessage("WMC_LastSeen",player.UserIDString),distanceToCorpse.ToString("0")));
-					drawArrow(player,30.0f);
+					SendReply(player,string.Format(GetMessage("WMC_LastSeenDirection",player.UserIDString),(int)Vector3.Distance(player.transform.position, lastDeathPosition), GetDirectionAngle(Quaternion.LookRotation((lastDeathPosition - player.eyes.position).normalized).eulerAngles.y, player.UserIDString)  ));
 				}
 				else
-				{
 					SendReply(player,GetMessage("WMC_NoData",player.UserIDString));
-				}
 			}
 			else
-			{
 				SendReply(player,GetMessage("WMC_NoPermission",player.UserIDString));
-			}
         }
-		
-		void drawArrow(BasePlayer player, float duration)
-		{
-			Vector3 lastDeathPosition = getVector3(deathInfo[player.UserIDString]);
-			Vector3 currentPosition = player.transform.position;
-			
-			float distanceToCorpse = Vector3.Distance(lastDeathPosition,currentPosition);
-			
-			Vector3 arrowBasePosition = LerpByDistance(currentPosition + new Vector3(0, 1, 0),lastDeathPosition + new Vector3(0, 1, 0),3);
-			Vector3 arrowPointPosition = LerpByDistance(currentPosition + new Vector3(0, 1, 0),lastDeathPosition + new Vector3(0, 1, 0),6);
-			
-			Vector3 beaconBasePosition = lastDeathPosition;
-			Vector3 beaconPointPosition = lastDeathPosition + new Vector3(0, 1000, 0);
-			
-			Color arrowColor = new Color(1, 0, 0, 1);
-			Color textColor = new Color(1,0,0,1);
-			Color beaconColor = new Color(1,0,0,1);
-			player.SendConsoleCommand("ddraw.arrow", duration, arrowColor, arrowBasePosition, arrowPointPosition, 0.5f);
-			player.SendConsoleCommand("ddraw.text", duration, textColor, arrowBasePosition, "Distance: " + distanceToCorpse.ToString("0") + " meters");
-			player.SendConsoleCommand("ddraw.arrow", duration, arrowColor, beaconBasePosition, beaconPointPosition, 1.0f);
-		}
 		
 		public Vector3 getVector3(string rString){
 			string[] temp = rString.Substring(1,rString.Length-2).Split(',');
@@ -146,12 +141,6 @@ namespace Oxide.Plugins
 			float z = float.Parse(temp[2]);
 			Vector3 rValue = new Vector3(x,y,z);
 			return rValue;
-		}
-		
-		public Vector3 LerpByDistance(Vector3 A, Vector3 B, float x)
-		{
-			Vector3 P = x * Vector3.Normalize(B - A) + A;
-			return P;
 		}
     }
 }

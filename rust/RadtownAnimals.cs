@@ -7,7 +7,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("RadtownAnimals", "k1lly0u", "0.2.12", ResourceId = 1561)]
+    [Info("RadtownAnimals", "k1lly0u", "0.2.2", ResourceId = 1561)]
     class RadtownAnimals : RustPlugin
     {
         #region Fields
@@ -241,15 +241,13 @@ namespace Oxide.Plugins
         #region NPCController
         class RAController : MonoBehaviour
         {
-            private readonly MethodInfo SetDeltaTimeMethod = typeof(NPCAI).GetProperty("deltaTime", (BindingFlags.Public | BindingFlags.Instance)).GetSetMethod(true);
+            private static double targetAttackRange = 70;
 
-            internal static double targetAttackRange = 70;
+            private Vector3 Home;
+            private Vector3 NextPos;
+            private BaseCombatEntity Target;
 
-            internal Vector3 Home;
-            internal Vector3 NextPos;
-            internal BaseCombatEntity Target;
-
-            internal bool isAttacking;
+            private bool isAttacking;
 
             public BaseNPC NPC;
             public NPCAI AI;
@@ -366,7 +364,7 @@ namespace Oxide.Plugins
         [ChatCommand("ra_killall")]
         private void chatKillAnimals(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin()) return;
+            if (player.IsAdmin) return;
             foreach(var animal in animalList)
             {
                 UnityEngine.Object.Destroy(animal.Key.GetComponent<RAController>());

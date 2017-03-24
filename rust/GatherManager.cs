@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Oxide.Plugins
 {
 
-    [Info("Gathering Manager", "Mughisi", "2.2.3", ResourceId = 675)]
+    [Info("Gathering Manager", "Mughisi", "2.2.4", ResourceId = 675)]
     class GatherManager : RustPlugin
     {
 
@@ -156,7 +156,7 @@ namespace Oxide.Plugins
                 help += "\r\n" + string.Format(HelpTextPlayerMiningQuarrySpeed, MiningQuarryResourceTickRate);
 
             SendMessage(player, help);
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             SendMessage(player, HelpTextAdmin);
         }
 
@@ -165,7 +165,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("gather.rate")]
         private void GatherRate(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NotAllowed);
                 return;
@@ -274,7 +274,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("gather.resources")]
         private void GatherResources(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NotAllowed);
                 return;
@@ -286,7 +286,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("gather.dispensers")]
         private void GatherDispensers(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NotAllowed);
                 return;
@@ -299,7 +299,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("dispenser.scale")]
         private void DispenserRate(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NotAllowed);
                 return;
@@ -336,7 +336,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("quarry.tickrate")]
         private void MiningQuarryTickRate(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NotAllowed);
                 return;

@@ -3,23 +3,22 @@ using Oxide.Core;
 using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using Oxide.Plugins;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("SharedDoors", "dbteku", 0.6)]
+    [Info("SharedDoors", "dbteku", "0.7.2", ResourceId = 2108)]
     [Description("Making sharing doors easier.")]
     class SharedDoors : CovalencePlugin
     {
         private const string RUST_IO = "clans";
         private const string CLANS_NAME = "Clans";
         private const string RUST_CLANS_LOADED_AFTER = "Rust Clans has been loaded. SharedDoors now hooking.";
-        private const string MASTER_PERM = "SharedDoors.Master";
+        private const string MASTER_PERM = "shareddoors.master";
         private static Library rustIO;
         [PluginReference("Clans")]
         private Plugin Clans;
@@ -28,7 +27,7 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-                        permission.RegisterPermission(MASTER_PERM,this);
+            permission.RegisterPermission(MASTER_PERM, this);
             ClansInstance = Clans;
             holders = new MasterKeyHolders();
         }
@@ -56,7 +55,7 @@ namespace Oxide.Plugins
         void OnPlayerInit(BasePlayer player)
         {
             IPlayer iPlayer = covalence.Players.FindPlayerById(player.userID.ToString());
-            if (player.IsAdmin() || iPlayer.HasPermission(MASTER_PERM))
+            if (player.IsAdmin || iPlayer.HasPermission(MASTER_PERM))
             {
                 holders.AddMaster(player.userID.ToString());
             }
@@ -65,7 +64,7 @@ namespace Oxide.Plugins
         void OnPlayerDisconnected(BasePlayer player, string reason)
         {
             IPlayer iPlayer = covalence.Players.FindPlayerById(player.userID.ToString());
-            if (player.IsAdmin() || iPlayer.HasPermission(MASTER_PERM))
+            if (player.IsAdmin || iPlayer.HasPermission(MASTER_PERM))
             {
                 holders.RemoveMaster(player.userID.ToString());
             }
@@ -75,10 +74,11 @@ namespace Oxide.Plugins
         {
             IPlayer iPlayer = covalence.Players.FindPlayerById(player.userID.ToString());
             bool canUse = false;
-            if((player.IsAdmin() && holders.IsAKeyMaster(player.userID.ToString())) || (iPlayer.HasPermission(MASTER_PERM) && holders.IsAKeyMaster(player.userID.ToString())))
+            if ((player.IsAdmin && holders.IsAKeyMaster(player.userID.ToString())) || (iPlayer.HasPermission(MASTER_PERM) && holders.IsAKeyMaster(player.userID.ToString())))
             {
                 canUse = true;
-            }else
+            }
+            else
             {
                 canUse = new DoorAuthorizer(door, player).canOpen();
             }
@@ -94,7 +94,7 @@ namespace Oxide.Plugins
         [Command("sd")]
         void SharedDoorsCommand(IPlayer player, string command, string[] args)
         {
-            
+
             if (args.Length > 0)
             {
                 if (args[0].ToLower() == "help")
@@ -116,14 +116,16 @@ namespace Oxide.Plugins
                             {
                                 PlayerResponder.NotifyUser(player, "Master Mode Disabled. You can no longer open all doors and chests.");
                             }
-                        }else
+                        }
+                        else
                         {
                             holders.AddMaster(player.Id);
                             holders.GiveMasterKey(player.Id);
                             PlayerResponder.NotifyUser(player, "Master Mode Enabled. You can now open all doors and chests.");
                         }
 
-                    }else
+                    }
+                    else
                     {
                         PlayerResponder.NotifyUser(player, "Master Mode Not Available. You don't have permission to use this command.");
                     }
@@ -135,14 +137,14 @@ namespace Oxide.Plugins
             }
         }
 
-        private class PlayerResponder : RustPlugin
+        private class PlayerResponder
         {
             private const String PREFIX = "<color=#00ffffff>[</color><color=#ff0000ff>SharedDoors</color><color=#00ffffff>]</color>";
 
 
             public static void NotifyUser(IPlayer player, String message)
             {
-               player.Message(PREFIX + " " + message);
+                player.Message(PREFIX + " " + message);
             }
 
         }
@@ -341,7 +343,7 @@ namespace Oxide.Plugins
        * 
        * */
 
-        private class MasterKeyHolders 
+        private class MasterKeyHolders
         {
 
             private Dictionary<string, PlayerSettings> keyMasters;
@@ -399,7 +401,7 @@ namespace Oxide.Plugins
                 bool exists = keyMasters.TryGetValue(id, out settings);
                 if (exists)
                 {
-                    settings.ToggleMasterMode();    
+                    settings.ToggleMasterMode();
                 }
             }
 

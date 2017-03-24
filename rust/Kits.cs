@@ -4,12 +4,13 @@ using System.Linq;
 using Oxide.Core.Plugins;
 using Newtonsoft.Json;
 using UnityEngine;
+using Oxide.Game.Rust.Cui;
 
 using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Kits", "Reneb", "3.1.14", ResourceId =668)]
+    [Info("Kits", "Reneb", "3.2.4", ResourceId = 668)]
     class Kits : RustPlugin
     {
         readonly int playerLayer = LayerMask.GetMask("Player (Server)");
@@ -18,7 +19,7 @@ namespace Oxide.Plugins
         ///// Plugin initialization
         //////////////////////////////////////////////////////////////////////////////////////////
         [PluginReference]
-        Plugin CopyPaste;
+        Plugin CopyPaste, ImageLibrary, EventManager;
 
         void Loaded()
         {
@@ -31,27 +32,57 @@ namespace Oxide.Plugins
             {
                 kitsData = new Dictionary<ulong, Dictionary<string, KitData>>();
             }
+            lang.RegisterMessages(messages, this);
         }
 
         void OnServerInitialized()
         {
             InitializePermissions();
+            if (!string.IsNullOrEmpty(BackgroundURL))
+                if (ImageLibrary)
+                    AddImage(BackgroundURL, "Background", (ulong)ResourceId);
+            foreach (var player in BasePlayer.activePlayerList)
+                OnPlayerInit(player);
+        }
+
+        void OnPlayerInit(BasePlayer player)
+        {
+            BindKeys(player);
         }
 
         void InitializePermissions()
         {
+            permission.RegisterPermission(this.Title + ".admin", this);
+            permission.RegisterPermission(this.Title + ".ConsoleGive", this);
             foreach (var kit in storedData.Kits.Values)
             {
                 if (!string.IsNullOrEmpty(kit.permission) && !permission.PermissionExists(kit.permission))
                     permission.RegisterPermission(kit.permission, this);
+                if (ImageLibrary)
+                    AddImage(kit.image ?? "http://i.imgur.com/xxQnE1R.png", kit.name.Replace(" ", ""), (ulong)ResourceId);
             }
         }
+
+        void BindKeys(BasePlayer player, bool unbind = false)
+        {
+            if (string.IsNullOrEmpty(UIKeyBinding)) return;
+            if (unbind)
+                player.Command($"bind {UIKeyBinding} \"\"");
+            else
+                player.Command($"bind {UIKeyBinding} \"UI_ToggleKitMenu\"");
+        }
+
         //////////////////////////////////////////////////////////////////////////////////////////
         ///// Configuration
         //////////////////////////////////////////////////////////////////////////////////////////
 
         Dictionary<ulong, GUIKit> GUIKits;
         List<string> CopyPasteParameters = new List<string>();
+        string BackgroundURL;
+        string UIKeyBinding;
+        bool KitLogging;
+        bool ShowUnavailableKits;
+        public Dictionary<int, string> AutoKits = new Dictionary<int, string>();
 
         class GUIKit
         {
@@ -69,9 +100,34 @@ namespace Oxide.Plugins
                 config["NPC - GUI Kits"] = GetExampleGUIKits();
                 Config.WriteObject(config);
             }
-            if(!config.ContainsKey("CopyPaste - Parameters"))
+            if (!config.ContainsKey("CopyPaste - Parameters"))
             {
                 config["CopyPaste - Parameters"] = new List<string> { "autoheight", "true", "blockcollision", "true", "deployables", "true", "inventories", "true" };
+                Config.WriteObject(config);
+            }
+            if (!config.ContainsKey("Custom AutoKits"))
+            {
+                config["Custom AutoKits"] = new Dictionary<int, string> {{0, "KitName" },{1, "KitName" },{2, "KitName" }};
+                Config.WriteObject(config);
+            }
+            if (!config.ContainsKey("UI KeyBinding"))
+            {
+                config["UI KeyBinding"] = string.Empty;
+                Config.WriteObject(config);
+            }
+            if (!config.ContainsKey("Kit - Logging"))
+            {
+                config["Kit - Logging"] = false;
+                Config.WriteObject(config);
+            }
+            if (!config.ContainsKey("Show All Kits"))
+            {
+                config["Show All Kits"] = false;
+                Config.WriteObject(config);
+            }
+            if (!config.ContainsKey("Background - URL"))
+            {
+                config["Background - URL"] = string.Empty;
                 Config.WriteObject(config);
             }
             var keys = config.Keys.ToArray();
@@ -79,13 +135,18 @@ namespace Oxide.Plugins
             {
                 foreach (var key in keys)
                 {
-                    if (!key.Equals("NPC - GUI Kits") && !key.Equals("CopyPaste - Parameters"))
+                    if (!key.Equals("NPC - GUI Kits") && !key.Equals("CopyPaste - Parameters") && !key.Equals("Custom AutoKits") && !key.Equals("UI KeyBinding") && !key.Equals("Background - URL") && !key.Equals("Kit - Logging") && !key.Equals("Show All Kits"))
                         config.Remove(key);
                 }
                 Config.WriteObject(config);
             }
             CopyPasteParameters = JsonConvert.DeserializeObject<List<string>>(JsonConvert.SerializeObject(config["CopyPaste - Parameters"]));
             GUIKits = JsonConvert.DeserializeObject<Dictionary<ulong, GUIKit>>(JsonConvert.SerializeObject(config["NPC - GUI Kits"]));
+            AutoKits = JsonConvert.DeserializeObject<Dictionary<int, string>>(JsonConvert.SerializeObject(config["Custom AutoKits"]));
+            UIKeyBinding = JsonConvert.DeserializeObject<string>(JsonConvert.SerializeObject(config["UI KeyBinding"]));
+            BackgroundURL = JsonConvert.DeserializeObject<string>(JsonConvert.SerializeObject(config["Background - URL"]));
+            KitLogging = JsonConvert.DeserializeObject<bool>(JsonConvert.SerializeObject(config["Kit - Logging"])); 
+            ShowUnavailableKits = JsonConvert.DeserializeObject<bool>(JsonConvert.SerializeObject(config["Show All Kits"]));
         }
 
         static Dictionary<ulong, GUIKit> GetExampleGUIKits()
@@ -93,10 +154,17 @@ namespace Oxide.Plugins
             return new Dictionary<ulong, GUIKit>
             {
                 {
+                    0, new GUIKit
+                    {
+                        kits = {"kit1", "kit2"},
+                        description = "Welcome on this server! Here is a list of free kits that you can get.<color=green>Enjoy your stay</color>"
+                    }
+                },
+{
                     1235439, new GUIKit
                     {
                         kits = {"kit1", "kit2"},
-                        description = "Welcome on this server, Here is a list of free kits that you can get <color=red>only once each</color>\n\n                      <color=green>Enjoy your stay</color>"
+                        description = "Welcome on this server! Here is a list of free kits that you can get.<color=green>Enjoy your stay</color>"
                     }
                 },
                 {
@@ -111,12 +179,25 @@ namespace Oxide.Plugins
 
         void OnPlayerRespawned(BasePlayer player)
         {
-            if (!storedData.Kits.ContainsKey("autokit")) return;
             var thereturn = Interface.Oxide.CallHook("canRedeemKit", player);
             if (thereturn == null)
             {
-                player.inventory.Strip();
-                GiveKit(player, "autokit");
+                if (storedData.Kits.ContainsKey("autokit"))
+                {
+                    player.inventory.Strip();
+                    GiveKit(player, "autokit");
+                    return;
+                }
+                foreach (var entry in AutoKits.OrderBy(k=>k.Key))
+                    {
+                        var success = CanRedeemKit(player, entry.Value, true) as string;
+                        if (success != null) continue;
+                        player.inventory.Strip();
+                        success = GiveKit(player, entry.Value) as string;
+                        if (success != null) continue;
+                        proccessKitGiven(player, entry.Value);
+                        return;
+                    }
             }
         }
 
@@ -125,6 +206,40 @@ namespace Oxide.Plugins
         //////////////////////////////////////////////////////////////////////////////////////////
 
         string GetMsg(string key, object steamid = null) { return lang.GetMessage(key, this, steamid == null ? null : steamid.ToString()); }
+
+        Dictionary<string, string> messages = new Dictionary<string, string>()
+        {
+            {"title", "Kits: " },
+            {"Name", "Name" },
+            {"Description", "Description" },
+            {"Redeem", "Redeem" },
+            {"AddKit", "Add Kit" },
+            {"Close", "Close" },
+            {"NoKitsFound", "All Available Kits are already in this Menu!" },
+            {"AddKitToMenu", "Select a Kit to Add to this Menu" },
+            {"KitCooldown", "Cooldown: {0}" },
+            {"Unavailable", "Unavailable" },
+            {"Last", "Last" },
+            {"Next", "Next" },
+            {"Back", "Back" },
+            {"First", "First" },
+            {"RemoveKit", "Remove Kit?" },
+            {"KitUses", "Uses: {0}" },
+            {"NoInventorySpace", "You do not have enough inventory space for this Kit!" },
+            {"Unlimited", "Unlimited" },
+            {"None", "None" },
+            {"KitRedeemed", "Kit Redeemed" },
+            {"Emptykitname", "Empty Kit Name" },
+            {"KitExistError","This kit doesn't exist"},
+            {"CantRedeemNow","You are not allowed to redeem a kit at the moment"},
+            {"NoAuthToRedeem","You don't have the Auth Level to use this kit"},
+            {"NoPermKit","You don't have the permissions to use this kit"},
+            {"NoRemainingUses","You already redeemed all of these kits"},
+            {"CooldownMessage","You need to wait {0} seconds to use this kit"},
+            {"NPCError","You must find the NPC that gives this kit to redeem it."},
+            {"PastingError", "Something went wrong while pasting, is CopyPaste installed?"},
+            {"NoKitFound", "This kit doesn't exist" },
+};
 
         //////////////////////////////////////////////////////////////////////////////////////////
         ///// Kit Creator
@@ -198,17 +313,16 @@ namespace Oxide.Plugins
             var success = CanRedeemKit(player, kitname) as string;
             if (success != null)
             {
-                SendReply(player, success);
+                OnScreen(player, success);
                 return;
             }
             success = GiveKit(player, kitname) as string;
             if (success != null)
             {
-                SendReply(player, success);
+                OnScreen(player, success);
                 return;
             }
-            SendReply(player, "Kit redeemed");
-
+            OnScreen(player, GetMsg("KitRedeemed",player.userID));
             proccessKitGiven(player, kitname);
         }
         void proccessKitGiven(BasePlayer player, string kitname)
@@ -224,13 +338,15 @@ namespace Oxide.Plugins
 
             if (kit.cooldown > 0)
                 kitData.cooldown = CurrentTime() + kit.cooldown;
-        }        
+            if (PlayerGUI.ContainsKey(player.userID) && PlayerGUI[player.userID].open)
+                RefreshKitPanel(player, PlayerGUI[player.userID].guiid, PlayerGUI[player.userID].page);
+        }
         object GiveKit(BasePlayer player, string kitname)
         {
-            if (string.IsNullOrEmpty(kitname)) return "Empty kit name";
+            if (string.IsNullOrEmpty(kitname)) return GetMsg("Emptykitname", player.userID);
             kitname = kitname.ToLower();
             Kit kit;
-            if (!storedData.Kits.TryGetValue(kitname, out kit)) return "This kit doesn't exist";
+            if (!storedData.Kits.TryGetValue(kitname, out kit)) return GetMsg("NoKitFound",player.userID);
 
             foreach (KitItem kitem in kit.items)
             {
@@ -248,9 +364,11 @@ namespace Oxide.Plugins
                 }
                 if(!(success is List<BaseEntity>))
                 {
-                    return "Something went wrong while pasting, is CopyPaste installed?";
+                    return GetMsg("PastingError",player.userID);
                 }
             }
+            if(KitLogging)
+            Log("KitLogging", $"{player.displayName}<{player.UserIDString}> - Received Kit: {kitname}");
             return true;
         }
         bool GiveItem(PlayerInventory inv, Item item, ItemContainer container = null)
@@ -280,6 +398,12 @@ namespace Oxide.Plugins
                 }
 
             return item;
+        }
+
+        void Log(string fileName, string text)
+        {
+            var dateTime = DateTime.Now.ToString("yyyy-MM-dd");
+            ConVar.Server.Log($"oxide/logs/{Title.ToUpper()}-{fileName}_{dateTime}.txt", text);
         }
 
         //////////////////////////////////////////////////////////////////////////////////////////
@@ -332,41 +456,40 @@ namespace Oxide.Plugins
                 }
             }
             return true;
-
         }
 
-        object CanRedeemKit(BasePlayer player, string kitname)
+        object CanRedeemKit(BasePlayer player, string kitname, bool skipAuth = false)
         {
-            if (string.IsNullOrEmpty(kitname)) return "Empty kit name";
+            if (string.IsNullOrEmpty(kitname)) return GetMsg("Emptykitname", player.userID);
             kitname = kitname.ToLower();
             Kit kit;
-            if (!storedData.Kits.TryGetValue(kitname, out kit)) return "This kit doesn't exist";
+            if (!storedData.Kits.TryGetValue(kitname, out kit)) return GetMsg("KitExistError", player.userID);
 
             object thereturn = Interface.Oxide.CallHook("canRedeemKit", player);
             if (thereturn != null)
             {
                 if (thereturn is string) return thereturn;
-                return "You are not allowed to redeem a kit at the moment";
+                return GetMsg("CantRedeemNow", player.userID);
             }
 
-            if (kit.authlevel > 0)
+            if (kit.authlevel > 0 && !skipAuth)
                 if (player.net.connection.authLevel < kit.authlevel)
-                    return "You don't have the level to use this kit";
+                    return GetMsg("NoAuthToRedeem", player.userID);
 
             if (!string.IsNullOrEmpty(kit.permission))
                 if (player.net.connection.authLevel < 2 && !permission.UserHasPermission(player.UserIDString, kit.permission))
-                    return "You don't have the permissions to use this kit";
+                    return GetMsg("NoPermKit", player.userID);
 
             var kitData = GetKitData(player.userID, kitname);
             if (kit.max > 0)
                 if (kitData.max >= kit.max)
-                    return "You already redeemed all of those kits";
+                    return GetMsg("NoRemainingUses", player.userID);
 
             if (kit.cooldown > 0)
             {
                 var ct = CurrentTime();
                 if (kitData.cooldown > ct && kitData.cooldown != 0.0)
-                    return $"You need to wait {Math.Abs(Math.Ceiling(kitData.cooldown - ct))} seconds to use this kit";
+                    return string.Format(GetMsg("CooldownMessage", player.userID), Math.Abs(Math.Ceiling(kitData.cooldown - ct)));
             }
 
             if (kit.npconly)
@@ -390,8 +513,15 @@ namespace Oxide.Plugins
                     }
                 }
                 if (!foundNPC)
-                    return "You must find the NPC that gives this kit to redeem it.";
+                    return GetMsg("NPCError", player.userID);
             }
+            int beltcount = kit.items.Where(k => k.container == "belt").Count();
+            int wearcount = kit.items.Where(k => k.container == "wear").Count();
+            int maincount = kit.items.Where(k => k.container == "main").Count();
+            int totalcount = beltcount + wearcount + maincount;
+            if ((player.inventory.containerBelt.capacity - player.inventory.containerBelt.itemList.Count) < beltcount || (player.inventory.containerWear.capacity - player.inventory.containerWear.itemList.Count) < wearcount || (player.inventory.containerMain.capacity - player.inventory.containerMain.itemList.Count) < maincount)
+                if(totalcount > (player.inventory.containerMain.capacity - player.inventory.containerMain.itemList.Count))
+                    return GetMsg("NoInventorySpace", player.userID);
             return true;
         }
 
@@ -514,10 +644,193 @@ namespace Oxide.Plugins
 
         readonly Dictionary<ulong, string> kitEditor = new Dictionary<ulong, string>();
 
+        //////////////////////////////////////////////////////////////////////////////////////
+        // ImageLibrary Hooks ---->> Absolut
+        //////////////////////////////////////////////////////////////////////////////////////
+
+        private string TryForImage(string shortname, ulong skin = 99)
+        {
+            if (skin == 99)
+                return GetImage(shortname, (ulong)ResourceId);
+            return GetImage(shortname, skin);
+        }
+        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname, skin);
+
+        //////////////////////////////////////////////////////////////////////////////////////
+        // GUI CREATION ---->> Absolut
+        //////////////////////////////////////////////////////////////////////////////////////
+
+        private string PanelOnScreen = "PanelOnScreen";
+        private string PanelKits = "PanelKits";
+        private string PanelBackground = "PanelBackground";
+        public class UI
+        {
+            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
+            {
+                var NewElement = new CuiElementContainer()
+            {
+                {
+                    new CuiPanel
+                    {
+                        Image = {Color = color},
+                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                        CursorEnabled = cursor
+                    },
+                    new CuiElement().Parent,
+                    panelName
+                }
+            };
+                return NewElement;
+            }
+            static public CuiElementContainer CreateOverlayContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
+            {
+                var NewElement = new CuiElementContainer()
+            {
+                {
+                    new CuiPanel
+                    {
+                        Image = {Color = color},
+                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                        CursorEnabled = cursor
+                    },
+                    new CuiElement().Parent = "Overlay",
+                    panelName
+                }
+            };
+                return NewElement;
+            }
+
+            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
+            {
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = color },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                    CursorEnabled = cursor
+                },
+                panel);
+            }
+            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiLabel
+                {
+                    Text = { Color = color, FontSize = size, Align = align, FadeIn = 1.0f, Text = text },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
+                },
+                panel);
+            }
+
+            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiButton
+                {
+                    Button = { Color = color, Command = command, FadeIn = 1.0f },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                    Text = { Text = text, FontSize = size, Align = align }
+                },
+                panel);
+            }
+
+            static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
+            {
+                if (img.Contains("http"))
+                {
+                    container.Add(new CuiElement
+                    {
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                    });
+                }
+                else
+                    container.Add(new CuiElement
+                    {
+                        Parent = panel,
+                        Components =
+                    {
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
+                        new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
+                    }
+                    });
+            }
+
+            static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                element.Add(new CuiElement
+                {
+                    Parent = panel,
+                    Components =
+                    {
+                        new CuiTextComponent{Color = colorText, FontSize = size, Align = align, Text = text },
+                        new CuiOutlineComponent {Distance = "1 1", Color = colorOutline},
+                        new CuiRectTransformComponent {AnchorMax = aMax, AnchorMin = aMin }
+                    }
+                });
+            }
+        }
+
+        private Dictionary<string, string> UIColors = new Dictionary<string, string>
+        {
+            {"black", "0 0 0 1.0" },
+            {"dark", "0.1 0.1 0.1 0.98" },
+            {"header", "1 1 1 0.3" },
+            {"light", ".564 .564 .564 1.0" },
+            {"grey1", "0.6 0.6 0.6 1.0" },
+            {"brown", "0.3 0.16 0.0 1.0" },
+            {"yellow", "0.9 0.9 0.0 1.0" },
+            {"orange", "1.0 0.65 0.0 1.0" },
+            {"limegreen", "0.42 1.0 0 1.0" },
+            {"blue", "0.2 0.6 1.0 1.0" },
+            {"red", "1.0 0.1 0.1 1.0" },
+            {"white", "1 1 1 1" },
+            {"green", "0.28 0.82 0.28 1.0" },
+            {"grey", "0.85 0.85 0.85 1.0" },
+            {"lightblue", "0.6 0.86 1.0 1.0" },
+            {"buttonbg", "0.2 0.2 0.2 0.7" },
+            {"buttongreen", "0.133 0.965 0.133 0.9" },
+            {"buttonred", "0.964 0.133 0.133 0.9" },
+            {"buttongrey", "0.8 0.8 0.8 0.9" },
+        };
 
         //////////////////////////////////////////////////////////////////////////////////////
         // GUI
         //////////////////////////////////////////////////////////////////////////////////////
+        private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
+
+        void OnScreen(BasePlayer player, string msg)
+        {
+            if (timers.ContainsKey(player.userID.ToString()))
+            {
+                timers[player.userID.ToString()].Destroy();
+                timers.Remove(player.userID.ToString());
+            }
+            CuiHelper.DestroyUi(player, PanelOnScreen);
+            var element = UI.CreateOverlayContainer(PanelOnScreen, "0.0 0.0 0.0 0.0", "0.15 0.65", "0.85 .85", false);
+            UI.CreateTextOutline(ref element, PanelOnScreen, UIColors["black"], UIColors["white"], msg, 24, "0.0 0.0", "1.0 1.0");
+            CuiHelper.AddUi(player, element);
+            timers.Add(player.userID.ToString(), timer.Once(3, () => CuiHelper.DestroyUi(player, PanelOnScreen)));
+        }
+
+        void BackgroundPanel(BasePlayer player)
+        {
+            CuiHelper.DestroyUi(player, PanelBackground);
+            var element = UI.CreateOverlayContainer(PanelBackground, "0 0 0 0",".1 .15", ".9 .95", true);
+            UI.CreatePanel(ref element, PanelBackground, "0.1 0.1 0.1 0.8", "0 0", "1 1");
+            if (!string.IsNullOrEmpty(BackgroundURL))
+            {
+                var image = BackgroundURL;
+                if (ImageLibrary)
+                    image = TryForImage("Background");
+                UI.LoadImage(ref element, PanelBackground, image, "0 0", "1 1");
+            }
+            CuiHelper.AddUi(player, element);
+        }
+
 
         readonly Dictionary<ulong, PLayerGUI> PlayerGUI = new Dictionary<ulong, PLayerGUI>();
 
@@ -525,434 +838,296 @@ namespace Oxide.Plugins
         {
             public ulong guiid;
             public int page;
+            public bool open;
         }
 
-        private const string overlayjson = @"[
-			{
-				""name"": ""KitOverlay"",
-				""parent"": ""Overlay"",
-				""components"":
-				[
-					{
-						 ""type"":""UnityEngine.UI.Image"",
-						 ""color"":""0.1 0.1 0.1 0.8"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0 0"",
-						""anchormax"": ""1 1""
-					},
-					{
-						""type"":""NeedsCursor"",
-					}
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""{msg}"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.1 0.7"",
-						""anchormax"": ""0.9 0.9""
-					}
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Name"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.15 0.65"",
-						""anchormax"": ""0.25 0.7""
-					}
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Description"",
-						""fontSize"":10,
-						""align"": ""MiddleLeft"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.25 0.65"",
-						""anchormax"": ""0.70 0.7""
-					}
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Cooldown (s)"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.70 0.65"",
-						""anchormax"": ""0.75 0.7""
-					}
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Left"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.75 0.65"",
-						""anchormax"": ""0.80 0.7""
-					}
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Redeem"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.80 0.65"",
-						""anchormax"": ""0.90 0.7""
-					}
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Close"",
-						""fontSize"":20,
-						""align"": ""MiddleCenter"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.5 0.15"",
-						""anchormax"": ""0.7 0.20""
-					},
-				]
-			},
-			{
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Button"",
-						""command"":""kit.close"",
-						""color"": ""0.5 0.5 0.5 0.2"",
-						""imagetype"": ""Tiled""
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.5 0.15"",
-						""anchormax"": ""0.7 0.20""
-					}
-				]
-			}
-		]
-		";
-        private const string kitlistoverlay = @"[
-			{
-				""name"": ""KitListOverlay"",
-				""parent"": ""KitOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Image"",
-						""color"":""0 0 0 0"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0 0.20"",
-						""anchormax"": ""1 0.65""
-					}
-				]
-			}
-		]
-		";
-
-        private const string buttonjson = @"[
-			{
-				""parent"": ""KitListOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.RawImage"",
-						""imagetype"": ""Tiled"",
-						""url"": ""{imageurl}""
-                    },
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.10 {ymin}"",
-						""anchormax"": ""0.14 {ymax}""
-					}
-				]
-			},
-			{
-				""parent"": ""KitListOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""{kitfullname}"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-                    },
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.15 {ymin}"",
-						""anchormax"": ""0.25 {ymax}""
-					}
-				]
-			},
-			{
-				""parent"": ""KitListOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""{kitdescription}"",
-						""fontSize"":12,
-						""align"": ""MiddleLeft"",
-                    },
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.25 {ymin}"",
-						""anchormax"": ""0.70 {ymax}""
-					}
-				]
-			},
-			{
-				""parent"": ""KitListOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""{cooldown}"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-                    },
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.70 {ymin}"",
-						""anchormax"": ""0.75 {ymax}""
-					}
-				]
-			},
-			{
-				""parent"": ""KitListOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""{left}"",
-						""fontSize"":15,
-						""align"": ""MiddleLeft"",
-                    },
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.75 {ymin}"",
-						""anchormax"": ""0.80 {ymax}""
-					}
-				]
-			},
-			{
-				""parent"": ""KitListOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Redeem"",
-						""fontSize"":15,
-						""align"": ""MiddleCenter"",
-                    },
-                    {
-						""type"":""RectTransform"",
-						""anchormin"": ""0.80 {ymin}"",
-						""anchormax"": ""0.90 {ymax}""
-					}
-                ]
-            },
-            {
-                ""parent"": ""KitListOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Button"",
-						""command"":""kit.gui {guimsg}"",
-						""color"": ""{color}"",
-						""imagetype"": ""Tiled""
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.80 {ymin}"",
-						""anchormax"": ""0.90 {ymax}""
-					}
-				]
-			}
-		]
-		";
-
-        private const string kitchangepage = @"[
-		{
-			""parent"": ""KitListOverlay"",
-			""components"":
-			[
-				{
-					""type"":""UnityEngine.UI.Text"",
-					""text"":""<<"",
-					""fontSize"":20,
-					""align"": ""MiddleCenter"",
-				},
-				{
-					""type"":""RectTransform"",
-					""anchormin"": ""0.2 0"",
-					""anchormax"": ""0.3 0.1""
-				}
-			]
-		},
-		{
-			""parent"": ""KitListOverlay"",
-			""components"":
-			[
-				{
-					""type"":""UnityEngine.UI.Button"",
-					""color"": ""0.5 0.5 0.5 0.2"",
-					""command"":""kit.show {pageminus}"",
-					""imagetype"": ""Tiled""
-				},
-				{
-					""type"":""RectTransform"",
-					""anchormin"": ""0.2 0"",
-					""anchormax"": ""0.3 0.1""
-				}
-			]
-		},
-		{
-			""parent"": ""KitListOverlay"",
-			""components"":
-			[
-				{
-					""type"":""UnityEngine.UI.Text"",
-					""text"":"">>"",
-					""fontSize"":20,
-					""align"": ""MiddleCenter"",
-				},
-				{
-					""type"":""RectTransform"",
-					""anchormin"": ""0.35 0"",
-					""anchormax"": ""0.45 0.1""
-				}
-			]
-		},
-		{
-			""parent"": ""KitListOverlay"",
-			""components"":
-			[
-				{
-					""type"":""UnityEngine.UI.Button"",
-					""color"": ""0.5 0.5 0.5 0.2"",
-					""command"":""kit.show {pageplus}"",
-					""imagetype"": ""Tiled""
-				},
-				{
-					""type"":""RectTransform"",
-					""anchormin"": ""0.35 0"",
-					""anchormax"": ""0.45 0.1""
-				}
-			]
-		},
-		]
-		";
+        [ConsoleCommand("UI_ToggleKitMenu")]
+        private void cmdUI_ToggleKitMenu(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Connection.player as BasePlayer;
+            if (player == null || string.IsNullOrEmpty(UIKeyBinding)) return;
+            if (PlayerGUI.ContainsKey(player.userID))
+                if (PlayerGUI[player.userID].open)
+                {
+                    PlayerGUI[player.userID].open = false;
+                    DestroyAllGUI(player);
+                    return;
+                }
+            NewKitPanel(player);
+        }
 
         void NewKitPanel(BasePlayer player, ulong guiId = 0)
         {
             DestroyAllGUI(player);
             GUIKit kitpanel;
             if (!GUIKits.TryGetValue(guiId, out kitpanel)) return;
-
-            Game.Rust.Cui.CuiHelper.AddUi(player, overlayjson.Replace("{msg}", kitpanel.description));
-
+            BackgroundPanel(player);
             RefreshKitPanel(player, guiId);
         }
-        void RefreshKitPanel(BasePlayer player, ulong guiId, int minKit = 0)
+
+        void RefreshKitPanel(BasePlayer player, ulong guiId, int page = 0)
         {
+            CuiHelper.DestroyUi(player, PanelKits);
+            var element = UI.CreateOverlayContainer(PanelKits, "0 0 0 0", ".1 .15", ".9 .95");
             PLayerGUI playerGUI;
             if (!PlayerGUI.TryGetValue(player.userID, out playerGUI))
                 PlayerGUI[player.userID] = playerGUI = new PLayerGUI();
             playerGUI.guiid = guiId;
-            playerGUI.page = minKit;
-
-            DestroyGUI(player, "KitListOverlay");
-            Game.Rust.Cui.CuiHelper.AddUi(player, kitlistoverlay);
+            playerGUI.page = page;
+            PlayerGUI[player.userID].open = true;
+            bool npcCheck = false;
+            if (guiId != 0)
+                npcCheck = true;
             var kitpanel = GUIKits[guiId];
-
-            var max = minKit + 8;
-            if (max > kitpanel.kits.Count) max = kitpanel.kits.Count;
-            for (var i = minKit; i < max; i++)
+            List<string> Kits = new List<string>();
+            if (ShowUnavailableKits)
+                Kits = kitpanel.kits.Where(k=> storedData.Kits.ContainsKey(k.ToLower())).ToList();
+            else
             {
-                var kitname = kitpanel.kits[i].ToLower();
-                string reason;
-                var cansee = CanSeeKit(player, kitname, true, out reason);
-                if (!cansee && string.IsNullOrEmpty(reason)) continue;
-
-                Kit kit = storedData.Kits[kitname];
-                var kitData = GetKitData(player.userID, kitname);
-
-                var ckit = buttonjson.Replace("{color}", "0.5 0.5 0.5 0.2");
-                ckit = ckit.Replace("{guimsg}", $"'{kitname}'");
-                ckit = ckit.Replace("{ymin}", (1 - ((i - minKit) + 1) * 0.0775).ToString());
-                ckit = ckit.Replace("{ymax}", (1 - (i - minKit) * 0.0775).ToString());
-                ckit = ckit.Replace("{kitfullname}", kit.name);
-                ckit = ckit.Replace("{kitdescription}", kit.description ?? string.Empty);
-                ckit = ckit.Replace("{imageurl}", kit.image ?? "http://i.imgur.com/xxQnE1R.png");
-                ckit = ckit.Replace("{left}", kit.max <= 0 ? string.Empty : (kit.max - kitData.max).ToString());
-                ckit = ckit.Replace("{cooldown}", kit.cooldown <= 0 ? string.Empty : CurrentTime() > kitData.cooldown ? "0" : Math.Abs(Math.Ceiling(CurrentTime() - kitData.cooldown)).ToString());
-                Game.Rust.Cui.CuiHelper.AddUi(player, ckit);
+                foreach (var entry in kitpanel.kits)
+                {
+                    string reason;
+                    var cansee = CanSeeKit(player, entry.ToLower(), npcCheck, out reason);
+                    if (!cansee && string.IsNullOrEmpty(reason)) continue;
+                    Kits.Add(entry);
+                }
             }
-
-            var pageminus = minKit - 8 < 0 ? 0 : minKit - 8;
-            var pageplus = minKit + 8 > kitpanel.kits.Count ? minKit : minKit + 8;
-            var kpage = kitchangepage.Replace("{pageminus}", pageminus.ToString()).Replace("{pageplus}", pageplus.ToString());
-            Game.Rust.Cui.CuiHelper.AddUi(player, kpage);
+            int entriesallowed = 10;
+            int remainingentries = Kits.Count - (page * entriesallowed);
+            UI.CreateTextOutline(ref element, PanelKits, UIColors["white"], UIColors["black"], kitpanel.description, 20, "0.1 0.9", "0.9 1");
+            var i = 0;
+            var n = 0;
+            int shownentries = page * entriesallowed;
+            foreach (var entry in Kits)
+            {
+                i++;
+                if (i < shownentries + 1) continue;
+                else if (i <= shownentries + entriesallowed)
+                {
+                    var pos = KitSquarePos(n, remainingentries);
+                    CreateKitEntry(player, ref element, PanelKits, pos, entry);
+                    n++;
+                    if (n == entriesallowed) break;
+                }
+            }
+            if(player.net.connection.authLevel == 2 || permission.UserHasPermission(player.UserIDString, this.Title + ".admin"))
+                UI.CreateButton(ref element, PanelKits, UIColors["buttongrey"], GetMsg("AddKit", player.userID), 14, $".02 .02", ".07 .06", $"UI_AddKit {0}");
+            if (page >= 1)
+            UI.CreateButton(ref element, PanelKits, UIColors["buttongrey"], "<<", 20, $".79 .02", ".84 .06", $"kit.show {page - 1}");
+            if (remainingentries > entriesallowed)
+            UI.CreateButton(ref element, PanelKits, UIColors["buttongrey"], ">>", 20, $".86 .02", ".91 .06", $"kit.show {page + 1}");
+            UI.CreateButton(ref element, PanelKits, UIColors["buttonred"], GetMsg("Close", player.userID), 14, $".93 .02", ".98 .06", $"kit.close");
+            CuiHelper.AddUi(player, element);
         }
 
-        void DestroyAllGUI(BasePlayer player) { Game.Rust.Cui.CuiHelper.DestroyUi(player, "KitOverlay"); }
-        void DestroyGUI(BasePlayer player, string GUIName) { Game.Rust.Cui.CuiHelper.DestroyUi(player, GUIName); }
+        void CreateKitEntry(BasePlayer player, ref CuiElementContainer element, string panel, float[] pos, string entry)
+        {
+            Kit kit = storedData.Kits[entry.ToLower()];
+            var kitData = GetKitData(player.userID, entry.ToLower());
+            var image = kit.image ?? "http://i.imgur.com/xxQnE1R.png";
+            if (ImageLibrary)
+                image = TryForImage(kit.name.Replace(" ", ""));
+            UI.CreatePanel(ref element, PanelKits, UIColors["header"], $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+            UI.LoadImage(ref element, PanelKits, image, $"{pos[2] - .06f} {pos[1] + 0.01f}", $"{pos[2] - .005f} {pos[1] + .1f}");
+            UI.CreateLabel(ref element, PanelKits, UIColors["white"], kit.name, 12, $"{pos[0] + .005f} {pos[3] - .07f}", $"{pos[2] - .005f} {pos[3] - .01f}");
+            UI.CreateLabel(ref element, PanelKits, UIColors["white"], kit.description ?? string.Empty, 12, $"{pos[0] + .005f} {pos[3] - .18f}", $"{pos[2] - .005f} {pos[3] - .07f}", TextAnchor.UpperLeft);
+            UI.CreateLabel(ref element, PanelKits, UIColors["white"], string.Format(GetMsg("KitCooldown", player.userID), kit.cooldown <= 0 ? GetMsg("None", player.userID) : CurrentTime() > kitData.cooldown ? MinuteFormat(kit.cooldown / 60).ToString() : "<color=red> -" + MinuteFormat((double)Math.Abs(Math.Ceiling(CurrentTime() - kitData.cooldown)) / 60) + "</color>"), 12, $"{pos[0] + .005f} {pos[3] - .24f}", $"{pos[2] - .005f} {pos[3] - .21f}", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref element, PanelKits, UIColors["white"], string.Format(GetMsg("KitUses", player.userID), kit.max <= 0 ? GetMsg("Unlimited") : kit.max - kitData.max < kit.max ? $"<color=red>{kit.max - kitData.max }</color>/{kit.max}" : $"{kit.max - kitData.max }/{kit.max}"), 12, $"{pos[0] + .005f} {pos[3] - .27f}", $"{pos[2] - .005f} {pos[3] - .24f}", TextAnchor.MiddleLeft);
+            if (player.net.connection.authLevel == 2 || permission.UserHasPermission(player.UserIDString, this.Title + ".admin"))
+                UI.CreateButton(ref element, PanelKits, UIColors["buttonred"], GetMsg("RemoveKit", player.userID), 14, $"{pos[0] + .067f} {pos[1] + 0.01f}", $"{pos[0] + .122f} {pos[1] + .07f}", $"UI_RemoveKit {entry.ToLower()}");
+            if (!ShowUnavailableKits)
+                UI.CreateButton(ref element, PanelKits, UIColors["dark"], GetMsg("Redeem"), 12, $"{pos[0] + .005f} {pos[1] + 0.01f}", $"{pos[0] + .06f} {pos[1] + .07f}", $"kit.gui {entry.ToLower()}");
+            else
+            {
+                string reason;
+                var cansee = CanSeeKit(player, entry.ToLower(), PlayerGUI[player.userID].guiid == 0 ? false : true, out reason);
+                if (!cansee && string.IsNullOrEmpty(reason))
+                {
+                    UI.CreatePanel(ref element, PanelKits, UIColors["header"], $"{pos[0] + .005f} {pos[1] + 0.01f}", $"{pos[0] + .06f} {pos[1] + .07f}");
+                    UI.CreateLabel(ref element, PanelKits, UIColors["white"],"<color=red>"+GetMsg("Unavailable", player.userID)+"</color>", 12, $"{pos[0] + .005f} {pos[1] + 0.01f}", $"{pos[0] + .06f} {pos[1] + .07f}");
+                }
+                else
+                    UI.CreateButton(ref element, PanelKits, UIColors["dark"], GetMsg("Redeem"), 12, $"{pos[0] + .005f} {pos[1] + 0.01f}", $"{pos[0] + .06f} {pos[1] + .07f}", $"kit.gui {entry.ToLower()}");
+            }
+        }
+
+        private float[] KitSquarePos(int number, double count)
+        {
+            Vector2 position = new Vector2(0.015f, 0.5f);
+            Vector2 dimensions = new Vector2(0.19f, 0.4f);
+            float offsetY = 0;
+            float offsetX = 0;
+            if (count < 10)
+            {
+                position.x = (float)(1 - (((dimensions.x + .005f) * (count > 1 ? (Math.Round((count / 2), MidpointRounding.AwayFromZero)) : 1)))) / 2;
+            }
+            if (number >= 0 && number < 2)
+            {
+                offsetY = (-0.01f - dimensions.y) * number;
+            }
+            if (number > 1 && number < 4)
+            {
+                offsetX = (.005f + dimensions.x) * 1;
+                offsetY = (-0.01f - dimensions.y) * (number - 2);
+            }
+            if (number > 3 && number < 6)
+            {
+                offsetX = (.005f + dimensions.x) * 2;
+                offsetY = (-0.01f - dimensions.y) * (number - 4);
+            }
+            if (number > 5 && number < 8)
+            {
+                offsetX = (.005f + dimensions.x) * 3;
+                offsetY = (-0.01f - dimensions.y) * (number - 6);
+            }
+            if (number > 7 && number < 10)
+            {
+                offsetX = (.005f + dimensions.x) * 4;
+                offsetY = (-0.01f - dimensions.y) * (number - 8);
+            }
+            Vector2 offset = new Vector2(offsetX, offsetY);
+            Vector2 posMin = position + offset;
+            Vector2 posMax = posMin + dimensions;
+            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
+        }
+
+
+
+        [ConsoleCommand("UI_RemoveKit")]
+        private void cmdUI_RemoveKit(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Connection.player as BasePlayer;
+            if (player == null || (player.net.connection.authLevel < 2 && !permission.UserHasPermission(player.UserIDString, this.Title + ".admin"))) return;
+            CuiHelper.DestroyUi(player, PanelOnScreen);
+            var kit = string.Join(" ", arg.Args);
+            if (GUIKits[PlayerGUI[player.userID].guiid].kits.Contains(kit))
+            {
+                GUIKits[PlayerGUI[player.userID].guiid].kits.Remove(kit);
+                var config = Config.ReadObject<Dictionary<string, object>>();
+                config["NPC - GUI Kits"] = GUIKits;
+                Config.WriteObject(config);
+                CuiHelper.DestroyUi(player, PanelOnScreen);
+                RefreshKitPanel(player, PlayerGUI[player.userID].guiid, PlayerGUI[player.userID].page);
+            }
+        }
+
+        [ConsoleCommand("UI_AddKit")]
+        private void cmdUI_AddKit(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Connection.player as BasePlayer;
+            if (player == null || (player.net.connection.authLevel < 2 && !permission.UserHasPermission(player.UserIDString, this.Title + ".admin"))) return;
+            CuiHelper.DestroyUi(player, PanelOnScreen);
+            int page;
+            if (!int.TryParse(arg.Args[0], out page))
+                if (arg.Args[0] == "close")
+                    return;
+                else
+                {
+                    GUIKits[PlayerGUI[player.userID].guiid].kits.Add(string.Join(" ",arg.Args));
+                    var config = Config.ReadObject<Dictionary<string, object>>();
+                    config["NPC - GUI Kits"] = GUIKits;
+                    Config.WriteObject(config);
+                    CuiHelper.DestroyUi(player, PanelOnScreen);
+                    RefreshKitPanel(player, PlayerGUI[player.userID].guiid, PlayerGUI[player.userID].page);
+                    return;
+                }
+            double count = GetAllKits().Count() - GUIKits[PlayerGUI[player.userID].guiid].kits.Where(k => storedData.Kits.ContainsKey(k.ToLower())).ToList().Count();
+            if (count == 0)
+            {
+                SendReply(player, GetMsg("NoKitsFound", player.userID));
+                return;
+            }
+            var element = UI.CreateOverlayContainer(PanelOnScreen, UIColors["dark"], ".1 .15", ".9 .95");
+            UI.CreateTextOutline(ref element, PanelOnScreen, UIColors["white"], UIColors["black"], GetMsg("AddKitToMenu", player.userID), 20, "0.1 0.9", "0.9 .99", TextAnchor.UpperCenter);
+            int entriesallowed = 30;
+            double remainingentries = count - (page * (entriesallowed));
+            double totalpages = (Math.Floor(count / (entriesallowed)));
+            {
+                if (page < totalpages - 1)
+                {
+                    UI.CreateButton(ref element, PanelOnScreen, UIColors["buttongrey"], GetMsg("Last", player.userID), 16, "0.8 0.02", "0.85 0.06", $"UI_AddKit {totalpages}");
+                }
+                if (remainingentries > entriesallowed)
+                {
+                    UI.CreateButton(ref element, PanelOnScreen, UIColors["buttongrey"], GetMsg("Next", player.userID), 16, "0.74 0.02", "0.79 0.06", $"UI_AddKit {page + 1}");
+                }
+                if (page > 0)
+                {
+                    UI.CreateButton(ref element, PanelOnScreen, UIColors["buttongrey"], GetMsg("Back", player.userID), 16, "0.68 0.02", "0.73 0.06", $"UI_AddKit {page - 1}");
+                }
+                if (page > 1)
+                {
+                    UI.CreateButton(ref element, PanelOnScreen, UIColors["buttongrey"], GetMsg("First", player.userID), 16, "0.62 0.02", "0.67 0.06", $"UI_AddKit {0}");
+                }
+            }
+            var i = 0;
+            int n = 0;
+            double shownentries = page * entriesallowed;
+            foreach (string kitname in GetAllKits().Where(k => !GUIKits[PlayerGUI[player.userID].guiid].kits.Contains(k)).OrderBy(k=>k))
+            {
+                i++;
+                if (i < shownentries + 1) continue;
+                else if (i <= shownentries + entriesallowed)
+                {
+                    CreateKitButton(ref element, PanelOnScreen, UIColors["header"], kitname, $"UI_AddKit {kitname}", n);
+                    n++;
+                }
+            }
+            UI.CreateButton(ref element, PanelOnScreen, UIColors["buttonred"], GetMsg("Close", player.userID), 14, $".93 .02", ".98 .06", $"UI_AddKit close");
+            CuiHelper.AddUi(player, element);
+        }
+
+        private void CreateKitButton(ref CuiElementContainer container, string panelName, string color, string name, string cmd, int num)
+        {
+            var pos = CalcKitButtonPos(num);
+            UI.CreateButton(ref container, panelName, color, name, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", cmd);
+        }
+
+        private float[] CalcKitButtonPos(int number)
+        {
+            Vector2 position = new Vector2(0.05f, 0.82f);
+            Vector2 dimensions = new Vector2(0.125f, 0.125f);
+            float offsetY = 0;
+            float offsetX = 0;
+            if (number >= 0 && number < 6)
+            {
+                offsetX = (0.03f + dimensions.x) * number;
+            }
+            if (number > 5 && number < 12)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 6);
+                offsetY = (-0.06f - dimensions.y) * 1;
+            }
+            if (number > 11 && number < 18)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 12);
+                offsetY = (-0.06f - dimensions.y) * 2;
+            }
+            if (number > 17 && number < 24)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 18);
+                offsetY = (-0.06f - dimensions.y) * 3;
+            }
+            if (number > 23 && number < 36)
+            {
+                offsetX = (0.03f + dimensions.x) * (number - 24);
+                offsetY = (-0.06f - dimensions.y) * 4;
+            }
+            Vector2 offset = new Vector2(offsetX, offsetY);
+            Vector2 posMin = position + offset;
+            Vector2 posMax = posMin + dimensions;
+            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
+        }
+
+        private string MinuteFormat(double minutes)
+        {
+            TimeSpan dateDifference = TimeSpan.FromMinutes(minutes);
+            var hours = dateDifference.Hours;
+            hours += (dateDifference.Days * 24);
+            return string.Format("{0:00}:{1:00}:{2:00}", hours, dateDifference.Minutes, dateDifference.Seconds);
+        }
+
+        void DestroyAllGUI(BasePlayer player) { CuiHelper.DestroyUi(player, "KitOverlay"); CuiHelper.DestroyUi(player, PanelOnScreen); CuiHelper.DestroyUi(player, PanelKits); CuiHelper.DestroyUi(player, PanelBackground); }
         void OnUseNPC(BasePlayer npc, BasePlayer player)
         {
             if (!GUIKits.ContainsKey(npc.userID)) return;
@@ -985,6 +1160,24 @@ namespace Oxide.Plugins
             return null;
         }
 
+        [HookMethod("KitCooldown")]
+        public double KitCooldown(string kitname) => storedData.Kits[kitname].cooldown;
+
+        [HookMethod("PlayerKitCooldown")]
+        public double PlayerKitCooldown(ulong ID, string kitname) => storedData.Kits[kitname].cooldown <= 0 ? 0 : CurrentTime() > GetKitData(ID, kitname).cooldown ? storedData.Kits[kitname].cooldown : CurrentTime() - GetKitData(ID, kitname).cooldown;
+
+        [HookMethod("KitDescription")]
+        public string KitDescription(string kitname) => storedData.Kits[kitname].description;
+
+        [HookMethod("KitMax")]
+        public int KitMax(string kitname) => storedData.Kits[kitname].max;
+
+        [HookMethod("PlayerKitMax")]
+        public double PlayerKitMax(ulong ID, string kitname) => storedData.Kits[kitname].max <= 0 ? 0 : storedData.Kits[kitname].max - GetKitData(ID, kitname).max < storedData.Kits[kitname].max ? storedData.Kits[kitname].max - GetKitData(ID, kitname).max : 0;
+
+        [HookMethod("KitImage")]
+        public string KitImage(string kitname) => storedData.Kits[kitname].image;
+
         //////////////////////////////////////////////////////////////////////////////////////
         // Console Command
         //////////////////////////////////////////////////////////////////////////////////////
@@ -1002,9 +1195,8 @@ namespace Oxide.Plugins
                 return;
             }
             var player = arg.Player();
-            var kitname = arg.Args[0].Substring(1, arg.Args[0].Length - 2);
+            var kitname = arg.Args[0]/*.Substring(1, arg.Args[0].Length - 2)*/;
             TryGiveKit(player, kitname);
-            RefreshKitPanel(player, PlayerGUI[player.userID].guiid, PlayerGUI[player.userID].page);
         }
 
         [ConsoleCommand("kit.close")]
@@ -1015,6 +1207,7 @@ namespace Oxide.Plugins
                 SendReply(arg, "You can't use this command from the server console");
                 return;
             }
+            PlayerGUI[arg.Player().userID].open = false;
             DestroyAllGUI(arg.Player());
         }
 
@@ -1033,10 +1226,8 @@ namespace Oxide.Plugins
             }
 
             var player = arg.Player();
-
             PLayerGUI playerGUI;
             if (!PlayerGUI.TryGetValue(player.userID, out playerGUI)) return;
-
             RefreshKitPanel(player, playerGUI.guiid, arg.GetInt(0));
         }
 
@@ -1072,7 +1263,7 @@ namespace Oxide.Plugins
 
         bool hasAccess(BasePlayer player)
         {
-            if (player?.net?.connection?.authLevel > 1)
+            if (player?.net?.connection?.authLevel > 1 || permission.UserHasPermission(player.UserIDString, this.Title +".admin"))
                 return true;
             return false;
         }

@@ -1,0 +1,16 @@
+{
+    "name": "LightsOut",
+    "description": "Allows you to turn off all ovens\/lights.",
+    "author": "DylanSMR",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/lightsout.2384",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

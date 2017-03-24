@@ -2,7 +2,7 @@
     "name": "Cornucopia",
     "description": "The horn of plenty! Spawn extra crates, barrels, nodes, animals, etc. randomly on the map",
     "author": "Wulf",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/cornucopia.1264",

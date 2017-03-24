@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 using Rust;
 namespace Oxide.Plugins
 {
-    [Info("MagicTeleportation", "Norn", "1.1.1", ResourceId = 1404)]
+    [Info("MagicTeleportation", "Norn", "1.1.2", ResourceId = 1404)]
     [Description("Teleportation system.")]
     public class MagicTeleportation : RustPlugin
     {
@@ -1010,7 +1010,7 @@ namespace Oxide.Plugins
         {
             string result = "";
             string tp_correct = "continue";
-            if (player != null && player.IsConnected())
+            if (player != null && player.IsConnected)
             {
                 if (Convert.ToBoolean(Config["Settings", "BypassAdmin"]) && player.net.connection.authLevel >= Convert.ToInt32(Config["General", "AuthLevel"]))
                 {

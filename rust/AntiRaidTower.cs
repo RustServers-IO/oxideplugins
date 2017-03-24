@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiRaidTower", "Calytic @ RustServers.IO", "0.2.2", ResourceId = 1211)]
+    [Info("AntiRaidTower", "Calytic @ RustServers.IO", "0.2.3", ResourceId = 1211)]
     [Description("Building/deployable height limit, high jump instant death, no wounded teleport")]
     class AntiRaidTower : RustPlugin
     {
@@ -95,7 +95,7 @@ namespace Oxide.Plugins
                 {
                     return;
                 }
-                if (player.IsConnected() && player.net.connection.authLevel > 0)
+                if (player.IsConnected && player.net.connection.authLevel > 0)
                 {
                     return;
                 }

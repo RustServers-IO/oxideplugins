@@ -1,0 +1,16 @@
+{
+    "name": "BuildCost",
+    "description": "Displays an approximate build cost for a structure and deployables",
+    "author": "ignignokt84",
+    "version": "0.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/buildcost.2388",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

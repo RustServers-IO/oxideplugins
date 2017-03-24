@@ -10,10 +10,11 @@ using System.Reflection;
 using Rust;
 using System.Linq;
 using Newtonsoft.Json;
+using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut", "1.6.1", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut", "1.6.6", ResourceId = 2193)]
 
     class ImageLibrary : RustPlugin
     {
@@ -57,6 +58,7 @@ namespace Oxide.Plugins
             foreach (var entry in timers)
                 entry.Value.Destroy();
             timers.Clear();
+            UnableToFindImageList.Clear();
             SaveData();
         }
 
@@ -65,12 +67,16 @@ namespace Oxide.Plugins
             webObject = new GameObject("WebObject");
             images = webObject.AddComponent<Images>();
             images.SetDataDir(this);
-            LoadVariables();
             LoadData();
             InitializeItemList();
             RelocateImages();
             RefreshImages();
             timers.Add("clear", timer.Once(300, () => ClearImageNotFoundList()));
+        }
+
+        void OnPlayerInit(BasePlayer player)
+        {
+            GetPlayerAvatar(player.userID);
         }
 
         string GetPluginName(ulong resourceId)
@@ -90,6 +96,18 @@ namespace Oxide.Plugins
             UnableToFindImageList.Clear();
             timers.Add("clear", timer.Once(300, () => ClearImageNotFoundList()));
         }
+
+        static readonly Regex Regex = new Regex(@"<avatarIcon><!\[CDATA\[(.*)\]\]></avatarIcon>");
+        void GetPlayerAvatar(ulong ID)
+        {
+            webrequest.EnqueueGet($"http://steamcommunity.com/profiles/{ID}?xml=1", (code, response) =>
+            {
+                string avatar = null;
+                if (response != null && code == 200) avatar = Regex.Match(response).Groups[1].ToString();
+               images.Add(avatar, ID.ToString(), 0);
+            }, this);
+        }
+
 
         #endregion
 
@@ -414,20 +432,14 @@ namespace Oxide.Plugins
                     foreach (var item in items)
                     {
                         if (!string.IsNullOrEmpty(item.itemshortname) && !string.IsNullOrEmpty(item.icon_url))
-                                images.Add(item.icon_url, item.itemshortname, item.itemdefid);
+                            images.Add(item.icon_url, item.itemshortname, item.itemdefid);
                     }
                 }
             }, this);
             foreach (var entry in ItemImages)
                 foreach (var item in entry.Value.Where(k => k.Key == 0))
-                        images.Add(item.Value, entry.Key, item.Key);
-            if (!configData.GetMarketImages)
-            {
-                WorkshopDone = true;
-                return;
-            }
-            ServerMgr.Instance.StartCoroutine(GetWorkshopSkins());
-            Puts("Loading Workshop Images");
+                    images.Add(item.Value, entry.Key, item.Key);
+            WorkshopDone = true;
         }
 
         public IEnumerator GetWorkshopSkins()
@@ -2157,9 +2169,97 @@ namespace Oxide.Plugins
                 { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/d/d4/Python_Revolver_icon.png/revision/latest/scale-to-width-down/100?cb=20170118190136" }
             }
             },
+            {"clone.corn", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette4.wikia.nocookie.net/play-rust/images/6/65/Corn_Clone_icon.png/revision/latest/scale-to-width-down/100?cb=20170122060431" }
+            }
+            },
+            {"clone.hemp", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/c/c9/Hemp_Clone_icon.png/revision/latest/scale-to-width-down/100?cb=20170122060314" }
+            }
+            },
+            {"clone.pumpkin", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette4.wikia.nocookie.net/play-rust/images/8/82/Pumpkin_Plant_Clone_icon.png/revision/latest/scale-to-width-down/100?cb=20170122060357" }
+            }
+            },
+            {"vending.machine", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/5/5c/Vending_Machine_icon.png/revision/latest/scale-to-width-down/100?cb=20170215180154" }
+            }
+            },
+            {"flameturret", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette3.wikia.nocookie.net/play-rust/images/f/f9/Flame_Turret_icon.png/revision/latest/scale-to-width-down/100?cb=20170215180224" }
+            }
+            },
+            {"fridge", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette4.wikia.nocookie.net/play-rust/images/8/88/Fridge_icon.png/revision/latest/scale-to-width-down/100?cb=20170216160606" }
+            }
+            },
+            {"tunalight", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/b/b2/Tuna_Can_Lamp_icon.png/revision/latest/scale-to-width-down/100?cb=20170215182014" }
+            }
+            },
+            {"door.closer", new Dictionary<ulong, string>
+            {
+                { 0, "http://i.imgur.com/QIKkGqT.png" }
+            }
+            },
+            {"heavy.plate.pants", new Dictionary<ulong, string>
+            {
+                { 0, "http://i.imgur.com/lSPn5Y1.png" }
+            }
+            },
+            {"heavy.plate.jacket", new Dictionary<ulong, string>
+            {
+                { 0, "http://i.imgur.com/HnRvGUZ.png" }
+            }
+            },
+            {"heavy.plate.helmet", new Dictionary<ulong, string>
+            {
+                { 0, "http://i.imgur.com/2SFpnla.png" }
+            }
+            },
+            {"chair", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette1.wikia.nocookie.net/play-rust/images/3/3c/Chair_icon.png/revision/latest/scale-to-width-down/100?cb=20170301072948" }
+            }
+            },
+            {"wall.frame.shopfront.metal", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette2.wikia.nocookie.net/play-rust/images/4/46/Metal_Shop_Front_icon.png/revision/latest/scale-to-width-down/100?cb=20170216160552" }
+            }
+            },
+            {"table", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette3.wikia.nocookie.net/play-rust/images/5/5d/Table_icon.png/revision/latest/scale-to-width-down/100?cb=20170301073010" }
+            }
+            },
+            {"planter.small", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette3.wikia.nocookie.net/play-rust/images/a/a7/Small_Planter_Box_icon.png/revision/latest/scale-to-width-down/100?cb=20161215213113" }
+            }
+            },
+            {"rug", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette3.wikia.nocookie.net/play-rust/images/c/c5/Rug_icon.png/revision/latest/scale-to-width-down/100?cb=20170301074259" }
+            }
+            },
+            {"planter.large", new Dictionary<ulong, string>
+            {
+                { 0, "http://vignette1.wikia.nocookie.net/play-rust/images/3/35/Large_Planter_Box_icon.png/revision/latest/scale-to-width-down/100?cb=20161214151746" }
+            }
+            },
+            {"locker", new Dictionary<ulong, string>
+            {
+                { 0, "http://i.imgur.com/84BWEpB.png" }
+            }
+            },
 };
-
-
         #endregion
 
         #region Data Management
@@ -2189,30 +2289,5 @@ namespace Oxide.Plugins
             }
         }
         #endregion
-
-        #region Config        
-        private ConfigData configData;
-        class ConfigData
-        {
-            public bool GetMarketImages { get; set; }
-        }
-        private void LoadVariables()
-        {
-            LoadConfigVariables();
-            SaveConfig();
-        }
-        protected override void LoadDefaultConfig()
-        {
-            var config = new ConfigData
-            {
-                GetMarketImages = false,
-            };
-            SaveConfig(config);
-        }
-        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
-        #endregion
-
-
     }
 }

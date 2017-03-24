@@ -9,11 +9,10 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Building Grades", "bawNg / Nogrod", "0.3.7", ResourceId = 865)]
+    [Info("Building Grades", "bawNg / Nogrod", "0.3.9", ResourceId = 865)]
     class BuildingGrades : RustPlugin
     {
-        private readonly FieldInfo serverInputField = typeof(BasePlayer).GetField("serverInput", BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly FieldInfo instancesField = typeof(MeshColliderBatch).GetField("instances", BindingFlags.Instance | BindingFlags.NonPublic);
+        private readonly FieldInfo meshLookupField = typeof(MeshColliderBatch).GetField("meshLookup", BindingFlags.Instance | BindingFlags.NonPublic);
         private const string Perm = "buildinggrades.cangrade";
         private const string PermNoCost = "buildinggrades.nocost";
         private const string PermOwner = "buildinggrades.owner";
@@ -183,7 +182,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (!player.IsAdmin() && runningPlayers.Count > 0)
+            if (!player.IsAdmin && runningPlayers.Count > 0)
             {
                 PrintMessage(player, "AnotherProcess");
                 return;
@@ -239,11 +238,11 @@ namespace Oxide.Plugins
                 Pool.FreeList(ref blocks);
                 //done++;
             }
-            var allowed = player.IsAdmin() || permission.UserHasPermission(player.UserIDString, PermOwner);
+            var allowed = player.IsAdmin || permission.UserHasPermission(player.UserIDString, PermOwner);
             all_blocks.RemoveWhere(b => !allowed && b.OwnerID != player.userID || filter && !prefabs.Contains(b.prefabID));
             //Puts("Time: {0} Size: {1} Done: {2}", Interface.Oxide.Now - started, all_blocks.Count, done);
 
-            if (increment && !player.IsAdmin() && !permission.UserHasPermission(player.UserIDString, PermNoCost))
+            if (increment && !player.IsAdmin && !permission.UserHasPermission(player.UserIDString, PermNoCost))
             {
                 var costs = GetCosts(all_blocks, targetGrade);
                 if (!CanAffordUpgrade(costs, player)) return;
@@ -343,7 +342,7 @@ namespace Oxide.Plugins
                 item.Remove(0f);
         }
 
-        static bool CanUpgrade(BuildingBlock block, BuildingGrade.Enum grade)
+        private static bool CanUpgrade(BuildingBlock block, BuildingGrade.Enum grade)
         {
             if (block.IsDestroyed || grade == block.grade)
                 return false;
@@ -351,7 +350,17 @@ namespace Oxide.Plugins
                 return false;
             if (grade < BuildingGrade.Enum.Twigs)
                 return false;
+            if (IsUpgradeBlocked(block))
+                return false;
             return true;
+        }
+
+        private static bool IsUpgradeBlocked(BuildingBlock block)
+        {
+            if (!block.blockDefinition.checkVolumeOnUpgrade)
+                return false;
+            var deployVolumeArray = PrefabAttribute.server.FindAll<DeployVolume>(block.prefabID);
+            return DeployVolume.Check(block.transform.position, block.transform.rotation, deployVolumeArray, ~(1 << (block.gameObject.layer & 31)));
         }
 
         static int NextBlockGrade(BuildingBlock building_block, int targetGrade, int offset)
@@ -378,9 +387,7 @@ namespace Oxide.Plugins
 
         Stack<BuildingBlock> GetTargetBuildingBlock(BasePlayer player)
         {
-            var input = serverInputField?.GetValue(player) as InputState;
-            if (input == null) return null;
-            var direction = Quaternion.Euler(input.current.aimAngles);
+            var direction = Quaternion.Euler(player.serverInput.current.aimAngles);
             var stack = new Stack<BuildingBlock>();
             RaycastHit initial_hit;
             if (!Physics.Raycast(new Ray(player.transform.position + new Vector3(0f, 1.5f, 0f), direction * Vector3.forward), out initial_hit, 150f) || initial_hit.collider is TerrainCollider)
@@ -391,9 +398,9 @@ namespace Oxide.Plugins
             {
                 var batch = initial_hit.collider?.GetComponent<MeshColliderBatch>();
                 if (batch == null) return stack;
-                var colliders = (ListDictionary<Component, ColliderCombineInstance>)instancesField.GetValue(batch);
+                var colliders = ((MeshColliderLookup)meshLookupField.GetValue(batch)).src.data;
                 if (colliders == null) return stack;
-                foreach (var instance in colliders.Values)
+                foreach (var instance in colliders)
                 {
                     entity = instance.collider?.GetComponentInParent<BuildingBlock>();
                     if (entity == null) continue;
@@ -405,7 +412,7 @@ namespace Oxide.Plugins
 
         bool IsAllowed(BasePlayer player)
         {
-            return player != null && (player.IsAdmin() || permission.UserHasPermission(player.UserIDString, Perm));
+            return player != null && (player.IsAdmin || permission.UserHasPermission(player.UserIDString, Perm));
         }
 
         private void PrintMessage(BasePlayer player, string msgId, params object[] args)

@@ -17,7 +17,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiOfflineRaid", "rustservers.io", "0.2.8", ResourceId = 1464)]
+    [Info("AntiOfflineRaid", "rustservers.io", "0.2.9", ResourceId = 1464)]
     [Description("Prevents/reduces offline raiding")]
     public class AntiOfflineRaid : RustPlugin
     {
@@ -102,7 +102,7 @@ namespace Oxide.Plugins
             public bool IsConnected()
             {
                 BasePlayer player = this.player;
-                if (player != null && player.IsConnected())
+                if (player != null && player.IsConnected)
                 {
                     return true;
                 }
@@ -393,7 +393,7 @@ namespace Oxide.Plugins
         {
             foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
-                if (!player.IsConnected())
+                if (!player.IsConnected)
                     continue;
 
                 bool hasMoved = true;
@@ -599,7 +599,7 @@ namespace Oxide.Plugins
                 return true;
             }
 
-            if (player.IsConnected())
+            if (player.IsConnected)
             {
                 return false;
             }
@@ -877,14 +877,14 @@ namespace Oxide.Plugins
         [ChatCommand("boffline")]
         private void cmdboffline(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             lastOnline[player.userID].lastOnline = lastOnline[player.userID].lastOnline.Subtract(TimeSpan.FromHours(3));
         }
 
         [ChatCommand("bonline")]
         private void cmdbonline(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             lastOnline[player.userID].lastOnline = DateTime.Now;
             lastOnline[player.userID].afkMinutes = 0;
         }

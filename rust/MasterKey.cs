@@ -6,7 +6,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("MasterKey", "Wulf/lukespragg", "0.5.0", ResourceId = 1151)]
+    [Info("MasterKey", "Wulf/lukespragg", "0.6.0", ResourceId = 1151)]
     [Description("Gain access to any locked object and/or build anywhere with permission")]
 
     class MasterKey : CovalencePlugin
@@ -14,11 +14,10 @@ namespace Oxide.Plugins
         #region Initialization
 
         readonly DynamicConfigFile dataFile = Interface.Oxide.DataFileSystem.GetFile("MasterKey");
-        readonly string[] lockableTypes = { "box", "cell", "door", "gate", "shop", "hatch" };
+        readonly string[] lockableTypes = { "box", "cell", "door", "gate", "hatch", "shop" };
         Dictionary<string, bool> playerPrefs = new Dictionary<string, bool>();
 
         const string permBuild = "masterkey.build";
-        const string permCupboard = "masterkey.cupboard";
 
         bool logUsage;
         bool showMessages;
@@ -29,9 +28,13 @@ namespace Oxide.Plugins
             Config["Log Usage (true/false)"] = logUsage = GetConfig("Log Usage (true/false)", true);
             Config["Show Messages (true/false)"] = showMessages = GetConfig("Show Messages (true/false)", true);
 
+            // Cleanup
+            Config.Remove("LogUsage");
+            Config.Remove("ShowMessages");
+
             SaveConfig();
         }
-        
+
         void Init()
         {
             LoadDefaultConfig();
@@ -39,7 +42,6 @@ namespace Oxide.Plugins
             playerPrefs = dataFile.ReadObject<Dictionary<string, bool>>();
 
             permission.RegisterPermission(permBuild, this);
-            permission.RegisterPermission(permCupboard, this);
             foreach (var type in lockableTypes) permission.RegisterPermission($"{Title.ToLower()}.{type}", this);
         }
 
@@ -52,8 +54,8 @@ namespace Oxide.Plugins
             // English
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Disabled"] = "Master key access is now disabled",
-                ["Enabled"] = "Master key access is now enabled",
+                ["MasterKeyDisabled"] = "Master key access is now disabled",
+                ["MasterKeyEnabled"] = "Master key access is now enabled",
                 ["MasterKeyUsed"] = "{0} ({1}) used master key at {2}",
                 ["NotAllowed"] = "You are not allowed to use the '{0}' command",
                 ["UnlockedWith"] = "Unlocked {0} with master key!"
@@ -78,45 +80,7 @@ namespace Oxide.Plugins
             playerPrefs[player.Id] = !playerPrefs[player.Id];
             dataFile.WriteObject(playerPrefs);
 
-            player.Reply(playerPrefs[player.Id] ? Lang("Enabled", player.Id) : Lang("Disabled"));
-        }
-
-        #endregion
-
-        #region Lock Access
-
-        object CanUseLock(BasePlayer player, BaseLock @lock)
-        {
-            var prefab = @lock.parentEntity.Get(true).ShortPrefabName;
-
-            if (!@lock.IsLocked()) return null;
-            if (playerPrefs.ContainsKey(player.UserIDString) && !playerPrefs[player.UserIDString]) return null;
-
-            foreach (var type in lockableTypes)
-            {
-                if (!prefab.Contains(type)) continue;
-
-                if (!permission.UserHasPermission(player.UserIDString, $"masterkey.{type}")) return null;
-                if (showMessages) player.ChatMessage(Lang("UnlockedWith", player.UserIDString, type));
-                if (logUsage) LogToFile(Lang("MasterKeyUsed", null, player.displayName, player.UserIDString, player.transform.position));
-                return true;
-            }
-
-            return null;
-        }
-
-        #endregion
-
-        #region Cupboard Access
-
-        object OnCupboardAuthorize(BuildingPrivlidge priviledge, BasePlayer player)
-        {
-            if (playerPrefs.ContainsKey(player.UserIDString) && !playerPrefs[player.UserIDString]) return null;
-
-            if (!permission.UserHasPermission(player.UserIDString, permCupboard)) return null;
-            if (showMessages) player.ChatMessage(Lang("UnlockedWith", player.UserIDString, "cupboard"));
-            if (logUsage) LogToFile(Lang("MasterKeyUsed", null, player.displayName, player.UserIDString, player.transform.position));
-            return true;
+            player.Reply(playerPrefs[player.Id] ? Lang("MasterKeyEnabled", player.Id) : Lang("MasterKeyDisabled"));
         }
 
         #endregion
@@ -131,8 +95,35 @@ namespace Oxide.Plugins
             if (playerPrefs.ContainsKey(player.UserIDString) && !playerPrefs[player.UserIDString]) return;
             if (!permission.UserHasPermission(player.UserIDString, permBuild)) return;
 
-            timer.Once(0.1f, () => player.SetPlayerFlag(BasePlayer.PlayerFlags.HasBuildingPrivilege, true));
-            if (logUsage) LogToFile(Lang("MasterKeyUsed", null, player.displayName, player.UserIDString, player.transform.position));
+            NextTick(() =>
+            {
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.InBuildingPrivilege, true);
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.HasBuildingPrivilege, true);
+            });
+            if (logUsage) Log(Lang("MasterKeyUsed", null, player.displayName, player.UserIDString, player.transform.position));
+        }
+
+        #endregion
+
+        #region Lock Access
+
+        object CanUseLock(BasePlayer player, BaseLock @lock)
+        {
+            if (!@lock.IsLocked()) return null;
+            if (playerPrefs.ContainsKey(player.UserIDString) && !playerPrefs[player.UserIDString]) return null;
+
+            var prefab = @lock.parentEntity.Get(true).ShortPrefabName;
+            foreach (var type in lockableTypes)
+            {
+                if (!prefab.Contains(type)) continue;
+                if (!permission.UserHasPermission(player.UserIDString, $"masterkey.{type}")) return null;
+
+                if (showMessages) player.ChatMessage(Lang("UnlockedWith", player.UserIDString, type));
+                if (logUsage) Log(Lang("MasterKeyUsed", null, player.displayName, player.UserIDString, player.transform.position));
+                return true;
+            }
+
+            return null;
         }
 
         #endregion
@@ -143,7 +134,7 @@ namespace Oxide.Plugins
 
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        void LogToFile(string text) => ConVar.Server.Log($"oxide/logs/{Title.ToLower()}_{DateTime.Now.ToString("yyyy-MM-dd")}.txt", text);
+        void Log(string text) => LogToFile("usage", $"[{DateTime.Now}] {text}", this);
 
         #endregion
     }

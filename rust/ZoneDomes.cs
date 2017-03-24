@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneDomes", "k1lly0u", "0.1.32", ResourceId = 1945)]
+    [Info("ZoneDomes", "k1lly0u", "0.1.33", ResourceId = 1945)]
     class ZoneDomes : RustPlugin
     {
         #region Fields
@@ -255,7 +255,7 @@ namespace Oxide.Plugins
         [ChatCommand("zd")]
         private void cmdZoneDome(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 if (args == null || args.Length == 0)
                 {

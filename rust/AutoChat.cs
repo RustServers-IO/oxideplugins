@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.2.2", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.2.3", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
@@ -110,47 +110,17 @@ namespace Oxide.Plugins
         #endregion
 
         #region Hooks
+        void OnServerInitialized()
+        {
+            CheckPlugins();
+        }
+
         void Loaded()
         {
             LoadData();
             LoadConfigData();
-
-            if (plugins.Exists("Clans"))
-            {
-                ChatType.Add("c");
-                if (Clans.ResourceId == 2087) //Universal Clans
-                    ChatType.Add("a");
-            }
-            if (plugins.Exists("PrivateMessage"))
-            {
-                ChatType.Add("pm");
-                ChatType.Add("r");
-            }
-            if (plugins.Exists("Friends") && Friends.ResourceId == 2120) //Universal Friends
-            {
-                ChatType.Add("fm");
-                ChatType.Add("f");
-                ChatType.Add("pm");
-                ChatType.Add("m");
-                ChatType.Add("rm");
-                ChatType.Add("r");
-            }
-
-            if (ChatType.Count == 0)
-            {
-                Enabled = false;
-                PrintWarning("AutoChat was disabled because weren't found supported plugins.");
-            }
-
-            if (plugins.Exists("BetterChat"))
-            {
-                var v = Convert.ToInt32(BetterChat.Version.ToString().Split('.')[0]);
-                if (v >= 5) BC = false;
-            }
-            else
-                BC = false;
-
             LoadDefaultMessages();
+
             permission.RegisterPermission(PermAdmin, this);
             permission.RegisterPermission(PermUse, this);
         }
@@ -375,14 +345,15 @@ namespace Oxide.Plugins
                 return false;
         }
 
-        object OnBetterChat(IPlayer player, string message)
+        object OnBetterChat(Dictionary<string, object> data)
         {
-            if (!Enabled || !HasPermission(player.Id, PermUse)) return message;
+            var player = (IPlayer)data["Player"];
+            if (!Enabled || !HasPermission(player.Id, PermUse)) return data;
             var bPlayer = Game.Rust.RustCore.FindPlayerByIdString(player.Id);
-            if (!bPlayer) return message;
+            if (!bPlayer) return data;
             ChatInfo chatData;
             var playerData = GetPlayerData(bPlayer, out chatData);
-            if (!playerData.Active || chatData.Command == "") return message;
+            if (!playerData.Active || chatData.Command == "") return data;
 
             return false;
         }
@@ -399,6 +370,44 @@ namespace Oxide.Plugins
                 chatInfo[player.userID] = chatData = new ChatInfo();
 
             return playerData;
+        }
+
+        void CheckPlugins()
+        {
+            if (Clans)
+            {
+                ChatType.Add("c");
+                if (Clans.ResourceId == 2087) //Universal Clans
+                    ChatType.Add("a");
+            }
+            if (plugins.Exists("PrivateMessage"))
+            {
+                ChatType.Add("pm");
+                ChatType.Add("r");
+            }
+            if (Friends && Friends.ResourceId == 2120) //Universal Friends
+            {
+                ChatType.Add("fm");
+                ChatType.Add("f");
+                ChatType.Add("pm");
+                ChatType.Add("m");
+                ChatType.Add("rm");
+                ChatType.Add("r");
+            }
+
+            if (ChatType.Count == 0)
+            {
+                Enabled = false;
+                PrintWarning("AutoChat was disabled because weren't found supported plugins.");
+            }
+
+            if (BetterChat)
+            {
+                var v = Convert.ToInt32(BetterChat.Version.ToString().Split('.')[0]);
+                if (v >= 5) BC = false;
+            }
+            else
+                BC = false;
         }
         #endregion
 

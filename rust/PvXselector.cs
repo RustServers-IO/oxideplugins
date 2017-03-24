@@ -27,7 +27,7 @@ using Oxide.Core.Database;
 namespace Oxide.Plugins
 {
     [Info("PvXSelector", "Alphawar", "0.9.6", ResourceId = 1817)]
-    [Description("Player vs X Selector: Beta version 19/01/2017")]
+    [Description("Player vs X Selector: Beta version 21/02/2017")]
     class PvXselector : RustPlugin
     {
         #region Data/PlayerJoin/ServerInit
@@ -62,13 +62,13 @@ namespace Oxide.Plugins
                 if (!Players.State.IsNPC(Player))
                 {
                     GUI.Create.PlayerIndicator(Player);
-                    ModeSwitch.Cooldown.Check(Player);
+                    ModeSwitch.Cooldown.Check(Player.userID);
                     if (HasPerm(Player, "admin"))
                     {
-                        Players.Adminmode.AddPlayer(Player.OwnerID);
+                        Players.Admins.AddPlayer(Player.userID);
                         GUI.Create.AdminIndicator(Player);
                     }
-                    if (Players.State.IsNA(Player)) PvxChatNotification(Player);
+                    if (Players.State.IsNA(Player)) Timers.PvxChatNotification(Player);
                     UpdatePlayerChatTag(Player);
                 }
             }
@@ -79,6 +79,7 @@ namespace Oxide.Plugins
                 if (Players.Data.playerData.Info[_key].FirstConnection == "null") Players.Data.playerData.Info[_key].FirstConnection = DateTimeStamp();
                 if (Players.Data.playerData.Info[_key].LatestConnection == "null") Players.Data.playerData.Info[_key].LatestConnection = DateTimeStamp();
             }
+            Timers.CooldownTickets();
         }
 
         void Unloaded()
@@ -123,7 +124,7 @@ namespace Oxide.Plugins
         void OnPlayerInit(BasePlayer Player)
         {
             if (Player == null) return;
-            if (Player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+            else if (Player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
             {
                 timer.Once(3f, () =>
                 {
@@ -136,13 +137,13 @@ namespace Oxide.Plugins
         void PlayerLoaded(BasePlayer Player)
         {
             if (Players.State.IsNPC(Player)) return;
-            if (Players.IsNewPlayer(Player.userID))
+            if (Players.IsNew(Player.userID))
                 Players.Add(Player);
-            ModeSwitch.Cooldown.Check(Player);
+            ModeSwitch.Cooldown.Check(Player.userID);
             GUI.Create.PlayerIndicator(Player);
             if (IsAdmin(Player))
             {
-                Players.Adminmode.AddPlayer(Player.OwnerID);
+                Players.Admins.AddPlayer(Player.userID);
                 GUI.Create.AdminIndicator(Player);
             }
             if (Players.Data.playerData.UnknownUsers.Contains(Player.userID))
@@ -161,17 +162,17 @@ namespace Oxide.Plugins
             GUI.Create.PlayerIndicator(Player);
             if (Players.Data.playerData.Info[Player.userID].mode != Mode.NA) return;
             else if (ModeSwitch.Ticket.Data.ticketData.Notification.ContainsKey(Player.userID)) Messages.Chat(Players.Find.Iplayer(Player.userID), "TickClosLogin", ModeSwitch.Ticket.Data.ticketData.Notification[Player.userID]);
-            else if (Players.Data.playerData.Info[Player.userID].mode == Mode.NA) PvxChatNotification(Player);
+            else if (Players.Data.playerData.Info[Player.userID].mode == Mode.NA) Timers.PvxChatNotification(Player);
         }
         void OnPlayerDisconnected(BasePlayer Player)
         {
             if (IsAdmin(Player))
             {
-                Players.Adminmode.Online.Remove(Player.userID);
+                Players.Admins.RemovePlayer(Player.userID);
             }
-            if (Players.Adminmode.ContainsPlayer(Player.userID))
+            if (Players.Admins.Mode.ContainsPlayer(Player.userID))
             {
-                Players.Adminmode.RemovePlayer(Player.userID);
+                Players.Admins.RemovePlayer(Player.userID);
             }
         }
         void OnPlayerRespawned(BasePlayer Player)
@@ -217,7 +218,7 @@ namespace Oxide.Plugins
 
         #region Config/Permision/Plugin Ref
         //None Adjustable
-        private string PvXModtype = "Patreon Edition";//Regular Oxide Donator Patreon Developer
+        private string PvXModtype = "Developer Edition";//Regular Oxide Donator Patreon Developer
         private bool DebugMode;
         //Core
         private bool TicketSystem;
@@ -317,6 +318,9 @@ namespace Oxide.Plugins
         private string ChatPrefixColor;
         private string ChatPrefix;
         private string ChatMessageColor;
+        private string PvXNAColour;
+        private string PvXPvEColour;
+        private string PvXPvPColour;
         /*
          *
          * END Of Config
@@ -332,28 +336,29 @@ namespace Oxide.Plugins
         void LoadVariables() //Stores Default Values, calling GetConfig passing: menu, dataValue, defaultValue
         {
             //Core
-            TicketSystem = Convert.ToBoolean(GetConfig(ConfigLists.Core, "01:Ticket System", true));
-            CooldownSystem = Convert.ToBoolean(GetConfig(ConfigLists.Core, "01:Cooldown System", true));
-            CooldownTime = Convert.ToInt32(GetConfig(ConfigLists.Core, "02:Cooldown Time (Seconds)", 3600));
-            playerIndicatorMinWid = Convert.ToSingle(GetConfig(ConfigLists.Core, "08:player Gui width anchor", 0.484));
-            playerIndicatorMinHei = Convert.ToSingle(GetConfig(ConfigLists.Core, "07:player Gui height anchor", 0.111));
-            adminIndicatorMinHei = Convert.ToSingle(GetConfig(ConfigLists.Core, "09:admin Gui height anchor", 0.055));
-            adminIndicatorMinWid = Convert.ToSingle(GetConfig(ConfigLists.Core, "10:admin Gui width anchor", 0.166));
+            TicketSystem = Convert.ToBoolean(GetConfig(ConfigLists.Core, "01: Ticket System", true));
+            CooldownSystem = Convert.ToBoolean(GetConfig(ConfigLists.Core, "02: Cooldown System", true));
+            CooldownTime = Convert.ToInt32(GetConfig(ConfigLists.Core, "03: Cooldown Time (Seconds)", 3600));
+            playerIndicatorMinWid = Convert.ToSingle(GetConfig(ConfigLists.Core, "04: player Gui width anchor", 0.484));
+            playerIndicatorMinHei = Convert.ToSingle(GetConfig(ConfigLists.Core, "05: player Gui height anchor", 0.111));
+            adminIndicatorMinHei = Convert.ToSingle(GetConfig(ConfigLists.Core, "06: admin Gui height anchor", 0.055));
+            adminIndicatorMinWid = Convert.ToSingle(GetConfig(ConfigLists.Core, "07: admin Gui width anchor", 0.166));
+
             //Players
             PvEAttackPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "01: PvE v PvE", false));
-            PvEAttackPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "02:PvE v PvP", false));
-            PvPAttackPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "03:PvP v PvE", false));
-            PvPAttackPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "04:PvP v PvP", true));
-            PvELootPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "05:PvE Loot PvE", true));
-            PvELootPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "06:PvE Loot PvP", false));
-            PvPLootPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "07:PvP Loot PvE", false));
-            PvPLootPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "08:PvP Loot PvP", true));
-            PvEUsePvPDoor = Convert.ToBoolean(GetConfig(ConfigLists.Player, "09:PvE Use PvPDoor", false));
-            PvPUsePvEDoor = Convert.ToBoolean(GetConfig(ConfigLists.Player, "10:PvP Use PvEDoor", false));
-            PvEDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Player, "11:PvE Damage PvE", 0.0));
-            PvEDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Player, "12:PvE Damage PvP", 0.0));
-            PvPDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Player, "13:PvP Damage PvE", 0.0));
-            PvPDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Player, "14:PvP Damage PvP", 1.0));
+            PvEAttackPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "02: PvE v PvP", false));
+            PvPAttackPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "03: PvP v PvE", false));
+            PvPAttackPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "04: PvP v PvP", true));
+            PvELootPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "05: PvE Loot PvE", true));
+            PvELootPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "06: PvE Loot PvP", false));
+            PvPLootPvE = Convert.ToBoolean(GetConfig(ConfigLists.Player, "07: PvP Loot PvE", false));
+            PvPLootPvP = Convert.ToBoolean(GetConfig(ConfigLists.Player, "08: PvP Loot PvP", true));
+            PvEUsePvPDoor = Convert.ToBoolean(GetConfig(ConfigLists.Player, "09: PvE Use PvPDoor", false));
+            PvPUsePvEDoor = Convert.ToBoolean(GetConfig(ConfigLists.Player, "10: PvP Use PvEDoor", false));
+            PvEDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Player, "11: PvE Damage PvE", 0.0));
+            PvEDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Player, "12: PvE Damage PvP", 0.0));
+            PvPDamagePvE = Convert.ToSingle(GetConfig(ConfigLists.Player, "13: PvP Damage PvE", 0.0));
+            PvPDamagePvP = Convert.ToSingle(GetConfig(ConfigLists.Player, "14: PvP Damage PvP", 1.0));
             PvEDamagePvEStruct = Convert.ToSingle(GetConfig(ConfigLists.Player, "18: PvEDamagePvEStruct", 0.0));
             PvEDamagePvPStruct = Convert.ToSingle(GetConfig(ConfigLists.Player, "18: PvEDamagePvPStruct", 0.0));
             PvPDamagePvEStruct = Convert.ToSingle(GetConfig(ConfigLists.Player, "18: PvPDamagePvEStruct", 0.0));
@@ -425,11 +430,14 @@ namespace Oxide.Plugins
             FireDamagePvEStruc = Convert.ToSingle(GetConfig(ConfigLists.Fire, "4: FireDamagePvEStruc", 0.0));
             FireDamagePvPStruc = Convert.ToSingle(GetConfig(ConfigLists.Fire, "5: FireDamagePvPStruc", 1.0));
             //others
-            DisableUI_FadeIn = Convert.ToBoolean(GetConfig(ConfigLists.Settings, "DisableUI Fadein", false));
-            DebugMode = Convert.ToBoolean(GetConfig(ConfigLists.Settings, "DebugMode", false));
-            ChatPrefix = Convert.ToString(GetConfig(ConfigLists.Core, "03:ChatPrefix", "PvX"));
-            ChatPrefixColor = Convert.ToString(GetConfig(ConfigLists.Settings, "04:ChatPrefixColor", "008800"));
-            ChatMessageColor = Convert.ToString(GetConfig(ConfigLists.Settings, "06:ChatMessageColor", "yellow"));
+            DisableUI_FadeIn = Convert.ToBoolean(GetConfig(ConfigLists.Settings, "01: DisableUI Fadein", false));
+            DebugMode = Convert.ToBoolean(GetConfig(ConfigLists.Settings, "02: DebugMode", false));
+            ChatPrefix = Convert.ToString(GetConfig(ConfigLists.Core, "03: ChatPrefix", "PvX"));
+            ChatPrefixColor = Convert.ToString(GetConfig(ConfigLists.Settings, "04: ChatPrefixColor", "008800"));
+            ChatMessageColor = Convert.ToString(GetConfig(ConfigLists.Settings, "05: ChatMessageColor", "yellow"));
+            PvXNAColour = Convert.ToString(GetConfig(ConfigLists.Settings, "06: PvXNAColour", "#yellow"));
+            PvXPvEColour = Convert.ToString(GetConfig(ConfigLists.Settings, "07: PvXPvEColour", "#green"));
+            PvXPvPColour = Convert.ToString(GetConfig(ConfigLists.Settings, "08: PvXPvPColour", "#red"));
         }
 
         object GetConfig(string menu, string dataValue, object defaultValue)
@@ -750,7 +758,7 @@ namespace Oxide.Plugins
                             UIColours.Yellow_015,
                             "0.48 0.11",
                             "0.52 0.14");
-                    if (Players.Adminmode.ContainsPlayer(Player.userID))
+                    if (Players.Admins.Mode.ContainsPlayer(Player.userID))
                     {
                         QUI.CreateLabel(
                             ref indicatorContainer,
@@ -883,191 +891,190 @@ namespace Oxide.Plugins
                     {
                         var SideMenuGui = QUI.CreateElementContainer(pvxMenuSide, UIColours.Grey2_100, "0.607 0.125", "0.703 0.815", true);
 
-                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Welcome</color>", 15, 0, "PvX.Menu.Cmd Welcome");
-                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Settings</color>", 15, 1, "pvx");
-                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Character</color>", 15, 2, "PvX.Menu.Cmd Character");
-                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Players</color>", 15, 3, "pvx");
-                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Tickets</color>", 15, 4, "pvx");
-                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Settings</color>", 15, 5, "pvx");
-                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Debug</color>", 15, 6, "pvx");
-                        QUI.CreateButton(ref SideMenuGui, pvxMenuSide, UIColours.Red_100, "<color=black>X</color>", 15, "0.108 0.013", "0.892 0.047", "PvX.Menu.Cmd Close");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Welcome</color>", 15, 0, "PvXMenuCmd Welcome");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Settings</color>", 15, 1, "PvXMenuCmd Settings");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Grey5_100, "<color=black>Character</color>", 15, 2, "PvXMenuCmd Character");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Players</color>", 15, 3, "PvXMenuCmd Players");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Tickets</color>", 15, 4, "PvXMenuCmd Tickets");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Settings</color>", 15, 5, "PvXMenuCmd Admin Settings");
+                        GUI.Create.MenuButton(ref SideMenuGui, pvxMenuSide, UIColours.Green_100, "<color=black>Debug</color>", 15, 6, "PvXMenuCmd Admin Debug");
+                        QUI.CreateButton(ref SideMenuGui, pvxMenuSide, UIColours.Red_100, "<color=black>X</color>", 15, "0.108 0.013", "0.892 0.047", "PvXMenuCmd Close");
                         CuiHelper.AddUi(player, SideMenuGui);
                     }
                     public static class Content
                     {
-                        public static void WelcomePage1(BasePlayer Player)
+                        public static class WelcomePages
                         {
-                            var MenuGui = QUI.CreateElementContainer(
-                                pvxMenuMain,
-                                UIColours.Grey2_100,
-                                "0.297 0.125",
-                                "0.602 0.815",
-                                true);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L01), 16, 0);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L02), 16, 1);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L03), 16, 2);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L04), 16, 3);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L05), 16, 4);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L06), 16, 5);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L07), 16, 6);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L08), 16, 7);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L09), 16, 8);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L10), 16, 9);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L11), 16, 10);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L12), 16, 11);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L13), 16, 12);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L14), 16, 13);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L15), 16, 14);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L16), 16, 15);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L17), 16, 16);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L18), 16, 17);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L19), 16, 18);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L20), 16, 19);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L21), 16, 20);
-                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
-                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 1 Next");
-                            CuiHelper.AddUi(Player, MenuGui);
-                        }
-                        public static void WelcomePage2(BasePlayer Player)
-                        {
-                            var MenuGui = QUI.CreateElementContainer(
-                                pvxMenuMain,
-                                UIColours.Grey2_100,
-                                "0.297 0.125",
-                                "0.602 0.815",
-                                true);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L01), 16, 0);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L02), 16, 1);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L03), 16, 2);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L04), 16, 3);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L05), 16, 4);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L06), 16, 5);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L07), 16, 6);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L08), 16, 7);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L09), 16, 8);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L10), 16, 9);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L11), 16, 10);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L12), 16, 11);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L13), 16, 12);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L14), 16, 13);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L15), 16, 14);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L16), 16, 15);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L17), 16, 16);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L18), 16, 17);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L19), 16, 18);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L20), 16, 19);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L21), 16, 20);
-                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
-                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 2 Next");
-                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 2 Back");
-                            CuiHelper.AddUi(Player, MenuGui);
-                        }
-                        public static void WelcomePage3(BasePlayer Player)
-                        {
-                            var MenuGui = QUI.CreateElementContainer(
-                                pvxMenuMain,
-                                UIColours.Grey2_100,
-                                "0.297 0.125",
-                                "0.602 0.815",
-                                true);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L01), 16, 0);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L02), 16, 1);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L03), 16, 2);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L04), 16, 3);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L05), 16, 4);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L06), 16, 5);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L07), 16, 6);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L08), 16, 7);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L09), 16, 8);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L10), 16, 9);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L11), 16, 10);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L12), 16, 11);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L13), 16, 12);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L14), 16, 13);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L15), 16, 14);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L16), 16, 15);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L17), 16, 16);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L18), 16, 17);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L19), 16, 18);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L20), 16, 19);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L21), 16, 20);
-                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
-                            if (instance.IsMod(Player)) Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 3 Next");
-                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 3 Back");
-                            CuiHelper.AddUi(Player, MenuGui);
-                        }
-                        public static void WelcomePage4(BasePlayer Player)
-                        {
-                            var MenuGui = QUI.CreateElementContainer(
-                                pvxMenuMain,
-                                UIColours.Grey2_100,
-                                "0.297 0.125",
-                                "0.602 0.815",
-                                true);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L01), 16, 0);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L02), 16, 1);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L03), 16, 2);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L04), 16, 3);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L05), 16, 4);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L06), 16, 5);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L07), 16, 6);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L08), 16, 7);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L09), 16, 8);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L10), 16, 9);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L11), 16, 10);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L12), 16, 11);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L13), 16, 12);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L14), 16, 13);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L15), 16, 14);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L16), 16, 15);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L17), 16, 16);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L18), 16, 17);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L19), 16, 18);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L20), 16, 19);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L21), 16, 20);
-                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
-                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvX.Menu.Cmd WelcomePage 4 Next");
-                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 4 Back");
-                            CuiHelper.AddUi(Player, MenuGui);
-                        }
-                        public static void WelcomePage5(BasePlayer Player)
-                        {
-                            var MenuGui = QUI.CreateElementContainer(
-                                pvxMenuMain,
-                                UIColours.Grey2_100,
-                                "0.297 0.125",
-                                "0.602 0.815",
-                                true);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L01), 16, 0);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L02), 16, 1);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L03), 16, 2);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L04), 16, 3);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L05), 16, 4);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L06), 16, 5);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L07), 16, 6);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L08), 16, 7);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L09), 16, 8);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L10), 16, 9);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L11), 16, 10);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L12), 16, 11);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L13), 16, 12);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L14), 16, 13);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L15), 16, 14);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L16), 16, 15);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L17), 16, 16);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L18), 16, 17);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L19), 16, 18);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L20), 16, 19);
-                            Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L21), 16, 20);
-                            CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
-                            Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvX.Menu.Cmd WelcomePage 5 Back");
-                            CuiHelper.AddUi(Player, MenuGui);
+                            public static void Page1(BasePlayer Player)
+                            {
+                                var MenuGui = QUI.CreateElementContainer(
+                                    pvxMenuMain,
+                                    UIColours.Grey2_100,
+                                    "0.297 0.125",
+                                    "0.602 0.815",
+                                    true);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L01), 16, 0);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L02), 16, 1);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L03), 16, 2);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L04), 16, 3);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L05), 16, 4);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L06), 16, 5);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L07), 16, 6);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L08), 16, 7);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L09), 16, 8);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L10), 16, 9);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L11), 16, 10);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L12), 16, 11);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L13), 16, 12);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L14), 16, 13);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L15), 16, 14);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L16), 16, 15);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L17), 16, 16);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L18), 16, 17);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L19), 16, 18);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L20), 16, 19);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P1L21), 16, 20);
+                                CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                                Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvXMenuCmd WelcomePage 1 Next");
+                                CuiHelper.AddUi(Player, MenuGui);
+                            }
+                            public static void Page2(BasePlayer Player)
+                            {
+                                var MenuGui = QUI.CreateElementContainer(
+                                    pvxMenuMain,
+                                    UIColours.Grey2_100,
+                                    "0.297 0.125",
+                                    "0.602 0.815",
+                                    true);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L01), 16, 0);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L02), 16, 1);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L03), 16, 2);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L04), 16, 3);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L05), 16, 4);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L06), 16, 5);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L07), 16, 6);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L08), 16, 7);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L09), 16, 8);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L10), 16, 9);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L11), 16, 10);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L12), 16, 11);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L13), 16, 12);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L14), 16, 13);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L15), 16, 14);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L16), 16, 15);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L17), 16, 16);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L18), 16, 17);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L19), 16, 18);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L20), 16, 19);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P2L21), 16, 20);
+                                CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                                Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvXMenuCmd WelcomePage 2 Next");
+                                Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvXMenuCmd WelcomePage 2 Back");
+                                CuiHelper.AddUi(Player, MenuGui);
+                            }
+                            public static void Page3(BasePlayer Player)
+                            {
+                                var MenuGui = QUI.CreateElementContainer(
+                                    pvxMenuMain,
+                                    UIColours.Grey2_100,
+                                    "0.297 0.125",
+                                    "0.602 0.815",
+                                    true);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L01), 16, 0);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L02), 16, 1);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L03), 16, 2);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L04), 16, 3);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L05), 16, 4);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L06), 16, 5);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L07), 16, 6);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L08), 16, 7);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L09), 16, 8);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L10), 16, 9);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L11), 16, 10);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L12), 16, 11);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L13), 16, 12);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L14), 16, 13);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L15), 16, 14);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L16), 16, 15);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L17), 16, 16);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L18), 16, 17);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L19), 16, 18);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L20), 16, 19);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.P3L21), 16, 20);
+                                CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                                if (instance.IsMod(Player)) Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvXMenuCmd WelcomePage 3 Next");
+                                Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvXMenuCmd WelcomePage 3 Back");
+                                CuiHelper.AddUi(Player, MenuGui);
+                            }
+                            public static void Page4(BasePlayer Player)
+                            {
+                                var MenuGui = QUI.CreateElementContainer(
+                                    pvxMenuMain,
+                                    UIColours.Grey2_100,
+                                    "0.297 0.125",
+                                    "0.602 0.815",
+                                    true);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L01), 16, 0);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L02), 16, 1);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L03), 16, 2);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L04), 16, 3);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L05), 16, 4);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L06), 16, 5);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L07), 16, 6);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L08), 16, 7);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L09), 16, 8);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L10), 16, 9);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L11), 16, 10);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L12), 16, 11);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L13), 16, 12);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L14), 16, 13);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L15), 16, 14);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L16), 16, 15);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L17), 16, 16);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L18), 16, 17);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L19), 16, 18);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L20), 16, 19);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP1L21), 16, 20);
+                                CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                                Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, ">", 20, 0, "PvXMenuCmd WelcomePage 4 Next");
+                                Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvXMenuCmd WelcomePage 4 Back");
+                                CuiHelper.AddUi(Player, MenuGui);
+                            }
+                            public static void Page5(BasePlayer Player)
+                            {
+                                var MenuGui = QUI.CreateElementContainer(
+                                    pvxMenuMain,
+                                    UIColours.Grey2_100,
+                                    "0.297 0.125",
+                                    "0.602 0.815",
+                                    true);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L01), 16, 0);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L02), 16, 1);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L03), 16, 2);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L04), 16, 3);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L05), 16, 4);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L06), 16, 5);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L07), 16, 6);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L08), 16, 7);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L09), 16, 8);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L10), 16, 9);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L11), 16, 10);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L12), 16, 11);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L13), 16, 12);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L14), 16, 13);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L15), 16, 14);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L16), 16, 15);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L17), 16, 16);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L18), 16, 17);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L19), 16, 18);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L20), 16, 19);
+                                Create.MenuText(ref MenuGui, pvxMenuMain, UIColours.Black_100, Messages.Get(Lang.Menu.WelcomePage.AP2L21), 16, 20);
+                                CreateSignature(ref MenuGui, pvxMenuMain, UIColours.Black_100, "Created by Alphawar", 16, 20);
+                                Create.ContentButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, "<", 20, 1, "PvXMenuCmd WelcomePage 5 Back");
+                                CuiHelper.AddUi(Player, MenuGui);
+                            }
                         }
 
-                        public static void Serversettings(BasePlayer Player)
-                        {
-
-                        }
                         public static void Character(BasePlayer Player)
                         {
                             var MenuGui = QUI.CreateElementContainer(
@@ -1076,6 +1083,8 @@ namespace Oxide.Plugins
                                 "0.297 0.125",
                                 "0.602 0.815",
                                 true);
+                            String PvE = Mode.PvE;
+                            String PvP = Mode.PvP;
 
                             QUI.CreateLabel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "Player Info", 50, "0.034 0.852", "0.966 0.973");
 
@@ -1096,12 +1105,17 @@ namespace Oxide.Plugins
 
 
                             QUI.CreatePanel(ref MenuGui, pvxMenuMain, UIColours.Grey5_100, "0.034 0.027", "0.966 0.255");
-                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Blue_100, "Set Shared Chest", 22, "0.052 0.188", "0.491 0.242", "PvX.Menu.Cmd AddToShared");
-                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Blue_100, "remove Shared Chest", 22, "0.509 0.188", "0.948 0.242", "PvX.Menu.Cmd RemoveFromShared");
-                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, Mode.PvE, 22, "0.052 0.040", "0.491 0.174", $"PvX.Menu.Cmd {Mode.PvE}");
-                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Red_100, Mode.PvP, 22, "0.509 0.040", "0.948 0.174", $"PvX.Menu.Cmd {Mode.PvP}");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Blue_100, "Set Shared Chest", 22, "0.052 0.188", "0.491 0.242", "PvXMenuCmd AddToShared");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Blue_100, "remove Shared Chest", 22, "0.509 0.188", "0.948 0.242", "PvXMenuCmd RemoveFromShared");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Green_100, Mode.PvE, 22, "0.052 0.040", "0.491 0.174", $"PvXMenuCmd {PvE}");
+                            QUI.CreateButton(ref MenuGui, pvxMenuMain, UIColours.Red_100, Mode.PvP, 22, "0.509 0.040", "0.948 0.174", $"PvXMenuCmd {PvP}");
 
                             CuiHelper.AddUi(Player, MenuGui);
+                        }
+
+                        public static void Serversettings(BasePlayer Player)
+                        {
+
                         }
                     }
                 }
@@ -1127,9 +1141,8 @@ namespace Oxide.Plugins
             {
                 public static void AdminIndicator()
                 {
-                    if (Players.Adminmode.Online == null) return;
-                    else if (Players.Adminmode.Online.Count < 1) return;
-                    foreach (ulong PlayerID in Players.Adminmode.Online)
+                    if (Players.Admins.Count() == 0) return;
+                    foreach (ulong PlayerID in Players.Admins.Get())
                     {
                         BasePlayer Player = Players.Find.BasePlayer(PlayerID);
                         CuiHelper.DestroyUi(Player, pvxAdminUI);
@@ -1148,7 +1161,7 @@ namespace Oxide.Plugins
             GUI.Create.Menu.Background(player);
             GUI.Create.Menu.Title(player);
             GUI.Create.Menu.Selector(player);
-            GUI.Create.Menu.Content.WelcomePage1(player);
+            GUI.Create.Menu.Content.WelcomePages.Page1(player);
         }
 
         #endregion
@@ -1187,15 +1200,32 @@ namespace Oxide.Plugins
         private object CanLootPlayer(BasePlayer Target, BasePlayer Looter)
         {
             if (Players.State.IsNPC(Target)) return CanLootNPC(Looter);
-            if (IsGod(Target)) return null;
-            if (AreInEvent(Looter, Target)) return null;
-            return PvPOnlyCheck(Looter.userID, Target.userID) ? null : (object)false;
+            else if (Players.Admins.Mode.ContainsPlayer(Looter.userID)) return null;
+            else if (Players.State.IsNA(Looter.userID)) return false;
+            else if (Players.State.IsNA(Target.userID)) return false;
+            else if (IsGod(Looter)) return null;
+            else if (IsGod(Target)) return null;
+            else if (AreInEvent(Looter, Target)) return null;
+            else if (Players.State.IsPvE(Looter) && Players.State.IsPvE(Target) && PvELootPvE) return null;
+            else if (Players.State.IsPvE(Looter) && Players.State.IsPvP(Target) && PvELootPvP) return null;
+            else if (Players.State.IsPvP(Looter) && Players.State.IsPvE(Target) && PvPLootPvE) return null;
+            else if (Players.State.IsPvP(Looter) && Players.State.IsPvP(Target) && PvPLootPvP) return null;
+
+            return false;
         }
         private void OnLootPlayer(BasePlayer Looter, BasePlayer Target)
         {
-            if (Players.State.IsNPC(Target)) { NpcLootHandle(Looter); return; };
-            if (AreInEvent(Looter, Target)) return;
-            if (PvPOnlyCheck(Looter.userID, Target.userID)) return;
+            if (Players.State.IsNPC(Target)){NpcLootHandle(Looter);return;}
+            else if (Players.Admins.Mode.ContainsPlayer(Looter.userID)) return;
+            else if (Players.State.IsNA(Looter.userID)) NextTick(Looter.EndLooting);
+            else if (Players.State.IsNA(Target.userID)) NextTick(Looter.EndLooting);
+            else if (IsGod(Looter)) return;
+            else if (IsGod(Target)) return;
+            else if (AreInEvent(Looter, Target)) return;
+            else if ((Players.State.IsPvE(Looter)) && (Players.State.IsPvE(Target)) && (PvELootPvE)) return;
+            else if ((Players.State.IsPvE(Looter)) && (Players.State.IsPvP(Target)) && (PvELootPvP)) return;
+            else if ((Players.State.IsPvP(Looter)) && (Players.State.IsPvE(Target)) && (PvPLootPvE)) return;
+            else if ((Players.State.IsPvP(Looter)) && (Players.State.IsPvP(Target)) && (PvPLootPvP)) return;
             else NextTick(Looter.EndLooting);
         }
         private void OnLootEntity(BasePlayer Looter, BaseEntity Target)
@@ -1208,39 +1238,56 @@ namespace Oxide.Plugins
                     if (Players.State.IsNPC(Corpse)) { NpcLootHandle(Looter); return; }
                     ulong CorpseID = Corpse.playerSteamID;
                     if (CorpseID == Looter.userID) return;
-                    BasePlayer _corpseBP = Players.Find.BasePlayer(CorpseID);
-                    if (_corpseBP != null)
-                        if (AreInEvent(Looter, _corpseBP)) return;
-                        else if (PvPOnlyCheck(Looter.userID, CorpseID)) return;
+                    BasePlayer CorpseBP = Players.Find.BasePlayer(CorpseID);
+                    if (CorpseBP != null)
+                    {
+                        if (Players.Admins.Mode.ContainsPlayer(Looter.userID)) return;
+                        else if (Players.State.IsNA(Looter.userID)) NextTick(Looter.EndLooting);
+                        else if (Players.State.IsNA(CorpseBP.userID)) NextTick(Looter.EndLooting);
+                        else if (IsGod(Looter)) return;
+                        else if (AreInEvent(Looter, CorpseBP)) return;
+                        else if (Players.State.IsPvE(Looter) && Players.State.IsPvE(CorpseBP) && PvELootPvE) return;
+                        else if (Players.State.IsPvE(Looter) && Players.State.IsPvP(CorpseBP) && PvELootPvP) return;
+                        else if (Players.State.IsPvP(Looter) && Players.State.IsPvE(CorpseBP) && PvPLootPvE) return;
+                        else if (Players.State.IsPvP(Looter) && Players.State.IsPvP(CorpseBP) && PvPLootPvP) return;
                         else NextTick(Looter.EndLooting);
+                    }
                 }
             }
             else if (Target is StorageContainer)
             {
-                StorageContainer Containers = (StorageContainer)Target;
-                if (Containers.OwnerID == 0) return;
-                if (Containers.OwnerID == Looter.userID)
+                StorageContainer Container = (StorageContainer)Target;
+                BasePlayer ContainerBP = Players.Find.BasePlayer(Container.OwnerID);
+                if (Container == null) return;
+                else if (Container.OwnerID == 0) return;
+                else if (Container.OwnerID == Looter.userID)
                 {
-                    if (PvXselector.Containers.AddContainer(Containers, Looter.userID))
+                    if (PvXselector.Containers.AddContainer(Container, Looter.userID))
                         NextTick(Looter.EndLooting);
-                    else if (PvXselector.Containers.RemoveContainer(Containers, Looter.userID))
+                    else if (PvXselector.Containers.RemoveContainer(Container, Looter.userID))
                         NextTick(Looter.EndLooting);
-                    if (PvXselector.Containers.IsShared(Containers))
+                    if (PvXselector.Containers.IsShared(Container))
                     {
                         PvXselector.Containers.AddPlayerToInSharedChest(Looter.userID);
                         return;
                     }
                 }
-                if (PvXselector.Containers.IsShared(Containers))
+                else if (PvXselector.Containers.IsShared(Container))
                 {
-                    Puts("Adding Player to Shared list");
                     PvXselector.Containers.AddPlayerToInSharedChest(Looter.userID);
                     return;
                 }
-                BasePlayer ContainerBP = Players.Find.BasePlayer(Containers.OwnerID);
-                if (ContainerBP != null)
-                    if (AreInEvent(Looter, ContainerBP)) return;
-                if (SameOnlyCheck(Looter.userID, Containers.OwnerID)) return;
+                else if (ContainerBP != null) return;
+                else if (Players.Admins.Mode.ContainsPlayer(Looter.userID)) return;
+                else if (Players.State.IsNA(Looter.userID)) NextTick(Looter.EndLooting);
+                else if (Players.State.IsNA(ContainerBP.userID)) NextTick(Looter.EndLooting);
+                else if (IsGod(Looter)) return;
+                else if (IsGod(ContainerBP)) return;
+                else if (AreInEvent(Looter, ContainerBP)) return;
+                else if (Players.State.IsPvE(Looter) && Players.State.IsPvE(ContainerBP) && PvELootPvE) return;
+                else if (Players.State.IsPvE(Looter) && Players.State.IsPvP(ContainerBP) && PvELootPvP) return;
+                else if (Players.State.IsPvP(Looter) && Players.State.IsPvE(ContainerBP) && PvPLootPvE) return;
+                else if (Players.State.IsPvP(Looter) && Players.State.IsPvP(ContainerBP) && PvPLootPvP) return;
                 else NextTick(Looter.EndLooting);
             }
             else return;
@@ -1288,16 +1335,14 @@ namespace Oxide.Plugins
         private List<object> CombatPartEntityList = new List<object>() {
             typeof(AutoTurret),typeof(Barricade),typeof(BearTrap),typeof(Landmine),
             typeof(ReactiveTarget),typeof(BaseCombatEntity)};
-
-
-
+        
         void OnEntitySpawned(BaseNetworkable _entity)
         {
             if (_entity is BaseEntity)
             {
                 BaseEntity _base = (BaseEntity)_entity;
                 if (_base.OwnerID == 0) return;
-                else if (Players.Adminmode.ContainsPlayer(_base.OwnerID))
+                else if (Players.Admins.Mode.ContainsPlayer(_base.OwnerID))
                     _base.OwnerID = 0;
             }
         }
@@ -1334,24 +1379,34 @@ namespace Oxide.Plugins
 
         public void SetChatTag(BasePlayer player)
         {
-            if (Players.GetMode(player.userID) == Mode.NA) CreateChatTag(player, Mode.NA);
-            else if (Players.GetMode(player.userID) == Mode.PvE) CreateChatTag(player, Mode.PvE);
-            else if (Players.GetMode(player.userID) == Mode.PvP) CreateChatTag(player, Mode.PvP);
-        }
-        private void CreateChatTag(BasePlayer player, string Mode)
-        {
-            mode1 = Mode;
             IPlayer iplayer = covalence.Players.FindPlayerById(player.ToString());
-            BetterChat?.Call("API_RegisterThirdPartyTitle", new object[] { this, new Func<IPlayer, string>(bla) });
+            BetterChat?.Call("API_RegisterThirdPartyTitle", new object[] { this, new Func<IPlayer, string>(GetClanTag) });
         }
-        string colour1 = "orange";
-        string mode1 = "test";
-        private string bla(IPlayer iPlayer)
+        private string GetClanTag(IPlayer iPlayer)
         {
-            string test = $"[#{colour1}][{mode1}][/#]";
-            return test;
+            string value;
+            string mode = Mode.Error;
+            ulong PlayerID = Convert.ToUInt64(iPlayer.Id);
+            if (Players.State.IsNA(PlayerID))
+            {
+                mode = Mode.NA;
+                value = $"[{PvXNAColour}][{mode}][/#]";
+            }
+            else if (Players.State.IsPvE(PlayerID))
+            {
+                mode = Mode.PvE;
+                value = $"[{PvXPvEColour}][{mode}][/#]";
+            }
+            else if (Players.State.IsPvP(PlayerID))
+            {
+                mode = Mode.PvP;
+                value = $"[{PvXPvPColour}][{mode}][/#]";
+            }
+            else value = $"[{PvXNAColour}][{mode}][/#]";
+            return value;
         }
 
+        //Possible betterchat functions
         //void VerifyColors() Will need to impliment for when I set colour in Config
         //{
         //    bool hasChanged = false;
@@ -1540,16 +1595,17 @@ namespace Oxide.Plugins
 
         class Mode
         {
+            public string Value;
+
             public static readonly Mode PvP = new Mode("PvP");
             public static readonly Mode PvE = new Mode("PvE");
             public static readonly Mode NA = new Mode("NA");
-            
+            public static readonly Mode Error = new Mode("Error");
+
             private Mode(string value)
             {
                 Value = value;
             }
-
-            public string Value;
             public static implicit operator string(Mode mode)
             {
                 return mode.Value;
@@ -1665,12 +1721,12 @@ namespace Oxide.Plugins
         }
 
 
-        [ConsoleCommand("PvX.Menu.Cmd")]
+        [ConsoleCommand("PvXMenuCmd")]
         void PvXGuiCmds(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null) return;
+            if (arg.Connection.userid == 0) return;
             if (arg.Args == null || arg.Args.Length == 0) return;
-            BasePlayer Player = (BasePlayer)arg.connection.player;
+            BasePlayer Player = (BasePlayer)arg.Connection.player;
             if (Player == null) return;
             if (arg.Args[0] == "Close")
             {
@@ -1680,13 +1736,13 @@ namespace Oxide.Plugins
             if (arg.Args[0] == "Welcome")
             {
                 GUI.Destroy.Content(Player);
-                GUI.Create.Menu.Content.WelcomePage1(Player);
+                GUI.Create.Menu.Content.WelcomePages.Page1(Player);
                 return;
             }
             if (arg.Args[0] == "WelcomeAdmin")
             {
                 GUI.Destroy.Content(Player);
-                GUI.Create.Menu.Content.WelcomePage4(Player);
+                GUI.Create.Menu.Content.WelcomePages.Page4(Player);
                 return;
             }
             if (arg.Args[0] == "WelcomePage")
@@ -1696,17 +1752,17 @@ namespace Oxide.Plugins
                 GUI.Destroy.Content(Player);
                 if (arg.Args[2] == "Next")
                 {
-                    if (CurrentPage == 1) GUI.Create.Menu.Content.WelcomePage2(Player);
-                    if (CurrentPage == 2) GUI.Create.Menu.Content.WelcomePage3(Player);
-                    if (CurrentPage == 3) GUI.Create.Menu.Content.WelcomePage4(Player);
-                    if (CurrentPage == 4) GUI.Create.Menu.Content.WelcomePage5(Player);
+                    if (CurrentPage == 1) GUI.Create.Menu.Content.WelcomePages.Page2(Player);
+                    if (CurrentPage == 2) GUI.Create.Menu.Content.WelcomePages.Page3(Player);
+                    if (CurrentPage == 3) GUI.Create.Menu.Content.WelcomePages.Page4(Player);
+                    if (CurrentPage == 4) GUI.Create.Menu.Content.WelcomePages.Page5(Player);
                 }
                 if (arg.Args[2] == "Back")
                 {
-                    if (CurrentPage == 2) GUI.Create.Menu.Content.WelcomePage1(Player);
-                    if (CurrentPage == 3) GUI.Create.Menu.Content.WelcomePage2(Player);
-                    if (CurrentPage == 4) GUI.Create.Menu.Content.WelcomePage3(Player);
-                    if (CurrentPage == 5) GUI.Create.Menu.Content.WelcomePage4(Player);
+                    if (CurrentPage == 2) GUI.Create.Menu.Content.WelcomePages.Page1(Player);
+                    if (CurrentPage == 3) GUI.Create.Menu.Content.WelcomePages.Page2(Player);
+                    if (CurrentPage == 4) GUI.Create.Menu.Content.WelcomePages.Page3(Player);
+                    if (CurrentPage == 5) GUI.Create.Menu.Content.WelcomePages.Page4(Player);
                 }
             }
             if (arg.Args[0] == "Character")
@@ -1735,7 +1791,7 @@ namespace Oxide.Plugins
                     UpdatePlayerChatTag(Player);
                     Messages.Chat(Players.Find.Iplayer(Player.userID), "Selected: {0}", playermode);
                 }
-                else if (Players.HasTicket(Player) == true)
+                else if (Players.HasTicket(Player.userID) == true)
                 {
                     Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.AlreadyExists); return;
                 }
@@ -1758,7 +1814,7 @@ namespace Oxide.Plugins
                     UpdatePlayerChatTag(Player);
                     Messages.Chat(Players.Find.Iplayer(Player.userID), "Selected: {0}", playermode);
                 }
-                else if (Players.HasTicket(Player) == true)
+                else if (Players.HasTicket(Player.userID) == true)
                 {
                     Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.AlreadyExists); return;
                 }
@@ -1771,7 +1827,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("pvx.cmd")]
         void PvXConsoleCmd(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null) return;
+            if (arg.Connection != null) return;
             if (arg.Args == null || arg.Args.Length == 0) return;
             ModeSwitch.Ticket.ConsoleList();
             ModeSwitch.Ticket.ConsoleListLogs();
@@ -1792,7 +1848,7 @@ namespace Oxide.Plugins
             if (!(HasPerm(Player, "admin", "MissPerm"))) return;
             if (_cmd == "count") ModeSwitch.Ticket.Count(Player);
             if (_cmd == "list") ModeSwitch.Ticket.List(Player);
-            if (_cmd == "mode") Players.Adminmode.Toggle(Player.userID);
+            if (_cmd == "mode") Players.Admins.Mode.Toggle(Player.userID);
             if ((_cmd == "display") && (args.Length == 3))
             {
                 if (IsDigitsOnly(args[2]))
@@ -1825,7 +1881,7 @@ namespace Oxide.Plugins
         }
         void ChangeFunction(BasePlayer Player)
         {
-            if (Players.HasTicket(Player) == true)
+            if (Players.HasTicket(Player.userID) == true)
             {
                 Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.AlreadyExists); return;
             }
@@ -2419,8 +2475,7 @@ namespace Oxide.Plugins
                 private Chat(string chat) { Value = this.ToString() + "-" + chat; }
                 public static implicit operator string(Chat chat) { return chat.Value; }
             }
-
-
+            
             public static readonly Dictionary<string, string> List = new Dictionary<string, string>()
             {
                 { "xx", "xxx" },
@@ -2579,26 +2634,26 @@ namespace Oxide.Plugins
         {
             public class Cooldown
             {
-                public static bool Check(BasePlayer Player)
+                public static bool Check(ulong PlayerID)
                 {
-                    if (Data.cooldownData.Cooldowns.ContainsKey(Player.userID))
-                        if (Passed(Player)) return true;
+                    if (Data.cooldownData.Cooldowns.ContainsKey(PlayerID))
+                        if (Passed(PlayerID)) return true;
                         else return false;
-                    else Add(Player);
+                    else Add(PlayerID);
                     return true;
                 }
                 public static void Set(IPlayer Player)
                 {
-                    Data.cooldownData.Cooldowns[Convert.ToUInt32(Player.Id)] = Time();
+                    Data.cooldownData.Cooldowns[Convert.ToUInt64(Player.Id)] = Time();
                 }
 
-                static void Add(BasePlayer Player)
+                static void Add(ulong PlayerID)
                 {
-                    Data.cooldownData.Cooldowns.Add(Player.userID, Time());
+                    Data.cooldownData.Cooldowns.Add(PlayerID, Time());
                 }
-                static bool Passed(BasePlayer Player)
+                static bool Passed(ulong PlayerID)
                 {
-                    double CooldownValue = (Data.cooldownData.Cooldowns[Player.userID] + instance.CooldownTime);
+                    double CooldownValue = (Data.cooldownData.Cooldowns[PlayerID] + instance.CooldownTime);
                     if (Time() > CooldownValue) return true;
                     else return false;
                 }
@@ -2684,13 +2739,13 @@ namespace Oxide.Plugins
                     Players.Data.playerData.Info[_UserID].mode = Data.ticketData.Tickets[_UserID].requested;
                     SaveData.All();
                     BasePlayer Player = Players.Find.BasePlayer(_UserID);
-                    if (Player != null && Player.isConnected)
+                    if (Player != null && Player.IsConnected)
                     {
                         Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.Accepted);
                         GUI.Update.PlayerIndicator(Player);
                         instance.UpdatePlayerChatTag(Player);
                     }
-                    else if (Player != null && !Player.isConnected)
+                    else if (Player != null && !Player.IsConnected)
                     {
                         Data.ticketData.Notification.Add(Player.userID, "Accepted");
                     }
@@ -2702,7 +2757,7 @@ namespace Oxide.Plugins
                     Data.ticketData.Link.Remove(TicketID);
                     SaveData.All();
                     GUI.Update.AdminIndicator();
-                    if (Player != null && Player.isConnected) GUI.Update.PlayerIndicator(Player);
+                    if (Player != null && Player.IsConnected) GUI.Update.PlayerIndicator(Player);
                 }
                 public static void Decline(BasePlayer Admin, int TicketID)//updated: Fixed Baseplayer NRE
                 {
@@ -2715,7 +2770,7 @@ namespace Oxide.Plugins
                     SaveData.All();
                     GUI.Update.AdminIndicator();
                     BasePlayer Player = Players.Find.BasePlayer(_UserID);
-                    if (Player != null && Player.isConnected)
+                    if (Player != null && Player.IsConnected)
                     {
                         Messages.Chat(Players.Find.Iplayer(Player.userID), Lang.Ticket.Declined);
                         GUI.Update.PlayerIndicator(Player);
@@ -2808,7 +2863,12 @@ namespace Oxide.Plugins
                         instance.Puts("Reason: {0}", Data.logData.Logs[_ticket].reason);
                     }
                 }
+                public static Dictionary<ulong,Data.Ticket> GetTickets()
+                {
+                    return Data.ticketData.Tickets;
+                }
 
+                
                 static int GetNewID()
                 {
                     for (int _i = 1; _i <= 500; _i++)
@@ -2910,75 +2970,18 @@ namespace Oxide.Plugins
                         LogData.WriteObject(logData);
                     }
                 }
-
-
-
             }
         }
 
         public class Players
         {
-            public class Find
-            {
-                public static IPlayer Iplayer(ulong ID)
-                {
-                    return instance.covalence.Players.FindPlayerById(ID.ToString());
-                }
-                public static BasePlayer BasePlayer(ulong ID)
-                {
-                    BasePlayer BasePlayer = BasePlayer.FindByID(ID);
-                    if (BasePlayer == null) BasePlayer = BasePlayer.FindSleeping(ID);
-                    return BasePlayer;
-                }
-            }
-            public class ChangeMode
-            {
-                public static void Check(BasePlayer Player, string selection)
-                {
-                    bool tick = instance.TicketSystem;
-                    bool cool = instance.CooldownSystem;
-                    if (tick && !(cool))
-                    {
-                        if (ModeSwitch.Ticket.Data.ticketData.Tickets.ContainsKey(Player.userID)) return;
-                        ModeSwitch.Ticket.Create(Player, selection);
-                    }
-                    if (tick && cool)
-                    {
-                        if (ModeSwitch.Ticket.Data.ticketData.Tickets.ContainsKey(Player.userID)) return;
-                        if (ModeSwitch.Cooldown.Check(Player)) Change(Find.Iplayer(Player.userID), selection);
-                        else ModeSwitch.Ticket.Create(Player, selection);
-                    }
-                    if (!(tick) && cool)
-                    {
-                        if (ModeSwitch.Cooldown.Check(Player)) Change(Find.Iplayer(Player.userID), selection);
-                    }
-                }
-                public static void Change(IPlayer Player, string selection)
-                {
-                    ulong PlayerID = Convert.ToUInt32(Player.Id);
-                    Data.playerData.Info[PlayerID].mode = selection;
-                    ModeSwitch.Cooldown.Set(Player);
-                    SaveData.All();
-
-
-
-
-                    //Checks if connected, if so sends message and update gui
-                    if (Player != null && Player.IsConnected)
-                    {
-                        Messages.Chat(Player, Lang.Ticket.Accepted);
-                        GUI.Update.PlayerIndicator(Find.BasePlayer(Convert.ToUInt32(Player.Id)));
-                        instance.UpdatePlayerChatTag(Find.BasePlayer(Convert.ToUInt32(Player.Id)));
-                    }
-                    SaveData.All();
-                    if (Player != null && Player.IsConnected) GUI.Update.PlayerIndicator(Find.BasePlayer(Convert.ToUInt32(Player.Id)));
-                }
-            }
             public static class Data
             {
                 public static PlayerStorage playerData;
                 public static DynamicConfigFile PlayerData;
-
+                public static List<ulong> OnlineAdmins = new List<ulong>();
+                public static List<ulong> AdminModeEnabled = new List<ulong>();
+                
                 public class PlayerStorage
                 {
                     public Hash<ulong, PlayerInfo> Info = new Hash<ulong, PlayerInfo>();
@@ -2986,7 +2989,6 @@ namespace Oxide.Plugins
                     public List<ulong> UnknownUsers = new List<ulong>();
                     public Dictionary<ulong, double> Cooldown = new Dictionary<ulong, double>();
                 }
-
                 public class PlayerInfo
                 {
                     public string username;
@@ -3018,6 +3020,62 @@ namespace Oxide.Plugins
                 public static void Save()
                 {
                     PlayerData.WriteObject(Data.playerData);
+                }
+            }
+            public class Find
+            {
+                public static IPlayer Iplayer(ulong ID)
+                {
+                    return instance.covalence.Players.FindPlayerById(ID.ToString());
+                }
+                public static BasePlayer BasePlayer(ulong ID)
+                {
+                    BasePlayer BasePlayer = BasePlayer.FindByID(ID);
+                    if (BasePlayer == null) BasePlayer = BasePlayer.FindSleeping(ID);
+                    return BasePlayer;
+                }
+            }
+            public class ChangeMode
+            {
+                public static void Check(BasePlayer Player, string selection)
+                {
+                    bool tick = instance.TicketSystem;
+                    bool cool = instance.CooldownSystem;
+                    if (tick && !(cool))
+                    {
+                        if (ModeSwitch.Ticket.Data.ticketData.Tickets.ContainsKey(Player.userID)) return;
+                        ModeSwitch.Ticket.Create(Player, selection);
+                    }
+                    if (tick && cool)
+                    {
+                        if (ModeSwitch.Ticket.Data.ticketData.Tickets.ContainsKey(Player.userID)) return;
+                        if (ModeSwitch.Cooldown.Check(Player.userID)) Change(Find.Iplayer(Player.userID), selection);
+                        else ModeSwitch.Ticket.Create(Player, selection);
+                    }
+                    if (!(tick) && cool)
+                    {
+                        if (ModeSwitch.Cooldown.Check(Player.userID)) Change(Find.Iplayer(Player.userID), selection);
+                    }
+                }
+                public static void Change(IPlayer Player, string selection)
+                {
+                    ulong PlayerID = Convert.ToUInt64(Player.Id);
+                    Data.playerData.Info[PlayerID].mode = selection;
+                    ModeSwitch.Cooldown.Set(Player);
+                    SaveData.All();
+
+
+
+
+                    //Checks if connected, if so sends message and update gui
+                    if (Player != null && Player.IsConnected)
+                    {
+                        Messages.Chat(Player, Lang.Ticket.Accepted);
+                        GUI.Update.PlayerIndicator(Find.BasePlayer(Convert.ToUInt64(Player.Id)));
+                        instance.UpdatePlayerChatTag(Find.BasePlayer(Convert.ToUInt64(Player.Id)));
+                    }
+                    SaveData.All();
+                    if (Player != null && Player.IsConnected) GUI.Update.PlayerIndicator(Find.BasePlayer(Convert.ToUInt64(Player.Id)));
                 }
             }
             public class State
@@ -3117,36 +3175,56 @@ namespace Oxide.Plugins
                     else return false;
                 }
             }
-            public static class Adminmode
+            public static class Admins
             {
-                public static List<ulong> Online = new List<ulong>();
-                private static List<ulong> AdminModeEnabled = new List<ulong>();
-
-                public static bool ContainsPlayer(ulong playerID)
+                public static List<ulong> Get()
                 {
-                    if (AdminModeEnabled.Contains(playerID)) return true;
-                    else return false;
+                    return Data.OnlineAdmins;
+                }
+                public static int Count()
+                {
+                    return Data.OnlineAdmins.Count();
                 }
                 public static bool AddPlayer(ulong playerID)
                 {
-                    if (AdminModeEnabled.Contains(playerID)) return false;
-                    else AdminModeEnabled.Add(playerID);
-                    Messages.Chat(Find.Iplayer(playerID), "AdmModeAdd");
+                    if (Data.OnlineAdmins.Contains(playerID)) return false;
+                    else Data.OnlineAdmins.Add(playerID);
                     return true;
                 }
                 public static bool RemovePlayer(ulong playerID)
                 {
-                    if (!AdminModeEnabled.Contains(playerID)) return false;
-                    else AdminModeEnabled.Remove(playerID);
-                    Messages.Chat(Find.Iplayer(playerID), "AdmModeRem");
+                    if (!Data.OnlineAdmins.Contains(playerID)) return false;
+                    else Data.OnlineAdmins.Remove(playerID);
                     return true;
                 }
-                public static bool Toggle(ulong playerID)
+                public class Mode
                 {
-                    if (ContainsPlayer(playerID))
-                        RemovePlayer(playerID);
-                    else AddPlayer(playerID);
-                    return true;
+                    public static bool ContainsPlayer(ulong playerID)
+                    {
+                        if (Data.AdminModeEnabled.Contains(playerID)) return true;
+                        else return false;
+                    }
+                    public static bool Toggle(ulong playerID)
+                    {
+                        if (ContainsPlayer(playerID))
+                            RemovePlayer(playerID);
+                        else AddPlayer(playerID);
+                        return true;
+                    }
+                    private static bool AddPlayer(ulong playerID)
+                    {
+                        if (Data.AdminModeEnabled.Contains(playerID)) return false;
+                        else Data.AdminModeEnabled.Add(playerID);
+                        Messages.Chat(Find.Iplayer(playerID), "AdmModeAdd");
+                        return true;
+                    }
+                    private static bool RemovePlayer(ulong playerID)
+                    {
+                        if (!Data.AdminModeEnabled.Contains(playerID)) return false;
+                        else Data.AdminModeEnabled.Remove(playerID);
+                        Messages.Chat(Find.Iplayer(playerID), "AdmModeRem");
+                        return true;
+                    }
                 }
             }
 
@@ -3160,7 +3238,7 @@ namespace Oxide.Plugins
                     FirstConnection = instance.DateTimeStamp(),
                     LatestConnection = instance.DateTimeStamp(),
                 });
-                instance.PvxChatNotification(Player);
+                Timers.PvxChatNotification(Player);
             }
             public static void AddSleeper(BasePlayer Player)
             {
@@ -3186,11 +3264,6 @@ namespace Oxide.Plugins
                 });
                 Data.playerData.UnknownUsers.Add(_userID);
             }
-            public static bool HasTicket(BasePlayer Player)
-            {
-                if (Data.playerData.Info[Player.userID].ticket == true) return true;
-                else return false;
-            }
             public static bool HasTicket(ulong Player)
             {
                 if (Data.playerData.Info[Player].ticket == true) return true;
@@ -3200,13 +3273,45 @@ namespace Oxide.Plugins
             {
                 return Data.playerData.Info[player].mode;
             }
-            public static bool IsNewPlayer(ulong PlayerID)
+            public static bool IsNew(ulong PlayerID)
             {
                 if (Players.Data.playerData.Info.ContainsKey(PlayerID)) return false;
                 return true;
             }
         }
 
+        public class Timers
+        {
+            public static void PvxChatNotification(BasePlayer Player)
+            {
+                if (Players.State.IsNA(Player))
+                {
+                    Messages.Chat(Players.Find.Iplayer(Player.userID), "This server is running PvX, Please type /pvx for more info");
+                    instance.timer.Once(10, () => PvxChatNotification(Player));
+                }
+            }
+
+            public static void CooldownTickets()
+            {
+                bool tick = instance.TicketSystem;
+                bool cool = instance.CooldownSystem;
+                if (tick && cool)
+                {
+                    Dictionary<ulong, ModeSwitch.Ticket.Data.Ticket> TicketList = ModeSwitch.Ticket.GetTickets();
+                    foreach (ulong PlayerID in TicketList.Keys)
+                    {
+                        if (ModeSwitch.Cooldown.Check(PlayerID))
+                        {
+                            IPlayer Iplayer = Players.Find.Iplayer(PlayerID);
+                            BasePlayer FakeBP = new BasePlayer { name = "Cooldown Timer", displayName = "Cooldown Timer", userID = 0, UserIDString = "0" };
+                            ModeSwitch.Ticket.Accept(FakeBP, TicketList[PlayerID].TicketNumber);
+                            ModeSwitch.Cooldown.Set(Iplayer);
+                        }
+                    }
+                }
+                instance.timer.Once(60 * 5, () => CooldownTickets());
+            }
+        }
 
         public class Permisions
         {
@@ -3359,7 +3464,10 @@ namespace Oxide.Plugins
             }
         }
 
+        void OnLootItem(BasePlayer player, Item item)
+        {
 
+        }
 
         #endregion
 
@@ -3373,15 +3481,6 @@ namespace Oxide.Plugins
         //{
         //    Puts("OnEntityLeave works!");
         //}
-
-        void PvxChatNotification(BasePlayer Player)
-        {
-            if (Players.State.IsNA(Player))
-            {
-                Messages.Chat(Players.Find.Iplayer(Player.userID), "This server is running PvX, Please type /pvx for more info");
-                timer.Once(10, () => PvxChatNotification(Player));
-            }
-        }
 
 
         void ModifyDamage(HitInfo HitInfo, float scale)

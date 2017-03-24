@@ -11,7 +11,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Factions", "Absolut", "3.5.2", ResourceId = 1919)]
+    [Info("Factions", "Absolut", "3.5.4", ResourceId = 1919)]
 
     class Factions : RustPlugin
     {
@@ -875,7 +875,7 @@ namespace Oxide.Plugins
                     case 2:
                         Faction.group = string.Join(" ", arg.Args);
                         SendMSG(player, string.Format(lang.GetMessage("CreatorFactionGroup", this), args));
-                        ConsoleSystem.Run.Server.Normal($"group add {Faction.group}");
+                        ConsoleSystem.Run(ConsoleSystem.Option.Server, $"group add {Faction.group}");
                         Creator.partNum++;
                         if (isCreatingFaction)
                             CreationHelp(player, 20);
@@ -2560,7 +2560,7 @@ namespace Oxide.Plugins
             {
                 if (ActiveCreations[player.userID].Entry.group != "")
                 {
-                    ConsoleSystem.Run.Server.Normal($"group remove {ActiveCreations[player.userID].Entry.group}");
+                    ConsoleSystem.Run(ConsoleSystem.Option.Server, $"group remove {ActiveCreations[player.userID].Entry.group}");
                 }
                 ActiveCreations.Remove(player.userID);
             }
@@ -2688,7 +2688,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 var Color = arg.Args[0];
                 FactionDesigner Creator;
@@ -2717,7 +2717,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 var type = (FactionType)Enum.Parse(typeof(FactionType), arg.Args[0]);
                 FactionDesigner Creator;
@@ -2753,7 +2753,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 var kit = arg.Args[0];
                 FactionDesigner Creator;
@@ -2784,7 +2784,7 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             DestroyFactionMenu(player);
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 var random = new System.Random();
                 int number;
@@ -2811,7 +2811,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 ushort ID = Convert.ToUInt16(arg.Args[0]);
                 foreach (var faction in factionData.Factions)
@@ -2832,7 +2832,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 ushort faction = Convert.ToUInt16(arg.Args[0]);
                 int page = Convert.ToInt16(arg.Args[1]);
@@ -2847,7 +2847,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 ushort faction = Convert.ToUInt16(arg.Args[0]);
                 var oldleaderID = factionData.leader[faction];
@@ -2874,7 +2874,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 ushort UID = Convert.ToUInt16(arg.Args[0]);
                 var faction = LeaderPromotes[UID].factionID;
@@ -2923,7 +2923,7 @@ namespace Oxide.Plugins
                 SendMSG(player, string.Format(lang.GetMessage("ExitedFactionDeletion", this)));
                 return;
             }
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 ushort ID = Convert.ToUInt16(arg.Args[0]);
                 RemoveFaction(player, ID);
@@ -2938,7 +2938,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 if (ActiveEditors.ContainsKey(player.userID))
                     ActiveEditors.Remove(player.userID);
@@ -2961,7 +2961,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 if (ActiveEditors.ContainsKey(player.userID))
                 {
@@ -2999,7 +2999,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 bool creating = false;
                 if (ActiveCreations.ContainsKey(player.userID))
@@ -3013,7 +3013,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 bool creating = false;
                 if (ActiveCreations.ContainsKey(player.userID))
@@ -3028,7 +3028,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 bool IsEditing = false;
                 if (ActiveEditors.ContainsKey(player.userID))
@@ -3043,7 +3043,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 ushort ID = Convert.ToUInt16(arg.Args[1]);
                 string name = "";
@@ -3087,7 +3087,7 @@ namespace Oxide.Plugins
                 SendMSG(player, string.Format(lang.GetMessage("ExitedFactionDeletion", this)));
                 return;
             }
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 if (arg.Args[0] == "rally")
                 {
@@ -6094,7 +6094,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 bool isSpawn = false;
                 if (SpawnCreation.ContainsKey(player.userID))
@@ -6108,7 +6108,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 bool isSpawn = false;
                 if (SpawnCreation.ContainsKey(player.userID))
@@ -6764,8 +6764,8 @@ namespace Oxide.Plugins
             }
             if (configData.Use_Groups)
             {
-                foreach (var entry in factionData.Factions) { ConsoleSystem.Run.Server.Normal($"usergroup remove {player.userID} {factionData.Factions[entry.Key].group}"); }
-                ConsoleSystem.Run.Server.Normal($"usergroup add {player.userID} {factionData.Factions[faction].group}");
+                foreach (var entry in factionData.Factions) { ConsoleSystem.Run(ConsoleSystem.Option.Server, $"usergroup remove {player.userID} {factionData.Factions[entry.Key].group}"); }
+                ConsoleSystem.Run(ConsoleSystem.Option.Server, $"usergroup add {player.userID} {factionData.Factions[faction].group}");
             }
             if (configData.Use_Kits) GiveFactionKit(player, faction);
             if (configData.AllowTradesByPlayer)

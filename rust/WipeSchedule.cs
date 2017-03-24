@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("WipeSchedule", "k1lly0u", "2.0.31", ResourceId = 1451)]
+    [Info("WipeSchedule", "k1lly0u", "2.0.4", ResourceId = 1451)]
     class WipeSchedule : RustPlugin
     {
         #region Fields
@@ -74,7 +74,7 @@ namespace Oxide.Plugins
         [ChatCommand("setwipe")]
         private void cmdSetWipe(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             if (args == null || args.Length == 0)
             {
                 SendReply(player, $"<color=#ffae1a>/setwipe</color>{MSG("setWipeMap", player.UserIDString)}");
@@ -121,10 +121,15 @@ namespace Oxide.Plugins
                 }                
             }
         }
+        [ConsoleCommand("getwipe")]
+        private void ccmdGetWipe(ConsoleSystem.Arg arg)
+        {
+            SendReply(arg, string.Format(MSG("lastMapWipe"), configData.LastWipe, NextWipeDays(NextWipeDate)));
+        }
         [ChatCommand("setnextwipe")]
         private void cmdSetNextWipe(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             if (args == null || args.Length == 0)
             {                
                 SendReply(player, $"<color=#ffae1a>/setnextwipe <date></color>{MSG("setNextWipeMapManual", player.UserIDString)}");

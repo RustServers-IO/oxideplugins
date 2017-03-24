@@ -1,0 +1,16 @@
+{
+    "name": "StatLogger",
+    "description": "A plugin designed to send statistics in JSON format to defined endpoints",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/statlogger.2374",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

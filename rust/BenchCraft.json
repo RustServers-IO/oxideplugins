@@ -1,0 +1,16 @@
+{
+    "name": "BenchCraft",
+    "description": "Customize crafting using repair benches or research tables",
+    "author": "ignignokt84",
+    "version": "0.0.14",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/benchcraft.2338",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

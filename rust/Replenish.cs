@@ -5,7 +5,7 @@ using Oxide.Core;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("Replenish", "Skrallex", "1.3.1", ResourceId = 1956)]
+    [Info("Replenish", "Skrallex", "1.3.2", ResourceId = 1956)]
     [Description("Easily replenish chests")]
     class Replenish : RustPlugin {
     	List<ReplenishableContainer> containers = new List<ReplenishableContainer>();
@@ -484,7 +484,7 @@ namespace Oxide.Plugins {
     	}
 
         bool IsAllowed(BasePlayer player, string perm) {
-    		if(player.IsAdmin() && !UsePermissionsOnly) return true;
+    		if(player.IsAdmin && !UsePermissionsOnly) return true;
     		if(permission.UserHasPermission(player.UserIDString, adminPerm)) return true;
     		if(permission.UserHasPermission(player.UserIDString, perm)) return true;
     		return false;

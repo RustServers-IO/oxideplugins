@@ -7,12 +7,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Block Remover", "bawNg / Nogrod", "0.4.1")]
+    [Info("Block Remover", "bawNg / Nogrod", "0.4.3")]
     class BlockRemover : RustPlugin
     {
         private ConfigData configData;
         private readonly FieldInfo entityListField = typeof(BaseNetworkable.EntityRealm).GetField("entityList", BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly FieldInfo instancesField = typeof(MeshColliderBatch).GetField("instances", BindingFlags.Instance | BindingFlags.NonPublic);
+        private readonly FieldInfo meshLookupField = typeof(MeshColliderBatch).GetField("meshLookup", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic)).GetValue(null);
         private const string PermCount = "blockremover.count";
         private const string PermRemove = "blockremover.remove";
@@ -124,10 +124,10 @@ namespace Oxide.Plugins
                     else
                     {
                         var batch = collider.transform.GetComponent<MeshColliderBatch>();
-                        var instances = (ListDictionary<Component, ColliderCombineInstance>)instancesField.GetValue(batch);
-                        foreach (var item in instances.Values)
+                        var instances = ((MeshColliderLookup)meshLookupField.GetValue(batch)).src.data;
+                        foreach (var item in instances)
                         {
-                            if ((item.bounds.ClosestPoint(cupboard.transform.position) - cupboard.transform.position).sqrMagnitude <= squaredDist)
+                            if (item.collider && (item.bounds.ClosestPoint(cupboard.transform.position) - cupboard.transform.position).sqrMagnitude <= squaredDist)
                             {
                                 var buildingBlock = item.collider?.GetComponentInParent<T>();
                                 if (buildingBlock) blocks.Remove(buildingBlock);
@@ -165,7 +165,7 @@ namespace Oxide.Plugins
 
         bool CheckAccess(ConsoleSystem.Arg arg, string perm)
         {
-            if (arg != null && arg.connection == null || arg.Player() != null && (arg.Player().IsAdmin() || permission.UserHasPermission(arg.Player().UserIDString, perm)))
+            if (arg != null && arg.Connection == null || arg.Player() != null && (arg.Player().IsAdmin || permission.UserHasPermission(arg.Player().UserIDString, perm)))
                 return true;
             SendReply(arg, "You need to be admin to use that command");
             return false;

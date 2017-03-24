@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Recycle", "Calytic", "2.0.4", ResourceId = 1296)]
+    [Info("Recycle", "Calytic", "2.0.7", ResourceId = 1296)]
     [Description("Recycle crafted items to base resources")]
     class Recycle : RustPlugin
     {
@@ -18,6 +18,7 @@ namespace Oxide.Plugins
         private string box;
         private bool npconly;
         private List<object> npcids;
+        private float radiationMax;
 
         #endregion
 
@@ -51,6 +52,7 @@ namespace Oxide.Plugins
             Config["Settings","box"] = "assets/prefabs/deployable/woodenbox/woodbox_deployed.prefab";
             Config["Settings","cooldownMinutes"] = 5;
             Config["Settings","refundRatio"] = 0.5f;
+            Config["Settings", "radiationMax"] = 1;
             Config["Settings", "NPCOnly"] = false;
             Config["Settings", "NPCIDs"] = new List<object>();
             Config["VERSION"] = Version.ToString();
@@ -82,6 +84,7 @@ namespace Oxide.Plugins
             cooldownMinutes = GetConfig("Settings","cooldownMinutes", 5f);
             box = GetConfig("Settings","box", "assets/prefabs/deployable/woodenbox/box_wooden.item.prefab");
             refundRatio = GetConfig("Settings", "refundRatio", 0.5f);
+            radiationMax = GetConfig("Settings", "radiationMax", 1f);
 
             npconly = GetConfig("Settings", "NPCOnly", false);
             npcids = GetConfig("Settings", "NPCIDs", new List<object>());
@@ -108,6 +111,7 @@ namespace Oxide.Plugins
             // NEW CONFIGURATION OPTIONS HERE
             Config["Settings", "NPCOnly"] = false;
             Config["Settings", "NPCIDs"] = new List<object>();
+            Config["Settings", "radiationMax"] = GetConfig("Settings", "radiationMax", 1f);
             // END NEW CONFIGURATION OPTIONS
 
             PrintToConsole("Upgrading configuration file");
@@ -126,6 +130,7 @@ namespace Oxide.Plugins
                 {"Denied: Swimming", "You cannot do that while swimming"},
                 {"Denied: Falling", "You cannot do that while falling"},
                 {"Denied: Wounded", "You cannot do that while wounded"},
+                {"Denied: Irradiated", "You cannot do that while irradiated"},
                 {"Denied: Generic", "You cannot do that right now"},
                 {"Cooldown: Seconds", "You are doing that too often, try again in a {0} seconds(s)."},
                 {"Cooldown: Minutes", "You are doing that too often, try again in a {0} minute(s)."},
@@ -152,7 +157,7 @@ namespace Oxide.Plugins
         object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
         {
             if (entity == null || target == null || entity == target) return null;
-            if (target.IsAdmin()) return null;
+            if (target.IsAdmin) return null;
 
             OnlinePlayer onlinePlayer;
             bool IsMyBox = false;
@@ -257,7 +262,7 @@ namespace Oxide.Plugins
             if (!CanPlayerRecycle(player))
                 return;
 
-            if (cooldownMinutes > 0 && !player.IsAdmin())
+            if (cooldownMinutes > 0 && !player.IsAdmin)
             {
                 DateTime startTime;
 
@@ -436,6 +441,11 @@ namespace Oxide.Plugins
                 SendReply(player, GetMsg("Denied: Privilege", player));
                 return false;
             }
+            if (radiationMax > 0 && player.radiationLevel > radiationMax)
+            {
+                SendReply(player, GetMsg("Denied: Irradiated", player));
+                return false;
+            }
             if (player.IsSwimming())
             {
                 SendReply(player, GetMsg("Denied: Swimming", player));
@@ -446,7 +456,7 @@ namespace Oxide.Plugins
                 SendReply(player, GetMsg("Denied: Falling", player));
                 return false;
             }
-            if (player.IsFlying())
+            if (player.IsFlying)
             {
                 SendReply(player, GetMsg("Denied: Falling", player));
                 return false;
@@ -457,7 +467,7 @@ namespace Oxide.Plugins
                 return false;
             }
 
-            var canRecycle = Interface.Call("CanRecycle", player);
+            var canRecycle = Interface.Call("CanRecycleCommand", player);
             if (canRecycle != null)
             {
                 if (canRecycle is string)

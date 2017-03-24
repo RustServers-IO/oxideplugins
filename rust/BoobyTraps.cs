@@ -12,7 +12,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("BoobyTraps", "k1lly0u", "0.2.11", ResourceId = 1549)]
+    [Info("BoobyTraps", "k1lly0u", "0.2.12", ResourceId = 1549)]
     class BoobyTraps : RustPlugin
     {
         #region Fields
@@ -783,7 +783,7 @@ namespace Oxide.Plugins
                     }
                 case "removeall":
                     {
-                        if (!player.IsAdmin() && !HasPermission(userId, adminPerm))
+                        if (!player.IsAdmin && !HasPermission(userId, adminPerm))
                         {
                             SendReply(player, msg("noPerm", player.UserIDString));
                             return;
@@ -794,7 +794,7 @@ namespace Oxide.Plugins
                     }
                 case "list":
                     {
-                        if (!player.IsAdmin() && !HasPermission(userId, adminPerm))
+                        if (!player.IsAdmin && !HasPermission(userId, adminPerm))
                         {
                             SendReply(player, msg("noPerm", player.UserIDString));
                             return;

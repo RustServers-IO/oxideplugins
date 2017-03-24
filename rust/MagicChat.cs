@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using Rust;
 using Oxide.Core;
 using Oxide.Core.Plugins;
+
 namespace Oxide.Plugins
 {
-    [Info("MagicChat", "Norn", 0.1, ResourceId = 1437)]
+    [Info("MagicChat", "Norn", "0.1.2", ResourceId = 1437)]
     [Description("An alternative chat system.")]
     public class MagicChat : RustPlugin
     {
@@ -237,27 +238,27 @@ namespace Oxide.Plugins
             {
                 if (Convert.ToBoolean(Config["Public", "Enabled"]))
                 {
-                    if (MCData.Users[arg.connection.userid].uShowPublicChat)
+                    if (MCData.Users[arg.Connection.userid].uShowPublicChat)
                     {
-                        BasePlayer player = BasePlayer.FindByID(arg.connection.userid);
+                        BasePlayer player = BasePlayer.FindByID(arg.Connection.userid);
                         string final_text = text.Remove(0, Config["General", "PublicPrefix"].ToString().Length);
                         if (final_text.Length >= 1 && player != null) UserTextPublic(player, final_text);
                     }
                     else
                     {
-                        PrintToChat(BasePlayer.FindByID(arg.connection.userid), "You <color=red>can't</color> use public chat when you can't even see it. (/chat public)");
+                        PrintToChat(BasePlayer.FindByID(arg.Connection.userid), "You <color=red>can't</color> use public chat when you can't even see it. (/chat public)");
                     }
                 }
                 else
                 {
-                    PrintToChat(BasePlayer.FindByID(arg.connection.userid), Config["Messages", "PublicDisabled"].ToString());
+                    PrintToChat(BasePlayer.FindByID(arg.Connection.userid), Config["Messages", "PublicDisabled"].ToString());
                 }
             }
             else
             {
                 if (Convert.ToBoolean(Config["Local", "Enabled"]))
                 {
-                    BasePlayer player = BasePlayer.FindByID(arg.connection.userid);
+                    BasePlayer player = BasePlayer.FindByID(arg.Connection.userid);
                     if(text.Length >= 1 && player != null) UserTextRadius(player, Convert.ToDouble(Config["Local", "Radius"]), text, UserNameColor(player));
                 }
                 else return null;
@@ -267,7 +268,7 @@ namespace Oxide.Plugins
         private void UserTextPublic(BasePlayer player, string text)
         {
             string end_result = null;
-            if (player != null && player.IsConnected())
+            if (player != null && player.IsConnected)
             {
                 if (!UserDataExists(player)) { InitUserData(player); }
                 if (Convert.ToBoolean(Config["Public", "Enabled"]))
@@ -292,7 +293,7 @@ namespace Oxide.Plugins
                         Puts("[" + Config["Public", "ChatPrefex"].ToString() + "] " + player.displayName + ": " + text);
                         foreach (BasePlayer target in BasePlayer.activePlayerList)
                         {
-                            if(target != null && target.IsConnected())
+                            if(target != null && target.IsConnected)
                             {
                                 if (!UserDataExists(target)) InitUserData(target);
                                 if (MCData.Users[target.userID].uShowPublicChat) { if (user.uShowIcon) { rust.SendChatMessage(target, end_result, null, player.userID.ToString()); } else { rust.SendChatMessage(target, end_result, null, Config["General", "IconDisabled"].ToString()); } }
@@ -305,7 +306,7 @@ namespace Oxide.Plugins
         private string UserNameColor(BasePlayer i)
         {
             string color = DEFAULT_COLOR;
-            if (i != null && i.IsConnected())
+            if (i != null && i.IsConnected)
             {
                 UserInfo user = null;
                 if (MCData.Users.TryGetValue(i.userID, out user))
@@ -345,7 +346,7 @@ namespace Oxide.Plugins
             {
                 InitUserData(player);
             }
-            if (player.IsConnected())
+            if (player.IsConnected)
             {
                 float posx;
                 float posy;
@@ -361,7 +362,7 @@ namespace Oxide.Plugins
                 string gradient5 = Config["FadeGradient", "5"].ToString();
                 foreach (BasePlayer i in BasePlayer.activePlayerList)
                 {
-                    if (i.IsConnected())
+                    if (i.IsConnected)
                     {
                         posx = i.transform.position.x;
                         posy = i.transform.position.y;
@@ -476,7 +477,7 @@ namespace Oxide.Plugins
         }
         private bool CanUserToggleSteamIcon(BasePlayer player)
         {
-            if (player.isConnected && player != null)
+            if (player.IsConnected && player != null)
             {
                 UserInfo item = null;
                 if (MCData.Users.TryGetValue(player.userID, out item))
@@ -488,7 +489,7 @@ namespace Oxide.Plugins
         }
         private bool CanUserCustomColor(BasePlayer player)
         {
-            if (player.isConnected && player != null)
+            if (player.IsConnected && player != null)
             {
                 UserInfo item = null;
                 if (MCData.Users.TryGetValue(player.userID, out item))
@@ -501,7 +502,7 @@ namespace Oxide.Plugins
         private bool UserColorToggle(BasePlayer player)
         {
             bool return_b = false;
-            if (player.isConnected && player != null)
+            if (player.IsConnected && player != null)
             {
                 UserInfo item = null;
                 if (MCData.Users.TryGetValue(player.userID, out item))
@@ -522,7 +523,7 @@ namespace Oxide.Plugins
         private bool UserTagToggle(BasePlayer player)
         {
             bool return_b = false;
-            if (player.isConnected && player != null)
+            if (player.IsConnected && player != null)
             {
                 UserInfo item = null;
                 if (MCData.Users.TryGetValue(player.userID, out item))
@@ -542,7 +543,7 @@ namespace Oxide.Plugins
         }
         private bool UserTagEnabled(BasePlayer player)
         {
-            if (player.isConnected && player != null)
+            if (player.IsConnected && player != null)
             {
                 UserInfo item = null;
                 if (MCData.Users.TryGetValue(player.userID, out item))
@@ -554,7 +555,7 @@ namespace Oxide.Plugins
         }
         private bool CanUserCustomTag(BasePlayer player)
         {
-            if (player.isConnected && player != null)
+            if (player.IsConnected && player != null)
             {
                 UserInfo item = null;
                 if (MCData.Users.TryGetValue(player.userID, out item))

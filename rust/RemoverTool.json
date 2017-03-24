@@ -1,12 +1,13 @@
 {
     "name": "R-Remover Tool",
     "description": "Remover tool",
-    "author": "Reneb",
-    "version": "4.0.11",
+    "author": "Fujikura",
+    "version": "4.1.7",
     "configuration": true,
     "suggest": {
         "BuildingOwners": "*",
         "Friends": "*",
+        "Clans": "*",
         "Economics": "*"
     },
     "language": "cs",

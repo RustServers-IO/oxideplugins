@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("Loyalty", "Bamabo", "1.3.1")]
+    [Info("Loyalty", "Bamabo", "1.3.2", ResourceId = 1978)]
     [Description("Reward your players for play time with new permissions/usergroups")]
 
     class Loyalty : RustPlugin
@@ -94,7 +94,7 @@ namespace Oxide.Plugins
             {
                 foreach (var player in BasePlayer.activePlayerList)
                 {
-                    if ((player.IsAdmin() && (bool)Config["allowAdmin"]) || !player.IsAdmin())
+                    if ((player.IsAdmin && (bool)Config["allowAdmin"]) || !player.IsAdmin)
                     {
                         if (!data.players.ContainsKey(player.userID))
                             data.players.Add(player.userID, new Player(player.userID, player.displayName, 1, ""));
@@ -160,7 +160,7 @@ namespace Oxide.Plugins
         void OnPlayerInit(BasePlayer player)
         {
 
-            if ((player.IsAdmin() && (bool)Config["allowAdmin"]) || !player.IsAdmin())
+            if ((player.IsAdmin && (bool)Config["allowAdmin"]) || !player.IsAdmin)
             {
                 if (!data.players.ContainsKey(player.userID))
                 {
@@ -179,7 +179,7 @@ namespace Oxide.Plugins
         void CmdLoyalty(BasePlayer sender, string command, string[] args)
         {
             if (args.Length == 0)
-                if (permission.UserHasPermission(sender.UserIDString, "loyalty.loyalty") || sender.IsAdmin())
+                if (permission.UserHasPermission(sender.UserIDString, "loyalty.loyalty") || sender.IsAdmin)
                 {
                     if (data.players.ContainsKey(sender.userID))
                         SendMessage(sender, "loyaltyCurrent", data.players[sender.userID].loyalty, Config["serverName"]);
@@ -195,7 +195,7 @@ namespace Oxide.Plugins
                 switch (args[0].ToLower())
                 {
                     case "add":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.add") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.add") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -212,7 +212,7 @@ namespace Oxide.Plugins
                         break;
 
                     case "remove":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.remove") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.remove") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -225,7 +225,7 @@ namespace Oxide.Plugins
                         CmdRemove(sender, args[1]);
                         break;
                     case "removeg":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.removegroup") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.removegroup") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -238,7 +238,7 @@ namespace Oxide.Plugins
                         CmdRemoveUserGroup(sender, args[1]);
                         break;
                     case "reset":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.reset") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.reset") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -252,7 +252,7 @@ namespace Oxide.Plugins
                         break;
 
                     case "set":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.set") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.set") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -265,7 +265,7 @@ namespace Oxide.Plugins
                         CmdSet(sender, args[1], args[2]);
                         break;
                     case "help":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.help") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.help") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -279,7 +279,7 @@ namespace Oxide.Plugins
                         break;
 
                     case "lookup":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.lookup") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.lookup") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -293,7 +293,7 @@ namespace Oxide.Plugins
                         break;
 
                     case "top":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.top") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.top") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -306,7 +306,7 @@ namespace Oxide.Plugins
                         CmdTop(sender);
                         break;
                     case "addg":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.addgroup") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.addgroup") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -319,7 +319,7 @@ namespace Oxide.Plugins
                         CmdAddUserGroup(sender, args[1], args[2]);
                         break;
                     case "rewards":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.rewards") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.rewards") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;
@@ -332,7 +332,7 @@ namespace Oxide.Plugins
                         CmdRewards(sender);
                         break;
                     case "rewardsg":
-                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.rewardsg") && !sender.IsAdmin())
+                        if (!permission.UserHasPermission(sender.UserIDString, "loyalty.rewardsg") && !sender.IsAdmin)
                         {
                             SendErrorMessage(sender, "accessDenied");
                             return;

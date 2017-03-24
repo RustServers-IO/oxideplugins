@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using Oxide.Core;
 namespace Oxide.Plugins
 {
-    [Info("MagicSets", "Norn", "0.1.2", ResourceId = 2290)]
+    [Info("MagicSets", "Norn", "0.1.3", ResourceId = 2290)]
     [Description("Magical gearsets.")]
 
     class MagicSets : RustPlugin
@@ -134,7 +134,7 @@ namespace Oxide.Plugins
         private bool GiveSetItem(BasePlayer player, int itemid, ulong skinid, int amount)
         {
             Item i;
-            if (!player.isConnected) return false;
+            if (!player.IsConnected) return false;
             i = ItemManager.CreateByItemID(itemid, amount, skinid);
             if (i != null) if (!i.MoveToContainer(player.inventory.containerWear) && !i.MoveToContainer(player.inventory.containerMain) && !i.MoveToContainer(player.inventory.containerBelt)) { i.Drop(player.eyes.position, player.eyes.BodyForward() * 2f); }
             return true;

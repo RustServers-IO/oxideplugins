@@ -16,7 +16,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "Nogrod", "1.0.18", ResourceId = 1832)]
+    [Info("NTeleportation", "Nogrod", "1.0.20", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
         private const string NewLine = "\n";
@@ -287,6 +287,7 @@ namespace Oxide.Plugins
                 {"HomeFoundationNotOwned", "You can't use home on someone else's house."},
                 {"HomeFoundationNotFriendsOwned", "You or a friend need to own the house to use home!"},
                 {"HomeRemovedInvalid", "Your home '{0}' was removed because not on a foundation or not owned!"},
+                {"HomeRemovedInsideBlock", "Your home '{0}' was removed because inside a foundation!"},
                 {"HomeRemove", "You have removed your home {0}!"},
                 {"HomeDelete", "You have removed {0}'s home '{1}'!"},
                 {"HomeList", "The following homes are available:"},
@@ -328,6 +329,7 @@ namespace Oxide.Plugins
                 {"TPWounded", "You can't teleport while being wounded!"},
                 {"TPBuildingBlocked", "You can't teleport while in a building blocked zone!"},
                 {"TPTargetBuildingBlocked", "You can't teleport in a building blocked zone!"},
+                {"TPTargetInsideBlock", "You can't teleport into a foundation!"},
                 {"TPSwimming", "You can't teleport while swimming!"},
                 {"TPCrafting", "You can't teleport while crafting!"},
                 {"TPBlockedItem", "You can't teleport while carrying: {0}!"},
@@ -1119,10 +1121,16 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (player.IsAdmin())
+            if (player.IsAdmin)
                 player.SendConsoleCommand("ddraw.sphere", 60f, Color.blue, GetGround(positionCoordinates), 2.5f);
 
             err = CheckFoundation(player.userID, positionCoordinates);
+            if (err != null)
+            {
+                PrintMsgL(player, err);
+                return;
+            }
+            err = CheckInsideBlock(positionCoordinates);
             if (err != null)
             {
                 PrintMsgL(player, err);
@@ -1326,7 +1334,7 @@ namespace Oxide.Plugins
             err = CheckInsideBlock(location);
             if (err != null)
             {
-                PrintMsgL(player, "HomeRemovedInvalid", args[0]);
+                PrintMsgL(player, "HomeRemovedInsideBlock", args[0]);
                 homeData.Locations.Remove(args[0]);
                 changedHome = true;
                 return;
@@ -2332,11 +2340,32 @@ namespace Oxide.Plugins
 
         private string CheckInsideBlock(Vector3 targetLocation)
         {
-            var blocks = Pool.GetList<BuildingBlock>();
-            Vis.Entities(targetLocation + new Vector3(0, 0.25f), 0.1f, blocks, blockLayer);
-            var inside = blocks.Count > 0;
-            Pool.FreeList(ref blocks);
-            return inside ? "TPTargetBuildingBlocked" : null;
+            var targets = Physics.SphereCastAll(new Ray(targetLocation + Vector3.up * 3.1f, Vector3.down), 0.1f, 3f, blockLayer);
+            foreach (var hit in targets)
+            {
+                if (hit.collider.transform.CompareTag("MeshColliderBatch"))
+                {
+                    var colliders = Pool.GetList<Collider>();
+                    hit.collider.transform.GetComponent<MeshColliderBatch>().LookupColliders(hit.point, 1.5f, colliders);
+                    var found = false;
+                    foreach (var collider in colliders)
+                    {
+                        var block = collider.gameObject.ToBaseEntity();
+                        if (block == null || !block.PrefabName.Contains("foundation")) continue;
+                        found = true;
+                        break;
+                    }
+                    Pool.FreeList(ref colliders);
+                    if (!found) continue;
+                }
+                else
+                {
+                    var block = hit.collider.gameObject.ToBaseEntity();
+                    if (block == null || !block.PrefabName.Contains("foundation")) continue;
+                }
+                return "TPTargetInsideBlock";
+            }
+            return null;
         }
 
         private string CheckItems(BasePlayer player)
@@ -2427,7 +2456,7 @@ namespace Oxide.Plugins
             var done = false;
             if (Physics.SphereCast(sourcePos, .1f, Vector3.down, out hitinfo, 250, groundLayer))
             {
-                if (configData.Home.AllowIceberg && (hitinfo.collider.name.Contains("iceberg") || configData.Home.AllowCave && hitinfo.collider.name.Contains("cave_")))
+                if (configData.Home.AllowIceberg && hitinfo.collider.name.Contains("iceberg") || configData.Home.AllowCave && hitinfo.collider.name.Contains("cave_"))
                 {
                     sourcePos.y = hitinfo.point.y;
                     done = true;

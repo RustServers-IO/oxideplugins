@@ -1,0 +1,16 @@
+{
+    "name": "NoSupplySignal",
+    "description": "Prevents supply drops triggering from supply signals",
+    "author": "Wulf",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nosupplysignal.2375",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

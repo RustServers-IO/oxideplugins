@@ -2,7 +2,7 @@
     "name": "HeliRide",
     "description": "Players can fly the Patrol Helicopter",
     "author": "Colon Blow",
-    "version": "1.1.8",
+    "version": "1.1.10",
     "configuration": true,
     "suggest": {
         "FauxAdmin": "*",

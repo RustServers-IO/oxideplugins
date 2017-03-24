@@ -6,7 +6,8 @@ using System.Text;
 
 namespace Oxide.Plugins
 {
-    [Info("Admin Inventory Cleaner", "TheDoc - Uprising Servers", "1.3.0", ResourceId = 973)]
+    [Info("Admin Inventory Cleaner", "TheDoc - Uprising Servers", "1.4.1", ResourceId = 973)]
+	[Description("A simple plugin that will do what is says it does, clean your inventory :)")]
     class InventoryCleaner : RustPlugin
     {
         void SendChatMessage(BasePlayer player, string message, string args = null) => PrintToChat(player, $"{message}", args);
@@ -20,7 +21,19 @@ namespace Oxide.Plugins
             {
                 if (args.Length == 0)
                 {
-                    player.inventory.Strip();
+                    //player.inventory.Strip();
+					foreach(var item in player.inventory.containerBelt.itemList)
+                    {
+                        item.Remove();
+                    }
+                    foreach (var item in player.inventory.containerMain.itemList)
+                    {
+                        item.Remove();
+                    }
+                    foreach (var item in player.inventory.containerWear.itemList)
+                    {
+                        item.Remove();
+                    }					
                     SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Complete Inventory is now clean!");
                     return;
                 }
@@ -39,19 +52,34 @@ namespace Oxide.Plugins
                             sb.Append("  ").Append("<color=#74c6ff>/cleaninv both</color> - Remove all items on your Main Inventory & Action Belt!").Append("\n");
                             SendChatMessage(player, sb.ToString());
                             break;
-                        case "belt":
-                            player.inventory.containerBelt.Kill();
+						case "belt":		
+                            foreach(var item in player.inventory.containerBelt.itemList)
+                            {
+                                item.Remove();
+                            }
                             SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Belt is now clean!");
                             break;
                         case "main":
-                            player.inventory.containerMain.Kill();
+                            foreach (var item in player.inventory.containerMain.itemList)
+                            {
+                                item.Remove();
+                            }
                             SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Main Inventory is now clean!");
                             break;
                         case "both":
-                            player.inventory.containerBelt.Kill();
-                            player.inventory.containerMain.Kill();
+                            foreach (var item in player.inventory.containerBelt.itemList)
+                            {
+                                item.Remove();
+                            }
+                            foreach (var item in player.inventory.containerMain.itemList)
+                            {
+                                item.Remove();
+                            }
                             SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Belt and Main Inventory is now clean!");
-                            break;
+                            break;							
+						case "fix":
+                            player.inventory.ServerInit(player);
+                            break;							
                         default:
                             break;
                     }

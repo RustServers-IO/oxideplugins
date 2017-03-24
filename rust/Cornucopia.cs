@@ -7,7 +7,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Cornucopia", "Deicide666ra", "1.1.5", ResourceId = 1264)]
+    [Info("Cornucopia", "Deicide666ra", "1.1.6", ResourceId = 1264)]
     class Cornucopia : RustPlugin
     {
         class CornuConfig
@@ -107,7 +107,7 @@ namespace Oxide.Plugins
         {
             var sb = new StringBuilder();
             sb.Append("<color=yellow>Cornucopia 1.1.4.0</color> · Controls resource abundance\n");
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 sb.Append("  · ").AppendLine("<color=lime>/cdump</color> (<color=orange>cornu.dump</color>) for RCON stats");
                 sb.Append("  · ").AppendLine("<color=lime>/cspawn</color> (<color=orange>cornu.spawn</color>) adjusts resources");
@@ -216,28 +216,28 @@ namespace Oxide.Plugins
         [ConsoleCommand("cornu.dump")]
         void DumpCommand(ConsoleSystem.Arg arg)
         {
-            if (arg != null && arg.Player() != null && arg.Player().IsAdmin() == false) return;
+            if (arg != null && arg.Player() != null && arg.Player().IsAdmin == false) return;
             DumpEntities();
         }
 
         [ConsoleCommand("cornu.spawn")]
         void SpawnCommand(ConsoleSystem.Arg arg)
         {
-            if (arg != null && arg.Player() != null && arg.Player().IsAdmin() == false) return;
+            if (arg != null && arg.Player() != null && arg.Player().IsAdmin == false) return;
             MainSpawnCycle();
         }
 
         [ConsoleCommand("cornu.fixloot")]
         void FixLootCommand(ConsoleSystem.Arg arg)
         {
-            if (arg != null && arg.Player() != null && arg.Player().IsAdmin() == false) return;
+            if (arg != null && arg.Player() != null && arg.Player().IsAdmin == false) return;
             FixLoot(null);
         }
 
         [ConsoleCommand("cornu.purge")]
         void PurgeCommand(ConsoleSystem.Arg arg)
         {
-            if (arg != null && arg.Player() != null && arg.Player().IsAdmin() == false) return;
+            if (arg != null && arg.Player() != null && arg.Player().IsAdmin == false) return;
             Purge();
         }
 
@@ -258,7 +258,7 @@ namespace Oxide.Plugins
         [ChatCommand("cpurge")]
         void cmdPurge(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 player.ChatMessage("You need to be admin to run this command, sorry buddy!");
                 return;
@@ -269,7 +269,7 @@ namespace Oxide.Plugins
         [ChatCommand("cfixloot")]
         void cmdFixLoot(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 player.ChatMessage("You need to be admin to run this command, sorry buddy!");
                 return;
@@ -280,7 +280,7 @@ namespace Oxide.Plugins
         [ChatCommand("cdump")]
         void cmdDump(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 player.ChatMessage("You need to be admin to run this command, sorry buddy!");
                 return;
@@ -291,7 +291,7 @@ namespace Oxide.Plugins
         [ChatCommand("cspawn")]
         void cmdSpawn(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 player.ChatMessage("You need to be admin to run this command, sorry buddy!");
                 return;

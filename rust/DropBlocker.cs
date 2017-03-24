@@ -1,18 +1,23 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Drop Blocker", "Krava", 1.1)]
+    [Info("Drop Blocker", "Krava", 1.2)]
     [Description("Anti drop items at the craft.")]
 
     public class DropBlocker : RustPlugin
     {
         private class TempData
         {
-            public int Uid { get; set; }
+            public TempData(int itemId, int amount)
+            {
+                ItemId = itemId;
+                Amount = amount;
+            }
+
+            public int ItemId { get; set; }
             public int Amount { get; set; }
-            public int Stack { get; set; }
         }
 
         private void Loaded()
@@ -23,104 +28,59 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        private void Merge(ItemCraftTask task, ref List<TempData> data)
+        /// <summary>
+        /// Called when a player attempts to craft an item
+        /// Returning true or false overrides default behavior
+        /// </summary>
+        private object CanCraft(ItemCrafter itemCrafter, ItemBlueprint bp, int amount)
         {
-            var amount = task.amount;
-            var item = task.blueprint.targetItem;
+            var slots = new List<TempData>();
 
-            foreach (var p in data.Where(x => x.Uid == item.itemid && x.Stack - x.Amount > 0))
+            foreach (var container in itemCrafter.containers)
+                slots.AddRange(container.itemList.Select(x => new TempData(x.info.itemid, x.amount)));
+
+            foreach (var craftTask in itemCrafter.queue)
+                Merge(slots, craftTask.blueprint.targetItem, craftTask.amount);
+
+            Merge(slots, bp.targetItem, amount);
+
+            if (slots.Count() > itemCrafter.containers.Sum(x => x.capacity))
             {
-                if (amount == 0) break;
+                SendReply(itemCrafter.containers.First().playerOwner, lang.GetMessage("CantCraft", this));
+                return false;
+            }
 
-                var toStack = p.Stack - p.Amount;
+            return null;
+        }
 
-                if (amount > toStack)
+        private void Merge(List<TempData> slots, ItemDefinition item, int amount)
+        {
+            foreach (var slot in slots.Where(x => x.ItemId == item.itemid && x.Amount < item.stackable))
+            {
+                if (amount == 0)
+                    return;
+
+                var toStack = item.stackable - slot.Amount;
+
+                if (toStack >= amount)
                 {
-                    p.Amount += toStack;
-                    amount -= toStack;
+                    slot.Amount += amount;
+                    amount = 0;
                 }
                 else
                 {
-                    p.Amount += amount;
-                    amount = 0;
-                    break;
+                    slot.Amount += toStack;
+                    amount = amount - toStack;
                 }
             }
 
-            if (amount != 0)
+            while (amount > 0)
             {
-                var count = amount / item.stackable;
+                var temp = item.stackable > amount ? amount : item.stackable;
+                amount -= temp;
 
-                for (var i = 0; i < count; i++)
-                    data.Add(new TempData
-                    {
-                        Uid = item.itemid,
-                        Amount = item.stackable,
-                        Stack = item.stackable
-                    });
-
-                if (amount % item.stackable != 0)
-                {
-                    data.Add(new TempData
-                    {
-                        Uid = item.itemid,
-                        Amount = amount % item.stackable,
-                        Stack = item.stackable
-                    });
-                }
+                slots.Add(new TempData(item.itemid, temp));
             }
-        }
-
-        private bool CanCraft(BasePlayer player, ItemCraftTask task)
-        {
-            var data = new List<TempData>();
-
-            foreach (var item in player.inventory.containerMain.itemList)
-                data.Add(new TempData
-                {
-                    Uid = item.info.itemid,
-                    Amount = item.amount,
-                    Stack = item.MaxStackable()
-                });
-
-            foreach (var item in player.inventory.containerBelt.itemList)
-                data.Add(new TempData
-                {
-                    Uid = item.info.itemid,
-                    Amount = item.amount,
-                    Stack = item.MaxStackable()
-                });
-
-            foreach (var t in player.inventory.crafting.queue)
-                Merge(t, ref data);
-
-            Merge(task, ref data);
-
-            if (data.Count <= 30)
-                return true;
-
-            return false;
-        }
-
-        private void OnItemCraft(ItemCraftTask task, BasePlayer player)
-        {
-            if (task == null || player == null)
-                return;
-
-            if (!CanCraft(player, task))
-            {
-                task.cancelled = true;
-
-                foreach (Item i in task.takenItems)
-                    player.inventory.GiveItem(i);
-
-                SendReply(player, GetMessage("CantCraft", player.UserIDString));
-            }
-        }
-
-        private string GetMessage(string name, string sid = null)
-        {
-            return lang.GetMessage(name, this, sid);
         }
     }
 }

@@ -1,0 +1,16 @@
+{
+    "name": "ResetCodeLocks",
+    "description": "Simple Plugin that allows players to reset the code lock (guest\/main) on all their locks",
+    "author": "Absolut",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/resetcodelocks.2348",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

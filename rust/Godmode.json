@@ -1,8 +1,8 @@
 {
     "name": "Godmode",
-    "description": "Allows players with permission to become invincible\/invulnerable",
+    "description": "Allows players with permission to be invulerable and god-like",
     "author": "Wulf",
-    "version": "3.2.1",
+    "version": "4.1.0",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/godmode.673",

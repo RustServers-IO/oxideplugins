@@ -2,7 +2,7 @@
     "name": "Player Manager",
     "description": "GUI-based player manager",
     "author": "Reneb",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "configuration": true,
     "suggest": {},
     "language": "cs",

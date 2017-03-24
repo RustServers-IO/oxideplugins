@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoPurge", "Fujikura/Norn", "1.5.1", ResourceId = 1566)]
+    [Info("AutoPurge", "Fujikura/Norn", "1.5.4", ResourceId = 1566)]
     [Description("Remove entities if the owner becomes inactive.")]
     public class AutoPurge : RustPlugin
     {
@@ -200,7 +200,7 @@ namespace Oxide.Plugins
         
 		private bool DataExists(BasePlayer player)
         {
-            if (player == null || !player.isConnected) return false;
+            if (player == null || !player.IsConnected) return false;
             if (playerConnections.PlayerInfo.ContainsKey(player.userID)) { return true; }
             return false;
         }
@@ -320,7 +320,7 @@ namespace Oxide.Plugins
 			{
 				if (logRealTimerToConsole)
 					Puts($"Running RealTimer purge ({DateTime.Now.ToString("HH:mm")})");
-				ccmdRunPurge( new ConsoleSystem.Arg(null) );
+				ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "autopurge.run");
 			}
 		}
 
@@ -370,7 +370,7 @@ namespace Oxide.Plugins
 			{
 				if(showMessagesAdminOnly)
 				{
-					foreach(var admin in BasePlayer.activePlayerList.Where(p => p.IsAdmin()).ToList())
+					foreach(var admin in BasePlayer.activePlayerList.Where(p => p.IsAdmin).ToList())
 					SendReply(admin, string.Format(lang.GetMessage("RunBefore", this, admin.UserIDString)));
 				}
 				else
@@ -456,7 +456,7 @@ namespace Oxide.Plugins
 			{
 				if (showMessagesAdminOnly)
 				{
-					foreach(var admin in BasePlayer.activePlayerList.Where(p => p.IsAdmin()).ToList())
+					foreach(var admin in BasePlayer.activePlayerList.Where(p => p.IsAdmin).ToList())
 					SendReply(admin, string.Format(lang.GetMessage("RunComplete", this, admin.UserIDString), count, UNIQUE_HITS.Count));
 				}
 				else

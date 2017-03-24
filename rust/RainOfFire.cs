@@ -1,19 +1,17 @@
-﻿// Reference: Rust.Global
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Oxide.Core.Plugins;
 using UnityEngine;
 using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("RainOfFire", "emu / k1lly0u", "0.2.2", ResourceId = 1249)]
+    [Info("RainOfFire", "emu / k1lly0u", "0.2.5", ResourceId = 1249)]
     class RainOfFire : RustPlugin
     {
         #region Fields
         [PluginReference]
         Plugin PopupNotifications;
 
-        const string s_Incoming = "Meteor shower incoming";
         private Timer EventTimer = null;
         private List<Timer> RocketTimers = new List<Timer>();
         
@@ -29,6 +27,7 @@ namespace Oxide.Plugins
         #region Oxide Hooks       
         void OnServerInitialized()
         {
+            lang.RegisterMessages(Messages, this);
             LoadVariables();
             StartEventTimer();
         }   
@@ -98,9 +97,9 @@ namespace Oxide.Plugins
             if (configData.Options.NotifyEvent)
             {
                 if (PopupNotifications)
-                    PopupNotifications.Call("CreatePopupNotification", s_Incoming);
+                    PopupNotifications.Call("CreatePopupNotification", msg("incoming"));
                 else
-                    PrintToChat(s_Incoming);
+                    PrintToChat(msg("incoming"));
             }
 
             timer.Repeat(intervals, numberOfRockets, () => RandomRocket(origin, radius, setting));
@@ -200,16 +199,16 @@ namespace Oxide.Plugins
         [ChatCommand("rof")]
         private void cmdROF(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin() || args.Length == 0)
+            if (!player.IsAdmin || args.Length == 0)
             {
-                SendReply(player, "/rof onplayer <opt:playername> - Calls a event on your position, or the player specified");
-                SendReply(player, "/rof onplayer_extreme <opt:playername> - Starts a extreme event on your position, or the player specified");
-                SendReply(player, "/rof onplayer_mild <opt:playername> - Starts a optimal event on your position, or the player specified");
-                SendReply(player, "/rof barrage - Fire a barrage of rockets from your position");
-                SendReply(player, "/rof random - Calls a event at a random postion");
-                SendReply(player, "/rof intervals <amount> - Change the time between events");
-                SendReply(player, "/rof damagescale <amount> - Change the damage scale");
-                SendReply(player, "/rof togglemsg - Toggle public event broadcast");
+                SendReply(player, msg("help1", player.UserIDString));
+                SendReply(player, msg("help2", player.UserIDString));
+                SendReply(player, msg("help3", player.UserIDString));
+                SendReply(player, msg("help4", player.UserIDString));
+                SendReply(player, msg("help5", player.UserIDString));
+                SendReply(player, msg("help6", player.UserIDString));
+                SendReply(player, msg("help7", player.UserIDString));
+                SendReply(player, msg("help8", player.UserIDString));
                 return;
             }
                 
@@ -220,14 +219,14 @@ namespace Oxide.Plugins
                     if (args.Length == 2)
                     {
                         if (StartOnPlayer(args[1], configData.z_IntensitySettings.Settings_Optimal))
-                            SendReply(player, "Event called on " + args[1] + "'s position");
+                            SendReply(player, string.Format(msg("calledOn", player.UserIDString), args[1]));
                         else
-                            SendReply(player, "No player found with that name");
+                            SendReply(player, msg("noPlayer", player.UserIDString));
                     }
                     else
                     {
                         StartRainOfFire(player.transform.position, configData.z_IntensitySettings.Settings_Optimal);
-                        SendReply(player, "Event called on your position");
+                        SendReply(player, msg("onPos", player.UserIDString));
                     }
                     break;
 
@@ -235,14 +234,14 @@ namespace Oxide.Plugins
                     if (args.Length == 2)
                     {
                         if (StartOnPlayer(args[1], configData.z_IntensitySettings.Settings_Extreme))
-                            SendReply(player, "Extreme event called on " + args[1] + "'s position");
+                            SendReply(player, msg("Extreme", player.UserIDString) + string.Format(msg("calledOn", player.UserIDString), args[1]));
                         else
-                            SendReply(player, "No player found with that name");
+                            SendReply(player, msg("noPlayer", player.UserIDString));
                     }
                     else
                     {
                         StartRainOfFire(player.transform.position, configData.z_IntensitySettings.Settings_Extreme);
-                        SendReply(player, "Extreme event called on your position");
+                        SendReply(player, msg("Extreme", player.UserIDString) + msg("onPos", player.UserIDString));
                     }
                     break;
 
@@ -250,14 +249,14 @@ namespace Oxide.Plugins
                     if (args.Length == 2)
                     {
                         if (StartOnPlayer(args[1], configData.z_IntensitySettings.Settings_Mild))
-                            SendReply(player, "Mild event called on " + args[1] + "'s position");
+                            SendReply(player, msg("Mild", player.UserIDString) + string.Format(msg("calledOn", player.UserIDString), args[1]));
                         else
-                            SendReply(player, "No player found with that name");
+                            SendReply(player, msg("noPlayer", player.UserIDString));
                     }
                     else
                     {
                         StartRainOfFire(player.transform.position, configData.z_IntensitySettings.Settings_Mild);
-                        SendReply(player, "Mild event called on your position");
+                        SendReply(player, msg("Mild", player.UserIDString) + msg("onPos", player.UserIDString));
                     }
                     break;
 
@@ -267,7 +266,7 @@ namespace Oxide.Plugins
 
                 case "random":
                     StartRandomOnMap();
-                    SendReply(player, "Event called on random position");
+                    SendReply(player, msg("randomCall", player.UserIDString));
                     break;
 
                 case "intervals":
@@ -282,18 +281,18 @@ namespace Oxide.Plugins
                             if (newIntervals >= 4 || newIntervals == 0)
                             {
                                 SetIntervals(newIntervals);
-                                SendReply(player, $"Event intervals set to {newIntervals} minutes");
+                                SendReply(player, string.Format(msg("interSet", player.UserIDString), newIntervals));
                                 StopTimer();
                                 StartEventTimer();
                             }
                             else
                             {
-                                SendReply(player, $"Event intervals under 4 minutes are not allowed");
+                                SendReply(player, msg("smallInter", player.UserIDString));
                             }
                         }
                         else
                         {
-                            SendReply(player, "Invalid parameter '" + args[1] + "'");
+                            SendReply(player, string.Format(msg("invalidParam", player.UserIDString), args[1]));
                         }
                     }
                     break;
@@ -306,11 +305,11 @@ namespace Oxide.Plugins
                         if (isValid)
                         {
                             SetDamageMult(newDropMultiplier);
-                            SendReply(player, "Global item drop multiplier set to " + newDropMultiplier);
+                            SendReply(player, msg("dropMulti", player.UserIDString) + newDropMultiplier);
                         }
                         else
                         {
-                            SendReply(player, "Invalid parameter '" + args[1] + "'");
+                            SendReply(player, string.Format(msg("invalidParam", player.UserIDString), args[1]));
                         }
                     }
                     break;
@@ -324,11 +323,11 @@ namespace Oxide.Plugins
                         if (isValid)
                         {
                             SetDamageMult(newDamageMultiplier);
-                            SendReply(player, "Damage scale set to " + newDamageMultiplier);
+                            SendReply(player, msg("damageMulti", player.UserIDString) + newDamageMultiplier);
                         }
                         else
                         {
-                            SendReply(player, "Invalid parameter '" + args[1] + "'");
+                            SendReply(player, string.Format(msg("invalidParam", player.UserIDString), args[1]));
                         }
                     }
                     break;
@@ -337,24 +336,24 @@ namespace Oxide.Plugins
                     if (configData.Options.NotifyEvent)
                     {
                         SetNotifyEvent(false);
-                        SendReply(player, "Event notification de-activated");
+                        SendReply(player, msg("notifDeAct", player.UserIDString));
                     }
                     else
                     {
                         SetNotifyEvent(true);
-                        SendReply(player, "Event notification activated");
+                        SendReply(player, msg("notifAct", player.UserIDString));
                     }                    
                     break;
 
                 default:
-                    SendReply(player, "Unknown parameter '" + args[0] + "'");
+                    SendReply(player, string.Format(msg("unknown", player.UserIDString), args[0]));
                     break;
             }
         }
         [ConsoleCommand("rof.random")]
         private void ccmdEventRandom(ConsoleSystem.Arg arg)
         {
-            if (!arg.isAdmin)
+            if (!arg.IsAdmin)
                 return;
 
             StartRandomOnMap();
@@ -364,7 +363,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("rof.onposition")]
         private void ccmdEventOnPosition(ConsoleSystem.Arg arg)
         {
-            if (!arg.isAdmin)
+            if (!arg.IsAdmin)
                 return;
 
             float x, z;
@@ -646,6 +645,35 @@ namespace Oxide.Plugins
         void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
         #endregion
 
-        
+        #region Localization
+        string msg(string key, string playerId = "") => lang.GetMessage(key, this, playerId);
+        Dictionary<string, string> Messages = new Dictionary<string, string>
+        {
+            {"incoming", "Meteor shower incoming" },
+            {"help1", "/rof onplayer <opt:playername> - Calls a event on your position, or the player specified"},
+            {"help2", "/rof onplayer_extreme <opt:playername> - Starts a extreme event on your position, or the player specified"},
+            {"help3", "/rof onplayer_mild <opt:playername> - Starts a optimal event on your position, or the player specified"},
+            {"help4", "/rof barrage - Fire a barrage of rockets from your position"},
+            {"help5", "/rof random - Calls a event at a random postion"},
+            {"help6", "/rof intervals <amount> - Change the time between events"},
+            {"help7", "/rof damagescale <amount> - Change the damage scale"},
+            {"help8", "/rof togglemsg - Toggle public event broadcast"},
+            {"calledOn", "Event called on {0}'s position"},
+            {"noPlayer", "No player found with that name"},
+            {"onPos", "Event called on your position"},
+            {"Extreme", "Extreme"},
+            {"Mild", "Mild" },
+            {"randomCall", "Event called on random position"},
+            {"invalidParam", "Invalid parameter '{0}'"},
+            {"smallInter", "Event intervals under 4 minutes are not allowed"},
+            {"interSet", "Event intervals set to {0} minutes"},
+            {"dropMulti", "Global item drop multiplier set to "},
+            {"damageMulti", "Damage scale set to "},
+            {"notifDeAct", "Event notification de-activated"},
+            {"notifAct", "Event notification activated"},
+            {"unknown", "Unknown parameter '{0}'"}
+        };
+        #endregion
+
     }
 }

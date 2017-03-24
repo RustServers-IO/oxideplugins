@@ -2,7 +2,7 @@
 
 namespace Oxide.Plugins
 {
-    [Info("RockBlock", "Nogrod", "1.0.4")]
+    [Info("RockBlock", "Nogrod", "1.0.6", ResourceId = 1831)]
     class RockBlock : RustPlugin
     {
         private readonly int worldLayer = LayerMask.GetMask("World", "Default");
@@ -33,7 +33,7 @@ namespace Oxide.Plugins
         void OnEntityBuilt(Planner planner, GameObject gameObject)
         {
             var player = planner.GetOwnerPlayer();
-            if (player == null || player.IsAdmin()) return;
+            if (player == null || player.IsAdmin) return;
             var entity = gameObject.GetComponent<BaseEntity>();
             RaycastHit hitInfo;
             if (configData.MaxHeight > 0 && Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hitInfo, float.PositiveInfinity, Rust.Layers.Terrain))
@@ -51,7 +51,7 @@ namespace Oxide.Plugins
         void OnItemDeployed(Deployer deployer, BaseEntity entity)
         {
             var player = deployer.GetOwnerPlayer();
-            if (player == null || player.IsAdmin()) return;
+            if (player == null || player.IsAdmin) return;
             CheckEntity(entity, player);
         }
 
@@ -75,9 +75,10 @@ namespace Oxide.Plugins
             var targets = Physics.RaycastAll(new Ray(entity.transform.position, Vector3.up), 250, worldLayer);
             foreach (var hit in targets)
             {
-                var collider = hit.collider.GetComponent<MeshCollider>();
+                //var collider = hit.collider.GetComponent<MeshCollider>();
                 //if (collider != null) SendReply(player, $"Cave: {collider.sharedMesh.name}");
-                if (collider == null || !collider.sharedMesh.name.StartsWith("rock_")) continue;
+                //if (collider == null || !collider.sharedMesh.name.StartsWith("rock_")) continue;
+                if (!hit.collider.name.StartsWith("rock_")) continue;
                 return true;
             }
             return false;

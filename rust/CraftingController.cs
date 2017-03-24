@@ -3,14 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using Oxide.Core.Plugins;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
 
-    [Info("Crafting Controller", "Mughisi", "2.4.6", ResourceId = 695)]
+    [Info("Crafting Controller", "Mughisi", "2.4.7", ResourceId = 695)]
     class CraftingController : RustPlugin
     {
 
@@ -82,12 +80,6 @@ namespace Oxide.Plugins
         public string NoBlockedItems { get; private set; }
 
         #endregion
-
-        [PluginReference]
-        private Plugin XpBooster;
-
-        [PluginReference]
-        private Plugin XPManager;
 
         List<ItemBlueprint> blueprintDefinitions = new List<ItemBlueprint>();
 
@@ -185,7 +177,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 SendChatMessage(player, NoPermission);
                 return;
@@ -213,7 +205,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NoPermission);
                 return;
@@ -239,7 +231,7 @@ namespace Oxide.Plugins
         [ChatCommand("itemrate")]
         private void CraftItemCommandChat(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 SendChatMessage(player, NoPermission);
                 return;
@@ -283,7 +275,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("crafting.itemrate")]
         private void CraftItemCommandConsole(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NoPermission);
                 return;
@@ -330,7 +322,7 @@ namespace Oxide.Plugins
         [ChatCommand("block")]
         private void BlockCommandChat(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 SendChatMessage(player, NoPermission);
                 return;
@@ -363,7 +355,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("crafting.block")]
         private void BlockCommandConsole(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NoPermission);
                 return;
@@ -400,45 +392,46 @@ namespace Oxide.Plugins
         [ChatCommand("unblock")]
         private void UnblockCommandChat(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel == 2)
+            if (!player.IsAdmin)
             {
-                if (args.Length == 0)
+                SendChatMessage(player, NoPermission);
+                return;
+            }
+
+            if (args.Length == 0)
+            {
+                SendChatMessage(player, NoItemSpecified);
+                return;
+            }
+
+            var item = string.Join(" ", args);
+            if (item != "*")
+            {
+                if (!Items.Contains(item))
                 {
-                    SendChatMessage(player, NoItemSpecified);
+                    SendChatMessage(player, InvalidItem, item);
                     return;
                 }
 
-                var item = string.Join(" ", args);
-                if (item != "*")
+                if (!BlockedItems.Contains(item))
                 {
-                    if (!Items.Contains(item))
-                    {
-                        SendChatMessage(player, InvalidItem, item);
-                        return;
-                    }
-
-                    if (!BlockedItems.Contains(item))
-                    {
-                        SendChatMessage(player, UnblockItem, item);
-                        return;
-                    }
-
-                    BlockedItems.Remove(item);
+                    SendChatMessage(player, UnblockItem, item);
+                    return;
                 }
-                else
-                    BlockedItems = new List<string>();
 
-                SetConfigValue("Options", "BlockedItems", BlockedItems);
-                SendChatMessage(player, UnblockSucces, item);
-                return;
+                BlockedItems.Remove(item);
             }
-            SendChatMessage(player, NoPermission);
+            else
+                BlockedItems = new List<string>();
+
+            SetConfigValue("Options", "BlockedItems", BlockedItems);
+            SendChatMessage(player, UnblockSucces, item);
         }
 
         [ConsoleCommand("crafting.unblock")]
         private void UnblockCommandConsole(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 arg.ReplyWith(NoPermission);
                 return;
@@ -573,13 +566,6 @@ namespace Oxide.Plugins
             var crafter = task.owner.inventory.crafting;
             if (crafter.queue.Count == 0) return;
             crafter.queue.First().endTime = 1f;
-        }
-
-        private object OnXpEarn(ulong id, float amount, string source)
-        {
-            if (XpBooster != null || XPManager != null) return null;
-            if (!source.Equals("UsedForCrafting")) return amount;
-            return amount * CraftingExperience / 100;
         }
 
         #region Helper methods

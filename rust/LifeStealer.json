@@ -1,0 +1,16 @@
+{
+    "name": "LifeStealer",
+    "description": "Gives players health when they damage someone",
+    "author": "redBDGR",
+    "version": "1.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/lifestealer.2357",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

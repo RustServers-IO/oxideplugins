@@ -1,8 +1,8 @@
 {
     "name": "TurretConfig",
-    "description": "Change turret accuracy, bullet speed, health, targeting, etc",
+    "description": "Customized turrets",
     "author": "Calytic",
-    "version": "1.0.3",
+    "version": "2.0.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/turretconfig.1418",

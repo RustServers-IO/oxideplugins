@@ -10,10 +10,9 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("HeliRide", "ColonBlow", "1.1.8", ResourceId = 2274)]
+    [Info("HeliRide", "ColonBlow", "1.1.10", ResourceId = 2274)]
     public class HeliRide : RustPlugin
     {
-
         [PluginReference]
         Plugin Chute;
 
@@ -40,10 +39,11 @@ namespace Oxide.Plugins
 	private static double RocketNapalmReloadTime = 20;
 	private static float BulletDamage = 50f;
 
-        static readonly FieldInfo serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Instance | BindingFlags.NonPublic));
+        static FieldInfo serverinput;
 
         void Loaded()
         {
+		serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
 		if (Chute == null)
 		{
                 	PrintWarning($"Chute Plugin not found. To Enable player parachutes when there helicopter dies, install Chute Plugin !!");
@@ -330,7 +330,7 @@ namespace Oxide.Plugins
 		void FixedUpdate()
 		{
 			player = GetComponent<BasePlayer>();
-			if (player.IsDead() || (!player.IsFlying()))
+			if (player.IsDead() || (!player.IsFlying))
 			{
 				heliAI._currentState = PatrolHelicopterAI.aiState.DEATH;
 			}
@@ -549,7 +549,7 @@ namespace Oxide.Plugins
 
 			if (playerheli == null)
 			{
-				if (!player.IsFlying()) { rust.RunClientCommand(player, "noclip"); }
+				if (!player.IsFlying) { rust.RunClientCommand(player, "noclip"); }
 				if (Vanish != null && UseAutoVanish) { Vanish.Call("Disappear", player); }
 				timer.Once(1f, () => AddHeli(player));
 				return;
@@ -590,7 +590,7 @@ namespace Oxide.Plugins
 
 			if (playerheli == null)
 			{
-				if (!player.IsFlying()) { rust.RunClientCommand(player, "noclip"); }
+				if (!player.IsFlying) { rust.RunClientCommand(player, "noclip"); }
 				if (Vanish != null && UseAutoVanish) { Vanish.Call("Disappear", player); }
 				timer.Once(1f, () => AddHeli(player));
 				return;
@@ -647,7 +647,7 @@ namespace Oxide.Plugins
 
 	void AddHeli(BasePlayer player)
 	{
-		if (player.IsFlying()) 
+		if (player.IsFlying) 
 		{ 
             		player.gameObject.AddComponent<FlyHelicopter>();
 			HeliFlying.Add(player.userID, new HeliData
@@ -656,7 +656,7 @@ namespace Oxide.Plugins
 			});
 			return;
 		}
-		if (!player.IsFlying()) 
+		if (!player.IsFlying) 
 		{ 
 			string SteamID = player.userID.ToString();
             		SendReply(player, lang.GetMessage("notflying", this, SteamID));

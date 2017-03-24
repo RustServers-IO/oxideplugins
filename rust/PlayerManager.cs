@@ -1,18 +1,12 @@
-using System.Collections.Generic;
 using System;
-using System.Reflection;
-using System.Data;
-using UnityEngine;
-using Oxide.Core;
-using Oxide.Core.Configuration;
-using Oxide.Core.Logging;
+using System.Collections.Generic;
 using System.Linq;
 using Oxide.Core.Plugins;
-using Rust;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerManager", "Reneb", "1.0.9", ResourceId= 1535)]
+    [Info("PlayerManager", "Reneb", "1.0.10", ResourceId = 1535)]
     class PlayerManager : RustPlugin
     {
         [PluginReference]
@@ -39,7 +33,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permissionIPs, this);
             foreach (object ecmdsRAW in ExternalCommandsList)
             {
-                var ecmds = ecmdsRAW as Dictionary<string,object>;
+                var ecmds = ecmdsRAW as Dictionary<string, object>;
                 permission.RegisterPermission(ecmds["permission"].ToString(), this);
             }
         }
@@ -52,7 +46,7 @@ namespace Oxide.Plugins
                 DestroyGUI(player, "DialogOverlay");
             }
         }
-         
+
         protected override void LoadDefaultConfig() { }
 
         private void CheckCfg<T>(string Key, ref T var)
@@ -62,7 +56,7 @@ namespace Oxide.Plugins
             else
                 Config[Key] = var;
         }
-        void Init() 
+        void Init()
         {
             CheckCfg<string>("Permission - GUI", ref permissionPM);
             CheckCfg<string>("Permission - GUI - Kick", ref permissionKICK);
@@ -83,7 +77,7 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-         
+
         static List<object> DefaultExternalCommands()
         {
             return new List<object>
@@ -136,7 +130,7 @@ namespace Oxide.Plugins
 
         class DialogOptions
         {
-            public Dictionary<string,string> option = new Dictionary<string, string>();
+            public Dictionary<string, string> option = new Dictionary<string, string>();
             public string action;
         }
 
@@ -170,7 +164,7 @@ namespace Oxide.Plugins
         }
         void RefreshGUI(BasePlayer player, string ttype)
         {
-            switch(ttype)
+            switch (ttype)
             {
                 case "section":
                     RefreshSection(player);
@@ -180,8 +174,8 @@ namespace Oxide.Plugins
 
         void RefreshSection(BasePlayer player)
         {
-            if(playerGUI[player.userID] == null) { DestroyGUI(player,"PlayerManagerOverlay"); return; }
-            switch(playerGUI[player.userID].section)
+            if (playerGUI[player.userID] == null) { DestroyGUI(player, "PlayerManagerOverlay"); return; }
+            switch (playerGUI[player.userID].section)
             {
                 case "players":
                     DestroyGUI(player, "PlayerListSection");
@@ -212,25 +206,25 @@ namespace Oxide.Plugins
             AddUI(player, playerlistsectionoverlay);
         }
         string playerlistsectionoverlay = @"[
-			{
-				""name"": ""PlayerListSection"",
-				""parent"": ""PlayerManagerOverlay"",
-				""components"":
-				[
-					{
-						 ""type"":""UnityEngine.UI.Image"",
-						 ""color"":""0.1 0.1 0.1 0.8"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.01 0.06"",
-						""anchormax"": ""0.4 0.90""
-					},
-					{
-						""type"":""NeedsCursor"",
-					}
-				]
-			},
+            {
+                ""name"": ""PlayerListSection"",
+                ""parent"": ""PlayerManagerOverlay"",
+                ""components"":
+                [
+                    {
+                         ""type"":""UnityEngine.UI.Image"",
+                         ""color"":""0.1 0.1 0.1 0.8"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0.01 0.06"",
+                        ""anchormax"": ""0.4 0.90""
+                    },
+                    {
+                        ""type"":""NeedsCursor"",
+                    }
+                ]
+            },
             {
                             ""parent"": ""PlayerListSection"",
                             ""components"":
@@ -264,7 +258,7 @@ namespace Oxide.Plugins
                                     ""anchormax"": ""0.20 1""
                                 }
                             ]
-                        }, 
+                        },
                     {
                             ""parent"": ""PlayerListSection"",
                             ""components"":
@@ -469,53 +463,53 @@ namespace Oxide.Plugins
                                 }
                             ]
                         }
-		]
-		";
+        ]
+        ";
         string selectoverlay = @"[
-			{
+            {
             ""name"": ""PlayerManagerSelectOverlay"",
-				""parent"": ""PlayerManagerOverlay"",
-				""components"":
-				[
-					{
-						 ""type"":""UnityEngine.UI.Image"",
-						 ""color"":""0.1 0.1 0.1 0.8"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.41 0.11"",
-						""anchormax"": ""0.99 0.89""
-					},
-					{
-						""type"":""NeedsCursor"",
-					}
-				]
-			}
-		]
-		";
+                ""parent"": ""PlayerManagerOverlay"",
+                ""components"":
+                [
+                    {
+                         ""type"":""UnityEngine.UI.Image"",
+                         ""color"":""0.1 0.1 0.1 0.8"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0.41 0.11"",
+                        ""anchormax"": ""0.99 0.89""
+                    },
+                    {
+                        ""type"":""NeedsCursor"",
+                    }
+                ]
+            }
+        ]
+        ";
 
         string playerlistsubsectionoverlay = @"[
-			{
-				""name"": ""PlayerListSubSection"",
-				""parent"": ""PlayerListSection"",
-				""components"":
-				[
-					{
-						 ""type"":""UnityEngine.UI.Image"",
-						 ""color"":""0.1 0.1 0.1 0.8"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0 0.06"",
-						""anchormax"": ""1 0.94""
-					},
-					{
-						""type"":""NeedsCursor"",
-					}
-				]
-			}
-		]
-		";
+            {
+                ""name"": ""PlayerListSubSection"",
+                ""parent"": ""PlayerListSection"",
+                ""components"":
+                [
+                    {
+                         ""type"":""UnityEngine.UI.Image"",
+                         ""color"":""0.1 0.1 0.1 0.8"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0 0.06"",
+                        ""anchormax"": ""1 0.94""
+                    },
+                    {
+                        ""type"":""NeedsCursor"",
+                    }
+                ]
+            }
+        ]
+        ";
         void UpdateSelect(BasePlayer player)
         {
             DestroyGUI(player, "PlayerManagerSelectOverlay");
@@ -596,7 +590,7 @@ namespace Oxide.Plugins
                         AddUI(player, fctext);
                     }
 
-                    if (targetplayer != null && targetplayer.IsConnected())
+                    if (targetplayer != null && targetplayer.IsConnected)
                     {
                         string lstext = GenerateText("PlayerManagerSelectOverlay", "Last Seen: Player is Connected", "10", "0.31", "0.60", "0.70", "0.75");
                         AddUI(player, lstext);
@@ -654,7 +648,7 @@ namespace Oxide.Plugins
 
                     AddUI(player, GenerateText("PlayerManagerSelectOverlay", "External Plugins", "15", "0.1", "1", "0.30", "0.35", "MiddleLeft"));
                     decimal epy = 0m;
-                    foreach(var ecmdsRAW in ExternalCommandsList)
+                    foreach (var ecmdsRAW in ExternalCommandsList)
                     {
                         var ecmds = ecmdsRAW as Dictionary<string, object>;
                         if (player.net.connection.authLevel > 1 || permission.UserHasPermission(player.userID.ToString(), ecmds["permission"].ToString()))
@@ -662,7 +656,7 @@ namespace Oxide.Plugins
                             decimal yeppos = 0.29m - epy * 0.04m;
                             AddUI(player, GenerateText("PlayerManagerSelectOverlay", ecmds["name"].ToString(), "10", "0.1", "0.5", (yeppos - 0.04m).ToString(), yeppos.ToString(), "MiddleLeft"));
                             decimal epx = 0m;
-                            foreach(var ecmdRAW in (ecmds["commands"] as List<object>))
+                            foreach (var ecmdRAW in (ecmds["commands"] as List<object>))
                             {
                                 var ecmd = ecmdRAW as Dictionary<string, object>;
                                 decimal xeppos = 0.6m + epx * 0.05m;
@@ -717,8 +711,8 @@ namespace Oxide.Plugins
         {
             DestroyGUI(player, "PlayerListSubSection");
             AddUI(player, playerlistsubsectionoverlay);
-            Dictionary<string,string> playerList = new Dictionary<string,string>(); ;
-            switch(playerGUI[player.userID].subsection)
+            Dictionary<string, string> playerList = new Dictionary<string, string>(); ;
+            switch (playerGUI[player.userID].subsection)
             {
                 case "all":
                     if (PlayerDatabase != null)
@@ -753,9 +747,9 @@ namespace Oxide.Plugins
                     }
                     break;
                 case "online":
-                    foreach(BasePlayer tplayer in BasePlayer.activePlayerList)
+                    foreach (BasePlayer tplayer in BasePlayer.activePlayerList)
                     {
-                        if(!playerList.ContainsKey(tplayer.userID.ToString()))
+                        if (!playerList.ContainsKey(tplayer.userID.ToString()))
                             playerList.Add(tplayer.userID.ToString(), tplayer.displayName);
                     }
                     break;
@@ -821,17 +815,17 @@ namespace Oxide.Plugins
                         }
                         playerList.Add(user.steamid.ToString(), name);
                     }
-                    if(EnhancedBanSystem != null)
+                    if (EnhancedBanSystem != null)
                     {
                         var banlist = EnhancedBanSystem.Call("BannedPlayers") as List<string>;
-                        if(banlist != null)
+                        if (banlist != null)
                         {
-                            foreach(string userid in banlist)
+                            foreach (string userid in banlist)
                             {
                                 if (playerList.ContainsKey(userid)) continue;
                                 var name = "Unknown Player";
-                                var bandata = EnhancedBanSystem.Call("GetBanData", userid) as Dictionary<string,object>;
-                                if(bandata != null)
+                                var bandata = EnhancedBanSystem.Call("GetBanData", userid) as Dictionary<string, object>;
+                                if (bandata != null)
                                 {
                                     if (bandata.ContainsKey("name"))
                                         name = bandata["name"].ToString();
@@ -853,7 +847,7 @@ namespace Oxide.Plugins
                     }
                     break;
                 default:
-                     
+
                     break;
             }
             var items = from pair in playerList
@@ -861,11 +855,11 @@ namespace Oxide.Plugins
                         select pair;
             decimal p = 0.0m;
             int page = (playerGUI[player.userID]).page;
-            foreach(KeyValuePair<string,string> pair in items)
+            foreach (KeyValuePair<string, string> pair in items)
             {
                 if (p >= page)
                 {
-                    decimal currentheight = (0.94m - 0.03m * (p- page));
+                    decimal currentheight = (0.94m - 0.03m * (p - page));
                     string playertext = GenerateText("PlayerListSubSection", string.Format("{0} - {1}", pair.Key, pair.Value), "10", "0.01", "1.0", (currentheight - 0.03m).ToString(), (currentheight).ToString(), "MiddleLeft");
                     string playerbutton = GenerateButton("PlayerListSubSection", string.Format("playermanager.select {0}", pair.Key), "0 0 0 0", "0.01", "1.0", (currentheight - 0.03m).ToString(), (currentheight).ToString());
                     AddUI(player, playertext);
@@ -879,15 +873,15 @@ namespace Oxide.Plugins
         {
             reason = string.Empty;
             ServerUsers.User user = ServerUsers.Get(steamid);
-            if(user != null)
+            if (user != null)
             {
-                if(user.group == ServerUsers.UserGroup.Banned)
+                if (user.group == ServerUsers.UserGroup.Banned)
                 {
                     reason = user.notes;
                     return true;
                 }
             }
-            if(EnhancedBanSystem != null)
+            if (EnhancedBanSystem != null)
             {
                 var bandata = EnhancedBanSystem.Call("GetBanData", steamid) as Dictionary<string, object>;
                 if (bandata != null)
@@ -912,63 +906,63 @@ namespace Oxide.Plugins
             }*/
             return false;
         }
-        
+
         string parentoverlay = @"[
-			{
-				""name"": ""PlayerManagerOverlay"",
-				""parent"": ""Overlay"",
-				""components"":
-				[
-					{
-						 ""type"":""UnityEngine.UI.Image"",
-						 ""color"":""0.1 0.1 0.1 0.8"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0 0"",
-						""anchormax"": ""1 1""
-					},
-					{
-						""type"":""NeedsCursor"",
-					}
-				]
-			},
-			{
-				""parent"": ""PlayerManagerOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Close"",
-						""fontSize"":20,
-						""align"": ""MiddleCenter"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0 0.01"",
-						""anchormax"": ""1 0.05""
-					},
-				]
-			},
-			{
-				""parent"": ""PlayerManagerOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Button"",
-						""command"":""playermanager.close"",
-						""color"": ""0.5 0.5 0.5 0.2"",
-						""imagetype"": ""Tiled""
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0 0.01"",
-						""anchormax"": ""1 0.05""
-					}
-				]
-			}
-		]
-		";
+            {
+                ""name"": ""PlayerManagerOverlay"",
+                ""parent"": ""Overlay"",
+                ""components"":
+                [
+                    {
+                         ""type"":""UnityEngine.UI.Image"",
+                         ""color"":""0.1 0.1 0.1 0.8"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0 0"",
+                        ""anchormax"": ""1 1""
+                    },
+                    {
+                        ""type"":""NeedsCursor"",
+                    }
+                ]
+            },
+            {
+                ""parent"": ""PlayerManagerOverlay"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Text"",
+                        ""text"":""Close"",
+                        ""fontSize"":20,
+                        ""align"": ""MiddleCenter"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0 0.01"",
+                        ""anchormax"": ""1 0.05""
+                    },
+                ]
+            },
+            {
+                ""parent"": ""PlayerManagerOverlay"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Button"",
+                        ""command"":""playermanager.close"",
+                        ""color"": ""0.5 0.5 0.5 0.2"",
+                        ""imagetype"": ""Tiled""
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0 0.01"",
+                        ""anchormax"": ""1 0.05""
+                    }
+                ]
+            }
+        ]
+        ";
         static Dictionary<string, object> dialogActions = new Dictionary<string, object> {
             {
                 "ban" , new List<object>
@@ -1008,7 +1002,7 @@ namespace Oxide.Plugins
                 }
             }
          };
-        
+
         void RefreshDialog(BasePlayer player)
         {
             if (playerDialog[player.userID] == null) return;
@@ -1023,19 +1017,19 @@ namespace Oxide.Plugins
             switch (playerDialog[player.userID].action)
             {
                 case "ban":
-                    if(!dialogActions.ContainsKey("ban"))
+                    if (!dialogActions.ContainsKey("ban"))
                     {
                         Debug.Log("ERROR ban WASNT PROPERLY SET IN THE CONFIGS! RESET YOUR CONFIGS AND TRY AGAIN");
                         DestroyGUI(player, "DialogOverlay");
                         return;
                     }
                     string reasontext = GenerateText("DialogOverlay", "Reason", "20", "0.4", "0.5", "0.80", "0.85", "MiddleLeft");
-                    AddUI(player,reasontext);
+                    AddUI(player, reasontext);
                     var actions = dialogActions["ban"] as List<object>;
-                    for (int i = 0; i < actions.Count; i++ )
+                    for (int i = 0; i < actions.Count; i++)
                     {
                         decimal currenty = 0.75m - Convert.ToDecimal(i) * 0.04m;
-                        string reasonstext = GenerateText("DialogOverlay", actions[i].ToString(), "12", "0.4", "0.5", currenty.ToString(),( currenty+0.04m).ToString(), "MiddleLeft");
+                        string reasonstext = GenerateText("DialogOverlay", actions[i].ToString(), "12", "0.4", "0.5", currenty.ToString(), (currenty + 0.04m).ToString(), "MiddleLeft");
                         string reasonsbutton = GenerateButton("DialogOverlay", string.Format("playermanager.dialogselect ban {0}", actions[i].ToString()), "0 0 0 0.4", "0.4", "0.5", currenty.ToString(), (currenty + 0.04m).ToString());
                         AddUI(player, reasonstext);
                         AddUI(player, reasonsbutton);
@@ -1074,137 +1068,137 @@ namespace Oxide.Plugins
             }
         }
         string dialogoverlay = @"[
-			{
-				""name"": ""DialogOverlay"",
-				""parent"": ""Overlay"",
-				""components"":
-				[
-					{
-						 ""type"":""UnityEngine.UI.Image"",
-						 ""color"":""0.1 0.1 0.1 0.8"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0 0"",
-						""anchormax"": ""1 1""
-					},
-					{
-						""type"":""NeedsCursor"",
-					}
-				]
-			},
-			{
-				""parent"": ""DialogOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Close"",
-						""fontSize"":20,
-						""align"": ""MiddleCenter"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.4 0.25"",
-						""anchormax"": ""0.55 0.30""
-					},
-				]
-			},
-			{
-				""parent"": ""DialogOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Button"",
-						""command"":""playermanager.dialogclose"",
-						""color"": ""0.5 0.5 0.5 0.2"",
-						""imagetype"": ""Tiled""
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.4 0.25"",
-						""anchormax"": ""0.55 0.30""
-					}
-				]
-			},
+            {
+                ""name"": ""DialogOverlay"",
+                ""parent"": ""Overlay"",
+                ""components"":
+                [
+                    {
+                         ""type"":""UnityEngine.UI.Image"",
+                         ""color"":""0.1 0.1 0.1 0.8"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0 0"",
+                        ""anchormax"": ""1 1""
+                    },
+                    {
+                        ""type"":""NeedsCursor"",
+                    }
+                ]
+            },
+            {
+                ""parent"": ""DialogOverlay"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Text"",
+                        ""text"":""Close"",
+                        ""fontSize"":20,
+                        ""align"": ""MiddleCenter"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0.4 0.25"",
+                        ""anchormax"": ""0.55 0.30""
+                    },
+                ]
+            },
+            {
+                ""parent"": ""DialogOverlay"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Button"",
+                        ""command"":""playermanager.dialogclose"",
+                        ""color"": ""0.5 0.5 0.5 0.2"",
+                        ""imagetype"": ""Tiled""
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0.4 0.25"",
+                        ""anchormax"": ""0.55 0.30""
+                    }
+                ]
+            },
         {
-				""parent"": ""DialogOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""Ok"",
-						""fontSize"":20,
-						""align"": ""MiddleCenter"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.55 0.25"",
-						""anchormax"": ""0.60 0.30""
-					},
-				]
-			},
-			{
-				""parent"": ""DialogOverlay"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Button"",
-						""command"":""playermanager.execute"",
-						""color"": ""0 1 0 0.2"",
-						""imagetype"": ""Tiled""
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""0.55 0.25"",
-						""anchormax"": ""0.60 0.30""
-					}
-				]
-			}
-		]
-		";
+                ""parent"": ""DialogOverlay"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Text"",
+                        ""text"":""Ok"",
+                        ""fontSize"":20,
+                        ""align"": ""MiddleCenter"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0.55 0.25"",
+                        ""anchormax"": ""0.60 0.30""
+                    },
+                ]
+            },
+            {
+                ""parent"": ""DialogOverlay"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Button"",
+                        ""command"":""playermanager.execute"",
+                        ""color"": ""0 1 0 0.2"",
+                        ""imagetype"": ""Tiled""
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""0.55 0.25"",
+                        ""anchormax"": ""0.60 0.30""
+                    }
+                ]
+            }
+        ]
+        ";
 
 
         string jsonbutton = @"[
-			{
-				""parent"": ""{0}"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Button"",
-						""command"":""{1}"",
-						""color"": ""{2}"",
-						""imagetype"": ""Tiled""
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""{3} {5}"",
-						""anchormax"": ""{4} {6}""
-					}
-				]
-			}
-		]
-		";
+            {
+                ""parent"": ""{0}"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Button"",
+                        ""command"":""{1}"",
+                        ""color"": ""{2}"",
+                        ""imagetype"": ""Tiled""
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""{3} {5}"",
+                        ""anchormax"": ""{4} {6}""
+                    }
+                ]
+            }
+        ]
+        ";
         string jsontext = @"[
-			{
-				""parent"": ""{0}"",
-				""components"":
-				[
-					{
-						""type"":""UnityEngine.UI.Text"",
-						""text"":""{1}"",
-						""fontSize"":{2},
-						""align"": ""{7}"",
-					},
-					{
-						""type"":""RectTransform"",
-						""anchormin"": ""{3} {5}"",
-						""anchormax"": ""{4} {6}""
-					}
-				]
-			}
-		]
-		";
+            {
+                ""parent"": ""{0}"",
+                ""components"":
+                [
+                    {
+                        ""type"":""UnityEngine.UI.Text"",
+                        ""text"":""{1}"",
+                        ""fontSize"":{2},
+                        ""align"": ""{7}"",
+                    },
+                    {
+                        ""type"":""RectTransform"",
+                        ""anchormin"": ""{3} {5}"",
+                        ""anchormax"": ""{4} {6}""
+                    }
+                ]
+            }
+        ]
+        ";
 
         string GenerateButton(string overlay, string command, string color, string xmin, string xmax, string ymin, string ymax)
         {
@@ -1212,7 +1206,7 @@ namespace Oxide.Plugins
         }
         string GenerateText(string overlay, string text, string textsize, string xmin, string xmax, string ymin, string ymax, string pos = "MiddleCenter")
         {
-            return jsontext.Replace("{0}", overlay).Replace("{1}", text).Replace("{2}", textsize).Replace("{3}", xmin).Replace("{4}", xmax).Replace("{5}", ymin).Replace("{6}", ymax).Replace("{7}", pos).Replace("'","");
+            return jsontext.Replace("{0}", overlay).Replace("{1}", text).Replace("{2}", textsize).Replace("{3}", xmin).Replace("{4}", xmax).Replace("{5}", ymin).Replace("{6}", ymax).Replace("{7}", pos).Replace("'", "");
         }
         [ChatCommand("playermanager")]
         void cmdChatPlayermanage(BasePlayer player, string command, string[] args)
@@ -1226,7 +1220,7 @@ namespace Oxide.Plugins
         void cmdConsolePlayermanagerClose(ConsoleSystem.Arg arg)
         {
             if (arg.Player() == null) return;
-            DestroyGUI(arg.Player(),"PlayerManagerOverlay");
+            DestroyGUI(arg.Player(), "PlayerManagerOverlay");
         }
         [ConsoleCommand("playermanager.subsection")]
         void cmdConsolePlayermanagerSubsection(ConsoleSystem.Arg arg)
@@ -1267,7 +1261,7 @@ namespace Oxide.Plugins
             if (arg.Player() == null) return;
             if (playerGUI[arg.Player().userID] == null) return;
             if (playerDialog[arg.Player().userID] == null) return;
-            switch(playerDialog[arg.Player().userID].action)
+            switch (playerDialog[arg.Player().userID].action)
             {
                 case "ban":
                     if (arg.Player().net.connection.authLevel < 2 && !permission.UserHasPermission(arg.Player().userID.ToString(), permissionBAN)) return;
@@ -1306,7 +1300,7 @@ namespace Oxide.Plugins
         {
             if (playerDialog[player.userID] == null) return;
             BasePlayer targetplayer = BasePlayer.Find(steamidstring);
-            if(targetplayer == null)
+            if (targetplayer == null)
             {
                 SendReply(player, string.Format("The player {0} isnt online", steamidstring));
                 return;
@@ -1330,7 +1324,7 @@ namespace Oxide.Plugins
         {
             if (playerDialog[player.userID] == null) return;
             ulong steamid = ulong.Parse(steamidstring);
-            if(steamid < 0xf8b0a10e470000L)
+            if (steamid < 0xf8b0a10e470000L)
             {
                 SendReply(player, "This doesnt seem to be a steamid");
                 return;
@@ -1362,7 +1356,7 @@ namespace Oxide.Plugins
                     ServerUsers.Set(steamid, ServerUsers.UserGroup.Banned, name, playerDialog[player.userID].option.ContainsKey("ban") ? playerDialog[player.userID].option["ban"] : "Unknown");
                 }
             }
-                       
+
             BasePlayer targetplayer = BasePlayer.Find(steamidstring);
             if (targetplayer != null)
             {
@@ -1377,16 +1371,16 @@ namespace Oxide.Plugins
             if (arg.Args.Length == 0) return;
             if (arg.Player() == null) return;
             if (playerGUI[arg.Player().userID] == null) return;
-            switch(playerGUI[arg.Player().userID].section)
+            switch (playerGUI[arg.Player().userID].section)
             {
                 case "players":
-                    if(arg.Args[0] == "next")
+                    if (arg.Args[0] == "next")
                         playerGUI[arg.Player().userID].page += 25;
                     else
                         playerGUI[arg.Player().userID].page -= 25;
-                    if(playerGUI[arg.Player().userID].page < 0)
+                    if (playerGUI[arg.Player().userID].page < 0)
                         playerGUI[arg.Player().userID].page = 0;
-                   
+
                     break;
             }
             RefreshSection(arg.Player());

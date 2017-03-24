@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
 
-    [Info("Tracker", "Maurice", "1.0.0", ResourceId = 1278)]
+    [Info("Tracker", "Maurice", "1.0.1", ResourceId = 1278)]
     [Description("Check the amount of an Item on the Map and where it is stored in")]
     class Tracker : RustPlugin
     {
@@ -223,9 +224,10 @@ namespace Oxide.Plugins
             SendReply(arg, string.Format(lang.GetMessage("SAVED_TO", this), savefile));
 
             ConVar.Server.Log(savefile, $"Logged Item: {item}");
-
+                        
             for (int i = 0; i < items_list.Count; i++)
             {
+                
                 TrackedItem t;
                 t = items_list[i];
                 if (t != null)
@@ -369,7 +371,7 @@ namespace Oxide.Plugins
         /// <returns></returns>
         bool CheckAccess(ConsoleSystem.Arg arg)
         {
-            if (arg != null && arg.connection == null || arg.Player() != null && (arg.Player().IsAdmin() || arg.connection.authLevel > neededAuthLevel))
+            if (arg != null && arg.Connection == null || arg.Player() != null && (arg.Player().IsAdmin || arg.Connection.authLevel > neededAuthLevel))
                 return true;
             SendReply(arg, lang.GetMessage("NO_PERMISSION", this));
             return false;

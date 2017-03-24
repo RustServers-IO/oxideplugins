@@ -6,13 +6,14 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ProximityAlert", "k1lly0u", "0.2.1", ResourceId = 1801)]
+    [Info("ProximityAlert", "k1lly0u", "0.2.3", ResourceId = 1801)]
     class ProximityAlert : RustPlugin
     {
         #region Fields
         [PluginReference] Plugin Clans;
         [PluginReference] Plugin Friends;
         [PluginReference] Plugin EventManager;
+        [PluginReference] Plugin HumanNPC;
 
         static ProximityAlert ins;
         const string proxUI = "ProximityAlertUI";
@@ -210,9 +211,10 @@ namespace Oxide.Plugins
             private void Awake()
             {
                 player = GetComponent<BasePlayer>();
-                gameObject.layer = (int)Layer.Reserved1;
-                
-                var collider = gameObject.AddComponent<SphereCollider>();
+
+                var child = gameObject.CreateChild();
+                var collider = child.AddComponent<SphereCollider>();
+                collider.gameObject.layer = (int)Layer.Reserved1;
                 collider.radius = ins.GetPlayerRadius(player);
                 collider.isTrigger = true;
 
@@ -226,6 +228,12 @@ namespace Oxide.Plugins
                     if (ins.IsFriend(player.userID, enemy.userID)) return;
                     if (ins.IsClanmate(player.userID, enemy.userID)) return;
                     if (ins.IsPlaying(enemy)) return;
+                    if (enemy.IsSleeping() && !ins.configData.DetectSleepers) return;
+                    if (!ins.configData.DetectHumanNPCs && ins.HumanNPC)
+                    {
+                        if (player.userID <= 2147483647)
+                            return;
+                    }
 
                     if (inProximity.Count == 0 && isEnabled)
                     {
@@ -256,6 +264,8 @@ namespace Oxide.Plugins
         private ConfigData configData;
         class ConfigData
         {
+            public bool DetectSleepers { get; set; }
+            public bool DetectHumanNPCs { get; set; }
             public float GUI_X_Pos { get; set; }
             public float GUI_X_Dim { get; set; }
             public float GUI_Y_Pos { get; set; }
@@ -279,6 +289,8 @@ namespace Oxide.Plugins
                     { "proximityalert.vip1", 50 },
                     { "proximityalert.vip2", 75 },
                 },
+                DetectHumanNPCs = false,
+                DetectSleepers = false,
                 FontSize = 18,
                 GUI_X_Pos = 0.2f,
                 GUI_X_Dim = 0.6f,

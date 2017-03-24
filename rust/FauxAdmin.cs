@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-     	[Info("FauxAdmin", "Colon Blow", "1.0.4", ResourceId = 1933)]
+     	[Info("FauxAdmin", "Colon Blow", "1.0.6", ResourceId = 1933)]
     	class FauxAdmin : RustPlugin
      	{
 
@@ -43,6 +44,7 @@ namespace Oxide.Plugins
         	permission.RegisterPermission("fauxadmin.allowed", this);
 		permission.RegisterPermission("fauxadmin.bypass", this);
 		permission.RegisterPermission("fauxadmin.blocked", this);
+		permission.RegisterPermission("fauxadmin.demo", this);
 		permission.RegisterPermission("fauxadmin.god", this);
 		}
 
@@ -55,6 +57,26 @@ namespace Oxide.Plugins
         	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+        object OnServerCommand(ConsoleSystem.Arg arg)
+        {
+            	if (arg == null || arg.cmd == null) return null;
+            	string command = arg.cmd.Name;
+
+            	if (command.Equals("snapshot"))
+            	{
+			BasePlayer player = arg.Player();
+			if (player.net?.connection?.authLevel > 0) return null;
+			if (!player) return true;
+                	if (!isAllowed(player, "fauxadmin.demo"))
+                	{
+                    		SendReply(player, lang.GetMessage("notallowed", this));
+                    		return true;
+                	}
+		}
+		return null;
+	}
 
 		[ChatCommand("noclip")]
         void cmdChatnoclip(BasePlayer player, string command, string[] args)
@@ -97,9 +119,9 @@ namespace Oxide.Plugins
 				if (player.CanBuild()) return;
 				if (!player.CanBuild())
 				{
-					if (!player.IsFlying()) return;
+					if (!player.IsFlying) return;
 					if (isAllowed(player, "fauxadmin.bypass")) return;
-			   		if (player.IsFlying() && isAllowed(player, "fauxadmin.allowed"))
+			   		if (player.IsFlying && isAllowed(player, "fauxadmin.allowed"))
 			   		{
 						player.violationLevel = 0;
 						

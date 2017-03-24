@@ -3,7 +3,7 @@ using System;
 using System.Linq;
 namespace Oxide.Plugins
 {
-    [Info("AntiLootDespawn", "Bamabo", "1.1.0")]
+    [Info("AntiLootDespawn", "Bamabo", "1.1.2", ResourceId = 2066)]
     [Description("Change loot despawn time in cupboard radius")]
     public class AntiLootDespawn : RustPlugin
     {
@@ -12,7 +12,7 @@ namespace Oxide.Plugins
 
         void Init()
         {
-            permission.RegisterPermission("antilootdespawn", this);
+            permission.RegisterPermission("antilootdespawn.check", this);
             permission.RegisterPermission("antilootdespawn.multiplier", this);
             permission.RegisterPermission("antilootdespawn.enabled", this);
             despawnMultiplier = GetConfigEntry<float>("multiplier", 2.0f);
@@ -53,11 +53,7 @@ namespace Oxide.Plugins
         {
             if(args.Player() != null)
             {
-                if (!args.Player().IsAdmin() && !permission.UserHasPermission(args.Player().UserIDString, "antilootdespawn.multiplier"))
-                    return;
-            }else
-            {
-                if (!args.CheckPermissions())
+                if (!args.Player().IsAdmin && !permission.UserHasPermission(args.Player().UserIDString, "antilootdespawn.multiplier"))
                     return;
             }
 
@@ -68,20 +64,14 @@ namespace Oxide.Plugins
                 SaveConfig();
             }
             args.ReplyWith($"antilootdespawn.multiplier = {despawnMultiplier}");
-
-
         }
+
         [ConsoleCommand("antilootdespawn.enabled")]
         void cmdEnabled(ConsoleSystem.Arg args)
         {
             if (args.Player() != null)
             {
-                if (!args.Player().IsAdmin() && !permission.UserHasPermission(args.Player().UserIDString, "antilootdespawn.enabled"))
-                    return;
-            }
-            else
-            {
-                if (!args.CheckPermissions())
+                if (!args.Player().IsAdmin && !permission.UserHasPermission(args.Player().UserIDString, "antilootdespawn.enabled"))
                     return;
             }
 
@@ -94,22 +84,18 @@ namespace Oxide.Plugins
             args.ReplyWith($"antilootdespawn.enabled = {enabled}");
         }
 
-       [ConsoleCommand("antilootdespawn")]
+        [ConsoleCommand("antilootdespawn")]
         void cmdList(ConsoleSystem.Arg args)
         {
             if (args.Player() != null)
             {
-                if (!args.Player().IsAdmin() && !permission.UserHasPermission(args.Player().UserIDString, "antilootdespawn"))
-                    return;
-            }
-            else
-            {
-                if (!args.CheckPermissions())
+                if (!args.Player().IsAdmin && !permission.UserHasPermission(args.Player().UserIDString, "antilootdespawn"))
                     return;
             }
 
             args.ReplyWith($"antilootdespawn.enabled = {enabled}\nantilootdespawn.multiplier = {despawnMultiplier}");
         }
+
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file for AntiLootDespawn");

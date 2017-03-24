@@ -2,7 +2,7 @@
     "name": "Block Remover",
     "description": "Allows admins to count and remove building blocks outside of cupboard range",
     "author": "Nogrod",
-    "version": "0.4.1",
+    "version": "0.4.3",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/block-remover.864",

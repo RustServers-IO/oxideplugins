@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 using Oxide.Core;
 namespace Oxide.Plugins
 {
-    [Info("MagicLoot", "Norn", "0.1.8", ResourceId = 2212)]
+    [Info("MagicLoot", "Norn", "0.1.9", ResourceId = 2212)]
     [Description("Basic loot multiplier.")]
 
     class MagicLoot : RustPlugin
@@ -44,8 +44,11 @@ namespace Oxide.Plugins
         void SaveMagicLootData() { Interface.GetMod().DataFileSystem.WriteObject(this.Title, LootData); }
         void LoadMagicLootData()
         {
+            int newitems = 0;
             LootData = Interface.GetMod().DataFileSystem.ReadObject<MLData>(this.Title);
-            if (LootData.ItemList.Count == 0) { Puts("Generating item list with limits..."); foreach (var item in ItemManager.itemList) { LootData.ItemList.Add(item.shortname, item.stackable); } SaveMagicLootData(); }
+            if (LootData.ItemList.Count == 0) { Puts("Generating item list with limits..."); { foreach (var item in ItemManager.itemList) { LootData.ItemList.Add(item.shortname, item.stackable); } SaveMagicLootData(); } }
+            foreach (var item in ItemManager.itemList) { if(!LootData.ItemList.ContainsKey(item.shortname)) { LootData.ItemList.Add(item.shortname, item.stackable); newitems++; } }
+            if(newitems != 0) { Puts("Added " + newitems.ToString() + " new items to /data/" + this.Title + ".json"); SaveMagicLootData(); }
             Puts("Loaded " + LootData.ItemList.Count + " item limits from /data/" + this.Title + ".json");
             Puts("Loaded " + Components.list.Count + " components from /config/" + this.Title + ".json");
         }
@@ -152,7 +155,7 @@ namespace Oxide.Plugins
             List<Rarity> RaritiesUsed = new List<Rarity>();
             foreach (Item lootitem in e.inventory.itemList.ToList())
             {
-                if (Exclude.list.Contains(lootitem.info.shortname)) { lootitem.RemoveFromContainer(); e.inventory.itemList.Remove(lootitem); break; }
+                //if (Exclude.list.Contains(lootitem.info.shortname)) { lootitem.RemoveFromContainer(); e.inventory.itemList.Remove(lootitem); break; }
                 if (ExcludeFromMultiplication.list.Contains(lootitem.info.shortname)) { break; }
                 var skins = GetSkins(ItemManager.FindItemDefinition(lootitem.info.itemid));
                 if (skins.Count > 1 && Convert.ToBoolean(Config["Loot", "WorkshopSkins"])) // If workshop skins enabled, randomise skin
@@ -172,7 +175,7 @@ namespace Oxide.Plugins
 
                             int limit = 0;
                             int ac = lootitem.amount * Convert.ToUInt16(Config["Settings", "MultiplierComponents"]);
-                            if (LootData.ItemList.TryGetValue(lootitem.info.shortname, out limit)) { lootitem.amount = Math.Min(ac, Math.Min(limit, lootitem.info.stackable)); }
+                            if (LootData.ItemList.TryGetValue(lootitem.info.shortname, out limit)) { lootitem.amount = Math.Min(ac, Math.Min(limit, lootitem.info.stackable)); } else { break; }
 
                             if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
                             { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=white>" + lootitem.info.displayName.english + " : new amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }
@@ -190,7 +193,7 @@ namespace Oxide.Plugins
 
                             int limit = 0;
                             int ac = lootitem.amount * Convert.ToUInt16(Config["Settings", "Multiplier"]);
-                            if (LootData.ItemList.TryGetValue(lootitem.info.shortname, out limit)) { lootitem.amount = Math.Min(ac, Math.Min(limit, lootitem.info.stackable)); }
+                            if (LootData.ItemList.TryGetValue(lootitem.info.shortname, out limit)) { lootitem.amount = Math.Min(ac, Math.Min(limit, lootitem.info.stackable)); } else { break; }
 
                             if (Convert.ToBoolean(Config["Developer", "Debug"]) && Convert.ToBoolean(Config["Developer", "AmountChange"]))
                             { string debugs = "[<color=green>" + e.GetInstanceID().ToString() + "</color> | " + e.ShortPrefabName + "] <color=white>" + lootitem.info.displayName.english + " : new amount: " + lootitem.amount.ToString() + "</color>"; Puts(debugs); PrintToChat(debugs); }

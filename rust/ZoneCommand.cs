@@ -4,13 +4,11 @@ using System.Text.RegularExpressions;
 
 using Oxide.Core;
 
-using UnityEngine;
-
 /* --- Do not edit anything here if you don't know what are you doing --- */
 
 namespace Oxide.Plugins
 {
-	[Info("ZoneCommand", "deer_SWAG", "0.1.0", ResourceId = 1254)]
+	[Info("ZoneCommand", "deer_SWAG", "0.1.1", ResourceId = 1254)]
 	[Description("Executes the commands when a player is entering a zone")]
 	class ZoneCommand : RustPlugin
 	{
@@ -524,7 +522,7 @@ namespace Oxide.Plugins
 
 		bool IsPlayerPermitted(BasePlayer player, string permissionName)
 		{
-			return player.IsAdmin() || permission.UserHasPermission(player.UserIDString, permissionName);
+			return player.IsAdmin || permission.UserHasPermission(player.UserIDString, permissionName);
 		}
 
 		// ---------------------------- PARSER -----------------------------

@@ -5,7 +5,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("RepairTool", "k1lly0u", "0.1.1", ResourceId = 1883)]
+    [Info("RepairTool", "k1lly0u", "0.1.2", ResourceId = 1883)]
     class RepairTool : RustPlugin
     {
         #region Fields
@@ -22,7 +22,7 @@ namespace Oxide.Plugins
             if (player.GetComponent<Repairer>())
                 if (input.WasJustPressed(BUTTON.FIRE_PRIMARY))
                 {
-                    if (!player.IsConnected() || player.IsDead()) { player.GetComponent<Repairer>().DestroyComponent(); return; }
+                    if (!player.IsConnected || player.IsDead()) { player.GetComponent<Repairer>().DestroyComponent(); return; }
 
                     if (player.GetActiveItem() != null)
                     {
@@ -250,7 +250,7 @@ namespace Oxide.Plugins
         private bool HasPerm(BasePlayer player)
         {
             if (permission.UserHasPermission(player.UserIDString, "repairtool.use")) return true;
-            else if (player.IsAdmin()) return true;
+            else if (player.IsAdmin) return true;
             return false;
         }
         #endregion

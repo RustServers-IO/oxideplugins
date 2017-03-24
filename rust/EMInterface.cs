@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Event Manager Menu Interface", "k1lly0u", "1.0.23", ResourceId = 2258)]
+    [Info("Event Manager Menu Interface", "k1lly0u", "1.0.24", ResourceId = 2258)]
     class EMInterface : RustPlugin
     {
         #region Fields
@@ -3237,7 +3237,7 @@ namespace Oxide.Plugins
             }
         }
         bool HasAccess(ConsoleSystem.Arg arg) => arg.Connection == null || arg.Connection?.authLevel < 1;
-        bool HasPerm(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "eminterface.admin") || player.IsAdmin();
+        bool HasPerm(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "eminterface.admin") || player.IsAdmin;
 
         Dictionary<string, string> Messages = new Dictionary<string, string>
         {

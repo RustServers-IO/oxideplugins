@@ -1,26 +1,13 @@
-﻿/*
-References:
- * System
- * Assembly-CSharp
- * Oxide.Core
- * Oxide.Ext.CSharp
- * OXide.Game.Rust
- * Oxide.Ext.Lua
- * NLua
-*/
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using Oxide.Core;
 using Oxide.Core.Plugins;
-using Oxide.Core.Libraries;
-using Oxide.Ext.Lua;
-using NLua;
 
 namespace Oxide.Plugins
 {
-    [Info("Unwound", "mk_sky", "1.0.9", ResourceId = 1352)]
+    [Info("Unwound", "mk_sky", "1.0.10", ResourceId = 1352)]
     [Description("The sky presents the newest technology in calling the MEDIC!")]
+
     class Unwound : RustPlugin
     {
         #region vars
@@ -43,33 +30,26 @@ namespace Oxide.Plugins
         bool economicsEnabled = false;
 
         bool forceEconomics = false;
-        
+
         //[PluginReference]
         //Plugin PopupNotifications;
 
         [PluginReference]
-        Plugin Economics;
+        Plugin Economics, ZoneManager;
 
-        [PluginReference]
-        Plugin ZoneManager;
         #endregion
 
         void OnServerInitialized()
         {
             ConfigLoader();
-
-            if (!permission.PermissionExists("unwound.canuse"))
-                permission.RegisterPermission("unwound.canuse", this);
-
-            if (!permission.GroupHasPermission("admin", "unwound.canuse"))
-                permission.GrantGroupPermission("admin", "unwound.canuse", this);
+            permission.RegisterPermission("unwound.canuse", this);
         }
 
         protected override void LoadDefaultConfig()
         {
             Config.Clear();
 
-            Config["Version"] = this.Version.ToString();
+            Config["Version"] = Version.ToString();
 
             #region localization
             Config["Localization", "PermissionMissing"] = "You have no permission to use this command, if you're wounded right now it means you're probably screwed!";
@@ -122,7 +102,7 @@ namespace Oxide.Plugins
             base.LoadConfig();
 
             if (Config.Exists() &&
-                Config["Version"].ToString() != this.Version.ToString())
+                Config["Version"].ToString() != Version.ToString())
                 ConfigUpdater();
 
             #region localization
@@ -191,8 +171,6 @@ namespace Oxide.Plugins
             else if (Convert.ToBoolean(Config["Settings", "EnableEconomics"]))
                 PrintError("Economics-Plugin missing, can't enable economics. Get the plugin first: http://oxidemod.org/plugins/economics.717/");
             #endregion
-
-            //Puts("Unwound loaded config.");
         }
 
         void ConfigUpdater()
@@ -238,7 +216,7 @@ namespace Oxide.Plugins
                     case "1.0.6":
                     case "1.0.7":
                         Config["Version"] = "1.0.8";
-                    break;
+                        break;
                     #endregion
                     #region 1.0.8 => 1.0.9
                     case "1.0.8":
@@ -274,8 +252,8 @@ namespace Oxide.Plugins
                         Config["Settings", "ForceEconomics"] = false;
 
                         Config["Version"] = "1.0.9";
-                    break;
-                    #endregion
+                        break;
+                        #endregion
                 }
 
             SaveConfig();
@@ -314,10 +292,10 @@ namespace Oxide.Plugins
         [ChatCommand("aid")]
         void ChatCommandAid(BasePlayer player, string command, string[] args)
         {
-            if (!permission.UserHasPermission(player.userID.ToString(), "unwound.canuse"))
+            if (!permission.UserHasPermission(player.UserIDString, "unwound.canuse"))
             {
                 //if (!popupsEnabled)
-                    SendReply(player, localization["PermissionMissing"]);
+                SendReply(player, localization["PermissionMissing"]);
                 //else
                 //    PopupNotifications.Call("CreatePopupNotification", localization["PermissionMissing"], player);
 
@@ -326,10 +304,10 @@ namespace Oxide.Plugins
             else if (!player.IsWounded())
             {
                 //if (!popupsEnabled)
-                    SendReply(player, localization["NotWounded"]);
+                SendReply(player, localization["NotWounded"]);
                 //else
                 //    PopupNotifications.Call("CreatePopupNotification", localization["NotWounded"], player);
-            
+
                 return;
             }
             else if (canCallMedicOncePerWounded &&
@@ -375,7 +353,7 @@ namespace Oxide.Plugins
                          args[0] == "?")
                     args = new string[0];
             }
-            
+
             if (waitTillMedic > 0 ||
                 Economics != null &&
                 economicsEnabled &&
@@ -393,7 +371,7 @@ namespace Oxide.Plugins
                         if (ecoSettings[Convert.ToUInt32(args[0])] > 0)
                         {
                             //if (!popupsEnabled)
-                                SendReply(player, String.Format(localization["TheMedicIsComing"], ecoSettings[Convert.ToUInt32(args[0])].ToString()));
+                            SendReply(player, String.Format(localization["TheMedicIsComing"], ecoSettings[Convert.ToUInt32(args[0])].ToString()));
                             //else
                             //    PopupNotifications.Call("CreatePopupNotification", String.Format(localization["TheMedicIsComing"], ecoSettings[Convert.ToUInt32(args[0])].ToString()), player);
 
@@ -411,13 +389,13 @@ namespace Oxide.Plugins
                                 {
                                     case 0:
                                         //if (!popupsEnabled)
-                                            SendReply(player, localization["MedicToLate"]);
+                                        SendReply(player, localization["MedicToLate"]);
                                         //else
                                         //    PopupNotifications.Call("CreatePopupNotification", localization["MedicToLate"], player);
                                         break;
                                     case 1:
                                         //if (!popupsEnabled)
-                                            SendReply(player, localization["MedicIncompetent"]);
+                                        SendReply(player, localization["MedicIncompetent"]);
                                         //else
                                         //    PopupNotifications.Call("CreatePopupNotification", localization["MedicIncompetent"], player);
                                         break;
@@ -433,7 +411,7 @@ namespace Oxide.Plugins
                             player.metabolism.bleeding.value = 0f;
 
                             //if (!popupsEnabled)
-                                SendReply(player, localization["Survived"]);
+                            SendReply(player, localization["Survived"]);
                             //else
                             //    PopupNotifications.Call("CreatePopupNotification", localization["Survived"], player);
                         }
@@ -441,7 +419,7 @@ namespace Oxide.Plugins
                     else
                     {
                         //if (!popupsEnabled)
-                            SendReply(player, String.Format((forceEconomics ? localization["NotEnoughMoney_ForcedEco"] : localization["NotEnoughMoney"]), playerMoney.ToString("0"), args[0], waitTillMedic.ToString()));
+                        SendReply(player, String.Format((forceEconomics ? localization["NotEnoughMoney_ForcedEco"] : localization["NotEnoughMoney"]), playerMoney.ToString("0"), args[0], waitTillMedic.ToString()));
                         //else
                         //    PopupNotifications.Call("CreatePopupNotification", String.Format((forceEconomics ? localization["NotEnoughMoney_ForcedEco"] : localization["NotEnoughMoney"]), playerMoney.ToString("0"), args[0], waitTillMedic.ToString()), player);
 
@@ -458,7 +436,7 @@ namespace Oxide.Plugins
                 else if (!forceEconomics)
                 {
                     //if (!popupsEnabled)
-                        SendReply(player, String.Format(localization["TheMedicIsComing"], waitTillMedic.ToString()));
+                    SendReply(player, String.Format(localization["TheMedicIsComing"], waitTillMedic.ToString()));
                     //else
                     //    PopupNotifications.Call("CreatePopupNotification", String.Format(localization["TheMedicIsComing"], waitTillMedic.ToString()), player);
 
@@ -475,13 +453,13 @@ namespace Oxide.Plugins
                     {
                         case 0:
                             //if (!popupsEnabled)
-                                SendReply(player, localization["MedicToLate"]);
+                            SendReply(player, localization["MedicToLate"]);
                             //else
                             //    PopupNotifications.Call("CreatePopupNotification", localization["MedicToLate"], player);
                             break;
                         case 1:
                             //if (!popupsEnabled)
-                                SendReply(player, localization["MedicIncompetent"]);
+                            SendReply(player, localization["MedicIncompetent"]);
                             //else
                             //    PopupNotifications.Call("CreatePopupNotification", localization["MedicIncompetent"], player);
                             break;
@@ -497,7 +475,7 @@ namespace Oxide.Plugins
                 player.metabolism.bleeding.value = 0f;
 
                 //if (!popupsEnabled)
-                    SendReply(player, localization["Survived"]);
+                SendReply(player, localization["Survived"]);
                 //else
                 //    PopupNotifications.Call("CreatePopupNotification", localization["Survived"], player);
             }
@@ -513,17 +491,17 @@ namespace Oxide.Plugins
 
                 return;
             }
-            else if (!player.IsConnected())
+            else if (!player.IsConnected)
                 return; //lol ragequit ftw
             else if (player.IsDead())
             {
-                //TODO: code to enqueue a message for the player 
+                //TODO: code to enqueue a message for the player
                 return;
             }
             else if (!player.IsWounded())
             {
                 //if (!popupsEnabled)
-                    SendReply(player, localization["DontTrollTheMedic"]);
+                SendReply(player, localization["DontTrollTheMedic"]);
                 //else
                 //    PopupNotifications.Call("CreatePopupNotification", localization["DontTrollTheMedic"], player);
 
@@ -537,13 +515,13 @@ namespace Oxide.Plugins
                 {
                     case 0:
                         //if (!popupsEnabled)
-                            SendReply(player, localization["MedicToLate"]);
+                        SendReply(player, localization["MedicToLate"]);
                         //else
                         //    PopupNotifications.Call("CreatePopupNotification", localization["MedicToLate"], player);
                         break;
                     case 1:
                         //if (!popupsEnabled)
-                            SendReply(player, localization["MedicIncompetent"]);
+                        SendReply(player, localization["MedicIncompetent"]);
                         //else
                         //    PopupNotifications.Call("CreatePopupNotification", localization["MedicIncompetent"], player);
                         break;
@@ -561,7 +539,7 @@ namespace Oxide.Plugins
             player.metabolism.bleeding.value = 0f;
 
             //if (!popupsEnabled)
-                SendReply(player, localization["Survived"]);
+            SendReply(player, localization["Survived"]);
             //else
             //    PopupNotifications.Call("CreatePopupNotification", localization["Survived"], player);
         }
@@ -587,7 +565,7 @@ namespace Oxide.Plugins
                 if (hitInfo.WeaponPrefab != null &&
                     hitInfo.WeaponPrefab.ToString().Contains("explosive"))
                     explosion = (hitInfo.WeaponPrefab.GetEntity() as TimedExplosive);
-                
+
                 if (entity.ShortPrefabName.ToString().Contains("player") &&
                     (
                      explosion == null ||
@@ -609,9 +587,9 @@ namespace Oxide.Plugins
 
                     if (player.health <= totalDamage)
                         //if (!popupsEnabled)
-                            SendReply(player, localization["AboutToDie"]);
-                        //else
-                        //    PopupNotifications.Call("CreatePopupNotification", localization["AboutToDie"], player);
+                        SendReply(player, localization["AboutToDie"]);
+                    //else
+                    //    PopupNotifications.Call("CreatePopupNotification", localization["AboutToDie"], player);
                 }
             }
         }
@@ -621,7 +599,7 @@ namespace Oxide.Plugins
             if (called.Contains(player.userID))
             {
                 //if (!popupsEnabled)
-                    SendReply(player, localization["MedicAlreadyCalled"]);
+                SendReply(player, localization["MedicAlreadyCalled"]);
                 //else
                 //    PopupNotifications.Call("CreatePopupNotification", localization["MedicAlreadyCalled"], player);
 
@@ -643,7 +621,7 @@ namespace Oxide.Plugins
             uint success = 0;
 
             //with 100k-test-rounds this seemed pretty accurate ... well 99% chance is as failsafe as 100%, so not perfect but good enough
-            
+
             for (int i = 0; i <= 100; i++)
                 success += (uint)Oxide.Core.Random.Range(1, 100);
 

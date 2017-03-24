@@ -6,21 +6,19 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AutomaticAuthorization", "k1lly0u", "0.1.7", ResourceId = 2063)]
+    [Info("AutomaticAuthorization", "k1lly0u", "0.1.8", ResourceId = 2063)]
     class AutomaticAuthorization : RustPlugin
     {
         #region Fields
         [PluginReference] Plugin Clans;
         [PluginReference] Plugin Friends;
 
-        private FieldInfo serverinput;
         #endregion
 
         #region Oxide Hooks        
         void OnServerInitialized()
         {
             permission.RegisterPermission("automaticauthorization.use", this);
-            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             lang.RegisterMessages(Messages, this);
         }
 
@@ -29,8 +27,7 @@ namespace Oxide.Plugins
         #region Functions
         private BaseEntity FindEntity(BasePlayer player)
         {
-            var input = serverinput.GetValue(player) as InputState;
-            var currentRot = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
+            var currentRot = Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward;
             Vector3 eyesAdjust = new Vector3(0f, 1.5f, 0f);
 
             var rayResult = Ray(player.transform.position + eyesAdjust, currentRot);
@@ -181,7 +178,7 @@ namespace Oxide.Plugins
         [ChatCommand("autoauth")]
         void cmdAuth(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin() || permission.UserHasPermission(player.UserIDString, "automaticauthorization.use"))
+            if (player.IsAdmin || permission.UserHasPermission(player.UserIDString, "automaticauthorization.use"))
             {
                 if (args == null || args.Length == 0)
                 {

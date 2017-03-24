@@ -15,11 +15,14 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.0.11", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.1.7", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
         Plugin Friends;
+		
+		[PluginReference]
+        Plugin Clans;
 
         static RemoverTool rt = new RemoverTool();
 
@@ -53,14 +56,22 @@ namespace Oxide.Plugins
         static bool removeGibsAdmin = true;
         static bool removeGibsAll = false;
 
+		static bool removeUnequipStart = false;
+		static bool removeUnequipUpdate = false;
+		
         static int RemoveDefaultTime = 30;
         static int RemoveMaxTime = 300;
-
+		static bool RemoveContainerWithDrop = false;
+		static bool RemoveFractionedObjects = false;
+		static bool RemoveFractionedObjectsExcludeBuildingBlocks = true;
+		static int RemoveFractionedPercent = 90;
+		
         static bool RemoveWithToolCupboards = false;
         static bool RemoveWithEntityOwners = true;
         static bool RemoveWithBuildingOwners = true;
         static bool RemoveWithRustIO = true;
         static bool RemoveWithFriends = true;
+		static bool RemoveWithClans = true;
 
         static bool RaidBlocker = true;
         static bool RaidBlockerBlockBuildingID = true;
@@ -69,8 +80,10 @@ namespace Oxide.Plugins
         static int RaidBlockerTime = 300;
 
         static Dictionary<string, object> Price = new Dictionary<string, object>();
-        static Dictionary<string, object> Refund = new Dictionary<string, object>();
-        static Dictionary<string, object> ValidEntities = new Dictionary<string, object>();
+        static bool PriceEnabled = true;
+		static Dictionary<string, object> Refund = new Dictionary<string, object>();
+        static bool RefundEnabled = true;
+		static Dictionary<string, object> ValidEntities = new Dictionary<string, object>();
 
         static string GUIRemoverToolBackgroundColor = "0.1 0.1 0.1 0";
         static string GUIRemoverToolAnchorMin = "0.1 0.65";
@@ -141,7 +154,8 @@ namespace Oxide.Plugins
 
 
         static Dictionary<string, string> PrefabNameToDeployable = new Dictionary<string, string>();
-        static Dictionary<string, string> PrefabNameToStructure = new Dictionary<string, string>();
+        static Dictionary<string, string> PrefabNameToItemName = new Dictionary<string, string>();
+		static Dictionary<string, string> PrefabNameToStructure = new Dictionary<string, string>();
         static Dictionary<string, int> ItemNameToItemID = new Dictionary<string, int>();
         static Hash<uint, float> LastAttackedBuildings = new Hash<uint, float>();
         static Hash<ulong, float> LastBlockedPlayers = new Hash<ulong, float>();
@@ -191,6 +205,9 @@ namespace Oxide.Plugins
             CheckCfg<bool>("Remove - Gibs - Admin", ref removeGibsAdmin);
             CheckCfg<bool>("Remove - Gibs - All", ref removeGibsAll);
 
+			CheckCfg<bool>("Remove - Check held item - Start", ref removeUnequipStart);
+            CheckCfg<bool>("Remove - Check held item - Always", ref removeUnequipUpdate);
+
             CheckCfg<int>("Remove - Time - Default", ref RemoveDefaultTime);
             CheckCfg<int>("Remove - Time - Max", ref RemoveMaxTime);
 
@@ -199,7 +216,12 @@ namespace Oxide.Plugins
             CheckCfg<bool>("Remove - Normal - Use Building Owners (You will need Building Owners plugin)", ref RemoveWithBuildingOwners);
             CheckCfg<bool>("Remove - Normal - Use Friends (RustIO)", ref RemoveWithRustIO);
             CheckCfg<bool>("Remove - Normal - Use Friends (Friends)", ref RemoveWithFriends);
-
+			CheckCfg<bool>("Remove - Normal - Use Clans", ref RemoveWithClans);
+			CheckCfg<bool>("Remove - Normal - Drop items from StorageContainer", ref RemoveContainerWithDrop);
+			CheckCfg<bool>("Remove - Normal - Remove fractioned objects", ref RemoveFractionedObjects);
+			CheckCfg<bool>("Remove - Normal - Remove fractioned objects - exclude BuildingBlocks", ref RemoveFractionedObjectsExcludeBuildingBlocks);
+			CheckCfg<int>("Remove - Normal - Remove fractioned objects percentage", ref RemoveFractionedPercent);
+			
             CheckCfg<bool>("Remove - Normal - RaidBlocker", ref RaidBlocker);
             CheckCfg<bool>("Remove - Normal - RaidBlocker - By Buildings", ref RaidBlockerBlockBuildingID);
             CheckCfg<bool>("Remove - Normal - RaidBlocker - By Surrounding Players", ref RaidBlockerBlockSurroundingPlayers);
@@ -211,7 +233,9 @@ namespace Oxide.Plugins
             Refund = DefaultRefund();
             CheckCfg<Dictionary<string, object>>("Remove - Normal - Allowed Entities", ref ValidEntities);
             CheckCfg<Dictionary<string, object>>("Remove - Normal - Price", ref Price);
-            CheckCfg<Dictionary<string, object>>("Remove - Normal - Refund", ref Refund);
+            CheckCfg<bool>("Remove - Normal - PriceEnabled", ref PriceEnabled);
+			CheckCfg<Dictionary<string, object>>("Remove - Normal - Refund", ref Refund);
+			CheckCfg<bool>("Remove - Normal - RefundEnabled", ref RefundEnabled);
 
             CheckCfg<string>("Remove - GUI - Main Box - Min Anchor (in Rust Window)", ref GUIRemoverToolAnchorMin);
             CheckCfg<string>("Remove - GUI - Main Box - Max Anchor (in Rust Window)", ref GUIRemoverToolAnchorMax);
@@ -308,7 +332,8 @@ namespace Oxide.Plugins
                 {"Couldn't use the RemoverTool: You don't have enough resources.","Couldn't use the RemoverTool: You don't have enough resources."},
                 {"RemoverTool from your target has been deactivated.","RemoverTool from your target has been deactivated."},
                 {"Couldn't use the RemoverTool: Admin has restricted this entity from being removed.","Couldn't use the RemoverTool: Admin has restricted this entity from being removed." },
-                {"Couldn't use the RemoverTool: An external plugin blocked the usage","Couldn't use the RemoverTool: An external plugin blocked the usage" },
+                {"Couldn't use the RemoverTool: Admin has restricted damaged objects from being removed.","Couldn't use the RemoverTool: Admin has restricted damaged objects from being removed." },
+				{"Couldn't use the RemoverTool: An external plugin blocked the usage","Couldn't use the RemoverTool: An external plugin blocked the usage" },
                 {"Couldn't use the RemoverTool: No valid entity targeted","Couldn't use the RemoverTool: No valid entity targeted" },
                 {"Couldn't use the RemoverTool: Paying system crashed! Contact an administrator with the time and date to help him understand what happened.","Couldn't use the RemoverTool: Paying system crashed! Contact an administrator with the time and date to help him understand what happened." },
                 {"Couldn't use the RemoverTool: No valid entity targeted, or entity is too far.","Couldn't use the RemoverTool: No valid entity targeted, or entity is too far." },
@@ -385,7 +410,8 @@ namespace Oxide.Plugins
                 if (itemdeployable == null) continue;
 
                 if (!PrefabNameToDeployable.ContainsKey(itemdeployable.entityPrefab.resourcePath)) PrefabNameToDeployable.Add(itemdeployable.entityPrefab.resourcePath, item.displayName.english);
-            }
+				if(!PrefabNameToItemName.ContainsKey(itemdeployable.entityPrefab.resourcePath)) PrefabNameToItemName.Add(itemdeployable.entityPrefab.resourcePath, item.shortname);
+			}
         }
         void InitializeConstruction()
         {
@@ -643,7 +669,7 @@ namespace Oxide.Plugins
             var panelName = "RemoverTool";
             CuiHelper.DestroyUi(player, panelName);
 
-            var Class_Element = UI.CreateElementContainer("Overlay", panelName, GUIRemoverToolBackgroundColor, GUIRemoverToolAnchorMin, GUIRemoverToolAnchorMax, false);
+            var Class_Element = UI.CreateElementContainer("Hud", panelName, GUIRemoverToolBackgroundColor, GUIRemoverToolAnchorMin, GUIRemoverToolAnchorMax, false);
             CuiHelper.AddUi(player, Class_Element);
 
             var panelName2 = "Remove";
@@ -776,6 +802,7 @@ namespace Oxide.Plugins
                 CreateGUI(player, removetype);
                 CancelInvoke("RemoveUpdate");
                 InvokeRepeating("RemoveUpdate", 0f, 1f);
+				if (removeUnequipStart && player.GetActiveItem()?.GetHeldEntity()) UnEquip();
             }
 
             void RemoveUpdate()
@@ -791,8 +818,8 @@ namespace Oxide.Plugins
 
             void FixedUpdate()
             {
-                if (player.IsSleeping() || !player.IsConnected()) { Destroy(); return; }
-
+                if (player.IsSleeping() || !player.IsConnected) { Destroy(); return; }
+				if (removeUnequipUpdate && player.GetActiveItem()?.GetHeldEntity()) UnEquip();
                 float currentTime = UnityEngine.Time.realtimeSinceStartup;
                 if (currentTime - lastUpdate >= 0.5f)
                 {
@@ -811,6 +838,21 @@ namespace Oxide.Plugins
                     }
                 }
             }
+			
+			void UnEquip()
+			{
+				var item = player.GetActiveItem();
+				var slot = item.position;
+				item.SetParent(null);
+				item.MarkDirty();
+				rt.timer.Once(0.1f, () =>
+				{
+					if (item == null) return;
+					item.SetParent(player.inventory.containerBelt);
+					item.position = slot;
+					item.MarkDirty();
+				});
+			}
 
             public void Destroy()
             {
@@ -909,7 +951,7 @@ namespace Oxide.Plugins
         static void GiveRefund(BasePlayer player, BaseEntity TargetEntity)
         {
             var refund = GetRefund(TargetEntity);
-            foreach (KeyValuePair<string, object> p in refund)
+			foreach (KeyValuePair<string, object> p in refund)
             {
                 var itemname = p.Key.ToLower();
                 if (ItemNameToItemID.ContainsKey(itemname))
@@ -917,8 +959,7 @@ namespace Oxide.Plugins
                     var itemid = ItemNameToItemID[itemname];
                     var itemamount = (int)p.Value;
                     var item = ItemManager.CreateByItemID(itemid, itemamount);
-                    player.inventory.GiveItem(item, null);
-                    player.Command("note.inv", itemid, itemamount);
+                    player.GiveItem(item, BaseEntity.GiveItemReason.Generic);
                 }
                 else { Interface.Oxide.LogWarning(string.Format("{0} {1} didn't receive refund because {2} doesn't seem to be a valid item name", player.UserIDString, player.displayName, itemname)); }
             }
@@ -951,8 +992,27 @@ namespace Oxide.Plugins
             }
             else
             {
-                var Name = GetName(TargetEntity.PrefabName);
-                if (Refund.ContainsKey(Name)) refund = Refund[Name] as Dictionary<string, object>;
+                var name = GetName(TargetEntity.PrefabName);
+                if (Refund.ContainsKey(name))
+				{
+					if (Refund[name] is Dictionary<string, object>)
+					{
+						refund = new Dictionary<string, object>(Refund[name] as Dictionary<string, object>);
+						if(TargetEntity.HasSlot(BaseEntity.Slot.Lock) && TargetEntity.GetSlot(BaseEntity.Slot.Lock) != null)
+							refund.Add(GetName(TargetEntity.GetSlot(BaseEntity.Slot.Lock).PrefabName).ToLower(), 1);
+					}
+					else if (Refund[name] is int)
+                    {
+						refund =  new Dictionary<string, object>();
+						var p = (int)Refund[name] / 100f;
+						var itemName = PrefabNameToItemName[TargetEntity.PrefabName];
+						if (itemName == null) return refund;
+						var itemDef = ItemManager.FindItemDefinition(itemName);
+						if(itemDef == null) return refund;
+						foreach (var item in itemDef.Blueprint.ingredients)
+							refund.Add(item.itemDef.displayName.english.ToLower(), Mathf.CeilToInt(item.amount * p));
+                    }
+				}
             }
             return refund;
         }
@@ -1039,7 +1099,10 @@ namespace Oxide.Plugins
             if (removeType == RemoveType.All) { RemoveAll(TargetEntity); return string.Empty; }
             if (removeType == RemoveType.Structure) { RemoveStructure(TargetEntity); return string.Empty; }
 
-            if (shouldPay)
+			if (TargetEntity is StorageContainer && RemoveContainerWithDrop && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
+				DropUtil.DropItems((TargetEntity as StorageContainer).inventory, TargetEntity.transform.position, 1f);
+			
+			if (shouldPay)
             {
                 bool flag2 = Pay(player, TargetEntity);
                 if (!flag2)
@@ -1071,7 +1134,6 @@ namespace Oxide.Plugins
                 Reason = GetMsg("Couldn't use the RemoverTool: No valid entity targeted", player);
                 return false;
             }
-
             if (removeType != RemoveType.Normal) return true;
 
             var externalPlugins = Interface.CallHook("canRemove", player);
@@ -1086,6 +1148,13 @@ namespace Oxide.Plugins
                 Reason = GetMsg("Couldn't use the RemoverTool: Admin has restricted this entity from being removed.", player);
                 return false;
             }
+
+            if (!RemoveFractionedObjects && IsFractioned(TargetEntity))
+            {
+                Reason = GetMsg("Couldn't use the RemoverTool: Admin has restricted damaged objects from being removed.", player);
+                return false;
+            }			
+
             if (IsBlocked(player, TargetEntity, out timeLeft))
             {
                 Reason = string.Format(GetMsg("Couldn't use the RemoverTool: The Remover Tool is blocked for another {0} seconds.", player), timeLeft.ToString());
@@ -1115,6 +1184,12 @@ namespace Oxide.Plugins
                 var r = Friends.CallHook("HasFriend", steamid, friend);
                 if (r != null && (bool)r) return true;
             }
+			if (RemoveWithClans && Clans != null)
+			{
+				var a = Clans?.Call("GetClanOf", steamid);
+				var b = Clans?.Call("GetClanOf", friend);
+				if (a != null && b != null && a == b) return true;
+			}
             return false;
         }
         static bool HasAccess(BasePlayer player, BaseEntity TargetEntity)
@@ -1162,6 +1237,14 @@ namespace Oxide.Plugins
             var Name = GetName(entity.PrefabName);
             return (!(Name == string.Empty));
         }
+		static bool IsFractioned(BaseEntity entity)
+		{
+			if (RemoveFractionedObjectsExcludeBuildingBlocks && (entity is BuildingBlock || entity is SimpleBuildingBlock)) return false;
+			var baseCombat = entity as BaseCombatEntity;
+			if (baseCombat == null || !baseCombat.repair.enabled || baseCombat.repair.itemTarget == null || baseCombat.repair.itemTarget.Blueprint == null) return false;
+			if ((100f / baseCombat.MaxHealth() * baseCombat.Health()) >= RemoveFractionedPercent) return false;
+			return true;			
+		}
         static bool IsValidEntity(BaseEntity entity)
         {
             var Name = GetName(entity.PrefabName);
@@ -1294,12 +1377,13 @@ namespace Oxide.Plugins
             RemoverTool.source = player;
             RemoverTool.timeLeft = Time;
             RemoverTool.removetype = RemoveType;
-            RemoverTool.Pay = (RemoveType == RemoveType.Normal);
-            RemoverTool.Refund = (RemoveType == RemoveType.Normal);
+            RemoverTool.Pay = (RemoveType == RemoveType.Normal && PriceEnabled);
+            RemoverTool.Refund = (RemoveType == RemoveType.Normal && RefundEnabled);
             RemoverTool.distance = RemoveType == RemoveType.Normal ? (float)removeDistanceNormal : RemoveType == RemoveType.Admin ? (float)removeDistanceAdmin : (RemoveType == RemoveType.All || RemoveType == RemoveType.Structure) ? (float)removeDistanceAll : (float)removeDistanceNormal;
             RemoverTool.Start();
 
-            return string.Format(GetMsg("{0} {1} now has remover tool activated for {2} seconds ({3})", player), Target.UserIDString, Target.displayName, Time.ToString(), RemoveType.ToString());
+            //return string.Format(GetMsg("{0} {1} now has remover tool activated for {2} seconds ({3})", player), Target.UserIDString, Target.displayName, Time.ToString(), RemoveType.ToString());
+			return null;
         }
         #endregion
 
@@ -1308,22 +1392,17 @@ namespace Oxide.Plugins
         void cmdChatRemove(BasePlayer player, string command, string[] args)
         {
             var success = ToggleRemove(player, args);
-            SendReply(player, success);
+			SendReply(player, success);
         }
 
-        [ConsoleCommand("remove.toggle")]
+		[ConsoleCommand("remove.toggle")]
         void ccmdRemoveToggle(ConsoleSystem.Arg arg)
         {
-            var success = ToggleRemove(arg.Player(), arg.Args);
-            arg.ReplyWith(success);
+            var args = arg.Args.Reverse().Skip(1).Reverse().ToArray();
+			var success = ToggleRemove(arg.Player(), args);
+			arg.ReplyWith(success);
         }
-
-        [ConsoleCommand("remove")]
-        void ccmdRemove(ConsoleSystem.Arg arg)
-        {
-
-        }
-
+		
         [ConsoleCommand("remove.allow")]
         void ccmdRemoveAllow(ConsoleSystem.Arg arg)
         {

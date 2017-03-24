@@ -2,7 +2,7 @@
     "name": "FriendlyFire",
     "description": "Toggle friendly fire on\/off for Friends API",
     "author": "Nogrod",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "configuration": true,
     "require": {
         "Friends": "*"
