@@ -1,28 +1,12 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using UnityEngine;
-
-using System;
 using System.Collections.Generic;
 using System.Collections;
 using System.Linq;
 using System.Reflection;
-using Oxide.Core;
-using Oxide.Core.Plugins;
-using UnityEngine;
-using ProtoBuf;
-using Network;
-using System.Net;
-using Facepunch.Steamworks;
-using Rust;
-using Facepunch;
 
 namespace Oxide.Plugins
 {
-    [Info("MagazinBoost", "Fujikura", "1.5.1", ResourceId = 1962)]
+    [Info("MagazinBoost", "Fujikura", "1.6.0", ResourceId = 1962)]
     [Description("Can change magazines, ammo and conditon for most projectile weapons")]
     public class MagazinBoost : RustPlugin
     {	
@@ -99,13 +83,19 @@ namespace Oxide.Plugins
 				int countLoadedServerStats = 0;
 				foreach (var weapon in weapons)
 				{
-					if (!guidToPathCopy.ContainsKey(weapon.GetComponent<ItemModEntity>().entityPrefab.guid)) continue;
-					if (weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>() == null) continue;
-					
+					if (!guidToPathCopy.ContainsKey(weapon.GetComponent<ItemModEntity>().entityPrefab.guid) || weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>() == null) continue;
 					if (weaponContainer.ContainsKey(weapon.shortname)) 
 					{
-						if (!guidToPathCopy.ContainsKey(weapon.GetComponent<ItemModEntity>().entityPrefab.guid)) continue;
 						Dictionary <string, object> serverDefaults = weaponContainer[weapon.shortname] as Dictionary <string, object>;
+						if(!serverDefaults.ContainsKey("givemaxammo"))
+						{
+							serverDefaults.Add("givemaxammo", serverDefaults["servermaxammo"]);
+							serverDefaults.Add("givepreload", serverDefaults["serverpreload"]);
+							serverDefaults.Add("giveammotype", serverDefaults["serverammotype"]);
+							serverDefaults.Add("givemaxcondition", serverDefaults["servermaxcondition"]);
+							serverDefaults.Add("giveskinid", 0);
+						}
+						
 						if ((bool)serverDefaults["serveractive"])
 						{
 							ItemDefinition weaponDef = ItemManager.FindItemDefinition(weapon.shortname);
@@ -132,6 +122,10 @@ namespace Oxide.Plugins
 					weaponStats.Add("serverammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
 					weaponStats.Add("servermaxcondition", weapon.condition.max);
 					weaponStats.Add("serveractive", false);				
+					weaponStats.Add("givemaxammo", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize);
+					weaponStats.Add("givepreload", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents);
+					weaponStats.Add("giveammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
+					weaponStats.Add("givemaxcondition", weapon.condition.max);					
 					weaponContainer.Add(weapon.shortname, weaponStats);
 					Puts($"Added NEW weapon '{weapon.displayName.english} ({weapon.shortname})' to weapons list");
 				}
@@ -161,7 +155,12 @@ namespace Oxide.Plugins
 					weaponStats.Add("serverpreload", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents);
 					weaponStats.Add("serverammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
 					weaponStats.Add("servermaxcondition", weapon.condition.max);
-					weaponStats.Add("serveractive", false);				
+					weaponStats.Add("serveractive", false);
+					weaponStats.Add("givemaxammo", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.definition.builtInSize);
+					weaponStats.Add("givepreload", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.contents);
+					weaponStats.Add("giveammotype", weapon.GetComponent<ItemModEntity>().entityPrefab.Get().GetComponent<BaseProjectile>().primaryMagazine.ammoType.shortname);
+					weaponStats.Add("givemaxcondition", weapon.condition.max);							
+					weaponStats.Add("giveskinid", 0);	
 					weaponContainer.Add(weapon.shortname, weaponStats);
 					counter++;
 				}
@@ -283,6 +282,75 @@ namespace Oxide.Plugins
 					item.GetHeldEntity().skinID = 0uL;
 				}
 			}
+		}
+		
+		[ConsoleCommand("mb.giveplayer")]
+		void BoostGive(ConsoleSystem.Arg arg)
+		{
+			if (arg.Connection != null && arg.Connection.authLevel < 2) return;
+			if (arg.Args == null || arg.Args.Length < 2)
+			{
+				SendReply(arg, "Usage: magazinboost.give playername|id weaponshortname (optional: skinid)");
+				return;
+			}
+
+			ulong skinid = 0;
+			if (arg.Args.Length > 2)
+			{
+				if (!ulong.TryParse(arg.Args[2], out skinid))
+				{
+					SendReply(arg, "Skin has to be a number");
+					return;
+				}
+				if (arg.Args[2].Length != 9)
+				{
+					SendReply(arg, "Skin has to be a 9-digit number");
+					return;
+				}
+			}
+
+			BasePlayer target = BasePlayer.Find(arg.Args[0]);
+			if (target == null)
+			{
+				SendReply(arg, $"Player '{arg.Args[0]}' not found");
+				return;
+			}
+			
+			Dictionary <string, object> weaponStats = null;
+			object checkStats;
+			if (weaponContainer.TryGetValue(arg.Args[1], out checkStats))
+				weaponStats = checkStats as Dictionary <string, object>;
+			else
+			{
+				SendReply(arg, "Weapon '{arg.Args[0]}' not included/supported");
+				return;
+			}
+			
+			Item item = ItemManager.Create(ItemManager.FindItemDefinition(arg.Args[1]), 1, skinid);
+			if (item == null)
+			{
+				SendReply(arg, "Weapon for unknown reason not created");
+				return;
+			}
+			
+			(item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity = (int)weaponStats["givemaxammo"];
+			(item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (int)weaponStats["givepreload"];
+			var ammo = ItemManager.FindItemDefinition((string)weaponStats["giveammotype"]);
+			if (ammo != null)
+				(item.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType = ammo;
+			_itemMaxCondition.SetValue(item, Convert.ToSingle(weaponStats["givemaxcondition"]));
+			_itemCondition.SetValue(item, Convert.ToSingle(weaponStats["givemaxcondition"]));	
+			
+			if (skinid == 0 && Convert.ToUInt64(weaponStats["giveskinid"]) > 0)
+			skinid = Convert.ToUInt64(weaponStats["giveskinid"]);
+			
+			if(skinid > 0)
+			{
+				item.skin = Convert.ToUInt64(weaponStats["giveskinid"]);
+				item.GetHeldEntity().skinID = Convert.ToUInt64(weaponStats["giveskinid"]);
+			}
+			target.GiveItem(item);
+			SendReply(arg, $"Weapon '{arg.Args[1]}' given to Player '{target.displayName}'");
 		}
 	}
 }

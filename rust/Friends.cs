@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Friends", "Nogrod", "2.1.3", ResourceId = 686)]
+    [Info("Friends", "Nogrod", "2.1.4", ResourceId = 686)]
     class Friends : RustPlugin
     {
         private readonly FieldInfo whitelistPlayersField = typeof(CodeLock).GetField("whitelistPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -99,7 +99,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        private object CanUseLock(BasePlayer player, BaseLock @lock)
+        private object CanUseLockedEntity(BasePlayer player, BaseLock @lock)
         {
             if (!configData.ShareCodeLocks || !(@lock is CodeLock) || @lock.GetParentEntity().OwnerID <= 0) return null;
             if (HasFriend(@lock.GetParentEntity().OwnerID, player.userID))

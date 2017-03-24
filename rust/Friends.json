@@ -2,7 +2,7 @@
     "name": "Friends API",
     "description": "An API to manage a friend list",
     "author": "Nogrod",
-    "version": "2.1.3",
+    "version": "2.1.4",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/friends-api.686",

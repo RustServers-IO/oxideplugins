@@ -2,7 +2,7 @@
     "name": "Bank",
     "description": "Safe player storage",
     "author": "Calytic",
-    "version": "0.0.9",
+    "version": "0.0.10",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/bank.2116",

@@ -5,7 +5,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Crosshair", "LaserHydra", "2.1.5", ResourceId = 1236)]
+    [Info("Crosshair", "LaserHydra", "2.1.6", ResourceId = 1236)]
     [Description("Adds a customizable crosshair to your screen")]
     class Crosshair : RustPlugin
     {
@@ -184,20 +184,19 @@ namespace Oxide.Plugins
         [ConsoleCommand("toggle.crosshair")]
         void ToggleCrosshair(ConsoleSystem.Arg arg)
         {
-            if (arg != null && arg?.connection != null && arg?.connection?.player != null)
-            {
-                BasePlayer player = (BasePlayer)arg.connection.player;
+            if (arg?.Connection?.player == null) return;
 
-                if (inventory.Contains(player))
-                {
-                    DrawCrosshair(player);
-                    inventory.Remove(player);
-                }
-                else
-                {
-                    DestroyCrosshair(player);
-                    inventory.Add(player);
-                }
+            BasePlayer player = (BasePlayer)arg.Connection.player;
+
+            if (inventory.Contains(player))
+            {
+                DrawCrosshair(player);
+                inventory.Remove(player);
+            }
+            else
+            {
+                DestroyCrosshair(player);
+                inventory.Add(player);
             }
         }
 

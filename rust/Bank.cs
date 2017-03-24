@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bank", "rustservers.io", "0.0.9", ResourceId = 2116)]
+    [Info("Bank", "rustservers.io", "0.0.10", ResourceId = 2116)]
     [Description("Safe player storage")]
     class Bank : RustPlugin
     {
@@ -606,14 +606,14 @@ namespace Oxide.Plugins
             }
         }
 
-        object CanUseLock(BasePlayer player, BaseLock lockItem)
+        object CanUseLockedEntity(BasePlayer player, BaseLock lockItem)
         {
             if(!keyring) {
                 return null;
             }
 
             if(MasterKey != null) {
-                var result = MasterKey.Call("CanUseLock", player, lockItem);
+                var result = MasterKey.Call("CanUseLockedEntity", player, lockItem);
                 if(result is bool) {
                     return null;
                 }
