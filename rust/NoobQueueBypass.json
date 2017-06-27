@@ -1,0 +1,16 @@
+{
+    "name": "NoobQueueBypass",
+    "description": "Allows new players to skip the queue",
+    "author": "Ryan",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/noobqueuebypass.2531",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "Realistic Weather",
+    "description": "Command based weather that realisticly rolls in & out.",
+    "author": "",
+    "version": "1.1.3",
+    "configuration": false,
+    "suggest": {
+        "TimedExecute": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/realistic-weather.2519",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

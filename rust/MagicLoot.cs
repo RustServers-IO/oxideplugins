@@ -1,15 +1,14 @@
-﻿// Reference: Rust.Workshop
-using Rust;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using Oxide.Core;
+using Rust;
+
 namespace Oxide.Plugins
 {
-    [Info("MagicLoot", "Norn", "0.1.9", ResourceId = 2212)]
+    [Info("MagicLoot", "Norn", "0.1.13", ResourceId = 2212)]
     [Description("Basic loot multiplier.")]
-
     class MagicLoot : RustPlugin
     {
         int VANILLA_MULTIPLIER = 1;
@@ -19,6 +18,9 @@ namespace Oxide.Plugins
         Configuration ExcludeFromMultiplication = new Configuration();
         Configuration Components = new Configuration();
         MLData LootData = new MLData();
+        List<ContainerToRefresh> refreshList = new List<ContainerToRefresh>();
+        DateTime lastRefresh = DateTime.MinValue;
+        int lastMinute;
 
         class MLData
         {
@@ -27,35 +29,38 @@ namespace Oxide.Plugins
             {
             }
         }
-
+        class ContainerToRefresh
+        {
+            public LootContainer container;
+            public DateTime time;
+        }
         public class Configuration
         {
             public List<String> list;
             public Configuration() { list = new List<String>(); }
         }
-        void Loaded()
-        {
-            if (Config["Settings", "MultiplierComponents"] == null) { Config["Settings", "MultiplierComponents"] = VANILLA_MULTIPLIER;  SaveConfig(); Puts("Updating configuration..."); }
-            try { Exclude = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(Config["Exclude"]).ToString()); } catch { }
-            try { Components = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(Config["Components"]).ToString()); } catch { }
-            LoadMagicLootData();
-        }
-        void Unload() { }
-        void SaveMagicLootData() { Interface.GetMod().DataFileSystem.WriteObject(this.Title, LootData); }
+
+        void SaveMagicLootData() { Interface.Oxide.DataFileSystem.WriteObject(this.Title, LootData); }
         void LoadMagicLootData()
         {
             int newitems = 0;
-            LootData = Interface.GetMod().DataFileSystem.ReadObject<MLData>(this.Title);
+            LootData = Interface.Oxide.DataFileSystem.ReadObject<MLData>(this.Title);
             if (LootData.ItemList.Count == 0) { Puts("Generating item list with limits..."); { foreach (var item in ItemManager.itemList) { LootData.ItemList.Add(item.shortname, item.stackable); } SaveMagicLootData(); } }
-            foreach (var item in ItemManager.itemList) { if(!LootData.ItemList.ContainsKey(item.shortname)) { LootData.ItemList.Add(item.shortname, item.stackable); newitems++; } }
-            if(newitems != 0) { Puts("Added " + newitems.ToString() + " new items to /data/" + this.Title + ".json"); SaveMagicLootData(); }
+            foreach (var item in ItemManager.itemList) { if (!LootData.ItemList.ContainsKey(item.shortname)) { LootData.ItemList.Add(item.shortname, item.stackable); newitems++; } }
+            if (newitems != 0) { Puts("Added " + newitems.ToString() + " new items to /data/" + this.Title + ".json"); SaveMagicLootData(); }
             Puts("Loaded " + LootData.ItemList.Count + " item limits from /data/" + this.Title + ".json");
             Puts("Loaded " + Components.list.Count + " components from /config/" + this.Title + ".json");
         }
         void OnServerInitialized()
         {
             INIT = true; // Server has fully loaded.
-            Puts("Loaded at x" + Config["Settings", "Multiplier"].ToString() + " vanilla rate | components rate x" + Config["Settings", "MultiplierComponents"].ToString() +"  [Extra Loot: " + Config["Loot", "Enabled"].ToString() + " | X Only Components: "+ Config["Settings", "MultiplyOnlyComponents"].ToString()+"]");
+            lastMinute = DateTime.UtcNow.Minute;
+            if (Config["Loot", "RefreshMinutes"] == null) { Config["Loot", "RefreshMinutes"] = 25; SaveConfig(); }
+            if(Config["Settings", "RefreshMessage"] == null) { Config["Settings", "RefreshMessage"] = true;  SaveConfig(); }
+            try { Exclude = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(Config["Exclude"]).ToString()); } catch { }
+            try { Components = JsonConvert.DeserializeObject<Configuration>(JsonConvert.SerializeObject(Config["Components"]).ToString()); } catch { }
+            LoadMagicLootData();
+            Puts("Loaded at x" + Config["Settings", "Multiplier"].ToString() + " vanilla rate | components rate x" + Config["Settings", "MultiplierComponents"].ToString() + "  [Extra Loot: " + Config["Loot", "Enabled"].ToString() + " | X Only Components: " + Config["Settings", "MultiplyOnlyComponents"].ToString() + "]");
             RefreshLootContainers();
         }
         private readonly Dictionary<string, List<ulong>> skinsCache = new Dictionary<string, List<ulong>>();
@@ -81,6 +86,14 @@ namespace Oxide.Plugins
             Puts("Added " + RarityList[Rarity.Uncommon].Count.ToString() + " items to Uncommon list.");
             RarityList.Add(Rarity.VeryRare, new List<ItemDefinition>(ItemManager.itemList.Where(z => z.rarity == Rarity.VeryRare).Select(z => z)));
             Puts("Added " + RarityList[Rarity.VeryRare].Count.ToString() + " items to Very Rare list.");
+
+            int itemsremoved = 0;
+            foreach(var ra in RarityList[Rarity.Common].ToList()) { int limit = 0; if (LootData.ItemList.TryGetValue(ra.shortname, out limit)) { if (limit == 0) { RarityList[Rarity.Common].Remove(ra); itemsremoved++; } } }
+            foreach(var ra in RarityList[Rarity.Rare].ToList()) { int limit = 0; if (LootData.ItemList.TryGetValue(ra.shortname, out limit)) { if (limit == 0) { RarityList[Rarity.Rare].Remove(ra); itemsremoved++; } } }
+            foreach (var ra in RarityList[Rarity.Uncommon].ToList()) { int limit = 0; if (LootData.ItemList.TryGetValue(ra.shortname, out limit)) { if (limit == 0) { RarityList[Rarity.Uncommon].Remove(ra); itemsremoved++; } } }
+            foreach (var ra in RarityList[Rarity.VeryRare].ToList()) { int limit = 0; if (LootData.ItemList.TryGetValue(ra.shortname, out limit)) { if (limit == 0) { RarityList[Rarity.VeryRare].Remove(ra); itemsremoved++; } } }
+            if(itemsremoved != 0) { Puts("Removed " + itemsremoved.ToString() + " items from loot table. [ LIMIT = 0 ]"); }
+
         }
         protected override void LoadDefaultConfig()
         {
@@ -92,6 +105,7 @@ namespace Oxide.Plugins
             Config["Settings", "MultiplierComponents"] = VANILLA_MULTIPLIER;
 
             Config["Settings", "MultiplyOnlyComponents"] = false;
+            Config["Settings", "RefreshMessage"] = true;
 
             Config["Loot", "Enabled"] = true;
             Config["Loot", "ItemsMin"] = 1;
@@ -99,11 +113,13 @@ namespace Oxide.Plugins
             Config["Loot", "AmountMin"] = 1;
             Config["Loot", "PreventDuplicates"] = false;
             Config["Loot", "WorkshopSkins"] = true;
+            Config["Loot", "RefreshMinutes"] = 25;
 
             Config["Developer", "Debug"] = false;
             Config["Developer", "Skins"] = false;
             Config["Developer", "AmountChange"] = false;
             Config["Developer", "ExtraItem"] = false;
+
 
             Exclude.list.Add("supply.signal");
             Exclude.list.Add("ammo.rocket.smoke");
@@ -113,7 +129,7 @@ namespace Oxide.Plugins
             Config["ExcludeFromMultiplication"] = ExcludeFromMultiplication;
 
             foreach (ItemDefinition q in ItemManager.itemList.Where(p => p.category == ItemCategory.Component)) { Components.list.Add(q.shortname); }
-            Puts("Added " + Components.list.Count.ToString()+" components to configuration file.");
+            Puts("Added " + Components.list.Count.ToString() + " components to configuration file.");
             Config["Components"] = Components;
         }
         private IEnumerable<int> CalculateStacks(int amount, ItemDefinition item)
@@ -138,6 +154,7 @@ namespace Oxide.Plugins
                 ClearContainer(container);
                 container.PopulateLoot();
                 ModifyContainerContents(container);
+                refreshList.Add(new ContainerToRefresh() { container = container, time = DateTime.UtcNow.AddMinutes(Convert.ToInt32(Config["Loot", "RefreshMinutes"])) });
             }
         }
         void ClearContainer(LootContainer container)
@@ -149,13 +166,66 @@ namespace Oxide.Plugins
                 item.Remove(0f);
             }
         }
+        void SuppressRefresh(LootContainer container)
+        {
+            container.minSecondsBetweenRefresh = -1;
+            container.maxSecondsBetweenRefresh = 0;
+            container.CancelInvoke("SpawnLoot");
+        }
+        void OnTick()
+        {
+            if (lastMinute == DateTime.UtcNow.Minute) return;
+            lastMinute = DateTime.UtcNow.Minute;
+
+            var now = DateTime.UtcNow;
+            int n = 0;
+            int m = 0;
+            var all = refreshList.ToArray();
+            refreshList.Clear();
+            foreach (var ctr in all)
+            {
+                if (ctr.time < now)
+                {
+                    if (ctr.container.IsDestroyed)
+                    {
+                        ++m;
+                        continue;
+                    }
+                    if (ctr.container.IsOpen())
+                    {
+                        refreshList.Add(ctr);
+                        continue;
+                    }
+                    try
+                    {
+                        RepopulateContainer(ctr.container); // Will re-add
+                        ++n;
+                    }
+                    catch (Exception ex) { PrintError("Failed to refresh container: " + ContainerName(ctr.container) + ": " + ex.Message + "\n" + ex.StackTrace); }
+                }
+                else
+                    refreshList.Add(ctr); // Re-add for later
+            }
+            if (n > 0 || m > 0)
+                if (Convert.ToBoolean(Config["Settings", "RefreshMessage"])) { Puts("Refreshed " + n + " containers (" + m + " destroyed)."); }
+        }
+
+        static string ContainerName(LootContainer container)
+        {
+            var name = container.gameObject.name;
+            name = name.Substring(name.LastIndexOf("/") + 1);
+            name += "#" + container.gameObject.GetInstanceID();
+            return name;
+        }
+
         void ModifyContainerContents(BaseNetworkable entity)
         {
-            var e = entity as LootContainer; if (e == null) return;
+            var e = entity as LootContainer; if (e?.inventory?.itemList == null) return;
             List<Rarity> RaritiesUsed = new List<Rarity>();
-            foreach (Item lootitem in e.inventory.itemList.ToList())
+            SuppressRefresh(e);
+            foreach (Item lootitem in e.inventory.itemList)
             {
-                //if (Exclude.list.Contains(lootitem.info.shortname)) { lootitem.RemoveFromContainer(); e.inventory.itemList.Remove(lootitem); break; }
+                if (Exclude.list.Contains(lootitem.info.shortname)) { lootitem.RemoveFromContainer(); e.inventory.itemList.Remove(lootitem); break; }
                 if (ExcludeFromMultiplication.list.Contains(lootitem.info.shortname)) { break; }
                 var skins = GetSkins(ItemManager.FindItemDefinition(lootitem.info.itemid));
                 if (skins.Count > 1 && Convert.ToBoolean(Config["Loot", "WorkshopSkins"])) // If workshop skins enabled, randomise skin
@@ -237,6 +307,6 @@ namespace Oxide.Plugins
             e.inventory.capacity = fcapacity;
             e.inventorySlots = fcapacity;
         }
-        void OnEntitySpawned(BaseNetworkable entity) { if (INIT) { ModifyContainerContents(entity); } }
+        void OnEntitySpawned(BaseNetworkable entity) { if (INIT) { var e = entity as LootContainer; if (e?.inventory?.itemList == null) return; RepopulateContainer(e); } }
     }
 }

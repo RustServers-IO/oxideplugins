@@ -1,0 +1,21 @@
+{
+    "name": "Duelist",
+    "description": "1v1 dueling event.",
+    "author": "nivex",
+    "version": "0.1.15",
+    "configuration": true,
+    "suggest": {
+        "Kits": "*",
+        "Economics": "*",
+        "ServerRewards": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/duelist.2520",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
