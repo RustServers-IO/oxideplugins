@@ -1,0 +1,16 @@
+{
+    "name": "Staff Chat",
+    "description": "Private chat for staff members and other VIP players",
+    "author": "",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/staff-chat.2485",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

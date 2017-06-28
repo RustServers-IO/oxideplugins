@@ -1,0 +1,21 @@
+{
+    "name": "ClanBan",
+    "description": "Ban an entire clan with one command!",
+    "author": "Slut",
+    "version": "1.1.0",
+    "configuration": true,
+    "suggest": {
+        "DiscordMessages": "*",
+        "EnhancedBanSystem": "*",
+        "Clans": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/clanban.2489",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

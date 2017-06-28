@@ -1,0 +1,20 @@
+{
+    "name": "CommandBlock",
+    "description": "Blocks configured commands sent by a player to the server",
+    "author": "Wulf",
+    "version": "0.3.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/commandblock.647",
+    "games": [
+        "rustlegacy",
+        "rust",
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "rustlegacy",
+        "rust",
+        "hurtworld"
+    ]
+}

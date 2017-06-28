@@ -1,0 +1,16 @@
+{
+    "name": "CustomChatCommands",
+    "description": "Allows you to add new chat commands",
+    "author": "PsychoTea",
+    "version": null,
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/customchatcommands.2307",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

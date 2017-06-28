@@ -10,7 +10,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord", "seanbyrne88", "0.2.0")]
+    [Info("Discord", "seanbyrne88", "0.2.1", ResourceId = 2149)]
     [Description("Discord Client for Rust OxideMods")]
     class Discord : CovalencePlugin
     {
@@ -40,7 +40,7 @@ namespace Oxide.Plugins
             //webrequest.EnqueuePost(UrlWithAccessToken, payloadJson, (code, response) => PostCallBack(code, response), this);
         }
 
-        
+
 
         void PostCallBack(int code, string response)
         {
