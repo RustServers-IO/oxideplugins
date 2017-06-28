@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Hotel", "Reneb", "1.1.6", ResourceId = 1298)]
+    [Info("Hotel", "FireStorm78", "1.1.7", ResourceId = 1298)]
     class Hotel : RustPlugin
     {
         ////////////////////////////////////////////////////////////
@@ -268,7 +268,7 @@ namespace Oxide.Plugins
             {
             }
 
-            public DeployableItem(Deployable deployable)
+            public DeployableItem(BaseEntity deployable)
             {
                 prefabname = StringPool.Get(deployable.prefabID);
 
@@ -408,7 +408,7 @@ namespace Oxide.Plugins
                         if (pair.Value.renter != null)
                         {
                             detectedRooms.Remove(pair.Key);
-                            Debug.Log(string.Format("{0} is occupied and can't be edited", pair.Key));
+                            Debug.Log(string.Format("[Hotel] {0} is occupied and can't be edited", pair.Key));
                             continue;
                         }
                         if (!detectedRooms.ContainsKey(pair.Key))
@@ -432,11 +432,11 @@ namespace Oxide.Plugins
                 foreach (string roomid in toDelete)
                 {
                     rooms.Remove(roomid);
-                    Debug.Log(string.Format("{0} doesnt exist anymore, removing this room", roomid));
+                    Debug.Log(string.Format("[Hotel] {0} doesnt exist anymore, removing this room", roomid));
                 }
                 foreach (string roomid in toAdd)
                 {
-                    Debug.Log(string.Format("{0} is a new room, adding it", roomid));
+                    Debug.Log(string.Format("[Hotel] {0} is a new room, adding it", roomid));
                     rooms.Add(roomid, detectedRooms[roomid]);
                 }
             }
@@ -520,7 +520,7 @@ namespace Oxide.Plugins
             LoadData();
         }
 
-        object CanUseLock(BasePlayer player, BaseLock baselock)
+        object CanUseLockedEntity(BasePlayer player, BaseLock baselock)
         {
             CodeLock codelock = baselock as CodeLock;
             BaseEntity parententity = codelock?.GetParentEntity();
@@ -607,6 +607,7 @@ namespace Oxide.Plugins
                 if (!door.HasSlot(BaseEntity.Slot.Lock)) continue;
                 if (door.GetSlot(BaseEntity.Slot.Lock) == null) continue;
                 if (!(door.GetSlot(BaseEntity.Slot.Lock) is CodeLock)) continue;
+                if (listLocks.Contains(door)) continue;
                 CloseDoor(door);
                 listLocks.Add(door);
             }
@@ -617,7 +618,7 @@ namespace Oxide.Plugins
         {
             List<Door> listLocks = FindDoorsFromPosition(position, radius);
 
-            Hash<Deployable, string> deployables = new Hash<Deployable, string>();
+            Hash<BaseEntity, string> deployables = new Hash<BaseEntity, string>();
             Dictionary<string, Room> tempRooms = new Dictionary<string, Room>();
 
             foreach (Door door in listLocks)
@@ -625,11 +626,11 @@ namespace Oxide.Plugins
                 Vector3 pos = door.transform.position;
                 Room newRoom = new Room(pos);
                 newRoom.defaultDeployables = new List<DeployableItem>();
-                List<Deployable> founditems = new List<Deployable>();
+                List<BaseEntity> founditems = new List<BaseEntity>();
 
                 foreach (Collider col in Physics.OverlapSphere(pos, roomradius, deployableColl))
                 {
-                    Deployable deploy = col.GetComponentInParent<Deployable>();
+                    BaseEntity deploy = col.GetComponentInParent<BaseEntity>();
                     if (deploy == null) continue;
                     if (founditems.Contains(deploy)) continue;
                     founditems.Add(deploy);
@@ -652,7 +653,7 @@ namespace Oxide.Plugins
                 }
                 tempRooms.Add(newRoom.roomid, newRoom);
             }
-            foreach (KeyValuePair<Deployable, string> pair in deployables)
+            foreach (KeyValuePair<BaseEntity, string> pair in deployables)
             {
                 if (pair.Value != "0")
                 {
@@ -758,7 +759,7 @@ namespace Oxide.Plugins
             GameObject newPrefab = GameManager.server.FindPrefab(prefabname);
             if (newPrefab == null) return;
 
-            BaseEntity entity = GameManager.server.CreateEntity(newPrefab.name, pos, rot);
+            BaseEntity entity = GameManager.server.CreateEntity(prefabname, pos, rot,true);
             if (entity == null) return;
 
             if (player != null)
@@ -793,19 +794,22 @@ namespace Oxide.Plugins
         }
         void EmptyDeployablesRoom(BaseEntity door, float radius)
         {
-            var founditems = new List<Deployable>();
+            var founditems = new List<BaseEntity>();
             Vector3 doorpos = door.transform.position;
             foreach (Collider col in Physics.OverlapSphere(doorpos, radius, deployableColl))
             {
-                Deployable deploy = col.GetComponentInParent<Deployable>();
+                BaseEntity deploy = col.GetComponentInParent<BaseEntity>();
                 if (deploy == null) continue;
                 if (founditems.Contains(deploy)) continue;
 
                 bool canReach = true;
                 foreach (RaycastHit rayhit in Physics.RaycastAll(deploy.transform.position + Vector3UP, (doorpos + Vector3UP - deploy.transform.position).normalized, Vector3.Distance(deploy.transform.position, doorpos) - 0.2f, constructionColl))
                 {
-                    if (rayhit.collider.GetComponentInParent<BaseEntity>() == door)
-                        continue;
+                    if (rayhit.collider.GetComponentInParent<Door>() != null)
+                    {
+                        if (rayhit.collider.GetComponentInParent<Door>() == door)
+                            continue;
+                    }
                     canReach = false;
                     break;
                 }
@@ -813,21 +817,31 @@ namespace Oxide.Plugins
 
                 foreach (Collider col2 in Physics.OverlapSphere(doorpos, radius, constructionColl))
                 {
-                    if (col2.GetComponentInParent<Door>() == null) continue;
-                    if (col2.transform.position == doorpos) continue;
+                    BaseEntity door2 = col2.GetComponentInParent<Door>();
+                    if (door2 == null) continue;
+                    if (door2.transform.position == doorpos) continue;
 
                     bool canreach2 = true;
-                    foreach (RaycastHit rayhit in Physics.RaycastAll(deploy.transform.position + Vector3UP, (col2.transform.position + Vector3UP - deploy.transform.position).normalized, Vector3.Distance(deploy.transform.position, col2.transform.position) - 0.2f, constructionColl)) { canreach2 = false; }
-                    if (canreach2) { canReach = false; break; }
+                    foreach (RaycastHit rayhit in Physics.RaycastAll(deploy.transform.position + Vector3UP, (door2.transform.position + Vector3UP - deploy.transform.position).normalized, Vector3.Distance(deploy.transform.position, door2.transform.position) - 0.2f, constructionColl)) 
+                    { 
+                        canreach2 = false; 
+                    }
+
+                    if (canreach2) 
+                    {
+                        canReach = false; 
+                        break; 
+                    }
                 }
                 if (!canReach) continue;
 
                 founditems.Add(deploy);
             }
-            foreach (Deployable deploy in founditems)
+            foreach (BaseEntity deploy in founditems)
             {
-                if (!(deploy.GetComponentInParent<BaseEntity>().IsDestroyed))
-                    deploy.GetComponent<BaseEntity>().KillMessage();
+                if (deploy == null) continue;
+                if (deploy.IsDestroyed) continue;
+                deploy.KillMessage();
             }
         }
         void ResetRoom(HotelData hotel, Room room)

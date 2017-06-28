@@ -6,26 +6,15 @@ using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core;
 using Oxide.Core.Plugins;
-using System.Collections;
-using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutGifts", "Absolut", "1.4.1", ResourceId = 2159)]
+    [Info("AbsolutGifts", "Absolut", "1.4.4", ResourceId = 2159)]
 
     class AbsolutGifts : RustPlugin
     {
         [PluginReference]
-        Plugin ImageLibrary;
-
-        [PluginReference]
-        Plugin ServerRewards;
-
-        [PluginReference]
-        Plugin Economics;
-
-        [PluginReference]
-        Plugin AbsolutCombat;
+        Plugin ImageLibrary, ServerRewards, Economics, AbsolutCombat;
 
         GiftData agdata;
         private DynamicConfigFile AGData;
@@ -35,8 +24,6 @@ namespace Oxide.Plugins
 
         string TitleColor = "<color=orange>";
         string MsgColor = "<color=#A9A9A9>";
-
-
 
         private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
         private Dictionary<ulong, GiftCreation> giftprep = new Dictionary<ulong, GiftCreation>();
@@ -88,10 +75,8 @@ namespace Oxide.Plugins
             LoadVariables();
             LoadData();
             LoadImages();
-            if (!permission.PermissionExists(this.Title+".vip"))
-                permission.RegisterPermission(this.Title + ".vip", this);
-            if (!permission.PermissionExists(this.Title + ".admin"))
-                permission.RegisterPermission(this.Title + ".admin", this);
+            permission.RegisterPermission(this.Title + ".vip", this);
+            permission.RegisterPermission(this.Title + ".admin", this);
             timers.Add("info", timer.Once(900, () => InfoLoop()));
             timers.Add("save", timer.Once(600, () => SaveLoop()));
             SaveData();
@@ -106,19 +91,37 @@ namespace Oxide.Plugins
 
         void LoadImages()
         {
-            if (!ImageLibrary) return;
-            if ((bool)ImageLibrary.Call("isReady"))
+            if (timers.ContainsKey("imageloading"))
             {
-                AddImage("http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/simple-black-square-icons-arrows/126517-simple-black-square-icon-arrows-double-arrowhead-left.png", "FIRST", (ulong)ResourceId);
-                AddImage("https://image.freepik.com/free-icon/back-left-arrow-in-square-button_318-76403.png", "BACK", (ulong)ResourceId);
-                AddImage("https://image.freepik.com/free-icon/right-arrow-square-button-outline_318-76302.png", "NEXT", (ulong)ResourceId);
-                AddImage("http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/matte-white-square-icons-arrows/124577-matte-white-square-icon-arrows-double-arrowhead-right.png", "LAST", (ulong)ResourceId);
-                AddImage("http://oxidemod.org/data/resource_icons/1/1751.jpg?1456924271", "SR", (ulong)ResourceId);
-                AddImage("http://oxidemod.org/data/resource_icons/0/717.jpg?1465675504", "ECO", (ulong)ResourceId);
-                AddImage("http://oxidemod.org/data/resource_icons/2/2103.jpg?1472590458", "AC", (ulong)ResourceId);
-                AddImage("http://i.imgur.com/15rwUBu.png", "NewGift", (ulong)ResourceId);
+                timers["imageloading"].Destroy();
+                timers.Remove("imageloading");
             }
-            else { Puts("ImageLibrary is still loading, trying to load images again in 10 seconds"); timer.Once(10, () => LoadImages()); }
+            if (!isReady())
+            { Puts(GetMSG("WaitingImageLibrary")); timers.Add("imageloading", timer.Once(60, () => LoadImages())); return; };
+            if (string.IsNullOrEmpty(configData.GiftIconImage))
+                AddImage("http://i.imgur.com/zMe9ky5.png", "newgift", (ulong)ResourceId);
+            else AddImage(configData.GiftIconImage, "newgift", (ulong)ResourceId);
+            CreateLoadOrder();
+            if (timers.ContainsKey("imageloading"))
+            {
+                timers["imageloading"].Destroy();
+                timers.Remove("imageloading");
+            }
+        }
+
+        private void CreateLoadOrder()
+        {
+            Dictionary<string, string> newLoadOrder = new Dictionary<string, string>
+            {
+            {     "first","http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/simple-black-square-icons-arrows/126517-simple-black-square-icon-arrows-double-arrowhead-left.png" },
+            {     "back", "https://image.freepik.com/free-icon/back-left-arrow-in-square-button_318-76403.png" },
+            {     "next", "https://image.freepik.com/free-icon/right-arrow-square-button-outline_318-76302.png"  },
+            {      "last", "http://cdn.mysitemyway.com/etc-mysitemyway/icons/legacy-previews/icons/matte-white-square-icons-arrows/124577-matte-white-square-icon-arrows-double-arrowhead-right.png" },
+            {      "sr", "http://oxidemod.org/data/resource_icons/1/1751.jpg?1456924271" },
+            {      "eco", "http://oxidemod.org/data/resource_icons/0/717.jpg?1465675504" },
+            {      "ac", "http://oxidemod.org/data/resource_icons/2/2103.jpg?1472590458" },
+            };
+            ImageLibrary.Call("ImportImageList", Title, newLoadOrder, (ulong)ResourceId, true);
         }
 
         private void OnPlayerDisconnected(BasePlayer player)
@@ -196,20 +199,19 @@ namespace Oxide.Plugins
         #endregion
 
         #region Functions
-        private string TryForImage(string shortname, ulong skin = 99, bool localimages = true)
+        private string TryForImage(string shortname, ulong skin = 99)
         {
-            if (localimages)
-                if (skin == 99)
-                    return GetImage(shortname, (ulong)ResourceId);
-                else return GetImage(shortname, skin);
-            else if (skin == 99)
-                return GetImageURL(shortname, (ulong)ResourceId);
-            else return GetImageURL(shortname, skin);
+            if (shortname.Contains("http")) return shortname;
+            if (skin == 99) skin = (ulong)ResourceId;
+            return GetImage(shortname, skin, true);
         }
 
-        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
-        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
-        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
+        public string GetImage(string shortname, ulong skin = 0, bool returnUrl = false) => (string)ImageLibrary.Call("GetImage", shortname.ToLower(), skin, returnUrl);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname.ToLower(), skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
+        public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
+
 
         private void CancelGiftCreation(BasePlayer player)
         {
@@ -409,10 +411,9 @@ namespace Oxide.Plugins
                 },
                 panel);
             }
-
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (img.Contains("http"))
+                if (img.StartsWith("http") || img.StartsWith("www"))
                 {
                     container.Add(new CuiElement
                     {
@@ -435,6 +436,7 @@ namespace Oxide.Plugins
                     }
                     });
             }
+
             static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 element.Add(new CuiElement
@@ -773,7 +775,7 @@ namespace Oxide.Plugins
         {
             CuiHelper.DestroyUi(player, PanelIcon);
             if (!agdata.Players.ContainsKey(player.userID) || agdata.Players[player.userID].pendingGift.Count() < 1) return;
-            var element = UI.CreateOverlayContainer(PanelIcon, "0 0 0 0", "0.78 0.95", "0.84 1");
+            var element = UI.CreateOverlayContainer(PanelIcon, "0 0 0 0", $"{configData.minx} {configData.miny}", $"{configData.maxx} {configData.maxy}");
             UI.LoadImage(ref element, PanelIcon, TryForImage("NewGift"), "0 0", "1 1");
             UI.CreateButton(ref element, PanelIcon, "0 0 0 0", "", 12, "0 0", "1 1", "UI_AG_GiftMenu");
             CuiHelper.AddUi(player, element);
@@ -1026,11 +1028,8 @@ namespace Oxide.Plugins
         [ChatCommand("gift")]
         private void cmdgift(BasePlayer player, string command, string[] args)
         {
-            if (args == null || args.Length == 0)
-            {
-                Background(player);
-                return;
-            }
+            Background(player);
+            return;
         }
 
         [ConsoleCommand("UI_AG_GiftMenu")]
@@ -1349,7 +1348,10 @@ namespace Oxide.Plugins
         }
 
         #endregion
-
+        float Default_minx = 0.21f;
+        float Default_miny = 0.005f;
+        float Default_maxx = 0.34f;
+        float Default_maxy = 0.055f;
         #region Config        
         private ConfigData configData;
         class ConfigData
@@ -1359,11 +1361,25 @@ namespace Oxide.Plugins
             public bool UseGatherIncrease { get; set; }
             public int ResetInDays { get; set; }
             public bool HideVIP { get; set; }
+            public string GiftIconImage { get; set; }
+            public float minx { get; set; }
+            public float miny { get; set; }
+            public float maxx { get; set; }
+            public float maxy { get; set; }
+
         }
         private void LoadVariables()
         {
             LoadConfigVariables();
             SaveConfig();
+            if (configData.maxx == new float() && configData.maxy == new float() && configData.minx == new float() && configData.miny == new float())
+            {
+                configData.minx = Default_minx;
+                configData.miny = Default_miny;
+                configData.maxx = Default_maxx;
+                configData.maxy = Default_maxy;
+                SaveConfig(configData);
+            }
         }
         protected override void LoadDefaultConfig()
         {
@@ -1373,6 +1389,11 @@ namespace Oxide.Plugins
                 NoAFK = true,
                 UseGatherIncrease = true,
                 ResetInDays = 1,
+                GiftIconImage = "http://i.imgur.com/zMe9ky5.png",
+                minx = Default_minx,
+                miny = Default_miny,
+                maxx = Default_maxx,
+                maxy = Default_maxy,
             };
             SaveConfig(config);
         }
@@ -1420,7 +1441,8 @@ namespace Oxide.Plugins
             {"Redeem", "Redeem" },
             {"CompletedNewGift", "You have been given a new gift for the {0} Minute PlayTime Objective!" },
             {"AccumulatedTime", "Accumulated Time: {0}" },
-            {"NotEnoughSpace", "You do not have enough room to redeem this gift!" }
+            {"NotEnoughSpace", "You do not have enough room to redeem this gift!" },
+            {"WaitingImageLibrary", "Waiting on Image Library to initialize. Trying again in 60 Seconds" },
         };
         #endregion
     }

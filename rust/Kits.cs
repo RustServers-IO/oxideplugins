@@ -1,16 +1,16 @@
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using Oxide.Core.Plugins;
 using Newtonsoft.Json;
-using UnityEngine;
-using Oxide.Game.Rust.Cui;
-
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
+using Oxide.Core.Plugins;
+using Oxide.Game.Rust.Cui;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Kits", "Reneb", "3.2.4", ResourceId = 668)]
+    [Info("Kits", "Reneb", "3.2.7", ResourceId = 668)]
     class Kits : RustPlugin
     {
         readonly int playerLayer = LayerMask.GetMask("Player (Server)");
@@ -145,7 +145,7 @@ namespace Oxide.Plugins
             AutoKits = JsonConvert.DeserializeObject<Dictionary<int, string>>(JsonConvert.SerializeObject(config["Custom AutoKits"]));
             UIKeyBinding = JsonConvert.DeserializeObject<string>(JsonConvert.SerializeObject(config["UI KeyBinding"]));
             BackgroundURL = JsonConvert.DeserializeObject<string>(JsonConvert.SerializeObject(config["Background - URL"]));
-            KitLogging = JsonConvert.DeserializeObject<bool>(JsonConvert.SerializeObject(config["Kit - Logging"])); 
+            KitLogging = JsonConvert.DeserializeObject<bool>(JsonConvert.SerializeObject(config["Kit - Logging"]));
             ShowUnavailableKits = JsonConvert.DeserializeObject<bool>(JsonConvert.SerializeObject(config["Show All Kits"]));
         }
 
@@ -358,17 +358,16 @@ namespace Oxide.Plugins
             if (kit.building != null && kit.building != string.Empty)
             {
                 var success = CopyPaste?.CallHook("TryPasteFromPlayer", player, kit.building, CopyPasteParameters.ToArray());
-                if(success is string)
+                if (success is string)
                 {
                     return success;
                 }
-                if(!(success is List<BaseEntity>))
+                if (!(success is List<BaseEntity>))
                 {
                     return GetMsg("PastingError",player.userID);
                 }
             }
-            if(KitLogging)
-            Log("KitLogging", $"{player.displayName}<{player.UserIDString}> - Received Kit: {kitname}");
+            if (KitLogging) LogToFile("received", $"{player.displayName}<{player.UserIDString}> - Received Kit: {kitname}", this);
             return true;
         }
         bool GiveItem(PlayerInventory inv, Item item, ItemContainer container = null)
@@ -398,12 +397,6 @@ namespace Oxide.Plugins
                 }
 
             return item;
-        }
-
-        void Log(string fileName, string text)
-        {
-            var dateTime = DateTime.Now.ToString("yyyy-MM-dd");
-            ConVar.Server.Log($"oxide/logs/{Title.ToUpper()}-{fileName}_{dateTime}.txt", text);
         }
 
         //////////////////////////////////////////////////////////////////////////////////////////
@@ -520,7 +513,7 @@ namespace Oxide.Plugins
             int maincount = kit.items.Where(k => k.container == "main").Count();
             int totalcount = beltcount + wearcount + maincount;
             if ((player.inventory.containerBelt.capacity - player.inventory.containerBelt.itemList.Count) < beltcount || (player.inventory.containerWear.capacity - player.inventory.containerWear.itemList.Count) < wearcount || (player.inventory.containerMain.capacity - player.inventory.containerMain.itemList.Count) < maincount)
-                if(totalcount > (player.inventory.containerMain.capacity - player.inventory.containerMain.itemList.Count))
+                if (totalcount > (player.inventory.containerMain.capacity - player.inventory.containerMain.itemList.Count))
                     return GetMsg("NoInventorySpace", player.userID);
             return true;
         }
@@ -536,7 +529,7 @@ namespace Oxide.Plugins
             public int amount;
             public ulong skinid;
             public bool weapon;
-            public List<int> mods;
+            public List<int> mods = new List<int>();
         }
 
         class Kit
@@ -650,13 +643,16 @@ namespace Oxide.Plugins
 
         private string TryForImage(string shortname, ulong skin = 99)
         {
-            if (skin == 99)
-                return GetImage(shortname, (ulong)ResourceId);
-            return GetImage(shortname, skin);
+            if (shortname.Contains("http")) return shortname;
+            if (skin == 99) skin = (ulong)ResourceId;
+            return GetImage(shortname, skin, true);
         }
-        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
-        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
-        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname, skin);
+
+        public string GetImage(string shortname, ulong skin = 0, bool returnUrl = false) => (string)ImageLibrary.Call("GetImage", shortname.ToLower(), skin, returnUrl);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname.ToLower(), skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
+        public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
 
         //////////////////////////////////////////////////////////////////////////////////////
         // GUI CREATION ---->> Absolut
@@ -735,7 +731,7 @@ namespace Oxide.Plugins
 
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (img.Contains("http"))
+                if (img.StartsWith("http") || img.StartsWith("www"))
                 {
                     container.Add(new CuiElement
                     {
@@ -910,7 +906,7 @@ namespace Oxide.Plugins
                     if (n == entriesallowed) break;
                 }
             }
-            if(player.net.connection.authLevel == 2 || permission.UserHasPermission(player.UserIDString, this.Title + ".admin"))
+            if (player.net.connection.authLevel == 2 || permission.UserHasPermission(player.UserIDString, this.Title + ".admin"))
                 UI.CreateButton(ref element, PanelKits, UIColors["buttongrey"], GetMsg("AddKit", player.userID), 14, $".02 .02", ".07 .06", $"UI_AddKit {0}");
             if (page >= 1)
             UI.CreateButton(ref element, PanelKits, UIColors["buttongrey"], "<<", 20, $".79 .02", ".84 .06", $"kit.show {page - 1}");
@@ -1140,13 +1136,51 @@ namespace Oxide.Plugins
         [HookMethod("GetAllKits")]
         public string[] GetAllKits() => storedData.Kits.Keys.ToArray();
 
+        [HookMethod("GetKitInfo")]
+        public object GetKitInfo(string kitname)
+        {
+            if (storedData.Kits.ContainsKey(kitname.ToLower()))
+            {
+                var kit = storedData.Kits[kitname.ToLower()];
+                JObject obj = new JObject();
+                obj["name"] = kit.name;
+                obj["permission"] = kit.permission;
+                obj["npconly"] = kit.npconly;
+                obj["max"] = kit.max;
+                obj["image"] = kit.image;
+                obj["hide"] = kit.hide;
+                obj["description"] = kit.description;
+                obj["cooldown"] = kit.cooldown;
+                obj["building"] = kit.building;
+                obj["authlevel"] = kit.authlevel;
+                JArray items = new JArray();
+                foreach(var itemEntry in kit.items)
+                {
+                    JObject item = new JObject();
+                    item["amount"] = itemEntry.amount;
+                    item["container"] = itemEntry.container;
+                    item["itemid"] = itemEntry.itemid;
+                    item["skinid"] = itemEntry.skinid;
+                    item["weapon"] = itemEntry.weapon;
+                    JArray mods = new JArray();
+                    foreach (var mod in itemEntry.mods)
+                        mods.Add(mod);
+                    item["mods"] = mods;
+                    items.Add(item);
+                }
+                obj["items"] = items;
+                return obj;
+            }
+            return null;
+        }
+
         [HookMethod("GetKitContents")]
         public string[] GetKitContents(string kitname)
         {
-            if (storedData.Kits.ContainsKey(kitname))
+            if (storedData.Kits.ContainsKey(kitname.ToLower()))
             {
                 List<string> items = new List<string>();
-                foreach (var item in storedData.Kits[kitname].items)
+                foreach (var item in storedData.Kits[kitname.ToLower()].items)
                 {
                     var itemstring = $"{item.itemid}_{item.amount}";
                     if (item.mods.Count > 0)
@@ -1480,6 +1514,6 @@ namespace Oxide.Plugins
                     break;
             }
             SaveKits();
-        } 
+        }
     }
 }

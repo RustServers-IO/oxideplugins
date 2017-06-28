@@ -2,7 +2,7 @@
     "name": "DoorLimiter",
     "description": "Only allow a certain number of people to use one door",
     "author": "redBDGR",
-    "version": "1.0.3",
+    "version": "1.0.6",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/doorlimiter.2334",

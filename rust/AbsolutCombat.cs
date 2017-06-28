@@ -1,5 +1,4 @@
-﻿//Reference: Rust.Workshop
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System;
 using System.Linq;
 using UnityEngine;
@@ -11,29 +10,14 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutCombat", "Absolut", "2.3.0", ResourceId = 2103)]
+    [Info("AbsolutCombat", "Absolut", "2.3.2", ResourceId = 2103)]
 
     class AbsolutCombat : RustPlugin
     {
         #region Fields
 
         [PluginReference]
-        Plugin EventManager;
-
-        [PluginReference]
-        Plugin AbsolutWar;
-
-        [PluginReference]
-        Plugin ServerRewards;
-
-        [PluginReference]
-        Plugin Economics;
-
-        [PluginReference]
-        Plugin BetterChat;
-
-        [PluginReference]
-        Plugin ImageLibrary;
+        Plugin EventManager, ServerRewards, Economics, BetterChat, ImageLibrary;
 
         Gear_Weapon_Data gwData;
         private DynamicConfigFile GWData;
@@ -165,11 +149,6 @@ namespace Oxide.Plugins
                         skins.Add(entry);
                 ItemSkins.Add(itemDef.shortname, skins);
             }
-            foreach (var shopskin in Rust.Workshop.Approved.All.Where(skin => skin.ItemType.ItemName != null && skin.ItemType.ItemName != ""))
-            {
-                if (!ItemSkins[shopskin.ItemType.ItemName].Contains(shopskin.WorkshopdId))
-                    ItemSkins[shopskin.ItemType.ItemName].Add(shopskin.WorkshopdId);
-            }
         }
 
         private void OnPlayerInit(BasePlayer player)
@@ -198,11 +177,8 @@ namespace Oxide.Plugins
                 return;
             }
             CheckCollections(player);
-            if (!AbsolutWar)
-            {
                 GiveGearCollection(player);
                 GiveWeaponCollection(player);
-            }
             player.health = 100f;
         }
 
@@ -285,7 +261,7 @@ namespace Oxide.Plugins
         private object OnPlayerChat(ConsoleSystem.Arg arg)
         {
             if (BetterChat) return null;
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return null;
             if (SavingCollection.ContainsKey(player.userID))
@@ -392,22 +368,18 @@ namespace Oxide.Plugins
         #endregion
 
         #region Functions
-        private string TryForImage(string shortname, ulong skin = 99, bool localimage = true)
+        private string TryForImage(string shortname, ulong skin = 99)
         {
-            if (localimage)
-                if (skin == 99)
-                    return GetImage(shortname, (ulong)ResourceId);
-                else return GetImage(shortname, skin);
-            else if (skin == 99)
-                return GetImageURL(shortname, (ulong)ResourceId);
-            else return GetImageURL(shortname, skin);
+            if (shortname.Contains("http")) return shortname;
+            if (skin == 99) skin = (ulong)ResourceId;
+            return GetImage(shortname, skin, true);
         }
 
-        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
-        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
-        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
-        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname);
-
+        public string GetImage(string shortname, ulong skin = 0, bool returnUrl = false) => (string)ImageLibrary.Call("GetImage", shortname.ToLower(), skin, returnUrl);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname.ToLower(), skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
+        public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
 
         private void InitializeACPlayer(BasePlayer player)
         {
@@ -496,7 +468,7 @@ namespace Oxide.Plugins
                 if (string.IsNullOrEmpty(playerData.players[player.userID].Gear.collectionname) && playerData.players[player.userID].GearCollections.Count() > 0)
                 {
                     playerData.players[player.userID].Gear.collectionname = playerData.players[player.userID].GearCollections.First().Key;
-                    GiveGearCollection(player);
+                        GiveGearCollection(player);
                 }
             }
             //Puts("6");
@@ -512,8 +484,11 @@ namespace Oxide.Plugins
                 {
                     if (playerData.players[player.userID].WeaponSelection.ContainsKey(playerData.players[player.userID].WeaponCollections.First().Key))
                     {
-                        playerData.players[player.userID].Weapons.collectionname = playerData.players[player.userID].WeaponCollections.First().Key;
-                        GiveWeaponCollection(player);
+                        playerData.players[player.userID].Weapons.collectionname = "N00b";
+                        playerData.players[player.userID].WeaponSelection.Add(playerData.players[player.userID].Weapons.collectionname, new Dictionary<string, List<string>>());
+                        foreach (var entry in playerData.players[player.userID].WeaponCollections[playerData.players[player.userID].Weapons.collectionname])
+                            playerData.players[player.userID].WeaponSelection[playerData.players[player.userID].Weapons.collectionname].Add(entry.Key, new List<string>());
+                            GiveWeaponCollection(player);
                     }
                 }
             }
@@ -568,7 +543,6 @@ namespace Oxide.Plugins
             player.MovePosition(destination);
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "ForcePositionTo", destination);
-            player.TransformChanged();
             if (player.net?.connection != null)
                 player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
@@ -590,7 +564,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("OpenACUI")]
         private void cmdOpenACUI(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (ACUIInfo.ContainsKey(player.userID))
@@ -631,7 +605,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyACPanel")]
         private void cmdUI_DestroyACPanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             DestroyACPanel(player);
@@ -767,12 +741,12 @@ namespace Oxide.Plugins
         [ConsoleCommand("addmoney")]
         private void cmdaddmoney(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
-                if (arg.connection.authLevel < 1)
+            if (arg.Connection != null)
+                if (arg.Connection.authLevel < 1)
                 {
-                    if (arg.connection.player != null)
+                    if (arg.Connection.player != null)
                     {
-                        var player = arg.connection.player as BasePlayer;
+                        var player = arg.Connection.player as BasePlayer;
                         GetSendMSG(player, "NotAuthorized");
                     }
                     return;
@@ -783,12 +757,12 @@ namespace Oxide.Plugins
         [ConsoleCommand("takemoney")]
         private void cmdtakemoney(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
-                if (arg.connection.authLevel < 1)
+            if (arg.Connection != null)
+                if (arg.Connection.authLevel < 1)
                 {
-                    if (arg.connection.player != null)
+                    if (arg.Connection.player != null)
                     {
-                        var player = arg.connection.player as BasePlayer;
+                        var player = arg.Connection.player as BasePlayer;
                         GetSendMSG(player, "NotAuthorized");
                     }
                     return;
@@ -799,12 +773,12 @@ namespace Oxide.Plugins
         [ConsoleCommand("addkills")]
         private void cmdaddkills(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
-                if (arg.connection.authLevel < 1)
+            if (arg.Connection != null)
+                if (arg.Connection.authLevel < 1)
                 {
-                    if (arg.connection.player != null)
+                    if (arg.Connection.player != null)
                     {
-                        var player = arg.connection.player as BasePlayer;
+                        var player = arg.Connection.player as BasePlayer;
                         GetSendMSG(player, "NotAuthorized");
                     }
                     return;
@@ -815,12 +789,12 @@ namespace Oxide.Plugins
         [ConsoleCommand("takekills")]
         private void cmdtakekills(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
-                if (arg.connection.authLevel < 1)
+            if (arg.Connection != null)
+                if (arg.Connection.authLevel < 1)
                 {
-                    if (arg.connection.player != null)
+                    if (arg.Connection.player != null)
                     {
-                        var player = arg.connection.player as BasePlayer;
+                        var player = arg.Connection.player as BasePlayer;
                         GetSendMSG(player, "NotAuthorized");
                     }
                     return;
@@ -1145,17 +1119,16 @@ namespace Oxide.Plugins
                 },
                 panel);
             }
-
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (img.Contains("http"))
+                if (img.StartsWith("http") || img.StartsWith("www"))
                 {
                     container.Add(new CuiElement
                     {
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -1166,7 +1139,7 @@ namespace Oxide.Plugins
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -1585,6 +1558,7 @@ namespace Oxide.Plugins
                             else if (money >= item.price && RequiredKills >= item.killsrequired)
                             {
                                 UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, GPanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                 UI.CreatePanel(ref element, GPanel, UIColors["red"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemGearCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateTextOutline(ref element, GPanel, UIColors["white"], UIColors["green"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -1593,6 +1567,7 @@ namespace Oxide.Plugins
                             else
                             {
                                 UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, GPanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                 UI.CreatePanel(ref element, GPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemGearCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateLabel(ref element, GPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -1601,6 +1576,7 @@ namespace Oxide.Plugins
                         else
                         {
                             UI.LoadImage(ref element, GPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                            UI.LoadImage(ref element, GPanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                             UI.CreatePanel(ref element, GPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                             info = GetMSG("ItemGearCost", item.price.ToString(), item.killsrequired.ToString());
                             UI.CreateLabel(ref element, GPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -1785,6 +1761,7 @@ namespace Oxide.Plugins
                                 else if (money >= item.price && RequiredKills >= item.killsrequired)
                                 {
                                     UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.LoadImage(ref element, WPanel, TryForImage("lock"), $"{min.x+.01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                     UI.CreatePanel(ref element, WPanel, UIColors["red"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                     info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
                                     UI.CreateTextOutline(ref element, WPanel, UIColors["white"], UIColors["green"], info, 16, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -1793,6 +1770,7 @@ namespace Oxide.Plugins
                                 else
                                 {
                                     UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.LoadImage(ref element, WPanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                     UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                     info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
                                     UI.CreateLabel(ref element, WPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -1802,6 +1780,7 @@ namespace Oxide.Plugins
                             {
                                 //Puts("10");
                                 UI.LoadImage(ref element, WPanel, TryForImage(item.shortname, item.skin), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                UI.LoadImage(ref element, WPanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                 UI.CreatePanel(ref element, WPanel, UIColors["grey"], $"{altmin.x} {altmin.y + .025f}", $"{altmax.x} {altmax.y - .025f}");
                                 info = GetMSG("ItemWeaponCost", item.price.ToString(), item.killsrequired.ToString());
                                 UI.CreateLabel(ref element, WPanel, UIColors["red"], info, 12, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2154,6 +2133,7 @@ namespace Oxide.Plugins
                                         else if (money >= attachment.Value.cost && playerData.players[player.userID].WeaponCollectionKills[set] >= attachment.Value.killsrequired)
                                         {
                                             UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                            UI.LoadImage(ref element, APanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                             UI.CreatePanel(ref element, APanel, UIColors["red"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                             info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                             UI.CreateTextOutline(ref element, APanel, UIColors["black"], UIColors["white"], info, 12, "1", "1", $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}");
@@ -2162,6 +2142,7 @@ namespace Oxide.Plugins
                                         else
                                         {
                                             UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                            UI.LoadImage(ref element, APanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                             UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                             info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                             UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2170,6 +2151,7 @@ namespace Oxide.Plugins
                                     else
                                     {
                                         UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                        UI.LoadImage(ref element, APanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                         UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                         info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                         UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2178,6 +2160,7 @@ namespace Oxide.Plugins
                                 else
                                 {
                                     UI.LoadImage(ref element, APanel, TryForImage(attachment.Value.shortname, 0), $"{min.x} {min.y}", $"{max.x} {max.y}");
+                                    UI.LoadImage(ref element, APanel, TryForImage("lock"), $"{min.x + .01f} {min.y + .01f}", $"{max.x - .01f} {max.y - .01f}");
                                     UI.CreatePanel(ref element, APanel, UIColors["grey"], $"{altmin.x} {altmin.y }", $"{altmax.x} {altmax.y - .03f}");
                                     info = GetMSG("ItemWeaponCost", attachment.Value.cost.ToString(), attachment.Value.killsrequired.ToString());
                                     UI.CreateLabel(ref element, APanel, UIColors["red"], info, 10, $"{altmin.x} {altmin.y}", $"{altmax.x} {altmax.y}", TextAnchor.MiddleCenter);
@@ -2431,14 +2414,14 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AddItemAttributes")]
         private void cmdUI_AddGearAttributes(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var item = arg.Args[0];
             var type = arg.Args[1];
             if (type == "attachment")
                 NewWeaponCollection[player.userID].collection.currentweapon = arg.Args[2];
-            if (DefaultItems[Slot.chest].Contains(item))
+            if (gwData.Items[Slot.chest].Contains(item))
             {
                 NewGearCollection[player.userID].collection.set[item].free = true;
                 DestroyACPanel(player);
@@ -2450,7 +2433,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_RemoveItem")]
         private void cmdUI_RemoveItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var item = arg.Args[0];
@@ -2467,7 +2450,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectCollectionItem")]
         private void cmdUI_SelectGear(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             Slot slot = (Slot)Enum.Parse(typeof(Slot), arg.Args[0]);
@@ -2488,7 +2471,7 @@ namespace Oxide.Plugins
             var element = UI.CreateElementContainer(PanelAC, "0 0 0 0", "0.275 0.25", "0.725 0.75", true);
             UI.CreateLabel(ref element, PanelAC, UIColors["black"], $"{TextColors["limegreen"]} {GetLang("SelectCollectionItem")}", 20, "0.05 .9", "1 1", TextAnchor.MiddleCenter);
             int entriesallowed = 30;
-            int remainingentries = DefaultItems[slot].Count() - (page * entriesallowed);
+            int remainingentries = gwData.Items[slot].Count() - (page * entriesallowed);
             {
                 if (remainingentries > entriesallowed)
                 {
@@ -2502,7 +2485,7 @@ namespace Oxide.Plugins
             int shownentries = page * entriesallowed;
             int i = 0;
             int n = 0;
-            foreach (var entry in DefaultItems[slot])
+            foreach (var entry in gwData.Items[slot])
             {
                 if (type == "attachment")
                     if (NewWeaponCollection[player.userID].collection.set[NewWeaponCollection[player.userID].collection.currentweapon].attachments.ContainsKey(entry)) continue;
@@ -2524,7 +2507,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_AddItem")]
         private void cmdUI_AddItem(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var item = arg.Args[0];
@@ -2572,13 +2555,14 @@ namespace Oxide.Plugins
                 NewWeaponCollection[player.userID].collection.set[NewWeaponCollection[player.userID].collection.currentweapon].ammoType = item;
             //DestroyACPanel(player);
             //OpenACUI(player);
+            ACUIInfo[player.userID].page = 0;
             SelectSkin(player, item, type);
         }
 
         [ConsoleCommand("UI_ChangeSkinPage")]
         private void cmdUI_ChangeSkinPage(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             ACUIInfo[player.userID].page = Convert.ToInt32(arg.Args[0]);
@@ -2640,7 +2624,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetItemKillRequirement")]
         private void cmdUI_SetGearKillRequirement(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int kills = Convert.ToInt32(arg.Args[0]);
@@ -2659,7 +2643,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetItemPrice")]
         private void cmdUI_SetGearPrice(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int amount = Convert.ToInt32(arg.Args[0]);
@@ -2678,7 +2662,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetCollectionCost")]
         private void cmdUI_SetCollectionCost(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int cost = Convert.ToInt32(arg.Args[0]);
@@ -2694,7 +2678,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SetCollectionKills")]
         private void cmdUI_SetCollectionKills(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             int amount = Convert.ToInt32(arg.Args[0]);
@@ -2719,7 +2703,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Free")]
         private void cmdUI_Free(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var answer = arg.Args[0];
@@ -2772,7 +2756,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ChangeGearSet")]
         private void cmdUI_ChangeGearSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var set = string.Join(" ",arg.Args);
@@ -2791,7 +2775,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ChangeWeaponSet")]
         private void cmdUI_ChangeWeaponSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var set = string.Join(" ", arg.Args);
@@ -2809,7 +2793,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SwitchAdminView")]
         private void cmdUI_SwitchAdminView(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (!isAuth(player))
@@ -2834,7 +2818,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_GearIndexShownChange")]
         private void cmdUI_GearIndexShownChange(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var index = Convert.ToInt32(arg.Args[0]);
@@ -2845,7 +2829,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_WeaponIndexShownChange")]
         private void cmdUI_WeaponIndexShownChange(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var index = Convert.ToInt32(arg.Args[0]);
@@ -2856,7 +2840,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DestroyPurchaseConfirmation")]
         private void cmdUI_DestroyPurchaseConfirmation(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CuiHelper.DestroyUi(player, PanelPurchaseConfirmation);
@@ -2865,7 +2849,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ProcessAttachment")]
         private void cmdUI_ProcessAttachment(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var request = arg.Args[0];
@@ -2898,7 +2882,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_ProcessSelection")]
         private void cmdUI_ProcessSelection(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var type = arg.Args[0];
@@ -2912,14 +2896,10 @@ namespace Oxide.Plugins
             {
                 case "set":
                     playerData.players[player.userID].Gear.collectionname = set;
-                    if ((AbsolutWar))
-                        AbsolutWar.Call("SetWeaponClass", player.userID, set);
                     SelectionGearCollection(player, set);
                     break;
                 case "weapon":
                     playerData.players[player.userID].Weapons.collectionname = set;
-                    if ((AbsolutWar))
-                        AbsolutWar.Call("SetGearClass", player.userID, set);
                     SelectWeapons(player);
                     break;
             }
@@ -2928,7 +2908,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_PurchasingPanel")]
         private void cmdPurchasePanel(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (arg.Args[0] == "gear")
@@ -2950,7 +2930,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_PrepPurchase")]
         private void cmdUI_PrepPurchase(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             PendingPurchase[player.userID].set = false;
@@ -2988,7 +2968,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_Purchase")]
         private void cmdUI_Purchase(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var item = string.Join(" ", arg.Args);
@@ -3091,7 +3071,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SaveCollect")]
         private void cmdUI_SaveCollect(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var type = arg.Args[0];
@@ -3121,7 +3101,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CreateGearSet")]
         private void cmdUI_CreateGearSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CreateGearSet(player);
@@ -3129,7 +3109,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CancelGearSet")]
         private void cmdUI_CancelGearSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (NewGearCollection.ContainsKey(player.userID))
@@ -3141,7 +3121,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CancelWeaponSet")]
         private void cmdUI_CancelWeaponSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             if (NewWeaponCollection.ContainsKey(player.userID))
@@ -3153,7 +3133,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_CreateWeaponSet")]
         private void cmdUI_CreateWeaponSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             CreateWeaponSet(player);
@@ -3162,7 +3142,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DeleteGearSet")]
         private void cmdUI_DeleteGearSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var set = ACUIInfo[player.userID].GearSet;
@@ -3187,7 +3167,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_DeleteWeaponSet")]
         private void cmdUI_DeleteWeaponSet(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var set = ACUIInfo[player.userID].WeaponSet;
@@ -3212,7 +3192,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("UI_SelectSkin")]
         private void cmdUI_SelectSkin(ConsoleSystem.Arg arg)
         {
-            var player = arg.connection.player as BasePlayer;
+            var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
             var item = arg.Args[0];
@@ -3320,7 +3300,7 @@ namespace Oxide.Plugins
         }
         private void GiveWeaponCollection(BasePlayer player)
         {
-            if (playerData.players[player.userID].Weapons.collectionname == null || playerData.players[player.userID].WeaponSelection.Count() < 1 || playerData.players[player.userID].Weapons.weapons == null) return;
+            if (playerData.players[player.userID].Weapons.collectionname == null || playerData.players[player.userID].WeaponSelection.Count() < 1 /*|| playerData.players[player.userID].Weapons.weapons == null*/) return;
             if (playerData.players[player.userID].Weapons.weapons != null)
                 playerData.players[player.userID].Weapons.weapons.Clear();
             else playerData.players[player.userID].Weapons.weapons = new List<uint>();
@@ -3869,6 +3849,7 @@ namespace Oxide.Plugins
                     "hoodie",
                     "burlap.shirt",
                     "hazmat.jacket",
+                    "hazmatsuit",
                 }
                 },
             {Slot.chest2, new List<string>
@@ -3958,7 +3939,9 @@ namespace Oxide.Plugins
                     "flamethrower",
                     "bow.hunting",
                     "bone.club",
-                }
+                    "pistol.m92",
+                    "smg.mp5",
+}
                 },
                 {Slot.main, new List<string>
                 {
@@ -3988,6 +3971,8 @@ namespace Oxide.Plugins
                     "flamethrower",
                     "bow.hunting",
                     "bone.club",
+                    "pistol.m92",
+                    "smg.mp5",
                 }
                 },
             {Slot.attachment1, new List<string>
@@ -4328,6 +4313,11 @@ namespace Oxide.Plugins
             try
             {
                 playerData = PlayerData.ReadObject<SavedPlayer>();
+                if (playerData == null || playerData.players == null)
+                {
+                    Puts("Corrupt Data file....creating new datafile");
+                    playerData = new SavedPlayer();
+                }
             }
             catch
             {
@@ -4337,6 +4327,11 @@ namespace Oxide.Plugins
             try
             {
                 gwData = GWData.ReadObject<Gear_Weapon_Data>();
+                if (gwData == null)
+                {
+                    Puts("Corrupt Data file....creating new datafile");
+                    gwData = new Gear_Weapon_Data();
+                }
             }
             catch
             {
@@ -4345,7 +4340,9 @@ namespace Oxide.Plugins
             }
             if (gwData.Items == null || gwData.Items.Count() == 0)
                 LoadDefaultItemsList();
+            SaveData();
         }
+
         void LoadDefaultItemsList()
         {
             gwData.Items = DefaultItems;

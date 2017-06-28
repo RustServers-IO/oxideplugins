@@ -1,454 +1,423 @@
-﻿// Reference: Rust.Global
-using System;
+﻿using System;
 using System.Collections.Generic;
-using UnityEngine;
-using System.Reflection;
-using Oxide.Core.Plugins;
-using Oxide.Core.Configuration;
+using Newtonsoft.Json;
 using Oxide.Core;
+using Oxide.Core.Configuration;
+using Oxide.Core.Plugins;
+using UnityEngine;
+using System.Linq;
+using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("Airstrike", "k1lly0u", "0.2.51", ResourceId = 1489)]
+    [Info("Airstrike", "k1lly0u", "0.3.03", ResourceId = 1489)]
     class Airstrike : RustPlugin
     {
-        #region fields
-        [PluginReference]
-        Plugin Economics;
+        #region Fields
+        [PluginReference] Plugin Economics, ServerRewards;
 
-        private bool changed;
-        private float rocketDrop = 0f;
+        StoredData storedData;
+        private DynamicConfigFile data;
 
-        static FieldInfo TimeToTake;
-        static FieldInfo StartPos;
-        static FieldInfo EndPos;
-        static FieldInfo DropPos;
-        
-        public Dictionary<ulong, bool> toggleList = new Dictionary<ulong, bool>();
+        private Dictionary<ulong, StrikeType> toggleList = new Dictionary<ulong, StrikeType>();
 
-        private List<StrikePlane> StrikePlanes = new List<StrikePlane>();
+        private Dictionary<string, int> shortnameToId = new Dictionary<string, int>();
+        private Dictionary<string, string> shortnameToDn = new Dictionary<string, string>();
 
-        PlayerCooldown pcdData;
-        private DynamicConfigFile PCDDATA;
+        private static Airstrike ins;
+
+        private static FieldInfo timeToTake = typeof(CargoPlane).GetField("secondsToTake", (BindingFlags.Instance | BindingFlags.NonPublic));
+        private static FieldInfo startPosition = typeof(CargoPlane).GetField("startPos", (BindingFlags.Instance | BindingFlags.NonPublic));
+        private static FieldInfo endPosition = typeof(CargoPlane).GetField("endPos", (BindingFlags.Instance | BindingFlags.NonPublic));
+        private static FieldInfo targetPosition = typeof(CargoPlane).GetField("dropPosition", (BindingFlags.Instance | BindingFlags.NonPublic));
+        private static FieldInfo hasDropped = typeof(CargoPlane).GetField("dropped", (BindingFlags.Instance | BindingFlags.NonPublic));
+
+        const string cargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
+        const string basicRocket = "assets/prefabs/ammo/rocket/rocket_basic.prefab";
+        const string fireRocket = "assets/prefabs/ammo/rocket/rocket_fire.prefab";
+
+        enum StrikeType { Strike, Squad }
         #endregion
 
-        #region Classes
-        public class StrikePlane : MonoBehaviour
+        #region Oxide Hooks
+        void Loaded()
         {
-            public CargoPlane Plane;
-            public Vector3 TargetPosition;
-            public int FiredRockets = 0;
+            data = Interface.Oxide.DataFileSystem.GetFile("airstrike_data");
 
-            public void SpawnPlane(CargoPlane plane, Vector3 position, float speed, bool isSquad = false, Vector3 offset = new Vector3())
+            lang.RegisterMessages(Messages, this);
+            permission.RegisterPermission("airstrike.signal.strike", this);
+            permission.RegisterPermission("airstrike.signal.squad", this);
+            permission.RegisterPermission("airstrike.purchase.strike", this);
+            permission.RegisterPermission("airstrike.purchase.squad", this);
+            permission.RegisterPermission("airstrike.chat.strike", this);
+            permission.RegisterPermission("airstrike.chat.squad", this);
+            permission.RegisterPermission("airstrike.ignorecooldown", this);
+        }
+        void OnServerInitialized()
+        {
+            ins = this;
+            LoadVariables();
+            LoadData();
+
+            shortnameToId = ItemManager.itemList.ToDictionary(x => x.shortname, y => y.itemid);
+            shortnameToDn = ItemManager.itemList.ToDictionary(x => x.shortname, y => y.displayName.translated);
+
+            CallRandomStrike();
+        }
+        void Unload()
+        {
+            ins = null;
+            SaveData();
+
+            var objects = UnityEngine.Object.FindObjectsOfType<StrikePlane>();
+            if (objects != null)
             {
-                enabled = true;                
-                Plane = plane;                
-                TargetPosition = position;
-                Plane.InitDropPosition(position);
-                Plane.Spawn();
-                if (isSquad)
+                foreach (var obj in objects)
+                    UnityEngine.Object.Destroy(obj);
+            }
+        }
+        void OnServerSave() => SaveData();
+
+        void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
+        {            
+            if (toggleList.ContainsKey(player.userID) && entity is SupplySignal)
+            {
+                StrikeType type = toggleList[player.userID];
+                toggleList.Remove(player.userID);
+                AddCooldownData(player, type);
+
+                entity.CancelInvoke((entity as SupplySignal).Explode);
+                entity.Invoke(entity.KillMessage, 30f);
+                timer.Once(3, () =>
                 {
-                    Vector3 SpawnPos = CalculateSpawnPos(offset);
-                    StartPos.SetValue(Plane, SpawnPos);
-                    EndPos.SetValue(Plane, SpawnPos - new Vector3(0, 0, TerrainMeta.Size.x));
-                    Plane.transform.position = SpawnPos;
-                    Plane.transform.rotation = new Quaternion(0, 180, 0, 0);
+                    Effect.server.Run("assets/bundled/prefabs/fx/smoke_signal_full.prefab", entity, 0, new Vector3(), new Vector3());
+                    Vector3 pos = entity.GetEstimatedWorldPosition();
+                    switch (type)
+                    {
+                        case StrikeType.Strike:
+                            SendReply(player, string.Format(msg("strikeConfirmed", player.UserIDString), pos));
+                            CallStrike(pos);
+                            return;
+                        case StrikeType.Squad:
+                            SendReply(player, string.Format(msg("strikeConfirmed", player.UserIDString), pos));
+                            CallSquad(pos);
+                            return;
+                    }                    
+                });
+            }
+        }
+        #endregion
+
+        #region Plane Control
+        class StrikePlane : MonoBehaviour
+        {
+            private CargoPlane entity;
+            private Vector3 targetPos;
+
+            private RocketOptions rocketOptions;
+
+            private Vector3 startPos;
+            private Vector3 endPos;
+            private float secondsToTake;
+
+            private int rocketsFired;
+            private float fireDistance;
+            private bool isFiring;
+            
+            private void Awake()
+            {
+                entity = GetComponent<CargoPlane>();
+                rocketOptions = ins.configData.Rocket;
+                fireDistance = ins.configData.Plane.Distance;
+
+                hasDropped.SetValue(entity, true);
+                enabled = false;
+            }
+            private void Update()
+            {
+                if (!isFiring && Vector3.Distance(transform.position, targetPos) <= fireDistance)
+                {
+                    isFiring = true;
+                    FireRocketLoop();
                 }
-                TimeToTake.SetValue(Plane, Vector3.Distance((Vector3)StartPos.GetValue(Plane), (Vector3)EndPos.GetValue(Plane)) / speed);
-                InvokeRepeating("CheckDistance", 3, 3);
             }
-            private Vector3 CalculateSpawnPos(Vector3 offset)
+            private void OnDestroy()
             {
-                float mapSize = (TerrainMeta.Size.x / 2) + 150f;
-                Vector3 spawnPos = new Vector3();
-                spawnPos.x = TargetPosition.x + offset.x;
-                spawnPos.z = mapSize + offset.z;
-                spawnPos.y = 150;
-                return spawnPos;
+                entity.CancelInvoke(LaunchRocket);
             }
-            private void CheckDistance()
-            {               
-                var currentPos = Plane.transform.position;
-                if (Vector3.Distance(currentPos, TargetPosition) < (currentPos.y + planeDistance))
+
+            public void InitializeFlightPath(Vector3 targetPos)
+            {                
+                this.targetPos = targetPos;
+
+                float size = TerrainMeta.Size.x;
+                float highestPoint = 170f;
+                
+                startPos = Vector3Ex.Range(-1f, 1f);
+                startPos.y = 0f;
+                startPos.Normalize();
+                startPos = startPos * (size * 2f);
+                startPos.y = highestPoint;
+                
+                endPos = startPos * -1f;
+                endPos.y = startPos.y;
+                startPos = startPos + targetPos;
+                endPos = endPos + targetPos;
+                
+                secondsToTake = (Vector3.Distance(startPos, endPos) / ins.configData.Plane.Speed) * UnityEngine.Random.Range(0.95f, 1.05f);
+                
+                entity.transform.position = startPos;
+                entity.transform.rotation = Quaternion.LookRotation(endPos - startPos);
+                
+                startPosition.SetValue(entity, startPos);
+                endPosition.SetValue(entity, endPos);
+                targetPosition.SetValue(entity, targetPos);
+                timeToTake.SetValue(entity, secondsToTake);
+                
+                enabled = true;
+            }
+            public void GetFlightData(out Vector3 startPos, out Vector3 endPos, out float secondsToTake)
+            {
+                startPos = this.startPos;
+                endPos = this.endPos;
+                secondsToTake = this.secondsToTake;
+            }
+            public void SetFlightData(Vector3 startPos, Vector3 endPos, Vector3 targetPos, float secondsToTake)
+            {
+                this.startPos = startPos;
+                this.endPos = endPos;
+                this.targetPos = targetPos;
+                this.secondsToTake = secondsToTake;
+
+                entity.transform.position = startPos;
+                entity.transform.rotation = Quaternion.LookRotation(endPos - startPos);
+
+                startPosition.SetValue(entity, startPos);
+                endPosition.SetValue(entity, endPos);
+                targetPosition.SetValue(entity, targetPos);
+                timeToTake.SetValue(entity, secondsToTake);
+                
+                enabled = true;
+            }
+
+            private void FireRocketLoop()
+            {
+                entity.InvokeRepeating(LaunchRocket, 0, rocketOptions.Interval);
+            }            
+            private void LaunchRocket()
+            {
+                if (rocketsFired >= rocketOptions.Amount)
                 {
-                    FireRockets(Plane, TargetPosition);
-                    CancelInvoke("CheckDistance");                    
-                }                
-            }
-            private void FireRockets(CargoPlane strikePlane, Vector3 targetPos)
-            {
-                InvokeRepeating("SpreadRockets", rocketInterval, rocketInterval);
-            }
-            private void SpreadRockets()
-            {
-                if (FiredRockets >= rocketAmount)
-                {
-                    CancelInvoke("SpreadRockets");
+                    entity.CancelInvoke(LaunchRocket);
                     return;
                 }
-                Vector3 targetPos = Quaternion.Euler(UnityEngine.Random.Range((float)(-rocketSpread * 0.2), rocketSpread * 0.2f), UnityEngine.Random.Range((float)(-rocketSpread * 0.2), rocketSpread * 0.2f), UnityEngine.Random.Range((float)(-rocketSpread * 0.2), rocketSpread * 0.2f)) * TargetPosition;
-                LaunchRocket(targetPos);
-                FiredRockets++;
-            }
-            private void LaunchRocket(Vector3 targetPos)
-            {
-                var rocket = rocketType;
-                if (useMixedRockets)                
-                    if (UnityEngine.Random.Range(1, fireChance) == 1)
-                        rocket = fireRocket;                
-                var launchPos = Plane.transform.position;
+                var rocketType = rocketOptions.Type == "Normal" ? basicRocket : fireRocket;
+                if (rocketOptions.Mixed && UnityEngine.Random.Range(1, rocketOptions.FireChance) == 1)
+                    rocketType = fireRocket;
 
-                ItemDefinition projectileItem = ItemManager.FindItemDefinition(rocket);
-                ItemModProjectile component = projectileItem.GetComponent<ItemModProjectile>();
+                Vector3 launchPos = entity.transform.position;
+                Vector3 newTarget = Quaternion.Euler(GetRandom(), GetRandom(), GetRandom()) * targetPos;
+                                
+                BaseEntity rocket = GameManager.server.CreateEntity(rocketType, launchPos, new Quaternion(), true);
 
-                BaseEntity entity = GameManager.server.CreateEntity(component.projectileObject.resourcePath, launchPos, new Quaternion(), true);
+                TimedExplosive rocketExplosion = rocket.GetComponent<TimedExplosive>();
+                ServerProjectile rocketProjectile = rocket.GetComponent<ServerProjectile>();
 
-                TimedExplosive rocketExplosion = entity.GetComponent<TimedExplosive>();
-                ServerProjectile rocketProjectile = entity.GetComponent<ServerProjectile>();
-
-                rocketProjectile.speed = rocketSpeed;
+                rocketProjectile.speed = rocketOptions.Speed;
                 rocketProjectile.gravityModifier = 0;
                 rocketExplosion.timerAmountMin = 60;
                 rocketExplosion.timerAmountMax = 60;
                 for (int i = 0; i < rocketExplosion.damageTypes.Count; i++)
-                    rocketExplosion.damageTypes[i].amount *= damageModifier;
+                    rocketExplosion.damageTypes[i].amount *= rocketOptions.Damage;
 
-                Vector3 newDirection = (targetPos - launchPos);                
+                Vector3 newDirection = (newTarget - launchPos);
 
-                entity.SendMessage("InitializeVelocity", (newDirection));
-                entity.Spawn();                
-            }           
-        }
-        private CargoPlane CreatePlane() => (CargoPlane)GameManager.server.CreateEntity(cargoPlanePrefab, new Vector3(), new Quaternion(), true);
-        #endregion
-
-        #region Oxide Hooks        
-        void Loaded() => PCDDATA = Interface.Oxide.DataFileSystem.GetFile("airstrike_data");
-        void OnServerInitialized()
-        {
-            broadcastStrikeAll = true;
-            //strikeCalled = false;
-            
-            RegisterPermissions();
-            RegisterMessages();
-            SetFieldInfo();
-            CheckDependencies();
-            LoadVariables();
-            LoadData();
-        }
-        void Unload()
-        {
-            SaveData();
-            DestroyAllPlanes();      
-        }
-        
-        void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
-        {
-            if (useSignalStrike && canSmokeStrike(player))
-                if (toggleList.ContainsKey(player.userID) && toggleList[player.userID])
-                    if (entity is SupplySignal)
-                    {
-                        entity.GetComponent<TimedExplosive>().timerAmountMin = 30f;                        
-                        if (useCooldown)                        
-                            if (!CheckPlayerData(player, false))
-                                return;
-                        var pos = entity.GetEstimatedWorldPosition();
-                        timer.Once(2.8f, () => 
-                        {                            
-                            Effect.server.Run("assets/bundled/prefabs/fx/smoke_signal.prefab", pos);
-                            strikeOnSmoke(player, pos);
-                            if (entity != null)                                                            
-                                entity.Kill(BaseNetworkable.DestroyMode.None);                            
-                        });
-                    }
-        }
-        void OnEntitySpawned(BaseEntity entity)
-        {
-            if (entity != null)
-            {
-                if (entity is SupplyDrop)
-                    CheckStrikeDrop(entity as SupplyDrop);                          
+                rocket.SendMessage("InitializeVelocity", (newDirection));
+                rocket.Spawn();
+                ++rocketsFired;
             }
+
+            private float GetRandom() => UnityEngine.Random.Range(-rocketOptions.Accuracy * 0.2f, rocketOptions.Accuracy * 0.2f);
         }
         #endregion
 
-        #region Plugin Init
-        private void RegisterPermissions()
+        #region Functions
+        private void CallRandomStrike()
         {
-            permission.RegisterPermission("airstrike.chat", this);
-            permission.RegisterPermission("airstrike.canuse", this);
-            permission.RegisterPermission("airstrike.buystrike", this);
-            permission.RegisterPermission("airstrike.mass", this);
+            if (!configData.Other.RandomStrikes && !configData.Other.RandomSquads) return;
+
+            timer.In(UnityEngine.Random.Range(configData.Other.RandomTimer[0], configData.Other.RandomTimer[1]), () =>
+            {
+                StrikeType type;
+                if (configData.Other.RandomStrikes && configData.Other.RandomSquads)
+                    type = UnityEngine.Random.Range(1, 2) == 1 ? type = StrikeType.Strike : type = StrikeType.Squad;
+                else if (configData.Other.RandomStrikes)
+                    type = StrikeType.Strike;
+                else type = StrikeType.Squad;
+
+                if (type == StrikeType.Strike)
+                    CallStrike(GetRandomPosition());
+                else CallSquad(GetRandomPosition());
+
+                CallRandomStrike();
+            });
         }
-        private void RegisterMessages() => lang.RegisterMessages(messages, this);
-        private void SetFieldInfo()
+        private void CallStrike(Vector3 position)
         {
-            StartPos = typeof(CargoPlane).GetField("startPos", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-            EndPos = typeof(CargoPlane).GetField("endPos", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-            TimeToTake = typeof(CargoPlane).GetField("secondsToTake", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-            DropPos = typeof(CargoPlane).GetField("dropPosition", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+            CargoPlane entity = CreatePlane();
+            entity.Spawn();
+
+            StrikePlane plane = entity.gameObject.AddComponent<StrikePlane>();
+            plane.InitializeFlightPath(position);
+
+            if (configData.Other.Broadcast)
+                PrintToChat(msg("strikeInbound"));
         }
-        private void CheckDependencies()
+        private void CallSquad(Vector3 position)
         {
-            if (Economics == null)
-                if (useEconomics)
+            CargoPlane leaderEnt = CreatePlane();
+            leaderEnt.Spawn();
+
+            StrikePlane leaderPlane = leaderEnt.gameObject.AddComponent<StrikePlane>();
+            leaderPlane.InitializeFlightPath(position);
+
+            Vector3 startPos;
+            Vector3 endPos;
+            float secondsToTake;
+            leaderPlane.GetFlightData(out startPos, out endPos, out secondsToTake);
+
+            CargoPlane leftEnt = CreatePlane();
+            leftEnt.Spawn();
+            StrikePlane leftPlane = leftEnt.gameObject.AddComponent<StrikePlane>();
+            Vector3 leftOffset = (leaderEnt.transform.right * 70) + (-leaderEnt.transform.forward * 80);
+            leftPlane.SetFlightData(startPos + leftOffset, endPos + leftOffset, position + (leftOffset / 4), secondsToTake);
+
+            CargoPlane rightEnt = CreatePlane();
+            rightEnt.Spawn();
+            StrikePlane rightPlane = rightEnt.gameObject.AddComponent<StrikePlane>();
+            Vector3 rightOffset = (-leaderEnt.transform.right * 70) + (-leaderEnt.transform.forward * 80);
+            rightPlane.SetFlightData(startPos + rightOffset, endPos + rightOffset, position + (rightOffset / 4), secondsToTake);
+
+            if (configData.Other.Broadcast)
+                PrintToChat(msg("squadInbound"));
+        }
+
+        private bool CanBuyStrike(BasePlayer player, StrikeType type)
+        {
+            Dictionary<string, int> costToBuy = type == StrikeType.Strike ? configData.Buy.StrikeCost : configData.Buy.SquadCost;
+                        
+            foreach(var item in costToBuy)
+            {
+                if (item.Key == "RP")
                 {
-                    PrintWarning($"Economics could not be found! Disabling money feature");
-                    useEconomics = false;
-                }
-        }
-        #endregion
-
-        #region Core Functions       
-        public const string cargoPlanePrefab = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";    
-        
-        private void DestroyPlane(StrikePlane plane)
-        {
-            if (StrikePlanes.Contains(plane))
-            {
-                if (plane.Plane != null)                
-                    plane.Plane.Kill();                
-                StrikePlanes.Remove(plane);
-                UnityEngine.Object.Destroy(plane);
-            }    
-        }
-
-        private void DestroyAllPlanes()
-        {
-            foreach (var plane in StrikePlanes)
-                DestroyPlane(plane);
-        }
-
-        public bool CheckStrikeDrop(SupplyDrop drop)
-        {
-            bool istrue = false;
-            var supplyDrop = drop.GetComponent<LootContainer>();
-            foreach (var plane in StrikePlanes)
-            {
-                if (plane.Plane == null) return false;
-                float dropDistance = ((Vector3.Distance(plane.Plane.transform.position, supplyDrop.transform.position)));
-                if (dropDistance < 100) supplyDrop.KillMessage();
-                istrue = true;
-            }
-            return istrue;
-        }
-        private void MassSet(Vector3 position, Vector3 offset, int speed = -1)
-        {
-            if (speed == -1) speed = planeSpeed;
-            CargoPlane plane = CreatePlane();            
-
-            var strikePlane = plane.gameObject.AddComponent<StrikePlane>();
-            StrikePlanes.Add(strikePlane);
-            strikePlane.SpawnPlane(plane, position, speed, true, offset);
-            
-            float removePlane = ((Vector3.Distance((Vector3)StartPos.GetValue(plane), (Vector3)DropPos.GetValue(plane)) / speed) + 10);
-            timer.Once(removePlane, () => DestroyPlane(strikePlane));
-        }
-        
-        private Vector3 calculateEndPos(Vector3 pos, Vector3 offset)
-        {
-            float mapSize = (TerrainMeta.Size.x / 2);
-            Vector3 endPos = new Vector3();
-            endPos.x = pos.x + offset.x;
-            endPos.z = -mapSize;
-            endPos.y = 150;
-            return endPos;
-        }
-        private void strikeOnPayment(BasePlayer player, string type)
-        {
-            int playerHQ = player.inventory.GetAmount(374890416);
-            int playerFlare = player.inventory.GetAmount(97513422);
-            int playerTC = player.inventory.GetAmount(1490499512);
-            switch (type)
-            {
-                case "computer":
-                    if (playerFlare >= buyFlare && playerTC >= buyTarget)
+                    if (ServerRewards)
                     {
-                        player.inventory.Take(null, 97513422, buyFlare);
-                        player.inventory.Take(null, 1490499512, buyTarget);
-                        callPaymentStrike(player);                        
+                        if ((int)ServerRewards.Call("CheckPoints", player.userID) < item.Value)
+                        {
+                            SendReply(player, string.Format(msg("buyItem", player.UserIDString), item.Value, item.Key));
+                            Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                            return false;
+                        }
                     }
-                    return;
-                case "metal":
-                    if (playerHQ >= buyMetal)
+                }
+                if (item.Key == "Economics")
+                {
+                    if (Economics)
                     {
-                        player.inventory.Take(null, 374890416, buyMetal);
-                        callPaymentStrike(player);
+                        if ((double)Economics.Call("GetPlayerMoney", player.userID) < item.Value)
+                        {
+                            SendReply(player, string.Format(msg("buyItem", player.UserIDString), item.Value, item.Key));
+                            Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                            return false;
+                        }
                     }
-                    return;
-                case "money":
-                    callPaymentStrike(player);
-                    return;
-                default:
-                    Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
-                    SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("buyCost", this, player.UserIDString));
-                    SendReply(player, string.Format(lang.GetMessage("buyFlare", this, player.UserIDString), buyTarget.ToString(), buyFlare.ToString()));
-                    SendReply(player, string.Format(lang.GetMessage("buyMetal", this, player.UserIDString), buyMetal.ToString()));
-                    return;
-            }
-        }
-        private void squadStrikeOnPayment(BasePlayer player, bool type)
-        {
-            int playerHQ = player.inventory.GetAmount(374890416);
-            int playerFlare = player.inventory.GetAmount(97513422);
-            int playerTC = player.inventory.GetAmount(1490499512);
-
-            if (!type)
-                if (playerFlare >= buyFlare && playerTC >= buyTarget)
-                {
-                    player.inventory.Take(null, 97513422, buyFlare * 3);
-                    player.inventory.Take(null, 1490499512, buyTarget * 3);
-                    callPaymentSquadStrike(player);
-                    return;
                 }
-                else if (playerHQ >= buyMetal)
+                if (shortnameToId.ContainsKey(item.Key))
                 {
-                    player.inventory.Take(null, 374890416, buyMetal * 3);
-                    callPaymentSquadStrike(player);
-                    return;
-                }            
-            Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("squadCost", this, player.UserIDString));
-            SendReply(player, string.Format(lang.GetMessage("buyFlare", this, player.UserIDString), (buyTarget * 3).ToString(), (buyFlare * 3).ToString()));
-            SendReply(player, string.Format(lang.GetMessage("buyMetal", this, player.UserIDString), (buyMetal * 3).ToString()));
-        }
-        private bool CheckPlayerMoney(BasePlayer player, int amount)
-        {
-            if (useEconomics)
-            {
-                double money = (double)Economics?.CallHook("GetPlayerMoney", player.userID);
-                if (money >= amount)
-                {
-                    money = money - amount;
-                    Economics?.CallHook("Set", player.userID, money);
-                    return true;
+                    if (player.inventory.GetAmount(shortnameToId[item.Key]) < item.Value)
+                    {
+                        SendReply(player, string.Format(msg("buyItem", player.UserIDString), item.Value, shortnameToDn[item.Key]));
+                        Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.denied.prefab", player.transform.position);
+                        return false;
+                    }
                 }
-                return false;
             }
-            return false;
+            Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.updated.prefab", player.transform.position);
+            return true;
         }
 
-        private bool CheckPlayerData(BasePlayer player, bool isSquad)
+        private void BuyStrike(BasePlayer player, StrikeType type)
         {
-            if (noAdminCooldown)
-                if (player.net.connection.authLevel >= auth) return true;
-            
-            var d = pcdData.pCooldown;
-            ulong ID = player.userID;
-            double timeStamp = GrabCurrentTime();
-            
-            if (!d.ContainsKey(ID))
+            Dictionary<string, int> costToBuy = type == StrikeType.Strike ? configData.Buy.StrikeCost : configData.Buy.SquadCost;
+
+            foreach (var item in costToBuy)
             {
-                d.Add(ID, new PCDInfo()
+                if (item.Key == "RP")
                 {
-                    squadCD = isSquad ? timeStamp + cooldownTime : 0,
-                    strikeCD = !isSquad ? timeStamp + cooldownTime : 0
-                }); 
-                SaveData();
-                return true;
+                    if (ServerRewards)
+                        ServerRewards.Call("TakePoints", player.userID, item.Value);
+                }
+                if (item.Key == "Economics")
+                {
+                    if (Economics)                    
+                        Economics.Call("Withdraw", player.userID, (double)item.Value); 
+                }
+                if (shortnameToId.ContainsKey(item.Key))                
+                    player.inventory.Take(null, shortnameToId[item.Key], item.Value);
+            }
+            if (type == StrikeType.Strike)
+            {
+                CallStrike(player.transform.position);
+                SendReply(player, string.Format(msg("strikeConfirmed", player.UserIDString), player.transform.position));
             }
             else
             {
-                double time = isSquad ? d[ID].squadCD : d[ID].strikeCD;
-                if (time > timeStamp && time != 0.0)
-                {
-                    SendReply(player, string.Format(lang.GetMessage("title", this) + lang.GetMessage("cdTime", this, player.UserIDString), (int)(time - timeStamp) / 60));
-                    return false;
-                }
-                else
-                {
-                    if (isSquad)
-                        d[ID].squadCD = timeStamp + cooldownTime;
-                    else d[ID].strikeCD = timeStamp + cooldownTime;
-                    SaveData();
-                    return true;
-                }
+                CallSquad(player.transform.position);
+                SendReply(player, string.Format(msg("squadConfirmed", player.UserIDString), player.transform.position));
             }
         }
-        static double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
         #endregion
 
-        #region Callstrike Functions        
-        private void strikeOnPlayer(BasePlayer player)
-        {
-            callStrike(player.transform.position);
-            SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("strikeConfirmed", this, player.UserIDString), player.transform.position.ToString()));
-            Puts(player.displayName.ToString() + lang.GetMessage("calledStrike", this, player.UserIDString) + player.transform.position.ToString());
-        }
-        private void squadStrikeOnPlayer(BasePlayer player)
-        {
-            massStrike(player.transform.position);
-            SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("strikeConfirmed", this, player.UserIDString), player.transform.position.ToString()));
-            Puts(player.displayName.ToString() + lang.GetMessage("calledMassStrike", this, player.UserIDString) + player.transform.position.ToString());
-        }
-        private void strikeOnSmoke(BasePlayer player, Vector3 strikePos)
-        {
-            if (changeSupplyStrike)
-                massStrike(strikePos);
-            else callStrike(strikePos);
-            SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("strikeConfirmed", this, player.UserIDString), strikePos.ToString()));
-            Puts(player.displayName.ToString() + lang.GetMessage("calledStrike", this, player.UserIDString) + strikePos.ToString());
-        }
-        private void callStrike(Vector3 position, int speed = -1)
-        {
-            if (speed == -1) speed = planeSpeed;
-            if (broadcastStrikeAll)
-                PrintToChat(lang.GetMessage("strikeInbound", this));
+        #region Helpers
+        private double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
+        private CargoPlane CreatePlane() => (CargoPlane)GameManager.server.CreateEntity(cargoPlanePrefab, new Vector3(), new Quaternion(), true);
+        private bool isStrikePlane(CargoPlane plane) => plane.GetComponent<StrikePlane>();
+        private bool HasPermission(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
 
-            Puts(string.Format(lang.GetMessage("calledTo", this), position.ToString()));
-
-            CargoPlane plane = CreatePlane();            
-            var strikePlane = plane.gameObject.AddComponent<StrikePlane>();
-            if (strikePlane == null) Puts("null plane");
-            StrikePlanes.Add(strikePlane);
-            strikePlane.SpawnPlane(plane, position, speed);
-
-            float removePlane = ((Vector3.Distance((Vector3)StartPos.GetValue(plane), (Vector3)DropPos.GetValue(plane)) / speed) + 10);
-            timer.Once(removePlane, () => DestroyPlane(strikePlane));
-        }
-        private void massStrike(Vector3 position)
-        {
-            if (broadcastStrikeAll)
-                PrintToChat(lang.GetMessage("strikeInbound", this));
-
-            Puts(lang.GetMessage("calledTo", this), position.ToString());                        
-                        
-            MassSet(position, new Vector3(0, 0, 0));
-            MassSet(position, new Vector3(-70, 0, 80));
-            MassSet(position, new Vector3(70, 0, 80));            
-        }       
-        private void callPaymentStrike(BasePlayer player)
-        {
-            var pos = player.transform.position;
-            Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.updated.prefab", pos);
-            callStrike(pos);
-            SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("strikeConfirmed", this, player.UserIDString), pos.ToString()));
-            Puts(player.displayName.ToString() + lang.GetMessage("calledStrike", this, player.UserIDString) + pos.ToString());
-            return;
-        }
-        private void callPaymentSquadStrike(BasePlayer player)
-        {
-            var pos = player.transform.position;
-            Effect.server.Run("assets/prefabs/locks/keypad/effects/lock.code.updated.prefab", pos);
-            massStrike(pos);
-            SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("squadConfirmed", this, player.UserIDString), pos.ToString()));
-            Puts(player.displayName.ToString() + lang.GetMessage("calledMassStrike", this, player.UserIDString) + pos.ToString());
-            return;
-        }
-        private void callRandomStrike(bool single)
+        private Vector3 GetRandomPosition()
         {
             float mapSize = (TerrainMeta.Size.x / 2) - 600f;
 
             float randomX = UnityEngine.Random.Range(-mapSize, mapSize);
             float randomY = UnityEngine.Random.Range(-mapSize, mapSize);
 
-            Vector3 pos = new Vector3(randomX, 0f, randomY);
+            return new Vector3(randomX, 0f, randomY);
+        }
 
-            if (single)callStrike(pos);
-            if (!single) massStrike(pos);            
-        }  
-       
-        List<BasePlayer> FindPlayer(string arg)
+        private string FormatTime(double time)
+        {
+            TimeSpan dateDifference = TimeSpan.FromSeconds((float)time);
+            var days = dateDifference.Days;
+            var hours = dateDifference.Hours;
+            hours += (days * 24);
+            var mins = dateDifference.Minutes;
+            var secs = dateDifference.Seconds;
+            return string.Format("{0:00}:{1:00}:{2:00}", hours, mins, secs);
+        }
+
+        private void AddCooldownData(BasePlayer player, StrikeType type)
+        {
+            if (!configData.Cooldown.Enabled) return;
+
+            if (!storedData.cooldowns.ContainsKey(player.userID))
+                storedData.cooldowns.Add(player.userID, new CooldownData());
+
+            if (type == StrikeType.Strike)
+                storedData.cooldowns[player.userID].strikeCd = GrabCurrentTime() + configData.Cooldown.Strike;
+            else storedData.cooldowns[player.userID].squadCd = GrabCurrentTime() + configData.Cooldown.Squad;
+        }
+
+        private List<BasePlayer> FindPlayer(string arg)
         {
             var foundPlayers = new List<BasePlayer>();
 
@@ -459,12 +428,14 @@ namespace Oxide.Plugins
             foreach (var player in BasePlayer.activePlayerList)
             {
                 if (steamid != 0L)
+                {
                     if (player.userID == steamid)
                     {
                         foundPlayers.Clear();
                         foundPlayers.Add(player);
                         return foundPlayers;
                     }
+                }
                 string lowername = player.displayName.ToLower();
                 if (lowername.Contains(lowerarg))
                 {
@@ -472,546 +443,402 @@ namespace Oxide.Plugins
                 }
             }
             return foundPlayers;
-        }        
-        private bool isStrikePlane(CargoPlane plane)
-        {
-            if (plane.GetComponent<StrikePlane>() != null && StrikePlanes.Contains(plane.GetComponent<StrikePlane>())) return true;
-            return false;
         }
-
         #endregion
 
-        #region Chat/Console Commands and Perms       
-        bool canChatStrike(BasePlayer player)
+        #region Commands
+        [ChatCommand("airstrike")]
+        void cmdAirstrike(BasePlayer player, string command, string[] args)
         {
-            if (permission.UserHasPermission(player.userID.ToString(), "airstrike.chat")) return true;
-            else if (player.net.connection.authLevel >= auth) return true;
-            return false;
-        }
-        bool canSquadStrike(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "airstrike.mass")) return true;
-            else if (player.net.connection.authLevel >= auth) return true;
-            return false;
-        }
-        bool canSmokeStrike(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "airstrike.canuse")) return true;
-            else if (player.net.connection.authLevel >= auth) return true;
-            return false;
-        }
-        bool canBuyStrike(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "airstrike.buystrike")) return true;
-            else if (player.net.connection.authLevel >= auth) return true;
-            return false;
-        }
-        bool isAuth(ConsoleSystem.Arg arg)
-        {
-            if (arg.Connection != null)
+            if (args.Length == 0)
             {
-                if (arg.Connection.authLevel < auth)
+                SendReply(player, string.Format("Airstrike  v.{0}", Version));
+                if (HasPermission(player, "airstrike.signal.strike"))
+                    SendReply(player, msg("help1", player.UserIDString));
+                if (HasPermission(player, "airstrike.signal.squad"))
+                    SendReply(player, msg("help2", player.UserIDString));
+                if (HasPermission(player, "airstrike.purchase.strike"))
+                    SendReply(player, msg("help3", player.UserIDString));
+                if (HasPermission(player, "airstrike.purchase.squad"))
+                    SendReply(player, msg("help4", player.UserIDString));
+                if (HasPermission(player, "airstrike.chat.strike"))
                 {
-                    SendReply(arg, lang.GetMessage("noPerms", this));
-                    return false;
+                    SendReply(player, msg("help5", player.UserIDString));
+                    SendReply(player, msg("help6", player.UserIDString));
+                    SendReply(player, msg("help7", player.UserIDString));
                 }
-            }
-            return true;
-        }
-
-        [ChatCommand("callstrike")]
-        private void chatStrike(BasePlayer player, string command, string[] args)
-        {
-            if (!canChatStrike(player)) return;
-
-            if (useCooldown)
-                if (!CheckPlayerData(player, false)) return;
-
-            if (args.Length == 0)
-            {
-                strikeOnPlayer(player);                
-                return;
-            }           
-            if (args.Length > 1)
-            {
-                SendReply(player, lang.GetMessage("badSyntax", this, player.UserIDString));
-                SendReply(player, lang.GetMessage("callStrike", this, player.UserIDString));
-                SendReply(player, lang.GetMessage("callStrikeName", this, player.UserIDString));
-                return;
-            }
-            var fplayer = FindPlayer(args[0]);
-            if (fplayer.Count == 0)
-            {
-                SendReply(player, lang.GetMessage("noPlayers", this, player.UserIDString));
-                return;
-            }
-            if (fplayer.Count > 1)
-            {
-                SendReply(player, lang.GetMessage("multiplePlayers", this, player.UserIDString));
-                return;
-            }
-            strikeOnPlayer(fplayer[0]);
-            
-        }
-        [ChatCommand("squadstrike")]
-        private void chatsquadStrike(BasePlayer player, string command, string[] args)
-        {
-            if (!canSquadStrike(player)) return;
-
-            if (useCooldown)
-                if (!CheckPlayerData(player, true)) return;
-
-            if (args.Length == 0)
-            {
-                squadStrikeOnPlayer(player);
-                return;
-            }
-            if (args.Length > 1)
-            {
-                SendReply(player, lang.GetMessage("badSyntax", this, player.UserIDString));
-                SendReply(player, lang.GetMessage("callStrike", this, player.UserIDString));
-                SendReply(player, lang.GetMessage("callStrikeName", this, player.UserIDString));
-                return;
-            }
-            var fplayer = FindPlayer(args[0]);
-            if (fplayer.Count == 0)
-            {
-                SendReply(player, lang.GetMessage("noPlayers", this, player.UserIDString));
-                return;
-            }
-            if (fplayer.Count > 1)
-            {
-                SendReply(player, lang.GetMessage("multiplePlayers", this, player.UserIDString));
-                return;
-            }
-            squadStrikeOnPlayer(fplayer[0]);
-            
-        }
-        [ChatCommand("buystrike")]
-        private void chatBuyStrike(BasePlayer player, string command, string[] args)
-        {
-            if (usePaymentStrike == true)
-            {
-                if (!canBuyStrike(player)) return;
-
-                if (useCooldown)
-                    if (!CheckPlayerData(player, false)) return;
-
-                if (args.Length == 0)
+                if (HasPermission(player, "airstrike.chat.squad"))
                 {
-                    SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("selectPayment", this, player.UserIDString));
-                    SendReply(player, lang.GetMessage("selectOptions", this, player.UserIDString));
-                    if (Economics && useEconomics)
+                    SendReply(player, msg("help8", player.UserIDString));
+                    SendReply(player, msg("help9", player.UserIDString));
+                    SendReply(player, msg("help10", player.UserIDString));
+                }
+                return;
+            }
+            if (args.Length >= 2)
+            {
+                var time = GrabCurrentTime();
+                StrikeType type = args[1].ToLower() == "squad" ? StrikeType.Squad : StrikeType.Strike;
+                
+                if (!HasPermission(player, "airstrike.ignorecooldown"))
+                {
+                    if (configData.Cooldown.Enabled)
                     {
-                        SendReply(player, lang.GetMessage("selectMoney", this, player.UserIDString));
-                    }
-                    return;
-                }               
-
-                if (args.Length == 1)
-                {                   
-                    if (args[0].ToLower() == "money")
-                    {
-                        if (CheckPlayerMoney(player, buyMoney))
+                        CooldownData data;
+                        if (storedData.cooldowns.TryGetValue(player.userID, out data))
                         {
-                            strikeOnPayment(player, "money");
+                            double nextUse = type == StrikeType.Strike ? data.strikeCd : data.squadCd;
+                            if (nextUse > time)
+                            {
+                                double remaining = nextUse - time;
+                                SendReply(player, string.Format(msg("onCooldown", player.UserIDString), FormatTime(remaining)));
                                 return;
-                        }
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("noMoney", this, player.UserIDString));
-                        return;                        
-                    }
-                    if (args[0].ToLower() == "squad")
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("squadSyntax", this, player.UserIDString));
-                        return;
-                    }
-                    var paymentType = args[0].ToUpper();
-                    if (paymentType != "METAL" && paymentType != "COMPUTER")
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("validType", this, player.UserIDString));
-                        return;
-                    }
-                    if (paymentType == "METAL")
-                    {
-                        strikeOnPayment(player, "metal");
-                        return;
-                    }
-                    else if (paymentType == "COMPUTER")
-                    {
-                        strikeOnPayment(player, "computer");
-                        return;
-                    }
-                }
-                else if (args.Length == 2)
-                {
-                    if (args[0].ToLower() != "squad")
-                    {
-                        SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("squadSyntax", this, player.UserIDString));
-                        return;
-                    }
-                    if (usePaymentSquad)
-                    {
-                        var paymentType = args[1].ToUpper();
-                        if (paymentType != "METAL" && paymentType != "COMPUTER")
-                        {
-                            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("validType", this, player.UserIDString));
-                            return;
-                        }
-                        if (paymentType == "METAL")
-                        {
-                            squadStrikeOnPayment(player, true);
-                            return;
-                        }
-                        else if (paymentType == "COMPUTER")
-                        {
-                            squadStrikeOnPayment(player, false);
-                            return;
+                            }
                         }
                     }
                 }
-                else
+                switch (args[0].ToLower())
                 {
-                    SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("badSyntax", this, player.UserIDString));
-                    SendReply(player, lang.GetMessage("selectOptions", this, player.UserIDString));
-                    if (Economics && useEconomics)
-                    {
-                        SendReply(player, lang.GetMessage("selectMoney", this, player.UserIDString));
-                    }
-                    return;
+                    case "signal":
+                        if ((type == StrikeType.Strike && configData.Other.SignalStrike) || (type == StrikeType.Squad && configData.Other.SignalSquad))
+                        {
+                            if (!HasPermission(player, $"airstrike.signal.{type.ToString().ToLower()}"))
+                            {
+                                SendReply(player, msg("noPerms", player.UserIDString));
+                                return;
+                            }
+                        }
+                        if (toggleList.ContainsKey(player.userID))
+                            toggleList[player.userID] = type;
+                        else toggleList.Add(player.userID, type);
+                        SendReply(player, msg("signalReady", player.UserIDString));                
+                        return;
+                    case "buy":
+                        if ((type == StrikeType.Strike && configData.Buy.PermissionStrike) || (type == StrikeType.Squad && configData.Buy.PermissionSquad))
+                        {
+                            if (!HasPermission(player, $"airstrike.purchase.{type.ToString().ToLower()}"))
+                            {
+                                SendReply(player, msg("noPerms", player.UserIDString));
+                                return;
+                            }
+                        }
+                        if (CanBuyStrike(player, type))
+                        {
+                            BuyStrike(player, type);
+                            AddCooldownData(player, type);
+                        }
+                        return;
+                    case "call":
+                        if (HasPermission(player, $"airstrike.chat.{type.ToString().ToLower()}"))
+                        {
+                            Vector3 position;
+                            if (args.Length == 4)
+                            {
+                                float x, z;   
+                                if (!float.TryParse(args[2], out x) || !float.TryParse(args[3], out z))
+                                {
+                                    SendReply(player, msg("invCoords", player.UserIDString));
+                                    return;                                                                     
+                                }
+                                else position = new Vector3(x, 0, z);
+                            }
+                            else if (args.Length == 3)
+                            {
+                                var players = FindPlayer(args[2]);
+                                if (players.Count > 1)
+                                {
+                                    SendReply(player, msg("multiplePlayers", player.UserIDString));
+                                    return;
+                                }
+                                else if (players.Count == 0)
+                                {
+                                    SendReply(player, msg("noPlayers", player.UserIDString));
+                                    return;
+                                }
+                                else position = players[0].transform.position;
+                            }
+                            else position = player.transform.position;
+                            
+                            if (type == StrikeType.Strike)
+                            {
+                                CallStrike(position);
+                                SendReply(player, string.Format(msg("strikeConfirmed", player.UserIDString), position));
+                            }
+                            else
+                            {
+                                CallSquad(position);
+                                SendReply(player, string.Format(msg("squadConfirmed", player.UserIDString), position));
+                            }
+                            AddCooldownData(player, type);
+                        }
+                        else SendReply(player, msg("noPerms", player.UserIDString));
+                        return;
+                    default:
+                        break;
                 }
             }
         }
-        [ChatCommand("togglestrike")]
-        private void chatToggleStrike(BasePlayer player, string command, string[] args)
-        {
-            if (!canSmokeStrike(player)) return;
-            if (!toggleList.ContainsKey(player.userID)) toggleList.Add(player.userID, false);
 
-            string reply = "";
-            if (toggleList[player.userID] == true) reply = "ON";
-            else reply = "OFF";
-
-            if (args.Length == 0)
-            {
-                SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("onOff", this, player.UserIDString), reply));
-                return;
-            }            
-            else if (args.Length == 1)
-            {
-                var toggleString = args[0].ToUpper();
-                if (toggleString != "ON")
-                {
-                    reply = "OFF";
-                    toggleList[player.userID] = false;
-                    SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("onOff", this, player.UserIDString), reply));
-                    return;
-                }
-                if (toggleString == "ON")
-                {
-                    toggleList[player.userID] = true;
-                    SendReply(player, string.Format(lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("onOff", this, player.UserIDString), toggleString));
-                    return;
-                }                
-            }
-            else if (args.Length > 1)
-            {
-                SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("badSyntax", this, player.UserIDString));
-                SendReply(player, lang.GetMessage("toggleOn", this, player.UserIDString));
-                return;
-            }
-
-        }
         [ConsoleCommand("airstrike")]
         void ccmdAirstrike(ConsoleSystem.Arg arg)
         {
-            if (!isAuth(arg)) return;
+            if (arg.Connection != null) return;
             if (arg.Args == null || arg.Args.Length == 0)
             {
-                callRandomStrike(true);
+                SendReply(arg, "airstrike strike <x> <z> - Call a airstrike to the target position");
+                SendReply(arg, "airstrike squad <x> <z> - Call a squadstrike to the target position");
+                SendReply(arg, "airstrike strike <playername> - Call a airstrike to the target player");
+                SendReply(arg, "airstrike squad <playername> - Call a squadstrike to the target player");
+                SendReply(arg, "airstrike strike random - Call a random airstrike");
+                SendReply(arg, "airstrike squad random - Call a random squadstrike");
                 return;
             }
 
-            if (arg.Args.Length == 1)
+            StrikeType type = arg.Args[0].ToLower() == "squad" ? StrikeType.Squad : StrikeType.Strike;
+
+            Vector3 position = Vector3.zero;
+
+            if (arg.Args[1].ToLower() == "random")
+                position = GetRandomPosition();
+            else if (arg.Args.Length == 3)
             {
-                var fplayer = FindPlayer(arg.Args[0]);
-                if (fplayer.Count == 0)
+                float x, z;
+                if (!float.TryParse(arg.Args[1], out x) || !float.TryParse(arg.Args[2], out z))
                 {
-                    SendReply(arg, lang.GetMessage("noPlayers", this));
+                    SendReply(arg, "Invalid co-ordinates set. You must enter number values for X and Z");
                     return;
                 }
-                if (fplayer.Count > 1)
+                else position = new Vector3(x, 0, z);
+            }
+            else if (arg.Args.Length == 2)
+            {
+                var players = FindPlayer(arg.Args[1]);
+                if (players.Count > 1)
                 {
-                    SendReply(arg, lang.GetMessage("multiplePlayers", this));
+                    SendReply(arg, "Multiple players found");
                     return;
                 }
-                strikeOnPlayer(fplayer[0]);
-                return;                  
-            }
-
-            if (arg.Args.Length == 3)
-            {
-                float x;
-                float y;
-                float z;
-                try
+                else if (players.Count == 0)
                 {
-                    x = Convert.ToSingle(arg.Args[0]);
-                    y = Convert.ToSingle(arg.Args[1]);
-                    z = Convert.ToSingle(arg.Args[2]);
-                }
-                catch (FormatException ex)
-                {
-                    SendReply(arg, lang.GetMessage("coordNum", this));
+                    SendReply(arg, "No players found");
                     return;
                 }
-                Vector3 pos = new Vector3(x, y, z);
-                callStrike(pos);
-                return;
+                else position = players[0].transform.position;
             }
 
-            if (arg.Args.Length == 2 || arg.Args.Length >= 4)
+            if (type == StrikeType.Strike)
             {
-                SendReply(arg, lang.GetMessage("badSyntax", this));
-                SendReply(arg, lang.GetMessage("airStrike", this));
-                SendReply(arg, lang.GetMessage("airStrikeName", this));
-                SendReply(arg, lang.GetMessage("airStrikeCoords", this));
-                return;
+                CallStrike(position);
+                SendReply(arg, string.Format("Airstrike confirmed at co-ordinates: {0}!", position));
             }
-            
-        }
-        [ConsoleCommand("squadstrike")]
-        void ccmdsquadstrike(ConsoleSystem.Arg arg)
-        {
-            if (!isAuth(arg)) return;
-            if (arg.Args == null || arg.Args.Length == 0)
+            else
             {
-                callRandomStrike(false);
-                return;
-            }
-
-            if (arg.Args.Length == 1)
-            {
-                var fplayer = FindPlayer(arg.Args[0]);
-                if (fplayer.Count == 0)
-                {
-                    SendReply(arg, lang.GetMessage("noPlayers", this));
-                    return;
-                }
-                if (fplayer.Count > 1)
-                {
-                    SendReply(arg, lang.GetMessage("multiplePlayers", this));
-                    return;
-                }
-                foreach (BasePlayer targetPlayer in fplayer)
-                {
-                    massStrike(targetPlayer.transform.position);
-                    return;
-                }
-            }
-
-            if (arg.Args.Length == 3)
-            {
-                float x;
-                float y;
-                float z;
-                try
-                {
-                    x = Convert.ToSingle(arg.Args[0]);
-                    y = Convert.ToSingle(arg.Args[1]);
-                    z = Convert.ToSingle(arg.Args[2]);
-                }
-                catch (FormatException ex)
-                {
-                    SendReply(arg, lang.GetMessage("coordNum", this));
-                    return;
-                }
-                Vector3 pos = new Vector3(x, y, z);
-                massStrike(pos);
-                return;
-            }
-
-            if (arg.Args.Length == 2 || arg.Args.Length >= 4)
-            {
-                SendReply(arg, lang.GetMessage("badSyntax", this));
-                SendReply(arg, lang.GetMessage("airStrike", this));
-                SendReply(arg, lang.GetMessage("airStrikeName", this));
-                SendReply(arg, lang.GetMessage("airStrikeCoords", this));
-                return;
-            }
-
-        }
-        #endregion
-
-        #region Classes and Data Management       
-        class PlayerCooldown
-        {
-            public Dictionary<ulong, PCDInfo> pCooldown = new Dictionary<ulong, PCDInfo>();            
-        }
-        class PCDInfo
-        {
-            public double strikeCD;
-            public double squadCD;            
-        }
-        void SaveData()
-        {
-            PCDDATA.WriteObject(pcdData);
-        }
-        void LoadData()
-        {
-            try
-            {
-                pcdData = Interface.GetMod().DataFileSystem.ReadObject<PlayerCooldown>("airstrike_data");
-            }
-            catch
-            {
-                Puts("Couldn't load Airstrike data, creating new datafile");
-                pcdData = new PlayerCooldown();
+                CallSquad(position);
+                SendReply(arg, string.Format("Squadstrike confirmed at co-ordinates: {0}!", position));
             }
         }
         #endregion
 
-        #region Config       
-        private static bool broadcastStrikeAll = true;
-        private static bool useSignalStrike = true;
-        private static bool usePaymentStrike = true;
-        private static bool usePaymentSquad = true;
-        private static bool useEconomics = true;
-        private static bool useCooldown = false;
-        private static bool noAdminCooldown = true;
-        private static bool useMixedRockets = false;
-        private static bool changeSupplyStrike = false;
-
-        private static float rocketSpeed = 110f;
-        private static float rocketInterval = 0.6f;
-        private static float damageModifier = 1.0f;
-        private static float rocketSpread = 1.5f;
-
-        private static int rocketAmount = 15;
-        private static int planeSpeed = 105;
-        private static int planeDistance = 900;
-        private static int buyMetal = 1000;
-        private static int buyFlare = 2;
-        private static int buyTarget = 1;
-        private static int buyMoney = 500;
-        private static int cooldownTime = 3600;
-        private static int auth = 1;
-        private static int fireChance = 4;
-
-        private static string normalRocket = "ammo.rocket.basic";
-        private static string fireRocket = "ammo.rocket.fire";
-        private static string rocketType = "ammo.rocket.basic";
-        protected override void LoadDefaultConfig()
+        #region Config 
+        private ConfigData configData;
+        class RocketOptions
         {
-            Puts("Creating a new config file");
-            Config.Clear();
-            LoadVariables();
+            [JsonProperty(PropertyName = "Speed of the rocket")]
+            public float Speed { get; set; }
+            [JsonProperty(PropertyName = "Damage modifier")]
+            public float Damage { get; set; }
+            [JsonProperty(PropertyName = "Accuracy of rocket (a lower number is more accurate)")]
+            public float Accuracy { get; set; }
+            [JsonProperty(PropertyName = "Interval between rockets (seconds)")]
+            public float Interval { get; set; }
+            [JsonProperty(PropertyName = "Type of rocket (Normal, Napalm)")]
+            public string Type { get; set; }
+            [JsonProperty(PropertyName = "Use both rocket types")]
+            public bool Mixed { get; set; }
+            [JsonProperty(PropertyName = "Chance of a fire rocket (when using both types)")]
+            public int FireChance { get; set; }
+            [JsonProperty(PropertyName = "Amount of rockets to fire")]
+            public int Amount { get; set; }
+        }
+        class CooldownOptions
+        {
+            [JsonProperty(PropertyName = "Use cooldown timers")]
+            public bool Enabled { get; set; }            
+            [JsonProperty(PropertyName = "Strike cooldown time (seconds)")]
+            public int Strike { get; set; }
+            [JsonProperty(PropertyName = "Squad cooldown time (seconds)")]
+            public int Squad { get; set; }
+        }
+        class PlaneOptions
+        {
+            [JsonProperty(PropertyName = "Flight speed (meters per second)")]
+            public float Speed { get; set; }
+            [JsonProperty(PropertyName = "Distance from target to engage")]
+            public float Distance { get; set; }
+        }
+        class BuyOptions
+        {
+            [JsonProperty(PropertyName = "Can purchase standard strike")]
+            public bool StrikeEnabled { get; set; }
+            [JsonProperty(PropertyName = "Can purchase squad strike")]
+            public bool SquadEnabled { get; set; }
+            [JsonProperty(PropertyName = "Require permission to purchase strike")]
+            public bool PermissionStrike { get; set; }
+            [JsonProperty(PropertyName = "Require permission to purchase squad strike")]
+            public bool PermissionSquad { get; set; }
+            [JsonProperty(PropertyName = "Cost to purchase a standard strike (shortname, amount)")]
+            public Dictionary<string, int> StrikeCost { get; set; }
+            [JsonProperty(PropertyName = "Cost to purchase a squad strike (shortname, amount)")]
+            public Dictionary<string, int> SquadCost { get; set; }
+        }
+        class OtherOptions
+        {
+            [JsonProperty(PropertyName = "Broadcast strikes to chat")]
+            public bool Broadcast { get; set; }
+            [JsonProperty(PropertyName = "Can call standard strikes using a supply signal")]
+            public bool SignalStrike { get; set; }
+            [JsonProperty(PropertyName = "Can call squad strikes using a supply signal")]
+            public bool SignalSquad { get; set; }
+            [JsonProperty(PropertyName = "Use random airstrikes")]
+            public bool RandomStrikes { get; set; }
+            [JsonProperty(PropertyName = "Use random squad strikes")]
+            public bool RandomSquads { get; set; }
+            [JsonProperty(PropertyName = "Random timer (minimum, maximum. In seconds)")]
+            public int[] RandomTimer { get; set; }
+        }
+        class ConfigData
+        {
+            [JsonProperty(PropertyName = "Rocket Options")]
+            public RocketOptions Rocket { get; set; }
+            [JsonProperty(PropertyName = "Cooldown Options")]
+            public CooldownOptions Cooldown { get; set; }
+            [JsonProperty(PropertyName = "Plane Options")]
+            public PlaneOptions Plane { get; set; }
+            [JsonProperty(PropertyName = "Purchase Options")]
+            public BuyOptions Buy { get; set; }
+            [JsonProperty(PropertyName = "Other Options")]
+            public OtherOptions Other { get; set; }
         }
         private void LoadVariables()
         {
             LoadConfigVariables();
             SaveConfig();
         }
-        private void LoadConfigVariables()
+        protected override void LoadDefaultConfig()
         {
-            CheckCfg("Messages - Broadcast strike to all players", ref broadcastStrikeAll);
-            CheckCfg("Rockets - Use both rocket types", ref useMixedRockets);
-            CheckCfg("Rockets - Chance of fire rocket - 1 in... ", ref fireChance);
-            CheckCfg("Supply Signals - Change the supply strike to call a Squadstrike", ref changeSupplyStrike);
-            CheckCfg("Supply Signals - Use supply signals to call strike", ref useSignalStrike);
-            CheckCfg("Buy - Can purchase airstrike", ref usePaymentStrike);
-            CheckCfg("Buy - Can purchase squadstrike", ref usePaymentSquad);
-            CheckCfg("Buy - Use Economics", ref useEconomics);
-            CheckCfg("Cooldown - Use Cooldown", ref useCooldown);
-            CheckCfg("Cooldown - Admin exempt from cooldown", ref noAdminCooldown);
-            CheckCfg("Options - Minimum Authlevel", ref auth);
-
-            CheckCfgFloat("Rockets - Speed of rockets", ref rocketSpeed);
-            CheckCfgFloat("Rockets - Interval between rockets (seconds)", ref rocketInterval);
-            CheckCfgFloat("Rockets - Damage Modifier", ref damageModifier);
-            CheckCfgFloat("Rockets - Accuracy of rockets", ref rocketSpread);
-
-            CheckCfg("Rockets - Amount of rockets to fire", ref rocketAmount);
-            CheckCfg("Plane - Plane speed", ref planeSpeed);
-            CheckCfg("Plane - Plane distance before firing", ref planeDistance);
-            CheckCfg("Buy - Buy strike cost - HQ Metal", ref buyMetal);
-            CheckCfg("Buy - Buy strike cost - Flare", ref buyFlare);
-            CheckCfg("Buy - Buy strike cost - Targeting Computer", ref buyTarget);
-            CheckCfg("Buy - Buy strike cost - Economics", ref buyMoney);
-            CheckCfg("Rockets - Default rocket type", ref rocketType);
-            CheckCfg("Cooldown - Cooldown timer", ref cooldownTime);
-        }
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-        private void CheckCfgFloat(string Key, ref float var)
-        {
-
-            if (Config[Key] != null)
-                var = Convert.ToSingle(Config[Key]);
-            else
-                Config[Key] = var;
-        }
-        object GetConfig(string menu, string datavalue, object defaultValue)
-        {
-            var data = Config[menu] as Dictionary<string, object>;
-            if (data == null)
+            var config = new ConfigData
             {
-                data = new Dictionary<string, object>();
-                Config[menu] = data;
-                changed = true;
-            }
-            object value;
-            if (!data.TryGetValue(datavalue, out value))
+                Buy = new BuyOptions
+                {
+                    SquadCost = new Dictionary<string, int>
+                    {
+                        ["metal.refined"] = 100,
+                        ["techparts"] = 50,
+                        ["targeting.computer"] = 1
+                    },
+                    SquadEnabled = true,
+                    PermissionSquad = true,
+                    StrikeCost = new Dictionary<string, int>
+                    {
+                        ["metal.refined"] = 50,
+                        ["targeting.computer"] = 1
+                    },
+                    StrikeEnabled = true,
+                    PermissionStrike = true
+                },
+                Cooldown = new CooldownOptions
+                {
+                    Enabled = true,
+                    Squad = 3600,
+                    Strike = 3600
+                },
+                Other = new OtherOptions
+                {
+                    Broadcast = true,
+                    SignalSquad = true,
+                    SignalStrike = true,
+                    RandomSquads = true,
+                    RandomStrikes = true,
+                    RandomTimer = new int[] { 1800, 3600 }
+                },
+                Plane = new PlaneOptions
+                {
+                    Distance = 900,
+                    Speed = 105
+                },
+                Rocket = new RocketOptions
+                {
+                    Accuracy = 1.5f,
+                    Amount = 15,
+                    Damage = 1.0f,
+                    FireChance = 4,
+                    Interval = 0.6f,
+                    Mixed = true,
+                    Speed = 110f,
+                    Type = "Normal"
+                }
+            };
+            SaveConfig(config);
+        }
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
+
+        #region Data Management
+        void SaveData() => data.WriteObject(storedData);
+        void LoadData()
+        {
+            try
             {
-                value = defaultValue;
-                data[datavalue] = value;
-                changed = true;
+                storedData = data.ReadObject<StoredData>();
             }
-            return value;
+            catch
+            {
+                storedData = new StoredData();
+            }
+        }
+        void ClearData()
+        {
+            storedData = new StoredData();
+            SaveData();
+        }
+        class StoredData
+        {
+            public Dictionary<ulong, CooldownData> cooldowns = new Dictionary<ulong, CooldownData>();
+        }
+        class CooldownData
+        {
+            public double strikeCd, squadCd;
         }
         #endregion
 
-        #region Localization       
-        Dictionary<string, string> messages = new Dictionary<string, string>()
+        #region Localization
+        string msg(string key, string playerId = null) => lang.GetMessage(key, this, playerId);
+
+        Dictionary<string, string> Messages = new Dictionary<string, string>
         {
-            {"title", "<color=orange>Airstrike</color> : "},
-            {"strikeConfirmed", "Airstrike confirmed at co-ords: {0}!"},
-            {"squadConfirmed", "Squadstrike confirmed at co-ords: {0}!"},
-            {"strikeInbound", "Airstrike Inbound!"},
-            {"buyCost", "To purchase a airstrike you need either;"},
-            {"squadCost", "To purchase a squadstrike you need either;"},
-            {"buyFlare", "{0} Targeting Computer(s) and {1} Flare(s)"},
-            {"noMoney", "You do not have enough money to buy a strike" },
-            {"buyMetal", "-or- {0} High Quality Metal"},
-            {"noPerms", "You dont not have permission to use this command."},
-            {"badSyntax", "Incorrect syntax:"},
-            {"callStrike", "\"callstrike\" will call a strike on your location."},
-            {"callStrikeName", "callstrike \"PLAYERNAME\" will call a strike on a player"},
-            {"noPlayers", "No players found."},
-            {"multiplePlayers", "Multiple players found"},
-            {"selectPayment", "You must select a payment type"},
-            {"selectOptions", "/buystrike metal -or- /buystrike computer"},
-            {"selectMoney", "-or- /buystrike money" },
-            {"validType", "Enter a valid payment type"},
-            {"squadSyntax", "/buystrike squad metal -or- /buystrike squad computer"},
-            {"onOff", "Signal airstrike is {0}!"},
-            {"toggleOn", "\"airstrike\" \"on\" -or- \"off\""},
-            {"coordNum", "Co-ordinates must be numbers!"},
-            {"airStrike", "\"airstrike\" will call a random strike."},
-            {"airStrikeName", "airstrike \"PLAYERNAME\" will call a strike on a player"},
-            {"airStrikeCoords", "airstrike \"x y z\" will call a strike on a co-ordinates"},
-            {"calledStrike", " has called a airstrike at co-ords: "},
-            {"calledMassStrike", " has called a squadron airstrike at co-ords: "},
-            {"calledTo", "Airstrike called to {0}" },
-            {"cdTime", "You must wait another {0} minutes before using this command again" },
-            {"Only change this is your supply signal name is in a differant language", "supply" }
+            ["strikeConfirmed"] = "Airstrike confirmed at co-ordinates: {0}",
+            ["squadConfirmed"] = "Squadstrike confirmed at co-ordinates: {0}",
+            ["strikeInbound"] = "Airstrike inbound!",
+            ["squadInbound"] = "Squadstrike inbound!",
+            ["buyItem"] = "You need another {0} {1} to buy this strike",
+            ["help1"] = "/airstrike signal strike - Use a supply signal to mark a airstrike position",
+            ["help2"] = "/airstrike signal squad - Use a supply signal to mark a squadstrike position",
+            ["help3"] = "/airstrike buy strike - Purchase a airstrike on your position",
+            ["help4"] = "/airstrike buy squad - Purchase a squadstrike on your position",
+            ["help5"] = "/airstrike call strike - Call a airstrike on your position",
+            ["help6"] = "/airstrike call strike <x> <z> - Call a airstrike to the target position",
+            ["help7"] = "/airstrike call strike <player name> - Call a airstrike to the target player",
+            ["help8"] = "/airstrike call squad - Call a squadstrike on your position",
+            ["help9"] = "/airstrike call squad <x> <z> - Call a squadstrike to the target position",
+            ["help10"] = "/airstrike call squad <player name> - Call a squadstrike to the target player",
+            ["onCooldown"] = "You must wait another {0} before calling this type again",
+            ["noPerms"] = "You do not have permission to use that strike type",
+            ["signalReady"] = "Throw a supply signal to call a strike",
+            ["invCoords"] = "Invalid co-ordinates set. You must enter number values for X and Z",
+            ["multiplePlayers"] = "Multiple players found",
+            ["noPlayers"] = "No players found"
         };
         #endregion
-
-
     }
 }

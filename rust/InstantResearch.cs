@@ -1,6 +1,6 @@
 namespace Oxide.Plugins
 {
-    [Info("Instant Research", "Artasan", 1.0)]
+    [Info("Instant Research", "Artasan", "1.0.1", ResourceId = 1318)]
     [Description("Allows instant research.")]
     public class InstantResearch : RustPlugin
     {

@@ -2,8 +2,12 @@
     "name": "CheatReportLogger",
     "description": "Saves cheat reports from the F7 menu to a file and\/or RCON.",
     "author": "mvrb",
-    "version": "1.0.1",
+    "version": "1.4.0",
     "configuration": true,
+    "suggest": {
+        "Slack": "*",
+        "Discord": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/cheatreportlogger.2227",
     "games": [

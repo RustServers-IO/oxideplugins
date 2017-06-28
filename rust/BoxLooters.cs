@@ -4,11 +4,10 @@ using Oxide.Core;
 using Oxide.Core.Configuration;
 using UnityEngine;
 using System.Linq;
-using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("BoxLooters", "4seti / k1lly0u", "0.3.2", ResourceId = 989)]
+    [Info("BoxLooters", "4seti / k1lly0u", "0.3.4", ResourceId = 989)]
     class BoxLooters : RustPlugin
     {
         #region Fields
@@ -17,13 +16,12 @@ namespace Oxide.Plugins
         private DynamicConfigFile bdata;
         private DynamicConfigFile pdata;
 
-        private Vector3 eyesAdjust;
-        private FieldInfo serverinput;
-
+        static BoxLooters ins;
+        
         private bool eraseData = false;
 
-        private Dictionary<uint, BoxData> boxCache;
-        private Dictionary<ulong, PlayerData> playerCache;
+        private Hash<uint, BoxData> boxCache;
+        private Hash<ulong, PlayerData> playerCache;
         #endregion
 
         #region Oxide Hooks
@@ -31,18 +29,16 @@ namespace Oxide.Plugins
         {
             bdata = Interface.Oxide.DataFileSystem.GetFile("Boxlooters/box_data");
             pdata = Interface.Oxide.DataFileSystem.GetFile("Boxlooters/player_data");
-
-            eyesAdjust = new Vector3(0f, 1.5f, 0f);
-            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-
-            boxCache = new Dictionary<uint, BoxData>();
-            playerCache = new Dictionary<ulong, PlayerData>();
+            
+            boxCache = new Hash<uint, BoxData>();
+            playerCache = new Hash<ulong, PlayerData>();
 
             lang.RegisterMessages(messages, this);
             permission.RegisterPermission("boxlooters.checkbox", this);
         }
         void OnServerInitialized()
         {
+            ins = this;
             LoadVariables();
             LoadData();
             if (eraseData)
@@ -51,44 +47,34 @@ namespace Oxide.Plugins
         }
         void OnNewSave(string filename) => eraseData = true;        
         void OnServerSave() => SaveData();
-        void Unload() => SaveData();
+        void Unload()
+        {
+            SaveData();
+            ins = null;
+        }
 
         void OnLootEntity(BasePlayer looter, BaseEntity entity)
         {
-            if (looter == null || entity == null || !IsValidType(entity)) return;
+            if (looter == null || entity == null || !entity.IsValid() || !IsValidType(entity)) return;
 
             var time = GrabCurrentTime();
-            var date = DateTime.Now.ToString("d/M HH:mm:ss");
-            var lootEntry = new LootEntry
-            {
-                FirstLoot = date,
-                LastInit = time,
-                LastLoot = date,
-                Name = looter.displayName
-            };
+            var date = DateTime.Now.ToString("d/M @ HH:mm:ss");
             
             if (entity is BasePlayer)
             {
+                if (!configData.LogPlayerLoot) return;
                 var looted = entity.ToPlayer();
                 if (!playerCache.ContainsKey(looted.userID))
-                    playerCache.Add(looted.userID, new PlayerData(time, looter));
-                else
-                {
-                    playerCache[looted.userID].lastInit = time;
-                    playerCache[looted.userID].AddLoot(looter, time, date);
-                }
+                    playerCache[looted.userID] = new PlayerData(looter, time, date);
+                else playerCache[looted.userID].AddLooter(looter, time, date);                
             }
             else
             {
-                if (entity?.net?.ID == null) return;
+                if (!configData.LogBoxLoot) return;
                 var boxId = entity.net.ID;
                 if (!boxCache.ContainsKey(boxId))
-                    boxCache.Add(boxId, new BoxData(time, looter, entity.transform.position));
-                else
-                {
-                    boxCache[boxId].lastInit = time;
-                    boxCache[boxId].AddLoot(looter, time, date);               
-                }
+                    boxCache[boxId] = new BoxData(looter, time, date, entity.transform.position);
+                else boxCache[boxId].AddLooter(looter, time, date); 
             }
 
         }
@@ -96,13 +82,12 @@ namespace Oxide.Plugins
         {
             try
             {
-                if (entity == null || !IsValidType(entity) || entity is BasePlayer) return;
+                if (entity == null || !entity.IsValid() || !IsValidType(entity) || entity is BasePlayer) return;
                 if (hitInfo?.Initiator is BasePlayer)
                 {
-                    if (entity?.net?.ID == null) return;
                     var boxId = entity.net.ID;
                     if (!boxCache.ContainsKey(boxId)) return;
-                    boxCache[boxId].SetKiller(hitInfo.InitiatorPlayer.userID, hitInfo.InitiatorPlayer.displayName);
+                    boxCache[boxId].OnDestroyed(hitInfo.InitiatorPlayer);
                 }
             }
             catch { }
@@ -121,59 +106,36 @@ namespace Oxide.Plugins
             PrintWarning("Attempting to remove old log entries");
             int boxCount = 0;
             int playerCount = 0;
-            var time = GrabCurrentTime() - (configData.RemoveHours * 3600);
-            for (int j = 0; j < boxCache.Count; j++)
+            double time = GrabCurrentTime() - (configData.RemoveHours * 3600);
+
+            for (int i = 0; i < boxCache.Count; i++)
             {
-                var ekey = boxCache.Keys.ToList()[j];
-                var entry = boxCache[ekey];
-                if (entry.lastInit < time)
+                KeyValuePair<uint, BoxData> boxEntry = boxCache.ElementAt(i);
+                if (boxEntry.Value.lastAccess < time)
                 {
-                    boxCache.Remove(ekey);
-                    boxCount++;
-                    continue;
-                }
-                for (int i = 0; i < entry.Looters.Count; i++)
-                {
-                    var key = entry.Looters.Keys.ToList()[i];
-                    var looter = entry.Looters[key];
-                    if (looter.LastInit < time)
-                    {
-                        entry.Looters.Remove(key);
-                        boxCount++;
-                    }
+                    boxCache.Remove(boxEntry.Key);
+                    ++boxCount;
                 }
             }
             PrintWarning($"Removed {boxCount} old records from BoxData");
-            for (int j = 0; j < playerCache.Count; j++)
+
+            for (int i = 0; i < playerCache.Count; i++)
             {
-                var ekey = playerCache.Keys.ToList()[j];
-                var entry = playerCache[ekey];
-                if (entry.lastInit < time)
+                KeyValuePair<ulong, PlayerData> playerEntry = playerCache.ElementAt(i);
+                if (playerEntry.Value.lastAccess < time)
                 {
-                    playerCache.Remove(ekey);
-                    playerCount++;
-                    continue;
-                }
-                for (int i = 0; i < entry.Looters.Count; i++)
-                {
-                    var key = entry.Looters.Keys.ToList()[i];
-                    var looter = entry.Looters[key];
-                    if (looter.LastInit < time)
-                    {
-                        entry.Looters.Remove(key);
-                        playerCount++;
-                    }
+                    playerCache.Remove(playerEntry.Key);
+                    ++playerCount;
                 }
             }
             PrintWarning($"Removed {playerCount} old records from PlayerData");
-        }
+        }       
         #endregion
 
         #region Functions
         object FindBoxFromRay(BasePlayer player)
         {
-            var input = serverinput.GetValue(player) as InputState;
-            Ray ray = new Ray(player.eyes.position, Quaternion.Euler(input.current.aimAngles) * Vector3.forward);
+            Ray ray = new Ray(player.eyes.position, Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward);
             RaycastHit hit;
             if (!Physics.Raycast(ray, out hit, 20))
                 return null;
@@ -199,15 +161,15 @@ namespace Oxide.Plugins
                     var box = boxCache[uint.Parse(Id)];
                     SendReply(player, string.Format(lang.GetMessage("BoxInfo", this, player.UserIDString), entId));
 
-                    if (!string.IsNullOrEmpty(box.destroyName))
-                        SendReply(player, string.Format(lang.GetMessage("DetectDestr", this, player.UserIDString), box.destroyName, box.destroyId));
+                    if (!string.IsNullOrEmpty(box.killerName))
+                        SendReply(player, string.Format(lang.GetMessage("DetectDestr", this, player.UserIDString), box.killerName, box.killerId));
 
                     int i = 1;
                     string response1 = string.Empty;
                     string response2 = string.Empty;
-                    foreach (var data in box.Looters.OrderByDescending(x => x.Value.LastInit).Take(10))
+                    foreach (var data in box.lootList.GetLooters().Reverse().Take(10))
                     {
-                        var respString = string.Format(lang.GetMessage("DetectedLooters", this, player.UserIDString), i, data.Value.Name, data.Key, data.Value.FirstLoot, data.Value.LastLoot);
+                        var respString = string.Format(lang.GetMessage("DetectedLooters", this, player.UserIDString), i, data.userName, data.userId, data.firstLoot, data.lastLoot);
                         if (i < 6) response1 += respString;
                         else response2 += respString;
                         i++;                        
@@ -226,9 +188,9 @@ namespace Oxide.Plugins
                     int i = 1;
                     string response1 = string.Empty;
                     string response2 = string.Empty;
-                    foreach (var data in playerCache[ulong.Parse(Id)].Looters.OrderByDescending(x => x.Value.LastInit).Take(10))
+                    foreach (var data in playerCache[ulong.Parse(Id)].lootList.GetLooters().Reverse().Take(10))
                     {
-                        var respString = string.Format(lang.GetMessage("DetectedLooters", this, player.UserIDString), i, data.Value.Name, data.Key, data.Value.FirstLoot, data.Value.LastLoot);
+                        var respString = string.Format(lang.GetMessage("DetectedLooters", this, player.UserIDString), i, data.userName, data.userId, data.firstLoot, data.lastLoot);
                         if (i < 6) response1 += respString;
                         else response2 += respString;
                         i++;
@@ -271,6 +233,8 @@ namespace Oxide.Plugins
                     }
                     else SendReply(player, lang.GetMessage("Nothing", this, player.UserIDString));
                 }
+                else if (success is BasePlayer)
+                    ReplyInfo(player, (success as BasePlayer).UserIDString, true);
                 else if (success is BaseEntity)
                     ReplyInfo(player, (success as BaseEntity).net.ID.ToString());
 
@@ -349,7 +313,10 @@ namespace Oxide.Plugins
         private ConfigData configData;
         class ConfigData
         {
-            public int RemoveHours { get; set; }            
+            public int RemoveHours { get; set; }  
+            public int RecordsPerContainer { get; set; } 
+            public bool LogPlayerLoot { get; set; }
+            public bool LogBoxLoot { get; set; }         
         }
         private void LoadVariables()
         {
@@ -360,7 +327,10 @@ namespace Oxide.Plugins
         {
             var config = new ConfigData
             {
-                RemoveHours = 48
+                RemoveHours = 48,
+                RecordsPerContainer = 10,
+                LogBoxLoot = true,
+                LogPlayerLoot = true
             };
             SaveConfig(config);
         }
@@ -371,114 +341,106 @@ namespace Oxide.Plugins
         #region Data Management        
         class BoxData
         {
-            public double lastInit;
             public float x, y, z;
-            public ulong destroyId;
-            public string destroyName;
-            public Dictionary<ulong, LootEntry> Looters;
-           
+            public string killerId, killerName;
+            public LootList lootList;
+            public double lastAccess;
+
             public BoxData() { }
-            public BoxData(double time, BasePlayer player, Vector3 pos)
+            public BoxData(BasePlayer player, double time, string date, Vector3 pos)
             {
-                lastInit = time;
                 x = pos.x;
                 y = pos.y;
                 z = pos.z;
-                Looters = new Dictionary<ulong, LootEntry>
-                {
-                    { player.userID, new LootEntry
-                    {
-                        FirstLoot = DateTime.Now.ToString("d/M @ HH:mm:ss"),
-                        LastInit = time,
-                        LastLoot = DateTime.Now.ToString("d/M @ HH:mm:ss"),
-                        Name = player.displayName
-                    }}
-                };
+                lootList = new LootList(player, date);
+                lastAccess = time;
             }
-            public void AddLoot(BasePlayer looter, double time, string date)
+            public void AddLooter(BasePlayer looter, double time, string date)
             {
-                if (Looters.ContainsKey(looter.userID))
-                {
-                    Looters[looter.userID].LastInit = time;
-                    Looters[looter.userID].LastLoot = date;
-                }
-                else Looters.Add(looter.userID, new LootEntry
-                {
-                    FirstLoot = date,
-                    LastInit = time,
-                    LastLoot = date,
-                    Name = looter.displayName
-                });
+                lootList.AddEntry(looter, date);
+                lastAccess = time;
             }
-            public void SetKiller(ulong Id, string name)
+
+            public void OnDestroyed(BasePlayer killer)
             {
-                destroyId = Id;
-                destroyName = name;
+                killerId = killer.UserIDString;
+                killerName = killer.displayName;
             }
             public Vector3 GetPosition() => new Vector3(x, y, z);            
         }
         class PlayerData
         {
-            public double lastInit;
-            public Dictionary<ulong, LootEntry> Looters;
+            public LootList lootList;
+            public double lastAccess;
+
             public PlayerData() { }
-            public PlayerData(double time, BasePlayer player)
+            public PlayerData(BasePlayer player, double time, string date)
             {
-                lastInit = time;
-                Looters = new Dictionary<ulong, LootEntry>
-                {
-                    { player.userID, new LootEntry
-                    {
-                        FirstLoot = DateTime.Now.ToString("d/M HH:mm:ss"),
-                        LastInit = time,
-                        LastLoot = DateTime.Now.ToString("d/M HH:mm:ss"),
-                        Name = player.displayName
-                    }}
-                };
+                lootList = new LootList(player, date);
+                lastAccess = time;
             }
-            public void AddLoot(BasePlayer looter, double time, string date)
+            public void AddLooter(BasePlayer looter, double time, string date)
             {
-                if (Looters.ContainsKey(looter.userID))
+                lootList.AddEntry(looter, date);
+                lastAccess = time;
+            }        
+        }
+        class LootList
+        {
+            public List<LootEntry> looters;
+
+            public LootList() { }
+            public LootList(BasePlayer player, string date)
+            {
+                looters = new List<LootEntry>();
+                looters.Add(new LootEntry(player, date));
+            }
+            public void AddEntry(BasePlayer player, string date)
+            {
+                LootEntry lastEntry = null;
+                try { lastEntry = looters.Single(x => x.userId == player.UserIDString); } catch { }                 
+                if (lastEntry != null)
                 {
-                    Looters[looter.userID].LastInit = time;
-                    Looters[looter.userID].LastLoot = date;
+                    looters.Remove(lastEntry);
+                    lastEntry.lastLoot = date;
                 }
                 else
-                    Looters.Add(looter.userID, new LootEntry
-                    {
-                        FirstLoot = date,
-                        LastInit = time,
-                        LastLoot = date,
-                        Name = looter.displayName
-                    });
+                {
+                    if (looters.Count == ins.configData.RecordsPerContainer)
+                        looters.Remove(looters.ElementAt(0));
+                    lastEntry = new LootEntry(player, date);
+                }
+                looters.Add(lastEntry);
+            }
+            public LootEntry[] GetLooters() => looters.ToArray();
+
+            public class LootEntry
+            {
+                public string userId, userName, firstLoot, lastLoot;
+                            
+                public LootEntry() { }
+                public LootEntry(BasePlayer player, string firstLoot)
+                {
+                    userId = player.UserIDString;
+                    userName = player.displayName;
+                    this.firstLoot = firstLoot;
+                    lastLoot = firstLoot;                    
+                }
             }
         }
-        public class LootEntry
-        {
-            public string Name;
-            public double LastInit = 0;
-            public string FirstLoot;
-            public string LastLoot;
-            public LootEntry()
-            {
-                Name = string.Empty;
-                FirstLoot = string.Empty;
-                LastLoot = string.Empty;
-            }
-            public LootEntry(string name, string firstLoot, double lastInit)
-            {
-                Name = name;
-                FirstLoot = firstLoot;
-                LastLoot = FirstLoot;
-                LastInit = lastInit;
-            }
-        }
+        
         void SaveData()
         {
-            boxData.boxes = boxCache;
-            playerData.players = playerCache;
-            bdata.WriteObject(boxData);
-            pdata.WriteObject(playerData);
+            if (configData.LogBoxLoot)
+            {
+                boxData.boxes = boxCache;
+                bdata.WriteObject(boxData);
+            }
+            if (configData.LogPlayerLoot)
+            {
+                playerData.players = playerCache;
+                pdata.WriteObject(playerData);
+            }
             PrintWarning("Saved Boxlooters data");
         }
         void LoadData()
@@ -504,11 +466,11 @@ namespace Oxide.Plugins
         }
         class BoxDS
         {
-            public Dictionary<uint, BoxData> boxes = new Dictionary<uint, BoxData>();
+            public Hash<uint, BoxData> boxes = new Hash<uint, BoxData>();
         }
         class PlayerDS
         {
-            public Dictionary<ulong, PlayerData> players = new Dictionary<ulong, PlayerData>();
+            public Hash<ulong, PlayerData> players = new Hash<ulong, PlayerData>();
         }       
         #endregion
 

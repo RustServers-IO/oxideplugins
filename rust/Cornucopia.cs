@@ -7,7 +7,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Cornucopia", "Deicide666ra", "1.1.6", ResourceId = 1264)]
+    [Info("Cornucopia", "Deicide666ra", "1.1.8", ResourceId = 1264)]
     class Cornucopia : RustPlugin
     {
         class CornuConfig
@@ -168,7 +168,7 @@ namespace Oxide.Plugins
             // stone-ore
             // metal-ore
             // sulfur-ore
-            return Resources.FindObjectsOfTypeAll<BaseResource>()
+            return Resources.FindObjectsOfTypeAll<ResourceEntity>()
                 .Where(c => /*c.name.StartsWith("autospawn") &&*/ c.isActiveAndEnabled)
                 .Cast<BaseEntity>()
                 .GroupBy(c => c.ShortPrefabName).ToDictionary(c => c.Key, c => c);
@@ -195,7 +195,7 @@ namespace Oxide.Plugins
             // stag
             // wolf
             // bear
-            return Resources.FindObjectsOfTypeAll<BaseNPC>()
+            return Resources.FindObjectsOfTypeAll<BaseNpc>()
                 .Where(c => c.isActiveAndEnabled)
                 .Cast<BaseEntity>()
                 .GroupBy(c => c.ShortPrefabName).ToDictionary(c => c.Key, c => c);
@@ -365,14 +365,14 @@ namespace Oxide.Plugins
             if (doAnimals)
             {
                 tick = DateTime.Now;
-                SubCycle(Resources.FindObjectsOfTypeAll<BaseNPC>().Where(c => c.isActiveAndEnabled).Cast<BaseEntity>(), g_config.Animals, collectibles, ref aborted);
+                SubCycle(Resources.FindObjectsOfTypeAll<BaseNpc>().Where(c => c.isActiveAndEnabled).Cast<BaseEntity>(), g_config.Animals, collectibles, ref aborted);
                 //Puts($"npc: {(DateTime.Now - tick).TotalMilliseconds} ms");
             }
 
             if (doOres)
             {
                 tick = DateTime.Now;
-                SubCycle(Resources.FindObjectsOfTypeAll<BaseResource>().Where(c => c.isActiveAndEnabled).Cast<BaseEntity>(), g_config.Ores, collectibles, ref aborted);
+                SubCycle(Resources.FindObjectsOfTypeAll<ResourceEntity>().Where(c => c.isActiveAndEnabled).Cast<BaseEntity>(), g_config.Ores, collectibles, ref aborted);
                 //Puts($"res: {(DateTime.Now - tick).TotalMilliseconds} ms");
             }
 

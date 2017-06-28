@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("TurretConfig", "Calytic", "2.0.2", ResourceId = 1418)]
+    [Info("TurretConfig", "Calytic", "2.0.4", ResourceId = 1418)]
     [Description("Customized turrets")]
     class TurretConfig : RustPlugin
     {
@@ -18,9 +18,6 @@ namespace Oxide.Plugins
         private readonly string flameTurretPrefab = "assets/prefabs/npc/flame turret/flameturret.deployed.prefab";
         private uint autoTurretPrefabId;
         private uint flameTurretPrefabId;
-
-        FieldInfo healthField = typeof(BaseCombatEntity).GetField("_health", (BindingFlags.Instance | BindingFlags.NonPublic));
-        FieldInfo maxHealthField = typeof(BaseCombatEntity).GetField("_maxHealth", (BindingFlags.Instance | BindingFlags.NonPublic));
 
         [PluginReference]
         Plugin Vanish;
@@ -66,9 +63,8 @@ namespace Oxide.Plugins
         private Dictionary<string, object> fuelPerSecs;
         private Dictionary<string, object> flameHealths;
 
-        void Loaded()
+        void Init()
         {
-            LoadMessages();
             LoadData();
 
             autoTurretPrefabId = StringPool.Get(autoTurretPrefab);
@@ -110,7 +106,7 @@ namespace Oxide.Plugins
             flameRadiuses = GetConfig("Flame", "flameRadiuses", GetDefaultFlameRadiuses());
             fuelPerSecs = GetConfig("Flame", "fuelPerSecs", GetDefaultFuelPerSecs());
             flameHealths = GetConfig("Flame", "flameHealths", GetDefaultFlameHealths());
-            
+
             LoadPermissions(bulletSpeeds);
             LoadPermissions(ammoTypes);
             LoadPermissions(sightRanges);
@@ -123,7 +119,10 @@ namespace Oxide.Plugins
             LoadPermissions(flameRadiuses);
             LoadPermissions(fuelPerSecs);
             LoadPermissions(flameHealths);
+        }
 
+        void OnServerInitialized()
+        {
             LoadAutoTurrets();
             LoadFlameTurrets();
         }
@@ -144,7 +143,6 @@ namespace Oxide.Plugins
 
         protected void LoadFlameTurrets()
         {
-
         }
 
         protected void LoadAutoTurrets() {
@@ -242,7 +240,7 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-        void LoadMessages()
+        void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -382,7 +380,7 @@ namespace Oxide.Plugins
         private void OnItemUse(Item item, int amount)
         {
             if (!infiniteAmmo) return;
-            
+
             var entity = item.parent?.entityOwner;
             if(entity != null) {
                 if(entity is AutoTurret) {
@@ -391,7 +389,7 @@ namespace Oxide.Plugins
                         if (!permission.UserHasPermission(autoTurret.OwnerID.ToString(), "turretconfig.infiniteammo")) return;
                         item.amount++;
                     }
-                } 
+                }
             }
         }
 
@@ -427,7 +425,7 @@ namespace Oxide.Plugins
                 return null;
             }
 
-            if (animalOverride == true && target.GetComponent<BaseNPC>() != null)
+            if (animalOverride == true && target.GetComponent<BaseNpc>() != null)
             {
                 if(animals.Count > 0) {
                     if(animals.Contains(target.ShortPrefabName.Replace(".prefab","").ToLower())) {
@@ -450,8 +448,8 @@ namespace Oxide.Plugins
             if (adminOverride && targetPlayer.IsConnected && targetPlayer.net.connection.authLevel > 0)
             {
                 return false;
-            } 
-            else if(sleepOverride && targetPlayer.IsSleeping()) 
+            }
+            else if(sleepOverride && targetPlayer.IsSleeping())
             {
                 return false;
             }
@@ -462,7 +460,7 @@ namespace Oxide.Plugins
         void OnEntitySpawned(BaseNetworkable entity)
         {
             if (entity == null) return;
-            
+
             if (entity.prefabID == autoTurretPrefabId)
             {
                 UpdateAutoTurret((AutoTurret)entity, true);
@@ -493,9 +491,9 @@ namespace Oxide.Plugins
         {
             if (justCreated)
             {
-                healthField.SetValue(turret, turretHealth);
+                turret._health = turretHealth;
             }
-            maxHealthField.SetValue(turret, turretHealth);
+            turret._maxHealth = turretHealth;
 
             if (justCreated)
             {

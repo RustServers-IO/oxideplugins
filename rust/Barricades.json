@@ -1,0 +1,16 @@
+{
+    "name": "Barricades",
+    "description": "Legacy wooden barricade made out of double stacked sign posts. Can be picked up.",
+    "author": "Xianith",
+    "version": "0.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/barricades.2460",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

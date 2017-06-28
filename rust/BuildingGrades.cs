@@ -2,14 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-
 using Facepunch;
-
+using Oxide.Core;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Building Grades", "bawNg / Nogrod", "0.3.9", ResourceId = 865)]
+    [Info("Building Grades", "bawNg / Nogrod", "0.3.11", ResourceId = 865)]
+    [Description("Allows admins to easily upgrade or downgrade an entire building")]
     class BuildingGrades : RustPlugin
     {
         private readonly FieldInfo meshLookupField = typeof(MeshColliderBatch).GetField("meshLookup", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -245,7 +245,7 @@ namespace Oxide.Plugins
             if (increment && !player.IsAdmin && !permission.UserHasPermission(player.UserIDString, PermNoCost))
             {
                 var costs = GetCosts(all_blocks, targetGrade);
-                if (!CanAffordUpgrade(costs, player)) return;
+                if (!CanAffordToUpgrade(costs, player)) return;
                 PayForUpgrade(costs, player);
             }
 
@@ -281,6 +281,7 @@ namespace Oxide.Plugins
                 building_block.SetHealthToMax();
                 building_block.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
                 building_block.UpdateSkin();
+                Interface.CallHook("OnStructureUpgrade", building_block, player, (BuildingGrade.Enum)target_grade);
             }
             if (all_blocks.Count > 0)
                 NextTick(() => DoUpgrade(all_blocks, targetGrade, increment, player));
@@ -317,7 +318,7 @@ namespace Oxide.Plugins
             return costs;
         }
 
-        private bool CanAffordUpgrade(Dictionary<int, float> costs, BasePlayer player)
+        private bool CanAffordToUpgrade(Dictionary<int, float> costs, BasePlayer player)
         {
             foreach (var current in costs)
             {

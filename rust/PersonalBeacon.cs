@@ -1,286 +1,477 @@
-
 using System.Collections.Generic;
 using System;
-using System.Reflection;
-using System.Data;
 using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Configuration;
-using Oxide.Core.Plugins;
+using System.Text;
 
-/*
-    This is my first plugin, and I'm not very good with C# - so this is probably horrible and I apologize now.  Thanks!
-*/
+//
+// Credit to the original author, Mordenak / HighTower 2
+//
 
 namespace Oxide.Plugins
 {
-    [Info("PersonalBeacon", "Mordenak", "1.0.7", ResourceId = 1000)]
+    [Info("PersonalBeacon", "redBDGR", "2.0.4", ResourceId = 997)]
     class PersonalBeacon : RustPlugin
     {
-        // To be moved into config file at some point...
-        static int beaconHeight = 500;
-        static int arrowSize = 10;
-        static float beaconRefresh = 2f;
+        #region Data
 
-        static Core.Configuration.DynamicConfigFile BeaconData;
-        static Dictionary<string, bool> userBeacons = new Dictionary<string, bool>();
-        static Dictionary<string, Oxide.Plugins.Timer> userBeaconTimers = new Dictionary<string, Oxide.Plugins.Timer>();
+        private DynamicConfigFile exampleData;
+        WaypointDataStorage storedData;
 
-        static Dictionary<string, bool> adminBeacons = new Dictionary<string, bool>();
-        static Dictionary<string, Oxide.Plugins.Timer> adminTimers = new Dictionary<string, Oxide.Plugins.Timer>();
+        void SaveData()
+        {
+            storedData.playerWaypoints = playerWaypointsCache;
+            storedData.globalWaypoints = globalWaypointCache;
+            exampleData.WriteObject(storedData);
+        }
+        void LoadData()
+        {
+            try
+            {
+                storedData = exampleData.ReadObject<WaypointDataStorage>();
+                LoadPlayerWaypoints();
+                LoadGlobalWaypoints();
+            }
+            catch
+            {
+                Puts("Failed to load data, creating new file");
+                storedData = new WaypointDataStorage();
+            }
+        }
 
-        static Dictionary<string, bool> adminBeaconIsOn = new Dictionary<string, bool>();
-        static Dictionary<string, Oxide.Plugins.Timer> adminBeaconTimers = new Dictionary<string, Oxide.Plugins.Timer>();
+        void LoadPlayerWaypoints()
+        {
+            foreach (var entry in storedData.playerWaypoints)
+            {
+                playerWaypointsCache.Add(entry.Key, new List<WaypointData>());
+                foreach (var _entry in entry.Value)
+                    playerWaypointsCache[entry.Key].Add(new WaypointData() { name = _entry.name, x = _entry.x, y = _entry.y, z = _entry.z });
+            }
+        }
+
+        void LoadGlobalWaypoints()
+        {
+            foreach (var entry in storedData.globalWaypoints)
+                globalWaypointCache.Add(new WaypointData() { name = entry.name, x = entry.x, y = entry.y, z = entry.z });
+        }
+
+        #endregion
+
+        #region Config
+
+        protected override void LoadDefaultConfig()
+        {
+            Config.Clear();
+            LoadVariables();
+        }
+
+        void LoadVariables()
+        {
+            // Arrow settings
+            arrowHeight = Convert.ToSingle(GetConfig("Arrow Settings", "Height", 100f));
+            arrowLevitation = Convert.ToSingle(GetConfig("Arrow Settings", "Levitation from ground", 3f));
+            arrowHeadSize = Convert.ToSingle(GetConfig("Arrow Settings", "Arrow Head Size", 3f));
+
+            // General settings
+            playerWaypointDisplaytime = Convert.ToSingle(GetConfig("Settings", "Player Display Time", 60f));
+            globalRefreshTime = Convert.ToSingle(GetConfig("Settings", "Global Waypoint Refresh Time", 60f));
+            maxWaypoints = Convert.ToInt32(GetConfig("Settings", "Max Waypoints", 5));
+
+            if (!Changed) return;
+            SaveConfig();
+            Changed = false;
+        }
+
+        #endregion
+
+        bool Changed = false;
+        private const string permissionName = "personalbeacon.use";
+        private const string permissionNameADMIN = "personalbeacon.admin";
+        Dictionary<string, List<WaypointData>> playerWaypointsCache = new Dictionary<string, List<WaypointData>>();
+        List<WaypointData> globalWaypointCache = new List<WaypointData>();
+        List<TimerData> timers = new List<TimerData>();
+        public float arrowHeight = 50f;
+        public float arrowLevitation = 3f;
+        public float arrowHeadSize = 3;
+        public float playerWaypointDisplaytime = 60;
+        public float globalRefreshTime = 60f;
+        public int maxWaypoints = 5;
+
+        class WaypointDataStorage
+        {
+            public Dictionary<string, List<WaypointData>> playerWaypoints;
+            public List<WaypointData> globalWaypoints;
+        }
+
+        class WaypointData
+        {
+            public string name;
+            public float x;
+            public float y;
+            public float z;
+        }
+
+        class TimerData
+        {
+            public string name;
+            public Timer timer;
+            public WaypointData data;
+        }
 
         void Loaded()
         {
-            LoadBeaconData();
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                //chat
+                ["No Permission"] = "You cannot use this command!",
+                ["/setwp Invalid Syntax"] = "Invalid syntax! /setwp <waypoint name>",
+                ["/wp Invalid Syntax"] = "Invalid syntax! /wp <waypoint name>",
+                ["/setglobalwp Invalid Syntax"] = "Invalid syntax! /setglobalwp <waypoint name>",
+                ["/hideglobalwp Invalid Syntax"] = "Invalid syntax! /hideglobalwp <waypoint name>",
+                ["/removewp Invalid Syntax"] = "Invalid syntax! /removewp <waypoint name>",
+                ["Waypoint Removed"] = "This waypoint has been removed!",
+                ["Waypoint Already Exists"] = "This waypoint name already exists!",
+                ["Waypoint Added"] = "You successfully created a new waypoint!",
+                ["Waypoint Not Found"] = "Waypoint was not found",
+                ["Max Waypoints Allowed"] = "You already have the maxiumum amount of waypoints allowed!",
+                ["Global Waypoint Hidden"] = "This waypoint will disapear on the next update cycle",
+                ["Global Waypoint Already Showing"] = "This waypoint is already being broadcasted",
+                ["No Waypoints"] = "You do not have any waypoints!",
+                ["List 1st Line"] = "Your current waypoints are:",
+                ["List Entry"] = "- {0}",
+                ["Help msg Header"] = "The following are the basic commands for using waypoints:",
+                ["Help msg 1"] = "<color=#0080ff>/setwp <name></color> will set a waypoint with the name you enter",
+                ["Help msg 2"] = "<color=#0080ff>/wp <name></color> will graphically display the waypoints location ingame",
+                ["Help msg 3"] = "<color=#0080ff>/removewp <name></color> will remove a waypoint from your waypoints list",
+                ["Help msg 4"] = "<color=#0080ff>/wplist</color> will list all of your current waypoints",
+
+            }, this);
+
+            exampleData = Interface.Oxide.DataFileSystem.GetFile("PersonalBeacon");
+
+            NextTick(() =>
+            {
+                foreach (var entry in globalWaypointCache)
+                    InitGlobalWaypoint(entry);
+            });
+        }
+
+        void OnServerInitialized()
+        {
+            LoadData();
         }
 
         void Unload()
         {
-            SaveBeaconData();
-            //CleanUpBeacons();
+            SaveData();
         }
 
         void OnServerSave()
         {
-            SaveBeaconData();
+            SaveData();
         }
 
-        private void SaveBeaconData()
+        void Init()
         {
-            Interface.GetMod().DataFileSystem.SaveDatafile("PersonalBeacon_Data");
-        }
-        private void LoadBeaconData()
-        {
-            //Debug.Log("Loading data...");
-            try
-            {
-                //BeaconData = Interface.GetMod().DataFileSystem.ReadObject<Oxide.Core.Configuration.DynamicConfigFile>("PersonalBeacon_Data");
-                BeaconData = Interface.GetMod().DataFileSystem.GetDatafile("PersonalBeacon_Data");
-            }
-            catch
-            {
-                Debug.Log("Failed to load datafile.");
-            }
-            //Debug.Log("Data should be loaded.");
-        }
-  
-        void DisplayBeacon(BasePlayer player)
-        {
-            var playerId = player.userID.ToString();
-            // player has disconnected
-            if (!player.IsConnected())
-            {
-                Debug.Log("Cleaning up disconnected player timer.");
-                userBeacons[playerId] = false;
-                userBeaconTimers[playerId].Destroy();
-                return;
-            }
-
-            if (BeaconData == null)
-            {
-                Debug.Log("BeaconData wasn't loaded before use, forcing load.");
-                LoadBeaconData();
-            }
-            if (BeaconData[playerId] == null)
-            {
-                Debug.Log(string.Format("Player [{0}] -- BeaconData is corrupt.", playerId) );
-                userBeacons[playerId] = false;
-                userBeaconTimers[playerId].Destroy();
-                return;
-                /*
-                foreach (var playerbeacons in BeaconData)
-                {
-                    Debug.Log(playerbeacons.ToString());
-                }
-                */
-            }
-
-            var table = BeaconData[playerId] as Dictionary<string, object>;
-            //var beaconGround = new Vector3((float)table["x"], (float)table["y"], (float)table["z"]);
-            var beaconGround = new Vector3();
-            // Necessary evil here
-            beaconGround.x = float.Parse(table["x"].ToString());
-            beaconGround.y = float.Parse(table["y"].ToString());
-            beaconGround.z = float.Parse(table["z"].ToString());
-
-            var beaconSky = beaconGround;
-            beaconSky.y = beaconSky.y + beaconHeight;
-
-            player.SendConsoleCommand("ddraw.arrow", beaconRefresh, UnityEngine.Color.red, beaconGround, beaconSky, arrowSize);
+            permission.RegisterPermission("personalbeacon.use", this);
+            permission.RegisterPermission("personalbeacon.admin", this);
+            LoadVariables();
         }
 
         [ChatCommand("setwp")]
-        void cmdSetBeacon(BasePlayer player, string command, string[] args)
+        void setwpCMD(BasePlayer player, string command, string[] args)
         {
-            Dictionary<string, object> coords = new Dictionary<string, object>();
-            coords.Add("x", player.transform.position.x);
-            coords.Add("y", player.transform.position.y);
-            coords.Add("z", player.transform.position.z);
-
-            if (BeaconData == null)
+            if (!permission.UserHasPermission(player.UserIDString, permissionName))
             {
-                Debug.Log("BeaconData wasn't loaded before use, forcing load.");
-                LoadBeaconData();
+                player.ChatMessage(msg("No Permission", player.UserIDString));
+                return;
             }
-
-            BeaconData[player.userID.ToString()] = coords;
-
-            var newVals = BeaconData[player.userID.ToString()] as Dictionary<string, object>;
-
-            SendReply(player, string.Format("Beacon set to: x: {0}, y: {1}, z: {2}", newVals["x"], newVals["y"], newVals["z"]) );
+            if (args.Length != 1)
+            {
+                player.ChatMessage(msg("/setwp Invalid Syntax", player.UserIDString));
+                return;
+            }
+            if (!playerWaypointsCache.ContainsKey(player.UserIDString))
+                playerWaypointsCache.Add(player.UserIDString, new List<WaypointData>());
+            if (playerWaypointsCache[player.UserIDString].Count == maxWaypoints)
+            {
+                player.ChatMessage(msg("Max Waypoints Allowed", player.UserIDString));
+                return;
+            }
+            foreach (var entry in playerWaypointsCache[player.UserIDString])
+                if (args[0] == entry.name)
+                {
+                    player.ChatMessage(msg("Waypoint Already Exists", player.UserIDString));
+                    return;
+                }
+            WaypointData data = new WaypointData() { name = args[0], x = player.transform.position.x, y = player.transform.position.y, z = player.transform.position.z };
+            playerWaypointsCache[player.UserIDString].Add(data);
+            DrawWaypoint(player, new Vector3(data.x, data.y, data.z), playerWaypointDisplaytime, false, data.name);
         }
 
         [ChatCommand("wp")]
-        void cmdBeacon(BasePlayer player, string command, string[] args)
+        void wpCMD(BasePlayer player, string command, string[] args)
         {
-
-            if (BeaconData == null)
-            {
-                Debug.Log("BeaconData wasn't loaded before use, forcing load.");
-                LoadBeaconData();
-            }
-
-            var playerId = player.userID.ToString();
-
-            if (BeaconData[playerId] == null)
-            {
-                SendReply(player, "You have not set a waypoint yet.  Please run /setwp to create a waypoint.");
-                Debug.Log(string.Format("Player [{0}] -- BeaconData is corrupt or non-existent.", playerId) );
-                return;
-                /*
-                foreach (var playerbeacons in BeaconData)
+            if (!permission.UserHasPermission(player.UserIDString, permissionName))
+                if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
                 {
-                    Debug.Log(playerbeacons.ToString());
+                    player.ChatMessage(msg("No Permission", player.UserIDString));
+                    return;
                 }
-                */
-            }
-            if (!userBeacons.ContainsKey(playerId)) userBeacons.Add(playerId, false);
-
-            // maybe unecessary
-            if (userBeacons[playerId] == null) userBeacons[playerId] = false;
-
-            if (userBeacons[playerId] == false)
+            if (args.Length != 1)
             {
-                DisplayBeacon(player); // display immediately
-                userBeaconTimers[playerId] = timer.Repeat(beaconRefresh, 0, delegate() { DisplayBeacon(player); } );
-                SendReply(player, "Beacon on.");
-                userBeacons[playerId] = true;
+                player.ChatMessage(msg("/wp Invalid Syntax", player.UserIDString));
+                return;
+            }
+            if (!playerWaypointsCache.ContainsKey(player.UserIDString))
+                playerWaypointsCache.Add(player.UserIDString, new List<WaypointData>());
+            WaypointData data = null;
+            foreach (var entry in playerWaypointsCache[player.UserIDString])
+                if (entry.name == args[0])
+                    data = entry;
+            if (data == null)
+            {
+                player.ChatMessage(msg("Waypoint Not Found", player.UserIDString));
+                return;
+            }
+            DrawWaypoint(player, new Vector3(data.x, data.y, data.z), playerWaypointDisplaytime, false, data.name);
+            player.ChatMessage(msg("Waypoint Added", player.UserIDString));
+        }
+
+        [ChatCommand("removewp")]
+        void removewp(BasePlayer player, string command, string[] args)
+        {
+            if (!permission.UserHasPermission(player.UserIDString, permissionName))
+                if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+                {
+                    player.ChatMessage(msg("No Permission", player.UserIDString));
+                    return;
+                }
+            if (args.Length != 1)
+            {
+                player.ChatMessage(msg("/removewp Invalid Syntax", player.UserIDString));
+                return;
+            }
+            if (!playerWaypointsCache.ContainsKey(player.UserIDString))
+                playerWaypointsCache.Add(player.UserIDString, new List<WaypointData>());
+            foreach (var entry in playerWaypointsCache[player.UserIDString])
+                if (args[0] == entry.name)
+                {
+                    playerWaypointsCache[player.UserIDString].Remove(entry);
+                    player.ChatMessage(msg("Waypoint Removed", player.UserIDString));
+                    return;
+                }
+        }
+
+        [ChatCommand("wplist")]
+        void wplistCMD(BasePlayer player, string command, string[] args)
+        {
+            if (!permission.UserHasPermission(player.UserIDString, permissionName))
+                if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+                {
+                    player.ChatMessage(msg("No Permission", player.UserIDString));
+                    return;
+                }
+            if (!playerWaypointsCache.ContainsKey(player.UserIDString))
+            {
+                player.ChatMessage(msg("No Waypoints", player.UserIDString));
+                return;
             }
             else
             {
-                userBeaconTimers[playerId].Destroy();
-                SendReply(player, "Beacon off.");
-                userBeacons[playerId] = false;
+                StringBuilder x = new StringBuilder();
+                x.AppendLine(msg("List 1st Line", player.UserIDString));
+                foreach (var entry in playerWaypointsCache[player.UserIDString])
+                    x.AppendLine(string.Format(msg("List Entry", player.UserIDString), entry.name.ToString()));
+                player.ChatMessage(x.ToString().TrimEnd());
             }
+        }
+
+        [ChatCommand("wphelp")]
+        void wphelpCMD(BasePlayer player, string command, string[] args)
+        {
+        	if (!permission.UserHasPermission(player.UserIDString, permissionName))
+        	{
+                if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+                {
+                    player.ChatMessage(msg("No Permission", player.UserIDString));
+                    return;
+                }
+            }
+            StringBuilder x = new StringBuilder();
+            if (msg("Help msg Header") != "")
+                x.AppendLine(msg("Help msg Header", player.UserIDString));
+            if (msg("Help msg 1") != "")
+            	x.AppendLine(msg("Help msg 1", player.UserIDString));
+            if (msg("Help msg 2") != "")
+            	x.AppendLine(msg("Help msg 2", player.UserIDString));
+            if (msg("Help msg 3") != "")
+            	x.AppendLine(msg("Help msg 3", player.UserIDString));
+            if (msg("Help msg 4") != "")
+                x.AppendLine(msg("Help msg 4", player.UserIDString));
+            player.ChatMessage(x.ToString().TrimEnd());
         }
 
         // Admin commands:
 
-        [ChatCommand("wpadmin")]
-        void cmdAdminWaypoint(BasePlayer player, string command, string[] args)
+        [ChatCommand("setglobalwp")]
+        void globalwpCMD(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel == 0) return;
-
-            // set a wp at the current location
-            var currLocation = player.transform.position;
-
-            var playerId = player.userID.ToString();
-
-            if (!adminBeaconIsOn.ContainsKey(playerId)) adminBeaconIsOn.Add(playerId, false);
-            if (adminBeaconIsOn[playerId] == null) adminBeaconIsOn[playerId] = false;
-
-            //var repeatBeacon = new Dictionary<string, Oxide.Plugins.Timer>();
-
-            if (adminBeaconIsOn[playerId] == false)
+            if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
             {
-                SendReply(player, "Sending Admin Waypoint to all players.");
-                adminBeaconTimers[playerId] = timer.Repeat(beaconRefresh, 0, delegate() {
-                    var beaconGround = currLocation;
-
-                    var beaconSky = beaconGround;
-                    beaconSky.y = beaconSky.y + beaconHeight;
-                    ConsoleSystem.Broadcast("ddraw.arrow", beaconRefresh, UnityEngine.Color.green, beaconGround, beaconSky, arrowSize);
-                } );
-                adminBeaconIsOn[playerId] = true;
+                player.ChatMessage(msg("No Permissions", player.UserIDString));
+                return;
             }
-            else
+            if (args.Length != 1)
             {
-                SendReply(player, "Removing the Admin Waypoint.");
-                foreach (var adbeacontimers in adminBeaconTimers)
+                player.ChatMessage(msg("/setglobalwp Invalid Syntax", player.UserIDString));
+                return;
+            }
+            foreach(var entry in globalWaypointCache)
+                if (entry.name == args[0])
                 {
-                    adbeacontimers.Value.Destroy();
+                    player.ChatMessage(msg("Waypoint Already Exists", player.UserIDString));
+                    return;
                 }
-                adminBeaconIsOn[playerId] = false;
-            }
+            WaypointData data = new WaypointData() { name = args[0], x = player.transform.position.x, y = player.transform.position.y, z = player.transform.position.z };
+            globalWaypointCache.Add(data);
+            InitGlobalWaypoint(data);
         }
 
-        [ChatCommand("wpcount")]
-        void cmdCountBeacons(BasePlayer player, string command, string[] args)
+        [ChatCommand("hideglobalwp")]
+        void hideglobalwpCMD(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel == 0) return;
-            int wpCount = 0;
-            foreach (var playerbeacons in BeaconData)
+            if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
             {
-                //Debug.Log(playerbeacons.ToString());
-                wpCount = wpCount + 1;
+                player.ChatMessage(msg("No Permission", player.UserIDString));
+                return;
             }
-            //Debug.Log(string.Format("Found {0} waypoints.", wpCount) );
-            SendReply(player, string.Format("Tracking {0} waypoints.", wpCount) );
+            if (args.Length != 1)
+            {
+                player.ChatMessage(msg("/hideglobalwp Invalid Syntax", player.UserIDString));
+                return;
+            }
+            TimerData data = null;
+            foreach (var entry in timers)
+                if (args[0] == entry.name)
+                    data = entry;
+            if (data == null)
+            {
+                player.ChatMessage(msg("Waypoint Not Found", player.UserIDString));
+                return;
+            }
+            data.timer.Destroy();
+            data.timer = null;
+            player.ChatMessage(msg("Global Waypoint Hidden", player.UserIDString));
+        }
+
+        [ChatCommand("showglobalwp")]
+        void showglobalwpCMD(BasePlayer player, string command, string[] args)
+        {
+            if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+            {
+                player.ChatMessage(msg("No Permission", player.UserIDString));
+                return;
+            }
+            if (args.Length != 1)
+            {
+                player.ChatMessage(msg("/hideglobalwp Invalid Syntax", player.UserIDString));
+                return;
+            }
+            TimerData data = null;
+            foreach (var entry in timers)
+                if (entry.name == args[0])
+                    data = entry;
+            if (data == null)
+            {
+                player.ChatMessage(msg("Waypoint Not Found", player.UserIDString));
+                return;
+            }
+            if (data.timer != null)
+            {
+                player.ChatMessage(msg("Global Waypoint Already Showing", player.UserIDString));
+                return;
+            }
+            foreach (BasePlayer _player in BasePlayer.activePlayerList)
+                DrawWaypoint(_player, new Vector3(data.data.x, data.data.y, data.data.z), globalRefreshTime, true, data.name);
+            data.timer = timer.Repeat(globalRefreshTime, 0, () =>
+            {
+                foreach (BasePlayer _player in BasePlayer.activePlayerList)
+                    DrawWaypoint(_player, new Vector3(data.data.x, data.data.y, data.data.z), globalRefreshTime, true, data.name);
+            });
         }
 
         [ChatCommand("wpshowall")]
         void cmdShowAllBeacons(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel == 0) return;
-            var playerId = player.userID.ToString();
-            if (!adminBeacons.ContainsKey(playerId)) adminBeacons.Add(playerId, false);
-            if (adminBeacons[playerId] == null) adminBeacons[playerId] = false;
-            if (adminBeacons[playerId] == false)
+            if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
             {
-                foreach (var playerbeacons in BeaconData)
-                {
-                    //Debug.Log(string.Format("Looking for beacon for player: {0}", playerbeacons.Key) );
+                player.ChatMessage(msg("No Permission", player.UserIDString));
+                return;
+            }
 
-                    var targetId = playerbeacons.Key;
+            foreach (var entry in playerWaypointsCache)
+                foreach (var _entry in playerWaypointsCache[entry.Key])
+                    DrawWaypoint(player, new Vector3(_entry.x, _entry.y, _entry.z), playerWaypointDisplaytime, false, _entry.name);
+        }
 
-                    var table = BeaconData[targetId] as Dictionary<string, object>;
-                    //var beaconGround = new Vector3((float)table["x"], (float)table["y"], (float)table["z"]);
-                    var beaconGround = new Vector3();
-                    // Necessary evil here
-                    beaconGround.x = float.Parse(table["x"].ToString());
-                    beaconGround.y = float.Parse(table["y"].ToString());
-                    beaconGround.z = float.Parse(table["z"].ToString());
+        void InitGlobalWaypoint(WaypointData data)
+        {
+            foreach (BasePlayer _player in BasePlayer.activePlayerList)
+                DrawWaypoint(_player, new Vector3(data.x, data.y, data.z), globalRefreshTime, true, data.name);
 
-                    var beaconSky = beaconGround;
-                    beaconSky.y = beaconSky.y + beaconHeight;
-                    player.SendConsoleCommand("ddraw.arrow", beaconRefresh, UnityEngine.Color.red, beaconGround, beaconSky, arrowSize);
-                    adminTimers[targetId] = timer.Repeat(beaconRefresh, 0, delegate() { player.SendConsoleCommand("ddraw.arrow", beaconRefresh, UnityEngine.Color.red, beaconGround, beaconSky, arrowSize);; } );
+            Timer repeat = timer.Repeat(globalRefreshTime, 0, () =>
+            {
+                foreach (BasePlayer _player in BasePlayer.activePlayerList)
+                    DrawWaypoint(_player, new Vector3(data.x, data.y, data.z), globalRefreshTime, true, data.name);
+            });
+            TimerData timerdata = new TimerData() { timer = repeat, name = data.name, data = data };
+            timers.Add(timerdata);
+        }
 
-                    //player.SendConsoleCommand("ddraw.arrow", 10f, UnityEngine.Color.red, beaconGround, beaconSky, 10);
-                }
-                SendReply(player, "All beacons on.");
-                adminBeacons[playerId] = true;
+        void DrawWaypoint(BasePlayer player, Vector3 pos, float time, bool isGlobal, string name)
+        {
+            var color = Color.blue;
+            if (isGlobal)
+                color = Color.red;
+
+            if (!player.HasPlayerFlag(BasePlayer.PlayerFlags.IsAdmin))
+            {
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, true);
+                player.SendNetworkUpdateImmediate();
+                player.SendConsoleCommand("ddraw.arrow", time, color, new Vector3(pos.x, pos.y + arrowHeight + arrowLevitation, pos.z), new Vector3(pos.x, pos.y + arrowLevitation, pos.z), arrowHeadSize);
+                player.SendConsoleCommand("ddraw.text", time, color, new Vector3(pos.x, pos.y + arrowHeight + arrowLevitation + 5f, pos.z), name);
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, false);
+                player.SendNetworkUpdate();
             }
             else
             {
-                foreach (var playerdata in BeaconData)
-                {
-                    adminTimers[playerdata.Key].Destroy();
-                }
-                //adminTimers[targetId].Destroy();
-                SendReply(player, "All beacons off.");
-                adminBeacons[playerId] = false;
+                player.SendConsoleCommand("ddraw.arrow", time, color, new Vector3(pos.x, pos.y + arrowHeight + arrowLevitation, pos.z), new Vector3(pos.x, pos.y + arrowLevitation, pos.z), arrowHeadSize);
+                player.SendConsoleCommand("ddraw.text", time, color, new Vector3(pos.x, pos.y + arrowHeight + arrowLevitation + 5f, pos.z), name);
             }
+                    return;
         }
 
-        [HookMethod("SendHelpText")]
-        private void SendHelpText(BasePlayer player) 
+        object GetConfig(string menu, string datavalue, object defaultValue)
         {
-            var helpString = "<color=#11FF22>PersonalBeacon</color>:\n/setwp - Sets the beacon to the current location.\n/wp - Toggles beacon on or off.";
-            player.ChatMessage(helpString.TrimEnd());
+            var data = Config[menu] as Dictionary<string, object>;
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[menu] = data;
+                Changed = true;
+            }
+            object value;
+            if (!data.TryGetValue(datavalue, out value))
+            {
+                value = defaultValue;
+                data[datavalue] = value;
+                Changed = true;
+            }
+            return value;
         }
+
+        string msg(string key, string id = null) => lang.GetMessage(key, this, id);
     }
 }

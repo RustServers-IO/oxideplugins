@@ -12,7 +12,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Kill Feed", "Tuntenfisch", "1.15.6", ResourceId = 1433)]
+    [Info("Kill Feed", "Tuntenfisch", "1.15.9", ResourceId = 1433)]
     [Description("Displays a basic Kill Feed on screen!")]
     public class KillFeed : RustPlugin
     {
@@ -35,7 +35,7 @@ namespace Oxide.Plugins
 
         static Timer _timer;
 
-        static Dictionary<ulong, Player> _players;
+        static Dictionary<ulong, KillFeedPlayer> _players;
 
         float width;
         float horizontalSpacing;
@@ -97,7 +97,7 @@ namespace Oxide.Plugins
             LoadDefaultLang();
 
             // initialize and populate _players
-            _players = new Dictionary<ulong, Player>();
+            _players = new Dictionary<ulong, KillFeedPlayer>();
             foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
                 AddPlayer(player);
@@ -175,7 +175,7 @@ namespace Oxide.Plugins
         /// <summary>
         /// The entry point for a new Kill Feed entry. Only encompasses players being wounded.
         /// </summary>
-        /// <remarks> 
+        /// <remarks>
         /// If <c>displayPlayerDeaths</c> is true, player deaths will be processed by <c>OnEntityDeath(BaseCombatEntity entity, HitInfo info)</c> instead.
         /// </remarks>
         /// <param name="player"> The player who was wounded.</param>
@@ -186,7 +186,7 @@ namespace Oxide.Plugins
 
             if (info == null) return;
 
-            if (!enableAnimals && info.Initiator is BaseNPC) return;                                            // if animals are off and the initiator is an animal, return
+            if (!enableAnimals && info.Initiator is BaseNpc) return;                                            // if animals are off and the initiator is an animal, return
 
             EntryData entryData = new EntryData(player, info);
 
@@ -206,14 +206,13 @@ namespace Oxide.Plugins
 
             if (info == null) return;
 
-            if (!enableAnimals && (info.Initiator is BaseNPC || entity is BaseNPC)) return;                     // if animals are off and either the initator or the entity is an animal, return
+            if (!enableAnimals && (info.Initiator is BaseNpc || entity is BaseNpc)) return;                     // if animals are off and either the initator or the entity is an animal, return
             if (!displayPlayerDeaths && entity.ToPlayer() != null) return;
 
-            if (!(entity is BaseNPC) && !(entity is BaseHelicopter) && entity.ToPlayer() == null) return;       // if the entity isn't an animal, patrolhelicopter or player, return
-            if ((info.Initiator is BaseNPC || info.Initiator is BaseHelicopter) && entity is BaseNPC) return;   // if the initator is either an animal or a patrolhelicopter and the entity is an animal, return
-            if (entity is BaseNPC && (info.damageTypes?.GetMajorityDamageType() == DamageType.Hunger
-                || info.damageTypes?.GetMajorityDamageType() == DamageType.Thirst))
-                return;                                                                                         // if an animal either died of hunger or of thirst, return
+            if (!(entity is BaseNpc) && !(entity is BaseHelicopter) && entity.ToPlayer() == null) return;       // if the entity isn't an animal, patrolhelicopter or player, return
+            if ((info.Initiator is BaseNpc || info.Initiator is BaseHelicopter) && entity is BaseNpc) return;   // if the initator is either an animal or a patrolhelicopter and the entity is an animal, return
+            if (entity is BaseNpc && (info.damageTypes?.GetMajorityDamageType() == DamageType.Hunger
+                || info.damageTypes?.GetMajorityDamageType() == DamageType.Thirst)) return;                     // if an animal either died of hunger or of thirst, return
 
             EntryData entryData = new EntryData(entity, info);
 
@@ -239,7 +238,7 @@ namespace Oxide.Plugins
             }
             else if (args[0].Equals("enable"))                                                                  // the player wants to enable the visual component of the plugin
             {
-                Player p;
+                KillFeedPlayer p;
                 if (_players.TryGetValue(player.userID, out p))
                 {
                     if (!p.enabled)
@@ -257,7 +256,7 @@ namespace Oxide.Plugins
             }
             else if (args[0].Equals("disable"))                                                                 // the player wants to disable the visual component of the plugin
             {
-                Player p;
+                KillFeedPlayer p;
                 if (_players.TryGetValue(player.userID, out p))
                 {
                     if (p.enabled)
@@ -275,7 +274,7 @@ namespace Oxide.Plugins
             }
             else if (args[0].Equals("status"))                                                                  // the player wants to know whether the visual component of the plugin is enabled or disabled
             {
-                Player p;
+                KillFeedPlayer p;
                 if (_players.TryGetValue(player.userID, out p))
                 {
                     if (p.enabled)
@@ -352,11 +351,12 @@ namespace Oxide.Plugins
                     { "explosive.satchel", "0/0b/Satchel_Charge_icon.png" },
                     { "explosive.timed", "6/6c/Timed_Explosive_Charge_icon.png" },
                     { "flamethrower", "5/55/Flame_Thrower_icon.png" },
-                    { "flameturret", "http://i.imgur.com/bi5VmCd.png" },
+                    { "flameturret", "f/f9/Flame_Turret_icon.png" },
                     { "gates.external.high.stone", "8/85/High_External_Stone_Gate_icon.png" },
                     { "gates.external.high.wood", "5/53/High_External_Wooden_Gate_icon.png" },
                     { "grenade.beancan", "b/be/Beancan_Grenade_icon.png" },
                     { "grenade.f1", "5/52/F1_Grenade_icon.png" },
+                    { "guntrap", "http://i.imgur.com/10MOtwu.png" },
                     { "hammer.salvaged", "f/f8/Salvaged_Hammer_icon.png" },
                     { "hatchet", "0/06/Hatchet_icon.png" },
                     { "icepick.salvaged", "e/e1/Salvaged_Icepick_icon.png" },
@@ -725,7 +725,6 @@ namespace Oxide.Plugins
         /// <summary>
         /// Responsible for loading the configuration file.
         /// </summary>
-        /// <seealso cref="GetConfig{T}(T, string, string, string)"/>
         new void LoadConfig()
         {
             Puts("Loading configuration file!");
@@ -958,7 +957,6 @@ namespace Oxide.Plugins
             /// </summary>
             /// <param name="key"> The key that is used to keep track of the value.</param>
             /// <param name="value"> The value containing the url to the png file.</param>
-            /// <seealso cref="WaitForRequest(string, string)"/>
             public static void Store(string key, string value)
             {
                 StringBuilder url = new StringBuilder();
@@ -986,7 +984,6 @@ namespace Oxide.Plugins
             /// Stores a list of value inside the server's file storage.
             /// </summary>
             /// <param name="files"> The list of values that should be stored. The list of keys is used to keep track of the values.</param>
-            /// <seealso cref="Store(string, string)"/>
             public static void Store(Dictionary<string, string> files)
             {
                 foreach (KeyValuePair<string, string> pair in files)
@@ -1038,7 +1035,6 @@ namespace Oxide.Plugins
             /// </summary>
             /// <param name = "action"> The action that should be executed.</param>
             /// <param name="delay"> The delay after which the action should be executed.</param>
-            /// <seealso cref="Timer(Action, float)"/>
             public void DelayedAction(Action action, float delay)
             {
                 if (isRunning)
@@ -1084,11 +1080,11 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Player
+        #region KillFeedPlayer
         /// <summary>
         /// Handles player related features on a per player basis, e.g. enabling/disabling the ui.
         /// </summary>
-        class Player
+        class KillFeedPlayer
         {
             public bool enabled { get; set; } = true;
 
@@ -1097,7 +1093,7 @@ namespace Oxide.Plugins
 
             public Connection connection { get; private set; }
 
-            public Player(Connection connection, string username)
+            public KillFeedPlayer(Connection connection, string username)
             {
                 this.username = username;
                 this.connection = connection;
@@ -1110,9 +1106,6 @@ namespace Oxide.Plugins
         /// </summary>
         /// <param name="username"> The username that should be formatted.</param>
         /// <returns> The formatted username</returns>
-        /// <seealso cref="StringHelper.RemoveTag(string)"/>
-        /// <seealso cref="StringHelper.RemoveSpecialCharacters(string, bool[])"/>
-        /// <seealso cref="StringHelper.TrimToSize(string, int)"/>
         string FormatUsername(string username)
         {
             if (removeTags)
@@ -1144,7 +1137,7 @@ namespace Oxide.Plugins
 
             string username = FormatUsername(player.displayName);
 
-            _players[player.userID] = new Player(player.net.connection, username);
+            _players[player.userID] = new KillFeedPlayer(player.net.connection, username);
         }
 
         /// <summary>
@@ -1246,7 +1239,6 @@ namespace Oxide.Plugins
             /// </summary>
             /// <param name="info"> Contains information about the initiator.</param>
             /// <returns> A instance that contains both the name and the userID of the initiator.</returns>
-            /// <seealso cref="EntityInfo"/>
             EntityInfo GetInitiator(HitInfo info)
             {
                 string name = "";
@@ -1256,7 +1248,7 @@ namespace Oxide.Plugins
                 {
                     userID = info.Initiator.ToPlayer().userID;
 
-                    Player player;
+                    KillFeedPlayer player;
                     if (_players.TryGetValue(info.Initiator.ToPlayer().userID, out player))
                     {
                         name = player.username;
@@ -1290,7 +1282,6 @@ namespace Oxide.Plugins
             /// </summary>
             /// <param name="entity"> The entity that died or got wounded.</param>
             /// <returns> A instance that contains both the name and the userID of the entity.</returns>
-            /// <seealso cref="EntityInfo"/>
             EntityInfo GetHitEntity(BaseCombatEntity entity)
             {
                 string name = "";
@@ -1300,7 +1291,7 @@ namespace Oxide.Plugins
                 {
                     userID = entity.ToPlayer().userID;
 
-                    Player player;
+                    KillFeedPlayer player;
                     if (_players.TryGetValue(entity.ToPlayer().userID, out player))
                     {
                         name = player.username;
@@ -1310,7 +1301,7 @@ namespace Oxide.Plugins
                         needsFormatting = true;
                         name = entity.ToPlayer().displayName;
                     }
-                    else if (entity.ToPlayer().userID < 76560000000000000L || entity.ToPlayer().userID > 0L)    // hitEntity (player) is actually a npc and his name needs to be formatted
+                    else if (entity.ToPlayer().userID > 0L && entity.ToPlayer().userID < 76560000000000000L)    // hitEntity (player) is actually a npc and his name needs to be formatted
                     {
                         needsFormatting = true;
                         name = entity.ToPlayer().displayName;
@@ -1353,9 +1344,7 @@ namespace Oxide.Plugins
             /// The weapon id represents the id of the stored png file of that weapon's icon.
             /// </remarks>
             /// <param name="info"> Contains information about the killing or wounding hit.</param>
-            /// <param name="selfInflicted"> Used to determine whether the event was self inflicted or not.</param>
             /// <returns> A instance containing both the shortname and the id of a weapon</returns>
-            /// <seealso cref="WeaponInfo"/>
             WeaponInfo GetWeapon(HitInfo info)
             {
                 string weaponID;
@@ -1437,6 +1426,11 @@ namespace Oxide.Plugins
                         else if (info.Initiator.ShortPrefabName.Equals("gates.external.high.wood"))
                         {
                             weapon = "gates.external.high.wood";
+                            selfInflicted = true;
+                        }
+                        else if (info.Initiator.ShortPrefabName.Equals("guntrap.deployed"))
+                        {
+                            weapon = "guntrap";
                             selfInflicted = true;
                         }
                         else if (info.Initiator.ShortPrefabName.Equals("lock.code")) weapon = "lock.code";
@@ -1617,14 +1611,7 @@ namespace Oxide.Plugins
         /// <summary>
         /// Creates a new Kill Feed entry formatted with the information provided through the parameters.
         /// </summary>
-        /// <param name="initiatorName"> The name of the initiator.</param>
-        /// <param name="initiatorColor"> The color of the initiator.</param>
-        /// <param name="bone"> The bone that was hit.</param>
-        /// <param name="infoColor"> The color of both the bone and the distance.</param>
-        /// <param name="weaponID"> The weaponID that refers to the png file of the weapon.</param>
-        /// <param name="dist"> The distance between the entity that was killed or wounded and the initiator.</param>
-        /// <param name="hitEntityName"> The name of the entity that was hit.</param>
-        /// <param name="hitEntityColor"> The color of the entity that was hit.</param>
+        /// <param name="entryData"> The data that is need for a new entry.</param>
         /// <returns> A list containing all UI elements.</returns>
         CuiElementContainer GetKillFeedEntry(EntryData entryData)
         {
@@ -1644,7 +1631,7 @@ namespace Oxide.Plugins
             CuiElement feedEntryElement = new CuiElement
             {
                 Name = "{0} feedEntry",
-                Parent = "Hud.Under",
+                Parent = "Hud",
                 FadeOut = fadeOut,
                 Components =
                     {
@@ -1786,15 +1773,15 @@ namespace Oxide.Plugins
             #region outline
             if (outline)
             {
-                CuiOutlineComponent outline = new CuiOutlineComponent
+                CuiOutlineComponent outlineComponent = new CuiOutlineComponent
                 {
                     Distance = "1.0 1.0",
                     Color = "0.0 0.0 0.0 1.0"
                 };
-                outerLeftHandElement.Components.Add(outline);
-                innerLeftHandElement.Components.Add(outline);
-                outerRightHandElement.Components.Add(outline);
-                innerRightHandElement.Components.Add(outline);
+                outerLeftHandElement.Components.Add(outlineComponent);
+                innerLeftHandElement.Components.Add(outlineComponent);
+                outerRightHandElement.Components.Add(outlineComponent);
+                innerRightHandElement.Components.Add(outlineComponent);
             }
             #endregion
 
@@ -1812,7 +1799,6 @@ namespace Oxide.Plugins
         /// Handles moving of existing entries and the addition of new entries.
         /// </summary>
         /// <param name="entryData"> The data that is need for a new entry.</param>
-        /// <seealso cref="IndexesOf(string, string, int)"/>
         void OnWoundedOrDeath(EntryData entryData)
         {
             // move existing entries
@@ -1826,7 +1812,7 @@ namespace Oxide.Plugins
                 {
                     element.Name = element.Name.Replace("{" + (i - 1) + "}", "{" + i + "}");
 
-                    if (element.Parent.Equals("Hud.Under"))
+                    if (element.Parent.Equals("Hud"))
                     {
                         CuiRectTransformComponent transform = (CuiRectTransformComponent)element.Components.Find(x => x.Type.Equals("RectTransform"));
                         transform.AnchorMin = (anchormin.x + horizontalSpacing * i) + " " + (anchormin.y + verticalSpacing * i);
@@ -1889,13 +1875,10 @@ namespace Oxide.Plugins
         /// <summary>
         /// Adds the specified UI elements to every player on the server.
         /// </summary>
-        /// <param name = "elements"> The UI elements that should be added.</param>
-        /// <param name="destroyAfter"> The time after which the UI elements should be destroyed again.</param>
-        /// <seealso cref="DestroyUI"/>
-        /// <seealso cref="AddUI(Player, float)"/>
+        /// <param name = "elements"> The UI elements that should be added.</param>>
         static void AddUI(CuiElementContainer elements)
         {
-            foreach (Player player in _players.Values)
+            foreach (KillFeedPlayer player in _players.Values)
             {
                 DestroyUI(elements, player);
 
@@ -1908,9 +1891,7 @@ namespace Oxide.Plugins
         /// </summary>
         /// <param name = "elements"> The UI elements that should be added.</param>
         /// <param name="player"> That player that the UI elements should be added to.</param>
-        /// <param name="destroyAfter"> The time after which the UI elements should be destroyed again.</param>
-        /// <seealso cref="Player.DelayedDestroyUI(float)"/>
-        static void AddUI(CuiElementContainer elements, Player player)
+        static void AddUI(CuiElementContainer elements, KillFeedPlayer player)
         {
             if (player.connection == null || !player.enabled) return;
 
@@ -1923,7 +1904,7 @@ namespace Oxide.Plugins
         /// <param name = "elements"> The UI elements that should be destroyed.</param>
         static void DestroyUI(CuiElementContainer elements)
         {
-            foreach (Player player in _players.Values)
+            foreach (KillFeedPlayer player in _players.Values)
             {
                 DestroyUI(elements, player);
             }
@@ -1934,7 +1915,7 @@ namespace Oxide.Plugins
         /// </summary>
         /// <param name = "elements"> The UI elements that should be destroyed.</param>
         /// <param name="player"> The player that should have his UI elements destroyed.</param>
-        static void DestroyUI(CuiElementContainer elements, Player player)
+        static void DestroyUI(CuiElementContainer elements, KillFeedPlayer player)
         {
             if (player.connection == null || !player.enabled) return;
 

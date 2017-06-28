@@ -1,148 +1,155 @@
-using System.Collections.Generic;
-using System.Reflection;
-using System;
-using UnityEngine;
-using Oxide.Core;
+﻿using System.Collections.Generic;
+using Newtonsoft.Json;
 using Oxide.Core.Plugins;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomSpawnPoints", "Reneb", "1.0.4", ResourceId = 1076)]
-    public class CustomSpawnPoints : RustPlugin
+    [Info("CustomSpawnPoints", "Reneb / k1lly0u", "1.1.0", ResourceId = 1076)]
+    class CustomSpawnPoints : RustPlugin
     {
+        #region Fields
+        [PluginReference] Plugin Spawns;
 
-        [PluginReference]
-        Plugin Spawns;
+        private List<Vector3> spawnPoints = new List<Vector3>();
+        private List<Vector3> remainingPoints = new List<Vector3>();
+        private bool initialized;
 
-        bool activated = false;
+        #endregion
 
-
-        /////////////////////////////////////////
-        // Oxide Hooks
-        /////////////////////////////////////////
-        BasePlayer.SpawnPoint OnFindSpawnPoint()
-        {
-            if (!activated) return null;
-            var targetpos = Spawns.Call("GetRandomSpawn", new object[] { spawnsname });
-            if (targetpos is string)
-                return null;
-            BasePlayer.SpawnPoint point = new BasePlayer.SpawnPoint();
-            point.pos = (Vector3)targetpos;
-            Debug.Log(point.pos.ToString());
-            point.rot = new Quaternion(0f, 0f, 0f, 1f);
-            RaycastHit hit;
-            if (checkDown != 0f)
-            {
-                if (Physics.Raycast(new Ray(point.pos + vectorUp, Vector3.down), out hit, checkDown, -1063190271))
-                {
-                    point.pos = hit.point;
-                }
-            }
-            return point;
-        }
-
-        /////////////////////////////////////////
-        // Config Manager
-        /////////////////////////////////////////
-        private static string spawnsname = "spawnfile";
-        static string MessagesPermissionsNotAllowed = "You are not allowed to use this command";
-        static string CheckUp = "1.0";
-        static string CheckDown = "1.0";
-        Vector3 vectorUp = new Vector3(0f, 1f, 0f);
-        float checkDown = 2f;
-
-        void LoadDefaultConfig() { }
-
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-        
-        void Init()
-        {
-            CheckCfg<string>("Settings - Spawn Database Name", ref spawnsname);
-            CheckCfg<string>("Messages - Permissions - Not Allowed", ref MessagesPermissionsNotAllowed);
-            CheckCfg<string>("Spawn Fix - Check from Xm up", ref CheckUp);
-            CheckCfg<string>("Spawn Fix - Check to Xm down", ref CheckDown);
-            vectorUp = new Vector3(0f, Convert.ToSingle(CheckUp), 0f);
-            checkDown = Convert.ToSingle(CheckUp) + Convert.ToSingle(CheckDown);
-            SaveConfig();
-        }
-
+        #region Oxide Hooks        
         void OnServerInitialized()
         {
-            LoadSpawns();
+            LoadVariables();
+            if (Spawns)
+                LoadSpawnpoints();
         }
-
-        void LoadSpawns()
+        void OnPluginLoaded(Plugin plugin)
         {
-            activated = false;
-            object success = Spawns.Call("GetSpawnsCount", new object[] { spawnsname });
-            if (success is string)
-            {
-                Debug.Log("Custom Spawn Points - ERROR:" + (string)success);
-                return;
-            }
-            int count = 0;
-            if (!int.TryParse(success.ToString(), out count))
-            {
-                Debug.Log(string.Format("Custom Spawn Points - ERROR: {0} is not a valid spawnfile",spawnsname));
-                return;
-            }
-            if (count < 1)
-            {
-                Debug.Log("Custom Spawn Points - ERROR: You must have at least 1 spawn in your spawnfile");
-                return;
-            }
-            Debug.Log(string.Format("Custom Spawn Points: {0} spawn points loaded", count.ToString()));
-            activated = true;
+            if (!initialized && plugin?.Title == "Spawns")            
+                LoadSpawnpoints();            
         }
-
-        bool hasAccess(ConsoleSystem.Arg arg)
+        BasePlayer.SpawnPoint OnFindSpawnPoint()
         {
-            if (arg.connection != null)
+            if (!initialized) return null;
+
+            object position = GetSpawnPoint();
+            if (position is Vector3)            
+                return new BasePlayer.SpawnPoint() { pos = (Vector3)position, rot = new Quaternion(0, 0, 0, 1) };
+            return null;
+        }
+        #endregion
+
+        #region Functions
+        private void LoadSpawnpoints()
+        {
+            initialized = false;
+            if (string.IsNullOrEmpty(configData.Spawnfile))
             {
-                if (arg.connection.authLevel < 2)
+                PrintError("No spawnfile set in the config. Unable to continue");
+                return;
+            }
+
+            object success = Spawns.Call("LoadSpawnFile", configData.Spawnfile);
+            if (success is List<Vector3>)
+            {
+                spawnPoints = success as List<Vector3>;
+                if (spawnPoints.Count == 0)
                 {
-                    SendReply(arg, MessagesPermissionsNotAllowed);
-                    return false;
+                    PrintError("Loaded spawnfile contains no spawn points. Unable to continue");
+                    return;
                 }
+                PrintWarning($"Successfully loaded {spawnPoints.Count} spawn points");
             }
-            return true;
+            else
+            {
+                PrintError($"Unable to load the specified spawnfile: {configData.Spawnfile}");
+                return;
+            }
+            remainingPoints = new List<Vector3>(spawnPoints);
+            initialized = true;
         }
+        object GetSpawnPoint(int attempt = 0)
+        {
+            if (attempt >= 10)
+                return null;
+
+            var position = remainingPoints.GetRandom();
+
+            List<BaseEntity> entities = Facepunch.Pool.GetList<BaseEntity>();
+            Vis.Entities(position, configData.Detect, entities, LayerMask.GetMask("Construction", "Deployable"));
+            int count = entities.Count;
+            Facepunch.Pool.FreeList(ref entities);
+
+            remainingPoints.Remove(position);
+            if (remainingPoints.Count == 0)            
+                remainingPoints = new List<Vector3>(spawnPoints);            
+
+            if (count > 0) 
+                return GetSpawnPoint(++attempt);
+
+            return position;
+        }
+        #endregion
+
+        #region Commands
         [ConsoleCommand("spawns.config")]
         void ccmdSpawnFile(ConsoleSystem.Arg arg)
         {
-            if (!hasAccess(arg)) return;
-            if (arg.Args == null || arg.Args.Length == 0)
+            if (arg.Connection == null || (arg.Connection != null && arg.Connection.authLevel == 2))
             {
-                SendReply(arg, "spawns.config SPAWNFILENAME");
-                return;
+                if (arg.Args == null || arg.Args.Length == 0)
+                {
+                    SendReply(arg, "spawns.config \"spawnfile name\" - Set a new spawnfile");
+                    return;
+                }
+                object success = Spawns.Call("GetSpawnsCount", new object[] { arg.Args[0] });
+                if (success is string)
+                {
+                    SendReply(arg, $"Unable to load the specified spawnfile: {arg.Args[0]}");
+                    return;
+                }
+                if (success is int)
+                {
+                    if ((int)success == 0)
+                    {
+                        PrintError("Loaded spawnfile contains no spawn points. Unable to continue");
+                        return;
+                    }
+                    configData.Spawnfile = arg.Args[0];
+                    SaveConfig(configData);
+                    LoadSpawnpoints();
+                }                
             }
-            object success = Spawns.Call("GetSpawnsCount", new object[] { arg.Args[0] });
-            if (success is string)
-            {
-                SendReply(arg, (string)success);
-                return;
-            }
-            int count = 0;
-            if(!int.TryParse(success.ToString(), out count))
-            {
-                SendReply(arg, "This is not a valid spawnfile");
-                return;
-            }
-            if (count < 1)
-            {
-                SendReply(arg, "You must have at least 1 spawn in your spawnfile");
-                return;
-            }
-            SendReply(arg,string.Format("{0} spawns loaded", count.ToString()));
-            spawnsname = arg.Args[0];
-            SaveConfig();
-            LoadSpawns();
+            else SendReply(arg, "You do not have permission to use this command");           
         }
+        #endregion
+
+        #region Config        
+        private ConfigData configData;
+        class ConfigData
+        {
+            [JsonProperty(PropertyName = "Spawnfile name")]
+            public string Spawnfile { get; set; }
+            [JsonProperty(PropertyName = "Entity detection radius")]
+            public float Detect { get; set; }            
+        }
+        private void LoadVariables()
+        {
+            LoadConfigVariables();
+            SaveConfig();
+        }
+        protected override void LoadDefaultConfig()
+        {
+            var config = new ConfigData
+            {
+                Spawnfile = string.Empty,
+                Detect = 10
+            };
+            SaveConfig(config);
+        }
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion       
     }
 }

@@ -1,0 +1,19 @@
+{
+    "name": "SkipNight UI",
+    "description": "A UI skip night plugin with completely customisable interfaces",
+    "author": "k1lly0u",
+    "version": "0.1.1",
+    "configuration": true,
+    "suggest": {
+        "ImageLibrary": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/skipnight-ui.2506",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

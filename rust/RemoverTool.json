@@ -1,8 +1,8 @@
 {
     "name": "R-Remover Tool",
-    "description": "Remover tool",
+    "description": "Building and entity removal tool",
     "author": "Fujikura",
-    "version": "4.1.7",
+    "version": "4.1.8",
     "configuration": true,
     "suggest": {
         "BuildingOwners": "*",

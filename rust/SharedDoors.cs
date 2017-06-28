@@ -1,34 +1,30 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System;
+using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
-using Oxide.Plugins;
-using System;
-using System.Collections.Generic;
-using System.Reflection;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("SharedDoors", "dbteku", "0.7.2", ResourceId = 2108)]
+    [Info("SharedDoors", "dbteku", "0.7.6", ResourceId = 2108)]
     [Description("Making sharing doors easier.")]
     class SharedDoors : CovalencePlugin
     {
+        [PluginReference]
+        private Plugin Clans;
+
         private const string RUST_IO = "clans";
         private const string CLANS_NAME = "Clans";
         private const string RUST_CLANS_LOADED_AFTER = "Rust Clans has been loaded. SharedDoors now hooking.";
         private const string MASTER_PERM = "shareddoors.master";
-        private static Library rustIO;
-        [PluginReference("Clans")]
-        private Plugin Clans;
-        private static Plugin ClansInstance;
         private MasterKeyHolders holders;
 
         void OnServerInitialized()
         {
             permission.RegisterPermission(MASTER_PERM, this);
-            ClansInstance = Clans;
             holders = new MasterKeyHolders();
         }
 
@@ -38,7 +34,6 @@ namespace Oxide.Plugins
             {
                 Puts(RUST_CLANS_LOADED_AFTER);
                 Clans = name;
-                ClansInstance = name;
             }
         }
 
@@ -48,7 +43,6 @@ namespace Oxide.Plugins
             {
                 Puts(RUST_CLANS_LOADED_AFTER);
                 Clans = null;
-                ClansInstance = null;
             }
         }
 
@@ -70,25 +64,14 @@ namespace Oxide.Plugins
             }
         }
 
-        bool CanUseLock(BasePlayer player, BaseLock door)
+        bool CanUseLockedEntity(BasePlayer player, BaseLock door)
         {
             IPlayer iPlayer = covalence.Players.FindPlayerById(player.userID.ToString());
             bool canUse = false;
-            if ((player.IsAdmin && holders.IsAKeyMaster(player.userID.ToString())) || (iPlayer.HasPermission(MASTER_PERM) && holders.IsAKeyMaster(player.userID.ToString())))
-            {
-                canUse = true;
-            }
-            else
-            {
-                canUse = new DoorAuthorizer(door, player).canOpen();
-            }
-
+            canUse = (player.IsAdmin && holders.IsAKeyMaster(player.userID.ToString()))
+            || (iPlayer.HasPermission(MASTER_PERM) && holders.IsAKeyMaster(player.userID.ToString()))
+            || new DoorAuthorizer(door, player).CanOpen();
             return canUse;
-        }
-
-        protected static Plugin GetClans()
-        {
-            return ClansInstance;
         }
 
         [Command("sd")]
@@ -150,15 +133,12 @@ namespace Oxide.Plugins
         }
 
         /*
-         * 
+         *
          * Door Handler Class
-         * 
+         *
          * */
         private class DoorAuthorizer
         {
-
-            readonly FieldInfo whiteListField = typeof(CodeLock).GetField("whitelistPlayers", (BindingFlags.Instance | BindingFlags.NonPublic));
-            readonly FieldInfo _codeField = typeof(CodeLock).GetField("code", (BindingFlags.Instance | BindingFlags.NonPublic));
             public BaseLock BaseDoor { get; protected set; }
             public BasePlayer Player { get; protected set; }
             private ToolCupboardChecker checker;
@@ -172,7 +152,7 @@ namespace Oxide.Plugins
                 handler = new RustIOHandler(this);
             }
 
-            public bool canOpen()
+            public bool CanOpen()
             {
                 bool canUse = false;
                 if (BaseDoor.IsLocked())
@@ -180,59 +160,50 @@ namespace Oxide.Plugins
                     if (BaseDoor is CodeLock)
                     {
                         CodeLock codeLock = (CodeLock)BaseDoor;
-                        canUse = canOpenCodeLock(codeLock, Player);
+                        canUse = CanOpenCodeLock(codeLock, Player);
                     }
                     else if (BaseDoor is KeyLock)
                     {
                         KeyLock keyLock = (KeyLock)BaseDoor;
-                        canUse = canOpenKeyLock(keyLock, Player);
+                        canUse = CanOpenKeyLock(keyLock, Player);
                     }
                 }
                 else
                 {
                     canUse = true;
                 }
-
                 return canUse;
             }
 
-            public List<ulong> GetWhiteList()
-            {
-                return (List<ulong>)whiteListField.GetValue(BaseDoor);
-            }
-
-            private bool canOpenCodeLock(CodeLock door, BasePlayer player)
+            private bool CanOpenCodeLock(CodeLock door, BasePlayer player)
             {
                 bool canUse = false;
-                //Have to do this due to Facepunch not overriding their own method called HasLockPermission()
-                var whitelist = (List<ulong>)whiteListField.GetValue(door);
-                if (whitelist.Contains(player.userID))
+                var whitelist = door.whitelistPlayers;
+                canUse = whitelist.Contains(player.userID);
+
+                if (!canUse)
                 {
-                    canUse = true;
-                }
-                else
-                {
-                    canUse = (player.CanBuild() && checker.isPlayerAuthorized());
-                    if (canUse && handler.clansAvailable())
+                    canUse = (player.CanBuild() && checker.IsPlayerAuthorized());
+                    if (canUse && handler.ClansAvailable())
                     {
-                        canUse = handler.isInClan(player);
+                        canUse = handler.IsInClan(player);
                     }
                 }
 
-                playSound(canUse, door, player);
+                PlaySound(canUse, door, player);
                 return canUse;
             }
 
-            private bool canOpenKeyLock(KeyLock door, BasePlayer player)
+            private bool CanOpenKeyLock(KeyLock door, BasePlayer player)
             {
                 bool canUse = false;
 
-                canUse = door.HasLockPermission(player) || (player.CanBuild() && checker.isPlayerAuthorized());
+                canUse = door.HasLockPermission(player) || (player.CanBuild() && checker.IsPlayerAuthorized());
 
                 return canUse;
             }
 
-            private void playSound(bool canUse, CodeLock door, BasePlayer player)
+            private void PlaySound(bool canUse, CodeLock door, BasePlayer player)
             {
                 if (canUse)
                 {
@@ -245,16 +216,13 @@ namespace Oxide.Plugins
             }
         }
 
-
         /*
-         * 
+         *
          * Tool Cupboard Tool
-         * 
+         *
          * */
-
         private class ToolCupboardChecker
         {
-
             public BasePlayer Player { get; protected set; }
 
             public ToolCupboardChecker(BasePlayer player)
@@ -262,7 +230,7 @@ namespace Oxide.Plugins
                 this.Player = player;
             }
 
-            public bool isPlayerAuthorized()
+            public bool IsPlayerAuthorized()
             {
                 bool isIn = false;
                 BuildPrivilegeTrigger trigger = Player.FindTrigger<BuildPrivilegeTrigger>();
@@ -275,14 +243,12 @@ namespace Oxide.Plugins
         }
 
         /*
-         * 
+         *
          * RustIO Handler
-         * 
+         *
          * */
-
         private class RustIOHandler
         {
-
             private const string GET_CLAN_OF_PLAYER = "GetClanOf";
             private const string GET_CLAN = "GetClan";
             private const string MEMBERS = "members";
@@ -292,12 +258,13 @@ namespace Oxide.Plugins
 
             public RustIOHandler(DoorAuthorizer door)
             {
-                this.Clans = SharedDoors.GetClans();
                 if (door.BaseDoor is CodeLock)
                 {
-                    if (door.GetWhiteList().Count > 0)
+                    CodeLock codeLock = door.BaseDoor as CodeLock;
+                    List<ulong> whitelist = codeLock.whitelistPlayers;
+                    if (whitelist.Count > 0)
                     {
-                        this.OriginalPlayerID = door.GetWhiteList()[0];
+                        this.OriginalPlayerID = whitelist[0];
                     }
                     else
                     {
@@ -307,10 +274,10 @@ namespace Oxide.Plugins
                 this.Door = door;
             }
 
-            public bool isInClan(BasePlayer player)
+            public bool IsInClan(BasePlayer player)
             {
                 bool isInClan = false;
-                if (clansAvailable())
+                if (ClansAvailable())
                 {
                     object obj = Clans.CallHook(GET_CLAN_OF_PLAYER, new object[] { OriginalPlayerID });
                     if (obj != null)
@@ -330,22 +297,19 @@ namespace Oxide.Plugins
                 return isInClan;
             }
 
-            public bool clansAvailable()
+            public bool ClansAvailable()
             {
                 return this.Clans != null;
             }
-
         }
 
         /*
-       * 
+       *
        * Admin Mode Handler
-       * 
+       *
        * */
-
         private class MasterKeyHolders
         {
-
             private Dictionary<string, PlayerSettings> keyMasters;
 
             public MasterKeyHolders()
@@ -411,13 +375,11 @@ namespace Oxide.Plugins
             }
         }
 
-
         /*
-       * 
+       *
        * Player Settings
-       * 
+       *
        * */
-
         private class PlayerSettings
         {
             public bool IsMasterKeyHolder { get; set; }
@@ -431,7 +393,6 @@ namespace Oxide.Plugins
             {
                 IsMasterKeyHolder = !IsMasterKeyHolder;
             }
-
         }
     }
 }

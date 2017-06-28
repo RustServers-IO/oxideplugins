@@ -1,8 +1,8 @@
 {
     "name": "PsyArrows",
-    "description": "Adds more arrows to Rust through commands",
-    "author": "",
-    "version": "1.0.0",
+    "description": "Allows players with permission to use various different custom arrow types",
+    "author": "Ryan",
+    "version": "2.0.2",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/psyarrows.1413",

@@ -1,15 +1,18 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RockBlock", "Nogrod", "1.0.6", ResourceId = 1831)]
-    class RockBlock : RustPlugin
+    [Info("Rock Block", "Nogrod", "1.1.0", ResourceId = 1831)]
+    [Description("Blocks players from building in rocks")]
+    public class RockBlock : RustPlugin
     {
-        private readonly int worldLayer = LayerMask.GetMask("World", "Default");
-        private const BaseNetworkable.DestroyMode DestroyMode = BaseNetworkable.DestroyMode.None;
         private ConfigData configData;
+        private const BaseNetworkable.DestroyMode DestroyMode = BaseNetworkable.DestroyMode.None;
+        private const string permBypass = "rockblock.bypass";
+        private readonly int worldLayer = LayerMask.GetMask("World", "Default");
 
-        class ConfigData
+        private class ConfigData
         {
             public int MaxHeight { get; set; }
             public bool AllowCave { get; set; }
@@ -25,22 +28,33 @@ namespace Oxide.Plugins
             Config.WriteObject(config, true);
         }
 
+        private new void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                ["DistanceTooHigh"] = "Distance to ground too high: {0}",
+                ["PlayerSuspected"] = "{0} is suspected of building {1} inside a rock at {2}!"
+            }, this);
+        }
+
         private void Init()
         {
             configData = Config.ReadObject<ConfigData>();
+            permission.RegisterPermission(permBypass, this);
         }
 
-        void OnEntityBuilt(Planner planner, GameObject gameObject)
+        private void OnEntityBuilt(Planner planner, GameObject gameObject)
         {
             var player = planner.GetOwnerPlayer();
-            if (player == null || player.IsAdmin) return;
-            var entity = gameObject.GetComponent<BaseEntity>();
+            if (player == null || permission.UserHasPermission(player.UserIDString, permBypass)) return;
+
             RaycastHit hitInfo;
+            var entity = gameObject.GetComponent<BaseEntity>();
             if (configData.MaxHeight > 0 && Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hitInfo, float.PositiveInfinity, Rust.Layers.Terrain))
             {
                 if (hitInfo.distance > configData.MaxHeight)
                 {
-                    SendReply(player, "Distance to ground too high: {0}", hitInfo.distance);
+                    SendReply(player, string.Format(lang.GetMessage("DistanceTooHigh", this, player.UserIDString), hitInfo.distance));
                     entity.Kill(DestroyMode);
                     return;
                 }
@@ -48,23 +62,26 @@ namespace Oxide.Plugins
             CheckEntity(entity, player);
         }
 
-        void OnItemDeployed(Deployer deployer, BaseEntity entity)
+        private void OnItemDeployed(Deployer deployer, BaseEntity entity)
         {
             var player = deployer.GetOwnerPlayer();
-            if (player == null || player.IsAdmin) return;
+            if (player == null || permission.UserHasPermission(player.UserIDString, permBypass)) return;
+
             CheckEntity(entity, player);
         }
 
         private void CheckEntity(BaseEntity entity, BasePlayer player)
         {
             if (entity == null) return;
+
             var targets = Physics.RaycastAll(new Ray(entity.transform.position + Vector3.up * 200f, Vector3.down), 250, worldLayer);
             foreach (var hit in targets)
             {
                 var collider = hit.collider.GetComponent<MeshCollider>();
                 //if (collider != null) SendReply(player, $"Rock: {collider.sharedMesh.name}");
                 if (collider == null || !collider.sharedMesh.name.StartsWith("rock_") || !IsInside(hit.collider, entity) && (configData.AllowCave || !IsInCave(entity, player))) continue;
-                Puts($"{player.displayName} is suspected of building {entity.PrefabName} inside a rock at {entity.transform.position}!");
+
+                Puts(lang.GetMessage("PlayerSuspected", this), player.displayName, entity.PrefabName, entity.transform.position); // TODO: Optional logging
                 entity.Kill(DestroyMode);
                 break;
             }

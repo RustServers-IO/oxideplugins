@@ -1,0 +1,19 @@
+{
+    "name": "Blueprints Revived",
+    "description": "Adds blueprints back to Rust",
+    "author": "Jake Rich",
+    "version": "1.2.2",
+    "configuration": true,
+    "require": {
+        "ImageLibrary": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/blueprints-revived.2433",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

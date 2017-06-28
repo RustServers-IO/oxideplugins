@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoPurge", "Fujikura/Norn", "1.5.4", ResourceId = 1566)]
+    [Info("AutoPurge", "Fujikura/Norn", "1.5.5", ResourceId = 1566)]
     [Description("Remove entities if the owner becomes inactive.")]
     public class AutoPurge : RustPlugin
     {
@@ -24,7 +24,6 @@ namespace Oxide.Plugins
 		static readonly double MaxUnixSeconds = (DateTime.MaxValue - UnixEpoch).TotalSeconds;
 		private List<ulong> groupModerator = new List<ulong>();
 		private List<ulong> groupOwner = new List<ulong>();
-		private string logFile = "oxide/logs/AutoPurgeLog.txt";
 		private bool friendsEnabled = false;
 		private bool clansEnabled = false;
 		private int lastMinute;
@@ -348,7 +347,7 @@ namespace Oxide.Plugins
 			}
 			SendReply(arg, $"Removed: {count} entities from ID: {owner}");
 			if (logPurgeToFile && count > 0)
-				ConVar.Server.Log(logFile,$"Manually removed: {count} entities from ID: {owner}");
+				LogToFile("AutoPurge", $"Manually removed: {count} entities from ID: {owner}", this);
 		}
 
         [ConsoleCommand("autopurge.run")]
@@ -487,15 +486,15 @@ namespace Oxide.Plugins
 				Puts(ifTest+ "Affected IDs: " + playerIds);
 				if (logPurgeToFile)
 				{
-					ConVar.Server.Log(logFile, ifTest+ "Removed: " + count.ToString() + " entities from: " + UNIQUE_HITS.Count.ToString() + " inactive players");
-					ConVar.Server.Log(logFile, ifTest+ "Affected IDs: " + playerIds);
+					LogToFile("AutoPurge", ifTest+ "Removed: " + count.ToString() + " entities from: " + UNIQUE_HITS.Count.ToString() + " inactive players", this);
+					LogToFile("AutoPurge", ifTest+ "Affected IDs: " + playerIds, this);
 				}
 			}
 			else
 			{
 				Puts("Nothing to remove... up to date.");
 				if (logPurgeToFile)
-					ConVar.Server.Log(logFile,"Nothing to remove... up to date.");
+					LogToFile("AutoPurge", "Nothing to remove... up to date.", this);
 			}
         }
 

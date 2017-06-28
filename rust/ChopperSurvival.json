@@ -2,7 +2,7 @@
     "name": "Chopper Survival",
     "description": "Helicopter survival event for EventManager",
     "author": "k1lly0u",
-    "version": "0.2.71",
+    "version": "0.2.82",
     "configuration": true,
     "require": {
         "EventManager": "*",

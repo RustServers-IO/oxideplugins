@@ -9,7 +9,7 @@ using Facepunch.Extend;
 
 namespace Oxide.Plugins
 {
-     [Info("Fishing", "Colon Blow", "1.2.2", ResourceId = 1537)]
+     [Info("Fishing", "Colon Blow", "1.2.3", ResourceId = 1537)]
      class Fishing : RustPlugin
      {
 	public int fishchance;
@@ -27,7 +27,6 @@ namespace Oxide.Plugins
 	private static int groundlayer;
 	private bool Changed;
 	//string CaughtFish = "assets/content/unimplemented/fishing_rod/vm_fishing_rod/pluck_fish.prefab";
-	string randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier3 lootbox.prefab";
 
 	Dictionary<ulong, string> GuiInfo = new Dictionary<ulong, string>();
 
@@ -367,11 +366,17 @@ namespace Oxide.Plugins
 	SendReply(player, lang.GetMessage("chancetext1", this) + fishchancepercent + lang.GetMessage("chancetext2", this) + currenttime);
         }
 
+	string randomlootprefab;
+
         void SpawnLootBox(BasePlayer player, HitInfo hitInfo)
         {
-            var createdPrefab = GameManager.server.CreateEntity(randomlootprefab, hitInfo.HitPositionWorld);
-            BaseEntity entity = createdPrefab?.GetComponent<BaseEntity>();
-            entity?.Spawn();
+		int rlroll = UnityEngine.Random.Range(1, 4);
+		if (rlroll == 1) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier1 lootbox.prefab";
+		if (rlroll == 2) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier2 lootbox.prefab";
+		if (rlroll == 3) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier3 lootbox.prefab";
+            	var createdPrefab = GameManager.server.CreateEntity(randomlootprefab, hitInfo.HitPositionWorld);
+            	BaseEntity entity = createdPrefab?.GetComponent<BaseEntity>();
+            	entity?.Spawn();
         }
      }
 }

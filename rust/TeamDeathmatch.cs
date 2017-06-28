@@ -7,7 +7,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("TeamDeathmatch", "k1lly0u", "0.3.2", ResourceId = 1484)]
+    [Info("TeamDeathmatch", "k1lly0u", "0.3.52", ResourceId = 1484)]
     class TeamDeathmatch : RustPlugin
     {
         #region Fields        
@@ -148,13 +148,13 @@ namespace Oxide.Plugins
         {
             if (UseTDM && Started && !GameEnding)
             {
+                if (!player.GetComponent<TDMPlayer>()) return;
                 if (player.IsSleeping())
                 {
                     player.EndSleeping();
                     timer.In(1, () => OnEventPlayerSpawn(player));
                     return;
-                }
-                if (!player.GetComponent<TDMPlayer>()) return;
+                }                
                 GiveTeamGear(player);
                 EventManager.CreateScoreboard(player);
             }
@@ -164,24 +164,35 @@ namespace Oxide.Plugins
             if (!GameEnding)
             {
                 player.health = configData.GameSettings.StartHealth;
-                EventManager.GivePlayerKit(player, Kit);
-                if (!EventManager._Event.UseClassSelector)
-                    GiveTeamShirts(player);
+                EventManager.GivePlayerKit(player, Kit);                
+            }
+        }
+        private void OnEventKitGiven(BasePlayer player)
+        {
+            if (UseTDM)
+            {
+                GiveTeamShirts(player);
             }
         }
         private void GiveTeamShirts(BasePlayer player)
-        {            
+        {
             if (player.GetComponent<TDMPlayer>().team == Team.A)
             {
-                Item shirt = ItemManager.CreateByPartialName(configData.TeamA.Shirt);
-                shirt.skin = configData.TeamA.SkinID;
-                shirt.MoveToContainer(player.inventory.containerWear);
+                foreach (var item in configData.TeamA.ClothingItems)
+                {
+                    Item clothing = ItemManager.CreateByPartialName(item.Key);
+                    clothing.skin = item.Value;
+                    clothing.MoveToContainer(player.inventory.containerWear);
+                }
             }
-            else if (player.GetComponent<TDMPlayer>().team == Team.B)
+            if (player.GetComponent<TDMPlayer>().team == Team.B)
             {
-                Item shirt = ItemManager.CreateByPartialName(configData.TeamB.Shirt);
-                shirt.skin = configData.TeamB.SkinID;
-                shirt.MoveToContainer(player.inventory.containerWear);
+                foreach (var item in configData.TeamB.ClothingItems)
+                {
+                    Item clothing = ItemManager.CreateByPartialName(item.Key);
+                    clothing.skin = item.Value;
+                    clothing.MoveToContainer(player.inventory.containerWear);
+                }
             }
         }       
                 
@@ -198,12 +209,7 @@ namespace Oxide.Plugins
                 CheckScores(true); 
             }
             return null;
-        }
-        void OnPlayerSelectClass(BasePlayer player)
-        {
-            if (UseTDM && Started && !GameEnding)
-                GiveTeamShirts(player);
-        }
+        }        
         object OnEventCancel()
         {
             if (UseTDM && Started)
@@ -375,12 +381,10 @@ namespace Oxide.Plugins
                 if (player.GetComponent<TDMPlayer>().team == Team.NONE)
                 {
                     player.GetComponent<TDMPlayer>().team = team;
-                    string color = string.Empty;
-                    if (team == Team.A) color = configData.TeamA.Color;
-                    else if (team == Team.B) color = configData.TeamB.Color;
+                    string color = team == Team.A ? configData.TeamA.Color : configData.TeamB.Color;
                     SendReply(player, string.Format(lang.GetMessage("AssignTeam", this, player.UserIDString), GetTeamName(team, player), color));
                     Puts("Player " + player.displayName + " assigned to Team " + team);
-                    player.Respawn();                    
+                    //player.Respawn();                    
                 }
             }
         }
@@ -422,7 +426,7 @@ namespace Oxide.Plugins
         #region Scoreboard        
         private void UpdateScores()
         {
-            if (UseTDM && Started)
+            if (UseTDM && Started && configData.EventSettings.ShowScoreboard)
             {
                 var sortedList = TDMPlayers.OrderByDescending(pair => pair.kills).ToList();
                 var scoreList = new Dictionary<ulong, EventManager.Scoreboard>();
@@ -462,6 +466,12 @@ namespace Oxide.Plugins
                 }
             }
             return foundPlayers;
+        }
+        void SendMessage(string message)
+        {
+            if (configData.EventSettings.UseUINotifications)
+                EventManager.PopupMessage(message);
+            else PrintToChat(message);
         }
         #endregion
 
@@ -521,7 +531,7 @@ namespace Oxide.Plugins
         }
         bool isAuth(ConsoleSystem.Arg arg)
         {
-            if (arg.connection?.authLevel < 1)
+            if (arg.Connection?.authLevel < 1)
             {
                 SendReply(arg, "You dont not have permission to use this command.");
                 return false;
@@ -545,7 +555,7 @@ namespace Oxide.Plugins
             string color = string.Empty;
             if (p.team == Team.A) color = configData.TeamA.Color;
             else if (p.team == Team.B) color = configData.TeamB.Color;
-            EventManager.PopupMessage(string.Format(lang.GetMessage("KillMsg", this), player.displayName, victim.displayName));
+            SendMessage(string.Format(lang.GetMessage("KillMsg", this), player.displayName, victim.displayName));
             CheckScores();
         }
         void CheckScores(bool timelimit = false)
@@ -621,6 +631,8 @@ namespace Oxide.Plugins
             public string DefaultZoneID { get; set; }
             public int TokensOnKill { get; set; }
             public int TokensOnWin { get; set; }
+            public bool ShowScoreboard { get; set; }
+            public bool UseUINotifications { get; set; }
         }
         class GameSettings
         {
@@ -630,8 +642,7 @@ namespace Oxide.Plugins
         }
         class TeamSettings
         {
-            public string Shirt { get; set; }
-            public ulong SkinID { get; set; }
+            public Dictionary<string, ulong> ClothingItems { get; set; }
             public string Color { get; set; }
             public string Spawnfile { get; set; }
         }
@@ -668,7 +679,9 @@ namespace Oxide.Plugins
                     DefaultKit = "tdmkit",
                     DefaultZoneID = "tdmzone",
                     TokensOnKill = 1,
-                    TokensOnWin = 5
+                    TokensOnWin = 5,
+                    ShowScoreboard = true,
+                    UseUINotifications = true
                 },
                 GameSettings = new GameSettings
                 {
@@ -679,15 +692,19 @@ namespace Oxide.Plugins
                 TeamA = new TeamSettings
                 {
                     Color = "#33CC33",
-                    Shirt = "tshirt",
-                    SkinID = 0,
+                    ClothingItems = new Dictionary<string, ulong>
+                    {
+                        { "tshirt", 0 }
+                    },
                     Spawnfile = "tdmspawnsa"
                 },
                 TeamB = new TeamSettings
                 {
                     Color = "#003366",
-                    Shirt = "tshirt",
-                    SkinID = 14177,
+                    ClothingItems = new Dictionary<string, ulong>
+                    {
+                        { "tshirt", 14177 }
+                    },
                     Spawnfile = "tdmspawnsb"
                 },
                 Messaging = new Messaging

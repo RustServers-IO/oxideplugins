@@ -1,0 +1,16 @@
+{
+    "name": "Phantom Sleepers",
+    "description": "Create phantom sleepers to lure ESP hackers.",
+    "author": "nivex",
+    "version": "0.1.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/phantom-sleepers.2478",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

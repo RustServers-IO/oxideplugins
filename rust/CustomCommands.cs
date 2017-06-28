@@ -9,15 +9,13 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomCommands", "Absolut", "1.1.2", ResourceId = 2158)]
+    [Info("CustomCommands", "Absolut", "1.1.3", ResourceId = 2158)]
 
     class CustomCommands : RustPlugin
     {
 
         [PluginReference]
         Plugin ImageLibrary;
-        bool localimages = true;
-
         CustomCommandData ccData;
         private DynamicConfigFile CCData;
 
@@ -110,13 +108,9 @@ namespace Oxide.Plugins
                 Interface.Oxide.UnloadPlugin(Name);
                 return;
             }
-            if (!permission.PermissionExists("CustomCommands.admin"))
-                permission.RegisterPermission("CustomCommands.admin", this);
-            if (!permission.PermissionExists("CustomCommands.create"))
-                permission.RegisterPermission("CustomCommands.create", this);
-            if (!permission.PermissionExists("CustomCommands.allowed"))
-                permission.RegisterPermission("CustomCommands.allowed", this);
-
+                permission.RegisterPermission(this.Title+".admin", this);
+                permission.RegisterPermission(this.Title + ".create", this);
+                permission.RegisterPermission(this.Title + ".allowed", this);
             LoadVariables();
             LoadData();
             timers.Add("info", timer.Once(900, () => InfoLoop()));
@@ -167,18 +161,16 @@ namespace Oxide.Plugins
         #region Functions
         private string TryForImage(string shortname, ulong skin = 99)
         {
-            if (localimages)
-                if (skin == 99)
-                return GetImage(shortname, (ulong)ResourceId);
-                else return GetImage(shortname, skin);
-            else if (skin == 99)
-                return GetImageURL(shortname, (ulong)ResourceId);
-                else return GetImageURL(shortname, skin);
+            if (shortname.Contains("http")) return shortname;
+            if (skin == 99) skin = (ulong)ResourceId;
+            return GetImage(shortname, skin, true);
         }
 
-        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
-        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
-        public bool AddImage(string url, string shortname, ulong ID = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, ID);
+        public string GetImage(string shortname, ulong skin = 0, bool returnUrl = false) => (string)ImageLibrary.Call("GetImage", shortname.ToLower(), skin, returnUrl);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname.ToLower(), skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
+        public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
 
         public void DestroyCCPanel(BasePlayer player)
         {
@@ -245,7 +237,6 @@ namespace Oxide.Plugins
 
         public class UI
         {
-            static bool localimage = true;
             static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
@@ -296,14 +287,14 @@ namespace Oxide.Plugins
 
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (UI.localimage)
+                if (img.StartsWith("http") || img.StartsWith("www"))
                 {
                     container.Add(new CuiElement
                     {
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -314,7 +305,7 @@ namespace Oxide.Plugins
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });

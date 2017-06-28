@@ -9,7 +9,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GunGame", "k1lly0u", "0.4.11", ResourceId = 1485)]
+    [Info("GunGame", "k1lly0u", "0.4.22", ResourceId = 1485)]
     class GunGame : RustPlugin
     {
         #region Fields
@@ -104,7 +104,7 @@ namespace Oxide.Plugins
         #region Scoreboard
         private void UpdateScores()
         {
-            if (usingGG && hasStarted)
+            if (usingGG && hasStarted && configData.EventSettings.ShowScoreboard)
             {
                 var sortedList = GunGamePlayers.OrderByDescending(pair => pair.level).ToList();
                 var scoreList = new Dictionary<ulong, EventManager.Scoreboard>();
@@ -385,11 +385,14 @@ namespace Oxide.Plugins
         {
             if (gameEnding) return;
             player.inventory.Strip();
-            GiveRankKit(player, player.GetComponent<GunGamePlayer>().level);
-            if (!downgradeDisabled)            
-                GiveItem(player, configData.GameSettings.DowngradeWeapon);            
-            foreach (var entry in weaponSet.PlayerGear)
-                GiveItem(player, entry);
+            timer.In(1, () =>
+            {
+                GiveRankKit(player, player.GetComponent<GunGamePlayer>().level);
+                if (!downgradeDisabled)
+                    GiveItem(player, configData.GameSettings.DowngradeWeapon);
+                foreach (var entry in weaponSet.PlayerGear)
+                    GiveItem(player, entry);
+            });
         }
         public void GiveRankKit(BasePlayer player, int rank)
         {
@@ -516,7 +519,7 @@ namespace Oxide.Plugins
                 gunGamePlayer.level++;               
             }
             EventManager.AddTokens(player.userID, configData.EventSettings.TokensOnKill);
-            EventManager.PopupMessage(string.Format(GGMessageKill, player.displayName, gunGamePlayer.kills, gunGamePlayer.level, victim.displayName));
+            SendMessage(string.Format(GGMessageKill, player.displayName, gunGamePlayer.kills, gunGamePlayer.level, victim.displayName));
             UpdateScores();
             CheckScores(player, leveled);            
         }
@@ -614,7 +617,8 @@ namespace Oxide.Plugins
             public string DefaultWeaponSet { get; set; }
             public int TokensOnKill { get; set; }
             public int TokensOnWin { get; set; }
-            
+            public bool ShowScoreboard { get; set; }
+            public bool UseUINotifications { get; set; }
         }
         class GameSettings
         {
@@ -661,7 +665,9 @@ namespace Oxide.Plugins
                     DefaultWeaponSet = "default",
                     DefaultZoneID = "ggzone",
                     TokensOnKill = 1,
-                    TokensOnWin = 5                   
+                    TokensOnWin = 5,
+                    ShowScoreboard = true,
+                    UseUINotifications = true
                 }
             };
             SaveConfig(config);
@@ -1037,6 +1043,12 @@ namespace Oxide.Plugins
         #endregion
 
         #region Messaging
+        void SendMessage(string message)
+        {
+            if (configData.EventSettings.UseUINotifications)
+                EventManager.PopupMessage(message);
+            else PrintToChat(message);
+        }
         string EventMessageWon = "{0} has won the event";
         string EventMessageNoMorePlayers = "The Gun Game Arena has no more players, auto-closing.";
         string GGMessageKill = "{3} was killed by {0}, who is now rank {2} with {1} kill(s)";

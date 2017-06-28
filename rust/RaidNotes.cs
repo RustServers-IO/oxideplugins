@@ -12,13 +12,13 @@ using Oxide.Game.Rust.Libraries.Covalence;
 using UnityEngine;
 using Rust;
 
-using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("RaidNotes", "Calytic", "0.0.6")]
+    [Info("RaidNotes", "Calytic", "0.0.7", ResourceId = 2117)]
     [Description("Broadcasts raid activity to chat")]
     public class RaidNotes : RustPlugin
     {
@@ -771,6 +771,7 @@ namespace Oxide.Plugins
             if (printToLog)
             {
                 PrintToConsole(message);
+                LogToFile("raids", message, this);
             }
 
             if (announceGlobal)

@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Where's My Corpse", "Fuji/LeoCurtss", "0.6.0", ResourceId = 1777)]
+    [Info("Where's My Corpse", "Fuji/LeoCurtss", "0.6.1", ResourceId = 1777)]
     [Description("Points a player to their corpse when they type a command.")]
 
     class WheresMyCorpse : RustPlugin
@@ -57,8 +57,9 @@ namespace Oxide.Plugins
 			if (entity.name.Contains("player.prefab"))
 			{
 				var player = entity as BasePlayer;
-				
 				string UserID = player.UserIDString;
+				if (!IsSteamId(Convert.ToUInt64(UserID)))
+					return;
 				string DeathPosition = entity.GetEstimatedWorldPosition().ToString();
 				
 				Puts("Player death info: " + UserID + " at " + DeathPosition);
@@ -133,6 +134,11 @@ namespace Oxide.Plugins
 			else
 				SendReply(player,GetMessage("WMC_NoPermission",player.UserIDString));
         }
+		
+		bool IsSteamId(ulong id)
+		{
+			return id > 70000000000000000uL;
+		}
 		
 		public Vector3 getVector3(string rString){
 			string[] temp = rString.Substring(1,rString.Length-2).Split(',');

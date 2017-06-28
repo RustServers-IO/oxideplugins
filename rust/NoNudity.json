@@ -1,0 +1,16 @@
+{
+    "name": "NoNudity",
+    "description": "Gives pants and forces players to wear pants. For those that don't like lower body nudity",
+    "author": "Absolut",
+    "version": "1.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nonudity.2394",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

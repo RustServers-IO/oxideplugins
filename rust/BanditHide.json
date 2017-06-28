@@ -1,0 +1,16 @@
+{
+    "name": "Bandit Hide",
+    "description": "Hides name when wearing specific clothes",
+    "author": "mangiang",
+    "version": "1.0.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/bandit-hide.2470",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -7,18 +7,31 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
+using Oxide.Core;
+using Oxide.Core.Libraries;
+using Oxide.Core.Plugins;
+
 namespace Oxide.Plugins
 {
-    [Info("Enhanced Hammer", "Fuji/Visa", "1.2.1", ResourceId = 1439)]
+    [Info("Enhanced Hammer", "Fuji/Visa", "1.3.3", ResourceId = 1439)]
     public class EnhancedHammer : RustPlugin
     {
         bool Changed = false;
+		
+		static EnhancedHammer eh = null;
+		static int colliderUpgrade = LayerMask.GetMask("Construction");
+		static FieldInfo serverInput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+		
+        Dictionary<ulong, PlayerDetails> playersInfo = new Dictionary<ulong, PlayerDetails>();
+        Dictionary<ulong, Timer> playersTimers = new Dictionary<ulong, Timer>();
+		List <BuildingBlock> upgradeBlockCheck = new List <BuildingBlock>();
 		
 		string pluginPrefix;
 		string permissionName;
 		bool enablePermission;
 		static int defaultDisableTimer;
 		float hammerHitRange;
+		float hammerHitCheckRefresh;
 		bool enableDistanceUpgrade;
 		
 		string UIAnchorMin = "0.32 0.09";
@@ -55,7 +68,8 @@ namespace Oxide.Plugins
 			defaultDisableTimer = Convert.ToInt32(GetConfig("Settings", "defaultDisableTimer", 30));
 			UIAnchorMin = Convert.ToString(GetConfig("Settings", "UIAnchorMin", "0.32 0.09"));
 			UIAnchorMax = Convert.ToString(GetConfig("Settings", "UIAnchorMax", "0.34 0.13"));
-			hammerHitRange = Convert.ToInt32(GetConfig("Settings", "hammerHitRange", 3.0f));
+			hammerHitRange = Convert.ToSingle(GetConfig("Settings", "hammerHitRange", 3.0f));
+			hammerHitCheckRefresh = Convert.ToSingle(GetConfig("Settings", "hammerHitCheckRefresh", 0.33f));
 			enableDistanceUpgrade =  Convert.ToBoolean(GetConfig("Settings", "enableDistanceUpgrade", true));
 			
 			permissionName  = Convert.ToString(GetConfig("Permission", "permissionName", "enhancedhammer.use"));
@@ -109,8 +123,10 @@ namespace Oxide.Plugins
 			LoadVariables();
 			LoadDefaultMessages();
 			if (!permission.PermissionExists(permissionName)) permission.RegisterPermission(permissionName, this);
+			eh = this;
+			upgradeBlockCheck = new List <BuildingBlock>();
 		}
-
+		
 		public class PlayerDetails
         {
             public PlayerFlags flags = PlayerFlags.MESSAGES_DISABLED;
@@ -125,40 +141,142 @@ namespace Oxide.Plugins
             PLUGIN_DISABLED = 4,
             MESSAGES_DISABLED = 8
         }
-
-        public static Dictionary<ulong, PlayerDetails> playersInfo = new Dictionary<ulong, PlayerDetails>();
-        public static Dictionary<ulong, Timer> playersTimers = new Dictionary<ulong, Timer>();
 		
-		void OnPlayerInput(BasePlayer player, InputState inputState)
+		class EHammer : MonoBehaviour
+        {
+			BasePlayer player;
+            BaseEntity TargetEntity;
+            RaycastHit RayHit;
+            InputState state;
+            float lastUpdate;
+            float lastHit;
+			float refreshTime;
+			float distance;
+
+            void Awake()
+            {
+                player = GetComponent<BasePlayer>();
+                lastUpdate = UnityEngine.Time.realtimeSinceStartup;
+                lastHit = UnityEngine.Time.realtimeSinceStartup;
+				refreshTime = eh.hammerHitCheckRefresh;
+				distance = eh.hammerHitRange;
+            }
+
+            public void Start()
+            {
+				state = (InputState)serverInput.GetValue(player);
+            }
+
+            void FixedUpdate()
+            {
+                if (!player.IsConnected) { Destroy(); return; }
+                if (player.IsSleeping()) return;
+				float currentTime = UnityEngine.Time.realtimeSinceStartup;
+                if ((currentTime - lastUpdate >= refreshTime) && player.GetActiveItem()?.GetHeldEntity() is Hammer)
+                {
+                    bool flag1 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, distance, colliderUpgrade);
+					TargetEntity = flag1 ? RayHit.GetEntity() : null;
+					lastUpdate = currentTime;
+                }
+                if ((currentTime - lastHit >= refreshTime) && (state.IsDown(BUTTON.FIRE_PRIMARY) || state.WasJustPressed(BUTTON.FIRE_PRIMARY) || state.WasJustReleased(BUTTON.FIRE_PRIMARY)))
+                {
+					if (TargetEntity != null && TargetEntity is BuildingBlock && player.GetActiveItem()?.GetHeldEntity() is Hammer)
+						eh.CheckInput(TargetEntity, player);
+					lastHit = currentTime;
+                }
+            }
+
+            public void Destroy()
+            {
+				GameObject.Destroy(this);
+            }
+        }
+		
+		void CheckInput(BaseEntity targetEntity, BasePlayer player)
 		{
-			if (!enableDistanceUpgrade || player == null || player.svActiveItemID == 0 || player.GetActiveItem() == null || player.GetActiveItem().info.shortname != "hammer" || inputState == null || !inputState.WasJustPressed(BUTTON.FIRE_PRIMARY) ||
-				(enablePermission && !permission.UserHasPermission(player.UserIDString, permissionName)) || PlayerHasFlag(player.userID, PlayerFlags.PLUGIN_DISABLED)) return;
-			BaseEntity targetEntity;
-            RaycastHit rayHit;
-			bool flag1 = UnityEngine.Physics.Raycast(player.eyes.HeadRay(), out rayHit, hammerHitRange, 2097152);
-			targetEntity = flag1 ? rayHit.GetEntity() : null;
-			if (targetEntity != null && targetEntity is BuildingBlock)
+			BuildingBlock block = targetEntity as BuildingBlock;
+			BaseCombatEntity entity = targetEntity as BaseCombatEntity;
+			if (playersInfo[player.userID].upgradeInfo == BuildingGrade.Enum.Count || playersInfo[player.userID].upgradeInfo <= block.currentGrade.gradeBase.type || !player.CanBuild())
 			{
-				BuildingBlock block = targetEntity as BuildingBlock;
-				BaseCombatEntity entity = targetEntity as BaseCombatEntity;
-				if (playersInfo[player.userID].upgradeInfo == BuildingGrade.Enum.Count || playersInfo[player.userID].upgradeInfo <= block.currentGrade.gradeBase.type || !player.CanBuild())
+				if (playersInfo[player.userID].upgradeInfo != BuildingGrade.Enum.Count && playersInfo[player.userID].upgradeInfo <= block.currentGrade.gradeBase.type)
 				{
-					if (playersInfo[player.userID].upgradeInfo != BuildingGrade.Enum.Count && playersInfo[player.userID].upgradeInfo <= block.currentGrade.gradeBase.type)
+					if (entity.healthFraction < 1f)
 					{
-						if (entity.healthFraction < 1f)
-						{
-							if(!PlayerHasFlag(player.userID, PlayerFlags.MESSAGES_DISABLED))
-								player.ChatMessage(pluginPrefix + lang.GetMessage("RepairMode", this, player.UserIDString));
-							playersInfo[player.userID].upgradeInfo = BuildingGrade.Enum.Count;
-							RenderMode(player, true);
-						}
+						if(!PlayerHasFlag(player.userID, PlayerFlags.MESSAGES_DISABLED))
+							player.ChatMessage(pluginPrefix + lang.GetMessage("RepairMode", this, player.UserIDString));
+						playersInfo[player.userID].upgradeInfo = BuildingGrade.Enum.Count;
+						RenderMode(player, true);
+						return;
 					}
-					else if (!player.CanBuild())
-						player.ChatMessage(pluginPrefix + lang.GetMessage("BuildingBlocked", this, player.UserIDString));
 				}
-				else
-					UpgradeBlock(player, entity, block);
+				else if (!player.CanBuild())
+					player.ChatMessage(pluginPrefix + lang.GetMessage("BuildingBlocked", this, player.UserIDString));
 			}
+			else
+				UpgradeBlock(player, entity, block);
+		}
+		
+		void UpgradeBlock(BasePlayer player, BaseCombatEntity entity, BuildingBlock block)
+		{
+			MethodInfo dynMethod = block.GetType().GetMethod("CanChangeToGrade", BindingFlags.Instance | BindingFlags.NonPublic );
+			var newGrade = playersInfo[player.userID].upgradeInfo;
+			bool canChangeGrade = (bool)dynMethod.Invoke(block, new object[] { newGrade, player });
+			if (!canChangeGrade)
+			{
+				player.ChatMessage(pluginPrefix + lang.GetMessage("UpgradeBlocked", this, player.UserIDString));
+				return;
+			}
+			if (block.name.ToLower().Contains("wall.external"))
+			{
+				player.ChatMessage(pluginPrefix + lang.GetMessage("CantUpgradeWalls", this, player.UserIDString));
+				playersInfo[player.userID].upgradeInfo = BuildingGrade.Enum.Count;
+				return;
+			}
+			if (!CanAffordUpgradeInternal(block, newGrade, player))
+			{
+				player.ChatMessage(pluginPrefix + lang.GetMessage("CantAffordUpgrade", this, player.UserIDString));
+				return;
+			}
+			
+			upgradeBlockCheck.Add(block);
+			if (Interface.CallHook("OnStructureUpgrade", new object[]  { block, player, newGrade }) != null)
+				return;
+
+			List<Item> list = new List<Item>();
+			foreach (ItemAmount current in GetGrade(block, newGrade).costToBuild)
+			{
+				player.inventory.Take(list, current.itemid, (int)current.amount);
+				player.Command(string.Concat(new object[] { "note.inv ", current.itemid, " ", current.amount * -1f }), new object[0]);
+			}
+			foreach (Item current2 in list)
+				current2.Remove(0f);
+
+			block.SetGrade(newGrade);
+			block.SetHealthToMax();
+			block.SetFlag(BaseEntity.Flags.Reserved1, true);
+			block.Invoke("StopBeingRotatable", 600f);
+			(block as BaseNetworkable).SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+			block.UpdateSkin(false);
+			Effect.server.Run("assets/bundled/prefabs/fx/build/promote_" + newGrade.ToString().ToLower() + ".prefab", block, 0u, Vector3.zero, Vector3.zero, null, false);
+
+		}
+		
+		bool CanAffordUpgradeInternal(BuildingBlock block, BuildingGrade.Enum iGrade, BasePlayer player)
+		{
+			ConstructionGrade constructionGrade = GetGrade(block, iGrade);
+			foreach (ItemAmount current in constructionGrade.costToBuild)
+			{
+				if ((float)player.inventory.GetAmount(current.itemid) < current.amount)
+					return false;
+			}
+			return true;
+		}
+		
+		ConstructionGrade GetGrade(BuildingBlock block, BuildingGrade.Enum iGrade)
+		{
+			if (block.grade >= (BuildingGrade.Enum)block.blockDefinition.grades.Length)
+				return block.blockDefinition.defaultGrade;
+			return block.blockDefinition.grades[(int)iGrade];
 		}
 
         void OnStructureRepair(BaseCombatEntity entity, BasePlayer player)
@@ -186,63 +304,27 @@ namespace Oxide.Plugins
             RefreshTimer(player);
         }
 		
-		void UpgradeBlock(BasePlayer player, BaseCombatEntity entity, BuildingBlock block)
-		{
-			BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-			MethodInfo dynMethod = block.GetType().GetMethod("CanChangeToGrade", flags);
-			bool canChangeGrade = (bool)dynMethod.Invoke(block, new object[] { playersInfo[player.userID].upgradeInfo, player });
-
-			if (!canChangeGrade)
+		void OnStructureUpgrade(BaseCombatEntity block, BasePlayer player, BuildingGrade.Enum grade)
+        {
+            if (block != null && upgradeBlockCheck.Contains(block as BuildingBlock))
 			{
-				player.ChatMessage(pluginPrefix + lang.GetMessage("UpgradeBlocked", this, player.UserIDString));
+				upgradeBlockCheck.Remove(block as BuildingBlock);
 				return;
 			}
+			if ((enablePermission && !permission.UserHasPermission(player.UserIDString, permissionName)) || PlayerHasFlag(player.userID, PlayerFlags.PLUGIN_DISABLED))
+                return;
 
-			if (block.name.ToLower().Contains("wall.external"))
-			{
-				player.ChatMessage(pluginPrefix + lang.GetMessage("CantUpgradeWalls", this, player.UserIDString));
-				playersInfo[player.userID].upgradeInfo = BuildingGrade.Enum.Count;
-				return;
-			}
-			float currentHealth = block.health;
-			var currentGradeType = block.currentGrade.gradeBase.type;
-			block.SetGrade(playersInfo[player.userID].upgradeInfo);
-			var TwigsDecay = plugins.Find("TwigsDecay");
-			TwigsDecay?.Call("OnStructureUpgrade", block, player, playersInfo[player.userID].upgradeInfo);
-			block.UpdateSkin(false);
-			var cost = block.currentGrade.gradeBase.baseCost;
-			int hasEnough = 0;
-			foreach (var itemCost in cost)
-			{
-				int itemCostAmount = Convert.ToInt32((float)itemCost.amount*block.blockDefinition.costMultiplier);
-				var foundItems = player.inventory.FindItemIDs(itemCost.itemid);
-				var amountFound = foundItems?.Sum(item => item.amount) ?? 0;
-				if (amountFound >= itemCostAmount)
-					hasEnough++;
-			}
-			if (hasEnough >= cost.Count)
-			{
-				foreach (var itemCost in cost)
-				{
-					int itemCostAmount = Convert.ToInt32((float)itemCost.amount * block.blockDefinition.costMultiplier);
-					var foundItems = player.inventory.FindItemIDs(itemCost.itemid);
-					int taken = player.inventory.Take(foundItems, itemCost.itemid, itemCostAmount);
-					player.Command(string.Concat(new object[]{"note.inv ", itemCost.itemid, " ",	taken * -1f}), new object[0]);
-				}
-				block.SetHealthToMax();
-				block.SetFlag(BaseEntity.Flags.Reserved1, true); // refresh rotation
-				block.Invoke("StopBeingRotatable", 600f);
-				Effect.server.Run("assets/bundled/prefabs/fx/build/promote_" + playersInfo[player.userID].upgradeInfo.ToString().ToLower() + ".prefab", block, 0u, Vector3.zero, Vector3.zero, null, false);
-			}
-			else
-			{
-				block.SetGrade(currentGradeType);
-				TwigsDecay?.Call("OnStructureUpgrade", block, player, currentGradeType);
-				block.UpdateSkin(false);
-				block.health = currentHealth;
-				player.ChatMessage(pluginPrefix + lang.GetMessage("CantAffordUpgrade", this, player.UserIDString));
-			}
-		}		
+            if (playersInfo[player.userID].upgradeInfo != grade)
+            {
+                playersInfo[player.userID].upgradeInfo = grade;
+                RenderMode(player, false);
+				if (!PlayerHasFlag(player.userID, PlayerFlags.MESSAGES_DISABLED))
+					player.ChatMessage(pluginPrefix + string.Format(lang.GetMessage("UpgradeModeGrade", this, player.UserIDString), grade.ToString()));
+            }
+			if (enableDistanceUpgrade && player.GetComponent<EHammer>() == null)
+				player.gameObject.AddComponent<EHammer>();
+            RefreshTimer(player);
+        }
 
         void RefreshTimer(BasePlayer player)
         {
@@ -257,21 +339,6 @@ namespace Oxide.Plugins
 
             var timerIn = timer.Once(playersInfo[player.userID].backToDefaultTimer, () => SetBackToDefault(player));
             playersTimers.Add(player.userID, timerIn);
-        }
-
-        void OnStructureUpgrade(BaseCombatEntity block, BasePlayer player, BuildingGrade.Enum grade)
-        {
-            if ((enablePermission && !permission.UserHasPermission(player.UserIDString, permissionName)) || PlayerHasFlag(player.userID, PlayerFlags.PLUGIN_DISABLED))
-                return;
-
-            if (playersInfo[player.userID].upgradeInfo != grade)
-            {
-                playersInfo[player.userID].upgradeInfo = grade;
-                RenderMode(player, false);
-                if (!PlayerHasFlag(player.userID, PlayerFlags.MESSAGES_DISABLED))
-					player.ChatMessage(pluginPrefix + string.Format(lang.GetMessage("UpgradeModeGrade", this, player.UserIDString), grade.ToString()));
-            }
-            RefreshTimer(player);
         }
 
         void RenderMode(BasePlayer player, bool repair = false)
@@ -317,6 +384,7 @@ namespace Oxide.Plugins
 
         void SetBackToDefault(BasePlayer player)
         {
+			player.GetComponent<EHammer>()?.Destroy();
 			playersTimers.Remove(player.userID);
 			if(playersInfo.ContainsKey(player.userID))
 				playersInfo[player.userID].upgradeInfo = BuildingGrade.Enum.Count;
@@ -337,6 +405,7 @@ namespace Oxide.Plugins
 
         void OnPlayerDisconnected(BasePlayer player, string reason)
         {
+			player.GetComponent<EHammer>()?.Destroy();
 			playersInfo.Remove(player.userID);
         }
 
@@ -355,11 +424,11 @@ namespace Oxide.Plugins
 
         void Unload()
         {
-            foreach (var player in BasePlayer.activePlayerList)
-            {
+			foreach (EHammer ehammer in Resources.FindObjectsOfTypeAll<EHammer>())
+				ehammer.Destroy();
+			playersInfo.Clear();
+			foreach (var player in BasePlayer.activePlayerList)
                 RemoveUI(player);
-				playersInfo.Remove(player.userID);
-            }
         }
 
         [ChatCommand("eh")]

@@ -1,13 +1,17 @@
 ﻿using System.Collections.Generic;
+using Oxide.Core;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("NoFuelRequirements", "k1lly0u", "1.3.3", ResourceId = 1179)]
+    [Info("NoFuelRequirements", "k1lly0u", "1.3.5", ResourceId = 1179)]
     class NoFuelRequirements : RustPlugin
     {
         #region Fields        
         bool usingPermissions;
         bool initialized;
+
+        string[] ValidFuelTypes = new string[] { "wood", "lowgradefuel" };
         #endregion
 
         #region Oxide Hooks        
@@ -32,13 +36,12 @@ namespace Oxide.Plugins
                 fuel.amount += 1;
             }
         }
+        
         void OnItemUse(Item item, int amount)
         {
-            if (!initialized || item == null || amount == 0) return;
-
-            string shortname = item?.parent?.parent?.info?.shortname;
-            if (string.IsNullOrEmpty(shortname))
-                shortname = item?.GetRootContainer()?.entityOwner?.ShortPrefabName;
+            if (!initialized || item == null || amount == 0 || !ValidFuelTypes.Contains(item.info.shortname)) return;
+           
+            string shortname = item?.parent?.parent?.info?.shortname ?? item?.GetRootContainer()?.entityOwner?.ShortPrefabName;
             if (string.IsNullOrEmpty(shortname)) return;
 
             ConsumeTypes type = StringToType(shortname);
@@ -99,6 +102,8 @@ namespace Oxide.Plugins
                     return ConsumeTypes.Quarry;
                 case "tunalight.deployed":
                     return ConsumeTypes.TunaLight;
+                case "searchlight.deployed":
+                    return ConsumeTypes.Searchlight;
                 default:
                     return ConsumeTypes.None;
             }
@@ -108,7 +113,7 @@ namespace Oxide.Plugins
         #region Config  
         enum ConsumeTypes
         {
-            Campfires, CandleHat, CeilingLight, Furnace, Lanterns, LargeFurnace, MinersHat, OilRefinery, Quarry, TunaLight, None
+            Campfires, CandleHat, CeilingLight, Furnace, Lanterns, LargeFurnace, MinersHat, OilRefinery, Quarry, TunaLight, Searchlight, None
         }
         private ConfigData configData;
         class ConfigData
@@ -137,7 +142,8 @@ namespace Oxide.Plugins
                     {ConsumeTypes.MinersHat, true },
                     {ConsumeTypes.OilRefinery, true },
                     {ConsumeTypes.Quarry, true },
-                    {ConsumeTypes.TunaLight, true }
+                    {ConsumeTypes.TunaLight, true },
+                    {ConsumeTypes.Searchlight, true }
                 },
                 Permissions = new Dictionary<ConsumeTypes, string>
                 {
@@ -150,7 +156,8 @@ namespace Oxide.Plugins
                     {ConsumeTypes.MinersHat, "nofuelrequirements.minershat" },
                     {ConsumeTypes.OilRefinery, "nofuelrequirements.oilrefinery" },
                     {ConsumeTypes.Quarry, "nofuelrequirements.quarry" },
-                    {ConsumeTypes.TunaLight, "nofuelrequirements.tunalight" }
+                    {ConsumeTypes.TunaLight, "nofuelrequirements.tunalight" },
+                    {ConsumeTypes.Searchlight, "nofuelrequirements.searchlight" }
                 },
                 UsePermissions = false
             };

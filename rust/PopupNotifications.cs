@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Popup Notifications", "emu / k1lly0u", "0.1.2", ResourceId = 1252)]
+    [Info("Popup Notifications", "emu / k1lly0u", "0.1.3", ResourceId = 1252)]
     public class PopupNotifications : RustPlugin
     {
         private static Vector2 position;
@@ -18,6 +18,7 @@ namespace Oxide.Plugins
         void OnServerInitialized()
         {
             lang.RegisterMessages(Messages, this);
+            permission.RegisterPermission("popupnotifications.send", this);
             LoadVariables();
             config = configData;
             position = new Vector2(configData.PositionX, configData.PositionY);
@@ -70,26 +71,26 @@ namespace Oxide.Plugins
         [ChatCommand("popupmsg")]
         private void SendPopupMessage(BasePlayer player, string command, string[] args)
         {
-			if(!player.IsAdmin)
-				return;
-		
-			if(args.Length == 1)
-			{
-				CreateGlobalPopup(args[0]);
-			}
-			else if(args.Length == 2)
-			{
-				var target = GetPlayerByName(args[0]);
-                if (target is string)
+            if (player.IsAdmin || permission.UserHasPermission(player.UserIDString, "popupnotifications.send"))
+            {
+                if (args.Length == 1)
                 {
-                    SendReply(player, (string)target);
-                    return;
+                    CreateGlobalPopup(args[0]);
                 }
-				if(target as BasePlayer != null)
-					CreatePopupOnPlayer(args[1], target as BasePlayer);				
-			}
-			else
-				SendReply(player,msg("Usage: /popupmsg \"Your message here.\" OR /popupmsg \"player name\" \"You message here.\"", player.UserIDString));
+                else if (args.Length == 2)
+                {
+                    var target = GetPlayerByName(args[0]);
+                    if (target is string)
+                    {
+                        SendReply(player, (string)target);
+                        return;
+                    }
+                    if (target as BasePlayer != null)
+                        CreatePopupOnPlayer(args[1], target as BasePlayer);
+                }
+                else
+                    SendReply(player, msg("Usage: /popupmsg \"Your message here.\" OR /popupmsg \"player name\" \"You message here.\"", player.UserIDString));
+            }
 		}
 		
         [ConsoleCommand("popupmsg.global")]

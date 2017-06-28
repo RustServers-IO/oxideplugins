@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.7.11", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.7.20", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
@@ -28,7 +28,7 @@ namespace Oxide.Plugins
 		[PluginReference]
 		Plugin LiteZones;
 		
-		// usage information string with formatting
+		// usage information string with formatting 
 		public string usageString;
 		// valid commands
 		enum Command { def, sched, usage };
@@ -63,7 +63,9 @@ namespace Oxide.Plugins
 			LootableSleepers = 1 << 10,
 			ProtectedSleepers = 1 << 11,
 			TrapsIgnorePlayers = 1 << 12,
-			TurretsIgnorePlayers = 1 << 13
+			TurretsIgnorePlayers = 1 << 13,
+			AuthorizedLooting = 1 << 14,
+			CupboardOwnership = 1 << 15
 		}
 		// layer mask for finding authorization
 		readonly int triggerMask = LayerMask.GetMask("Trigger");
@@ -107,6 +109,7 @@ namespace Oxide.Plugins
 				{"Error_NoSuicide", "You are not allowed to commit suicide"},
 				{"Error_NoLootCorpse", "You are not allowed to loot another player's corpse"},
 				{"Error_NoLootSleeper", "You are not allowed to loot sleeping players"},
+				{"Error_NoLootAuthorized", "You are not allowed to loot unauthorized entities" },
 				{"Error_NoEntityFound", "No entity found"},
 				
 				{"Notify_AvailOptions", "Available Options: {0}"},
@@ -144,11 +147,11 @@ namespace Oxide.Plugins
 				cmd.AddConsoleCommand((baseCommand + "." + command.ToString()), this, "CommandDelegator");
 			// register chat command
 			cmd.AddChatCommand(baseCommand + "_prod", this, "HandleProd");
-			// build usage string
-			usageString = WrapSize(14, WrapColor("orange", GetMessage("Header_Usage"))) + "\n" +
-						  WrapSize(12, WrapColor("cyan", baseCommand + "." + Command.def.ToString()) + " - " + GetMessage("Cmd_Usage_def") + "\n" +
-									   WrapColor("cyan", baseCommand + "." + Command.sched.ToString() + " [enable|disable]") + " - " + GetMessage("Cmd_Usage_sched") + "\n" +
-									   WrapColor("cyan", "/" + baseCommand + "_prod") + " - " + GetMessage("Cmd_Usage_prod"));
+			// build usage string for console (without sizing)
+			usageString = WrapColor("orange", GetMessage("Header_Usage")) +"\n" +
+						  WrapColor("cyan", baseCommand + "." + Command.def.ToString()) + " - " + GetMessage("Cmd_Usage_def") + "\n" +
+						  WrapColor("cyan", baseCommand + "." + Command.sched.ToString() + " [enable|disable]") + " - " + GetMessage("Cmd_Usage_sched") + "\n" +
+						  WrapColor("cyan", "/" + baseCommand + "_prod") + " - " + GetMessage("Cmd_Usage_prod");
 		}
 
 		// on unloaded
@@ -417,8 +420,6 @@ namespace Oxide.Plugins
 
 			// build groups first
 			EntityGroup dispenser = new EntityGroup("dispensers");
-			dispenser.Add(typeof(TreeEntity).Name);
-			dispenser.Add(typeof(BaseResource).Name);
 			dispenser.Add(typeof(BaseCorpse).Name);
 			dispenser.Add(typeof(HelicopterDebris).Name);
 			data.groups.Add(dispenser);
@@ -432,6 +433,7 @@ namespace Oxide.Plugins
 			traps.Add(typeof(BearTrap).Name);
 			traps.Add(typeof(FlameTurret).Name);
 			traps.Add(typeof(Landmine).Name);
+			traps.Add(typeof(GunTrap).Name);
 			traps.Add(typeof(ReactiveTarget).Name); // include targets with traps, since behavior is the same
 			traps.Add("spikes.floor");
 			data.groups.Add(traps);
@@ -513,7 +515,7 @@ namespace Oxide.Plugins
 				return true;
 			
 			// allow NPCs to take damage
-			if (entity is BaseNPC)
+			if (entity is BaseNpc)
 				return true;
 			
 			// allow damage to door barricades and covers
@@ -570,15 +572,15 @@ namespace Oxide.Plugins
 				return true;
 
 			// check for sleeper protection - return false if sleeper protection is on (true)
-			if (ruleSet.HasFlag(RuleFlags.ProtectedSleepers) && hitinfo.Initiator is BaseNPC && entity is BasePlayer && (entity as BasePlayer).IsSleeping())
+			if (ruleSet.HasFlag(RuleFlags.ProtectedSleepers) && hitinfo.Initiator is BaseNpc && entity is BasePlayer && (entity as BasePlayer).IsSleeping())
 				return false;
 			
 			// allow NPC damage to other entities if sleeper protection is off
-			if (hitinfo.Initiator is BaseNPC)
+			if (hitinfo.Initiator is BaseNpc)
 				return true;
 			
 			// ignore checks if authorized damage enabled (except for players)
-			if (ruleSet.HasFlag(RuleFlags.AuthorizedDamage) && !(entity is BasePlayer) && hitinfo.Initiator is BasePlayer && CheckAuthDamage(entity, hitinfo.Initiator as BasePlayer))
+			if (ruleSet.HasFlag(RuleFlags.AuthorizedDamage) && !(entity is BasePlayer) && hitinfo.Initiator is BasePlayer && CheckAuthorized(entity, hitinfo.Initiator as BasePlayer, ruleSet))
 				return true;
 			
 			// allow sleeper damage by admins if configured
@@ -654,19 +656,24 @@ namespace Oxide.Plugins
 			return null;
 		}
 		
-		// checks if the player is authorized to damage the entity
-		bool CheckAuthDamage(BaseCombatEntity entity, BasePlayer player)
+		// checks if the player is authorized to damage/loot the entity
+		bool CheckAuthorized(BaseCombatEntity entity, BasePlayer player, RuleSet ruleSet)
 		{
 			// check if the player is the owner of the entity
-			if (player.userID == entity.OwnerID)
-				return true; // player is the owner, allow damage
+			if ((!ruleSet.HasFlag(RuleFlags.CupboardOwnership) && player.userID == entity.OwnerID) || entity.OwnerID == 0L)
+				return true; // player is the owner or the owner is undefined, allow damage/looting
 			
 			// assume no authorization by default
 			bool authed = false;
 			// check for cupboards which overlap the entity
-			var hit = Physics.OverlapBox(entity.transform.position, entity.bounds.extents/2f, entity.transform.rotation, triggerMask);
+			Collider[] hit = Physics.OverlapBox(entity.transform.position, entity.bounds.extents/2f, entity.transform.rotation, triggerMask);
+
+			// if CupboardOwnership and no cupboards overlap, allow damage/looting
+			if (ruleSet.HasFlag(RuleFlags.CupboardOwnership) && (hit == null || hit.Length == 0))
+				return true;
+
 			// loop through cupboards
-			foreach (var ent in hit)
+			foreach (Collider ent in hit)
 			{
 				// get cupboard BuildingPrivilidge
 				BuildingPrivlidge privs = ent.GetComponentInParent<BuildingPrivlidge>();
@@ -742,19 +749,28 @@ namespace Oxide.Plugins
 		{
 			if(IsAdmin(player))
 				return true;
-			
-			// check for exclusion zones (zones with no rules mapped)
-			if(CheckExclusion(player, target)) return true;
 
-			// if target is not player or corpse, allow looting
-			if (!(target is BasePlayer || target is LootableCorpse))
+			// allow anyone to access vending machines, drop boxes, mailboxes, and shop fronts
+			if (target is VendingMachine || target is DropBox || target is Mailbox || target is ShopFront)
 				return true;
+
+			// check for exclusion zones (zones with no rules mapped)
+			if (CheckExclusion(player, target)) return true;
 
 			RuleSet ruleSet = GetRuleSet(player, target);
 
+			// handle non-player/non-corpse
+			if (!(target is BasePlayer || target is LootableCorpse))
+			{
+				if (ruleSet.HasFlag(RuleFlags.AuthorizedLooting) && target is StorageContainer)
+					return CheckAuthorized(target as StorageContainer, player, ruleSet);
+				else
+					return true;
+			}
+			
 			if (target is BasePlayer && (target as BasePlayer).IsSleeping())
 				return ruleSet.HasFlag(RuleFlags.LootableSleepers);
-			else if(target is LootableCorpse && player.userID != (target as LootableCorpse).playerSteamID)
+			else if (target is LootableCorpse && player.userID != (target as LootableCorpse).playerSteamID)
 				return ruleSet.HasFlag(RuleFlags.LootableCorpses);
 			return true;
 		}
@@ -767,6 +783,8 @@ namespace Oxide.Plugins
 				message = "Error_NoLootCorpse";
 			else if(target is BasePlayer)
 				message = "Error_NoLootSleeper";
+			else
+				message = "Error_NoLootAuthorized";
 			
 			NextTick(() =>
 			{
@@ -778,7 +796,7 @@ namespace Oxide.Plugins
 		// check if entity can be targeted
 		object CanBeTargeted(BaseCombatEntity target, object turret)
 		{
-			if (target == null || turret == null) return null;
+			if (!serverInitialized || target == null || turret == null) return null;
 			if (turret as HelicopterTurret)
 				return null;
 			BasePlayer player = target as BasePlayer;
@@ -869,17 +887,25 @@ namespace Oxide.Plugins
 		
 		// send message to player (console)
 		void SendMessage(ConsoleSystem.Arg arg, string key, object[] options = null) => SendReply(arg, BuildMessage(null, key, options));
-		
+
 		// build message string
 		string BuildMessage(BasePlayer player, string key, object[] options = null)
 		{
 			string message = player == null ? GetMessage(key) : GetMessage(key, player.UserIDString);
-			if(options != null && options.Length > 0)
-				message = String.Format(message, options);
+			if (options != null && options.Length > 0)
+				message = string.Format(message, options);
 			string type = key.Split('_')[0];
-			string size = GetMessage("Format_"+type+"Size");
-			string color = GetMessage("Format_"+type+"Color");
-			return WrapSize(size, WrapColor(color, message));
+			if (player != null)
+			{
+				string size = GetMessage("Format_" + type + "Size");
+				string color = GetMessage("Format_" + type + "Color");
+				return WrapSize(size, WrapColor(color, message));
+			}
+			else
+			{
+				string color = GetMessage("Format_" + type + "Color");
+				return WrapColor(color, message);
+			}
 		}
 
 		// prints the value of an Option
@@ -892,7 +918,7 @@ namespace Oxide.Plugins
 		string WrapSize(string size, string input)
 		{
 			int i = 0;
-			if(Int32.TryParse(size, out i))
+			if(int.TryParse(size, out i))
 				return WrapSize(i, input);
 			return input;
 		}
@@ -997,7 +1023,10 @@ namespace Oxide.Plugins
 				if (currentRuleSet == null)
 					currentRuleSet = new RuleSet(ruleSetName); // create empty ruleset to hold name
 				if (data.schedule.broadcast && currentBroadcastMessage != null)
+				{
 					Server.Broadcast(currentBroadcastMessage, GetMessage("Prefix"));
+					Console.WriteLine(GetMessage("Prefix") + " Schedule Broadcast: " + currentBroadcastMessage);
+				}
 			}
 
 			if (data.schedule.enabled)
@@ -1042,7 +1071,8 @@ namespace Oxide.Plugins
 				if (!groupCache.TryGetValue(entity.net.ID, out groupList))
 				{
 					groupList = groups.Where(g => g.Contains(entity)).Select(g => g.name).ToList();
-					groupCache[entity.net.ID] = groupList;
+					if(entity.net != null)
+						groupCache[entity.net.ID] = groupList;
 				}
 				return groupList;
 			}
@@ -1281,18 +1311,19 @@ namespace Oxide.Plugins
 			public void ClockUpdate(out string currentRuleSet, out string message)
 			{
 				TimeSpan time = useRealtime ? new TimeSpan((int)DateTime.Now.DayOfWeek, 0, 0, 0).Add(DateTime.Now.TimeOfDay) : TOD_Sky.Instance.Cycle.DateTime.TimeOfDay;
-
 				try
 				{
+					ScheduleEntry se = null;
 					// get the most recent schedule entry
-					ScheduleEntry se = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && t.time <= time && ((useRealtime && !t.isDaily) || !useRealtime)).Max(t => t.time));
+					if (parsedEntries.Where(t => !t.isDaily).Count() > 0)
+						se = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && t.time <= time && ((useRealtime && !t.isDaily) || !useRealtime)).Max(t => t.time));
 					// if realtime, check for daily
 					if (useRealtime)
 					{
 						ScheduleEntry daily = null;
 						try
 						{
-							daily = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && t.time <= time && t.isDaily).Max(t => t.time));
+							daily = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && t.time <= DateTime.Now.TimeOfDay && t.isDaily).Max(t => t.time));
 						} catch(Exception)
 						{ // no daily entries
 						}
@@ -1303,12 +1334,13 @@ namespace Oxide.Plugins
 					}
 					currentRuleSet = se.ruleSet;
 					message = se.message;
-
 				}
 				catch (Exception)
 				{
+					ScheduleEntry se = null;
 					// if time is earlier than all schedule entries, use max time
-					ScheduleEntry se = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && ((useRealtime && !t.isDaily) || !useRealtime)).Max(t => t.time));
+					if (parsedEntries.Where(t => !t.isDaily).Count() > 0)
+						se = parsedEntries.FirstOrDefault(e => e.time == parsedEntries.Where(t => t.valid && ((useRealtime && !t.isDaily) || !useRealtime)).Max(t => t.time));
 					if (useRealtime)
 					{
 						ScheduleEntry daily = null;

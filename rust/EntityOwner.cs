@@ -1,28 +1,22 @@
-﻿// Reference: Newtonsoft.Json
-// Reference: Rust.Data
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-
 using Facepunch;
-
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Owner", "rustservers.io", "3.1.1", ResourceId = 1255)]
+    [Info("Entity Owner", "rustservers.io", "3.1.2", ResourceId = 1255)]
     [Description("Modify entity ownership and cupboard/turret authorization")]
     class EntityOwner : RustPlugin
     {
         #region Data & Config
         private Dictionary<string, string> messages = new Dictionary<string, string>();
         private readonly int layerMasks = LayerMask.GetMask("Construction", "Construction Trigger", "Trigger", "Deployed");
-        FieldInfo keyCodeField = typeof(CodeLock).GetField("code", (BindingFlags.Instance | BindingFlags.NonPublic));
 
         private bool prodKeyCode = true;
         private int EntityLimit = 8000;
@@ -259,13 +253,13 @@ namespace Oxide.Plugins
 
                     string msg = string.Format(messages["Owner: {0}"], owner) + "\n<color=lightgrey>" + targetEntity.ShortPrefabName + "</color>";
 
-                    if(prodKeyCode) {
-                        if(target is Door) {
+                    if (prodKeyCode) {
+                        if (target is Door) {
                             Door door = (Door)target;
                             BaseLock baseLock = door.GetSlot(BaseEntity.Slot.Lock) as BaseLock;
-                            if(baseLock is CodeLock) {
+                            if (baseLock is CodeLock) {
                                 CodeLock codeLock = (CodeLock)baseLock;
-                                string keyCode = keyCodeField.GetValue(codeLock).ToString();
+                                string keyCode = codeLock.code.ToString();
                                 msg += "\n" + string.Format(messages["Code: {0}"], keyCode);
                             }
                         }
@@ -856,7 +850,7 @@ namespace Oxide.Plugins
                     Pool.FreeList(ref hits);
                 }
 
-                if(target == 0) {
+                if (target == 0) {
                     SendReply(player, string.Format(messages["New owner of all around is: {0}"], "No one"));
                 } else {
                     BasePlayer targetPlayer = BasePlayer.FindByID(target);
@@ -1267,7 +1261,7 @@ namespace Oxide.Plugins
                         });
 
                         priv.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                        if(priv.CheckEntity(target)) {
+                        if (priv.CheckEntity(target)) {
                             target.SetInsideBuildingPrivilege(priv, true);
                         }
 
@@ -1333,7 +1327,7 @@ namespace Oxide.Plugins
                             {
                                 priv.authorizedPlayers.Remove(p);
                                 priv.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                                if(priv.CheckEntity(target)) {
+                                if (priv.CheckEntity(target)) {
                                     target.SetInsideBuildingPrivilege(priv, false);
                                 }
                             }
@@ -1698,7 +1692,7 @@ namespace Oxide.Plugins
         private string FindPlayerName(ulong playerID)
         {
             var player = FindPlayerByPartialName(playerID.ToString());
-            if (player) 
+            if (player)
             {
                 if (player.IsSleeping())
                 {
@@ -1742,16 +1736,16 @@ namespace Oxide.Plugins
                 return 0;
 
             ulong userID;
-            if(ulong.TryParse(name, out userID)) {
+            if (ulong.TryParse(name, out userID)) {
                 return userID;
             }
 
             IPlayer player = covalence.Players.FindPlayer(name);
 
-            if(player != null) {
+            if (player != null) {
                 return Convert.ToUInt64(player.Id);
             }
-            
+
             return 0;
         }
 
@@ -1762,10 +1756,10 @@ namespace Oxide.Plugins
 
             IPlayer player = covalence.Players.FindPlayer(name);
 
-            if(player != null) {
+            if (player != null) {
                 return (BasePlayer)player.Object;
             }
-            
+
             return null;
         }
 

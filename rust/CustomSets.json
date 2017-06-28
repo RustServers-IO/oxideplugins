@@ -1,0 +1,24 @@
+{
+    "name": "CustomSets",
+    "description": "Set creation and management system with built-in purchasing",
+    "author": "Absolut",
+    "version": "1.0.3",
+    "configuration": true,
+    "suggest": {
+        "EventManager": "*",
+        "ServerRewards": "*",
+        "Economics": "*"
+    },
+    "require": {
+        "ImageLibrary": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/customsets.2425",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

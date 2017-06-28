@@ -12,7 +12,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("BetterLoot", "Fujikura/dcode", "2.12.0", ResourceId = 828)]
+	[Info("BetterLoot", "Fujikura/dcode", "2.13.1", ResourceId = 828)]
 	[Description("A complete re-implementation of the drop system")]
 	public class BetterLoot : RustPlugin
 	{
@@ -83,13 +83,16 @@ namespace Oxide.Plugins
 		#region Config
 
 		bool pluginEnabled;
+		bool enableScrapSpawn;
 		bool seperateLootTables;
 		string barrelTypes;
 		string crateTypes;
 		bool enableBarrels;
+		bool randomAmountBarrels;
 		int minItemsPerBarrel;
 		int maxItemsPerBarrel;
 		bool enableCrates;
+		bool randomAmountCrates;
 		int minItemsPerCrate;
 		int maxItemsPerCrate;
 		int minItemsPerSupplyDrop;
@@ -102,7 +105,9 @@ namespace Oxide.Plugins
 		bool enforceBlacklist;
 		bool dropWeaponsWithAmmo;
 		bool includeSupplyDrop;
+		bool randomAmountSupplyDrop;
 		bool includeHeliCrate;
+		bool randomAmountHeliCrate;
 		bool listUpdatesOnLoaded;
 		bool listUpdatesOnRefresh;
 		bool useCustomTableHeli;
@@ -140,22 +145,26 @@ namespace Oxide.Plugins
 			refreshBarrels = Convert.ToBoolean(GetConfig("Barrel", "refreshBarrels", false));
 			barrelTypes = Convert.ToString(GetConfig("Barrel","barrelTypes","loot-barrel|loot_barrel|loot_trash"));
 			enableBarrels = Convert.ToBoolean(GetConfig("Barrel", "enableBarrels", true));
+			randomAmountBarrels = Convert.ToBoolean(GetConfig("Barrel", "randomAmountBarrels", true));
 
 			minItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "minItemsPerCrate", 3));
 			maxItemsPerCrate = Convert.ToInt32(GetConfig("Crate", "maxItemsPerCrate", 6));
 			refreshCrates = Convert.ToBoolean(GetConfig("Crate", "refreshCrates", true));
 			crateTypes = Convert.ToString(GetConfig("Crate","crateTypes","crate_normal|crate_tools"));
 			enableCrates = Convert.ToBoolean(GetConfig("Crate", "enableCrates", true));
+			randomAmountCrates = Convert.ToBoolean(GetConfig("Crate", "randomAmountCrates", true));
 
 			minItemsPerSupplyDrop = Convert.ToInt32(GetConfig("SupplyDrop", "minItemsPerSupplyDrop", 3));
 			maxItemsPerSupplyDrop = Convert.ToInt32(GetConfig("SupplyDrop", "maxItemsPerSupplyDrop", 6));
 			includeSupplyDrop = Convert.ToBoolean(GetConfig("SupplyDrop", "includeSupplyDrop", false));
 			useCustomTableSupply = Convert.ToBoolean(GetConfig("SupplyDrop", "useCustomTableSupply", true));
+			randomAmountSupplyDrop = Convert.ToBoolean(GetConfig("SupplyDrop", "randomAmountSupplyDrop", true));
 
 			minItemsPerHeliCrate = Convert.ToInt32(GetConfig("HeliCrate", "minItemsPerHeliCrate", 2));
 			maxItemsPerHeliCrate = Convert.ToInt32(GetConfig("HeliCrate", "maxItemsPerHeliCrate", 4));
 			includeHeliCrate = Convert.ToBoolean(GetConfig("HeliCrate", "includeHeliCrate", false));
 			useCustomTableHeli = Convert.ToBoolean(GetConfig("HeliCrate", "useCustomTableHeli", true));
+			randomAmountHeliCrate = Convert.ToBoolean(GetConfig("HeliCrate", "randomAmountHeliCrate", true));
 
 			refreshMinutes = Convert.ToInt32(GetConfig("Generic", "refreshMinutes", 30));
 			enforceBlacklist = Convert.ToBoolean(GetConfig("Generic", "enforceBlacklist", false));
@@ -165,6 +174,7 @@ namespace Oxide.Plugins
 			pluginEnabled = Convert.ToBoolean(GetConfig("Generic", "pluginEnabled", true));
 			removeStackedContainers = Convert.ToBoolean(GetConfig("Generic", "removeStackedContainers", true));
 			seperateLootTables = Convert.ToBoolean(GetConfig("Generic", "seperateLootTables", true));
+			enableScrapSpawn =  Convert.ToBoolean(GetConfig("Generic", "enableScrapSpawn", true));
 
 			if (!Changed) return;
 			SaveConfig();
@@ -601,7 +611,13 @@ namespace Oxide.Plugins
 									return null;
 								if (item.info.stackable > 1 && storedLootTable.ItemList.TryGetValue(item.info.shortname, out limit))
 								{
-									item.amount = rng.Next(1, Math.Min(limit, item.info.stackable) + 1);
+									if (limit > 0)
+									{
+										if (randomAmountCrates || randomAmountBarrels)
+											item.amount = rng.Next(1, Math.Min(limit, item.info.stackable));
+										else
+											item.amount = Math.Min(limit, item.info.stackable);
+									}
 								}
 								return item;
 			case "crate":
@@ -637,7 +653,13 @@ namespace Oxide.Plugins
 									return null;
 								if (item.info.stackable > 1 && separateLootTable.ItemListCrates.TryGetValue(item.info.shortname, out limit))
 								{
-									item.amount = rng.Next(1, Math.Min(limit, item.info.stackable) + 1);
+									if (limit > 0)
+									{
+										if (randomAmountCrates)
+											item.amount = rng.Next(1, Math.Min(limit, item.info.stackable));
+										else
+											item.amount = Math.Min(limit, item.info.stackable);
+									}
 								}
 								return item;
 			case "barrel":
@@ -673,7 +695,13 @@ namespace Oxide.Plugins
 									return null;
 								if (item.info.stackable > 1 && separateLootTable.ItemListBarrels.TryGetValue(item.info.shortname, out limit))
 								{
-									item.amount = rng.Next(1, Math.Min(limit, item.info.stackable) + 1);
+									if (limit > 0)
+									{
+										if (randomAmountBarrels)
+											item.amount = rng.Next(1, Math.Min(limit, item.info.stackable));
+										else
+											item.amount = Math.Min(limit, item.info.stackable);
+									}
 								}
 								return item;
 			case "heli":
@@ -709,7 +737,13 @@ namespace Oxide.Plugins
 									return null;
 								if (item.info.stackable > 1 && storedHeliCrate.ItemList.TryGetValue(item.info.shortname, out limit))
 								{
-									item.amount = rng.Next(1, Math.Min(limit, item.info.stackable) + 1);
+									if (limit > 0)
+									{
+										if (randomAmountHeliCrate)
+											item.amount = rng.Next(1, Math.Min(limit, item.info.stackable));
+										else
+											item.amount = Math.Min(limit, item.info.stackable);
+									}
 								}
 								return item;
 			case "supply":
@@ -745,7 +779,13 @@ namespace Oxide.Plugins
 									return null;
 								if (item.info.stackable > 1 && storedSupplyDrop.ItemList.TryGetValue(item.info.shortname, out limit))
 								{
-									item.amount = rng.Next(1, Math.Min(limit, item.info.stackable) + 1);
+									if (limit > 0)
+									{
+										if (randomAmountSupplyDrop)
+											item.amount = rng.Next(1, Math.Min(limit, item.info.stackable));
+										else
+											item.amount = Math.Min(limit, item.info.stackable);
+									}
 								}
 								return item;
 					default:
@@ -844,11 +884,12 @@ namespace Oxide.Plugins
 			if (min < 1 ) min = 1;
 			if (max > 30) max = 30;
 			var n = UnityEngine.Random.Range(min,max);
+			if (enableScrapSpawn && container.scrapAmount > 0) n++;
 			container.inventory.capacity = n;
 			container.inventorySlots = n;
 			if (n > 18) container.panelName= "largewoodbox";
 			else container.panelName= "generic";
-
+			
 			var sb = new StringBuilder();
 			var items = new List<Item>();
 			var itemNames = new List<string>();
@@ -900,6 +941,8 @@ namespace Oxide.Plugins
 			}
 			foreach (var item in items)
 				item.MoveToContainer(container.inventory, -1, false);
+			if (enableScrapSpawn)
+				container.GenerateScrap();
 			container.inventory.MarkDirty();
 			populatedContainers++;
 			if (refresh)

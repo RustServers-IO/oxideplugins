@@ -1,8 +1,8 @@
 {
     "name": "AbsolutGifts",
-    "description": "Daily Gift Reward System - PlayTimeRewards.. Time Resets Daily",
+    "description": "Daily Gift Reward System - PlayTimeRewards.. Time Resets per config!",
     "author": "Absolut",
-    "version": "1.4.1",
+    "version": "1.4.4",
     "configuration": true,
     "suggest": {
         "Economics": "*",

@@ -1,91 +1,118 @@
 ﻿/*
- * TODO:
- * Add metabolism configuration settings for food
+ * TODO: Add metabolism individual configuration settings for food
  */
 
-using System;using UnityEngine;
-namespace Oxide.Plugins
-{
-    [Info("Metabolism", "Wulf/lukespragg", "2.4.1", ResourceId = 680)]
-    [Description("Modifies player metabolism stats and rates")]
+using System;
+using Newtonsoft.Json;
+using UnityEngine;
 
-    class Metabolism : RustPlugin
+namespace Oxide.Plugins
+{
+    [Info("Metabolism", "Wulf/lukespragg", "2.5.1", ResourceId = 680)]
+    [Description("Modify or disable player metabolism stats and rates")]
+    public class Metabolism : RustPlugin
     {
         #region Configuration
 
-        const string permAllow = "metabolism.allow";
+        private Configuration config;
 
-        bool caloriesUsage;
-        bool healthUsage;
-        bool hydrationUsage;
-        bool usePermissions;
-
-        float caloriesLossRate;
-        float caloriesSpawnValue;
-        float healthGainRate;
-        float healthSpawnValue;
-        float hydrationLossRate;
-        float hydrationSpawnValue;
-
-        protected override void LoadDefaultConfig()
+        public class Configuration
         {
-            // Options
-            Config["Calories Usage (true/false)"] = caloriesUsage = GetConfig("Calories Usage (true/false)", true);
-            Config["Health Usage (true/false)"] = healthUsage = GetConfig("Health Usage (true/false)", true);
-            Config["Hydration Usage (true/false)"] = hydrationUsage = GetConfig("Hydration Usage (true/false)", true);
-            Config["Use Permissions (true/false)"] = usePermissions = GetConfig("Use Permissions (true/false)", false);
+            [JsonProperty(PropertyName = "Calories loss rate (0.0 - infinite)")]
+            public float CaloriesLossRate;
 
-            // Settings
-            Config["Calories Loss Rate (0.0 - infinite)"] = caloriesLossRate = GetConfig("Calories Loss Rate (0.0 - infinite)", 0.03f);
-            Config["Calories Spawn Value (0.0 - 500.0)"] = caloriesSpawnValue = GetConfig("Calories Spawn Value (0.0 - 500.0)", 500f);
-            Config["Health Gain Rate (0.0 - infinite)"] = healthGainRate = GetConfig("Health Gain Rate (0.0 - infinite)", 0.03f);
-            Config["Health Spawn Value (0.0 to 100.0)"] = healthSpawnValue = GetConfig("Health Spawn Value (0.0 - 100.0)", 100f);
-            Config["Hydration Loss Rate (0.0 - infinite)"] = hydrationLossRate = GetConfig("Hydration Loss Rate (0.0 - infinite)", 0.03f);
-            Config["Hydration Spawn Value (0.0 - 250.0)"] = hydrationSpawnValue = GetConfig("Hydration Spawn Value (0.0 - 250.0)", 250f);
+            [JsonProperty(PropertyName = "Calories spawn amount (0.0 - 500.0)")]
+            public float CaloriesSpawnAmount;
 
-            // Cleanup
-            Config.Remove("CaloriesLossRate");
-            Config.Remove("CaloriesSpawnValue");
-            Config.Remove("HealthGainRate");
-            Config.Remove("HealthSpawnValue");
-            Config.Remove("HydrationLossRate");
-            Config.Remove("HydrationSpawnValue");
+            [JsonProperty(PropertyName = "Health gain rate (0.0 - infinte)")]
+            public float HealthGainRate;
 
+            [JsonProperty(PropertyName = "Health spawn amount (0.0 - 100.0)")]
+            public float HealthSpawnAmount;
+
+            [JsonProperty(PropertyName = "Hydration loss rate (0.0 - infinite)")]
+            public float HydrationLossRate;
+
+            [JsonProperty(PropertyName = "Hydration spawn amount (0.0 - 250.0)")]
+            public float HydrationSpawnAmount;
+
+            public static Configuration DefaultConfig()
+            {
+                return new Configuration
+                {
+                    CaloriesLossRate = 0.03f,
+                    CaloriesSpawnAmount = 500f,
+                    HealthGainRate = 0.03f,
+                    HealthSpawnAmount = 100f,
+                    HydrationLossRate = 0.03f,
+                    HydrationSpawnAmount = 250f
+                };
+            }
+        }
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            try
+            {
+                config = Config.ReadObject<Configuration>();
+                if (config?.HealthGainRate == null) LoadDefaultConfig();
+            }
+            catch
+            {
+                PrintWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+                LoadDefaultConfig();
+            }
             SaveConfig();
         }
 
-        void Init()        {            LoadDefaultConfig();
-            permission.RegisterPermission(permAllow, this);        }        #endregion
+        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
 
-        #region Modify Metabolism
+        protected override void SaveConfig() => Config.WriteObject(config);
 
-        void Metabolize(BasePlayer player)
+        #endregion
+
+        #region Initialization
+
+        private const string permBoost = "metabolism.boost";
+        private const string permNone = "metabolism.none";
+
+        private void Init()
         {
-            player.health = healthSpawnValue;
-            player.metabolism.calories.value = caloriesSpawnValue;
-            player.metabolism.hydration.value = hydrationSpawnValue;
-        }        /*void OnConsumableUse(Item item)        {
-            var player = item.GetOwnerPlayer();
-            PrintWarning(item.info.name);
-            PrintWarning(item.info.category.ToString());
-            //if (item.info?.itemid != 1685058759 || player == null) return;
-        }*/
-
-        void OnPlayerRespawned(BasePlayer player) => Metabolize(player);        void OnRunPlayerMetabolism(PlayerMetabolism m, BaseCombatEntity entity)
-        {
-            var player = entity.ToPlayer();
-            if (player == null || usePermissions && !permission.UserHasPermission(player.UserIDString, permAllow)) return;
-
-            player.health = healthUsage ? Mathf.Clamp(player.health + healthGainRate, 0f, 100f) : 100f;
-            m.calories.value = caloriesUsage ? Mathf.Clamp(m.calories.value - caloriesLossRate, m.calories.min, m.calories.max) : m.calories.max;
-            m.hydration.value = hydrationUsage ? Mathf.Clamp(m.hydration.value - hydrationLossRate, m.hydration.min, m.hydration.max) : m.hydration.max;
+            permission.RegisterPermission(permBoost, this);
+            permission.RegisterPermission(permNone, this);
         }
 
         #endregion
 
-        #region Helpers
+        #region Modify Metabolism
 
-        T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
+        private void Metabolize(BasePlayer player)
+        {
+            player.health = config.HealthSpawnAmount;
+            player.metabolism.calories.value = config.CaloriesSpawnAmount;
+            player.metabolism.hydration.value = config.HydrationSpawnAmount;
+        }
+
+        private void OnPlayerRespawned(BasePlayer player) => Metabolize(player);
+
+        private void OnRunPlayerMetabolism(PlayerMetabolism m, BaseCombatEntity entity)
+        {
+            var player = entity.ToPlayer();
+            if (player == null) return;
+
+            if (permission.UserHasPermission(player.UserIDString, permBoost))
+            {
+                player.health = Mathf.Clamp(player.health + config.HealthGainRate, 0f, 100f);
+                m.calories.value = Mathf.Clamp(m.calories.value - config.CaloriesLossRate, m.calories.min, m.calories.max);
+                m.hydration.value = Mathf.Clamp(m.hydration.value - config.HydrationLossRate, m.hydration.min, m.hydration.max);
+            }
+            else if (permission.UserHasPermission(player.UserIDString, permNone))
+            {
+                m.calories.value = m.calories.max;
+                m.hydration.value = m.hydration.max;
+            }
+        }
 
         #endregion
     }

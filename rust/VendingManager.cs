@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("VendingManager", "ignignokt84", "0.1.7", ResourceId = 2331)]
+	[Info("VendingManager", "ignignokt84", "0.1.8", ResourceId = 2331)]
 	[Description("Improved vending machine control")]
 	class VendingManager : RustPlugin
 	{
@@ -1095,7 +1095,7 @@ namespace Oxide.Plugins
 			{
 				BaseLock l = (BaseLock)vm.GetSlot(BaseEntity.Slot.Lock);
 				if (l == null) continue;
-
+				
 				LockInfo li = new LockInfo(vm.net.ID, l);
 				locks[vm.net.ID] = li;
 			}
@@ -1297,13 +1297,6 @@ namespace Oxide.Plugins
 			public bool firstKey;
 			public bool isLocked;
 
-			FieldInfo codeField = typeof(CodeLock).GetField("code", BindingFlags.Instance | BindingFlags.NonPublic);
-			FieldInfo guestCodeField = typeof(CodeLock).GetField("guestCode", BindingFlags.Instance | BindingFlags.NonPublic);
-			FieldInfo whitelistField = typeof(CodeLock).GetField("whitelistPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
-			FieldInfo guestField = typeof(CodeLock).GetField("guestPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
-			FieldInfo keyCodeField = typeof(KeyLock).GetField("keyCode", BindingFlags.Instance | BindingFlags.NonPublic);
-			FieldInfo firstKeyField = typeof(KeyLock).GetField("firstKeyCreated", BindingFlags.Instance | BindingFlags.NonPublic);
-
 			public LockInfo() { }
 			public LockInfo(uint vmId, BaseLock l)
 			{
@@ -1316,15 +1309,15 @@ namespace Oxide.Plugins
 				if (l.GetType() == typeof(CodeLock))
 				{
 					isCodeLock = true;
-					code = codeField.GetValue(l).ToString();
-					guestCode = guestCodeField.GetValue(l).ToString();
-					whitelist = (List<ulong>)whitelistField.GetValue(l);
-					guests = (List<ulong>)guestField.GetValue(l);
+					code = (l as CodeLock).code;
+					guestCode = (l as CodeLock).guestCode;
+					whitelist = (l as CodeLock).whitelistPlayers;
+					guests = (l as CodeLock).guestPlayers;
 				}
 				else if (l.GetType() == typeof(KeyLock))
 				{
-					keyCode = (int)keyCodeField.GetValue(l);
-					firstKey = (bool)firstKeyField.GetValue(l);
+					keyCode = (l as KeyLock).keyCode;
+					firstKey = (l as KeyLock).firstKeyCreated;
 				}
 				isLocked = l.IsLocked();
 			}
@@ -1333,15 +1326,15 @@ namespace Oxide.Plugins
 			{
 				if (l.GetType() == typeof(CodeLock))
 				{
-					codeField.SetValue(l, code);
-					guestCodeField.SetValue(l, guestCode);
-					whitelistField.SetValue(l, whitelist);
-					guestField.SetValue(l, guests);
+					(l as CodeLock).code = code;
+					(l as CodeLock).guestCode = guestCode;
+					(l as CodeLock).whitelistPlayers = whitelist;
+					(l as CodeLock).guestPlayers = guests;
 				}
 				else if (l.GetType() == typeof(KeyLock))
 				{
-					keyCodeField.SetValue(l, keyCode);
-					firstKeyField.SetValue(l, firstKey);
+					(l as KeyLock).keyCode = keyCode;
+					(l as KeyLock).firstKeyCreated = firstKey;
 				}
 				l.SetFlag(BaseEntity.Flags.Locked, isLocked);
 			}

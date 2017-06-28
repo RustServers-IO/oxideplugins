@@ -1,18 +1,20 @@
-﻿using System.Collections.Generic;
+﻿// Requires: Friends
+
+using System.Collections.Generic;
 using System.Linq;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Cupboard for Friends", "LaserHydra", "1.2.4", ResourceId = 1578)]
+    [Info("Cupboard for Friends", "LaserHydra", "1.2.7", ResourceId = 1578)]
     [Description("Only allow friends of already authorized people to authorize themselves.")]
     class CupboardForFriends : RustPlugin
     {
         bool debug = false;
-
         bool blockDamage = false;
 
-        RustPlugin FriendsAPI;
-        RustPlugin Clans;
+        [PluginReference]
+        Plugin Clans, Friends;
 
         ////////////////////////////////////////
         ///     On Plugin Loaded
@@ -20,34 +22,17 @@ namespace Oxide.Plugins
 
         void Loaded()
         {
-            FriendsAPI = (RustPlugin) plugins.Find("Friends");
-            Clans = (RustPlugin) plugins.Find("Clans");
-
             LoadMessages();
             LoadConfig();
 
-            if (FriendsAPI == null)
-                PrintError($"FriendsAPI could not be found! You need to have FriendsAPI installed for the plugin '{this.Title}' to work! Get it here: http://oxidemod.org/plugins/686/");
+            if (Friends == null)
+                PrintError($"Friends could not be found! You need to have Friends installed for the plugin '{this.Title}' to work! Get it here: http://oxidemod.org/plugins/686/");
 
             if (Clans == null)
                 PrintWarning($"Clans could not be found! Clans is an OPTIONAL addition for '{this.Title}'! Get it here: http://oxidemod.org/plugins/842/");
 
-            if(Config["Settings", "Block Damage"] != null)
+            if (Config["Settings", "Block Damage"] != null)
                 blockDamage = (bool)Config["Settings", "Block Damage"];
-        }
-
-        void OnPluginLoaded(object plugin)
-        {
-            if(plugin.GetType().BaseType == typeof(RustPlugin))
-            {
-                RustPlugin rustPlugin = (RustPlugin) plugin;
-
-                if (rustPlugin.Title == "Friends")
-                    FriendsAPI = rustPlugin;
-
-                if (rustPlugin.Title == "Clans")
-                    Clans = rustPlugin;
-            }
         }
 
         ////////////////////////////////////////
@@ -112,7 +97,7 @@ namespace Oxide.Plugins
             DevMsg($"-------------------------------------------");
             DevMsg($"Any authed: {priviledge.AnyAuthed()}");
 
-            if (FriendsAPI != null && priviledge.AnyAuthed())
+            if (Friends != null && priviledge.AnyAuthed())
             {
                 bool isFriend = false;
 
@@ -156,10 +141,10 @@ namespace Oxide.Plugins
 
         bool IsFriend(BasePlayer player, string friendID)
         {
-            if (FriendsAPI == null)
+            if (Friends == null)
                 return true;
 
-            bool isFriend = (bool)(FriendsAPI.Call("HasFriendS", friendID, player.UserIDString) ?? false);
+            bool isFriend = (bool)(Friends.Call("HasFriendS", friendID, player.UserIDString) ?? false);
 
             DevMsg($"IsFriend({player}, {friendID})");
             DevMsg($"IsFriend: returning {isFriend}");

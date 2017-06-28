@@ -1,0 +1,16 @@
+{
+    "name": "KDGUI",
+    "description": "Displays your kills and deaths as an extension to your hotbar!",
+    "author": "JoeSheep",
+    "version": "1.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/kdgui.2466",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

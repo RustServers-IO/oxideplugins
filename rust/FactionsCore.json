@@ -1,0 +1,25 @@
+{
+    "name": "FactionsCore",
+    "description": "A Faction\/Team System. Revamp from original Factions.",
+    "author": "Absolut",
+    "version": "1.0.4",
+    "configuration": true,
+    "suggest": {
+        "EventManager": "*",
+        "ZoneManager": "*",
+        "LustyMap": "*",
+        "Kits": "*"
+    },
+    "require": {
+        "ImageLibrary": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/factionscore.2399",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

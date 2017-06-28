@@ -1,271 +1,247 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildingRestriction", "Jakkee", "1.1.3", ResourceId = 2124)]
-    class BuildingRestriction : RustPlugin
+    [Info("Building Restriction", "Wulf/lukespragg", "1.3.1", ResourceId = 2124)]
+    [Description("Restricts building height, building in water, and number of foundations")]
+    public class BuildingRestriction : RustPlugin
     {
+        #region Configuration
 
-        #region Variables
+        private Configuration config;
 
-        private List<string> AllowedBuildingBlocks = new List<string> { "assets/prefabs/building core/wall.low/wall.low.prefab",
-            "assets/prefabs/building core/floor/floor.prefab",
-            "assets/prefabs/building core/floor.triangle/floor.triangle.prefab",
-            "assets/prefabs/building core/floor.frame/floor.frame.prefab",
-            "assets/prefabs/building core/roof/roof.prefab" };
-        private float MaxHeight = 15;
-        private int MaxTFoundations = 24;
-        private int MaxFoundations = 16;
-        private string PermBypass = "buildingrestriction.bypass";
-        private string TriangleFoundation = "assets/prefabs/building core/foundation.triangle/foundation.triangle.prefab";
-        private string Foundation = "assets/prefabs/building core/foundation/foundation.prefab";
-        Dictionary<uint, List<BuildingBlock>> buildingids = new Dictionary<uint, List<BuildingBlock>>();
+        public class Configuration
+        {
+            [JsonProperty(PropertyName = "Maximum build height")]
+            public int MaxBuildHeight;
+
+            [JsonProperty(PropertyName = "Maximum foundations")]
+            public int MaxFoundations;
+
+            [JsonProperty(PropertyName = "Maximum triangle foundations")]
+            public int MaxTriFoundations;
+
+            [JsonProperty(PropertyName = "Maximum water depth")]
+            public double MaxWaterDepth;
+
+            [JsonProperty(PropertyName = "Refund resources when restricted")]
+            public bool RefundResources;
+
+            public static Configuration DefaultConfig()
+            {
+                return new Configuration
+                {
+                    MaxBuildHeight = 5,
+                    MaxFoundations = 16,
+                    MaxTriFoundations = 24,
+                    MaxWaterDepth = 0.1,
+                    RefundResources = true
+                };
+            }
+        }
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            try
+            {
+                config = Config.ReadObject<Configuration>();
+                if (config?.MaxBuildHeight == null) LoadDefaultConfig();
+            }
+            catch
+            {
+                PrintWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+                LoadDefaultConfig();
+            }
+            SaveConfig();
+        }
+
+        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+
+        protected override void SaveConfig() => Config.WriteObject(config);
+
+        #endregion
+
+        #region Localization
+
+        private new void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>()
+            {
+                ["MaxBuildHeight"] = "You have reached the max building height! ({0} building blocks)",
+                ["MaxFoundations"] = "You have reached the max foundations allowed! ({0} foundations)",
+                ["MaxTriFoundations"] = "You have reached the max triangle foundations allowed! ({0} foundations)",
+                ["MaxWaterDepth"] = "You are not allowed to build in water!"
+            }, this);
+        }
 
         #endregion
 
         #region Initialization
 
-        protected override void LoadDefaultConfig()
+        private Dictionary<uint, List<BuildingBlock>> buildingIds = new Dictionary<uint, List<BuildingBlock>>();
+        private List<string> allowedBuildingBlocks = new List<string>
         {
-            Config.Clear();
-            Config["Max build height"] = 5;
-            Config["Max triangle foundations"] = 24;
-            Config["Max foundations"] = 16;
-            Config.Save();
-        }
-
-        void Loaded()
-        {
-            CheckConfig();
-            MaxTFoundations = GetConfig("Max triangle foundations", 24);
-            MaxFoundations = GetConfig("Max foundations", 16);
-            MaxHeight = GetConfig("Max build height", 5) * 3;
-            permission.RegisterPermission(PermBypass, this);
-            lang.RegisterMessages(messages, this);
-        }
-
-        Dictionary<string, string> messages = new Dictionary<string, string>()
-        {
-            {"Limit: Height", "You have reached the max building height! ({0} BuildingBlocks)"},
-            {"Limit: Foundations", "You have reached the max foundations allowed! ({0} Foundations)"},
-            {"Limit: Triangle Foundations", "You have reached the max triangle foundations allowed! ({0} Foundations)"},
+            "assets/prefabs/building core/floor/floor.prefab",
+            "assets/prefabs/building core/floor.frame/floor.frame.prefab",
+            "assets/prefabs/building core/floor.triangle/floor.triangle.prefab",
+            "assets/prefabs/building core/roof/roof.prefab",
+            "assets/prefabs/building core/wall.low/wall.low.prefab"
         };
 
-        void CheckConfig()
+        private const string triFoundation = "assets/prefabs/building core/foundation.triangle/foundation.triangle.prefab";
+        private const string foundation = "assets/prefabs/building core/foundation/foundation.prefab";
+        private const string permBypass = "buildingrestriction.bypass";
+
+        private void OnServerInitialized()
         {
-            if (Config["VERSION"] == null)
-            {
-                ReloadConfig();
-            }
-            else if (GetConfig<string>("VERSION", "") != Version.ToString())
-            {
-                ReloadConfig();
-            }
+            permission.RegisterPermission(permBypass, this);
+
+            FindStructures();
         }
 
-        void OnServerInitialized()
+        private void FindStructures()
         {
-            UpdateDictionary();
-        }
-
-        protected void ReloadConfig()
-        {
-            Config["VERSION"] = Version.ToString();
-            SaveConfig();
-        }
-
-        void UpdateDictionary()
-        {
-            Puts("Searching for structures, This may awhile...");
-            buildingids.Clear();
-            var FoundationBlocks = Resources.FindObjectsOfTypeAll<BuildingBlock>().Where(x => x.name == Foundation || x.name == TriangleFoundation).ToList();
-            foreach (BuildingBlock Block in FoundationBlocks)
+            buildingIds.Clear();
+            Puts("Searching for structures, this may awhile...");
+            var foundationBlocks = Resources.FindObjectsOfTypeAll<BuildingBlock>().Where(b => b.name == foundation || b.name == triFoundation).ToList();
+            foreach (var block in foundationBlocks.Where(b => !buildingIds.ContainsKey(b.buildingID)))
             {
-                if (!buildingids.ContainsKey(Block.buildingID))
-                {
-                    var structure = UnityEngine.GameObject.FindObjectsOfType<BuildingBlock>().Where(x => x.buildingID == Block.buildingID && x.name == Foundation || x.name == TriangleFoundation).ToList();
-                    buildingids[Block.buildingID] = structure;
-                }
+                var structure = GameObject.FindObjectsOfType<BuildingBlock>().Where(b => b.buildingID == block.buildingID && b.name == foundation || b.name == triFoundation);
+                buildingIds[block.buildingID] = structure.ToList();
             }
-            Puts("Completed! Found " + buildingids.Count.ToString() + " structures");
+            Puts($"Search complete! Found {buildingIds.Count} structures");
         }
 
         #endregion
 
-        #region Oxide Hooks / Core
+        #region Game Hooks
 
-        void OnEntityBuilt(Planner planner, GameObject gameobject)
+        private void RefundResources(BasePlayer player, BuildingBlock buildingBlock)
         {
-            BasePlayer player = planner.GetOwnerPlayer();
-            var hasperm = HasPermission(player.UserIDString, PermBypass);
-            BaseEntity entity = UnityEngine.GameObjectEx.ToBaseEntity(gameobject);
-            var buildingBlock = entity?.GetComponent<BuildingBlock>()?? null;
-            if(buildingBlock != null || !buildingBlock.Equals(null))
+            foreach(var item in buildingBlock.blockDefinition.grades[(int)buildingBlock.grade].costToBuild)
             {
-                var buildingId = buildingBlock.buildingID;
-                if (buildingids.ContainsKey(buildingId))
+                var newItem = ItemManager.CreateByItemID(item.itemid, (int)item.amount);
+                if (newItem != null)
                 {
-                    var ConnectingStructure = buildingids[buildingBlock.buildingID];
-                    if (buildingBlock.name == Foundation || buildingBlock.name == TriangleFoundation)
+                    player.inventory.GiveItem(newItem);
+                    player.Command("note.inv", item.itemid, item.amount);
+                }
+            }
+        }
+
+        private void OnEntityBuilt(Planner planner, GameObject go)
+        {
+            var player = planner?.GetOwnerPlayer();
+            if (player == null || permission.UserHasPermission(player.UserIDString, permBypass)) return;
+
+            var entity = GameObjectEx.ToBaseEntity(go);
+            var buildingBlock = entity?.GetComponent<BuildingBlock>();
+            if (buildingBlock == null) return;
+
+            if (buildingBlock.WaterFactor() >= config.MaxWaterDepth)
+            {
+                if (config.RefundResources) RefundResources(player, buildingBlock);
+                buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
+                Player.Reply(player, Lang("MaxWaterDepth", player.UserIDString, config.MaxWaterDepth));
+                return;
+            }
+
+            var buildingId = buildingBlock.buildingID;
+            if (buildingIds.ContainsKey(buildingId))
+            {
+                var connectingStructure = buildingIds[buildingBlock.buildingID];
+                if (buildingBlock.name == foundation || buildingBlock.name == triFoundation)
+                {
+                    var foundationCount = GetCountOf(connectingStructure, foundation);
+                    var triFoundationCount = GetCountOf(connectingStructure, triFoundation);
+
+                    if (buildingBlock.name == foundation && foundationCount >= config.MaxFoundations)
                     {
-                        var trifcount = GetCountOf(ConnectingStructure, TriangleFoundation);
-                        var fcount = GetCountOf(ConnectingStructure, Foundation);
-                        if (buildingBlock.name == Foundation && fcount >= MaxFoundations)
-                        {
-                            if (!hasperm)
-                            {
-                                buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
-                                SendReply(player, Lang("Limit: Foundations", player.UserIDString, MaxFoundations.ToString()), player);
-                            }
-                        }
-                        else if (buildingBlock.name == TriangleFoundation && trifcount >= MaxTFoundations)
-                        {
-                            if (!hasperm)
-                            {
-                                buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
-                                SendReply(player, Lang("Limit: Triangle Foundations", player.UserIDString, MaxTFoundations.ToString()), player);
-                            }
-                        }
-                        else
-                        {
-                            var structure = new List<BuildingBlock>(ConnectingStructure);
-                            structure.Add(buildingBlock);
-                            buildingids[buildingId] = structure;
-                        }
+                        if (config.RefundResources) RefundResources(player, buildingBlock);
+                        buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
+                        Player.Reply(player, Lang("MaxFoundations", player.UserIDString, config.MaxFoundations));
+                    }
+                    else if (buildingBlock.name == triFoundation && triFoundationCount >= config.MaxTriFoundations)
+                    {
+                        if (config.RefundResources) RefundResources(player, buildingBlock);
+                        buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
+                        Player.Reply(player, Lang("MaxTriFoundations", player.UserIDString, config.MaxTriFoundations));
                     }
                     else
                     {
-                        if (!AllowedBuildingBlocks.Contains(buildingBlock.name))
-                        {
-                            BuildingBlock firstfoundation = null;
-                            foreach (BuildingBlock block in ConnectingStructure)
-                            {
-                                if (block.name.Contains(TriangleFoundation) || block.name.Contains(Foundation))
-                                {
-                                    firstfoundation = block;
-                                    break;
-                                }
-                            }
-                            if (firstfoundation != null)
-                            {
-                                float height = (float)Math.Round(buildingBlock.transform.position.y - firstfoundation.transform.position.y, 0, MidpointRounding.AwayFromZero);
-                                if (MaxHeight <= height)
-                                {
-                                    if (!hasperm)
-                                    {
-                                        buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
-                                        SendReply(player, Lang("Limit: Height", player.UserIDString, (MaxHeight / 3).ToString()), player);
-                                    }
-                                }
-                            }
-                        }
+                        var structure = new List<BuildingBlock>(connectingStructure);
+                        structure.Add(buildingBlock);
+                        buildingIds[buildingId] = structure;
                     }
                 }
                 else
                 {
-                    var structure = new List<BuildingBlock>();
-                    structure.Add(buildingBlock);
-                    buildingids[buildingId] = structure;
-                }
-            }
-        }
-
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            var buildingBlock = entity?.GetComponent<BuildingBlock>()?? null;
-            if (buildingBlock == null || buildingBlock.Equals(null))
-            {
-                return;
-            } 
-            else
-            {
-                if (buildingBlock.name == Foundation || buildingBlock.name == TriangleFoundation)
-                {
-                    if (buildingids.ContainsKey(buildingBlock.buildingID))
+                    if (!allowedBuildingBlocks.Contains(buildingBlock.name))
                     {
-                        foreach (BuildingBlock Block in buildingids[buildingBlock.buildingID])
+                        BuildingBlock firstFoundation = null;
+                        foreach (var block in connectingStructure.Where(b => !string.IsNullOrEmpty(b.name) && b.name.Contains(triFoundation) || b.name.Contains(foundation)))
+                            firstFoundation = block;
+
+                        if (firstFoundation != null)
                         {
-                            if (buildingBlock == Block)
+                            var height = (float)Math.Round(buildingBlock.transform.position.y - firstFoundation.transform.position.y, 0, MidpointRounding.AwayFromZero);
+                            if (config.MaxBuildHeight <= height)
                             {
-                                buildingids[buildingBlock.buildingID].Remove(buildingBlock);
-                                break;
+                                if (config.RefundResources) RefundResources(player, buildingBlock);
+                                buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
+                                Player.Reply(player, Lang("MaxBuildHeight", player.UserIDString, (config.MaxBuildHeight / 3)));
                             }
                         }
                     }
                 }
             }
+            else
+            {
+                var structure = new List<BuildingBlock>();
+                structure.Add(buildingBlock);
+                buildingIds[buildingId] = structure;
+            }
         }
 
-        void OnStructureDemolish(BaseCombatEntity entity, BasePlayer player)
+        private void HandleRemoval(BaseCombatEntity entity)
         {
             var buildingBlock = entity?.GetComponent<BuildingBlock>() ?? null;
-            if (buildingBlock == null || buildingBlock.Equals(null))
+            if (buildingBlock == null || buildingBlock.name != foundation && buildingBlock.name != triFoundation) return;
+
+            if (buildingIds.ContainsKey(buildingBlock.buildingID))
             {
-                return;
-            }
-            else
-            {
-                if (buildingBlock.name == Foundation || buildingBlock.name == TriangleFoundation)
-                {
-                    if (buildingids.ContainsKey(buildingBlock.buildingID))
-                    {
-                        foreach (BuildingBlock Block in buildingids[buildingBlock.buildingID])
-                        {
-                            if (buildingBlock == Block)
-                            {
-                                buildingids[buildingBlock.buildingID].Remove(buildingBlock);
-                                break;
-                            }
-                        }
-                    }
-                }
+                var blockList = buildingIds[buildingBlock.buildingID].Where(b => b == buildingBlock).ToList();
+                foreach (var block in blockList)
+                    buildingIds[buildingBlock.buildingID].Remove(buildingBlock);
             }
         }
+
+        private void OnEntityDeath(BaseCombatEntity entity) => HandleRemoval(entity);
+
+        private void OnStructureDemolish(BaseCombatEntity entity) => HandleRemoval(entity);
 
         #endregion
 
         #region Helper Methods
 
-        private int GetCountOf(List<BuildingBlock> ConnectingStructure, string buildingobject)
+        private int GetCountOf(List<BuildingBlock> ConnectingStructure, string buildingObject)
         {
-            int count = 0;
-            var templist = ConnectingStructure.ToList();
-            foreach (BuildingBlock block in templist)
+            var count = 0;
+            var blockList = ConnectingStructure.ToList();
+            foreach (var block in blockList)
             {
-                if (block == null || block.Equals(null))
-                {
-                    ConnectingStructure.Remove(block);
-                }
-                else
-                {
-                    if (block.name == buildingobject)
-                    {
-                        count++;
-                    }
-                }
+                if (block == null) ConnectingStructure.Remove(block);
+                else if (block.name == buildingObject) count++;
             }
             return count;
         }
 
-        private T GetConfig<T>(string name, T defaultValue)
-        {
-            if (Config[name] == null)
-            {
-                Config[name] = defaultValue;
-                Config.Save();
-                return defaultValue;
-            }
-
-            return (T)Convert.ChangeType(Config[name], typeof(T));
-        }
-
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
-
-        bool HasPermission(string id, string perm) => permission.UserHasPermission(id, perm);
 
         #endregion
     }

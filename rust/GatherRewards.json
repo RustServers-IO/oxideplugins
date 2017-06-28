@@ -2,8 +2,12 @@
     "name": "GatherRewards",
     "description": "Gives players money through Economics\/ServerRewards for various actions (gathering, animal kills)",
     "author": "Canopy Sheep",
-    "version": "1.3.2",
+    "version": "1.4.4",
     "configuration": true,
+    "suggest": {
+        "Friends": "*",
+        "Clans": "*"
+    },
     "require": {
         "Economics": "*",
         "ServerRewards": "*"

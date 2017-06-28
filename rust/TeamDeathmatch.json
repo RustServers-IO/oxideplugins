@@ -2,7 +2,7 @@
     "name": "Team Deathmatch",
     "description": "Team Deathmatch event for EventManager",
     "author": "k1lly0u",
-    "version": "0.3.1",
+    "version": "0.3.52",
     "configuration": true,
     "require": {
         "EventManager": "*",

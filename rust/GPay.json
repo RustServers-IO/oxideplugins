@@ -2,7 +2,7 @@
     "name": "GPay Auto Donation System",
     "description": "Allows you to accept donations for items automatically",
     "author": "",
-    "version": "0.3",
+    "version": "1.0.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/gpay-auto-donation-system.2386",

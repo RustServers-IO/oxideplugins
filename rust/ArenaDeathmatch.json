@@ -2,7 +2,7 @@
     "name": "Deathmatch",
     "description": "Deathmatch event for EventManager",
     "author": "k1lly0u",
-    "version": "1.2.1",
+    "version": "1.2.22",
     "configuration": true,
     "require": {
         "EventManager": "*",

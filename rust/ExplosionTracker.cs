@@ -1,108 +1,202 @@
-using System.Collections.Generic;
-using System.Reflection;
+using Newtonsoft.Json;
+using Oxide.Core.Plugins;
 using System;
-using System.Data;
-using UnityEngine;
-using Oxide.Core;
-using System.Linq;
-using Rust;
+using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Explosion Tracker", "PaiN", 0.7, ResourceId = 1282)]
+    [Info("Explosion Tracker", "Ryan", "1.0.0", ResourceId = 1282)]
     [Description("This plugin tracks every explosion that happens in the server.")]
-    class ExplosionTracker : RustPlugin
+    internal class ExplosionTracker : RustPlugin
     {
-		private bool Changed;
-		private bool logtofile;
-		private bool logtorcon;
-		
-		void Loaded()
+        [PluginReference] private Plugin Slack;
+        [PluginReference] private Plugin Discord;
+
+        #region Config
+
+        private ConfigFile ConfigData;
+
+        public class ConfigFile
         {
-            LoadVariables();
+            [JsonProperty(PropertyName = "Enable RCON messages")]
+            public bool RCON;
+
+            [JsonProperty(PropertyName = "Enable Log messages")]
+            public bool Log;
+
+            [JsonProperty(PropertyName = "Send messages to online admins")]
+            public bool AdminMsg;
+
+            [JsonProperty(PropertyName = "Enable Discord messages")]
+            public bool Discord;
+
+            [JsonProperty(PropertyName = "Slack Settings")]
+            public SlackInfo SlackInfo;
+
+            [JsonProperty(PropertyName = "Enable rocket launch notifications")]
+            public bool Launch;
+
+            [JsonProperty(PropertyName = "Enable explosive throw notifications")]
+            public bool Throw;
+
+            [JsonProperty(PropertyName = "Enable explosive drop notifications")]
+            public bool Drop;
+
+            public static ConfigFile DefaultConfig()
+            {
+                return new ConfigFile
+                {
+                    RCON = true,
+                    Log = true,
+                    AdminMsg = true,
+                    Discord = false,
+                    SlackInfo = new SlackInfo
+                    {
+                        Enabled = false,
+                        Channel = "mychannelname"
+                    },
+                    Launch = true,
+                    Drop = false,
+                    Throw = true
+                };
+            }
         }
 
-        object GetConfig(string menu, string datavalue, object defaultValue)
+        public class SlackInfo
         {
-            var data = Config[menu] as Dictionary<string, object>;
-            if (data == null)
-            {
-                data = new Dictionary<string, object>();
-                Config[menu] = data;
-                Changed = true;
-            }
-            object value;
-            if (!data.TryGetValue(datavalue, out value))
-            {
-                value = defaultValue;
-                data[datavalue] = value;
-                Changed = true;
-            }
-            return value;
-        }
+            [JsonProperty(PropertyName = "Enable Slack messages")]
+            public bool Enabled { get; set; }
 
-        void LoadVariables()
-        {
-
-            logtofile = Convert.ToBoolean(GetConfig("Settings", "LogToFile", true));
-            logtorcon = Convert.ToBoolean(GetConfig("Settings", "LogToRcon", true));
-
-            if (Changed)
-            {
-                SaveConfig();
-                Changed = false;
-
-            }
-
+            [JsonProperty(PropertyName = "Channel name")]
+            public string Channel { get; set; }
         }
 
         protected override void LoadDefaultConfig()
         {
-            Puts("Creating a new configuration file!");
-            Config.Clear();
-            LoadVariables();
-        } 
-		
-		void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
+            PrintWarning("Generating default configuration file...");
+            ConfigData = ConfigFile.DefaultConfig();
+        }
+
+        protected override void LoadConfig()
         {
-            NextTick(() => {
-                if (logtorcon == true)
-                {
-                    Puts("**" + player.displayName + "**" + "(" + player.userID.ToString() + ")" + " threw " + entity.name.ToString() +
-                    " at position " +
-                    "( X: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().x).ToString() +
-                    " Y: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().y).ToString() +
-                    " Z: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().z).ToString() + " )");
-                }
-                if (logtofile == true)
-                {
-                    ConVar.Server.Log("Oxide/Logs/ExplosionTrackerLog.txt", "**" + player.displayName + "**" + "(" + player.userID.ToString() + ")" + " threw " + entity.name.ToString() +
-                    " at position " +
-                    "( X: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().x).ToString() +
-                    " Y: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().y).ToString() +
-                    " Z: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().z).ToString() + " )");
-                }
+            base.LoadConfig();
+            ConfigData = Config.ReadObject<ConfigFile>();
+        }
+
+        protected override void SaveConfig() => Config.WriteObject(ConfigData);
+
+        #endregion Config
+
+        #region Lang
+
+        private void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                ["Dropped Message"] = "{0} ({1}) dropped {2} at (X: {3}, Y: {4}, Z: {5})",
+                ["Launched Message"] = "{0} ({1}) launched a rocket at (X: {3}, Y: {4}, Z: {5})",
+                ["Thrown Message"] = "{0} ({1}) dropped {2} at (X: {3}, Y: {4}, Z: {5})"
+            }, this);
+        }
+
+        #endregion Lang
+
+        #region Methods
+
+        private void Log(string message, string action) => LogToFile(action, string.Format($"[{DateTime.Now}] " + message), this);
+
+        private void SendSlack(string message, BasePlayer player)
+        {
+            if (!Slack) return;
+            Slack.Call("SimpleMessage", message, covalence.Players.FindPlayerById(player.UserIDString), ConfigData.SlackInfo.Channel);
+        }
+
+        private void SendDiscord(string message)
+        {
+            if (!Discord) return;
+            Discord.Call("SendMessage", message);
+        }
+
+        private string ThrowMsg(BasePlayer player, BaseEntity entity)
+        {
+            return string.Format(lang.GetMessage("Thrown Message", this, player.UserIDString), player.displayName, player.UserIDString, entity.ShortPrefabName,
+                Math.Round(entity.GetEstimatedWorldPosition().x, 2), Math.Round(entity.GetEstimatedWorldPosition().y, 2), Math.Round(entity.GetEstimatedWorldPosition().z, 2));
+        }
+
+        private string LaunchMsg(BasePlayer player, BaseEntity entity)
+        {
+            return string.Format(lang.GetMessage("Launched Message", this, player.UserIDString), player.displayName, player.UserIDString, entity.ShortPrefabName,
+                Math.Round(entity.GetEstimatedWorldPosition().x, 2), Math.Round(entity.GetEstimatedWorldPosition().y, 2), Math.Round(entity.GetEstimatedWorldPosition().z, 2));
+        }
+
+        private string DropMsg(BasePlayer player, BaseEntity entity)
+        {
+            return string.Format(lang.GetMessage("Dropped Message", this, player.UserIDString), player.displayName, player.UserIDString, entity.ShortPrefabName,
+                Math.Round(entity.GetEstimatedWorldPosition().x, 2), Math.Round(entity.GetEstimatedWorldPosition().y, 2), Math.Round(entity.GetEstimatedWorldPosition().z, 2));
+        }
+
+        private void SendMessages(string message, string action, BasePlayer player)
+        {
+            if (ConfigData.Log)
+                Log(message, action);
+            if (ConfigData.RCON)
+                Puts(message);
+            if (ConfigData.AdminMsg)
+                foreach (var p in BasePlayer.activePlayerList)
+                    if (p.IsAdmin)
+                        PrintToChat(player, message);
+            if (ConfigData.SlackInfo.Enabled)
+                SendSlack(message, player);
+            if (ConfigData.Discord)
+                SendDiscord(message);
+        }
+
+        private void ConstructMessage(BasePlayer player, BaseEntity entity, string action)
+        {
+            if (action == "throw" && ConfigData.Throw)
+                SendMessages(ThrowMsg(player, entity), action, player);
+            if (action == "launch" && ConfigData.Launch)
+                SendMessages(LaunchMsg(player, entity), action, player);
+            if (action == "drop" && ConfigData.Drop)
+                SendMessages(DropMsg(player, entity), action, player);
+        }
+
+        #endregion Methods
+
+        #region Hooks
+
+        private void Loaded() => SaveConfig();
+
+        private void OnServerInitialized()
+        {
+            if (ConfigData.Discord && !Discord) PrintWarning("You have Discord notifications on, but 'Discord' plugin isn't detected");
+            if (ConfigData.SlackInfo.Enabled && !Slack) PrintWarning("You have Slack notifications on, but 'Slack' plugin isn't detected");
+        }
+
+        private void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
+        {
+            NextTick(() =>
+            {
+                ConstructMessage(player, entity, "throw");
             });
         }
-			
-			void OnRocketLaunched(BasePlayer player, BaseEntity entity)
-			{
-				NextTick(() => {
-				if(logtorcon == true)
-				{
-					Puts("**"+player.displayName+"**" +"(" + player.userID.ToString() + ")" + " launched a rocket at " +
-					"( X: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().x).ToString() + 
-					" Y: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().y).ToString() + 
-					" Z: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().z).ToString() + " )");
-				}
-				if(logtofile == true) 
-				{
-					ConVar.Server.Log("Oxide/Logs/ExplosionTrackerLog.txt", "**"+player.displayName+"**" +"(" + player.userID.ToString() + ")" + " launched a rocket at " +
-					"( X: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().x).ToString() + 
-					" Y: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().y).ToString() + 
-					" Z: " + Convert.ToInt32(entity.GetEstimatedWorldPosition().z).ToString() + " )");
-				}
-				});
-			}
-	}
+
+        private void OnRocketLaunched(BasePlayer player, BaseEntity entity)
+        {
+            NextTick(() =>
+            {
+                ConstructMessage(player, entity, "launch");
+            });
+        }
+
+        private void OnExplosiveDropped(BasePlayer player, BaseEntity entity)
+        {
+            NextTick(() =>
+            {
+                ConstructMessage(player, entity, "drop");
+            });
+        }
+
+        #endregion Hooks
+    }
 }

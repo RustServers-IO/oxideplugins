@@ -1,9 +1,12 @@
 {
     "name": "Custom Spawn Points",
     "description": "Create custom spawn points for your server",
-    "author": "Reneb",
-    "version": "1.0.4",
+    "author": "k1lly0u",
+    "version": "1.1.0",
     "configuration": false,
+    "require": {
+        "Spawns": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/custom-spawn-points.1076",
     "games": [

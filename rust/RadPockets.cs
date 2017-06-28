@@ -11,7 +11,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("RadPockets", "k1lly0u", "2.0.1", ResourceId = 1492)]
+    [Info("RadPockets", "k1lly0u", "2.0.2", ResourceId = 1492)]
     class RadPockets : RustPlugin
     {
         #region Fields  
@@ -111,7 +111,7 @@ namespace Oxide.Plugins
         [ChatCommand("rp")]
         void cmdRP(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin() || permission.UserHasPermission(player.UserIDString, "radpockets.use"))
+            if (player.IsAdmin || permission.UserHasPermission(player.UserIDString, "radpockets.use"))
             {
                 if (args == null || args.Length == 0)
                 {
@@ -240,7 +240,6 @@ namespace Oxide.Plugins
         class RZ : MonoBehaviour
         {
             public PocketData data;  
-            private List<BasePlayer> InZone;
             void Awake()
             {
                 gameObject.layer = (int)Layer.Reserved1;
@@ -249,7 +248,6 @@ namespace Oxide.Plugins
                 var rigidbody = gameObject.AddComponent<Rigidbody>();
                 rigidbody.useGravity = false;
                 rigidbody.isKinematic = true;
-                InZone = new List<BasePlayer>();
             }
             public void Activate(PocketData data)
             {
@@ -266,14 +264,10 @@ namespace Oxide.Plugins
                 Rads.RadiationAmountOverride = data.amount;
                 Rads.radiationSize = data.radius;
                 Rads.interestLayers = playerLayer;
-                Rads.enabled = true;
-
-                if (IsInvoking("UpdateTrigger")) CancelInvoke("UpdateTrigger");
-                InvokeRepeating("UpdateTrigger", 3f, 3f);
+                Rads.enabled = true;                
             }            
             void OnDestroy()
             {
-                CancelInvoke("UpdateTrigger");
                 Destroy(gameObject);
             }
             internal void UpdateCollider()
@@ -287,18 +281,7 @@ namespace Oxide.Plugins
                     }
                     sphereCollider.radius = data.radius;
                 }
-            }
-            internal void UpdateTrigger()
-            {
-                InZone = new List<BasePlayer>();
-                int entities = Physics.OverlapSphereNonAlloc(data.position, data.radius, colBuffer, playerLayer);
-                for (var i = 0; i < entities; i++)
-                {
-                    var player = colBuffer[i].GetComponentInParent<BasePlayer>();
-                    if (player != null)                    
-                        InZone.Add(player); 
-                }                
-            }
+            }           
         }
         #endregion
 

@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Limit", "PaiN", 0.5, ResourceId = 1947)]
+    [Info("Entity Limit", "PaiN", 0.6, ResourceId = 1947)]
     class EntityLimit : RustPlugin
     {
         static EntityLimit Plugin;
@@ -18,7 +18,7 @@ namespace Oxide.Plugins
             {
                 ["wall.external.high.stone"] = 10,
                 ["gates.external.high.stone"] = 2,
-                ["gates.external.high.wood"] = 2
+                ["gates.external.high.wood"] = 2,
             };
         }
 
@@ -54,7 +54,6 @@ namespace Oxide.Plugins
                     {
                         info.limit.Add(new Entities()
                         { Count = 1, Name = entity.ShortPrefabName });
-
                     }
                     else
                     {
@@ -65,6 +64,10 @@ namespace Oxide.Plugins
                             {
                                 player.ChatMessage(LangMsg("MAX_ENTITIES"));
                                 var item = ItemManager.CreateByName(entity.ShortPrefabName.Replace("_", "."), 1);
+
+                                if (entity.ShortPrefabName.Contains("sleeping"))
+                                    item = ItemManager.CreateByName("sleepingbag");
+
                                 player.inventory.GiveItem(item, player.inventory.containerBelt);
                                 player.Command(string.Concat(new object[4]
                                 {
@@ -73,11 +76,12 @@ namespace Oxide.Plugins
                                     (object) " ",
                                     (object) "1"
                                 }));
+                                //player.Command("note.inv", (object)item.info.itemid, (object)item.amount, (object)item.name.);
+
                                 entity.KillMessage();
                                 return;
                             }
                             playerEnt.Count += 1;
-                            Plugin.Puts(playerEnt.Count.ToString());
                             return;
                         }
                     }

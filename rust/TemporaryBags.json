@@ -1,0 +1,16 @@
+{
+    "name": "TemporaryBags",
+    "description": "One time use sleeping bags.",
+    "author": "Kappasaurus",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/temporarybags.2508",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,16 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
 using Rust;
 
 namespace Oxide.Plugins
 {
-
-    [Info("Explosives Modifier", "Mughisi", "1.3.1", ResourceId = 832)]
+    [Info("Explosives Modifier", "Mughisi", "1.3.2", ResourceId = 832)]
+    [Description("Allows you to modify explosive damage and radius")]
     class ExplosivesModifier : RustPlugin
     {
-
         #region Configuration Data
 
         private bool configChanged;
@@ -18,7 +16,7 @@ namespace Oxide.Plugins
         // Plugin options
         private const string DefaultChatPrefix = "Bomb Squad";
         private const string DefaultChatPrefixColor = "#008000";
-        
+
         public string ChatPrefix { get; private set; }
         public string ChatPrefixColor { get; private set; }
 
@@ -106,8 +104,8 @@ namespace Oxide.Plugins
         private readonly string[] weaponRadiusTypes = { "timed", "f1", "beancan", "rocket" };
 
         protected override void LoadDefaultConfig() => PrintWarning("New configuration file created.");
-        
-        private void Loaded() => LoadConfiguration();
+
+        private void Init() => LoadConfiguration();
 
         private void LoadConfiguration()
         {
@@ -168,19 +166,19 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("explosivedamage")]
-        void ExplosiveDamage(BasePlayer player, string command, string[] args)
+        private void ExplosiveDamage(BasePlayer player, string command, string[] args)
         {
             ChangeExplosive(player, command, args, "Damage Modifier");
         }
 
         [ChatCommand("explosiveradius")]
-        void ExplosiveRadius(BasePlayer player, string command, string[] args)
+        private void ExplosiveRadius(BasePlayer player, string command, string[] args)
         {
             ChangeExplosive(player, command, args, "Radius Modifier");
         }
 
         [ChatCommand("stickygrenades")]
-        void StickyGrenades(BasePlayer player, string command, string[] args)
+        private void StickyGrenades(BasePlayer player, string command, string[] args)
         {
             if (!IsAllowed(player)) return;
 
@@ -201,7 +199,7 @@ namespace Oxide.Plugins
             SendChatMessage(player, InvalidArguments);
         }
 
-        void ChangeExplosive(BasePlayer player, string command, string[] args, string type)
+        private void ChangeExplosive(BasePlayer player, string command, string[] args, string type)
         {
             if (!IsAllowed(player)) return;
 
@@ -215,7 +213,7 @@ namespace Oxide.Plugins
             float newModifier;
             if (!float.TryParse(args[1], out newModifier))
                 invalid = true;
-            
+
             if (!IsValidType(command, args[0]) || invalid)
             {
                 SendChatMessage(player, InvalidArguments, command);
@@ -272,7 +270,7 @@ namespace Oxide.Plugins
 
         #region Hooks
 
-        void OnWeaponThrown(BasePlayer player, BaseEntity entity)
+        private void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
             var explosive = entity as TimedExplosive;
             if (!explosive) return;
@@ -282,14 +280,14 @@ namespace Oxide.Plugins
             if (entity.name == "items/timed.explosive.deployed") { modifier = ExplosiveChargeDamageModifier; radius = ExplosiveChargeRadiusModifier; }
             if (entity.name == "items/grenade.f1.deployed") { modifier = F1GrenadeDamageModifier; radius = F1GrenadeRadiusModifier; }
             if (entity.name == "items/grenade.beancan.deployed") { modifier = BeancanGrenadeDamageModifier; radius = BeancanGrenadeRadiusModifier; }
-            
+
             foreach (var damage in explosive.damageTypes)
                 damage.amount *= modifier / 100;
 
             explosive.explosionRadius *= radius / 100;
         }
-        
-        void OnRocketLaunched(BasePlayer player, BaseEntity entity)
+
+        private void OnRocketLaunched(BasePlayer player, BaseEntity entity)
         {
             var explosive = entity as TimedExplosive;
             if (!explosive) return;
@@ -299,15 +297,15 @@ namespace Oxide.Plugins
 
             explosive.explosionRadius *= RocketRadiusModifier / 100;
         }
-        void OnEntityTakeDamage(BaseEntity entity, HitInfo info)
+        private void OnEntityTakeDamage(BaseEntity entity, HitInfo info)
         {
             if (info.Initiator?.ToPlayer() != null && info.damageTypes.Get(DamageType.Explosion) > 0)
                 info.damageTypes.Scale(DamageType.Explosion, ExplosiveAmmoDamageModifier / 100);
         }
 
 
-        void SendHelpText(BasePlayer player)
-        {      
+        private void SendHelpText(BasePlayer player)
+        {
             SendChatMessage(player, HelpTextPlayersExplosiveCharge, ExplosiveAmmoDamageModifier, ExplosiveChargeRadiusModifier);
             SendChatMessage(player, HelpTextPlayersF1Grenade, F1GrenadeDamageModifier, F1GrenadeRadiusModifier, (F1GrenadeSticky ? "enabled" : "disabled"));
             SendChatMessage(player, HelpTextPlayersBeancanGrenade, BeancanGrenadeDamageModifier, BeancanGrenadeRadiusModifier, (BeancanGrenadeSticky ? "enabled" : "disabled"));
@@ -321,7 +319,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helper Methods
-        
+
         private bool IsValidType(string command, string type)
         {
             switch (command)
@@ -334,7 +332,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        void SendChatMessage(BasePlayer player, string message, params object[] arguments) =>
+        private void SendChatMessage(BasePlayer player, string message, params object[] arguments) =>
             PrintToChat(player, $"<color={ChatPrefixColor}>{ChatPrefix}</color>: {message}", arguments);
 
         bool IsAllowed(BasePlayer player)
@@ -361,7 +359,7 @@ namespace Oxide.Plugins
             return (T)Convert.ChangeType(value, typeof(T));
         }
 
-        void SetConfigValue(string category, string setting, object newValue)
+        private void SetConfigValue(string category, string setting, object newValue)
         {
             var data = Config[category] as Dictionary<string, object>;
             object value;
@@ -377,7 +375,5 @@ namespace Oxide.Plugins
         }
 
         #endregion
-
     }
-
 }

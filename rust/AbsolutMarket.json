@@ -2,7 +2,7 @@
     "name": "AbsolutMarket",
     "description": "Global Trade Menu. Any player can buy and sell items. Simply list it!",
     "author": "Absolut",
-    "version": "1.8.2",
+    "version": "1.8.3",
     "configuration": true,
     "require": {
         "ImageLibrary": "*"

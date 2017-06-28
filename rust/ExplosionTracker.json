@@ -1,9 +1,13 @@
 {
     "name": "Explosion Tracker",
-    "description": "This plugin tracks every explosion that happens in the server.",
-    "author": "PaiN",
-    "version": "0.7",
-    "configuration": false,
+    "description": "This plugin tracks every explosion that happens on the server.",
+    "author": "Ryan",
+    "version": "1.0.0",
+    "configuration": true,
+    "suggest": {
+        "Discord": "*",
+        "Slack": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/explosion-tracker.1282",
     "games": [

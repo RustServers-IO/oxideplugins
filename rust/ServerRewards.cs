@@ -1,167 +1,61 @@
-﻿// Reference: Rust.Workshop
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using Facepunch.Steamworks;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Configuration;
-using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using Oxide.Core.Libraries.Covalence;
 using Oxide.Game.Rust.Cui;
-using Rust;
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.3.92", ResourceId = 1751)]
-    public class ServerRewards : RustPlugin
+    [Info("ServerRewards", "k1lly0u", "0.4.54", ResourceId = 1751)]
+    class ServerRewards : RustPlugin
     {
         #region Fields
         [PluginReference]
-        Plugin Kits;
-        [PluginReference]
-        Plugin Economics;
-        [PluginReference]
-        Plugin HumanNPC;
-        [PluginReference]
-        Plugin LustyMap;
-        [PluginReference]
-        Plugin PlaytimeTracker;
+        Plugin Kits, Economics, EventManager, HumanNPC, LustyMap, PlaytimeTracker, ImageLibrary;
 
-        #region Datafiles
-        PointData playerData;
-        private DynamicConfigFile PlayerData;
+        PlayerData playerData;
+        NPCData npcData;
+        RewardData rewardData;
+        SaleData saleData;
+        private DynamicConfigFile playerdata, npcdata, rewarddata, saledata;
 
-        RewardDataStorage rewardData;
-        private DynamicConfigFile RewardData;
-
-        ImageFileStorage imageData;
-        private DynamicConfigFile ImageData;
-
-        SaleDataStorage saleData;
-        private DynamicConfigFile SaleData;
-
-        NPCDealers npcDealers;
-        private DynamicConfigFile NPC_Dealers;
-        #endregion
-
-        static GameObject webObject;
-        static UnityWeb uWeb;
-
-        static ServerRewards instance;
-        ConfigData configData;
-
+        static ServerRewards ins;
+        private UIManager uiManager;
         private Timer saveTimer;
 
-        private Dictionary<ulong, OUIData> OpenUI;
-        private Dictionary<string, string> ItemNames;
-        private Dictionary<ulong, int> PointCache;
-        private Dictionary<ulong, NPCInfos> NPCCreator;
+        static bool uiFadeIn;
+        private bool isILReady;
+        private string color1;
+        private string color2;
 
-        private readonly FieldInfo skins2 = typeof(ItemDefinition).GetField("_skins2", BindingFlags.NonPublic | BindingFlags.Instance);
-        #endregion
+        private Dictionary<string, string> uiColors = new Dictionary<string, string>();
+        private Dictionary<ulong, int> playerRP = new Dictionary<ulong, int>();
+        private Hash<ulong, Timer> popupMessages = new Hash<ulong, Timer>();
+        private Dictionary<int, string> itemIds = new Dictionary<int, string>();
+        private Dictionary<string, string> itemNames = new Dictionary<string, string>();
+        private Dictionary<ulong, KeyValuePair<string, NPCData.NPCInfo>> npcCreator = new Dictionary<ulong, KeyValuePair<string, NPCData.NPCInfo>>();
+        private Dictionary<ulong, UserNPC> userNpc = new Dictionary<ulong, UserNPC>();
 
-        #region Classes
-        #region Player data
-        class PointData
-        {
-            public Dictionary<ulong, int> Players = new Dictionary<ulong, int>();
-        }
-
-        #endregion
-
-        #region Reward data
-        class ImageFileStorage
-        {
-            public Dictionary<string, Dictionary<ulong, uint>> storedImages = new Dictionary<string, Dictionary<ulong, uint>>();
-            public uint instanceId;
-        }
-        class RewardDataStorage
-        {
-            public Dictionary<string, KitInfo> RewardKits = new Dictionary<string, KitInfo>();
-            public Dictionary<int, ItemInfo> RewardItems = new Dictionary<int, ItemInfo>();
-            public Dictionary<string, CommandInfo> RewardCommands = new Dictionary<string, CommandInfo>();
-        }
-        class SaleDataStorage
-        {
-            public Dictionary<int, Dictionary<ulong, SaleInfo>> Prices = new Dictionary<int, Dictionary<ulong, SaleInfo>>();
-        }
-        class SaleInfo
-        {
-            public float SalePrice;
-            public string Name;
-            public bool Enabled;
-        }
-        class KitInfo
-        {
-            public string KitName;
-            public string Description = "";
-            public string URL = "";
-            public int Cost;
-        }
-        class ItemInfo
-        {
-            public string DisplayName;
-            public string URL;
-            public int ID;
-            public int Amount;
-            public ulong Skin;
-            public int Cost;
-            public int TargetID;
-        }
-        class CommandInfo
-        {
-            public List<string> Command;
-            public string Description;
-            public int Cost;
-        }
-
-        #endregion
-
-        #region Other data
-        class NPCDealers
-        {
-            public Dictionary<string, NPCInfos> NPCIDs = new Dictionary<string, NPCInfos>();
-        }
-        class NPCInfos
-        {
-            public float X;
-            public float Z;
-            public float ID;
-            public string NPCID;
-            public bool isCustom;
-            public List<int> itemList = new List<int>();
-            public List<string> kitList = new List<string>();
-            public List<string> commandList = new List<string>();
-            public bool allowExchange;
-            public bool allowTransfer;
-            public bool allowSales;
-        }
-        class KitItemEntry
-        {
-            public int ItemAmount;
-            public List<string> ItemMods;
-        }
-        public class OUIData
-        {
-            public ElementType type;
-            public int page;
-            public string npcid;
-        }
+        enum UserNPC { Add, Edit, Remove }
+        enum UIPanel { None, Navigation, Kits, Items, Commands, Exchange, Transfer, Sell }
+        enum Category { None, Weapon, Construction, Items, Resources, Attire, Tool, Medical, Food, Ammunition, Traps, Misc, Component }
         #endregion
 
         #region UI
-        static string UIMain = "SR_Store";
-        static string UISelect = "SR_Select";
-        static string UIRP = "SR_RPPanel";
-        static string UIPopup = "SR_Popup";
+        const string UIMain = "SR_Store";
+        const string UISelect = "SR_Select";
+        const string UIRP = "SR_RPPanel";
+        const string UIPopup = "SR_Popup";
 
-        class SR_UI
+        class UI
         {
             static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax)
             {
@@ -190,13 +84,13 @@ namespace Oxide.Plugins
                 },
                 panel, CuiHelper.GetGuid());
             }
-            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
+            static public void CreateLabel(ref CuiElementContainer container, string panel, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, string color = null, float fadein = 1.0f)
             {
-                if (instance.configData.UI_Options.DisableUI_FadeIn)
+                if (uiFadeIn)
                     fadein = 0;
                 container.Add(new CuiLabel
                 {
-                    Text = { Color = color, FontSize = size, Align = align, FadeIn = fadein, Text = text },
+                    Text = { FontSize = size, Align = align, FadeIn = fadein, Text = text },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
                 },
                 panel, CuiHelper.GetGuid());
@@ -204,7 +98,7 @@ namespace Oxide.Plugins
             }
             static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
             {
-                if (instance.configData.UI_Options.DisableUI_FadeIn)
+                if (uiFadeIn)
                     fadein = 0;
                 container.Add(new CuiButton
                 {
@@ -227,869 +121,684 @@ namespace Oxide.Plugins
                     }
                 });
             }
-            static public void CreateTextOverlay(ref CuiElementContainer container, string panel, string text, string color, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 1.0f)
+            static public string Color(string hexColor, float alpha)
             {
-                if (instance.configData.UI_Options.DisableUI_FadeIn)
-                    fadein = 0;
-                container.Add(new CuiLabel
-                {
-                    Text = { Color = color, FontSize = size, Align = align, FadeIn = fadein, Text = text },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
-                },
-                panel, CuiHelper.GetGuid());
-
+                if (hexColor.StartsWith("#"))
+                    hexColor = hexColor.TrimStart('#');
+                int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
+                int green = int.Parse(hexColor.Substring(2, 2), NumberStyles.AllowHexSpecifier);
+                int blue = int.Parse(hexColor.Substring(4, 2), NumberStyles.AllowHexSpecifier);
+                return $"{(double)red / 255} {(double)green / 255} {(double)blue / 255} {alpha}";
             }
         }
-        private Dictionary<string, string> UIColors = new Dictionary<string, string>
+        class UIManager
         {
-            {"dark", "0.1 0.1 0.1 0.98" },
-            {"light", "0.9 0.9 0.9 0.1" },
-            {"grey1", "0.6 0.6 0.6 1.0" },
-            {"buttonbg", "0.2 0.2 0.2 0.7" },
-            {"buttoncom", "0 0.5 0.1 0.9" },
-            {"grey8", "0.8 0.8 0.8 1.0" }
-        };
-        #endregion
+            public Dictionary<UIPanel, Dictionary<Category, Dictionary<int, CuiElementContainer>>> standardElements = new Dictionary<UIPanel, Dictionary<Category, Dictionary<int, CuiElementContainer>>>();
+            public Dictionary<string, Dictionary<UIPanel, Dictionary<Category, Dictionary<int, CuiElementContainer>>>> npcElements = new Dictionary<string, Dictionary<UIPanel, Dictionary<Category, Dictionary<int, CuiElementContainer>>>>();
+
+            public Dictionary<ulong, PlayerUI> playerUi = new Dictionary<ulong, PlayerUI>();
+
+
+            public void AddUI(BasePlayer player, UIPanel type, Category subType = Category.None, int pageNumber = 0, string npcId = null)
+            {
+                PlayerUI data;
+                if (!playerUi.TryGetValue(player.userID, out data))
+                {
+                    data = new PlayerUI { npcId = npcId };
+                    playerUi.Add(player.userID, data);
+                }
+
+                CuiElementContainer container = null;
+                if (type == UIPanel.Navigation)
+                {
+                    if (!string.IsNullOrEmpty(npcId))
+                        container = npcElements[npcId][UIPanel.Navigation][Category.None][0];
+                    else container = standardElements[UIPanel.Navigation][Category.None][0];
+
+                    data.navigationIds.AddRange(container.Select(x => x.Name));
+                    ins.DisplayPoints(player);
+                }
+                else
+                {
+                    if (type != UIPanel.Sell && type != UIPanel.Transfer)
+                    {
+                        if (!string.IsNullOrEmpty(npcId))
+                            container = npcElements[npcId][type][subType][pageNumber];
+                        else container = standardElements[type][subType][pageNumber];
+                    }
+                    else
+                    {
+                        switch (type)
+                        {
+                            case UIPanel.Transfer:
+                                container = ins.CreateTransferElement(player, pageNumber);
+                                break;
+                            case UIPanel.Sell:
+                                container = ins.CreateSaleElement(player);
+                                break;
+                        }
+                    }
+                    data.elementIds.AddRange(container.Select(x => x.Name));
+                }
+                if (container != null)
+                    CuiHelper.AddUi(player, container);
+                playerUi[player.userID] = data;
+            }
+            public void DestroyUI(BasePlayer player, bool destroyNav = false)
+            {
+                PlayerUI data;
+                if (playerUi.TryGetValue(player.userID, out data))
+                {
+                    foreach (var elementId in data.elementIds)
+                        CuiHelper.DestroyUi(player, elementId);
+
+                    if (destroyNav)
+                    {
+                        foreach (var elementId in data.navigationIds)
+                            CuiHelper.DestroyUi(player, elementId);
+
+                        CuiHelper.DestroyUi(player, UIRP);
+                        CuiHelper.DestroyUi(player, UISelect);
+
+                        playerUi.Remove(player.userID);
+                        ins.OpenMap(player);
+                    }
+                }
+            }
+            public void SwitchElement(BasePlayer player, UIPanel type, Category subType = Category.None, int pageNumber = 0, string npcId = null)
+            {
+                DestroyUI(player);
+                AddUI(player, type, subType, pageNumber, npcId);
+            }
+            public bool IsOpen(BasePlayer player) => playerUi.ContainsKey(player.userID);
+
+            public void RenameComponents(CuiElementContainer container)
+            {
+                foreach (var element in container)
+                {
+                    if (element.Name == "AddUI CreatedPanel")
+                        element.Name = CuiHelper.GetGuid();
+                }
+            }
+            public string GetNPCInUse(BasePlayer player)
+            {
+                if (playerUi.ContainsKey(player.userID))
+                    return playerUi[player.userID].npcId;
+                return string.Empty;
+            }
+            public class PlayerUI
+            {
+                public string npcId = string.Empty;
+                public List<string> elementIds = new List<string>();
+                public List<string> navigationIds = new List<string>();
+            }
+        }
         #endregion
 
-        #region Player UI
+        #region UI Creation
+        void CreateAllElements()
+        {
+            if (!(bool)ImageLibrary?.Call("IsReady"))
+            {
+                PrintWarning("Waiting for ImageLibrary to finish image processing!");
+                timer.In(60, CreateAllElements);
+                return;
+            }
+            isILReady = true;
+
+            CreateNewElement();
+            foreach (var npc in npcData.npcInfo)
+                CreateNewElement(npc.Key, npc.Value);
+            PrintWarning("All UI elements have been successfully generated!");
+        }
+        private void CreateNewElement(string npcId = null, NPCData.NPCInfo info = null)
+        {
+            Category[] categories = new Category[] { Category.Ammunition, Category.Attire, Category.Component, Category.Construction, Category.Food, Category.Items, Category.Medical, Category.Misc, Category.Resources, Category.Tool, Category.Traps, Category.Weapon };
+
+            SetNewElement(npcId);
+            CreateNavUI(npcId, info);
+            CreateKitsUI(npcId, info);
+            foreach (var category in categories)
+            {
+                CreateItemsUI(category, npcId, info);
+            }
+            CreateCommandsUI(npcId, info);
+            CreateExchangeUI(npcId);
+        }
+        private void SetNewElement(string npcId = null)
+        {
+            var structure = new Dictionary<UIPanel, Dictionary<Category, Dictionary<int, CuiElementContainer>>>
+                {
+                    { UIPanel.Commands, new Dictionary<Category, Dictionary<int, CuiElementContainer>> { { Category.None, new Dictionary<int, CuiElementContainer>()} } },
+                    { UIPanel.Exchange, new Dictionary<Category, Dictionary<int, CuiElementContainer>> { { Category.None, new Dictionary<int, CuiElementContainer>()} } },
+                    { UIPanel.Items, new Dictionary<Category, Dictionary<int, CuiElementContainer>>
+                        {
+                            { Category.Ammunition, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Attire, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Component, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Construction, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Food, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Items, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Medical, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Misc, new Dictionary<int, CuiElementContainer>()},
+                            { Category.None, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Resources, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Tool, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Traps, new Dictionary<int, CuiElementContainer>()},
+                            { Category.Weapon, new Dictionary<int, CuiElementContainer>()},
+                        }
+                    },
+                    { UIPanel.Kits, new Dictionary<Category, Dictionary<int, CuiElementContainer>> { { Category.None, new Dictionary<int, CuiElementContainer>()} } },
+                    { UIPanel.Navigation, new Dictionary<Category, Dictionary<int, CuiElementContainer>> { { Category.None, new Dictionary<int, CuiElementContainer>()} } }
+
+                };
+            if (!string.IsNullOrEmpty(npcId))
+                uiManager.npcElements.Add(npcId, structure);
+            else uiManager.standardElements = structure;
+        }
+
+        private void CreateNavUI(string npcId = null, NPCData.NPCInfo npcInfo = null)
+        {
+            var container = UI.CreateElementContainer(UISelect, uiColors["dark"], "0 0.93", "1 1");
+            UI.CreatePanel(ref container, UISelect, uiColors["light"], "0.01 0", "0.99 1", true);
+            UI.CreateLabel(ref container, UISelect, $"{color1}{msg("storeTitle")}</color>", 26, "0.01 0", "0.2 1");
+
+            int i = 0;
+            if (string.IsNullOrEmpty(npcId))
+            {
+                if (configData.Tabs.Kits)
+                {
+                    CreateMenuButton(ref container, UISelect, msg("storeKits"), $"SRUI_ChangeElement Kits 0", i);
+                    i++;
+                }
+                if (configData.Tabs.Items)
+                {
+                    CreateMenuButton(ref container, UISelect, msg("storeItems"), $"SRUI_ChangeElement Items 0", i);
+                    i++;
+                }
+                if (configData.Tabs.Commands)
+                {
+                    CreateMenuButton(ref container, UISelect, msg("storeCommands"), $"SRUI_ChangeElement Commands 0", i);
+                    i++;
+                }
+                if (Economics && configData.Tabs.Exchange)
+                {
+                    CreateMenuButton(ref container, UISelect, msg("storeExchange"), "SRUI_ChangeElement Exchange 0", i);
+                    i++;
+                }
+                if (configData.Tabs.Transfer)
+                {
+                    CreateMenuButton(ref container, UISelect, msg("storeTransfer"), "SRUI_ChangeElement Transfer 0", i);
+                    i++;
+                }
+                if (configData.Tabs.Seller)
+                {
+                    CreateMenuButton(ref container, UISelect, msg("sellItems"), "SRUI_ChangeElement Sell 0", i);
+                    i++;
+                }
+                CreateMenuButton(ref container, UISelect, msg("storeClose"), "SRUI_DestroyAll", i);
+
+                uiManager.RenameComponents(container);
+                uiManager.standardElements[UIPanel.Navigation][Category.None][0] = container;
+            }
+            else
+            {
+                if (npcInfo != null)
+                {
+                    if (configData.Tabs.Kits && npcInfo.sellKits)
+                    {
+                        CreateMenuButton(ref container, UISelect, msg("storeKits"), $"SRUI_ChangeElement Kits 0 {npcId}", i);
+                        i++;
+                    }
+                    if (configData.Tabs.Items && npcInfo.sellItems)
+                    {
+                        CreateMenuButton(ref container, UISelect, msg("storeItems"), $"SRUI_ChangeElement Items 0 {npcId}", i);
+                        i++;
+                    }
+                    if (configData.Tabs.Commands && npcInfo.sellCommands)
+                    {
+                        CreateMenuButton(ref container, UISelect, msg("storeCommands"), $"SRUI_ChangeElement Commands 0 {npcId}", i);
+                        i++;
+                    }
+                    if (Economics && configData.Tabs.Exchange && npcInfo.canExchange)
+                    {
+                        CreateMenuButton(ref container, UISelect, msg("storeExchange"), $"SRUI_ChangeElement Exchange 0 {npcId}", i);
+                        i++;
+                    }
+                    if (configData.Tabs.Transfer && npcInfo.canTransfer)
+                    {
+                        CreateMenuButton(ref container, UISelect, msg("storeTransfer"), $"SRUI_ChangeElement Transfer 0 {npcId}", i);
+                        i++;
+                    }
+                    if (configData.Tabs.Seller && npcInfo.canSell)
+                    {
+                        CreateMenuButton(ref container, UISelect, msg("sellItems"), $"SRUI_ChangeElement Sell 0 {npcId}", i);
+                        i++;
+                    }
+                    CreateMenuButton(ref container, UISelect, msg("storeClose"), "SRUI_DestroyAll", i);
+
+                    uiManager.RenameComponents(container);
+                    uiManager.npcElements[npcId][UIPanel.Navigation][Category.None][0] = container;
+                }
+                else PrintWarning($"Failed to create the navigation menu for NPC: {npcId}. Invalid data was supplied!");
+            }
+        }
+        private void CreateItemsUI(Category category, string npcId = null, NPCData.NPCInfo npcInfo = null)
+        {
+            Category[] categories = new Category[] { Category.Ammunition, Category.Attire, Category.Component, Category.Construction, Category.Food, Category.Items, Category.Medical, Category.Misc, Category.Resources, Category.Tool, Category.Traps, Category.Weapon };
+
+            if (string.IsNullOrEmpty(npcId))
+            {
+                int maxPages = 1;
+                var items = rewardData.items.Where(x => x.Value.category == category).ToList();
+                bool[] hasItems = new bool[12];
+                for (int i = 0; i < categories.Length; i++)
+                {
+                    var cat = categories[i];
+                    hasItems[i] = rewardData.items.Where(x => x.Value.category == cat).Count() > 0;
+                }
+                if (items.Count == 0)
+                {
+                    CuiElementContainer container = CreateItemsElement(new List<KeyValuePair<string, RewardData.RewardItem>>(), category, hasItems, 0, false, false, null);
+                    uiManager.RenameComponents(container);
+                    uiManager.standardElements[UIPanel.Items][category][0] = container;
+                }
+                else
+                {
+                    if (items.Count > 36)
+                        maxPages = (items.Count - 1) / 36 + 1;
+                    for (int i = 0; i < maxPages; i++)
+                    {
+                        int min = i * 36;
+                        int max = items.Count < 36 ? items.Count : min + 36 > items.Count ? (items.Count - min) : 36;
+                        var range = items.OrderBy(x => x.Value.displayName).ToList().GetRange(min, max);
+                        CuiElementContainer container = CreateItemsElement(range, category, hasItems, i, i < maxPages - 1, i > 0, null);
+                        uiManager.RenameComponents(container);
+                        uiManager.standardElements[UIPanel.Items][category][i] = container;
+                    }
+                }
+            }
+            else
+            {
+                if (npcInfo != null)
+                {
+                    int maxPages = 1;
+
+                    List<KeyValuePair<string, RewardData.RewardItem>> items = new List<KeyValuePair<string, RewardData.RewardItem>>();
+                    if (npcInfo.useCustom)
+                        items = rewardData.items.Where(y => npcInfo.items.Contains(y.Key)).Where(x => x.Value.category == category).ToList();
+                    else items = rewardData.items.Where(x => x.Value.category == category).ToList();
+                    bool[] hasItems = new bool[12];
+                    for (int i = 0; i < categories.Length; i++)
+                    {
+                        var cat = categories[i];
+                        if (npcInfo.useCustom)
+                            hasItems[i] = rewardData.items.Where(y => npcInfo.items.Contains(y.Key)).Where(x => x.Value.category == cat).Count() > 0;
+                        else hasItems[i] = rewardData.items.Where(x => x.Value.category == cat).Count() > 0;
+                    }
+                    if (items.Count == 0)
+                    {
+                        CuiElementContainer container = CreateItemsElement(new List<KeyValuePair<string, RewardData.RewardItem>>(), category, hasItems, 0, false, false, npcId);
+                        uiManager.RenameComponents(container);
+                        uiManager.npcElements[npcId][UIPanel.Items][category][0] = container;
+                    }
+                    else
+                    {
+                        if (items.Count > 36)
+                            maxPages = (items.Count - 1) / 36 + 1;
+                        for (int i = 0; i < maxPages; i++)
+                        {
+                            int min = i * 36;
+                            int max = items.Count < 36 ? items.Count - 1 : min + 36 > items.Count ? (items.Count - min - 1) : 36;
+                            var range = items.OrderBy(x => x.Value.displayName).ToList().GetRange(min, max);
+                            CuiElementContainer container = CreateItemsElement(range, category, hasItems, i, i < maxPages - 1, i > 0, npcId);
+                            uiManager.RenameComponents(container);
+                            uiManager.npcElements[npcId][UIPanel.Items][category][i] = container;
+                        }
+                    }
+                }
+                else PrintWarning($"Failed to create items menu for NPC: {npcId} Category: {category}. Invalid data was supplied!");
+            }
+        }
+        private void CreateKitsUI(string npcId = null, NPCData.NPCInfo npcInfo = null)
+        {
+            if (string.IsNullOrEmpty(npcId))
+            {
+                int maxPages = 1;
+                var kits = rewardData.kits;
+                if (kits.Count == 0)
+                {
+                    CuiElementContainer container = CreateKitsElement(new List<KeyValuePair<string, RewardData.RewardKit>>(), 0, false, false);
+                    uiManager.RenameComponents(container);
+                    uiManager.standardElements[UIPanel.Kits][Category.None][0] = container;
+                }
+                else
+                {
+                    if (kits.Count > 10)
+                        maxPages = (kits.Count - 1) / 10 + 1;
+                    for (int i = 0; i < maxPages; i++)
+                    {
+                        int min = i * 10;
+                        int max = kits.Count < 10 ? kits.Count : min + 10 > kits.Count ? (kits.Count - min) : 10;
+                        var range = kits.OrderBy(x => x.Value.displayName).ToList().GetRange(min, max);
+                        CuiElementContainer container = CreateKitsElement(range, i, i < maxPages - 1, i > 0);
+                        uiManager.RenameComponents(container);
+                        uiManager.standardElements[UIPanel.Kits][Category.None][i] = container;
+                    }
+                }
+            }
+            else
+            {
+                if (npcInfo != null)
+                {
+                    int maxPages = 1;
+                    var kits = rewardData.kits.Where(x => npcInfo.kits.Contains(x.Key)).ToDictionary(v => v.Key, y => y.Value);
+                    if (kits.Count == 0)
+                    {
+                        CuiElementContainer container = CreateKitsElement(new List<KeyValuePair<string, RewardData.RewardKit>>(), 0, false, false, npcId);
+                        uiManager.RenameComponents(container);
+                        uiManager.npcElements[npcId][UIPanel.Kits][Category.None][0] = container;
+                    }
+                    else
+                    {
+                        if (kits.Count > 10)
+                            maxPages = (kits.Count - 1) / 10 + 1;
+                        for (int i = 0; i < maxPages; i++)
+                        {
+                            int min = i * 10;
+                            int max = kits.Count < 10 ? kits.Count : min + 10 > kits.Count ? (kits.Count - min) : 10;
+                            var range = kits.OrderBy(x => x.Value.displayName).ToList().GetRange(min, max);
+                            CuiElementContainer container = CreateKitsElement(range, i, i < maxPages - 1, i > 0, npcId);
+                            uiManager.RenameComponents(container);
+                            uiManager.npcElements[npcId][UIPanel.Kits][Category.None][i] = container;
+                        }
+                    }
+                }
+                else PrintWarning($"Failed to create kits menu for NPC: {npcId}. Invalid data was supplied!");
+            }
+        }
+        private void CreateCommandsUI(string npcId = null, NPCData.NPCInfo npcInfo = null)
+        {
+            if (string.IsNullOrEmpty(npcId))
+            {
+                int maxPages = 1;
+                var commands = rewardData.commands;
+                if (commands.Count == 0)
+                {
+                    CuiElementContainer container = CreateCommandsElement(new List<KeyValuePair<string, RewardData.RewardCommand>>(), 0, false, false);
+                    uiManager.RenameComponents(container);
+                    uiManager.standardElements[UIPanel.Commands][Category.None][0] = container;
+                }
+                else
+                {
+                    if (commands.Count > 10)
+                        maxPages = (commands.Count - 1) / 10 + 1;
+                    for (int i = 0; i < maxPages; i++)
+                    {
+                        int min = i * 10;
+                        int max = commands.Count < 10 ? commands.Count : min + 10 > commands.Count ? (commands.Count - min) : 10;
+                        var range = commands.OrderBy(x => x.Value.displayName).ToList().GetRange(min, max);
+                        CuiElementContainer container = CreateCommandsElement(range, i, i < maxPages - 1, i > 0);
+                        uiManager.RenameComponents(container);
+                        uiManager.standardElements[UIPanel.Commands][Category.None][i] = container;
+                    }
+                }
+            }
+            else
+            {
+                if (npcInfo != null)
+                {
+                    int maxPages = 1;
+                    var commands = rewardData.commands.Where(x => npcInfo.commands.Contains(x.Key)).ToDictionary(v => v.Key, y => y.Value);
+                    if (commands.Count == 0)
+                    {
+                        CuiElementContainer container = CreateCommandsElement(new List<KeyValuePair<string, RewardData.RewardCommand>>(), 0, false, false, npcId);
+                        uiManager.RenameComponents(container);
+                        uiManager.npcElements[npcId][UIPanel.Commands][Category.None][0] = container;
+                    }
+                    else
+                    {
+                        if (commands.Count > 10)
+                            maxPages = (commands.Count - 1) / 10 + 1;
+                        for (int i = 0; i < maxPages; i++)
+                        {
+                            int min = i * 10;
+                            int max = commands.Count < 10 ? commands.Count : min + 10 > commands.Count ? (commands.Count - min) : 10;
+                            var range = commands.OrderBy(x => x.Value.displayName).ToList().GetRange(min, max);
+                            CuiElementContainer container = CreateCommandsElement(range, i, i < maxPages - 1, i > 0, npcId);
+                            uiManager.RenameComponents(container);
+                            uiManager.npcElements[npcId][UIPanel.Commands][Category.None][i] = container;
+                        }
+                    }
+                }
+                else PrintWarning($"Failed to create commands menu for NPC: {npcId}. Invalid data was supplied!");
+            }
+        }
+        private void CreateExchangeUI(string npcId = null)
+        {
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeExchange")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("exchange1")}</color>", 24, "0 0.82", "1 0.9");
+            UI.CreateLabel(ref container, UIMain, $"{color2}{msg("exchange2")}</color>{color1}{configData.Exchange.RP} {msg("storeRP")}</color> -> {color1}{configData.Exchange.Economics} {msg("storeCoins")}</color>", 20, "0 0.6", "1 0.7");
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("storeRP")} => {msg("storeEcon")}</color>", 20, "0.25 0.4", "0.4 0.55");
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("storeEcon")} => {msg("storeRP")}</color>", 20, "0.6 0.4", "0.75 0.55");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], msg("storeExchange"), 20, "0.25 0.3", "0.4 0.38", "SRUI_Exchange 1");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], msg("storeExchange"), 20, "0.6 0.3", "0.75 0.38", "SRUI_Exchange 2");
+
+            uiManager.RenameComponents(container);
+            if (!string.IsNullOrEmpty(npcId))
+                uiManager.npcElements[npcId][UIPanel.Exchange][Category.None][0] = container;
+            else uiManager.standardElements[UIPanel.Exchange][Category.None][0] = container;
+        }
+
+        private CuiElementContainer CreateItemsElement(List<KeyValuePair<string, RewardData.RewardItem>> items, Category category, bool[] hasItems, int page, bool pageUp, bool pageDown, string npcId)
+        {
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg(category.ToString())}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.94", "0.99 0.99", true);
+
+            CreateSubMenu(ref container, UIMain, hasItems, npcId);
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.93", true);
+                        
+            if (pageUp) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], ">>>", 16, "0.87 0.03", "0.955 0.07", $"SRUI_ChangeElement Items {page + 1} {npcId ?? "null"} {category}");
+            if (pageDown) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "<<<", 16, "0.045 0.03", "0.13 0.07", $"SRUI_ChangeElement Items {page - 1} {npcId ?? "null"} {category}");
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                CreateItemEntry(ref container, UIMain, items[i].Key, items[i].Value, i);
+            }
+                        
+            return container;
+        }
+        private CuiElementContainer CreateKitsElement(List<KeyValuePair<string, RewardData.RewardKit>> kits, int page, bool pageUp, bool pageDown, string npcId = null)
+        {
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeKits")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
+
+            if (kits.Count == 0)
+                UI.CreateLabel(ref container, UIMain, $"{color1}{msg("noKits")}</color>", 24, "0 0.82", "1 0.9");
+            else
+            {
+                if (pageUp) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], ">>>", 16, "0.87 0.03", "0.955 0.07", $"SRUI_ChangeElement Kits {page + 1} {npcId}");
+                if (pageDown) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "<<<", 16, "0.045 0.03", "0.13 0.07", $"SRUI_ChangeElement Kits {page - 1} {npcId}");
+
+                for (int i = 0; i < kits.Count; i++)
+                {
+                    RewardData.RewardKit kit = kits[i].Value;
+                    string description = string.Empty;
+                    if (configData.UIOptions.KitContents)
+                        description = GetKitContents(kit.kitName);
+                    else description = kit.description;
+                    CreateKitCommandEntry(ref container, UIMain, kit.displayName, kits[i].Key, description, kit.cost, i, true, kit.iconName);
+                }
+            }
+            return container;
+        }
+        private CuiElementContainer CreateCommandsElement(List<KeyValuePair<string, RewardData.RewardCommand>> commands, int page, bool pageUp, bool pageDown, string npcId = null)
+        {
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeCommands")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
+
+            if (commands.Count == 0)
+                UI.CreateLabel(ref container, UIMain, $"{color1}{msg("noCommands")}</color>", 24, "0 0.82", "1 0.9");
+            else
+            {
+                if (pageUp) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], ">>>", 16, "0.87 0.03", "0.955 0.07", $"SRUI_ChangeElement Commands {page + 1} {npcId}");
+                if (pageDown) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "<<<", 16, "0.045 0.03", "0.13 0.07", $"SRUI_ChangeElement Commands {page - 1} {npcId}");
+
+                for (int i = 0; i < commands.Count; i++)
+                {
+                    RewardData.RewardCommand command = commands[i].Value;
+                    CreateKitCommandEntry(ref container, UIMain, command.displayName, commands[i].Key, command.description, command.cost, i, false, command.iconName);
+                }
+            }
+            return container;
+        }
+
+        private void PopupMessage(BasePlayer player, string msg)
+        {
+            var element = UI.CreateElementContainer(UIPopup, uiColors["dark"], "0.33 0.45", "0.67 0.6");
+            UI.CreatePanel(ref element, UIPopup, uiColors["light"], "0.01 0.04", "0.99 0.96");
+            UI.CreateLabel(ref element, UIPopup, $"{color1}{msg}</color>", 22, "0 0", "1 1");
+
+            if (popupMessages.ContainsKey(player.userID))
+            {
+                CuiHelper.DestroyUi(player, UIPopup);
+                popupMessages[player.userID].Destroy();
+                popupMessages.Remove(player.userID);
+            }
+            CuiHelper.AddUi(player, element);
+            popupMessages.Add(player.userID, timer.In(3.5f, () =>
+            {
+                CuiHelper.DestroyUi(player, UIPopup);
+                popupMessages.Remove(player.userID);
+            }));
+        }
         private void DisplayPoints(BasePlayer player)
         {
             if (player == null) return;
+
             CuiHelper.DestroyUi(player, UIRP);
-            if (!OpenUI.ContainsKey(player.userID)) return;
-            int playerPoints = 0;
-            if (PointCache.ContainsKey(player.userID))
-                playerPoints = PointCache[player.userID];
-            var element = SR_UI.CreateElementContainer(UIRP, "0 0 0 0", "0.3 0", "0.7 0.1");
-            string message = $"{configData.Messaging.MSG_MainColor}{msg("storeRP", player.UserIDString)}: {playerPoints}</color>";
-            if (Economics && !configData.Categories.Disable_CurrencyExchange)
+            if (!uiManager.IsOpen(player)) return;
+
+            int playerPoints = CheckPoints(player.userID);
+
+            var element = UI.CreateElementContainer(UIRP, "0 0 0 0", "0.3 0", "0.7 0.1");
+            string message = $"{color1}{msg("storeRP", player.UserIDString)}: {playerPoints}</color>";
+            if (Economics && configData.Tabs.Exchange)
             {
                 var amount = Economics?.Call("GetPlayerMoney", player.userID);
-                message = message + $" || {configData.Messaging.MSG_MainColor}Economics: {amount}</color>";
+                message = message + $"  {color2}||</color> {color1}Economics: {amount}</color>";
             }
-            if (configData.Options.Use_PTT && PlaytimeTracker)
+            if (configData.UIOptions.ShowPlaytime && PlaytimeTracker)
             {
                 var time = PlaytimeTracker?.Call("GetPlayTime", player.UserIDString);
                 if (time is double)
                 {
                     var playTime = GetPlaytimeClock((double)time);
                     if (!string.IsNullOrEmpty(playTime))
-                        message = $"{configData.Messaging.MSG_MainColor}{msg("storePlaytime", player.UserIDString)}: {playTime}</color> || " + message;
+                        message = $"{color1}{msg("storePlaytime", player.UserIDString)}: {playTime}</color> {color2}||</color> " + message;
                 }
             }
 
-            SR_UI.CreateLabel(ref element, UIRP, "0 0 0 0", message, 20, "0 0", "1 1", TextAnchor.MiddleCenter, 0f);
+            UI.CreateLabel(ref element, UIRP, message, 20, "0 0", "1 1", TextAnchor.MiddleCenter, null, 0f);
+
             CuiHelper.AddUi(player, element);
             timer.Once(1, () => DisplayPoints(player));
         }
-        private void PopupMessage(BasePlayer player, string msg)
-        {
-            CuiHelper.DestroyUi(player, UIPopup);
-            var element = SR_UI.CreateElementContainer(UIPopup, UIColors["dark"], "0.33 0.45", "0.67 0.6");
-            SR_UI.CreatePanel(ref element, UIPopup, UIColors["grey1"], "0.01 0.04", "0.99 0.96");
-            SR_UI.CreateLabel(ref element, UIPopup, "", $"{configData.Messaging.MSG_MainColor}{msg}</color>", 22, "0 0", "1 1");
-            CuiHelper.AddUi(player, element);
-            timer.Once(3.5f, () => CuiHelper.DestroyUi(player, UIPopup));
-        }
-
-        private void OpenNavMenu(BasePlayer player, string npcid = null)
-        {
-            CuiElementContainer element = GetElement(ElementType.Navigation, 0, npcid);
-            CuiHelper.AddUi(player, element);
-            DisplayPoints(player);
-        }
-        private void SwitchElement(BasePlayer player, ElementType type, int page = 0, string npcid = null)
-        {
-            if (!OpenUI.ContainsKey(player.userID))
-            {
-                DestroyUI(player);
-                UIElements.DestroyWholeList(player);
-                return;
-            }
-            if (type == ElementType.Transfer)
-            {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);
-                OpenUI[player.userID].type = ElementType.Transfer;
-                OpenUI[player.userID].page = 0;
-                CreateTransferElement(player, page);
-            }
-            else if (type == ElementType.Sell)
-            {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);
-                OpenUI[player.userID].type = ElementType.Sell;
-                OpenUI[player.userID].page = 0;
-                CreateSaleElement(player);
-            }
-            else if (type == ElementType.Exchange)
-            {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);
-                CuiElementContainer element = GetElement(type, page, null);
-                OpenUI[player.userID].type = ElementType.Exchange;
-                OpenUI[player.userID].page = 0;
-                CuiHelper.AddUi(player, element);
-                return;
-            }
-            else
-            {
-                CuiElementContainer element = GetElement(type, page, npcid);
-
-                UIElements.DestroyUI(player, OpenUI[player.userID]);
-                CuiHelper.DestroyUi(player, UIMain);
-                OpenUI[player.userID].page = page;
-                OpenUI[player.userID].type = type;
-                CuiHelper.AddUi(player, element);
-            }
-        }
-        private CuiElementContainer GetElement(ElementType type, int page, string npcid = null)
-        {
-            if (!string.IsNullOrEmpty(npcid))
-            {
-                if (UIElements.npcElements.ContainsKey(npcid))
-                    return UIElements.npcElements[npcid][type][page];
-            }
-            return UIElements.standardElements[type][page];
-        }
-        private void DestroyUI(BasePlayer player)
-        {
-            CuiHelper.DestroyUi(player, UIMain);
-            CuiHelper.DestroyUi(player, UISelect);
-            CuiHelper.DestroyUi(player, UIRP);
-            if (OpenUI.ContainsKey(player.userID))
-            {
-                UIElements.DestroyUI(player, OpenUI[player.userID]);
-                UIElements.DestroyNav(player, OpenUI[player.userID]);
-                OpenUI.Remove(player.userID);
-            }
-            OpenMap(player);
-        }
-
-        public enum ElementType
-        {
-            None,
-            Navigation,
-            Kits,
-            Items,
-            Commands,
-            Exchange,
-            Transfer,
-            Sell
-        }
-        #endregion
-
-        #region UI Creation
-        #region Static UI cache
-        public static class UIElements
-        {
-            public static Dictionary<ElementType, CuiElementContainer[]> standardElements;
-            public static Dictionary<string, Dictionary<ElementType, CuiElementContainer[]>> npcElements;
-            public static List<string> elementIDs;
-
-            public static void RenameComponents(CuiElementContainer[] container)
-            {
-                foreach (var element in container)
-                {
-                    foreach (var e in element)
-                    {
-                        if (e.Name == "AddUI CreatedPanel")
-                            e.Name = CuiHelper.GetGuid();
-                        elementIDs.Add(e.Name);
-                    }
-                }
-            }
-            public static void DestroyUI(BasePlayer player, OUIData data)
-            {
-                if (data.type == ElementType.None) return;
-                if (data.type == ElementType.Transfer || data.type == ElementType.Sell)
-                {
-                    CuiHelper.DestroyUi(player, UIMain);
-                    return;
-                }
-
-                CuiElementContainer element = null;
-
-                if (data.type == ElementType.Exchange)
-                {
-                    if (standardElements[ElementType.Exchange].Length >= data.page)
-                        element = standardElements[ElementType.Exchange][data.page];
-                }
-                else if (!string.IsNullOrEmpty(data.npcid) && npcElements.ContainsKey(data.npcid))
-                {
-                    if (npcElements[data.npcid].ContainsKey(data.type))
-                    {
-                        if (npcElements[data.npcid][data.type].Length >= data.page)
-                            element = npcElements[data.npcid][data.type][data.page];
-                    }
-                }
-                else
-                {
-                    if (standardElements.ContainsKey(data.type))
-                    {
-                        if (standardElements[data.type].Length >= data.page)
-                            element = standardElements[data.type][data.page];
-                    }
-                }
-
-                if (element == null)
-                {
-                    DestroyWholeList(player);
-                    return;
-                }
-
-                for (int i = 0; i < element.ToArray().Length; i++)
-                    CuiHelper.DestroyUi(player, element.ToArray()[i].Name);
-            }
-            public static void DestroyNav(BasePlayer player, OUIData data)
-            {
-                CuiElementContainer element = null;
-
-                if (!string.IsNullOrEmpty(data.npcid) && npcElements.ContainsKey(data.npcid))
-                    element = npcElements[data.npcid][ElementType.Navigation][0];
-                else element = standardElements[ElementType.Navigation][0];
-
-                for (int i = 0; i < element.ToArray().Length; i++)
-                    CuiHelper.DestroyUi(player, element.ToArray()[i].Name);
-            }
-            public static void DestroyWholeList(BasePlayer player)
-            {
-                foreach (var element in elementIDs)
-                    CuiHelper.DestroyUi(player, element);
-            }
-        }
-        void InitializeAllElements()
-        {
-            if (imageData.storedImages.Count > 0 && imageData.instanceId != CommunityEntity.ServerInstance.net.ID)
-            {
-                RelocateImages();
-                return;
-            }
-
-            PrintWarning("Creating and storing all UI elements to cache");
-            CreateNavUI();
-            CreateKitsUI();
-            CreateItemsUI();
-            CreateCommandsUI();
-            CreateExchangeUI();
-            CreateAllNPCs();
-        }
-        private void RelocateImages()
-        {
-            Puts($"{imageData.instanceId} {CommunityEntity.ServerInstance.net.ID}");
-            PrintWarning("Restart Detected! Attempting to re-locate images, please wait!");
-
-            MemoryStream stream = new MemoryStream();
-
-            var keys = imageData.storedImages.Keys.ToList();
-
-            for (int i = 0; i < imageData.storedImages.Count; i++)
-            {
-                var skins = imageData.storedImages[keys[i]].Keys.ToList();
-
-                for (int j = 0; j < imageData.storedImages[keys[i]].Count; j++)
-                {
-                    var image = imageData.storedImages[keys[i]][skins[j]];
-
-                    byte[] bytes = FileStorage.server.Get(image, FileStorage.Type.png, imageData.instanceId);
-                    if (bytes != null)
-                    {
-                        stream.Write(bytes, 0, bytes.Length);
-
-                        var imageId = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
-
-                        if (imageId != image)
-                            imageData.storedImages[keys[i]][skins[j]] = imageId;
-
-                        stream.Position = 0;
-                        stream.SetLength(0);
-                    }
-                }
-            }
-
-            imageData.instanceId = CommunityEntity.ServerInstance.net.ID;
-            SaveImages();
-
-            PrintWarning("All images successfully re-located!");
-            InitializeAllElements();
-        }
-
-        #region Standard Elements
-        private void CreateNavUI()
-        {
-            var Selector = SR_UI.CreateElementContainer(UISelect, UIColors["dark"], "0 0.92", "1 1");
-            SR_UI.CreatePanel(ref Selector, UISelect, UIColors["light"], "0.01 0.05", "0.99 0.95", true);
-            SR_UI.CreateLabel(ref Selector, UISelect, "", $"{configData.Messaging.MSG_MainColor}{msg("storeTitle")}</color>", 30, "0.01 0", "0.2 1");
-
-            int number = 0;
-            if (!configData.Categories.Disable_Kits) { CreateMenuButton(ref Selector, UISelect, msg("storeKits"), $"SRUI_ChangeElement Kits 0", number); number++; }
-            if (!configData.Categories.Disable_Items) { CreateMenuButton(ref Selector, UISelect, msg("storeItems"), $"SRUI_ChangeElement Items 0", number); number++; }
-            if (!configData.Categories.Disable_Commands) { CreateMenuButton(ref Selector, UISelect, msg("storeCommands"), $"SRUI_ChangeElement Commands 0", number); number++; }
-            if (Economics) if (!configData.Categories.Disable_CurrencyExchange) { CreateMenuButton(ref Selector, UISelect, msg("storeExchange"), "SRUI_ChangeElement Exchange 0", number); number++; }
-            if (!configData.Categories.Disable_CurrencyTransfer) { CreateMenuButton(ref Selector, UISelect, msg("storeTransfer"), "SRUI_ChangeElement Transfer 0", number); number++; }
-            if (!configData.Categories.Disable_SellersScreen) { CreateMenuButton(ref Selector, UISelect, msg("sellItems"), "SRUI_ChangeElement Sell 0", number); number++; }
-            CreateMenuButton(ref Selector, UISelect, msg("storeClose"), "SRUI_DestroyAll", number);
-
-            UIElements.standardElements.Add(ElementType.Navigation, new CuiElementContainer[] { Selector });
-            UIElements.RenameComponents(UIElements.standardElements[ElementType.Navigation]);
-        }
-        private void CreateKitsUI()
-        {
-            int maxPages = 0;
-            var count = rewardData.RewardKits;
-            if (count.Count > 10)
-                maxPages = (count.Count - 1) / 10 + 1;
-            List<CuiElementContainer> kitList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)
-                kitList.Add(CreateKitsElement(i));
-            UIElements.standardElements.Add(ElementType.Kits, kitList.ToArray());
-            UIElements.RenameComponents(UIElements.standardElements[ElementType.Kits]);
-        }
-        private void CreateItemsUI()
-        {
-            int maxPages = 0;
-            var count = rewardData.RewardItems;
-            if (count.Count > 21)
-                maxPages = (count.Count - 1) / 21 + 1;
-            List<CuiElementContainer> itemList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)
-                itemList.Add(CreateItemsElement(i));
-            UIElements.standardElements.Add(ElementType.Items, itemList.ToArray());
-            UIElements.RenameComponents(UIElements.standardElements[ElementType.Items]);
-        }
-        private void CreateCommandsUI()
-        {
-            int maxPages = 0;
-            var count = rewardData.RewardCommands;
-            if (count.Count > 10)
-                maxPages = (count.Count - 1) / 10 + 1;
-            List<CuiElementContainer> commandList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)
-                commandList.Add(CreateCommandsElement(i));
-            UIElements.standardElements.Add(ElementType.Commands, commandList.ToArray());
-            UIElements.RenameComponents(UIElements.standardElements[ElementType.Commands]);
-        }
-        private void CreateExchangeUI()
-        {
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("exchange1")}</color>", 24, "0 0.82", "1 0.9");
-            SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_Color}{msg("exchange2")}</color>{configData.Messaging.MSG_MainColor}{configData.CurrencyExchange.RP_ExchangeRate} {msg("storeRP")}</color> -> {configData.Messaging.MSG_MainColor}{configData.CurrencyExchange.Econ_ExchangeRate} {msg("storeCoins")}</color>", 20, "0 0.6", "1 0.7");
-            SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("storeRP")} => {msg("storeEcon")}</color>", 20, "0.25 0.4", "0.4 0.55");
-            SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("storeEcon")} => {msg("storeRP")}</color>", 20, "0.6 0.4", "0.75 0.55");
-            SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeExchange"), 20, "0.25 0.3", "0.4 0.38", "SRUI_Exchange 1");
-            SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeExchange"), 20, "0.6 0.3", "0.75 0.38", "SRUI_Exchange 2");
-            UIElements.standardElements.Add(ElementType.Exchange, new CuiElementContainer[] { Main });
-            UIElements.RenameComponents(UIElements.standardElements[ElementType.Exchange]);
-        }
-        private CuiElementContainer CreateKitsElement(int page = 0)
-        {
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            var rew = rewardData.RewardKits;
-            if (rew.Count > 10)
-            {
-                var maxpages = (rew.Count - 1) / 10 + 1;
-                if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeNext"), 18, "0.84 0.05", "0.97 0.1", $"SRUI_ChangeElement Kits {page + 1}");
-                if (page > 0)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_ChangeElement Kits {page - 1}");
-            }
-            int maxentries = (10 * (page + 1));
-            if (maxentries > rew.Count)
-                maxentries = rew.Count;
-            int rewardcount = 10 * page;
-
-            List<string> kitNames = rewardData.RewardKits.Keys.ToList();
-
-            int i = 0;
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                var contents = GetKitContents(rew[kitNames[n]].KitName);
-                if (string.IsNullOrEmpty(contents) || !configData.UI_Options.ShowKitContents)
-                    contents = rew[kitNames[n]].Description;
-                CreateKitCommandEntry(ref Main, UIMain, kitNames[n], contents, rew[kitNames[n]].Cost, i, true);
-                i++;
-            }
-            if (i == 0)
-                SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("noKits")}</color>", 24, "0 0.82", "1 0.9");
-            return Main;
-        }
-        private CuiElementContainer CreateItemsElement(int page = 0)
-        {
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            var rew = rewardData.RewardItems;
-            if (rew.Count > 21)
-            {
-                var maxpages = (rew.Count - 1) / 21 + 1;
-                if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeNext"), 18, "0.84 0.05", "0.97 0.1", $"SRUI_ChangeElement Items {page + 1}");
-                if (page > 0)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_ChangeElement Items {page - 1}");
-            }
-            int maxentries = (21 * (page + 1));
-            if (maxentries > rew.Count)
-                maxentries = rew.Count;
-            int i = 0;
-            int rewardcount = 21 * page;
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                CreateItemEntry(ref Main, UIMain, n, i);
-                i++;
-            }
-            if (i == 0)
-                SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("noItems")}</color>", 24, "0 0.82", "1 0.9");
-            return Main;
-        }
-        private CuiElementContainer CreateCommandsElement(int page = 0)
-        {
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            var rew = rewardData.RewardCommands;
-            if (rew.Count > 10)
-            {
-                var maxpages = (rew.Count - 1) / 10 + 1;
-                if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeNext"), 18, "0.84 0.05", "0.97 0.1", $"SRUI_ChangeElement Commands {page + 1}");
-                if (page > 0)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_ChangeElement Commands {page - 1}");
-            }
-            int maxentries = (10 * (page + 1));
-            if (maxentries > rew.Count)
-                maxentries = rew.Count;
-            int rewardcount = 10 * page;
-
-            List<string> commNames = rewardData.RewardCommands.Keys.ToList();
-
-            int i = 0;
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                CreateKitCommandEntry(ref Main, UIMain, commNames[n], rew[commNames[n]].Description, rew[commNames[n]].Cost, i, false);
-                i++;
-            }
-            if (i == 0)
-                SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("noCommands")}</color>", 24, "0 0.82", "1 0.9");
-            return Main;
-        }
-        #endregion
-
-        #region NPC Elements
-        private void CreateAllNPCs()
-        {
-            foreach (var npc in npcDealers.NPCIDs)
-            {
-                if (npc.Value.isCustom)
-                {
-                    CreateNPCMenu(npc.Key);
-                }
-            }
-            PrintWarning("All UI elements created successfully!");
-        }
-        private void CreateNPCMenu(string npcid)
-        {
-            if (UIElements.npcElements.ContainsKey(npcid))
-                UIElements.npcElements.Remove(npcid);
-            CreateNPCNavUI(npcid);
-            CreateNPCCommandsUI(npcid);
-            CreateNPCItemsUI(npcid);
-            CreateNPCKitsUI(npcid);
-        }
-        private void CreateNPCNavUI(string npcid)
-        {
-            var Selector = SR_UI.CreateElementContainer(UISelect, UIColors["dark"], "0 0.92", "1 1");
-            SR_UI.CreatePanel(ref Selector, UISelect, UIColors["light"], "0.01 0.05", "0.99 0.95", true);
-            SR_UI.CreateLabel(ref Selector, UISelect, "", $"{configData.Messaging.MSG_MainColor}{msg("storeTitle")}</color>", 30, "0.01 0", "0.2 1");
-
-            NPCInfos npcInfo = null;
-            if (!string.IsNullOrEmpty(npcid))
-                npcInfo = npcDealers.NPCIDs[npcid];
-            if (npcInfo == null) return;
-
-            int number = 0;
-            if (!configData.Categories.Disable_Kits && npcInfo.kitList.Count > 0) { CreateMenuButton(ref Selector, UISelect, msg("storeKits"), $"SRUI_ChangeElement Kits 0 {npcid}", number); number++; }
-            if (!configData.Categories.Disable_Items && npcInfo.itemList.Count > 0) { CreateMenuButton(ref Selector, UISelect, msg("storeItems"), $"SRUI_ChangeElement Items 0 {npcid}", number); number++; }
-            if (!configData.Categories.Disable_Commands && npcInfo.commandList.Count > 0) { CreateMenuButton(ref Selector, UISelect, msg("storeCommands"), $"SRUI_ChangeElement Commands 0 {npcid}", number); number++; }
-            if (Economics) if (!configData.Categories.Disable_CurrencyExchange && npcInfo.allowExchange) { CreateMenuButton(ref Selector, UISelect, msg("storeExchange"), "SRUI_ChangeElement Exchange 0", number); number++; }
-            if (!configData.Categories.Disable_CurrencyTransfer && npcInfo.allowTransfer) { CreateMenuButton(ref Selector, UISelect, msg("storeTransfer"), "SRUI_ChangeElement Transfer 0", number); number++; }
-            if (!configData.Categories.Disable_SellersScreen && npcInfo.allowSales) { CreateMenuButton(ref Selector, UISelect, msg("sellItems"), "SRUI_ChangeElement Sell 0", number); number++; }
-            CreateMenuButton(ref Selector, UISelect, msg("storeClose"), "SRUI_DestroyAll", number);
-
-            UIElements.npcElements.Add(npcid, new Dictionary<ElementType, CuiElementContainer[]> { { ElementType.Navigation, new CuiElementContainer[] { Selector } } });
-            UIElements.RenameComponents(UIElements.npcElements[npcid][ElementType.Navigation]);
-        }
-        private void CreateNPCKitsUI(string npcid)
-        {
-            int maxPages = 0;
-            var count = npcDealers.NPCIDs[npcid].kitList;
-            if (count.Count > 10)
-                maxPages = (count.Count - 1) / 10 + 1;
-            List<CuiElementContainer> kitList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)
-                kitList.Add(CreateNPCKitsElement(npcid, i));
-            UIElements.npcElements[npcid].Add(ElementType.Kits, kitList.ToArray());
-            UIElements.RenameComponents(UIElements.npcElements[npcid][ElementType.Kits]);
-        }
-        private void CreateNPCItemsUI(string npcid)
-        {
-            int maxPages = 0;
-            var count = npcDealers.NPCIDs[npcid].itemList;
-            if (count.Count > 21)
-                maxPages = (count.Count - 1) / 21 + 1;
-            List<CuiElementContainer> itemList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)
-                itemList.Add(CreateNPCItemsElement(npcid, i));
-            UIElements.npcElements[npcid].Add(ElementType.Items, itemList.ToArray());
-            UIElements.RenameComponents(UIElements.npcElements[npcid][ElementType.Items]);
-        }
-        private void CreateNPCCommandsUI(string npcid)
-        {
-            int maxPages = 0;
-            var count = npcDealers.NPCIDs[npcid].commandList;
-            if (count.Count > 10)
-                maxPages = (count.Count - 1) / 10 + 1;
-            List<CuiElementContainer> commandList = new List<CuiElementContainer>();
-            for (int i = 0; i <= maxPages; i++)
-                commandList.Add(CreateNPCCommandsElement(npcid, i));
-            UIElements.npcElements[npcid].Add(ElementType.Commands, commandList.ToArray());
-            UIElements.RenameComponents(UIElements.npcElements[npcid][ElementType.Commands]);
-        }
-        private CuiElementContainer CreateNPCKitsElement(string npcid, int page = 0)
-        {
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-
-            List<string> kitNames = npcDealers.NPCIDs[npcid].kitList;
-            if (kitNames.Count > 10)
-            {
-                var maxpages = (kitNames.Count - 1) / 10 + 1;
-                if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeNext"), 18, "0.84 0.05", "0.97 0.1", $"SRUI_ChangeElement Kits {page + 1} {npcid}");
-                if (page > 0)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_ChangeElement Kits {page - 1} {npcid}");
-            }
-            int maxentries = (10 * (page + 1));
-            if (maxentries > kitNames.Count)
-                maxentries = kitNames.Count;
-            int rewardcount = 10 * page;
-
-            int i = 0;
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                var contents = GetKitContents(rewardData.RewardKits[kitNames[n]].KitName);
-                if (string.IsNullOrEmpty(contents) || !configData.UI_Options.ShowKitContents)
-                    contents = rewardData.RewardKits[kitNames[n]].Description;
-                CreateKitCommandEntry(ref Main, UIMain, kitNames[n], contents, rewardData.RewardKits[kitNames[n]].Cost, i, true);
-                i++;
-            }
-            if (i == 0)
-                SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("noKits")}</color>", 24, "0 0.82", "1 0.9");
-            return Main;
-        }
-        private CuiElementContainer CreateNPCItemsElement(string npcid, int page = 0)
-        {
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-
-            var rew = npcDealers.NPCIDs[npcid].itemList;
-            if (rew.Count > 21)
-            {
-                var maxpages = (rew.Count - 1) / 21 + 1;
-                if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeNext"), 18, "0.84 0.05", "0.97 0.1", $"SRUI_ChangeElement Items {page + 1} {npcid}");
-                if (page > 0)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_ChangeElement Items {page - 1} {npcid}");
-            }
-            int maxentries = (21 * (page + 1));
-            if (maxentries > rew.Count)
-                maxentries = rew.Count;
-            int i = 0;
-            int rewardcount = 21 * page;
-
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                CreateItemEntry(ref Main, UIMain, rew[n], i);
-                i++;
-            }
-            if (i == 0)
-                SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("noItems")}</color>", 24, "0 0.82", "1 0.9");
-            return Main;
-        }
-        private CuiElementContainer CreateNPCCommandsElement(string npcid, int page = 0)
-        {
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-
-            List<string> commNames = npcDealers.NPCIDs[npcid].commandList;
-            if (commNames.Count > 10)
-            {
-                var maxpages = (commNames.Count - 1) / 10 + 1;
-                if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeNext"), 18, "0.84 0.05", "0.97 0.1", $"SRUI_ChangeElement Commands {page + 1} {npcid}");
-                if (page > 0)
-                    SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_ChangeElement Commands {page - 1} {npcid}");
-            }
-            int maxentries = (10 * (page + 1));
-            if (maxentries > commNames.Count)
-                maxentries = commNames.Count;
-            int rewardcount = 10 * page;
-
-            int i = 0;
-            for (int n = rewardcount; n < maxentries; n++)
-            {
-                if (rewardData.RewardCommands.ContainsKey(commNames[n]))
-                {
-                    CreateKitCommandEntry(ref Main, UIMain, commNames[n], rewardData.RewardCommands[commNames[n]].Description, rewardData.RewardCommands[commNames[n]].Cost, i, false);
-                    i++;
-                }
-            }
-            if (i == 0)
-                SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("noCommands")}</color>", 24, "0 0.82", "1 0.9");
-            return Main;
-        }
-        #endregion
-        #endregion
 
         #region Sale System
-        private void CreateSaleElement(BasePlayer player)
+        private CuiElementContainer CreateSaleElement(BasePlayer player)
         {
-            var HelpMain = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref HelpMain, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            SR_UI.CreateLabel(ref HelpMain, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("selectSell")}</color>", 22, "0 0.9", "1 1");
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeSales")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("selectSell")}</color>", 22, "0 0.9", "1 1");
 
             int i = 0;
             foreach (var item in player.inventory.containerMain.itemList)
             {
-                if (saleData.Prices.ContainsKey(item.info.itemid))
+                if (saleData.items.ContainsKey(item.info.shortname))
                 {
-                    if (!saleData.Prices[item.info.itemid].ContainsKey(item.skin))
+                    if (!saleData.items[item.info.shortname].ContainsKey(item.skin))
                     {
-                        saleData.Prices[item.info.itemid].Add(item.skin, new SaleInfo { Enabled = false, Name = item?.info?.steamItem?.displayName?.english ?? $"{item.info.displayName.english} {item.skin}", SalePrice = 1 });
-                        SavePrices();
+                        saleData.items[item.info.shortname].Add(item.skin, new SaleData.SaleItem { displayName = item?.info?.steamItem?.displayName?.translated ?? $"{item.info.displayName.translated} {item.skin}" });
+                        SaveSales();
                     }
-                    if (saleData.Prices[item.info.itemid][item.skin].Enabled)
+                    if (saleData.items[item.info.shortname][item.skin].enabled)
                     {
-                        var name = item.info.displayName.english;
-                        if (ItemNames.ContainsKey(item.info.itemid.ToString()))
-                            name = ItemNames[item.info.itemid.ToString()];
-
-                        CreateInventoryEntry(ref HelpMain, UIMain, item.info.itemid, item.skin, name, item.amount, i);
+                        var name = saleData.items[item.info.shortname][item.skin].displayName;
+                        CreateInventoryEntry(ref container, UIMain, item.info.shortname, item.skin, name, item.amount, i);
                         i++;
                     }
                 }
             }
-            CuiHelper.DestroyUi(player, UIMain);
-            CuiHelper.AddUi(player, HelpMain);
+            return container;
         }
-        private void CreateInventoryEntry(ref CuiElementContainer container, string panelName, int itemId, ulong skinId, string name, int amount, int number)
+        private void CreateInventoryEntry(ref CuiElementContainer container, string panelName, string shortname, ulong skinId, string name, int amount, int number)
         {
             var pos = CalcPosInv(number);
 
-            SR_UI.CreateLabel(ref container, panelName, "", $"{msg("Name")}:  {configData.Messaging.MSG_MainColor}{name}</color>", 14, $"{pos[0]} {pos[1]}", $"{pos[0] + 0.22f} {pos[3]}", TextAnchor.MiddleLeft);
-            SR_UI.CreateLabel(ref container, panelName, "", $"{msg("Amount")}:  {configData.Messaging.MSG_MainColor}{amount}</color>", 14, $"{pos[0] + 0.22f} {pos[1]}", $"{pos[0] + 0.32f} {pos[3]}", TextAnchor.MiddleLeft);
-            SR_UI.CreateButton(ref container, panelName, UIColors["buttonbg"], msg("Sell"), 14, $"{pos[0] + 0.35f} {pos[1]}", $"{pos[2]} {pos[3]}", $"SRUI_SellItem {itemId} {skinId} {amount} {name}");
+            UI.CreateLabel(ref container, panelName, $"{msg("Name")}:  {color1}{name}</color>", 14, $"{pos[0]} {pos[1]}", $"{pos[0] + 0.22f} {pos[3]}", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, panelName, $"{msg("Amount")}:  {color1}{amount}</color>", 14, $"{pos[0] + 0.22f} {pos[1]}", $"{pos[0] + 0.32f} {pos[3]}", TextAnchor.MiddleLeft);
+            UI.CreateButton(ref container, panelName, uiColors["buttonbg"], msg("Sell"), 14, $"{pos[0] + 0.35f} {pos[1]}", $"{pos[2]} {pos[3]}", $"SRUI_SellItem {shortname} {skinId} {amount}");
         }
-        private void SellItem(BasePlayer player, int itemId, ulong skinId, string name, int amount)
+        private void SellItem(BasePlayer player, string shortname, ulong skinId, int amount)
         {
-            var HelpMain = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref HelpMain, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            SR_UI.CreateLabel(ref HelpMain, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("selectToSell")}</color>", 22, "0 0.9", "1 1");
-            var price = saleData.Prices[itemId][skinId].SalePrice;
-            int salePrice = (int)Math.Floor(price * amount);
+            var saleItem = saleData.items[shortname][skinId];
+            var name = saleItem.displayName;
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeSales")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("selectToSell")}</color>", 22, "0 0.9", "1 1");
+            int salePrice = (int)Math.Floor(saleItem.price * amount);
 
-            SR_UI.CreateLabel(ref HelpMain, UIMain, "", string.Format(msg("sellItemF"), configData.Messaging.MSG_MainColor, name), 18, "0.1 0.8", "0.3 0.84", TextAnchor.MiddleLeft);
-            SR_UI.CreateLabel(ref HelpMain, UIMain, "", string.Format(msg("sellPriceF"), configData.Messaging.MSG_MainColor, price, msg("storeRP")), 18, "0.1 0.76", "0.3 0.8", TextAnchor.MiddleLeft);
-            SR_UI.CreateLabel(ref HelpMain, UIMain, "", string.Format(msg("sellUnitF"), configData.Messaging.MSG_MainColor, amount), 18, "0.1 0.72", "0.3 0.76", TextAnchor.MiddleLeft);
-            SR_UI.CreateLabel(ref HelpMain, UIMain, "", string.Format(msg("sellTotalF"), configData.Messaging.MSG_MainColor, salePrice, msg("storeRP")), 18, "0.1 0.68", "0.3 0.72", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, UIMain, string.Format(msg("sellItemF"), color1, name), 18, "0.1 0.8", "0.3 0.84", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, UIMain, string.Format(msg("sellPriceF"), color1, saleItem.price, msg("storeRP")), 18, "0.1 0.76", "0.3 0.8", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, UIMain, string.Format(msg("sellUnitF"), color1, amount), 18, "0.1 0.72", "0.3 0.76", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, UIMain, string.Format(msg("sellTotalF"), color1, salePrice, msg("storeRP")), 18, "0.1 0.68", "0.3 0.72", TextAnchor.MiddleLeft);
 
 
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 10000", 16, "0.84 0.72", "0.89 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 10000} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 1000", 16, "0.78 0.72", "0.83 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 1000} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 100", 16, "0.72 0.72", "0.77 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 100} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 10", 16, "0.66 0.72", "0.71 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 10} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "+ 1", 16, "0.6 0.72", "0.65 0.76", $"SRUI_SellItem {itemId} {skinId} {amount + 1} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "-1", 16, "0.54 0.72", "0.59 0.76", $"SRUI_SellItem {itemId} {skinId} {amount - 1} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "-10", 16, "0.48 0.72", "0.53 0.76", $"SRUI_SellItem {itemId} {skinId} {amount - 10} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "-100", 16, "0.42 0.72", "0.47 0.76", $"SRUI_SellItem {itemId} {skinId} {amount - 100} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "-1000", 16, "0.36 0.72", "0.41 0.76", $"SRUI_SellItem {itemId} {skinId} {amount - 1000} {name}");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], "-10000", 16, "0.3 0.72", "0.35 0.76", $"SRUI_SellItem {itemId} {skinId} {amount - 10000} {name}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "+ 10000", 16, "0.84 0.72", "0.89 0.76", $"SRUI_SellItem {shortname} {skinId} {amount + 10000}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "+ 1000", 16, "0.78 0.72", "0.83 0.76", $"SRUI_SellItem {shortname} {skinId} {amount + 1000}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "+ 100", 16, "0.72 0.72", "0.77 0.76", $"SRUI_SellItem {shortname} {skinId} {amount + 100}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "+ 10", 16, "0.66 0.72", "0.71 0.76", $"SRUI_SellItem {shortname} {skinId} {amount + 10}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "+ 1", 16, "0.6 0.72", "0.65 0.76", $"SRUI_SellItem {shortname} {skinId} {amount + 1}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "-1", 16, "0.54 0.72", "0.59 0.76", $"SRUI_SellItem {shortname} {skinId} {amount - 1}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "-10", 16, "0.48 0.72", "0.53 0.76", $"SRUI_SellItem {shortname} {skinId} {amount - 10}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "-100", 16, "0.42 0.72", "0.47 0.76", $"SRUI_SellItem {shortname} {skinId} {amount - 100}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "-1000", 16, "0.36 0.72", "0.41 0.76", $"SRUI_SellItem {shortname} {skinId} {amount - 1000}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "-10000", 16, "0.3 0.72", "0.35 0.76", $"SRUI_SellItem {shortname} {skinId} {amount - 10000}");
 
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], msg("cancelSale"), 16, "0.75 0.34", "0.9 0.39", "SRUI_CancelSale");
-            SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], msg("confirmSale"), 16, "0.55 0.34", "0.7 0.39", $"SRUI_Sell {itemId} {skinId} {amount} {name}");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], msg("cancelSale"), 16, "0.75 0.34", "0.9 0.39", "SRUI_CancelSale");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], msg("confirmSale"), 16, "0.55 0.34", "0.7 0.39", $"SRUI_Sell {shortname} {skinId} {amount}");
 
             CuiHelper.DestroyUi(player, UIMain);
-            CuiHelper.AddUi(player, HelpMain);
+            CuiHelper.AddUi(player, container);
         }
-
-        #region Commands
-        [ConsoleCommand("SRUI_CancelSale")]
-        private void cmdCancelSale(ConsoleSystem.Arg arg)
-        {
-            var player = arg.Connection.player as BasePlayer;
-            if (player == null)
-                return;
-            CreateSaleElement(player);
-        }
-        [ConsoleCommand("SRUI_SellItem")]
-        private void cmdSellItem(ConsoleSystem.Arg arg)
-        {
-            var player = arg.Connection.player as BasePlayer;
-            if (player == null)
-                return;
-            int itemId = arg.GetInt(0);
-            ulong skinId = arg.GetUInt64(1);
-            int amount = arg.GetInt(2);
-            string name = arg.GetString(3);
-            var max = GetAmount(player, itemId, skinId);
-
-            if (amount <= 0)
-                amount = 1;
-            if (amount > max)
-                amount = max;
-
-            SellItem(player, itemId, skinId, name, amount);
-        }
-        [ConsoleCommand("SRUI_Sell")]
-        private void cmdSell(ConsoleSystem.Arg arg)
-        {
-            var player = arg.Connection.player as BasePlayer;
-            if (player == null)
-                return;
-            int itemId = arg.GetInt(0);
-            ulong skinId = arg.GetUInt64(1);
-            int amount = arg.GetInt(2);
-            string name = arg.GetString(3);
-            float price = saleData.Prices[itemId][skinId].SalePrice;
-            int salePrice = (int)Math.Floor(price * amount);
-
-            if (TakeResources(player, itemId, skinId, amount))
-            {
-                AddPoints(player.userID, salePrice);
-
-                if (configData.Options.LogRPTransactions)
-                {
-                    var message = $"{player.displayName} sold {amount}x {itemId} for {salePrice}";
-                    var dateTime = DateTime.Now.ToString("yyyy-MM-dd");
-                    ConVar.Server.Log($"oxide/logs/ServerRewards - SoldItems_{dateTime}.txt", message);
-                }
-
-                CreateSaleElement(player);
-                PopupMessage(player, string.Format(msg("saleSuccess"), amount, name, salePrice, msg("storeRP")));
-            }
-        }
-        #endregion
-
-        #region Functions
-        private float[] CalcPosInv(int number)
-        {
-            Vector2 dimensions = new Vector2(0.45f, 0.04f);
-            Vector2 origin = new Vector2(0.015f, 0.86f);
-            float offsetY = 0.005f;
-            float offsetX = 0.033f;
-            float posX = 0;
-            float posY = 0;
-            if (number < 18)
-            {
-                posX = origin.x;
-                posY = (offsetY + dimensions.y) * number;
-            }
-            else
-            {
-                number -= 18;
-                posX = offsetX + dimensions.x;
-                posY = (offsetY + dimensions.y) * number;
-            }
-            Vector2 offset = new Vector2(posX, -posY);
-            Vector2 posMin = origin + offset;
-            Vector2 posMax = posMin + dimensions;
-            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
-        }
-        private int GetAmount(BasePlayer player, int itemid, ulong skinid)
-        {
-            List<Item> items = player.inventory.AllItems().ToList().FindAll((Item x) => x.info.itemid == itemid);
-            int num = 0;
-            foreach (Item item in items)
-            {
-                if (!item.IsBusy())
-                {
-                    if (item.skin == skinid)
-                        num = num + item.amount;
-                }
-            }
-            return num;
-        }
-        private bool TakeResources(BasePlayer player, int itemid, ulong skinId, int iAmount)
-        {
-            int num = TakeResourcesFrom(player, player.inventory.containerMain.itemList, itemid, skinId, iAmount);
-            if (num < iAmount)
-                num += TakeResourcesFrom(player, player.inventory.containerBelt.itemList, itemid, skinId, iAmount);
-            if (num < iAmount)
-                num += TakeResourcesFrom(player, player.inventory.containerWear.itemList, itemid, skinId, iAmount);
-            if (num >= iAmount)
-                return true;
-            return false;
-        }
-        private int TakeResourcesFrom(BasePlayer player, List<Item> container, int itemid, ulong skinId, int iAmount)
-        {
-            List<Item> collect = new List<Item>();
-            List<Item> items = new List<Item>();
-            int num = 0;
-            foreach (Item item in container)
-            {
-                if (item.info.itemid == itemid && item.skin == skinId)
-                {
-                    int num1 = iAmount - num;
-                    if (num1 > 0)
-                    {
-                        if (item.amount <= num1)
-                        {
-                            if (item.amount <= num1)
-                            {
-                                num = num + item.amount;
-                                items.Add(item);
-                                if (collect != null)
-                                    collect.Add(item);
-                            }
-                            if (num != iAmount)
-                                continue;
-                            break;
-                        }
-                        else
-                        {
-                            item.MarkDirty();
-                            Item item1 = item;
-                            item1.amount = item1.amount - num1;
-                            num = num + num1;
-                            Item item2 = ItemManager.CreateByItemID(itemid, 1, skinId);
-                            item2.amount = num1;
-                            item2.CollectedForCrafting(player);
-                            if (collect != null)
-                                collect.Add(item2);
-                            break;
-                        }
-                    }
-                }
-            }
-            foreach (Item item3 in items)
-                item3.RemoveFromContainer();
-            return num;
-        }
-        #endregion
         #endregion
 
         #region Transfer System
-        private void CreateTransferElement(BasePlayer player, int page = 0)
+        private CuiElementContainer CreateTransferElement(BasePlayer player, int page = 0)
         {
-            var HelpMain = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref HelpMain, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            SR_UI.CreateLabel(ref HelpMain, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("transfer1", player.UserIDString)}</color>", 22, "0 0.9", "1 1");
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeTransfer")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("transfer1", player.UserIDString)}</color>", 22, "0 0.9", "1 1");
 
             var playerCount = BasePlayer.activePlayerList.Count;
             if (playerCount > 96)
             {
                 var maxpages = (playerCount - 1) / 96 + 1;
                 if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], msg("storeNext", player.UserIDString), 18, "0.87 0.92", "0.97 0.97", $"SRUI_Transfer {page + 1}");
+                    UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], msg("storeNext", player.UserIDString), 18, "0.87 0.92", "0.97 0.97", $"SRUI_Transfer {page + 1}");
                 if (page > 0)
-                    SR_UI.CreateButton(ref HelpMain, UIMain, UIColors["buttonbg"], msg("storeBack", player.UserIDString), 18, "0.03 0.92", "0.13 0.97", $"SRUI_Transfer {page - 1}");
+                    UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], msg("storeBack", player.UserIDString), 18, "0.03 0.92", "0.13 0.97", $"SRUI_Transfer {page - 1}");
             }
             int maxentries = (96 * (page + 1));
             if (maxentries > playerCount)
@@ -1100,30 +809,127 @@ namespace Oxide.Plugins
             for (int n = rewardcount; n < maxentries; n++)
             {
                 if (BasePlayer.activePlayerList[n] == null) continue;
-                CreatePlayerNameEntry(ref HelpMain, UIMain, BasePlayer.activePlayerList[n].displayName, BasePlayer.activePlayerList[n].UserIDString, i);
+                CreatePlayerNameEntry(ref container, UIMain, BasePlayer.activePlayerList[n].displayName, BasePlayer.activePlayerList[n].UserIDString, i);
                 i++;
             }
-            CuiHelper.DestroyUi(player, UIMain);
-            CuiHelper.AddUi(player, HelpMain);
+            return container;
         }
         private void TransferElement(BasePlayer player, string name, string id)
         {
             CuiHelper.DestroyUi(player, UIMain);
-            var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 0.92");
-            SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
+            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
+            UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeTransfer")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
+            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
 
-            SR_UI.CreateLabel(ref Main, UIMain, "", $"{configData.Messaging.MSG_MainColor}{msg("transfer2", player.UserIDString)}</color>", 24, "0 0.82", "1 0.9");
-            SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], "1", 20, "0.27 0.3", "0.37 0.38", $"SRUI_TransferID {id} {name} 1");
-            SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], "10", 20, "0.39 0.3", "0.49 0.38", $"SRUI_TransferID {id} {name} 10");
-            SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], "100", 20, "0.51 0.3", "0.61 0.38", $"SRUI_TransferID {id} {name} 100");
-            SR_UI.CreateButton(ref Main, UIMain, UIColors["buttonbg"], "1000", 20, "0.63 0.3", "0.73 0.38", $"SRUI_TransferID {id} {name} 1000");
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("transfer2", player.UserIDString)}</color>", 24, "0 0.82", "1 0.9");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "1", 20, "0.27 0.3", "0.37 0.38", $"SRUI_TransferID {id} 1");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "10", 20, "0.39 0.3", "0.49 0.38", $"SRUI_TransferID {id} 10");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "100", 20, "0.51 0.3", "0.61 0.38", $"SRUI_TransferID {id} 100");
+            UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "1000", 20, "0.63 0.3", "0.73 0.38", $"SRUI_TransferID {id} 1000");
 
-            CuiHelper.AddUi(player, Main);
+            CuiHelper.DestroyUi(player, UIMain);
+            CuiHelper.AddUi(player, container);
+        }
+        #endregion
+        #endregion
+
+        #region UI Functions
+        private void CreateMenuButton(ref CuiElementContainer container, string panelName, string buttonname, string command, int number)
+        {
+            Vector2 dimensions = new Vector2(0.1f, 0.6f);
+            Vector2 origin = new Vector2(0.2f, 0.2f);
+            Vector2 offset = new Vector2((0.005f + dimensions.x) * number, 0);
+
+            Vector2 posMin = origin + offset;
+            Vector2 posMax = posMin + dimensions;
+
+            UI.CreateButton(ref container, panelName, uiColors["buttonbg"], buttonname, 16, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", command);
+        }
+        private void CreateSubMenu(ref CuiElementContainer container, string panelName, bool[] hasItems, string npcId = null)
+        {
+            Category[] categories = new Category[] { Category.Ammunition, Category.Attire, Category.Component, Category.Construction, Category.Food, Category.Items, Category.Medical, Category.Misc, Category.Resources, Category.Tool, Category.Traps, Category.Weapon };
+
+            float sizeX = 0.96f / categories.Length;
+            int i = 0;
+            int y = 0;
+            foreach (var cat in categories)
+            {
+                if (hasItems[y])
+                {
+                    float xMin = 0.02f + (sizeX * i) + 0.003f;
+                    float xMax = xMin + sizeX - 0.006f;
+                    UI.CreateButton(ref container, panelName, uiColors["buttonbg"], msg(cat.ToString()), 12, $"{xMin} 0.945", $"{xMax} 0.985", $"SRUI_ChangeElement Items 0 {npcId ?? "null"} {cat.ToString()}");
+                    i++;
+                }
+                y++;
+            }
+        }
+        private void CreateItemEntry(ref CuiElementContainer container, string panelName, string itemId, RewardData.RewardItem item, int number)
+        {
+            Vector2 dimensions = new Vector2(0.1f, 0.19f);
+            Vector2 origin = new Vector2(0.03f, 0.72f);
+            float offsetY = 0;
+            float offsetX = 0;
+
+            if (number > 0 && number < 9)
+                offsetX = (0.005f + dimensions.x) * number;
+            if (number > 8 && number < 18)
+            {
+                offsetX = (0.005f + dimensions.x) * (number - 9);
+                offsetY = (0.02f + dimensions.y) * 1;
+            }
+            if (number > 17 && number < 27)
+            {
+                offsetX = (0.005f + dimensions.x) * (number - 18);
+                offsetY = (0.02f + dimensions.y) * 2;
+            }
+            if (number > 26 && number < 36)
+            {
+                offsetX = (0.005f + dimensions.x) * (number - 27);
+                offsetY = (0.02f + dimensions.y) * 3;
+            }
+
+            Vector2 offset = new Vector2(offsetX, -offsetY);
+            Vector2 posMin = origin + offset;
+            Vector2 posMax = posMin + dimensions;
+
+            string itemIcon = string.IsNullOrEmpty(item.customIcon) ? GetImage(item.shortname, item.skinId) : GetImage(item.customIcon, 0);
+            if (!string.IsNullOrEmpty(itemIcon))
+            {
+                UI.LoadImage(ref container, panelName, itemIcon, $"{posMin.x + 0.02} {posMin.y + 0.08}", $"{posMax.x - 0.02} {posMax.y}");
+                if (item.amount > 1)
+                    UI.CreateLabel(ref container, panelName, $"{color1}x{item.amount}</color>", 16, $"{posMin.x + 0.02} {posMin.y + 0.09}", $"{posMax.x - 0.02} {posMax.y - 0.02}", TextAnchor.LowerLeft);
+            }
+            UI.CreateLabel(ref container, panelName, item.displayName, 14, $"{posMin.x} {posMin.y + 0.04}", $"{posMax.x} {posMin.y + 0.09}");
+            UI.CreateButton(ref container, panelName, uiColors["buttonbg"], $"{msg("storeCost")}: {item.cost}", 14, $"{posMin.x + 0.015} {posMin.y}", $"{posMax.x - 0.015} {posMin.y + 0.04}", $"SRUI_BuyItem {itemId}");
+        }
+        private void CreateKitCommandEntry(ref CuiElementContainer container, string panelName, string displayName, string name, string description, int cost, int number, bool kit, string icon = null)
+        {
+            Vector2 dimensions = new Vector2(0.8f, 0.079f);
+            Vector2 origin = new Vector2(0.03f, 0.86f);
+            float offsetY = (0.004f + dimensions.y) * number;
+            Vector2 offset = new Vector2(0, offsetY);
+            Vector2 posMin = origin - offset;
+            Vector2 posMax = posMin + dimensions;
+            string command = kit ? $"SRUI_BuyKit {name}" : $"SRUI_BuyCommand {name}";
+
+            if (!string.IsNullOrEmpty(icon))
+            {
+                string iconId = GetImage(icon);
+                if (!string.IsNullOrEmpty(iconId))
+                {
+                    UI.LoadImage(ref container, panelName, iconId, $"{posMin.x} {posMin.y}", $"{posMin.x + 0.05} {posMax.y}");
+                    posMin.x = 0.09f;
+                }
+            }
+
+            UI.CreateLabel(ref container, panelName, $"{color1}{displayName}</color> -- {color2}{description}</color>", 16, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", TextAnchor.MiddleLeft);
+            UI.CreateButton(ref container, panelName, uiColors["buttonbg"], $"{msg("storeCost")}: {cost}", 16, $"0.87 {posMin.y + 0.02}", $"0.97 {posMax.y - 0.015f}", command);
         }
         private void CreatePlayerNameEntry(ref CuiElementContainer container, string panelName, string name, string id, int number)
         {
             var pos = CalcPlayerNamePos(number);
-            SR_UI.CreateButton(ref container, panelName, UIColors["buttonbg"], name, 10, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"SRUI_TransferNext {id} {name}");
+            UI.CreateButton(ref container, panelName, uiColors["buttonbg"], name, 10, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"SRUI_TransferNext {id}");
         }
         private float[] CalcPlayerNamePos(int number)
         {
@@ -1195,167 +1001,29 @@ namespace Oxide.Plugins
             Vector2 posMax = posMin + dimensions;
             return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
         }
-
-        #endregion
-
-        #region Item Entries
-        private void CreateMenuButton(ref CuiElementContainer container, string panelName, string buttonname, string command, int number)
+        private float[] CalcPosInv(int number)
         {
-            Vector2 dimensions = new Vector2(0.1f, 0.6f);
-            Vector2 origin = new Vector2(0.2f, 0.2f);
-            Vector2 offset = new Vector2((0.005f + dimensions.x) * number, 0);
-
+            Vector2 dimensions = new Vector2(0.45f, 0.04f);
+            Vector2 origin = new Vector2(0.015f, 0.86f);
+            float offsetY = 0.005f;
+            float offsetX = 0.033f;
+            float posX = 0;
+            float posY = 0;
+            if (number < 18)
+            {
+                posX = origin.x;
+                posY = (offsetY + dimensions.y) * number;
+            }
+            else
+            {
+                number -= 18;
+                posX = offsetX + dimensions.x;
+                posY = (offsetY + dimensions.y) * number;
+            }
+            Vector2 offset = new Vector2(posX, -posY);
             Vector2 posMin = origin + offset;
             Vector2 posMax = posMin + dimensions;
-
-            SR_UI.CreateButton(ref container, panelName, UIColors["buttonbg"], buttonname, 16, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", command);
-        }
-        private void CreateKitCommandEntry(ref CuiElementContainer container, string panelName, string name, string description, int cost, int number, bool kit)
-        {
-            Vector2 dimensions = new Vector2(0.8f, 0.079f);
-            Vector2 origin = new Vector2(0.03f, 0.86f);
-            float offsetY = (0.004f + dimensions.y) * number;
-            Vector2 offset = new Vector2(0, offsetY);
-            Vector2 posMin = origin - offset;
-            Vector2 posMax = posMin + dimensions;
-            string command;
-            if (kit)
-            {
-                command = $"SRUI_BuyKit {name}";
-                if (!string.IsNullOrEmpty(rewardData.RewardKits[name].URL))
-                {
-                    string fileLocation = imageData.storedImages[999999999.ToString()][0].ToString();
-                    if (imageData.storedImages.ContainsKey(rewardData.RewardKits[name].KitName))
-                        fileLocation = imageData.storedImages[rewardData.RewardKits[name].KitName][0].ToString();
-
-                    SR_UI.LoadImage(ref container, panelName, fileLocation, $"{posMin.x} {posMin.y}", $"{posMin.x + 0.05} {posMax.y}");
-                }
-                posMin.x = 0.09f;
-            }
-            else command = $"SRUI_BuyCommand {name}";
-            SR_UI.CreateLabel(ref container, panelName, "", $"{configData.Messaging.MSG_MainColor}{name}</color> -- {configData.Messaging.MSG_Color}{description}</color>", 18, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", TextAnchor.MiddleLeft);
-            SR_UI.CreateButton(ref container, panelName, UIColors["buttonbg"], $"{msg("storeCost")}: {cost}", 18, $"0.84 {posMin.y + 0.015}", $"0.97 {posMax.y - 0.015f}", command);
-        }
-        private void CreateItemEntry(ref CuiElementContainer container, string panelName, int itemnumber, int number)
-        {
-            if (rewardData.RewardItems.ContainsKey(itemnumber))
-            {
-                var item = rewardData.RewardItems[itemnumber];
-                Vector2 dimensions = new Vector2(0.13f, 0.24f);
-                Vector2 origin = new Vector2(0.03f, 0.7f);
-                float offsetY = 0;
-                float offsetX = 0;
-                switch (number)
-                {
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                        offsetX = (0.005f + dimensions.x) * number;
-                        break;
-                    case 7:
-                    case 8:
-                    case 9:
-                    case 10:
-                    case 11:
-                    case 12:
-                    case 13:
-                        {
-                            offsetX = (0.005f + dimensions.x) * (number - 7);
-                            offsetY = (0.02f + dimensions.y) * 1;
-                        }
-                        break;
-                    case 14:
-                    case 15:
-                    case 16:
-                    case 17:
-                    case 18:
-                    case 19:
-                    case 20:
-                        {
-                            offsetX = (0.005f + dimensions.x) * (number - 14);
-                            offsetY = (0.02f + dimensions.y) * 2;
-                        }
-                        break;
-                }
-                Vector2 offset = new Vector2(offsetX, -offsetY);
-                Vector2 posMin = origin + offset;
-                Vector2 posMax = posMin + dimensions;
-
-                string fileLocation = imageData.storedImages[999999999.ToString()][0].ToString();
-                if (imageData.storedImages.ContainsKey(item.ID.ToString()))
-                {
-                    if (imageData.storedImages[item.ID.ToString()].ContainsKey(item.Skin))
-                        fileLocation = imageData.storedImages[item.ID.ToString()][item.Skin].ToString();
-                }
-
-                SR_UI.LoadImage(ref container, panelName, fileLocation, $"{posMin.x + 0.02} {posMin.y + 0.08}", $"{posMax.x - 0.02} {posMax.y}");
-                if (item.Amount > 1)
-                    SR_UI.CreateTextOverlay(ref container, panelName, $"{configData.Messaging.MSG_MainColor}<size=18>X</size><size=20>{item.Amount}</size></color>", "", 20, $"{posMin.x + 0.02} {posMin.y + 0.1}", $"{posMax.x - 0.02} {posMax.y - 0.1}", TextAnchor.MiddleCenter);
-                SR_UI.CreateLabel(ref container, panelName, "", item.DisplayName, 16, $"{posMin.x} {posMin.y + 0.05}", $"{posMax.x} {posMin.y + 0.08}");
-                SR_UI.CreateButton(ref container, panelName, UIColors["buttonbg"], $"{msg("storeCost")}: {item.Cost}", 16, $"{posMin.x + 0.015} {posMin.y}", $"{posMax.x - 0.015} {posMin.y + 0.05}", $"SRUI_BuyItem {itemnumber}");
-            }
-        }
-        #endregion
-
-        #region Kit Contents
-        private string GetKitContents(string kitname)
-        {
-            var contents = Kits?.Call("GetKitContents", kitname);
-            if (contents != null)
-            {
-                var itemString = "";
-                var itemList = new SortedDictionary<string, KitItemEntry>();
-
-                foreach (var item in (string[])contents)
-                {
-                    var entry = item.Split('_');
-                    var name = entry[0];
-                    if (ItemNames.ContainsKey(entry[0]))
-                        name = ItemNames[entry[0]];
-                    var amount = 0;
-                    if (!int.TryParse(entry[1], out amount))
-                        amount = 1;
-                    var mods = new List<string>();
-
-                    if (entry.Length > 2)
-                        for (int i = 2; i < entry.Length; i++)
-                        {
-                            if (ItemNames.ContainsKey(entry[i]))
-                                mods.Add(ItemNames[entry[i]]);
-                        }
-
-                    if (itemList.ContainsKey(name))
-                        itemList[name].ItemAmount += amount;
-                    else itemList.Add(name, new KitItemEntry { ItemAmount = amount, ItemMods = mods });
-                }
-                int eCount = 0;
-                foreach (var entry in itemList)
-                {
-                    itemString = itemString + $"{entry.Value.ItemAmount}x {entry.Key}";
-                    if (entry.Value.ItemMods.Count > 0)
-                    {
-                        itemString = itemString + " (";
-                        int i = 0;
-                        foreach (var mod in entry.Value.ItemMods)
-                        {
-                            itemString = itemString + $"{mod}";
-                            if (i < entry.Value.ItemMods.Count - 1)
-                                itemString = itemString + ", ";
-                            i++;
-                        }
-                        itemString = itemString + "), ";
-                    }
-                    else if (eCount < itemList.Count - 1)
-                        itemString = itemString + ", ";
-                    eCount++;
-                }
-                return itemString;
-            }
-            return null;
+            return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
         }
         #endregion
 
@@ -1367,20 +1035,17 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var kitName = arg.FullString;
-            if (rewardData.RewardKits.ContainsKey(kitName))
+            if (rewardData.kits.ContainsKey(kitName))
             {
-                var kit = rewardData.RewardKits[kitName];
-                if (PointCache.ContainsKey(player.userID))
+                var kit = rewardData.kits[kitName];
+                var pd = CheckPoints(player.userID);
+                if (pd >= kit.cost)
                 {
-                    var pd = PointCache[player.userID];
-                    if (pd >= kit.Cost)
+                    if (TakePoints(player.userID, kit.cost, "Kit " + kit.displayName) != null)
                     {
-                        if (TakePoints(player.userID, kit.Cost, "Kit " + kit.KitName) != null)
-                        {
-                            Kits?.Call("GiveKit", new object[] { player, kit.KitName });
-                            PopupMessage(player, string.Format(msg("buyKit", player.UserIDString), kitName));
-                            return;
-                        }
+                        Kits?.Call("GiveKit", new object[] { player, kit.kitName });
+                        PopupMessage(player, string.Format(msg("buyKit", player.UserIDString), kitName));
+                        return;
                     }
                 }
                 PopupMessage(player, msg("notEnoughPoints", player.UserIDString));
@@ -1397,22 +1062,19 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var commandname = arg.FullString;
-            if (rewardData.RewardCommands.ContainsKey(commandname))
+            if (rewardData.commands.ContainsKey(commandname))
             {
-                var command = rewardData.RewardCommands[commandname];
-                if (PointCache.ContainsKey(player.userID))
+                var command = rewardData.commands[commandname];
+                var pd = CheckPoints(player.userID);
+                if (pd >= command.cost)
                 {
-                    var pd = PointCache[player.userID];
-                    if (pd >= command.Cost)
+                    if (TakePoints(player.userID, command.cost, "Command") != null)
                     {
-                        if (TakePoints(player.userID, command.Cost, "Command") != null)
-                        {
-                            foreach (var cmd in command.Command)
-                                rust.RunServerCommand(cmd.Replace("$player.id", player.UserIDString).Replace("$player.name", player.displayName).Replace("$player.x", player.transform.position.x.ToString()).Replace("$player.y", player.transform.position.y.ToString()).Replace("$player.z", player.transform.position.z.ToString()));
+                        foreach (var cmd in command.commands)
+                            rust.RunServerCommand(cmd.Replace("$player.id", player.UserIDString).Replace("$player.name", player.displayName).Replace("$player.x", player.transform.position.x.ToString()).Replace("$player.y", player.transform.position.y.ToString()).Replace("$player.z", player.transform.position.z.ToString()));
 
-                            PopupMessage(player, string.Format(msg("buyCommand", player.UserIDString), commandname));
-                            return;
-                        }
+                        PopupMessage(player, string.Format(msg("buyCommand", player.UserIDString), commandname));
+                        return;
                     }
                 }
                 PopupMessage(player, msg("notEnoughPoints", player.UserIDString));
@@ -1428,26 +1090,24 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            var itemname = int.Parse(arg.GetString(0).Replace("'", ""));
-            if (rewardData.RewardItems.ContainsKey(itemname))
+            var itemname = arg.GetString(0);
+            if (rewardData.items.ContainsKey(itemname))
             {
-                var item = rewardData.RewardItems[itemname];
-                if (PointCache.ContainsKey(player.userID))
+                var item = rewardData.items[itemname];
+                var pd = CheckPoints(player.userID);
+                if (pd >= item.cost)
                 {
-                    var pd = PointCache[player.userID];
                     if (player.inventory.containerMain.itemList.Count == 24)
                     {
                         PopupMessage(player, msg("fullInv", player.UserIDString));
                         return;
                     }
-                    if (pd >= item.Cost)
+
+                    if (TakePoints(player.userID, item.cost, item.displayName) != null)
                     {
-                        if (TakePoints(player.userID, item.Cost, item.DisplayName) != null)
-                        {
-                            GiveItem(player, itemname);
-                            PopupMessage(player, string.Format(msg("buyItem", player.UserIDString), item.Amount, item.DisplayName));
-                            return;
-                        }
+                        GiveItem(player, itemname);
+                        PopupMessage(player, string.Format(msg("buyItem", player.UserIDString), item.amount, item.displayName));
+                        return;
                     }
                 }
                 PopupMessage(player, msg("notEnoughPoints", player.UserIDString));
@@ -1467,32 +1127,40 @@ namespace Oxide.Plugins
             string type = arg.GetString(0);
             int page = 0;
             string npcid = null;
+            Category cat = Category.None;
 
             if (arg.Args.Length >= 2)
                 page = arg.GetInt(1);
 
             if (arg.Args.Length >= 3)
+            {
                 npcid = arg.GetString(2);
+                if (npcid == "null")
+                    npcid = string.Empty;
+            }
+
+            if (arg.Args.Length >= 4)
+                cat = (Category)Enum.Parse(typeof(Category), arg.GetString(3), true);
 
             switch (type)
             {
                 case "Kits":
-                    SwitchElement(player, ElementType.Kits, page, npcid);
+                    uiManager.SwitchElement(player, UIPanel.Kits, Category.None, page, npcid);
                     return;
                 case "Commands":
-                    SwitchElement(player, ElementType.Commands, page, npcid);
+                    uiManager.SwitchElement(player, UIPanel.Commands, Category.None, page, npcid);
                     return;
                 case "Items":
-                    SwitchElement(player, ElementType.Items, page, npcid);
+                    uiManager.SwitchElement(player, UIPanel.Items, cat == Category.None ? Category.Ammunition : cat, page, npcid);
                     return;
                 case "Exchange":
-                    SwitchElement(player, ElementType.Exchange);
+                    uiManager.SwitchElement(player, UIPanel.Exchange, Category.None, 0, npcid);
                     return;
                 case "Transfer":
-                    SwitchElement(player, ElementType.Transfer, page);
+                    uiManager.SwitchElement(player, UIPanel.Transfer, Category.None, 0, npcid);
                     return;
                 case "Sell":
-                    SwitchElement(player, ElementType.Sell);
+                    uiManager.SwitchElement(player, UIPanel.Sell, Category.None, 0, npcid);
                     return;
             }
         }
@@ -1506,28 +1174,30 @@ namespace Oxide.Plugins
             var type = int.Parse(arg.GetString(0).Replace("'", ""));
             if (type == 1)
             {
-                if (!PointCache.ContainsKey(player.userID) || PointCache[player.userID] < configData.CurrencyExchange.RP_ExchangeRate)
+                if (CheckPoints(player.userID) < configData.Exchange.RP)
                 {
                     PopupMessage(player, msg("notEnoughPoints", player.UserIDString));
                     return;
                 }
-                if (TakePoints(player.userID, configData.CurrencyExchange.RP_ExchangeRate, "RP Exchange") != null)
+                if (TakePoints(player.userID, configData.Exchange.RP, "RP Exchange") != null)
                 {
-                    Economics.Call("Deposit", player.userID, (double)configData.CurrencyExchange.Econ_ExchangeRate);
-                    PopupMessage(player, $"{msg("exchange", player.UserIDString)}{configData.CurrencyExchange.RP_ExchangeRate} {msg("storeRP", player.UserIDString)} for {configData.CurrencyExchange.Econ_ExchangeRate} {msg("storeCoins", player.UserIDString)}");
+                    Economics.Call("Deposit", player.userID, (double)configData.Exchange.Economics);
+                    PopupMessage(player, $"{msg("exchange", player.UserIDString)}{configData.Exchange.RP} {msg("storeRP", player.UserIDString)} for {configData.Exchange.Economics} {msg("storeCoins", player.UserIDString)}");
                 }
             }
             else
             {
-                var amount = Convert.ToSingle(Economics?.Call("GetPlayerMoney", player.userID));
-                if (amount < configData.CurrencyExchange.Econ_ExchangeRate)
+                double amount = (double)Economics?.Call("GetPlayerMoney", player.userID);
+                if (amount < configData.Exchange.Economics)
                 {
                     PopupMessage(player, msg("notEnoughCoins", player.UserIDString));
                     return;
                 }
-                Economics?.Call("Withdraw", player.userID, (double)configData.CurrencyExchange.Econ_ExchangeRate);
-                AddPoints(player.userID, configData.CurrencyExchange.RP_ExchangeRate);
-                PopupMessage(player, $"{msg("exchange", player.UserIDString)}{configData.CurrencyExchange.Econ_ExchangeRate} {msg("storeCoins", player.UserIDString)} for {configData.CurrencyExchange.RP_ExchangeRate} {msg("storeRP", player.UserIDString)}");
+                if ((bool)Economics?.Call("Withdraw", player.userID, (double)configData.Exchange.Economics)) ;
+                {
+                    AddPoints(player.userID, configData.Exchange.RP);
+                    PopupMessage(player, $"{msg("exchange", player.UserIDString)}{configData.Exchange.Economics} {msg("storeCoins", player.UserIDString)} for {configData.Exchange.RP} {msg("storeRP", player.UserIDString)}");
+                }
             }
         }
 
@@ -1538,7 +1208,7 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var type = args.GetInt(0);
-            CreateTransferElement(player, type);
+            uiManager.SwitchElement(player, UIPanel.Transfer, Category.None, 0, uiManager.GetNPCInUse(player));
         }
 
         [ConsoleCommand("SRUI_TransferNext")]
@@ -1548,7 +1218,7 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var ID = args.GetString(0);
-            var name = args.GetString(1);
+            var name = (covalence.Players.FindPlayerById(ID)?.Object as BasePlayer)?.displayName ?? ID;
             TransferElement(player, name, ID);
         }
 
@@ -1558,9 +1228,9 @@ namespace Oxide.Plugins
             var player = args.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            var ID = args.GetUInt64(0);
-            var name = args.GetString(1);
-            var amount = args.GetInt(2);
+            string ID = args.GetString(0);
+            int amount = args.GetInt(1);
+            string name = (covalence.Players.FindPlayerById(ID)?.Object as BasePlayer)?.displayName ?? ID;
             var hasPoints = CheckPoints(player.userID);
             if (hasPoints is int && (int)hasPoints >= amount)
             {
@@ -1580,54 +1250,97 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            DestroyUI(player);
+            uiManager.DestroyUI(player, true);
         }
-        #endregion
 
-        #endregion
+        [ConsoleCommand("SRUI_CancelSale")]
+        private void cmdCancelSale(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Connection.player as BasePlayer;
+            if (player == null)
+                return;
+            uiManager.SwitchElement(player, UIPanel.Sell, Category.None, 0, uiManager.GetNPCInUse(player));
+        }
+
+        [ConsoleCommand("SRUI_SellItem")]
+        private void cmdSellItem(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Connection.player as BasePlayer;
+            if (player == null)
+                return;
+            string shortname = arg.GetString(0);
+            ulong skinId = arg.GetUInt64(1);
+            int amount = arg.GetInt(2);
+            var max = GetAmount(player, shortname, skinId);
+
+            if (amount <= 0)
+                amount = 1;
+            if (amount > max)
+                amount = max;
+
+            SellItem(player, shortname, skinId, amount);
+        }
+
+        [ConsoleCommand("SRUI_Sell")]
+        private void cmdSell(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Connection.player as BasePlayer;
+            if (player == null)
+                return;
+            string itemId = arg.GetString(0);
+            ulong skinId = arg.GetUInt64(1);
+            int amount = arg.GetInt(2);
+            var saleItem = saleData.items[itemId][skinId];
+            int salePrice = (int)Math.Floor(saleItem.price * amount);
+
+            if (TakeResources(player, itemId, skinId, amount))
+            {
+                AddPoints(player.userID, salePrice);
+
+                if (configData.Options.Logs)
+                {
+                    var message = $"{player.displayName} sold {amount}x {itemId} for {salePrice}";
+                    LogToFile($"Sold Items", $"[{DateTime.Now.ToString("hh:mm:ss")}] {message}", this);                    
+                }
+
+                uiManager.SwitchElement(player, UIPanel.Sell, Category.None, 0, uiManager.GetNPCInUse(player));
+                PopupMessage(player, string.Format(msg("saleSuccess"), amount, saleItem.displayName, salePrice, msg("storeRP")));
+            }
+        }
+        #endregion       
 
         #region Oxide Hooks
         void Loaded()
         {
             lang.RegisterMessages(messages, this);
 
-            PlayerData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_players");
-            RewardData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_rewards");
-            ImageData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_images");
-            NPC_Dealers = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_npcids");
-            SaleData = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/data/serverrewards_saleprices");
+            playerdata = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/player_data");
+            npcdata = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/npc_data");
+            rewarddata = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/reward_data");
+            saledata = Interface.Oxide.DataFileSystem.GetFile("ServerRewards/sale_data");
 
-            ItemNames = new Dictionary<string, string>();
-            OpenUI = new Dictionary<ulong, OUIData>();
-            NPCCreator = new Dictionary<ulong, NPCInfos>();
-            PointCache = new Dictionary<ulong, int>();
-            UIElements.npcElements = new Dictionary<string, Dictionary<ElementType, CuiElementContainer[]>>();
-            UIElements.standardElements = new Dictionary<ElementType, CuiElementContainer[]>();
-            UIElements.elementIDs = new List<string>();
+            ins = this;
+            uiManager = new UIManager();
         }
         void OnServerInitialized()
         {
-            webObject = new GameObject("WebObject");
-            uWeb = webObject.AddComponent<UnityWeb>();
-            uWeb.Add("http://i.imgur.com/zq9zuKw.jpg", "999999999", 0);
-
-            LoadData();
             LoadVariables();
-            LoadIcons();
+            LoadData();
 
-            instance = this;
-
-            if (!Kits) PrintWarning($"Kits could not be found! Unable to issue kit rewards");
-            if (configData.Options.Use_PTT && !PlaytimeTracker) PrintWarning("Playtime Tracker could not be found! Unable to monitor user playtime");
-
-            foreach (var item in ItemManager.itemList)
+            if (!ImageLibrary)
             {
-                if (!ItemNames.ContainsKey(item.itemid.ToString()))
-                    ItemNames.Add(item.itemid.ToString(), item.displayName.translated);
+                PrintWarning("Image Library not detected, unloading ServerRewards");
+                Interface.Oxide.UnloadPlugin(Name);
+                return;
             }
 
-            InitializeAllElements();
+            itemIds = ItemManager.itemList.ToDictionary(x => x.itemid, v => v.shortname);
+            itemNames = ItemManager.itemList.ToDictionary(x => x.shortname, v => v.displayName.translated);
+            LoadUIColors();
+            LoadAllImages();
             UpdatePriceList();
+
+            CreateAllElements();
 
             foreach (var player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);
@@ -1638,105 +1351,90 @@ namespace Oxide.Plugins
         {
             if (player != null)
             {
-                DestroyUI(player);
+                uiManager.DestroyUI(player, true);
                 var ID = player.userID;
-                if (PointCache.ContainsKey(ID))
-                    if (PointCache[ID] > 0)
-                        InformPoints(player);
+                if (CheckPoints(ID) > 0)
+                    InformPoints(player);
             }
         }
-        void OnPlayerDisconnected(BasePlayer player) => DestroyUI(player);
+        void OnPlayerDisconnected(BasePlayer player) => uiManager.DestroyUI(player, true);
         void Unload()
         {
             if (saveTimer != null)
                 saveTimer.Destroy();
             foreach (var player in BasePlayer.activePlayerList)
-                DestroyUI(player);
-            SaveData();
+                uiManager.DestroyUI(player, true);
+            SaveRP();
         }
         #endregion
 
         #region Functions
+        private void LoadUIColors()
+        {
+            uiColors.Add("dark", UI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha));
+            uiColors.Add("medium", UI.Color(configData.Colors.Background_Medium.Color, configData.Colors.Background_Medium.Alpha));
+            uiColors.Add("light", UI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha));
+            uiColors.Add("buttonbg", UI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha));
+            uiColors.Add("buttoncom", UI.Color(configData.Colors.Button_Accept.Color, configData.Colors.Button_Accept.Alpha));
+            uiColors.Add("buttongrey", UI.Color(configData.Colors.Button_Inactive.Color, configData.Colors.Button_Inactive.Alpha));
+        }
+        private void LoadAllImages()
+        {
+            ImageLibrary.Call("LoadImageList", Title, rewardData.items.Where(y => string.IsNullOrEmpty(y.Value.customIcon)).Select(x => new KeyValuePair<string, ulong>(x.Value.shortname, x.Value.skinId)).ToList());
+            Dictionary<string, string> newLoadOrder = new Dictionary<string, string>();
+
+            string dataDir = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}ServerRewards{Path.DirectorySeparatorChar}Images{Path.DirectorySeparatorChar}";
+            foreach(var item in rewardData.items.Where(x => !string.IsNullOrEmpty(x.Value.customIcon)))
+            {
+                if (newLoadOrder.ContainsKey(item.Value.customIcon))
+                    continue;
+                var url = item.Value.customIcon;
+                if (!url.StartsWith("http") && !url.StartsWith("www"))
+                    url = $"{dataDir}{item.Value.customIcon}.png";
+                newLoadOrder.Add(item.Value.customIcon, url);
+            }
+            foreach (var kit in rewardData.kits)
+            {
+                if (!string.IsNullOrEmpty(kit.Value.iconName))
+                {
+                    if (newLoadOrder.ContainsKey(kit.Value.iconName))
+                        continue;
+                    var url = kit.Value.iconName;
+                    if (!url.StartsWith("http") && !url.StartsWith("www"))
+                        url = $"{dataDir}{kit.Value.iconName}.png";
+                    newLoadOrder.Add(kit.Value.iconName, url);
+                }
+            }
+            foreach (var command in rewardData.commands)
+            {
+                if (!string.IsNullOrEmpty(command.Value.iconName))
+                {
+                    if (newLoadOrder.ContainsKey(command.Value.iconName))
+                        continue;
+                    var url = command.Value.iconName;
+                    if (!url.StartsWith("http") && !url.StartsWith("www"))
+                        url = $"{dataDir}{command.Value.iconName}.png";
+                    newLoadOrder.Add(command.Value.iconName, url);
+                }
+            }
+            if (newLoadOrder.Count > 0)
+                ImageLibrary.Call("ImportImageList", Title, newLoadOrder);
+        }
+        private void SaveLoop() => saveTimer = timer.Once(configData.Options.SaveInterval, () => { SaveRP(); SaveLoop(); });
+
         private void SendMSG(BasePlayer player, string msg, string keyword = "title")
         {
             if (keyword == "title") keyword = lang.GetMessage("title", this, player.UserIDString);
-            SendReply(player, configData.Messaging.MSG_MainColor + keyword + "</color>" + configData.Messaging.MSG_Color + msg + "</color>");
+            SendReply(player, $"{color1}{keyword}</color> {color2}{msg}</color>");
         }
         private void InformPoints(BasePlayer player)
         {
-            var outstanding = PointCache[player.userID];
-            if (configData.Options.NPCDealers_Only)
+            var outstanding = CheckPoints(player.userID);
+            if (configData.Options.NPCOnly)
                 SendMSG(player, string.Format(msg("msgOutRewardsnpc", player.UserIDString), outstanding));
             else SendMSG(player, string.Format(msg("msgOutRewards1", player.UserIDString), outstanding));
         }
-        private void OpenStore(BasePlayer player, string npcid = null)
-        {
-            if (!OpenUI.ContainsKey(player.userID))
-                OpenUI.Add(player.userID, new OUIData { npcid = npcid });
-            else OpenUI[player.userID] = new OUIData { npcid = npcid };
 
-            CloseMap(player);
-            OpenNavMenu(player, npcid);
-
-            if (!configData.Categories.Disable_Kits)
-                SwitchElement(player, ElementType.Kits, 0, npcid);
-            else if (!configData.Categories.Disable_Items)
-                SwitchElement(player, ElementType.Items, 0, npcid);
-            else if (!configData.Categories.Disable_Commands)
-                SwitchElement(player, ElementType.Commands, 0, npcid);
-            else
-            {
-                OpenUI.Remove(player.userID);
-                timer.Once(3.5f, () => { DestroyUI(player); OpenMap(player); });
-                PopupMessage(player, "All reward options are currently disabled. Closing the store.");
-            }
-        }
-        private string GetPlaytimeClock(double time)
-        {
-            TimeSpan dateDifference = TimeSpan.FromSeconds((float)time);
-            var days = dateDifference.Days;
-            var hours = dateDifference.Hours;
-            hours += (days * 24);
-            var mins = dateDifference.Minutes;
-            var secs = dateDifference.Seconds;
-            return string.Format("{0:00}:{1:00}:{2:00}", hours, mins, secs);
-        }
-        private void LoadIcons()
-        {
-            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", (code, response) =>
-            {
-                if (!(response == null && code == 200))
-                {
-                    var schema = JsonConvert.DeserializeObject<Rust.Workshop.ItemSchema>(response);
-                    var defs = new List<Inventory.Definition>();
-                    foreach (var item in schema.items)
-                    {
-                        if (item.itemshortname == string.Empty || item.workshopid == null) continue;
-                        var steamItem = Global.SteamServer.Inventory.CreateDefinition((int)item.itemdefid);
-                        steamItem.Name = item.name;
-                        steamItem.SetProperty("itemshortname", item.itemshortname);
-                        steamItem.SetProperty("workshopid", item.workshopid.ToString());
-                        steamItem.SetProperty("workshopdownload", item.workshopdownload);
-                        defs.Add(steamItem);
-                    }
-
-                    Global.SteamServer.Inventory.Definitions = defs.ToArray();
-
-                    foreach (var item in ItemManager.itemList)
-                        skins2.SetValue(item, Global.SteamServer.Inventory.Definitions.Where(x => (x.GetStringProperty("itemshortname") == item.shortname) && !string.IsNullOrEmpty(x.GetStringProperty("workshopdownload"))).ToArray());
-                }
-            }, this);
-        }
-        private void GiveItem(BasePlayer player, int itemkey)
-        {
-            if (rewardData.RewardItems.ContainsKey(itemkey))
-            {
-                var entry = rewardData.RewardItems[itemkey];
-                Item item = ItemManager.CreateByItemID(entry.ID, entry.Amount, entry.Skin);
-                if (entry.TargetID != 0) item.blueprintTarget = entry.TargetID;
-                item.MoveToContainer(player.inventory.containerMain);
-            }
-        }
         private object FindPlayer(BasePlayer player, string arg)
         {
             ulong targetID;
@@ -1781,14 +1479,14 @@ namespace Oxide.Plugins
         }
         private bool RemovePlayer(ulong ID)
         {
-            if (PointCache.ContainsKey(ID))
+            if (playerRP.ContainsKey(ID))
             {
-                PointCache.Remove(ID);
+                playerRP.Remove(ID);
                 return true;
             }
             return false;
         }
-        void SendEchoConsole(Network.Connection cn, string msg)
+        private void SendEchoConsole(Network.Connection cn, string msg)
         {
             if (Network.Net.sv.IsConnected())
             {
@@ -1798,11 +1496,135 @@ namespace Oxide.Plugins
                 Network.Net.sv.write.Send(new Network.SendInfo(cn));
             }
         }
+        private void OpenStore(BasePlayer player, string npcid = null)
+        {
+            if (!isILReady)
+            {
+                SendMSG(player, "", msg("imWait", player.UserIDString));
+                return;
+            }
+            if (uiManager.IsOpen(player))
+                return;
+
+            object success = Interface.Call("canShop", player);
+            if (success != null)
+            {
+                string message = "You are not allowed to shop at the moment";
+                if (success is string)
+                    message = (string)success;
+                SendReply(player, message);
+                return;
+            }
+
+            CloseMap(player);
+            uiManager.AddUI(player, UIPanel.Navigation, Category.None, 0, npcid);
+
+            if (configData.Tabs.Kits)
+                uiManager.AddUI(player, UIPanel.Kits, Category.None, 0, npcid);
+            else if (configData.Tabs.Items)
+                uiManager.AddUI(player, UIPanel.Items, Category.Ammunition, 0, npcid);
+            else if (configData.Tabs.Commands)
+                uiManager.AddUI(player, UIPanel.Commands, Category.None, 0, npcid);
+            else
+            {
+                uiManager.DestroyUI(player, true);
+                PopupMessage(player, "All reward options are currently disabled. Closing the store.");
+            }
+        }
+        private void GiveItem(BasePlayer player, string itemkey)
+        {
+            if (rewardData.items.ContainsKey(itemkey))
+            {
+                var entry = rewardData.items[itemkey];
+                Item item = ItemManager.CreateByName(entry.shortname, entry.amount, entry.skinId);
+                player.GiveItem(item, BaseEntity.GiveItemReason.PickedUp);
+            }
+        }
+        private int GetAmount(BasePlayer player, string shortname, ulong skinid)
+        {
+            List<Item> items = player.inventory.AllItems().ToList().FindAll(x => x.info.shortname == shortname);
+            int num = 0;
+            foreach (Item item in items)
+            {
+                if (!item.IsBusy())
+                {
+                    if (item.skin == skinid)
+                        num = num + item.amount;
+                }
+            }
+            return num;
+        }
+        private bool TakeResources(BasePlayer player, string shortname, ulong skinId, int iAmount)
+        {
+            int num = TakeResourcesFrom(player, player.inventory.containerMain.itemList, shortname, skinId, iAmount);
+            if (num < iAmount)
+                num += TakeResourcesFrom(player, player.inventory.containerBelt.itemList, shortname, skinId, iAmount);
+            if (num < iAmount)
+                num += TakeResourcesFrom(player, player.inventory.containerWear.itemList, shortname, skinId, iAmount);
+            if (num >= iAmount)
+                return true;
+            return false;
+        }
+        private int TakeResourcesFrom(BasePlayer player, List<Item> container, string shortname, ulong skinId, int iAmount)
+        {
+            List<Item> collect = new List<Item>();
+            List<Item> items = new List<Item>();
+            int num = 0;
+            foreach (Item item in container)
+            {
+                if (item.info.shortname == shortname && item.skin == skinId)
+                {
+                    int num1 = iAmount - num;
+                    if (num1 > 0)
+                    {
+                        if (item.amount <= num1)
+                        {
+                            if (item.amount <= num1)
+                            {
+                                num = num + item.amount;
+                                items.Add(item);
+                                if (collect != null)
+                                    collect.Add(item);
+                            }
+                            if (num != iAmount)
+                                continue;
+                            break;
+                        }
+                        else
+                        {
+                            item.MarkDirty();
+                            Item item1 = item;
+                            item1.amount = item1.amount - num1;
+                            num = num + num1;
+                            Item item2 = ItemManager.CreateByName(shortname, 1, skinId);
+                            item2.amount = num1;
+                            item2.CollectedForCrafting(player);
+                            if (collect != null)
+                                collect.Add(item2);
+                            break;
+                        }
+                    }
+                }
+            }
+            foreach (Item item3 in items)
+                item3.RemoveFromContainer();
+            return num;
+        }
+        private string GetPlaytimeClock(double time)
+        {
+            TimeSpan dateDifference = TimeSpan.FromSeconds((float)time);
+            var days = dateDifference.Days;
+            var hours = dateDifference.Hours;
+            hours += (days * 24);
+            var mins = dateDifference.Minutes;
+            var secs = dateDifference.Seconds;
+            return string.Format("{0:00}:{1:00}:{2:00}", hours, mins, secs);
+        }
         #endregion
 
+        #region Hooks and API
         #region API
-        [HookMethod("AddPoints")]
-        public object AddPoints(object userID, int amount)
+        private object AddPoints(object userID, int amount)
         {
             ulong ID;
             var success = GetUserID(userID);
@@ -1810,25 +1632,23 @@ namespace Oxide.Plugins
                 return false;
             else ID = (ulong)success;
 
-            if (!PointCache.ContainsKey(ID))
-                PointCache.Add(ID, amount);
-            else PointCache[ID] += amount;
+            if (!playerRP.ContainsKey(ID))
+                playerRP.Add(ID, amount);
+            else playerRP[ID] += amount;
 
-            if (configData.Options.LogRPTransactions)
+            if (configData.Options.Logs)
             {
+                string message = string.Empty;
                 BasePlayer player = BasePlayer.FindByID(ID);
-                var message = $"ADD - (offline){ID} has been issued {amount}x RP";
-
                 if (player != null)
-                    message = $"ADD - {ID} - {player.displayName} has been issued {amount}x RP";
+                    message = $"{ID} - {player.displayName} has been given {amount}x RP";
+                else message = $"(offline){ID} has been given {amount}x RP";
 
-                var dateTime = DateTime.Now.ToString("yyyy-MM-dd");
-                ConVar.Server.Log($"oxide/logs/ServerRewards - EarntRP_{dateTime}.txt", message);
+                LogToFile($"Earnings", $"[{DateTime.Now.ToString("hh:mm:ss")}] {message}", this);
             }
             return true;
         }
-        [HookMethod("TakePoints")]
-        public object TakePoints(object userID, int amount, string item = "")
+        private object TakePoints(object userID, int amount, string item = "")
         {
             ulong ID;
             var success = GetUserID(userID);
@@ -1836,37 +1656,31 @@ namespace Oxide.Plugins
                 return false;
             else ID = (ulong)success;
 
-            if (!PointCache.ContainsKey(ID)) return null;
-            PointCache[ID] -= amount;
+            if (!playerRP.ContainsKey(ID)) return null;
+            playerRP[ID] -= amount;
 
-            if (configData.Options.LogRPTransactions)
+            if (configData.Options.Logs)
             {
+                string message = string.Empty;
                 BasePlayer player = BasePlayer.FindByID(ID);
-                var message = $"TAKE - (offline){ID} has used {amount}x RP";
-
                 if (player != null)
-                    message = $"TAKE - {ID} - {player.displayName} has used {amount}x RP";
-                if (!string.IsNullOrEmpty(item))
-                    message = message + $" on: {item}";
-                if (player != null)
-                    message = message + $"\nInventory Count's:\n Belt: {player.inventory.containerBelt.itemList.Count}\n Main: {player.inventory.containerMain.itemList.Count}\n Wear: {player.inventory.containerWear.itemList.Count} ";
+                    message = $"{ID} - {player.displayName} has spent {amount}x RP{(string.IsNullOrEmpty(item) ? "" : $" on: {item}")}";
+                else message = $"(offline){ID} has spent {amount}x RP";
 
-                var dateTime = DateTime.Now.ToString("yyyy-MM-dd");
-                ConVar.Server.Log($"oxide/logs/ServerRewards-SpentRP_{dateTime}.txt", message);
+                LogToFile($"SpentRP", $"[{DateTime.Now.ToString("hh:mm:ss")}] {message}", this);
             }
             return true;
         }
-        [HookMethod("CheckPoints")]
-        public object CheckPoints(object userID)
+        private int CheckPoints(object userID)
         {
             ulong ID;
             var success = GetUserID(userID);
             if (success is bool)
-                return false;
+                return 0;
             else ID = (ulong)success;
 
-            if (!PointCache.ContainsKey(ID)) return null;
-            return PointCache[ID];
+            if (!playerRP.ContainsKey(ID)) return 0;
+            return playerRP[ID];
         }
 
         private object GetUserID(object userID)
@@ -1892,37 +1706,55 @@ namespace Oxide.Plugins
         private JObject GetItemList()
         {
             var obj = new JObject();
-            foreach (var item in rewardData.RewardItems)
+            foreach (var item in rewardData.items)
             {
                 var itemobj = new JObject();
-                itemobj["name"] = item.Value.DisplayName;
-                itemobj["itemid"] = item.Value.ID;
-                itemobj["skinid"] = item.Value.Skin;
-                itemobj["targetid"] = item.Value.TargetID;
-                itemobj["amount"] = item.Value.Amount;
-                itemobj["cost"] = item.Value.Cost;
+                itemobj["shortname"] = item.Key;
+                itemobj["skinid"] = item.Value.skinId;
+                itemobj["amount"] = item.Value.amount;
+                itemobj["cost"] = item.Value.cost;
+                itemobj["category"] = item.Value.category.ToString();
                 obj[item.Key] = itemobj;
             }
             return obj;
         }
-        private bool AddItem(string name, int itemId, ulong skinId, int amount, int cost, string url = "", int targetId = 0)
+        private bool AddItem(string shortname, ulong skinId, int amount, int cost, string category)
         {
-            ItemInfo newItem = new ItemInfo
+            Category cat = (Category)Enum.Parse(typeof(Category), category, true);
+
+            RewardData.RewardItem newItem = new RewardData.RewardItem
             {
-                Amount = amount,
-                Cost = cost,
-                DisplayName = name,
-                ID = itemId,
-                Skin = skinId,
-                URL = url,
-                TargetID = targetId
+                amount = amount,
+                cost = cost,
+                shortname = shortname,
+                skinId = skinId,
+                category = cat
             };
-            rewardData.RewardItems.Add(rewardData.RewardItems.Count, newItem);
+            string itemName = $"{newItem.shortname}_{newItem.skinId}";
+
+            if (rewardData.items.ContainsKey(itemName))
+                return false;
+
+            rewardData.items.Add(itemName, newItem);
             return true;
         }
         #endregion
 
-        #region External API Calls
+        #region Hooks
+        private void AddImage(string fileName)
+        {
+            var url = fileName;
+            if (!url.StartsWith("http") && !url.StartsWith("www"))
+                url = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}ServerRewards{Path.DirectorySeparatorChar}Images{Path.DirectorySeparatorChar}{fileName}.png";
+            ImageLibrary?.Call("AddImage", url, fileName, 0);
+        }
+        private string GetImage(string fileName, ulong skin = 0)
+        {
+            string imageId = (string)ImageLibrary.Call("GetImage", fileName, skin);
+            if (!string.IsNullOrEmpty(imageId))
+                return imageId;
+            return string.Empty;
+        }
         private void CloseMap(BasePlayer player)
         {
             if (LustyMap)
@@ -1942,8 +1774,6 @@ namespace Oxide.Plugins
             if (LustyMap)
             {
                 LustyMap.Call("AddMarker", x, z, name, icon);
-                LustyMap.Call("addCustom", icon);
-                LustyMap.Call("cacheImages");
             }
         }
         private void RemoveMapMarker(string name)
@@ -1955,51 +1785,23 @@ namespace Oxide.Plugins
         {
             if (player == null || npc == null) return;
             var npcID = npc.UserIDString;
-            if (npcDealers.NPCIDs.ContainsKey(npcID) && !OpenUI.ContainsKey(player.userID))
+            if (userNpc.ContainsKey(player.userID))
             {
-                OpenStore(player, npcID);
+                ModifyNPC(player, npc);
+                return;
             }
+            if (!string.IsNullOrEmpty(IsRegisteredNPC(npcID)) && !uiManager.IsOpen(player))
+                OpenStore(player, npcID);
         }
         #endregion
+        #endregion
 
-        #region NPC Registration
-        private static FieldInfo serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-
-        private BasePlayer FindEntity(BasePlayer player)
+        #region NPC Registration       
+        private string IsRegisteredNPC(string ID)
         {
-            var input = serverinput.GetValue(player) as InputState;
-            var currentRot = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
-            var rayResult = Ray(player, currentRot);
-            if (rayResult is BasePlayer)
-            {
-                var ent = rayResult as BasePlayer;
-                return ent;
-            }
-            return null;
-        }
-        private object Ray(BasePlayer player, Vector3 Aim)
-        {
-            var hits = Physics.RaycastAll(player.transform.position + new Vector3(0f, 1.5f, 0f), Aim);
-            float distance = 50f;
-            object target = null;
-
-            foreach (var hit in hits)
-            {
-                if (hit.collider.GetComponentInParent<BaseEntity>() != null)
-                {
-                    if (hit.distance < distance)
-                    {
-                        distance = hit.distance;
-                        target = hit.collider.GetComponentInParent<BaseEntity>();
-                    }
-                }
-            }
-            return target;
-        }
-        private string isNPCRegistered(string ID)
-        {
-            if (npcDealers.NPCIDs.ContainsKey(ID)) return msg("npcExist");
-            return null;
+            if (npcData.npcInfo.ContainsKey(ID))
+                return msg("npcExist");
+            return string.Empty;
         }
         [ChatCommand("srnpc")]
         void cmdSRNPC(BasePlayer player, string command, string[] args)
@@ -2012,94 +1814,105 @@ namespace Oxide.Plugins
                 SendMSG(player, "/srnpc loot - Create a custom loot table for the specified NPC vendor");
                 return;
             }
-            var NPC = FindEntity(player);
-            if (NPC != null)
+            switch (args[0].ToLower())
             {
-                var isRegistered = isNPCRegistered(NPC.UserIDString);
-
-                switch (args[0].ToLower())
-                {
-                    case "add":
+                case "add":
+                    userNpc[player.userID] = UserNPC.Add;
+                    SendMSG(player, "Press USE on the NPC you wish to add!");
+                    return;
+                case "remove":
+                    userNpc[player.userID] = UserNPC.Remove;
+                    SendMSG(player, "Press USE on the NPC you wish to remove!");
+                    return;
+                case "loot":
+                    userNpc[player.userID] = UserNPC.Edit;
+                    SendMSG(player, "Press USE on the NPC you wish to edit!");
+                    return;
+                default:
+                    break;
+            }
+        }
+        private void ModifyNPC(BasePlayer player, BasePlayer NPC)
+        {
+            var isRegistered = IsRegisteredNPC(NPC.UserIDString);
+            var type = userNpc[player.userID];
+            userNpc.Remove(player.userID);
+            switch (type)
+            {
+                case UserNPC.Add:
+                    {
+                        if (!string.IsNullOrEmpty(isRegistered))
                         {
-                            if (!string.IsNullOrEmpty(isRegistered))
+                            SendMSG(player, isRegistered);
+                            return;
+                        }
+                        int key = npcData.npcInfo.Count + 1;
+                        npcData.npcInfo.Add(NPC.UserIDString, new NPCData.NPCInfo { name = $"{msg("Reward Dealer")} {key}", x = NPC.transform.position.x, z = NPC.transform.position.z });
+                        AddMapMarker(NPC.transform.position.x, NPC.transform.position.z, $"{msg("Reward Dealer")} {key}");
+                        SendMSG(player, msg("npcNew"));
+                        SaveNPC();
+                    }
+                    return;
+                case UserNPC.Remove:
+                    {
+                        if (!string.IsNullOrEmpty(isRegistered))
+                        {
+                            RemoveMapMarker(npcData.npcInfo[NPC.UserIDString].name);
+                            npcData.npcInfo.Remove(NPC.UserIDString);
+
+                            for (int i = 0; i < npcData.npcInfo.Count; i++)
                             {
-                                SendMSG(player, isRegistered);
-                                return;
+                                KeyValuePair<string, NPCData.NPCInfo> info = npcData.npcInfo.ElementAt(i);
+
+                                if (info.Value.name.StartsWith(msg("Reward Dealer")))
+                                {
+                                    RemoveMapMarker(info.Value.name);
+                                    info.Value.name = $"{msg("Reward Dealer")} {i + 1}";
+                                    npcData.npcInfo[info.Key] = info.Value;
+                                    AddMapMarker(info.Value.x, info.Value.z, info.Value.name);
+                                }
                             }
-                            int key = npcDealers.NPCIDs.Count + 1;
-                            npcDealers.NPCIDs.Add(NPC.UserIDString, new NPCInfos { ID = key, X = NPC.transform.position.x, Z = NPC.transform.position.z });
-                            AddMapMarker(NPC.transform.position.x, NPC.transform.position.z, $"{msg("Reward Dealer")} {key}");
-                            SendMSG(player, msg("npcNew"));
+
+                            SendMSG(player, msg("npcRem"));
                             SaveNPC();
                         }
-                        return;
-                    case "remove":
+                        else SendMSG(player, msg("npcNotAdded"));
+                    }
+                    return;
+                case UserNPC.Edit:
+                    {
+                        if (!string.IsNullOrEmpty(isRegistered))
                         {
-                            if (!string.IsNullOrEmpty(isRegistered))
-                            {
-                                npcDealers.NPCIDs.Remove(NPC.UserIDString);
-                                int i = 1;
-                                var data = new Dictionary<string, NPCInfos>();
+                            if (!npcCreator.ContainsKey(player.userID))
+                                npcCreator.Add(player.userID, new KeyValuePair<string, NPCData.NPCInfo>(NPC.UserIDString, new NPCData.NPCInfo()));
 
-                                foreach (var npc in npcDealers.NPCIDs)
-                                {
-                                    RemoveMapMarker($"{msg("Reward Dealer")} {npc.Value}");
-                                    data.Add(npc.Key, new NPCInfos { ID = i, X = NPC.transform.position.x, Z = NPC.transform.position.z });
-                                    i++;
-                                }
-                                foreach (var npc in data)
-                                {
-                                    AddMapMarker(npc.Value.X, npc.Value.Z, $"{msg("Reward Dealer")} {npc.Value.ID}");
-                                }
-                                npcDealers.NPCIDs = data;
-
-                                SendMSG(player, msg("npcRem"));
-                                SaveNPC();
-                            }
-                            else SendMSG(player, msg("npcNotAdded"));
+                            if (npcData.npcInfo[NPC.UserIDString].useCustom)
+                                npcCreator[player.userID] = new KeyValuePair<string, NPCData.NPCInfo>(NPC.UserIDString, npcData.npcInfo[NPC.UserIDString]);
+                            var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 1");
+                            UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
+                            UI.CreateLabel(ref container, UIMain, msg("cldesc", player.UserIDString), 18, "0.25 0.88", "0.75 0.98");
+                            UI.CreateLabel(ref container, UIMain, msg("storeKits", player.UserIDString), 18, "0 0.8", "0.33 0.88");
+                            UI.CreateLabel(ref container, UIMain, msg("storeItems", player.UserIDString), 18, "0.33 0.8", "0.66 0.88");
+                            UI.CreateLabel(ref container, UIMain, msg("storeCommands", player.UserIDString), 18, "0.66 0.8", "1 0.88");
+                            CuiHelper.AddUi(player, container);
+                            NPCLootMenu(player);
                         }
-                        return;
-                    case "loot":
-                        {
-                            if (!string.IsNullOrEmpty(isRegistered))
-                            {
-                                if (!NPCCreator.ContainsKey(player.userID))
-                                    NPCCreator.Add(player.userID, new NPCInfos());
-
-                                if (npcDealers.NPCIDs[NPC.UserIDString].isCustom)
-                                {
-                                    NPCCreator[player.userID] = npcDealers.NPCIDs[NPC.UserIDString];
-                                    NPCCreator[player.userID].NPCID = NPC.UserIDString;
-                                }
-                                else NPCCreator[player.userID] = new NPCInfos { NPCID = NPC.UserIDString };
-
-                                var Main = SR_UI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 1");
-                                SR_UI.CreatePanel(ref Main, UIMain, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-                                SR_UI.CreateLabel(ref Main, UIMain, "", msg("cldesc", player.UserIDString), 18, "0.25 0.88", "0.75 0.98");
-                                SR_UI.CreateLabel(ref Main, UIMain, "", msg("storeKits", player.UserIDString), 18, "0 0.8", "0.33 0.88");
-                                SR_UI.CreateLabel(ref Main, UIMain, "", msg("storeItems", player.UserIDString), 18, "0.33 0.8", "0.66 0.88");
-                                SR_UI.CreateLabel(ref Main, UIMain, "", msg("storeCommands", player.UserIDString), 18, "0.66 0.8", "1 0.88");
-                                CuiHelper.AddUi(player, Main);
-                                NPCLootMenu(player);
-                            }
-                            else SendMSG(player, msg("npcNotAdded"));
-                        }
-                        return;
-                    default:
-                        break;
-                }
+                        else SendMSG(player, msg("npcNotAdded"));
+                    }
+                    return;
+                default:
+                    break;
             }
-            else SendMSG(player, msg("noNPC", player.UserIDString));
         }
         private void NPCLootMenu(BasePlayer player, int page = 0)
         {
-            var Main = SR_UI.CreateElementContainer(UISelect, "0 0 0 0", "0 0", "1 1");
-            SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("save", player.UserIDString), 16, "0.85 0.91", "0.95 0.96", "SRUI_NPCSave", TextAnchor.MiddleCenter, 0f);
-            SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("storeClose", player.UserIDString), 16, "0.05 0.91", "0.15 0.96", "SRUI_NPCCancel", TextAnchor.MiddleCenter, 0f);
+            var container = UI.CreateElementContainer(UISelect, "0 0 0 0", "0 0", "1 1");
+            UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("save", player.UserIDString), 16, "0.85 0.91", "0.95 0.96", "SRUI_NPCSave", TextAnchor.MiddleCenter, 0f);
+            UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("storeClose", player.UserIDString), 16, "0.05 0.91", "0.15 0.96", "SRUI_NPCCancel", TextAnchor.MiddleCenter, 0f);
 
-            int[] itemNames = rewardData.RewardItems.Keys.ToArray();
-            string[] kitNames = rewardData.RewardKits.Keys.ToArray();
-            string[] commNames = rewardData.RewardCommands.Keys.ToArray();
+            string[] itemNames = rewardData.items.Keys.ToArray();
+            string[] kitNames = rewardData.kits.Keys.ToArray();
+            string[] commNames = rewardData.commands.Keys.ToArray();
 
             int maxCount = itemNames.Length;
             if (kitNames.Length > maxCount) maxCount = kitNames.Length;
@@ -2109,9 +1922,9 @@ namespace Oxide.Plugins
             {
                 var maxpages = (maxCount - 1) / 30 + 1;
                 if (page < maxpages - 1)
-                    SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("storeNext"), 18, "0.84 0.05", "0.97 0.1", $"SRUI_NPCPage {page + 1}", TextAnchor.MiddleCenter, 0f);
+                    UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], ">>>", 18, "0.84 0.05", "0.97 0.1", $"SRUI_NPCPage {page + 1}", TextAnchor.MiddleCenter, 0f);
                 if (page > 0)
-                    SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("storeBack"), 18, "0.03 0.05", "0.16 0.1", $"SRUI_NPCPage {page - 1}", TextAnchor.MiddleCenter, 0f);
+                    UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], "<<<", 18, "0.03 0.05", "0.16 0.1", $"SRUI_NPCPage {page - 1}", TextAnchor.MiddleCenter, 0f);
             }
 
             int maxComm = (30 * (page + 1));
@@ -2122,32 +1935,35 @@ namespace Oxide.Plugins
             int comm = 0;
             for (int n = commcount; n < maxComm; n++)
             {
-                string color1 = UIColors["buttonbg"];
-                string text1 = commNames[n];
-                string command1 = $"SRUI_CustomList Commands {text1.Replace(" ", "%!%")} true {page}";
+                KeyValuePair<string, RewardData.RewardCommand> command = rewardData.commands.ElementAt(n);
+
+                string color1 = uiColors["buttonbg"];
+                string text1 = command.Value.displayName;
+                string command1 = $"SRUI_CustomList Commands {command.Key.Replace(" ", "%!%")} true {page}";
                 string color2 = "0 0 0 0";
                 string text2 = "";
                 string command2 = "";
 
-                if (NPCCreator[player.userID].commandList.Contains(commNames[n]))
+                if (npcCreator[player.userID].Value.commands.Contains(command.Key))
                 {
-                    color1 = UIColors["buttoncom"];
-                    command1 = $"SRUI_CustomList Commands {text1.Replace(" ", "%!%")} false {page}";
+                    color1 = uiColors["buttoncom"];
+                    command1 = $"SRUI_CustomList Commands {command.Key.Replace(" ", "%!%")} false {page}";
                 }
                 if (n + 1 < commNames.Length)
                 {
-                    color2 = UIColors["buttonbg"];
-                    text2 = commNames[n + 1];
-                    command2 = $"SRUI_CustomList Commands {text2.Replace(" ", "%!%")} true {page}";
-                    if (NPCCreator[player.userID].commandList.Contains(commNames[n + 1]))
+                    command = rewardData.commands.ElementAt(n + 1);
+                    color2 = uiColors["buttonbg"];
+                    text2 = command.Value.displayName;
+                    command2 = $"SRUI_CustomList Commands {command.Key.Replace(" ", "%!%")} true {page}";
+                    if (npcCreator[player.userID].Value.commands.Contains(command.Key))
                     {
-                        color2 = UIColors["buttoncom"];
-                        command2 = $"SRUI_CustomList Commands {text2.Replace(" ", "%!%")} false {page}";
+                        color2 = uiColors["buttoncom"];
+                        command2 = $"SRUI_CustomList Commands {command.Key.Replace(" ", "%!%")} false {page}";
                     }
                     ++n;
                 }
 
-                CreateItemButton(ref Main, UISelect, color1, text1, command1, color2, text2, command2, comm, 0.66f);
+                CreateItemButton(ref container, UISelect, color1, text1, command1, color2, text2, command2, comm, 0.66f);
                 comm++;
             }
 
@@ -2159,31 +1975,34 @@ namespace Oxide.Plugins
             int kits = 0;
             for (int n = kitcount; n < maxKit; n++)
             {
-                string color1 = UIColors["buttonbg"];
-                string text1 = kitNames[n];
-                string command1 = $"SRUI_CustomList Kits {text1.Replace(" ", "%!%")} true {page}";
+                KeyValuePair<string, RewardData.RewardKit> kit = rewardData.kits.ElementAt(n);
+
+                string color1 = uiColors["buttonbg"];
+                string text1 = kit.Value.displayName;
+                string command1 = $"SRUI_CustomList Kits {kit.Key.Replace(" ", "%!%")} true {page}";
                 string color2 = "0 0 0 0";
                 string text2 = "";
                 string command2 = "";
-                if (NPCCreator[player.userID].kitList.Contains(kitNames[n]))
+                if (npcCreator[player.userID].Value.kits.Contains(kit.Key))
                 {
-                    color1 = UIColors["buttoncom"];
-                    command1 = $"SRUI_CustomList Kits {text1.Replace(" ", "%!%")} false {page}";
+                    color1 = uiColors["buttoncom"];
+                    command1 = $"SRUI_CustomList Kits {kit.Key.Replace(" ", "%!%")} false {page}";
                 }
                 if (n + 1 < kitNames.Length)
                 {
-                    color2 = UIColors["buttonbg"];
-                    text2 = kitNames[n + 1];
-                    command2 = $"SRUI_CustomList Kits {text2.Replace(" ", "%!%")} true {page}";
-                    if (NPCCreator[player.userID].kitList.Contains(kitNames[n + 1]))
+                    kit = rewardData.kits.ElementAt(n + 1);
+                    color2 = uiColors["buttonbg"];
+                    text2 = kit.Value.displayName;
+                    command2 = $"SRUI_CustomList Kits {kit.Key.Replace(" ", "%!%")} true {page}";
+                    if (npcCreator[player.userID].Value.kits.Contains(kit.Key))
                     {
-                        color2 = UIColors["buttoncom"];
-                        command2 = $"SRUI_CustomList Kits {text2.Replace(" ", "%!%")} false {page}";
+                        color2 = uiColors["buttoncom"];
+                        command2 = $"SRUI_CustomList Kits {kit.Key.Replace(" ", "%!%")} false {page}";
                     }
                     ++n;
                 }
 
-                CreateItemButton(ref Main, UISelect, color1, text1, command1, color2, text2, command2, kits, 0f);
+                CreateItemButton(ref container, UISelect, color1, text1, command1, color2, text2, command2, kits, 0f);
                 kits++;
             }
 
@@ -2195,50 +2014,56 @@ namespace Oxide.Plugins
             int items = 0;
             for (int n = itemcount; n < maxItem; n++)
             {
-                string color1 = UIColors["buttonbg"];
-                string text1 = rewardData.RewardItems[n].DisplayName;
-                string command1 = $"SRUI_CustomList Items {n} true {page}";
+                KeyValuePair<string, RewardData.RewardItem> item = rewardData.items.ElementAt(n);
+                string color1 = uiColors["buttonbg"];
+                string text1 = item.Value.displayName;
+                string command1 = $"SRUI_CustomList Items {item.Key.Replace(" ", "%!%")} true {page}";
                 string color2 = "0 0 0 0";
                 string text2 = "";
                 string command2 = "";
 
-                if (NPCCreator[player.userID].itemList.Contains(n))
+                if (npcCreator[player.userID].Value.items.Contains(item.Key))
                 {
-                    color1 = UIColors["buttoncom"];
-                    command1 = $"SRUI_CustomList Items {n} false {page}";
+                    color1 = uiColors["buttoncom"];
+                    command1 = $"SRUI_CustomList Items {item.Key.Replace(" ", "%!%")} false {page}";
                 }
-                if (n + 1 < rewardData.RewardItems.Count)
+                if (n + 1 < rewardData.items.Count)
                 {
-                    color2 = UIColors["buttonbg"];
-                    text2 = rewardData.RewardItems[n + 1].DisplayName;
-                    command2 = $"SRUI_CustomList Items {n + 1} true {page}";
-                    if (NPCCreator[player.userID].itemList.Contains(n + 1))
+                    item = rewardData.items.ElementAt(n + 1);
+                    color2 = uiColors["buttonbg"];
+                    text2 = item.Value.displayName;
+                    command2 = $"SRUI_CustomList Items {item.Key.Replace(" ", "%!%")} true {page}";
+                    if (npcCreator[player.userID].Value.items.Contains(item.Key))
                     {
-                        color2 = UIColors["buttoncom"];
-                        command2 = $"SRUI_CustomList Items {n + 1} false {page}";
+                        color2 = uiColors["buttoncom"];
+                        command2 = $"SRUI_CustomList Items {item.Key.Replace(" ", "%!%")} false {page}";
                     }
                     ++n;
                 }
 
-                CreateItemButton(ref Main, UISelect, color1, text1, command1, color2, text2, command2, items, 0.33f);
+                CreateItemButton(ref container, UISelect, color1, text1, command1, color2, text2, command2, items, 0.33f);
                 items++;
             }
-            if (NPCCreator[player.userID].allowExchange)
-                SR_UI.CreateButton(ref Main, UISelect, UIColors["buttoncom"], msg("allowExchange"), 18, "0.435 0.05", "0.565 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
-            else SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("allowExchange"), 18, "0.435 0.05", "0.565 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
+            if (npcCreator[player.userID].Value.useCustom)
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("useCustom"), 18, "0.21 0.05", "0.34 0.1", $"SRUI_NPCOption {page} custom", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("useCustom"), 18, "0.21 0.05", "0.34 0.1", $"SRUI_NPCOption {page} custom", TextAnchor.MiddleCenter, 0f);
 
-            if (NPCCreator[player.userID].allowSales)
-                SR_UI.CreateButton(ref Main, UISelect, UIColors["buttoncom"], msg("allowSales"), 18, "0.27 0.05", "0.4 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
-            else SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("allowSales"), 18, "0.27 0.05", "0.4 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
+            if (npcCreator[player.userID].Value.canExchange)
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowExchange"), 18, "0.36 0.05", "0.49 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowExchange"), 18, "0.36 0.05", "0.49 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
 
-            if (NPCCreator[player.userID].allowTransfer)
-                SR_UI.CreateButton(ref Main, UISelect, UIColors["buttoncom"], msg("allowTransfer"), 18, "0.6 0.05", "0.73 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
-            else SR_UI.CreateButton(ref Main, UISelect, UIColors["buttonbg"], msg("allowTransfer"), 18, "0.6 0.05", "0.73 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
+            if (npcCreator[player.userID].Value.canSell)
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowSales"), 18, "0.51 0.05", "0.64 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowSales"), 18, "0.51 0.05", "0.64 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
+
+            if (npcCreator[player.userID].Value.canTransfer)
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowTransfer"), 18, "0.66 0.05", "0.79 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowTransfer"), 18, "0.66 0.05", "0.79 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
 
             CuiHelper.DestroyUi(player, UISelect);
-            CuiHelper.AddUi(player, Main);
+            CuiHelper.AddUi(player, container);
         }
-        void CreateItemButton(ref CuiElementContainer Main, string panel, string b1color, string b1text, string b1command, string b2color, string b2text, string b2command, int number, float xPos)
+        void CreateItemButton(ref CuiElementContainer container, string panel, string b1color, string b1text, string b1command, string b2color, string b2text, string b2command, int number, float xPos)
         {
             float offsetX = 0.01f;
             float offsetY = 0.0047f;
@@ -2250,8 +2075,8 @@ namespace Oxide.Plugins
             Vector2 posMin = origin - offset;
             Vector2 posMax = posMin + dimensions;
 
-            SR_UI.CreateButton(ref Main, panel, b1color, b1text, 14, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", b1command, TextAnchor.MiddleCenter, 0f);
-            SR_UI.CreateButton(ref Main, panel, b2color, b2text, 14, $"{posMin.x + offsetX + dimensions.x} {posMin.y}", $"{posMax.x + offsetX + dimensions.x} {posMax.y}", b2command, TextAnchor.MiddleCenter, 0f);
+            UI.CreateButton(ref container, panel, b1color, b1text, 14, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", b1command, TextAnchor.MiddleCenter, 0f);
+            UI.CreateButton(ref container, panel, b2color, b2text, 14, $"{posMin.x + offsetX + dimensions.x} {posMin.y}", $"{posMax.x + offsetX + dimensions.x} {posMax.y}", b2command, TextAnchor.MiddleCenter, 0f);
         }
 
         [ConsoleCommand("SRUI_CustomList")]
@@ -2270,19 +2095,18 @@ namespace Oxide.Plugins
             {
                 case "Kits":
                     if (isAdding)
-                        NPCCreator[player.userID].kitList.Add(key);
-                    else NPCCreator[player.userID].kitList.Remove(key);
+                        npcCreator[player.userID].Value.kits.Add(key);
+                    else npcCreator[player.userID].Value.kits.Remove(key);
                     break;
                 case "Commands":
                     if (isAdding)
-                        NPCCreator[player.userID].commandList.Add(key);
-                    else NPCCreator[player.userID].commandList.Remove(key);
+                        npcCreator[player.userID].Value.commands.Add(key);
+                    else npcCreator[player.userID].Value.commands.Remove(key);
                     break;
                 case "Items":
-                    var id = int.Parse(key);
                     if (isAdding)
-                        NPCCreator[player.userID].itemList.Add(id);
-                    else NPCCreator[player.userID].itemList.Remove(id);
+                        npcCreator[player.userID].Value.items.Add(key);
+                    else npcCreator[player.userID].Value.items.Remove(key);
                     break;
             }
             NPCLootMenu(player, page);
@@ -2306,19 +2130,16 @@ namespace Oxide.Plugins
             switch (arg.Args[1])
             {
                 case "exchange":
-                    if (NPCCreator[player.userID].allowExchange)
-                        NPCCreator[player.userID].allowExchange = false;
-                    else NPCCreator[player.userID].allowExchange = true;
+                    npcCreator[player.userID].Value.canExchange = !npcCreator[player.userID].Value.canExchange;
                     break;
                 case "transfer":
-                    if (NPCCreator[player.userID].allowTransfer)
-                        NPCCreator[player.userID].allowTransfer = false;
-                    else NPCCreator[player.userID].allowTransfer = true;
+                    npcCreator[player.userID].Value.canTransfer = !npcCreator[player.userID].Value.canTransfer;
                     break;
                 case "sales":
-                    if (NPCCreator[player.userID].allowSales)
-                        NPCCreator[player.userID].allowSales = false;
-                    else NPCCreator[player.userID].allowSales = true;
+                    npcCreator[player.userID].Value.canSell = !npcCreator[player.userID].Value.canSell;
+                    break;
+                case "custom":
+                    npcCreator[player.userID].Value.useCustom = !npcCreator[player.userID].Value.useCustom;
                     break;
                 default:
                     break;
@@ -2332,7 +2153,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            NPCCreator.Remove(player.userID);
+            npcCreator.Remove(player.userID);
             CuiHelper.DestroyUi(player, UIMain);
             CuiHelper.DestroyUi(player, UISelect);
             SendReply(player, msg("clcanc", player.UserIDString));
@@ -2346,79 +2167,41 @@ namespace Oxide.Plugins
 
             CuiHelper.DestroyUi(player, UIMain);
             CuiHelper.DestroyUi(player, UISelect);
-            var info = NPCCreator[player.userID];
-            npcDealers.NPCIDs[info.NPCID].isCustom = true;
-            npcDealers.NPCIDs[info.NPCID].itemList = info.itemList;
-            npcDealers.NPCIDs[info.NPCID].commandList = info.commandList;
-            npcDealers.NPCIDs[info.NPCID].kitList = info.kitList;
+            var info = npcCreator[player.userID];
+            if (info.Value.useCustom)
+            {
+                if (info.Value.kits.Count > 0)
+                    info.Value.sellKits = true;
+                else info.Value.sellKits = false;
+                if (info.Value.items.Count > 0)
+                    info.Value.sellItems = true;
+                else info.Value.sellItems = false;
+                if (info.Value.commands.Count > 0)
+                    info.Value.sellCommands = true;
+                else info.Value.sellCommands = false;
+            }
+            else
+            {
+                info.Value.sellKits = true;
+                info.Value.sellItems = true;
+                info.Value.sellCommands = true;
+            }
+            npcData.npcInfo[info.Key] = info.Value;
             SaveNPC();
-            CreateNPCMenu(info.NPCID);
-            NPCCreator.Remove(player.userID);
+
+            if (uiManager.npcElements.ContainsKey(info.Key))
+                uiManager.npcElements.Remove(info.Key);
+            CreateNewElement(info.Key, info.Value);
+            npcCreator.Remove(player.userID);
             SendReply(player, msg("clootsucc", player.UserIDString));
         }
         #endregion
 
-        #region Sale updater
-        void UpdatePriceList()
-        {
-            bool changed = false;
-            foreach (var item in ItemManager.itemList)
-            {
-                if (!saleData.Prices.ContainsKey(item.itemid))
-                {
-                    SaleInfo saleInfo = new SaleInfo { Enabled = false, SalePrice = 1, Name = item.displayName.english };
-                    saleData.Prices.Add(item.itemid, new Dictionary<ulong, SaleInfo>());
-                    saleData.Prices[item.itemid].Add(0, saleInfo);
-                    changed = true;
-                }
-                if (HasSkins(item))
-                {
-                    foreach (var skin in ItemSkinDirectory.ForItem(item))
-                    {
-                        if (!saleData.Prices[item.itemid].ContainsKey(Convert.ToUInt64(skin.id)))
-                        {
-                            SaleInfo saleInfo = new SaleInfo { Enabled = false, SalePrice = 1, Name = skin.invItem.displayName.english };
-                            saleData.Prices[item.itemid].Add(Convert.ToUInt64(skin.id), saleInfo);
-                            changed = true;
-                        }
-                    }
-                    foreach (var skin in Rust.Workshop.Approved.All.Where(x => x.Name == item.shortname))
-                    {
-                        if (saleData.Prices[item.itemid].ContainsKey(skin.InventoryId))
-                            saleData.Prices[item.itemid].Remove(skin.InventoryId);
-
-                        if (!saleData.Prices[item.itemid].ContainsKey(skin.WorkshopdId))
-                        {
-                            SaleInfo saleInfo = new SaleInfo { Enabled = false, SalePrice = 1, Name = skin.Name };
-                            saleData.Prices[item.itemid].Add(skin.WorkshopdId, saleInfo);
-                            changed = true;
-                        }
-                    }
-                }
-            }
-            if (changed)
-                SavePrices();
-        }
-        bool HasSkins(ItemDefinition item)
-        {
-            if (item != null)
-            {
-                var skins = ItemSkinDirectory.ForItem(item).ToList();
-                if (skins.Count > 0)
-                    return true;
-                else if (Rust.Workshop.Approved.All.Where(x => x.Name == item.shortname).Count() > 0)
-                    return true;
-
-            }
-            return false;
-        }
-        #endregion
-
-        #region Chat Commands
+        #region Commands
         [ChatCommand("s")]
         private void cmdStore(BasePlayer player, string command, string[] args)
         {
-            if ((configData.Options.NPCDealers_Only && isAuth(player)) || !configData.Options.NPCDealers_Only)
+            if ((configData.Options.NPCOnly && isAuth(player)) || !configData.Options.NPCOnly)
             {
                 OpenStore(player);
             }
@@ -2437,10 +2220,13 @@ namespace Oxide.Plugins
                     SendMSG(player, msg("chatAddKit", player.UserIDString), msg("addSynKit", player.UserIDString));
                     SendMSG(player, msg("chatAddItem", player.UserIDString), msg("addSynItem", player.UserIDString));
                     SendMSG(player, msg("chatAddCommand", player.UserIDString), msg("addSynCommand", player.UserIDString));
+                    SendMSG(player, msg("editSynKit1", player.UserIDString), msg("editSynKit", player.UserIDString));
+                    SendMSG(player, msg("editSynItem1", player.UserIDString), msg("editSynItem2", player.UserIDString));
+                    SendMSG(player, msg("editSynCommand1", player.UserIDString), msg("editSynCommand", player.UserIDString));
                     SendMSG(player, msg("chatRemove", player.UserIDString), msg("remSynKit", player.UserIDString));
                     SendMSG(player, msg("chatRemove", player.UserIDString), msg("remSynItem", player.UserIDString));
                     SendMSG(player, msg("chatRemove", player.UserIDString), msg("remSynCommand", player.UserIDString));
-                    SendMSG(player, msg("chatList1", player.UserIDString), msg("chatList", player.UserIDString));
+                    SendMSG(player, msg("chatListOpt1", player.UserIDString), msg("chatListOpt", player.UserIDString));
                 }
                 return;
             }
@@ -2449,24 +2235,46 @@ namespace Oxide.Plugins
                 switch (args[0].ToLower())
                 {
                     case "check":
-                        if (!PointCache.ContainsKey(player.userID))
-                        {
-                            SendMSG(player, msg("errorProfile", player.UserIDString));
-                            Puts(msg("errorPCon", player.UserIDString), player.displayName);
-                            return;
-                        }
-                        int points = PointCache[player.userID];
+                        int points = CheckPoints(player.userID);
                         SendMSG(player, string.Format(msg("tpointsAvail", player.UserIDString), points));
                         return;
+                    #region Lists
                     case "list":
-                        if (isAuth(player))
-                            foreach (var entry in rewardData.RewardItems)
+                        if (args.Length >= 2)
+                        {
+                            if (isAuth(player))
                             {
-                                SendEchoConsole(player.net.connection, string.Format("ID: {0} - Type: {1} - Amount: {2} - Cost: {3}", entry.Key, entry.Value.DisplayName, entry.Value.Amount, entry.Value.Cost));
+                                switch (args[1].ToLower())
+                                {
+                                    case "items":
+                                        foreach (var entry in rewardData.items)
+                                        {
+                                            SendEchoConsole(player.net.connection, string.Format("Item ID: {0} - Name: {1} Skin ID: {4} - Amount: {2} - Cost: {3}", entry.Key, entry.Value.displayName, entry.Value.amount, entry.Value.cost, entry.Value.skinId));
+                                        }
+                                        return;
+                                    case "kits":
+                                        foreach (var entry in rewardData.kits)
+                                        {
+                                            SendEchoConsole(player.net.connection, string.Format("Kit ID: {0} - Name: {1} - Cost: {2} - Description: {3}", entry.Key, entry.Value.displayName, entry.Value.cost, entry.Value.description));
+                                        }
+                                        return;
+                                    case "commands":
+                                        foreach (var entry in rewardData.commands)
+                                        {
+                                            SendEchoConsole(player.net.connection, string.Format("Command ID: {0} - Name: {1} - Cost: {2} - Description: {3} - Commands: {4}", entry.Key, entry.Value.displayName, entry.Value.cost, entry.Value.description, entry.Value.commands.ToSentence()));
+                                        }
+                                        return;
+                                    default:
+                                        return;
+                                }
                             }
+                        }
                         return;
+                    #endregion
+                    #region Additions
                     case "add":
                         if (args.Length >= 2)
+                        {
                             if (isAuth(player))
                             {
                                 switch (args[1].ToLower())
@@ -2474,141 +2282,651 @@ namespace Oxide.Plugins
                                     case "kit":
                                         if (args.Length == 5)
                                         {
-                                            int i = -1;
-                                            int.TryParse(args[4], out i);
-                                            if (i <= 0) { SendMSG(player, msg("noCost", player.UserIDString)); return; }
+                                            int i = 0;
+                                            if (!int.TryParse(args[4], out i))
+                                            {
+                                                SendMSG(player, msg("noCost", player.UserIDString));
+                                                return;
+                                            }
 
                                             object isKit = Kits?.Call("isKit", new object[] { args[3] });
-                                            if (isKit is bool)
-                                                if ((bool)isKit)
+                                            if (isKit is bool && (bool)isKit)
+                                            {
+                                                if (rewardData.kits.ContainsKey(args[2]))
+                                                    SendMSG(player, string.Format(msg("rewardExisting", player.UserIDString), args[2]));
+                                                else
                                                 {
-                                                    if (!rewardData.RewardKits.ContainsKey(args[2]))
-                                                        rewardData.RewardKits.Add(args[2], new KitInfo() { KitName = args[3], Cost = i, Description = "" });
-                                                    else
-                                                    {
-                                                        SendMSG(player, string.Format(msg("rewardExisting", player.UserIDString), args[2]));
-                                                        return;
-                                                    }
+                                                    rewardData.kits.Add(args[3], new RewardData.RewardKit { displayName = args[2], kitName = args[3], cost = i, description = "" });
                                                     SendMSG(player, string.Format(msg("addSuccess", player.UserIDString), "kit", args[2], i));
                                                     SaveRewards();
-                                                    return;
                                                 }
-                                            SendMSG(player, msg("noKit", player.UserIDString), "");
-                                            return;
+                                            }
+                                            else SendMSG(player, msg("noKit", player.UserIDString), "");
                                         }
-                                        SendMSG(player, "", msg("addSynKit", player.UserIDString));
+                                        else SendMSG(player, "", msg("addSynKit", player.UserIDString));
                                         return;
                                     case "item":
                                         if (args.Length >= 3)
                                         {
-                                            int i = -1;
-                                            int.TryParse(args[2], out i);
-                                            if (i <= 0) { SendMSG(player, msg("noCost", player.UserIDString)); return; }
+                                            int i = 0;
+                                            if (!int.TryParse(args[2], out i))
+                                            {
+                                                SendMSG(player, msg("noCost", player.UserIDString));
+                                                return;
+                                            }
                                             if (player.GetActiveItem() != null)
                                             {
                                                 Item item = player.GetActiveItem();
                                                 if (item == null)
                                                 {
-                                                    SendMSG(player, "", "Unable to get the required item information");
+                                                    SendMSG(player, "", "You must place the item in your hands");
                                                     return;
                                                 }
-                                                ItemInfo newItem = new ItemInfo
+                                                Category cat = (Category)Enum.Parse(typeof(Category), item.info.category.ToString(), true);
+
+                                                RewardData.RewardItem newItem = new RewardData.RewardItem
                                                 {
-                                                    Amount = item.amount,
-                                                    Cost = i,
-                                                    DisplayName = item.info.displayName.english,
-                                                    ID = item.info.itemid,
-                                                    Skin = item.skin,
-                                                    URL = "",
-                                                    TargetID = !item.IsBlueprint() ? 0 : item.blueprintTarget
+                                                    amount = item.amount,
+                                                    cost = i,
+                                                    displayName = item.info.displayName.english,
+                                                    skinId = item.skin,
+                                                    shortname = item.info.shortname,
+                                                    category = cat
                                                 };
-                                                rewardData.RewardItems.Add(rewardData.RewardItems.Count, newItem);
-                                                SendMSG(player, string.Format(msg("addSuccess", player.UserIDString), "item", newItem.DisplayName, i));
+                                                string key = $"{item.info.shortname}_{item.skin}";
+                                                if (rewardData.items.ContainsKey(key))
+                                                    key += $"_{UnityEngine.Random.Range(0, 1000)}";
+                                                rewardData.items.Add(key, newItem);
+                                                SendMSG(player, string.Format(msg("addSuccess", player.UserIDString), "item", newItem.displayName, i));
                                                 SaveRewards();
-                                                return;
                                             }
-                                            SendMSG(player, "", msg("itemInHand", player.UserIDString));
-                                            return;
+                                            else SendMSG(player, "", msg("itemInHand", player.UserIDString));
                                         }
-                                        SendMSG(player, "", msg("addSynItem", player.UserIDString));
+                                        else SendMSG(player, "", msg("addSynItem", player.UserIDString));
                                         return;
                                     case "command":
-
                                         if (args.Length == 5)
                                         {
-                                            int i = -1;
-                                            int.TryParse(args[4], out i);
-                                            if (i <= 0) { SendMSG(player, msg("noCost", player.UserIDString)); return; }
-                                            rewardData.RewardCommands.Add(args[2], new CommandInfo { Command = new List<string> { args[3] }, Cost = i, Description = "" });
+                                            int i = 0;
+                                            if (!int.TryParse(args[4], out i))
+                                            {
+                                                SendMSG(player, msg("noCost", player.UserIDString));
+                                                return;
+                                            }
+                                            rewardData.commands.Add(args[2], new RewardData.RewardCommand { commands = new List<string> { args[3] }, cost = i, description = "" });
                                             SendMSG(player, string.Format(msg("addSuccess", player.UserIDString), "command", args[2], i));
                                             SaveRewards();
-                                            return;
                                         }
-                                        SendMSG(player, "", msg("addSynCommand", player.UserIDString));
+                                        else SendMSG(player, "", msg("addSynCommand", player.UserIDString));
                                         return;
                                 }
                             }
+                        }
                         return;
-
+                    #endregion
+                    #region Removal
                     case "remove":
                         if (isAuth(player))
+                        {
                             if (args.Length == 3)
                             {
                                 switch (args[1].ToLower())
                                 {
                                     case "kit":
-                                        if (rewardData.RewardKits.ContainsKey(args[2]))
+                                        if (rewardData.kits.ContainsKey(args[2]))
                                         {
-                                            rewardData.RewardKits.Remove(args[2]);
+                                            rewardData.kits.Remove(args[2]);
                                             SendMSG(player, "", string.Format(msg("remSuccess", player.UserIDString), args[2]));
                                             SaveRewards();
-                                            return;
+                                        }
+                                        else SendMSG(player, msg("noKitRem", player.UserIDString), "");
+                                        return;
+                                    case "item":
+                                        if (rewardData.items.ContainsKey(args[2]))
+                                        {
+                                            rewardData.items.Remove(args[2]);
+                                            SendMSG(player, "", string.Format(msg("remSuccess", player.UserIDString), args[2]));
+                                            SaveRewards();
+                                        }
+                                        else SendMSG(player, msg("noItemRem", player.UserIDString), "");
+                                        return;
+                                    case "command":
+                                        if (rewardData.commands.ContainsKey(args[2]))
+                                        {
+                                            rewardData.commands.Remove(args[2]);
+                                            SendMSG(player, "", string.Format(msg("remSuccess", player.UserIDString), args[2]));
+                                            SaveRewards();
+                                        }
+                                        else SendMSG(player, msg("noCommandRem", player.UserIDString), "");
+                                        return;
+                                }
+                            }
+                        }
+                        return;
+                    #endregion
+                    #region Editing
+                    case "edit":
+                        if (isAuth(player))
+                        {
+                            if (args.Length >= 3)
+                            {
+                                switch (args[1].ToLower())
+                                {
+                                    case "kit":
+                                        if (rewardData.kits.ContainsKey(args[2]))
+                                        {
+                                            if (args.Length >= 5)
+                                            {
+                                                switch (args[3].ToLower())
+                                                {
+                                                    case "cost":
+                                                        int cost = 0;
+                                                        if (int.TryParse(args[4], out cost))
+                                                        {
+                                                            rewardData.kits[args[2]].cost = cost;
+                                                            SaveRewards();
+                                                            SendMSG(player, string.Format("Kit {0} cost set to {1}", args[2], cost));
+                                                        }
+                                                        else SendMSG(player, msg("noCost", player.UserIDString));
+                                                        return;
+                                                    case "description":
+                                                        rewardData.kits[args[2]].description = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Kit {0} description set to {1}", args[2], args[4]));
+                                                        return;
+                                                    case "name":
+                                                        rewardData.kits[args[2]].displayName = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Kit {0} name set to {1}", args[2], args[4]));
+                                                        return;
+                                                    case "icon":
+                                                        rewardData.kits[args[2]].iconName = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Kit {0} icon set to {1}", args[2], args[4]));
+                                                        return;
+                                                    default:
+                                                        SendMSG(player, msg("editSynKit", player.UserIDString), "");
+                                                        return; ;
+                                                }
+                                            }
+                                            else SendMSG(player, msg("editSynKit", player.UserIDString), "");
                                         }
                                         SendMSG(player, msg("noKitRem", player.UserIDString), "");
                                         return;
                                     case "item":
-                                        int i;
-                                        if (!int.TryParse(args[2], out i))
+                                        if (rewardData.items.ContainsKey(args[2]))
                                         {
-                                            SendMSG(player, "", msg("itemIDHelp", player.UserIDString));
-                                            return;
-                                        }
-                                        if (rewardData.RewardItems.ContainsKey(i))
-                                        {
-                                            SendMSG(player, "", string.Format(msg("remSuccess", player.UserIDString), rewardData.RewardItems[i].DisplayName));
-                                            rewardData.RewardItems.Remove(i);
-                                            Dictionary<int, ItemInfo> newList = new Dictionary<int, ItemInfo>();
-                                            int n = 0;
-                                            foreach (var entry in rewardData.RewardItems)
+                                            if (args.Length >= 5)
                                             {
-                                                newList.Add(n, entry.Value);
-                                                n++;
+                                                switch (args[3].ToLower())
+                                                {
+
+                                                    case "amount":
+                                                        int amount = 0;
+                                                        if (int.TryParse(args[4], out amount))
+                                                        {
+                                                            rewardData.items[args[2]].amount = amount;
+                                                            SaveRewards();
+                                                            SendMSG(player, string.Format("Item {0} amount set to {1}", args[2], amount));
+                                                        }
+                                                        else SendMSG(player, msg("noCost", player.UserIDString));
+                                                        return;
+                                                    case "cost":
+                                                        int cost = 0;
+                                                        if (int.TryParse(args[4], out cost))
+                                                        {
+                                                            rewardData.items[args[2]].cost = cost;
+                                                            SaveRewards();
+                                                            SendMSG(player, string.Format("Item {0} cost set to {1}", args[2], cost));
+                                                        }
+                                                        else SendMSG(player, msg("noCost", player.UserIDString));
+                                                        return;
+                                                    case "name":
+                                                        rewardData.items[args[2]].displayName = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Item {0} name set to {1}", args[2], args[4]));
+                                                        return;
+                                                    case "icon":
+                                                        rewardData.items[args[2]].customIcon = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Item {0} icon set to {1}", args[2], args[4]));
+                                                        return;
+                                                    default:
+                                                        SendMSG(player, msg("editSynItem2", player.UserIDString), "");
+                                                        return;
+                                                }
                                             }
-                                            rewardData.RewardItems = newList;
-                                            SaveRewards();
-                                            return;
+                                            else SendMSG(player, msg("editSynKit", player.UserIDString), "");
                                         }
                                         SendMSG(player, msg("noItemRem", player.UserIDString), "");
                                         return;
                                     case "command":
-                                        if (rewardData.RewardCommands.ContainsKey(args[2]))
+                                        if (rewardData.commands.ContainsKey(args[2]))
                                         {
-                                            rewardData.RewardKits.Remove(args[2]);
-                                            SendMSG(player, "", string.Format(msg("remSuccess", player.UserIDString), args[2]));
-                                            SaveRewards();
-                                            return;
+                                            if (args.Length >= 5)
+                                            {
+                                                switch (args[3].ToLower())
+                                                {
+                                                    case "cost":
+                                                        int cost = 0;
+                                                        if (int.TryParse(args[4], out cost))
+                                                        {
+                                                            rewardData.commands[args[2]].cost = cost;
+                                                            SaveRewards();
+                                                            SendMSG(player, string.Format("Command {0} cost set to {1}", args[2], cost));
+                                                        }
+                                                        else SendMSG(player, msg("noCost", player.UserIDString));
+                                                        return;
+                                                    case "description":
+                                                        rewardData.commands[args[2]].description = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Command {0} description set to {1}", args[2], args[4]));
+                                                        return;
+                                                    case "name":
+                                                        rewardData.commands[args[2]].displayName = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Command {0} name set to {1}", args[2], args[4]));
+                                                        return;
+                                                    case "icon":
+                                                        rewardData.commands[args[2]].iconName = args[4];
+                                                        SaveRewards();
+                                                        SendMSG(player, string.Format("Command {0} icon set to {1}", args[2], args[4]));
+                                                        return;
+                                                    case "add":
+                                                        if (!rewardData.commands[args[2]].commands.Contains(args[4]))
+                                                        {
+                                                            rewardData.commands[args[2]].commands.Add(args[4]);
+                                                            SaveRewards();
+                                                            SendMSG(player, string.Format("Added command \"{1}\" to Reward Command {0}", args[2], args[4]));
+                                                        }
+                                                        else SendMSG(player, string.Format("The command \"0\" is already registered to this reward command", args[4]));
+                                                        return;
+                                                    case "remove":
+                                                        if (rewardData.commands[args[2]].commands.Contains(args[4]))
+                                                        {
+                                                            rewardData.commands[args[2]].commands.Remove(args[4]);
+                                                            SaveRewards();
+                                                            SendMSG(player, string.Format("Removed command \"{1}\" to Command {0}", args[2], args[4]));
+                                                        }
+                                                        else SendMSG(player, string.Format("The command \"{0}\" is not registered to this reward command", args[4]));
+                                                        return;
+                                                    default:
+                                                        SendMSG(player, msg("editSynCommand", player.UserIDString), "");
+                                                        return;
+                                                }
+                                            }
+                                            else SendMSG(player, msg("editSynKit", player.UserIDString), "");
                                         }
                                         SendMSG(player, msg("noCommandRem", player.UserIDString), "");
                                         return;
                                 }
                             }
-
+                        }
                         return;
+                        #endregion
                 }
             }
         }
 
+        [ConsoleCommand("rewards")]
+        private void ccmdRewards(ConsoleSystem.Arg conArgs)
+        {
+            if (conArgs.Connection != null) return;
 
+            var args = conArgs.Args;
+            if (args == null || args.Length == 0)
+            {
+                SendReply(conArgs, $"{Title}  v{Version}");
+                SendReply(conArgs, "--- List Rewards ---");
+                SendReply(conArgs, "rewards list <items | kits | commands> - Display a list of rewards for the specified category, which information on each item");
+                SendReply(conArgs, "--- Add Rewards ---");
+                SendReply(conArgs, "rewards add item <shortname> <skinId> <amount> <cost> - Add a new reward item to the store");
+                SendReply(conArgs, "rewards add kit <name> <kitname> <cost> - Add a new reward kit to the store");
+                SendReply(conArgs, "rewards add command <name> <command> <cost> - Add a new reward command to the store");
+                SendReply(conArgs, "--- Editing Rewards ---");
+                SendReply(conArgs, "rewards edit item <ID> <name | cost | amount> \"edit value\" - Edit the specified field of the item with ID number <ID>");
+                SendReply(conArgs, "rewards edit kit <ID> <name | cost | description | icon> \"edit value\" - Edit the specified field of the kit with ID number <ID>");
+                SendReply(conArgs, "rewards edit command <ID> <name | cost | amount | description | icon | add | remove> \"edit value\" - Edit the specified field of the kit with ID number <ID>");
+                SendReply(conArgs, "Icon field : The icon field can either be a URL, or a image saved to disk under the folder \"oxide/data/ServerRewards/Images/\"");
+                SendReply(conArgs, "Command add/remove field: Here you add additional commands or remove existing commands. Be sure to type the command inside quotation marks");
+                SendReply(conArgs, "--- Removing Rewards ---");
+                SendReply(conArgs, "rewards remove item <ID> - Removes the item with the specified ID");
+                SendReply(conArgs, "rewards remove kit <ID> - Removes the kit with the specified ID");
+                SendReply(conArgs, "rewards remove command <ID> - Removes the command with the specified ID");
+                SendReply(conArgs, "--- Important Note ---");
+                SendReply(conArgs, "Any changes you make to the store items/kits/commands will NOT be reflected until you reload the plugin!");
+                return;
+            }
+            if (args.Length >= 1)
+            {
+                switch (args[0].ToLower())
+                {
+                    #region Lists
+                    case "list":
+                        if (args.Length >= 2)
+                        {
+                            switch (args[1].ToLower())
+                            {
+                                case "items":
+                                    foreach (var entry in rewardData.items)
+                                    {
+                                        SendReply(conArgs, string.Format("Item ID: {0} || Name: {1} || Skin ID: {4} || Amount: {2} || Cost: {3}", entry.Key, entry.Value.displayName, entry.Value.amount, entry.Value.cost, entry.Value.skinId));
+                                    }
+                                    return;
+                                case "kits":
+                                    foreach (var entry in rewardData.kits)
+                                    {
+                                        SendReply(conArgs, string.Format("Kit ID: {0} || Name: {1} || Cost: {2} || Description: {3}", entry.Key, entry.Value.displayName, entry.Value.cost, entry.Value.description));
+                                    }
+                                    return;
+                                case "commands":
+                                    foreach (var entry in rewardData.commands)
+                                    {
+                                        SendReply(conArgs, string.Format("Command ID: {0} || Name: {1} || Cost: {2} || Description: {3} || Commands: {4}", entry.Key, entry.Value.displayName, entry.Value.cost, entry.Value.description, entry.Value.commands.ToSentence()));
+                                    }
+                                    return;
+                                default:
+                                    return;
+                            }
+                        }
+                        return;
+                    #endregion
+                    #region Additions
+                    case "add":
+                        if (args.Length >= 2)
+                        {
+                            switch (args[1].ToLower())
+                            {
+                                case "item":
+                                    if (args.Length == 6)
+                                    {
+                                        var shortname = args[2];
+                                        ulong skinId;
+                                        if (!ulong.TryParse(args[3], out skinId))
+                                        {
+                                            SendReply(conArgs, "You must enter a number for the skin ID. If you dont wish to select any skin use 0");
+                                            return;
+                                        }
+                                        int amount;
+                                        if (!int.TryParse(args[4], out amount))
+                                        {
+                                            SendReply(conArgs, "You must enter an amount of this item to sell");
+                                            return;
+                                        }
+                                        int cost;
+                                        if (!int.TryParse(args[5], out cost))
+                                        {
+                                            SendReply(conArgs, "You must enter a price for this item");
+                                            return;
+                                        }
+                                        var itemDef = ItemManager.FindItemDefinition(shortname);
+                                        if (itemDef != null)
+                                        {
+                                            Category cat = (Category)Enum.Parse(typeof(Category), itemDef.category.ToString(), true);
+
+                                            RewardData.RewardItem newItem = new RewardData.RewardItem
+                                            {
+                                                amount = amount,
+                                                cost = cost,
+                                                displayName = itemDef.displayName.translated,
+                                                skinId = skinId,
+                                                shortname = shortname,
+                                                category = cat
+                                            };
+                                            string key = $"{shortname}_{skinId}";
+                                            if (rewardData.items.ContainsKey(key))
+                                                key += $"_{UnityEngine.Random.Range(0, 1000)}";
+                                            rewardData.items.Add(key, newItem);
+                                            SendReply(conArgs, string.Format(msg("addSuccess"), "item", newItem.displayName, cost));
+                                            SaveRewards();
+                                        }
+                                        else SendReply(conArgs, "Invalid item selected!");
+                                    }
+                                    else SendReply(conArgs, msg("addSynItemCon"));
+                                    return;
+                                case "kit":
+                                    if (args.Length == 5)
+                                    {
+                                        int i = 0;
+                                        if (!int.TryParse(args[4], out i))
+                                        {
+                                            SendReply(conArgs, msg("noCost"));
+                                            return;
+                                        }
+
+                                        object isKit = Kits?.Call("isKit", new object[] { args[3] });
+                                        if (isKit is bool && (bool)isKit)
+                                        {
+                                            if (rewardData.kits.ContainsKey(args[2]))
+                                                SendReply(conArgs, string.Format(msg("rewardExisting"), args[2]));
+                                            else
+                                            {
+                                                rewardData.kits.Add(args[3], new RewardData.RewardKit { displayName = args[2], kitName = args[3], cost = i, description = "" });
+                                                SendReply(conArgs, string.Format(msg("addSuccess"), "kit", args[2], i));
+                                                SaveRewards();
+                                            }
+                                        }
+                                        else SendReply(conArgs, msg("noKit"), "");
+                                    }
+                                    else SendReply(conArgs, "", msg("addSynKit"));
+                                    return;
+                                case "command":
+                                    if (args.Length == 5)
+                                    {
+                                        int i = 0;
+                                        if (!int.TryParse(args[4], out i))
+                                        {
+                                            SendReply(conArgs, msg("noCost"));
+                                            return;
+                                        }
+                                        rewardData.commands.Add(args[2], new RewardData.RewardCommand { commands = new List<string> { args[3] }, cost = i, description = "" });
+                                        SendReply(conArgs, string.Format(msg("addSuccess"), "command", args[2], i));
+                                        SaveRewards();
+                                    }
+                                    else SendReply(conArgs, "", msg("addSynCommand"));
+                                    return;
+                            }
+                        }
+
+                        return;
+                    #endregion
+                    #region Removal
+                    case "remove":
+                        if (args.Length == 3)
+                        {
+                            switch (args[1].ToLower())
+                            {
+                                case "kit":
+                                    if (rewardData.kits.ContainsKey(args[2]))
+                                    {
+                                        rewardData.kits.Remove(args[2]);
+                                        SendReply(conArgs, "", string.Format(msg("remSuccess"), args[2]));
+                                        SaveRewards();
+                                    }
+                                    else SendReply(conArgs, msg("noKitRem"), "");
+                                    return;
+                                case "item":
+                                    if (rewardData.items.ContainsKey(args[2]))
+                                    {
+                                        rewardData.items.Remove(args[2]);
+                                        SendReply(conArgs, "", string.Format(msg("remSuccess"), args[2]));
+                                        SaveRewards();
+                                    }
+                                    else SendReply(conArgs, msg("noItemRem"), "");
+                                    return;
+                                case "command":
+                                    if (rewardData.commands.ContainsKey(args[2]))
+                                    {
+                                        rewardData.commands.Remove(args[2]);
+                                        SendReply(conArgs, "", string.Format(msg("remSuccess"), args[2]));
+                                        SaveRewards();
+                                    }
+                                    else SendReply(conArgs, msg("noCommandRem"), "");
+                                    return;
+                            }
+                        }
+                        return;
+                    #endregion
+                    #region Editing
+                    case "edit":
+                        if (args.Length >= 3)
+                        {
+                            switch (args[1].ToLower())
+                            {
+                                case "kit":
+                                    if (rewardData.kits.ContainsKey(args[2]))
+                                    {
+                                        if (args.Length >= 5)
+                                        {
+                                            switch (args[3].ToLower())
+                                            {
+                                                case "cost":
+                                                    int cost = 0;
+                                                    if (int.TryParse(args[4], out cost))
+                                                    {
+                                                        rewardData.kits[args[2]].cost = cost;
+                                                        SaveRewards();
+                                                        SendReply(conArgs, string.Format("Kit {0} cost set to {1}", args[2], cost));
+                                                    }
+                                                    else SendReply(conArgs, msg("noCost"));
+                                                    return;
+                                                case "description":
+                                                    rewardData.kits[args[2]].description = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Kit {0} description set to {1}", args[2], args[4]));
+                                                    return;
+                                                case "name":
+                                                    rewardData.kits[args[2]].displayName = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Kit {0} name set to {1}", args[2], args[4]));
+                                                    return;
+                                                case "icon":
+                                                    rewardData.kits[args[2]].iconName = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Kit {0} icon set to {1}", args[2], args[4]));
+                                                    return;
+                                                default:
+                                                    SendReply(conArgs, msg("editSynKit"), "");
+                                                    return; ;
+                                            }
+                                        }
+                                        else SendReply(conArgs, msg("editSynKit"), "");
+                                    }
+                                    else SendReply(conArgs, msg("noKitRem"), "");
+                                    return;
+                                case "item":
+                                    if (rewardData.items.ContainsKey(args[2]))
+                                    {
+                                        if (args.Length >= 5)
+                                        {
+                                            switch (args[3].ToLower())
+                                            {
+
+                                                case "amount":
+                                                    int amount = 0;
+                                                    if (int.TryParse(args[4], out amount))
+                                                    {
+                                                        rewardData.items[args[2]].amount = amount;
+                                                        SaveRewards();
+                                                        SendReply(conArgs, string.Format("Item {0} amount set to {1}", args[2], amount));
+                                                    }
+                                                    else SendReply(conArgs, msg("noCost"));
+                                                    return;
+                                                case "cost":
+                                                    int cost = 0;
+                                                    if (int.TryParse(args[4], out cost))
+                                                    {
+                                                        rewardData.items[args[2]].cost = cost;
+                                                        SaveRewards();
+                                                        SendReply(conArgs, string.Format("Item {0} cost set to {1}", args[2], cost));
+                                                    }
+                                                    else SendReply(conArgs, msg("noCost"));
+                                                    return;
+                                                case "name":
+                                                    rewardData.items[args[2]].displayName = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Item {0} name set to {1}", args[2], args[4]));
+                                                    return;
+                                                case "icon":
+                                                    rewardData.items[args[2]].customIcon = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Item {0} icon set to {1}", args[2], args[4]));
+                                                    return;
+                                                default:
+                                                    SendReply(conArgs, msg("editSynItem2"), "");
+                                                    return;
+                                            }
+                                        }
+                                        else SendReply(conArgs, msg("editSynKit"), "");
+                                    }
+                                    else SendReply(conArgs, msg("noItemRem"), "");
+                                    return;
+                                case "command":
+                                    if (rewardData.commands.ContainsKey(args[2]))
+                                    {
+                                        if (args.Length >= 5)
+                                        {
+                                            switch (args[3].ToLower())
+                                            {
+                                                case "cost":
+                                                    int cost = 0;
+                                                    if (int.TryParse(args[4], out cost))
+                                                    {
+                                                        rewardData.commands[args[2]].cost = cost;
+                                                        SaveRewards();
+                                                        SendReply(conArgs, string.Format("Command {0} cost set to {1}", args[2], cost));
+                                                    }
+                                                    else SendReply(conArgs, msg("noCost"));
+                                                    return;
+                                                case "description":
+                                                    rewardData.commands[args[2]].description = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Command {0} description set to {1}", args[2], args[4]));
+                                                    return;
+                                                case "name":
+                                                    rewardData.commands[args[2]].displayName = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Command {0} name set to {1}", args[2], args[4]));
+                                                    return;
+                                                case "icon":
+                                                    rewardData.commands[args[2]].iconName = args[4];
+                                                    SaveRewards();
+                                                    SendReply(conArgs, string.Format("Command {0} icon set to {1}", args[2], args[4]));
+                                                    return;
+                                                case "add":
+                                                    if (!rewardData.commands[args[2]].commands.Contains(args[4]))
+                                                    {
+                                                        rewardData.commands[args[2]].commands.Add(args[4]);
+                                                        SaveRewards();
+                                                        SendReply(conArgs, string.Format("Added command \"{1}\" to Reward Command {0}", args[2], args[4]));
+                                                    }
+                                                    else SendReply(conArgs, string.Format("The command \"0\" is already registered to this reward command", args[4]));
+                                                    return;
+                                                case "remove":
+                                                    if (rewardData.commands[args[2]].commands.Contains(args[4]))
+                                                    {
+                                                        rewardData.commands[args[2]].commands.Remove(args[4]);
+                                                        SaveRewards();
+                                                        SendReply(conArgs, string.Format("Removed command \"{1}\" to Command {0}", args[2], args[4]));
+                                                    }
+                                                    else SendReply(conArgs, string.Format("The command \"{0}\" is not registered to this reward command", args[4]));
+                                                    return;
+                                                default:
+                                                    SendReply(conArgs, msg("editSynCommand"), "");
+                                                    return;
+                                            }
+                                        }
+                                        else SendReply(conArgs, msg("editSynKit"), "");
+                                    }
+                                    else SendReply(conArgs, msg("noCommandRem"), "");
+                                    return;
+                            }
+                        }
+                        return;
+                        #endregion
+                }
+            }
+        }
 
         [ChatCommand("sr")]
         private void cmdSR(BasePlayer player, string command, string[] args)
@@ -2637,7 +2955,7 @@ namespace Oxide.Plugins
                                 int i = 0;
                                 if (int.TryParse(args[2], out i))
                                 {
-                                    var pList = PointCache.Keys.ToArray();
+                                    var pList = playerRP.Keys.ToArray();
                                     foreach (var entry in pList)
                                         AddPoints(entry, i);
                                     SendMSG(player, string.Format(msg("addPointsAll", player.UserIDString), i));
@@ -2651,16 +2969,13 @@ namespace Oxide.Plugins
                                 int i = 0;
                                 if (int.TryParse(args[2], out i))
                                 {
-                                    var pList = PointCache.Keys.ToArray();
+                                    var pList = playerRP.Keys.ToArray();
                                     foreach (var entry in pList)
                                     {
                                         var amount = CheckPoints(entry);
-                                        if (amount is int)
-                                        {
-                                            if ((int)amount >= i)
-                                                TakePoints(entry, i);
-                                            else TakePoints(entry, (int)amount);
-                                        }
+                                        if (amount >= i)
+                                            TakePoints(entry, i);
+                                        else TakePoints(entry, amount);
                                     }
 
                                     SendMSG(player, string.Format(msg("remPointsAll", player.UserIDString), i));
@@ -2668,7 +2983,7 @@ namespace Oxide.Plugins
                             }
                             return;
                         case "clear":
-                            PointCache.Clear();
+                            playerRP.Clear();
                             SendMSG(player, msg("clearAll", player.UserIDString));
                             return;
                     }
@@ -2706,13 +3021,8 @@ namespace Oxide.Plugins
                         case "check":
                             if (args.Length == 2)
                             {
-                                if (PointCache.ContainsKey((target as BasePlayer).userID))
-                                {
-                                    var points = PointCache[(target as BasePlayer).userID];
-                                    SendMSG(player, string.Format("{0} - {2}: {1}", (target as BasePlayer).displayName, points, msg("storeRP")));
-                                    return;
-                                }
-                                SendMSG(player, string.Format(msg("noProfile", player.UserIDString), (target as BasePlayer).displayName));
+                                var points = CheckPoints((target as BasePlayer).userID);
+                                SendMSG(player, string.Format("{0} - {2}: {1}", (target as BasePlayer).displayName, points, msg("storeRP")));
                             }
                             return;
                     }
@@ -2747,7 +3057,7 @@ namespace Oxide.Plugins
                                 int i = 0;
                                 if (int.TryParse(arg.Args[2], out i))
                                 {
-                                    var pList = PointCache.Keys.ToArray();
+                                    var pList = playerRP.Keys.ToArray();
                                     foreach (var entry in pList)
                                         AddPoints(entry, i);
                                     SendReply(arg, string.Format(msg("addPointsAll"), i));
@@ -2761,16 +3071,13 @@ namespace Oxide.Plugins
                                 int i = 0;
                                 if (int.TryParse(arg.Args[2], out i))
                                 {
-                                    var pList = PointCache.Keys.ToArray();
+                                    var pList = playerRP.Keys.ToArray();
                                     foreach (var entry in pList)
                                     {
                                         var amount = CheckPoints(entry);
-                                        if (amount is int)
-                                        {
-                                            if ((int)amount >= i)
-                                                TakePoints(entry, i);
-                                            else TakePoints(entry, (int)amount);
-                                        }
+                                        if (amount >= i)
+                                            TakePoints(entry, i);
+                                        else TakePoints(entry, amount);
                                     }
 
                                     SendReply(arg, string.Format(msg("remPointsAll"), i));
@@ -2778,7 +3085,7 @@ namespace Oxide.Plugins
                             }
                             return;
                         case "clear":
-                            PointCache.Clear();
+                            playerRP.Clear();
                             SendReply(arg, msg("clearAll"));
                             return;
                     }
@@ -2820,13 +3127,8 @@ namespace Oxide.Plugins
                         case "check":
                             if (arg.Args.Length == 2)
                             {
-                                if (PointCache.ContainsKey((target as BasePlayer).userID))
-                                {
-                                    var points = PointCache[(target as BasePlayer).userID];
-                                    SendReply(arg, string.Format("{0} - {2}: {1}", (target as BasePlayer).displayName, points, msg("storeRP")));
-                                    return;
-                                }
-                                SendReply(arg, string.Format(msg("noProfile"), (target as BasePlayer).displayName));
+                                var points = CheckPoints((target as BasePlayer).userID);
+                                SendReply(arg, string.Format("{0} - {2}: {1}", (target as BasePlayer).displayName, points, msg("storeRP")));
                             }
                             return;
                     }
@@ -2855,295 +3157,332 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Data
-        void SaveData()
+        #region Kit Contents       
+        private string GetKitContents(string kitname)
         {
-            playerData.Players = PointCache;
-            PlayerData.WriteObject(playerData);
-            Puts("Saved player data");
-        }
-        void SaveRewards()
-        {
-            RewardData.WriteObject(rewardData);
-            Puts("Saved reward data");
-        }
-        void SaveImages()
-        {
-            ImageData.WriteObject(imageData);
-            Puts("Saved image data");
-        }
-        void SaveNPC()
-        {
-            NPC_Dealers.WriteObject(npcDealers);
-            Puts("Saved NPC data");
-        }
-        void SavePrices() => SaleData.WriteObject(saleData);
-        private void SaveLoop() => saveTimer = timer.Once(configData.Options.Save_Interval * 60, () => { SaveData(); SaveLoop(); });
+            var contents = Kits?.Call("GetKitInfo", kitname);
+            if (contents != null && contents is JObject)
+            {
+                List<string> contentList = new List<string>();
+                JObject kitContents = contents as JObject;
 
-        void LoadData()
-        {
-            try
-            {
-                playerData = PlayerData.ReadObject<PointData>();
-                PointCache = playerData.Players;
+                JArray items = kitContents["items"] as JArray;
+                foreach (var itemEntry in items)
+                {
+                    JObject item = itemEntry as JObject;
+                    string itemString = (int)item["amount"] > 1 ? $"{(int)item["amount"]}x " : "";
+                    itemString += itemNames[itemIds[(int)item["itemid"]]];
+
+                    List<string> mods = new List<string>();
+                    foreach (var mod in item["mods"] as JArray)
+                        mods.Add(itemNames[itemIds[(int)mod]]);
+
+                    if (mods.Count > 0)
+                        itemString += $" ({mods.ToSentence()})";
+
+                    contentList.Add(itemString);
+                }
+                return contentList.ToSentence();
             }
-            catch
-            {
-                Puts("Couldn't load player data, creating new datafile");
-                playerData = new PointData();
-            }
-            try
-            {
-                rewardData = RewardData.ReadObject<RewardDataStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load reward data, creating new datafile");
-                rewardData = new RewardDataStorage();
-            }
-            try
-            {
-                imageData = ImageData.ReadObject<ImageFileStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load image data, creating new datafile");
-                imageData = new ImageFileStorage();
-            }
-            try
-            {
-                npcDealers = NPC_Dealers.ReadObject<NPCDealers>();
-            }
-            catch
-            {
-                Puts("Couldn't load NPC data, creating new datafile");
-                npcDealers = new NPCDealers();
-            }
-            try
-            {
-                saleData = SaleData.ReadObject<SaleDataStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load sale pricings, creating new datafile");
-                saleData = new SaleDataStorage();
-            }
+            return null;
         }
         #endregion
 
-        #region Config
+        #region Config        
+        private ConfigData configData;
+        class Colors
+        {
+            [JsonProperty(PropertyName = "Primary text color")]
+            public string TextColor_Primary { get; set; }
+            [JsonProperty(PropertyName = "Secondary text color")]
+            public string TextColor_Secondary { get; set; }
+            [JsonProperty(PropertyName = "Background color")]
+            public UIColor Background_Dark { get; set; }
+            [JsonProperty(PropertyName = "Secondary panel color")]
+            public UIColor Background_Medium { get; set; }
+            [JsonProperty(PropertyName = "Primary panel color")]
+            public UIColor Background_Light { get; set; }
+            [JsonProperty(PropertyName = "Button color - standard")]
+            public UIColor Button_Standard { get; set; }
+            [JsonProperty(PropertyName = "Button color - accept")]
+            public UIColor Button_Accept { get; set; }
+            [JsonProperty(PropertyName = "Button color - inactive")]
+            public UIColor Button_Inactive { get; set; }
+        }
+        class UIColor
+        {
+            [JsonProperty(PropertyName = "Hex color")]
+            public string Color { get; set; }
+            [JsonProperty(PropertyName = "Transparency (0 - 1)")]
+            public float Alpha { get; set; }
+        }
         class Tabs
         {
-            public bool Disable_Kits { get; set; }
-            public bool Disable_Items { get; set; }
-            public bool Disable_Commands { get; set; }
-            public bool Disable_CurrencyExchange { get; set; }
-            public bool Disable_CurrencyTransfer { get; set; }
-            public bool Disable_SellersScreen { get; set; }
-        }
-        class Messaging
-        {
-            public string MSG_MainColor { get; set; }
-            public string MSG_Color { get; set; }
+            [JsonProperty(PropertyName = "Show kits tab")]
+            public bool Kits { get; set; }
+            [JsonProperty(PropertyName = "Show commands tab")]
+            public bool Commands { get; set; }
+            [JsonProperty(PropertyName = "Show items tab")]
+            public bool Items { get; set; }
+            [JsonProperty(PropertyName = "Show exchange tab")]
+            public bool Exchange { get; set; }
+            [JsonProperty(PropertyName = "Show transfer tab")]
+            public bool Transfer { get; set; }
+            [JsonProperty(PropertyName = "Show seller tab")]
+            public bool Seller { get; set; }
         }
         class Exchange
         {
-            public int Econ_ExchangeRate { get; set; }
-            public int RP_ExchangeRate { get; set; }
+            [JsonProperty(PropertyName = "Value of RP")]
+            public int RP { get; set; }
+            [JsonProperty(PropertyName = "Value of Economics")]
+            public int Economics { get; set; }
         }
         class Options
         {
-            public bool LogRPTransactions { get; set; }
-            public int Save_Interval { get; set; }
-            public bool NPCDealers_Only { get; set; }
-            public bool Use_PTT { get; set; }
+            [JsonProperty(PropertyName = "Log all transactions")]
+            public bool Logs { get; set; }
+            [JsonProperty(PropertyName = "Data save interval")]
+            public int SaveInterval { get; set; }
+            [JsonProperty(PropertyName = "Use NPC dealers only")]
+            public bool NPCOnly { get; set; }
         }
         class UIOptions
         {
-            public bool DisableUI_FadeIn { get; set; }
-            public bool ShowKitContents { get; set; }
+            [JsonProperty(PropertyName = "Disable fade in effect")]
+            public bool FadeIn { get; set; }
+            [JsonProperty(PropertyName = "Display kit contents as the description")]
+            public bool KitContents { get; set; }
+            [JsonProperty(PropertyName = "Display user playtime")]
+            public bool ShowPlaytime { get; set; }
         }
         class ConfigData
         {
-            public Tabs Categories { get; set; }
-            public Exchange CurrencyExchange { get; set; }
-            public Messaging Messaging { get; set; }
+            [JsonProperty(PropertyName = "Coloring")]
+            public Colors Colors { get; set; }
+            [JsonProperty(PropertyName = "Active categories (global)")]
+            public Tabs Tabs { get; set; }
+            [JsonProperty(PropertyName = "Currency exchange rates")]
+            public Exchange Exchange { get; set; }
+            [JsonProperty(PropertyName = "Options")]
             public Options Options { get; set; }
-            public UIOptions UI_Options { get; set; }
+            [JsonProperty(PropertyName = "UI Options")]
+            public UIOptions UIOptions { get; set; }
         }
         private void LoadVariables()
         {
             LoadConfigVariables();
             SaveConfig();
-        }
-        private void LoadConfigVariables()
-        {
-            configData = Config.ReadObject<ConfigData>();
+            color1 = $"<color={configData.Colors.TextColor_Primary}>";
+            color2 = $"<color={configData.Colors.TextColor_Secondary}>";
         }
         protected override void LoadDefaultConfig()
         {
-            Puts("Creating a new config file");
-            ConfigData config = new ConfigData
+            var config = new ConfigData
             {
-                Categories = new Tabs
+                Colors = new Colors
                 {
-                    Disable_Commands = false,
-                    Disable_Items = false,
-                    Disable_Kits = false,
-                    Disable_CurrencyExchange = false,
-                    Disable_CurrencyTransfer = false,
-                    Disable_SellersScreen = false
+                    Background_Dark = new UIColor { Color = "#2a2a2a", Alpha = 0.98f },
+                    Background_Medium = new UIColor { Color = "#373737", Alpha = 0.98f },
+                    Background_Light = new UIColor { Color = "#696969", Alpha = 0.4f },
+                    Button_Accept = new UIColor { Color = "#00cd00", Alpha = 0.9f },
+                    Button_Inactive = new UIColor { Color = "#a8a8a8", Alpha = 0.9f },
+                    Button_Standard = new UIColor { Color = "#2a2a2a", Alpha = 0.9f },
+                    TextColor_Primary = "#ce422b",
+                    TextColor_Secondary = "#939393"
                 },
-                CurrencyExchange = new Exchange
+                Exchange = new Exchange
                 {
-                    Econ_ExchangeRate = 250,
-                    RP_ExchangeRate = 1
-                },
-                Messaging = new Messaging
-                {
-                    MSG_MainColor = "<color=orange>",
-                    MSG_Color = "<color=#939393>"
+                    Economics = 100,
+                    RP = 1
                 },
                 Options = new Options
                 {
-                    LogRPTransactions = true,
-                    NPCDealers_Only = false,
-                    Save_Interval = 10,
-                    Use_PTT = true
+                    Logs = true,
+                    NPCOnly = false,
+                    SaveInterval = 600
                 },
-                UI_Options = new UIOptions
+                Tabs = new Tabs
                 {
-                    DisableUI_FadeIn = false,
-                    ShowKitContents = true
+                    Commands = true,
+                    Exchange = true,
+                    Items = true,
+                    Kits = true,
+                    Seller = true,
+                    Transfer = true
+                },
+                UIOptions = new UIOptions
+                {
+                    FadeIn = true,
+                    KitContents = true,
+                    ShowPlaytime = true
                 }
             };
             SaveConfig(config);
         }
-        void SaveConfig(ConfigData config)
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
+
+        #region Data Management
+        void SaveRP()
         {
-            Config.WriteObject(config, true);
+            playerData.playerRP = playerRP;
+            playerdata.WriteObject(playerData);
+        }
+        void SaveRewards() => rewarddata.WriteObject(rewardData);
+        void SaveNPC() => npcdata.WriteObject(npcData);
+        void SaveSales() => saledata.WriteObject(saleData);
+
+        void LoadData()
+        {
+            try
+            {
+                playerData = playerdata.ReadObject<PlayerData>();
+                playerRP = playerData.playerRP;
+            }
+            catch
+            {
+                PrintWarning("No player data found! Creating a new data file");
+                playerData = new PlayerData();
+            }
+            try
+            {
+                rewardData = rewarddata.ReadObject<RewardData>();
+            }
+            catch
+            {
+                PrintWarning("No reward data found! Creating a new data file");
+                rewardData = new RewardData();
+            }
+            try
+            {
+                npcData = npcdata.ReadObject<NPCData>();
+            }
+            catch
+            {
+                PrintWarning("No npc data found! Creating a new data file");
+                npcData = new NPCData();
+            }
+            try
+            {
+                saleData = saledata.ReadObject<SaleData>();
+            }
+            catch
+            {
+                PrintWarning("No sale data found! Creating a new data file");
+                saleData = new SaleData();
+            }
+        }
+
+        class PlayerData
+        {
+            public Dictionary<ulong, int> playerRP = new Dictionary<ulong, int>();
+        }
+        class NPCData
+        {
+            public Dictionary<string, NPCInfo> npcInfo = new Dictionary<string, NPCInfo>();
+
+            public class NPCInfo
+            {
+                public string name;
+                public float x, z;
+                public bool useCustom, sellItems, sellKits, sellCommands, canTransfer, canSell, canExchange;
+                public List<string> items = new List<string>();
+                public List<string> kits = new List<string>();
+                public List<string> commands = new List<string>();
+            }
+        }
+        class RewardData
+        {
+            public Dictionary<string, RewardItem> items = new Dictionary<string, RewardItem>();
+            public SortedDictionary<string, RewardKit> kits = new SortedDictionary<string, RewardKit>();
+            public SortedDictionary<string, RewardCommand> commands = new SortedDictionary<string, RewardCommand>();
+
+            public class RewardItem
+            {
+                public string shortname, displayName, customIcon;
+                public int amount, cost;
+                public ulong skinId;
+                public Category category;
+            }
+            public class RewardKit
+            {
+                public string displayName, kitName, description, iconName;
+                public int cost;
+            }
+            public class RewardCommand
+            {
+                public string displayName, description, iconName;
+                public List<string> commands = new List<string>();
+                public int cost;
+            }
+        }
+        class SaleData
+        {
+            public Dictionary<string, Dictionary<ulong, SaleItem>> items = new Dictionary<string, Dictionary<ulong, SaleItem>>();
+
+            public class SaleItem
+            {
+                public float price = 0;
+                public string displayName;
+                public bool enabled = false;
+            }
         }
         #endregion
 
-        #region Unity WWW
-        class QueueItem
+        #region Sales Updater
+        void UpdatePriceList()
         {
-            public string url;
-            public string itemid;
-            public ulong skinid;
-            public QueueItem(string ur, string na, ulong sk)
+            bool changed = false;
+            foreach (var item in ItemManager.itemList)
             {
-                url = ur;
-                itemid = na;
-                skinid = sk;
-            }
-        }
-        class UnityWeb : MonoBehaviour
-        {
-            ServerRewards filehandler;
-            const int MaxActiveLoads = 3;
-            private Queue<QueueItem> QueueList = new Queue<QueueItem>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            private void Awake()
-            {
-                filehandler = (ServerRewards)Interface.Oxide.RootPluginManager.GetPlugin(nameof(ServerRewards));
-            }
-            private void OnDestroy()
-            {
-                QueueList.Clear();
-                filehandler = null;
-            }
-            public void Add(string url, string itemid, ulong skinid)
-            {
-                QueueList.Enqueue(new QueueItem(url, itemid, skinid));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                if (QueueList.Count <= 0) return;
-                activeLoads++;
-                StartCoroutine(WaitForRequest(QueueList.Dequeue()));
-            }
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(QueueItem info)
-            {
-                using (var www = new WWW(info.url))
+                if (!saleData.items.ContainsKey(item.shortname))
                 {
-                    yield return www;
-                    if (filehandler == null) yield break;
-                    if (www.error != null)
+                    saleData.items.Add(item.shortname, new Dictionary<ulong, SaleData.SaleItem> { { 0, new SaleData.SaleItem { displayName = item.displayName.translated } } });
+                    changed = true;
+                }
+                if (HasSkins(item))
+                {
+                    foreach (var skin in ItemSkinDirectory.ForItem(item))
                     {
-                        print(string.Format("Image loading fail! Error: {0}", www.error));
-                    }
-                    else
-                    {
-                        if (!filehandler.imageData.storedImages.ContainsKey(info.itemid.ToString()))
-                            filehandler.imageData.storedImages.Add(info.itemid.ToString(), new Dictionary<ulong, uint>());
-                        if (!filehandler.imageData.storedImages[info.itemid.ToString()].ContainsKey(info.skinid))
+                        ulong skinId = Convert.ToUInt64(skin.id);
+                        if (!saleData.items[item.shortname].ContainsKey(skinId))
                         {
-                            ClearStream();
-                            stream.Write(www.bytes, 0, www.bytes.Length);
-                            uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
-                            ClearStream();
-                            filehandler.imageData.storedImages[info.itemid.ToString()].Add(info.skinid, textureID);
+                            saleData.items[item.shortname].Add(skinId, new SaleData.SaleItem { displayName = skin.invItem.displayName.translated });
+                            changed = true;
                         }
                     }
-                    activeLoads--;
-                    if (QueueList.Count > 0) Next();
-                    else if (QueueList.Count <= 0) filehandler.SaveImages();
+                    foreach (var skin in Rust.Workshop.Approved.All.Where(x => x.Name == item.shortname))
+                    {
+                        if (!saleData.items[item.shortname].ContainsKey(skin.WorkshopdId))
+                        {
+                            saleData.items[item.shortname].Add(skin.WorkshopdId, new SaleData.SaleItem() { displayName = skin.Name });
+                            changed = true;
+                        }
+                    }
                 }
             }
+            if (changed)
+                SaveSales();
         }
-
-        [ConsoleCommand("loadimages")]
-        private void cmdLoadImages(ConsoleSystem.Arg arg)
+        bool HasSkins(ItemDefinition item)
         {
-            if (arg.Connection == null)
+            if (item != null)
             {
-                LoadImages();
-            }
-        }
+                var skins = ItemSkinDirectory.ForItem(item).ToList();
+                if (skins.Count > 0)
+                    return true;
+                else if (Rust.Workshop.Approved.All.Where(x => x.Name == item.shortname).Count() > 0)
+                    return true;
 
-        private void LoadImages()
-        {
-            string dir = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "ServerRewards" + Path.DirectorySeparatorChar + "Icons" + Path.DirectorySeparatorChar;
-
-            imageData.storedImages.Clear();
-            uWeb.Add("http://i.imgur.com/zq9zuKw.jpg", "999999999", 0);
-            foreach (var entry in rewardData.RewardItems)
-            {
-                if (!string.IsNullOrEmpty(entry.Value.URL))
-                {
-                    var url = entry.Value.URL;
-                    if (!url.StartsWith("http") && !url.StartsWith("www."))
-                        url = dir + url;
-                    uWeb.Add(url, entry.Value.ID.ToString(), entry.Value.Skin);
-                }
             }
-
-            foreach (var entry in rewardData.RewardKits)
-            {
-                if (!string.IsNullOrEmpty(entry.Value.URL))
-                {
-                    var url = entry.Value.URL;
-                    if (!url.StartsWith("http") && !url.StartsWith("www."))
-                        url = dir + url;
-                    uWeb.Add(url, entry.Value.KitName, 0);
-                }
-            }
+            return false;
         }
         #endregion
 
         #region Localization
-        string msg(string key, string id = null) => lang.GetMessage(key, this, id);
+        string msg(string key, string playerId = null) => lang.GetMessage(key, this, playerId);
         Dictionary<string, string> messages = new Dictionary<string, string>()
         {
             {"title", "ServerRewards: " },
@@ -3167,10 +3506,17 @@ namespace Oxide.Plugins
             {"remSuccess", "You have successfully removed {0} from the rewards list" },
             {"addSynKit", "/rewards add kit <Name> <kitname> <cost>" },
             {"addSynItem", "/rewards add item <cost>" },
+            {"addSynItemCon", "/rewards add item <shortname> <skinId> <amount> <cost>" },
             {"addSynCommand", "/rewards add command <Name> <command> <cost>" },
+            {"editSynItem2", "/rewards edit item <ID> <cost|amount|name|icon> \"info here\"" },
+            {"editSynItem1", "- Edit a reward item information" },
+            {"editSynKit", "/rewards edit kit <ID> <cost|description|name|icon> \"info here\"" },
+            {"editSynKit1", "- Edit a reward kit information" },
+            {"editSynCommand", "/rewards edit command <ID> <cost|description|name|icon|add|remove> \"info here\"" },
+            {"editSynCommand1", "- Edit a reward command information" },
             {"storeSyn21", "/s" },
             {"storeSyn2", " - Opens the reward store" },
-            {"addSuccess", "You have added the {0} {1}, available for {2} tokens" },
+            {"addSuccess", "You have added the {0} {1}, available for {2} RP" },
             {"rewardExisting", "You already have a reward kit named {0}" },
             {"noCost", "You must enter a reward cost" },
             {"reward", "Reward: " },
@@ -3186,8 +3532,8 @@ namespace Oxide.Plugins
             {"chatClaim", " - Claim the reward"},
             {"chatCheck", "/rewards check" },
             {"chatCheck1", " - Displays you current time played and current reward points"},
-            {"chatList", "/rewards list"},
-            {"chatList1", " - Dumps item rewards and their ID numbers to console"},
+            {"chatListOpt", "/rewards list <items|commands|kits>"},
+            {"chatListOpt1", " - Display rewards with their ID numbers and info in F1 console"},
             {"chatAddKit", " - Add a new reward kit"},
             {"chatAddItem", " - Add a new reward item"},
             {"chatAddCommand", " - Add a new reward command"},
@@ -3209,7 +3555,7 @@ namespace Oxide.Plugins
             {"srCheck", " - Check a players point count" },
             {"notSelf", "You cannot refer yourself. But nice try!" },
             {"noCommands", "There are currently no commands set up" },
-            {"noItems", "There are currently no items set up" },
+            {"noTypeItems", "This store currently has no {0} items available" },
             {"noKits", "There are currently no kits set up" },
             {"exchange1", "Here you can exchange economics money (Coins) for reward points (RP) and vice-versa" },
             {"exchange2", "The current exchange rate is " },
@@ -3240,6 +3586,7 @@ namespace Oxide.Plugins
             {"storeItems", "Items" },
             {"storeExchange", "Exchange" },
             {"storeTransfer", "Transfer" },
+            {"storeSales", "Sales" },
             {"storeClose", "Close" },
             {"storeNext", "Next" },
             {"storeBack", "Back" },
@@ -3277,7 +3624,21 @@ namespace Oxide.Plugins
             {"saleSuccess", "You have sold {0}x {1} for {2} {3}" },
             {"allowExchange", "Currency Exchange" },
             {"allowTransfer", "Currency Transfer" },
-            {"allowSales", "Item Sales" }
+            {"allowSales", "Item Sales" },
+            {"Weapon", "Weapons" },
+            {"Construction", "Construction" },
+            {"Items", "Items" },
+            {"Resources", "Resources" },
+            {"Attire", "Attire" },
+            {"Tool", "Tools" },
+            {"Medical", "Medical" },
+            {"Food", "Food" },
+            {"Ammunition", "Ammunition" },
+            {"Traps", "Traps" },
+            {"Misc", "Misc" },
+            {"Component", "Components" },
+            {"imWait", "You must wait until ImageLibrary has finished processing its images" },
+            {"useCustom", "Use Custom Loot" }
         };
         #endregion
     }

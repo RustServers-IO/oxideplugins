@@ -1,49 +1,49 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using UnityEngine;
-using Random = UnityEngine.Random;
-using Oxide.Core.Plugins;
-
 namespace Oxide.Plugins
 {
-  [Info("NoLoot", "Virobeast", "0.0.2", ResourceId = 1488)]
-  [Description("This plugin removes all loot from your server.")]
-  class NoLoot : RustPlugin
-  {
-    private bool server_ready = false;
-    private List<string> barrels = new List<string>() { "loot-barrel-1.prefab", "loot-barrel-2.prefab", "crate_normal.prefab", "crate_normal_2.prefab", "crate_normal_2_food.prefab", "crate_normal_2_medical.prefab", "loot_trash.prefab", "cargo_plane.prefab", "oil_barrel.prefab", "trash-pile-1.prefab", "loot_barrel_1.prefab", "patrolhelicopter.prefab", "loot_barrel_2.prefab" };
-
-    private bool ProcessBarrel(BaseNetworkable entity)
+    [Info("No Loot", "Wulf/lukespragg", "1.0.0", ResourceId = 1488)]
+    [Description("Removes all loot containers and prevents them from spawning")]
+    public class NoLoot : CovalencePlugin
     {
-        if (entity.isActiveAndEnabled && barrels.Contains(entity.LookupShortPrefabName()))
+        private bool serverReady = false;
+
+        #region Loot Handling
+
+        private bool ProcessContainers(BaseEntity entity)
         {
-            entity.Kill();
+            if (!entity.isActiveAndEnabled || entity.IsDestroyed) return false;
+            if (!(entity is LootContainer || entity is JunkPile)) return false;
+
+            var junkPile = entity as JunkPile;
+            if (junkPile != null)
+            {
+                junkPile.CancelInvoke("TimeOut");
+                junkPile.CancelInvoke("CheckEmpty");
+                junkPile.CancelInvoke("Effect");
+                junkPile.CancelInvoke("SinkAndDestroy");
+                junkPile.Kill();
+            }
+            else
+                entity.Kill();
+
             return true;
         }
-        return false;
-    }
 
-    void OnServerInitialized()
-    {
-        LootContainer[] loot = Resources.FindObjectsOfTypeAll<LootContainer>();
-        int count = 0;
-        foreach (var entity in loot)
+        private void OnServerInitialized()
         {
-            if (ProcessBarrel(entity))
-                count++;
+            var loot = UnityEngine.Resources.FindObjectsOfTypeAll<LootContainer>();
+            var count = 0;
+            foreach (var entity in loot)
+                if (ProcessContainers(entity)) count++;
+            Puts($"Removed {count} loot containers");
+            serverReady = true;
         }
-        Puts($"Deleted {count} loot entities on server start.");
-        server_ready = true;
-    }
 
-    void OnEntitySpawned(BaseNetworkable entity)
-    {
-        if (!server_ready)
-            return;
-        if(ProcessBarrel(entity))
-            return;
+        private void OnEntitySpawned(BaseEntity entity)
+        {
+            if (!serverReady) return;
+            if (entity.OwnerID == 0) ProcessContainers(entity);
+        }
+
+        #endregion
     }
-  }
 }

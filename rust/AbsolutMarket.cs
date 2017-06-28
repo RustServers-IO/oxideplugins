@@ -10,19 +10,13 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutMarket", "Absolut", "1.8.2", ResourceId = 2118)]
+    [Info("AbsolutMarket", "Absolut", "1.8.3", ResourceId = 2118)]
 
     class AbsolutMarket : RustPlugin
     {
 
         [PluginReference]
-        Plugin ServerRewards;
-
-        [PluginReference]
-        Plugin Economics;
-
-        [PluginReference]
-        Plugin ImageLibrary;
+        Plugin ServerRewards, Economics, ImageLibrary;
 
         MarketData mData;
         private DynamicConfigFile MData;
@@ -142,59 +136,61 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            initialized = false;
-            try
+            timer.Once(10, () =>
             {
-                ImageLibrary.Call("isLoaded", null);
-            }
-            catch (Exception)
-            {
-                PrintWarning($"ImageLibrary is missing. Unloading {Name} as it will not work without ImageLibrary.");
-                Interface.Oxide.UnloadPlugin(Name);
-                return;
-            }
-            LoadVariables();
-            if (configData.ServerRewards && configData.Economics)
-            {
-                PrintWarning($"You can not have Economics and Server Rewards enabled. Disable one and reload.");
-                Interface.Oxide.UnloadPlugin(Name);
-                return;
-            }
-            if (configData.ServerRewards)
+                initialized = false;
                 try
                 {
-                    ServerRewards.Call("isLoaded", null);
+                    ImageLibrary.Call("isLoaded", null);
                 }
                 catch (Exception)
                 {
-                    PrintWarning($"ServerRewards is missing. Unloading {Name} as it will not work without ServerRewards or change the config option to false.");
+                    PrintWarning($"ImageLibrary is missing. Unloading {Name} as it will not work without ImageLibrary.");
                     Interface.Oxide.UnloadPlugin(Name);
                     return;
                 }
-            if (configData.Economics)
-                try
+                LoadVariables();
+                if (configData.ServerRewards && configData.Economics)
                 {
-                    Economics.Call("isLoaded", null);
-                }
-                catch (Exception)
-                {
-                    PrintWarning($"Economics is missing. Unloading {Name} as it will not work without Economics or change the config option to false.");
+                    PrintWarning($"You can not have Economics and Server Rewards enabled. Disable one and reload.");
                     Interface.Oxide.UnloadPlugin(Name);
                     return;
                 }
-            if (!permission.PermissionExists("AbsolutMarket.admin"))
+                if (configData.ServerRewards)
+                    try
+                    {
+                        ServerRewards.Call("isLoaded", null);
+                    }
+                    catch (Exception)
+                    {
+                        PrintWarning($"ServerRewards is missing. Unloading {Name} as it will not work without ServerRewards or change the config option to false.");
+                        Interface.Oxide.UnloadPlugin(Name);
+                        return;
+                    }
+                if (configData.Economics)
+                    try
+                    {
+                        Economics.Call("isLoaded", null);
+                    }
+                    catch (Exception)
+                    {
+                        PrintWarning($"Economics is missing. Unloading {Name} as it will not work without Economics or change the config option to false.");
+                        Interface.Oxide.UnloadPlugin(Name);
+                        return;
+                    }
                 permission.RegisterPermission("AbsolutMarket.admin", this);
-            LoadData();
-            eyesAdjust = new Vector3(0f, 1.5f, 0f);
-            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-            timers.Add("info", timer.Once(configData.InfoInterval, () => InfoLoop()));
-            timers.Add("save", timer.Once(600, () => SaveLoop()));
-            timers.Add("listings", timer.Once(600, () => CheckListings()));
-            SaveData();
-            AddNeededImages();
-            RefreshBackgrounds();
-            foreach (BasePlayer p in BasePlayer.activePlayerList)
-                OnPlayerInit(p);
+                LoadData();
+                eyesAdjust = new Vector3(0f, 1.5f, 0f);
+                serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+                timers.Add("info", timer.Once(configData.InfoInterval, () => InfoLoop()));
+                timers.Add("save", timer.Once(600, () => SaveLoop()));
+                timers.Add("listings", timer.Once(600, () => CheckListings()));
+                SaveData();
+                AddNeededImages();
+                RefreshBackgrounds();
+                foreach (BasePlayer p in BasePlayer.activePlayerList)
+                    OnPlayerInit(p);
+            });
         }
 
         #endregion
@@ -439,21 +435,18 @@ namespace Oxide.Plugins
             }
         }
 
-        private string TryForImage(string shortname, ulong skin = 99, bool localimages = true)
+        private string TryForImage(string shortname, ulong skin = 99)
         {
-            if (localimages)
-                if (skin == 99)
-                    return GetImage(shortname, (ulong)ResourceId);
-                else return GetImage(shortname, skin);
-            else if (skin == 99)
-                return GetImageURL(shortname, (ulong)ResourceId);
-            else return GetImageURL(shortname, skin);
+            if (shortname.Contains("http")) return shortname;
+            if (skin == 99) skin = (ulong)ResourceId;
+            return GetImage(shortname, skin, true);
         }
 
-        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
-        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
-        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname, skin);
-        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
+        public string GetImage(string shortname, ulong skin = 0, bool returnUrl = false) => (string)ImageLibrary.Call("GetImage", shortname.ToLower(), skin, returnUrl);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname.ToLower(), skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
+        public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
 
 
         private IEnumerable<AMItem> GetItems(ItemContainer container)
@@ -682,7 +675,6 @@ namespace Oxide.Plugins
 
         public class UI
         {
-            static bool localimage = true;
             static public CuiElementContainer CreateElementContainer(string panel, string color, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
@@ -750,14 +742,14 @@ namespace Oxide.Plugins
 
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (UI.localimage)
+                if (img.StartsWith("http") || img.StartsWith("www"))
                 {
                     container.Add(new CuiElement
                     {
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -768,7 +760,7 @@ namespace Oxide.Plugins
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });

@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Oxide.Plugins {
 
-    [Info("GPay", "Soccerjunki", 0.3)]
+    [Info("GPay", "Soccerjunki", "1.0.1", ResourceId = 2386)]
     [Description("Auto donation system")]
     class GPay : RustPlugin {
 
@@ -68,9 +68,9 @@ namespace Oxide.Plugins {
               return;
             }
             SendReply(player,Lang("PleaseWait", player.UserIDString).ToString());
-            string username = player.displayName;
+            string steamid = player.userID.ToString();
             string secret = Config["Secret"].ToString();
-            webrequest.EnqueueGet("http://app.gpay.io/api/rust/" + username + "/" + secret, (code, response) => GetCallback(code, response, player), this);
+            webrequest.EnqueueGet("http://app.gpay.io/api/ruststeam/" + steamid + "/" + secret, (code, response) => GetCallback(code, response, player), this);
         }
 
         void GetCallback(int code, string response, BasePlayer player) {

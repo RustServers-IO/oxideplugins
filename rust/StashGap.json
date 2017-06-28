@@ -1,0 +1,16 @@
+{
+    "name": "StashGap",
+    "description": "Bring balance to stashes.",
+    "author": "nivex",
+    "version": "0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/stashgap.2507",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,8 +1,8 @@
 {
     "name": "LootConfig",
-    "description": "Adjust loot list",
-    "author": "Wulf",
-    "version": "1.0.19",
+    "description": "Allows you to adjust the server's loot list",
+    "author": "Nogrod",
+    "version": "1.0.21",
     "configuration": true,
     "suggest": {
         "SpawnConfig": "*"

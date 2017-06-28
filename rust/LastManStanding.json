@@ -2,7 +2,7 @@
     "name": "Last Man Standing Event",
     "description": "Fight to the death event for EventManager",
     "author": "k1lly0u",
-    "version": "2.0.1",
+    "version": "2.0.22",
     "configuration": true,
     "require": {
         "EventManager": "*"

@@ -1,0 +1,16 @@
+{
+    "name": "Water Limits",
+    "description": "Hurts or kills players that are in water under conditions",
+    "author": "Wulf",
+    "version": "3.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/water-limits.2122",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Christmas",
+    "description": "Christmas regardless of the month!",
+    "author": "Kappasaurus",
+    "version": "1.0.9",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/christmas.2404",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

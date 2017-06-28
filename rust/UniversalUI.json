@@ -2,7 +2,7 @@
     "name": "UniversalUI",
     "description": "This is a fully Customizable UI for Info and Buttons!",
     "author": "Absolut",
-    "version": "2.1.3",
+    "version": "2.1.4",
     "configuration": true,
     "suggest": {
         "Kits": "*"

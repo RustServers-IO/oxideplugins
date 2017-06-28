@@ -1,0 +1,22 @@
+{
+    "name": "Dangerous Treasures",
+    "description": "Dangerous event with treasure chests.",
+    "author": "nivex",
+    "version": "0.1.21",
+    "configuration": true,
+    "suggest": {
+        "LustyMap": "*",
+        "ZoneManager": "*",
+        "Economics": "*",
+        "ServerRewards": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/dangerous-treasures.2479",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

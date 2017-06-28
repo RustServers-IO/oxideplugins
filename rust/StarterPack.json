@@ -1,0 +1,16 @@
+{
+    "name": "Starter Pack",
+    "description": "Gives some items on connection",
+    "author": "mangiang",
+    "version": "1.10",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/starter-pack.2461",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

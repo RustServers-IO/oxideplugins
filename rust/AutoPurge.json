@@ -2,7 +2,7 @@
     "name": "Auto Purge",
     "description": "Automatically removes entities created by inactive users",
     "author": "Fujikura",
-    "version": "1.5.4",
+    "version": "1.5.5",
     "configuration": true,
     "suggest": {
         "Clans": "*",

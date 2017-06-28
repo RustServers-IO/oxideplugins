@@ -1,0 +1,16 @@
+{
+    "name": "Permadeath",
+    "description": "Simple plugin that deletes all of a player's entities after a certain amount of deaths.",
+    "author": "Kappasaurus",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/permadeath.2505",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

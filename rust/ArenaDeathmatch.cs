@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("ArenaDeathmatch", "Reneb", "1.2.1", ResourceId = 741)]
+    [Info("ArenaDeathmatch", "Reneb", "1.2.22", ResourceId = 741)]
     class ArenaDeathmatch : RustPlugin
     {
         ////////////////////////////////////////////////////////////
@@ -98,6 +98,10 @@ namespace Oxide.Plugins
         static string EventMessageKill = "{0} killed {3}. ({1}/{2} kills)";
         static string EventMessageOpenBroadcast = "In Deathmatch, it's a free for all, the goal is to kill as many players as possible!";
 
+        static bool ShowKillFeedChat = true;
+        static bool ShowKillFeedUI = true;
+        static bool ShowScoreboard = true;
+
         static int TokensAddKill = 1;
         static int TokensAddWon = 5;
 
@@ -120,6 +124,9 @@ namespace Oxide.Plugins
             CheckCfg("Messages - Empty", ref EventMessageNoMorePlayers);
             CheckCfg("Messages - Kill", ref EventMessageKill);
             CheckCfg("Messages - Open Broadcast", ref EventMessageOpenBroadcast);
+            CheckCfg("Messages - Show kill feed in chat", ref ShowKillFeedChat);
+            CheckCfg("Messages - Show kill feed UI", ref ShowKillFeedUI);
+            CheckCfg("Scoreboard - Display Scoreboard", ref ShowScoreboard);
 
             CheckCfg("Tokens - Per Kill", ref TokensAddKill);
             CheckCfg("Tokens - On Win", ref TokensAddWon);
@@ -172,7 +179,7 @@ namespace Oxide.Plugins
 
         private void UpdateScores() // Creating and updating the EM score board
         {
-            if (useThisEvent && EventStarted)
+            if (useThisEvent && EventStarted && ShowScoreboard)
             {
                 var sortedList = DeathmatchPlayers.OrderByDescending(pair => pair.kills).ToList(); // Sort the player list by the required value. In this case its sorted by kill count
                 var scoreList = new Dictionary<ulong, EventManager.Scoreboard>();
@@ -244,13 +251,13 @@ namespace Oxide.Plugins
         {
             if (useThisEvent && EventStarted && !gameEnding)
             {
+                if (!player.GetComponent<DeathmatchPlayer>()) return;
                 if (player.IsSleeping())
                 {
                     player.EndSleeping();
                     timer.In(1, () => OnEventPlayerSpawn(player));
                     return;
-                }
-                if (!player.GetComponent<DeathmatchPlayer>()) return;
+                }                
                 player.inventory.Strip();
                 EventManager.GivePlayerKit(player, CurrentKit);
                 player.health = EventStartHealth;
@@ -439,7 +446,10 @@ namespace Oxide.Plugins
 
             player.GetComponent<DeathmatchPlayer>().kills++;
             EventManager.AddTokens(player.userID, TokensAddKill);
-            EventManager.PopupMessage(string.Format(EventMessageKill, player.displayName, player.GetComponent<DeathmatchPlayer>().kills, Scorelimit, victim.displayName));
+            if (ShowKillFeedUI)
+                EventManager.PopupMessage(string.Format(EventMessageKill, player.displayName, player.GetComponent<DeathmatchPlayer>().kills, Scorelimit, victim.displayName));
+            else if (ShowKillFeedChat)
+                PrintToChat(string.Format(EventMessageKill, player.displayName, player.GetComponent<DeathmatchPlayer>().kills, Scorelimit, victim.displayName));
             UpdateScores();
             CheckScores(player.GetComponent<DeathmatchPlayer>());
         }
@@ -477,6 +487,7 @@ namespace Oxide.Plugins
                     if (dmPlayer.kills > score)
                     {
                         winner = dmPlayer.player;
+                        score = dmPlayer.kills;
                     }
                 }
                 if (winner != null)

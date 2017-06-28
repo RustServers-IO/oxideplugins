@@ -4,25 +4,19 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Oxide.Core.Plugins;
+using Oxide.Core.CSharp;
 using Oxide.Core;
 using UnityEngine;
+using UnityEngine.UI;
+
 namespace Oxide.Plugins
 {
-    [Info("Rewards", "Tarek", "1.3.5", ResourceId = 1961)]
-    [Description("Reward players for killing animals, players, other entities, and activity using Economic and/or ServerRewards")]
-
+    [Info("Rewards", "Tarek", "1.3.10", ResourceId = 1961)]
+    [Description("Reward players for activities using Economic and/or ServerRewards")]
     class Rewards : RustPlugin
     {
         [PluginReference]
-        Plugin Economics;
-        [PluginReference]
-        Plugin ServerRewards;
-        [PluginReference]
-        Plugin Friends;
-        [PluginReference]
-        Plugin Clans;
-        [PluginReference]
-        Plugin HumanNPC;
+        Plugin Economics, ServerRewards, Friends, Clans, HumanNPC;
 
         private bool IsFriendsLoaded = false;
         private bool IsEconomicsLoaded = false;
@@ -37,7 +31,7 @@ namespace Oxide.Plugins
 
         RewardRates rr; Multipliers m; Options o; Rewards_Version rv;//Strings str;
         public List<string> Options_itemList = new List<string> { "NPCReward_Enabled", "VIPMultiplier_Enabled", "ActivityReward_Enabled", "WelcomeMoney_Enabled", "WeaponMultiplier_Enabled", "DistanceMultiplier_Enabled", "UseEconomicsPlugin", "UseServerRewardsPlugin", "UseFriendsPlugin", "UseClansPlugin", "Economincs_TakeMoneyFromVictim", "ServerRewards_TakeMoneyFromVictim", "PrintToConsole", "HappyHour_Enabled" };
-        public List<string> Multipliers_itemList = new List<string> { "LR300","VIPMultiplier","HuntingBow", "Crossbow", "AssaultRifle", "PumpShotgun", "SemiAutomaticRifle", "Thompson", "CustomSMG", "BoltActionRifle", "TimedExplosiveCharge", "M249", "EokaPistol", "Revolver", "WaterpipeShotgun", "SemiAutomaticPistol", "DoubleBarrelShotgun", "SatchelCharge", "distance_50", "distance_100", "distance_200", "distance_300", "distance_400", "HappyHourMultiplier" };
+        public List<string> Multipliers_itemList = new List<string> { "LR300", "VIPMultiplier", "HuntingBow", "Crossbow", "AssaultRifle", "PumpShotgun", "SemiAutomaticRifle", "Thompson", "CustomSMG", "BoltActionRifle", "TimedExplosiveCharge", "M249", "EokaPistol", "Revolver", "WaterpipeShotgun", "SemiAutomaticPistol", "DoubleBarrelShotgun", "SatchelCharge", "distance_50", "distance_100", "distance_200", "distance_300", "distance_400", "HappyHourMultiplier", "M92Pistol", "MP5A4", "RocketLauncher", "BeancanGrenade", "F1Grenade", "Machete", "Longsword", "Mace", "SalvagedCleaver", "SalvagedSword", "StoneSpear", "WoodenSpear" };
         public List<string> Rewards_itemList = new List<string> { "human", "bear", "wolf", "chicken", "horse", "boar", "stag", "helicopter", "autoturret", "ActivityRewardRate_minutes", "ActivityReward", "WelcomeMoney", "HappyHour_BeginHour", "HappyHour_DurationInHours", "HappyHour_EndHour", "NPCKill_Reward" };
         //public List<string> Strings_itemList = new List<string> { "CustomPermissionName" };
         //private Strings strings = new Strings();
@@ -49,32 +43,31 @@ namespace Oxide.Plugins
         private Dictionary<BasePlayer, int> LastReward = new Dictionary<BasePlayer, int>();
 
         private void OnServerInitialized()
-        {            
+        {
             if (options.UseEconomicsPlugin && Economics != null)
                 IsEconomicsLoaded = true;
             else if (options.UseEconomicsPlugin && Economics == null)
-                PrintWarning("Plugin Economics was not found! Can't reward players using Economics.");
+                PrintWarning("Economics plugin was not found! Can't reward players using Economics.");
             if (options.UseServerRewardsPlugin && ServerRewards != null)
                 IsServerRewardsLoaded = true;
             else if (options.UseServerRewardsPlugin && ServerRewards == null)
-                PrintWarning("Plugin ServerRewards was not found! Can't reward players using ServerRewards.");
+                PrintWarning("ServerRewards plugin was not found! Can't reward players using ServerRewards.");
             if (options.UseFriendsPlugin && Friends != null)
                 IsFriendsLoaded = true;
             else if (options.UseFriendsPlugin && Friends == null)
-                PrintWarning("Plugin Friends was not found! Can't check if victim is friend to killer.");
+                PrintWarning("Friends plugin was not found! Can't check if victim is friend to killer.");
             if (options.UseClansPlugin && Clans != null)
                 IsClansLoaded = true;
             else if (options.UseClansPlugin && Clans == null)
-                PrintWarning("Plugin Clans was not found! Can't check if victim is in the same clan of killer.");
+                PrintWarning("Clans plugin was not found! Can't check if victim is in the same clan of killer.");
             if (options.NPCReward_Enabled && HumanNPC != null)
                 IsNPCLoaded = true;
             else if (options.NPCReward_Enabled && HumanNPC == null)
-                PrintWarning("Plugin HumanNPC was not found! Can't reward players on NPC kill.");
+                PrintWarning("HumanNPC plugin was not found! Can't reward players on NPC kill.");
         }
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file");
-            //Config["Strings"] = str;
             Config["Rewards_Version"] = rv;
             Config["Rewards"] = rr;
             Config["Multipliers"] = m;
@@ -82,7 +75,7 @@ namespace Oxide.Plugins
             SaveConfig();
             LoadConfig();
         }
-        void LoadDefaultMessages()
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -168,7 +161,19 @@ namespace Oxide.Plugins
                 distance_400 = 3,
                 HappyHourMultiplier = 2,
                 VIPMultiplier = 2,
-                LR300 = 1.5
+                LR300 = 1.5,
+                M92Pistol = 1,
+                MP5A4 = 1.5,
+                RocketLauncher = 2,
+                BeancanGrenade = 1.5,
+                F1Grenade = 1.5,
+                Machete = 2,
+                Longsword = 1.5,
+                Mace = 1,
+                SalvagedCleaver = 1,
+                SalvagedSword = 1,
+                StoneSpear = 1,
+                WoodenSpear = 1
             };
 
             o = new Options
@@ -193,7 +198,7 @@ namespace Oxide.Plugins
         {
             try
             {
-                
+
                 Dictionary<string, object> temp;
                 Dictionary<string, object> temp2;
                 Dictionary<string, object> temp3;
@@ -225,7 +230,7 @@ namespace Oxide.Plugins
                         Config["Multipliers", s] = m.GetItemByString(s);
                         SaveConfig();
                     }
-                }                
+                }
                 Config["Rewards_Version", "Version"] = this.Version.ToString();
                 SaveConfig();
             }
@@ -242,12 +247,12 @@ namespace Oxide.Plugins
                 {
                     Puts("Outdated config file. Fixing");
                     FixConfig();
-                }              
+                }
             }
             catch (Exception e)
             {
                 Puts("Outdated config file. Fixing");
-                FixConfig();                            
+                FixConfig();
             }
             try
             {
@@ -310,6 +315,19 @@ namespace Oxide.Plugins
                 multipliers.VIPMultiplier = Convert.ToDouble(temp3["VIPMultiplier"]);
                 multipliers.HappyHourMultiplier = Convert.ToDouble(temp3["HappyHourMultiplier"]);
                 multipliers.LR300 = Convert.ToDouble(temp3["LR300"]);
+                //NEW
+                multipliers.M92Pistol = Convert.ToDouble(temp3["M92Pistol"]);
+                multipliers.MP5A4 = Convert.ToDouble(temp3["MP5A4"]);
+                multipliers.RocketLauncher = Convert.ToDouble(temp3["RocketLauncher"]);
+                multipliers.BeancanGrenade = Convert.ToDouble(temp3["BeancanGrenade"]);
+                multipliers.F1Grenade = Convert.ToDouble(temp3["F1Grenade"]);
+                multipliers.Machete = Convert.ToDouble(temp3["Machete"]);
+                multipliers.Longsword = Convert.ToDouble(temp3["Longsword"]);
+                multipliers.Mace = Convert.ToDouble(temp3["Mace"]);
+                multipliers.SalvagedCleaver = Convert.ToDouble(temp3["SalvagedCleaver"]);
+                multipliers.SalvagedSword = Convert.ToDouble(temp3["SalvagedSword"]);
+                multipliers.StoneSpear = Convert.ToDouble(temp3["StoneSpear"]);
+                multipliers.WoodenSpear = Convert.ToDouble(temp3["WoodenSpear"]);
 
                 //Dictionary<string, object> temp4 = (Dictionary<string, object>)Config["Strings"];
                 //str.CustomPermissionName = temp4["CustomPermissionName"].ToString();
@@ -323,13 +341,13 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission("rewards.admin", this);
             permission.RegisterPermission("rewards.vip", this);
-            LoadDefaultMessages();
+            permission.RegisterPermission("rewards.showrewards", this);
             Loadcfg();
             if (options.HappyHour_Enabled)
             {
                 hhstart = new TimeSpan(Convert.ToInt32(rewardrates.HappyHour_BeginHour), 0, 0);
                 hhend = new TimeSpan(Convert.ToInt32(rewardrates.HappyHour_EndHour), 0, 0);
-                
+
             }
             #region Activity Check
             if (options.ActivityReward_Enabled || options.HappyHour_Enabled)
@@ -407,7 +425,7 @@ namespace Oxide.Plugins
         void BroadcastMessage(string prefix, string msg = null, object uid = null) => rust.BroadcastChat(msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg, null);
         void OnKillNPC(BasePlayer victim, HitInfo info)
         {
-            
+
             if (options.NPCReward_Enabled)
             {
                 if (info?.Initiator?.ToPlayer() == null)
@@ -421,16 +439,16 @@ namespace Oxide.Plugins
             }
         }
         void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
-        {          
+        {
             if (victim == null)
                 return;
             if (info?.Initiator?.ToPlayer() == null)
                 return;
             double totalmultiplier = 1;
-            
+
             if (options.DistanceMultiplier_Enabled || options.WeaponMultiplier_Enabled)
                 totalmultiplier = (options.DistanceMultiplier_Enabled ? multipliers.GetDistanceM(victim.Distance2D(info?.Initiator?.ToPlayer())) : 1) * (options.WeaponMultiplier_Enabled ? multipliers.GetWeaponM(info?.Weapon?.GetItem()?.info?.displayName?.english) : 1) * (HappyHourActive ? multipliers.HappyHourMultiplier : 1) * ((options.VIPMultiplier_Enabled && HasPerm(info?.Initiator?.ToPlayer(), "rewards.vip")) ? multipliers.VIPMultiplier : 1) * ((HasPerm(info?.Initiator?.ToPlayer(), "rewards.vip")) ? multipliers.VIPMultiplier : 1);
-            
+
             if (victim.ToPlayer() != null)
             {
                 if (victim.ToPlayer().userID <= 2147483647)
@@ -439,11 +457,11 @@ namespace Oxide.Plugins
                     return;
                 else { RewardForPlayerKill(info?.Initiator?.ToPlayer(), victim.ToPlayer(), totalmultiplier); return; }
             }
-            else if (victim.name.Contains("autospawn/animals"))
+            else if (victim.name.Contains("assets/rust.ai/agents/"))
             {
                 try
                 {
-                    var AnimalName = victim.name.Split(new[] { "autospawn/animals/" }, StringSplitOptions.None)[1].Split('.')[0];
+                    var AnimalName = victim.name.Split(new[] { "assets/rust.ai/agents/" }, StringSplitOptions.None)[1].Split('/')[0];
                     double rewardmoney = 0;
                     if (AnimalName == "stag")
                         rewardmoney = rewardrates.stag;
@@ -474,7 +492,7 @@ namespace Oxide.Plugins
         }
         private void RewardPlayer(BasePlayer player, double amount, double multiplier = 1, string reason = null, bool isWelcomeReward = false)
         {
-            
+
             if (amount > 0)
             {
                 amount = amount * multiplier;
@@ -485,21 +503,21 @@ namespace Oxide.Plugins
                 if (!isWelcomeReward)
                 {
                     SendChatMessage(player, Lang("Prefix"), reason == null ? Lang("ActivityReward", player.UserIDString, amount) : Lang("KillReward", player.UserIDString, amount, reason));
-                    ConVar.Server.Log("/oxide/logs/RewardsLog.txt", player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason));
+                    LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason), this);
                     if (options.PrintToConsole)
                         Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason));
                 }
                 else
                 {
                     SendChatMessage(player, Lang("Prefix"), Lang("WelcomeReward", player.UserIDString, amount));
-                    ConVar.Server.Log("/oxide/logs/RewardsLog.txt", player.displayName + " got " + amount + " as a welcome reward");
+                    LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " as a welcome reward", this);
                     if (options.PrintToConsole)
                         Puts(player.displayName + " got " + amount + " as a welcome reward");
                 }
             }
         }
         private static float GameTime()
-        {           
+        {
             return TOD_Sky.Instance.Cycle.Hour;
         }
         private void RewardForPlayerKill(BasePlayer player, BasePlayer victim, double multiplier = 1)
@@ -509,7 +527,7 @@ namespace Oxide.Plugins
                 bool success = true;
                 bool isFriend = false;
                 if (IsFriendsLoaded)
-                    isFriend = (bool)Friends?.CallHook("HasFriend", player.userID, victim.userID);               
+                    isFriend = (bool)Friends?.CallHook("HasFriend", player.userID, victim.userID);
                 if (!isFriend && IsClansLoaded)
                 {
                     string pclan = (string)Clans?.CallHook("GetClanOf", player); string vclan = (string)Clans?.CallHook("GetClanOf", victim);
@@ -541,7 +559,7 @@ namespace Oxide.Plugins
                     if (success) //Send message if transaction was successful
                     {
                         SendChatMessage(player, Lang("Prefix"), Lang("KillReward", player.UserIDString, rewardrates.human * multiplier, victim.displayName));
-                        ConVar.Server.Log("/oxide/logs/RewardsLog.txt", player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName);
+                        LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName, this);
                         if (options.PrintToConsole)
                             Puts(player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName);
                     }
@@ -551,7 +569,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("setreward")]
         private void setreward(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin)
+            if (arg.IsAdmin)
             {
                 try
                 {
@@ -574,7 +592,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("showrewards")]
         private void showrewards(ConsoleSystem.Arg arg)
         {
-            if (arg.isAdmin)
+            if (arg.IsAdmin)
                 arg.ReplyWith(String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, autoturret = {8} Activity Reward Rate (minutes) = {9}, Activity Reward = {10}, WelcomeMoney = {11}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney));
         }
         [ChatCommand("setreward")]
@@ -602,7 +620,7 @@ namespace Oxide.Plugins
         [ChatCommand("showrewards")]
         private void showrewardsCommand(BasePlayer player, string command, string[] args)
         {
-            if (HasPerm(player, "rewards.admin"))
+            if (HasPerm(player, "rewards.showrewards"))
                 SendChatMessage(player, Lang("Prefix"), String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, autoturret = {8} Activity Reward Rate (minutes) = {9}, Activity Reward = {10}, WelcomeMoney = {11}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney));
         }
         class StoredData
@@ -695,6 +713,22 @@ namespace Oxide.Plugins
             public double VIPMultiplier { get; set; }
             public double CustomPermissionMultiplier { get; set; }
             public double LR300 { get; set; }
+            public double M92Pistol { get; set; }
+            public double MP5A4 { get; set; }
+            public double RocketLauncher { get; set; }
+            public double BeancanGrenade { get; set; }
+            public double F1Grenade { get; set; }
+            public double Machete { get; set; }
+            public double Longsword { get; set; }
+            public double Mace { get; set; }
+            public double SalvagedCleaver { get; set; }
+            public double SalvagedSword { get; set; }
+            public double StoneSpear { get; set; }
+            public double WoodenSpear { get; set; }
+
+            //M92 Pistol, MP5A4, Rocket Launcher, Beancan Grenade, F1 Grenade
+            //Machete, Longsword, Mace, Salvaged Cleaver, Salvaged Sword, Stone Spear, Wooden Spear
+
             public double GetWeaponM(string wn)
             {
                 if (wn == "Assault Rifle")
@@ -731,12 +765,40 @@ namespace Oxide.Plugins
                     return this.DoubleBarrelShotgun;
                 else if (wn == "LR-300 Assault Rifle")
                     return this.LR300;
+                //NEW
+                else if (wn == "M92 Pistol")
+                    return this.M92Pistol;
+                else if (wn == "MP5A4")
+                    return this.MP5A4;
+                else if (wn == "Rocket Launcher")
+                    return this.RocketLauncher;
+                else if (wn == "Beancan Grenade")
+                    return this.BeancanGrenade;
+                else if (wn == "F1 Grenade")
+                    return this.F1Grenade;
+                else if (wn == "Machete")
+                    return this.Machete;
+                else if (wn == "Longsword")
+                    return this.Longsword;
+                else if (wn == "Mace")
+                    return this.Mace;
+                else if (wn == "Salvaged Cleaver")
+                    return this.SalvagedCleaver;
+                else if (wn == "Salvaged Sword")
+                    return this.SalvagedSword;
+                else if (wn == "Stone Spear")
+                    return this.StoneSpear;
+                else if (wn == "Wooden Spear")
+                    return this.WoodenSpear;
+
+
+                //
                 else
                     return 1;
             }
             public double GetDistanceM(float distance)
             {
-               
+
                 if (distance >= 400)
                     return this.distance_400;
                 else if (distance >= 300)
@@ -803,10 +865,36 @@ namespace Oxide.Plugins
                     return this.CustomPermissionMultiplier;
                 else if (itemName == "LR300")
                     return this.LR300;
+                //NEW
+                else if (itemName == "M92 Pistol")
+                    return this.M92Pistol;
+                else if (itemName == "MP5A4")
+                    return this.MP5A4;
+                else if (itemName == "Rocket Launcher")
+                    return this.RocketLauncher;
+                else if (itemName == "Beancan Grenade")
+                    return this.BeancanGrenade;
+                else if (itemName == "F1 Grenade")
+                    return this.F1Grenade;
+                else if (itemName == "Machete")
+                    return this.Machete;
+                else if (itemName == "Longsword")
+                    return this.Longsword;
+                else if (itemName == "Mace")
+                    return this.Mace;
+                else if (itemName == "Salvaged Cleaver")
+                    return this.SalvagedCleaver;
+                else if (itemName == "Salvaged Sword")
+                    return this.SalvagedSword;
+                else if (itemName == "Stone Spear")
+                    return this.StoneSpear;
+                else if (itemName == "Wooden Spear")
+                    return this.WoodenSpear;
+                //
                 else
                     return 0;
             }
-            
+
         }
         class Options
         {
@@ -822,9 +910,9 @@ namespace Oxide.Plugins
             public bool UseClansPlugin { get; set; }
             public bool Economincs_TakeMoneyFromVictim { get; set; }
             public bool ServerRewards_TakeMoneyFromVictim { get; set; }
-            public bool PrintToConsole { get; set; }           
-            public bool CustomPermissionMultiplier_Enabled { get; set; }  
-            public bool NPCReward_Enabled { get; set; }         
+            public bool PrintToConsole { get; set; }
+            public bool CustomPermissionMultiplier_Enabled { get; set; }
+            public bool NPCReward_Enabled { get; set; }
             public bool GetItemByString(string itemName)
             {
                 if (itemName == "ActivityReward_Enabled")
@@ -857,7 +945,7 @@ namespace Oxide.Plugins
                     return this.NPCReward_Enabled;
                 else
                     return false;
-            }          
+            }
         }
         class Rewards_Version
         {

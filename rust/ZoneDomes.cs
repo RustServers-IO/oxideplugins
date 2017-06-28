@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneDomes", "k1lly0u", "0.1.33", ResourceId = 1945)]
+    [Info("ZoneDomes", "k1lly0u", "0.1.4", ResourceId = 1945)]
     class ZoneDomes : RustPlugin
     {
         #region Fields
@@ -86,6 +86,7 @@ namespace Oxide.Plugins
         void OnServerInitialized()
         {
             VerifyDependency();
+            LoadVariables();
             LoadData();
             RemoveExisting();
             InitializeDomes();
@@ -146,14 +147,18 @@ namespace Oxide.Plugins
             }
         }
         private void CreateSphere(Vector3 position, float radius)
-        {
-            BaseEntity sphere = GameManager.server.CreateEntity(SphereEnt, position, new Quaternion(), true);
-            SphereEntity ent = sphere.GetComponent<SphereEntity>();
-            ent.currentRadius = radius * 2;
-            ent.lerpSpeed = 0f;
-            sphere?.Spawn();
-            Spheres.Add(sphere);
-        }
+        {            
+            for (int i = 0; i < configData.SphereDarkness; i++)
+            {
+                BaseEntity sphere = GameManager.server.CreateEntity(SphereEnt, position, new Quaternion(), true);
+                SphereEntity ent = sphere.GetComponent<SphereEntity>();
+                ent.currentRadius = radius * 2;
+                ent.lerpSpeed = 0f;
+
+                sphere.Spawn();
+                Spheres.Add(sphere);
+            } 
+        }       
         private void DestroySphere(BaseEntity sphere)
         {
             if (sphere != null)
@@ -289,6 +294,29 @@ namespace Oxide.Plugins
                 }
             }
         }
+        #endregion
+
+        #region Config        
+        private ConfigData configData;
+        class ConfigData
+        {
+            public int SphereDarkness { get; set; }
+        }
+        private void LoadVariables()
+        {
+            LoadConfigVariables();
+            SaveConfig();
+        }
+        protected override void LoadDefaultConfig()
+        {
+            var config = new ConfigData
+            {
+                SphereDarkness = 5
+            };
+            SaveConfig(config);
+        }
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
         #endregion
 
         #region Messaging

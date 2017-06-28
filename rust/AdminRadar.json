@@ -1,12 +1,11 @@
 {
     "name": "Admin Radar",
-    "description": "Admin Tool that gives admins the ability to help detect cheaters.",
+    "description": "Allows admins to have a radar to help detect cheaters",
     "author": "Austinv900",
-    "version": "2.0.3",
+    "version": "3.0.0",
     "configuration": true,
     "suggest": {
-        "AdminPanel": "*",
-        "Godmode": "*"
+        "AdminPanel": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/admin-radar.978",

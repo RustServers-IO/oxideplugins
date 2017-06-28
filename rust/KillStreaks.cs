@@ -9,7 +9,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("Killstreaks", "k1lly0u", "0.1.55", ResourceId = 1752)]
+    [Info("Killstreaks", "k1lly0u", "0.1.56", ResourceId = 1752)]
     class KillStreaks : RustPlugin
     {
         [PluginReference]
@@ -33,8 +33,6 @@ namespace Oxide.Plugins
         private List<ulong> heGren = new List<ulong>();
         private List<ulong> mrtdm = new List<ulong>();
         private List<ulong> turret = new List<ulong>();
-
-        private bool isSignal = false;
 
         private Dictionary<ulong, StreakType> activeGrenades = new Dictionary<ulong, StreakType>();
 
@@ -137,30 +135,35 @@ namespace Oxide.Plugins
         void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
             var ID = player.userID;
-            if (activeGrenades.ContainsKey(ID))
+            if (activeGrenades.ContainsKey(ID) && entity is SupplySignal)
             {
-                isSignal = true;
+                entity.CancelInvoke((entity as SupplySignal).Explode);
+                entity.Invoke(entity.KillMessage, 10f);
                 timer.Once(3, () =>
                 {
-                    Vector3 pos = entity.transform.position;
-                    if (pos == null) Puts("null");
-                    if (activeGrenades[ID] == StreakType.AirstrikeGrenade) CallAirstrike(pos);
-                    else if (activeGrenades[ID] == StreakType.SquadStrikeGrenade) CallAirstrike(pos, false);
-                    else if (activeGrenades[ID] == StreakType.ArtilleryGrenade) { LaunchArtillery(pos); timer.Once(10, () => entity.Kill()); }
-                    else if (activeGrenades[ID] == StreakType.HelicopterGrenade)
-                    {
-                        var count = cachedData[player.userID];
-                        Vector3 strikePos = entity.GetEstimatedWorldPosition();
-                        CallHeli(strikePos, count, true);
+                    Effect.server.Run("assets/bundled/prefabs/fx/smoke_signal.prefab", entity, 0, new Vector3(), new Vector3());
+                    Vector3 pos = entity.GetEstimatedWorldPosition();
+                    switch (activeGrenades[player.userID])
+                    {                        
+                        case StreakType.AirstrikeGrenade:
+                            CallAirstrike(pos);
+                            break;
+                        case StreakType.SquadStrikeGrenade:
+                            CallAirstrike(pos, false);
+                            break;
+                        case StreakType.ArtilleryGrenade:
+                            LaunchArtillery(pos);
+                            break;
+                        case StreakType.HelicopterGrenade:
+                            CallHeli(pos, cachedData[player.userID], true);
+                            break;
+                        case StreakType.TurretDrop:
+                            DropTurret(pos, player);
+                            break;                       
+                        default:
+                            return;
                     }
-                    else if (activeGrenades[ID] == StreakType.TurretDrop) { timer.Once(3, () => DropTurret(pos, player)); timer.Once(6, () => entity.Kill()); }
-                        activeGrenades.Remove(ID);
-                    timer.Once(2.8f, () =>
-                    {
-                        Effect.server.Run("assets/bundled/prefabs/fx/smoke_signal.prefab", pos);
-                        if (entity != null)
-                            entity.Kill(BaseNetworkable.DestroyMode.None);
-                    });
+                    activeGrenades.Remove(ID);                   
                 });
             }
         }        
@@ -409,8 +412,8 @@ namespace Oxide.Plugins
         {
             if (Airstrike)
             {                
-                if (type) Airstrike?.Call("callStrike", target, 140 );
-                else Airstrike?.Call("massStrike", target, 140 );
+                if (type) Airstrike?.Call("CallStrike", target);
+                else Airstrike?.Call("CallSquad", target);
             }
             else Puts(lang.GetMessage("noAirstrike", this));
         }
@@ -703,6 +706,22 @@ namespace Oxide.Plugins
         #endregion
 
         #region chat commands
+        //[ChatCommand("a")]
+        //void asd(BasePlayer player, string command, string[] args)
+        //{
+        //    if (!data.killStreakData.ContainsKey(player.userID))
+        //        data.killStreakData.Add(player.userID, new KSDATA() { Name = player.displayName, highestKS = 0 });
+
+        //    if (!cachedData.ContainsKey(player.userID))
+        //        cachedData.Add(player.userID, 0);
+
+        //    cachedData[player.userID]++;
+
+        //    if (cachedData[player.userID] > data.killStreakData[player.userID].highestKS)
+        //        data.killStreakData[player.userID].highestKS = cachedData[player.userID];
+
+        //    Deal(player);
+        //}
         [ChatCommand("ks")]
         void cmdTarget(BasePlayer player, string command, string[] args)
         {
@@ -801,7 +820,7 @@ namespace Oxide.Plugins
                                 int o = -1;
                                 if (args.Length >= 5) int.TryParse(args[4], out o);
                                 if (o != -1)
-                                    data.killStreaks[i].Amount = o;
+                                    data.killStreaks[i].Amount = o;                                
                             }
                             BroadcastToPlayer(player, "", string.Format(lang.GetMessage("addSuccess", this, player.UserIDString), i));
                             return;
@@ -1164,7 +1183,8 @@ namespace Oxide.Plugins
             Martyrdom,
             TurretDrop,
             Coins,
-            RP
+            RP,
+            Command
         }
         #endregion
 

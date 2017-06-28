@@ -1,0 +1,16 @@
+{
+    "name": "CupboardRadius",
+    "description": "Allows cupboard stacking, turns auth zones into a sphere, and optionally disables influence.",
+    "author": "",
+    "version": "2.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/cupboardradius.1316",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

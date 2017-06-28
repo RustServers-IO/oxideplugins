@@ -11,7 +11,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("CaptureTheFlag", "k1lly0u", "0.1.4", ResourceId = 2259)]
+    [Info("CaptureTheFlag", "k1lly0u", "0.1.62", ResourceId = 2259)]
     class CaptureTheFlag : RustPlugin
     {
         #region Fields
@@ -160,7 +160,7 @@ namespace Oxide.Plugins
                                 ctfPlayer.hasFlag = true;
                                 ctfPlayer.ClearInventory();
                                 SetupFlag();
-                                ctf.EventManager.PopupMessage($"{ctf.configData.Messaging.MainColor}{player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has taken")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
+                                ctf.SendMessage($"{ctf.configData.Messaging.MainColor}{player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has taken")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
                                 return;
                             }
                             if (ctfPlayer.team == team && flag.transform.position != homePos)
@@ -191,7 +191,7 @@ namespace Oxide.Plugins
                                 ctfPlayer.caps++;                                                               
                                 ctf.EventManager.AddStats(player, EventManager.StatType.Flags);
                                 ctf.AddCapturePoint(ctfPlayer.player, team);
-                                ctf.EventManager.PopupMessage($"{ctf.configData.Messaging.MainColor}{player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has captured")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(otherTeam)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
+                                ctf.SendMessage($"{ctf.configData.Messaging.MainColor}{player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has captured")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(otherTeam)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
                                 return;
                             }
                         }
@@ -200,10 +200,10 @@ namespace Oxide.Plugins
             }          
             private void ShowLocation()
             {
-                foreach (var p in ctf.CTFPlayers)
-                {
-                    p.player.SendConsoleCommand("ddraw.text", 2f, color, (carrier != null ? carrier.transform.position : flag.transform.position) + Vector3.up, $"<size=20>{ctf.GetTeamName(team)} {msg("flag")}</size>");
-                }
+                //foreach (var p in ctf.CTFPlayers)
+                //{
+                //    p.player.SendConsoleCommand("ddraw.text", 2f, color, (carrier != null ? carrier.transform.position : flag.transform.position) + Vector3.up, $"<size=20>{ctf.GetTeamName(team)} {msg("flag")}</size>");
+                //}
             }
             private void SetupFlag()
             {
@@ -216,8 +216,8 @@ namespace Oxide.Plugins
             public void RestoreFlag(string name = null)
             {
                 if (string.IsNullOrEmpty(name))
-                    ctf.EventManager.PopupMessage($"{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag has been returned to base!")}</color>");
-                else ctf.EventManager.PopupMessage($"{ctf.configData.Messaging.MainColor}{name}</color>{ctf.configData.Messaging.MSGColor} {msg("has returned")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag to base")}!</color>");
+                    ctf.SendMessage($"{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag has been returned to base!")}</color>");
+                else ctf.SendMessage($"{ctf.configData.Messaging.MainColor}{name}</color>{ctf.configData.Messaging.MSGColor} {msg("has returned")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag to base")}!</color>");
 
                 carrier = null;
                 flag.parentEntity.Set(null);
@@ -249,7 +249,6 @@ namespace Oxide.Plugins
             Collected
         }
         #endregion
-
 
         #region Oxide Hooks
         void Loaded()
@@ -382,7 +381,7 @@ namespace Oxide.Plugins
         #region Scoreboard        
         private void UpdateScores()
         {
-            if (usingCTF && hasStarted)
+            if (usingCTF && hasStarted && configData.EventSettings.ShowScoreboard)
             {
                 var sortedList = CTFPlayers.OrderByDescending(pair => pair.caps).ToList();
                 var scoreList = new Dictionary<ulong, EventManager.Scoreboard>();
@@ -429,18 +428,14 @@ namespace Oxide.Plugins
         {
             if (player.hasFlag)
             {
-                CTFFlag flag = null;
-                if (player.team == Team.A)
-                    flag = FlagB;
-                else flag = FlagA;
-
+                CTFFlag flag = player.team == Team.A ? FlagB : FlagA;
+               
                 flag.DropFlag(player.transform.position);
                 player.player.SendNetworkUpdate();
                 player.hasFlag = false;
-                EventManager.PopupMessage($"{ctf.configData.Messaging.MainColor}{player.player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has dropped")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(flag.team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
+                SendMessage($"{ctf.configData.Messaging.MainColor}{player.player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has dropped")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(flag.team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
             }            
-        }
-       
+        }        
         #endregion
 
         #region Event Manager Hooks
@@ -449,6 +444,19 @@ namespace Oxide.Plugins
             if (Title == name)            
                 usingCTF = true;            
             else usingCTF = false;
+        }
+        object CanEventOpen()
+        {
+            if (usingCTF)
+            {
+                object count = Spawns.Call("GetSpawnsCount", TeamASpawns);
+                if (count is int && (int)count <= 1)
+                    return "Team A spawnfile does not have enough spawnpoints";
+                count = Spawns.Call("GetSpawnsCount", TeamBSpawns);
+                if (count is int && (int)count <= 1)
+                    return "Team B spawnfile does not have enough spawnpoints";
+            }
+            return null;
         }
         void OnEventPlayerSpawn(BasePlayer player)
         {
@@ -462,10 +470,16 @@ namespace Oxide.Plugins
                     return;
                 }
                 EventManager.GivePlayerKit(player, Kit);
-                GiveTeamShirts(player);
                 player.health = configData.GameSettings.StartHealth;
             }
-        }       
+        }
+        private void OnEventKitGiven(BasePlayer player)
+        {
+            if (usingCTF)
+            {
+                GiveTeamShirts(player);
+            }
+        }
         object OnEventOpenPost()
         {
             if (usingCTF)  
@@ -475,7 +489,13 @@ namespace Oxide.Plugins
         object OnEventCancel()
         {
             if (usingCTF && hasStarted)
+            {
+                FlagA.RestoreFlag();
+                FlagB.RestoreFlag();
+                UnityEngine.Object.Destroy(FlagA);
+                UnityEngine.Object.Destroy(FlagB);
                 CheckScores(true);
+            }
             return null;
         }
 
@@ -535,12 +555,7 @@ namespace Oxide.Plugins
                 return true;
             }
             return null;
-        }
-        void OnPlayerSelectClass(BasePlayer player)
-        {
-            if (usingCTF && hasStarted && !gameEnding)
-                GiveTeamShirts(player);
-        }
+        }       
         object OnEventJoinPost(BasePlayer player)
         {
             if (usingCTF)
@@ -652,11 +667,9 @@ namespace Oxide.Plugins
                 if (player.GetComponent<CTFPlayer>().team == Team.NONE)
                 {
                     player.GetComponent<CTFPlayer>().team = team;
-                    string color = string.Empty;
-                    if (team == Team.A) color = configData.TeamA.Color;
-                    else if (team == Team.B) color = configData.TeamB.Color;
+                    string color = team == Team.A ? configData.TeamA.Color : configData.TeamB.Color;
                     SendReply(player, string.Format(msg("teamAssign", player.UserIDString), GetTeamName(team, player.UserIDString), color));
-                    player.Respawn();
+                    //player.Respawn();
                 }
             }
         }
@@ -697,15 +710,21 @@ namespace Oxide.Plugins
         {            
             if (player.GetComponent<CTFPlayer>().team == Team.A)
             {
-                Item shirt = ItemManager.CreateByPartialName(configData.TeamA.Shirt);
-                shirt.skin = configData.TeamA.SkinID;                
-                shirt.MoveToContainer(player.inventory.containerWear);                
+                foreach(var item in configData.TeamA.ClothingItems)
+                {
+                    Item clothing = ItemManager.CreateByPartialName(item.Key);
+                    clothing.skin = item.Value;
+                    clothing.MoveToContainer(player.inventory.containerWear);
+                }                            
             }
             else if (player.GetComponent<CTFPlayer>().team == Team.B)
             {
-                Item shirt = ItemManager.CreateByPartialName(configData.TeamB.Shirt);
-                shirt.skin = configData.TeamB.SkinID;
-                shirt.MoveToContainer(player.inventory.containerWear);
+                foreach (var item in configData.TeamB.ClothingItems)
+                {
+                    Item clothing = ItemManager.CreateByPartialName(item.Key);
+                    clothing.skin = item.Value;
+                    clothing.MoveToContainer(player.inventory.containerWear);
+                }
             }
         }
         public static Color HexToColor(string hexColor)
@@ -733,6 +752,12 @@ namespace Oxide.Plugins
             return new Color(((float)red) / 100f, ((float)green) / 100f, ((float)blue) / 100f);
         }
         string Msg(string key, string userId) => lang.GetMessage(key, this, userId);
+        void SendMessage(string message)
+        {
+            if (configData.EventSettings.UseUINotifications)
+                EventManager.PopupMessage(message);
+            else PrintToChat(message);
+        }
         #endregion
 
         #region Scoring
@@ -763,8 +788,8 @@ namespace Oxide.Plugins
             if (timelimit)
             {
                 if (ACaps > BCaps) Winner(Team.A);
-                if (BCaps > ACaps) Winner(Team.B);
-                if (ACaps == BCaps) Winner(Team.NONE);
+                else if (BCaps > ACaps) Winner(Team.B);
+                else if (ACaps == BCaps) Winner(Team.NONE);
                 return;
             }
             if (EventManager._Event.GameMode == EventManager.GameMode.Battlefield)
@@ -774,7 +799,7 @@ namespace Oxide.Plugins
             {
                 if (ACaps >= ScoreLimit)
                     Winner(Team.A);
-                if (BCaps >= ScoreLimit)
+                else if (BCaps >= ScoreLimit)
                     Winner(Team.B);
             }
         }
@@ -814,6 +839,8 @@ namespace Oxide.Plugins
             public int TokensOnKill { get; set; }
             public int TokensOnWin { get; set; }
             public int TokensOnFlagCapture { get; set; }
+            public bool ShowScoreboard { get; set; }
+            public bool UseUINotifications { get; set; }
         }
         class GameSettings
         {
@@ -821,12 +848,11 @@ namespace Oxide.Plugins
             public float FFDamageModifier { get; set; }
             public int ScoreLimit { get; set; }
             public string FlagType { get; set; }
-            public float FlagMarkerRefreshRate { get; set; }
+            public float FlagMarkerRefreshRate { get; set; }            
         }
         class TeamSettings
         {
-            public string Shirt { get; set; }
-            public ulong SkinID { get; set; }
+            public Dictionary<string, ulong> ClothingItems { get; set; }           
             public string Color { get; set; }
             public string Spawnfile { get; set; }
             public string FlagImageURL { get; set; }
@@ -859,7 +885,9 @@ namespace Oxide.Plugins
                     DefaultZoneID = "ctfzone",
                     TokensOnKill = 1,
                     TokensOnFlagCapture = 2,
-                    TokensOnWin = 5
+                    TokensOnWin = 5,
+                    ShowScoreboard = true,
+                    UseUINotifications = true
                 },
                 GameSettings = new GameSettings
                 {
@@ -872,16 +900,20 @@ namespace Oxide.Plugins
                 TeamA = new TeamSettings
                 {
                     Color = "#33CC33",
-                    Shirt = "tshirt",
-                    SkinID = 0,
+                    ClothingItems = new Dictionary<string, ulong>
+                    {
+                        { "tshirt", 0 }
+                    },                   
                     Spawnfile = "CTF_ASpawns",
                     FlagImageURL = "https://kienforcefidele.files.wordpress.com/2011/08/green-square-copy.jpg"
                 },
                 TeamB = new TeamSettings
                 {
                     Color = "#003366",
-                    Shirt = "tshirt",
-                    SkinID = 14177,
+                    ClothingItems = new Dictionary<string, ulong>
+                    {
+                        { "tshirt", 14177 }
+                    },                   
                     Spawnfile = "CTF_BSpawns",
                     FlagImageURL = "http://www.polyvore.com/cgi/img-thing?.out=jpg&size=l&tid=19393880"
                 },

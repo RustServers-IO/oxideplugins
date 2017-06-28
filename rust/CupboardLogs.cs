@@ -4,39 +4,29 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Cupboard Logging", "DylanSMR", "1.0.3", ResourceId = 1904)]
+    [Info("Cupboard Logging", "DylanSMR", "1.0.5", ResourceId = 1904)]
     [Description("Creates a log when a player places a cupboard.")]
     class CupboardLogs : RustPlugin
     {  
-        void Loaded()
-        {
+        void Loaded(){
             logData = Interface.GetMod().DataFileSystem.ReadObject<LogData>("Cupboard-Logs");   
             lang.RegisterMessages(messages, this);    
         }
         
-        public Dictionary<string, string> messages = new Dictionary<string, string>()
-        {
-            {"Format", "[{0}] placed down a tool cupboard at variables: [Location:{1}] - [Time:{2}] - [OnGround:{3}] - [OnBuildingBlock:{4}]" },        
+        public Dictionary<string, string> messages = new Dictionary<string, string>(){
+            {"Formatting", "[{0}:{1}] placed a tool cupboard with the following information: [Location:{3}] - [Time:{4}] - [OnGround:{5}] - [OnBuildingBlock:{6}]"},      
         };
         
-        void WriteLogs()
-        {
-            Interface.Oxide.DataFileSystem.WriteObject("Cupboard-Logs", logData);    
-        }
+        void WriteLogs() =>  Interface.Oxide.DataFileSystem.WriteObject("Cupboard-Logs", logData);    
         
-        class LogData
-        {
+        class LogData{
             public List<string> logs = new List<string>();
         }
+        LogData logData;
         
-         LogData logData;
-        
-        void OnEntitySpawned(BaseEntity entity, UnityEngine.GameObject gameObject)
-        {
-            try 
-            {
-                if(entity.ToString().Contains("cupboard.tool"))
-                {
+        void OnEntitySpawned(BaseEntity entity, UnityEngine.GameObject gameObject){
+            try {
+                if(entity.ToString().Contains("cupboard.tool")){
                     if(entity.OwnerID == null) return; 
                     var player = BasePlayer.FindByID(entity.OwnerID);
                     var onground = false;
@@ -67,11 +57,9 @@ namespace Oxide.Plugins
                             }
                         }
                             
-                    logData.logs.Add(string.Format(lang.GetMessage("Format", this), player.displayName, entity.transform.position, DateTime.Now.ToString("h:mm tt"), onground, onbuildingblock));
+                    logData.logs.Add(string.Format(lang.GetMessage("Formatting", this), player.displayName, player.UserIDString, entity.transform.position, DateTime.Now, onground, onbuildingblock));
                     WriteLogs();
-                }
-                else
-                {
+                }else{
                     return;
                 }
             }

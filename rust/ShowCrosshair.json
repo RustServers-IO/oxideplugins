@@ -1,9 +1,12 @@
 {
     "name": "ShowCrosshair",
     "description": "Shows a crosshair on the screen",
-    "author": "Marat 2",
-    "version": "1.0.7",
+    "author": "",
+    "version": "1.0.75",
     "configuration": true,
+    "require": {
+        "ImageLibrary": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/showcrosshair.2057",
     "games": [

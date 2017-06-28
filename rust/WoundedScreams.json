@@ -1,0 +1,16 @@
+{
+    "name": "Wounded Screams",
+    "description": "Restores the screams when a player gets wounded.",
+    "author": "Skipcast",
+    "version": "2.1.2",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/wounded-screams.2416",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -10,7 +10,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutMail", "Absolut", "1.0.6", ResourceId = 2255)]
+    [Info("AbsolutMail", "Absolut", "1.0.7", ResourceId = 2255)]
 
     class AbsolutMail : RustPlugin
     {
@@ -47,11 +47,6 @@ namespace Oxide.Plugins
         void Unload()
         {
             SaveData();
-            //if (configData.PhysicalMailBox)
-                //foreach (var entry in data.Mailboxes)
-                //{
-                //    //DESTROY MAIL BOXES
-                //}
             foreach (var player in BasePlayer.activePlayerList)
                 DestroyUI(player);
         }
@@ -74,14 +69,10 @@ namespace Oxide.Plugins
             LoadData();
             AddImage("https://cdn4.iconfinder.com/data/icons/SUPERVISTA/mail_icons/png/400/mailbox.png", "mailbox", (ulong)ResourceId);
             AddImage("http://icongal.com/gallery/image/153090/new_unread_mail_status.png", "NewMail", (ulong)ResourceId);
-            if (!permission.PermissionExists("AbsolutMail.admin"))
-                permission.RegisterPermission("AbsolutMail.admin", this);
-            if (!permission.PermissionExists("AbsolutMail.VIP1"))
-                permission.RegisterPermission("AbsolutMail.VIP1", this);
-            if (!permission.PermissionExists("AbsolutMail.VIP2"))
-                permission.RegisterPermission("AbsolutMail.VIP2", this);
-            if (!permission.PermissionExists("AbsolutMail.VIP3"))
-                permission.RegisterPermission("AbsolutMail.VIP3", this);
+            permission.RegisterPermission("AbsolutMail.admin", this);
+            permission.RegisterPermission("AbsolutMail.VIP1", this);
+            permission.RegisterPermission("AbsolutMail.VIP2", this);
+            permission.RegisterPermission("AbsolutMail.VIP3", this);
             timers.Add("info", timer.Once(900, () => InfoLoop()));
             timers.Add("save", timer.Once(600, () => SaveLoop()));
             foreach (var player in BasePlayer.activePlayerList)
@@ -211,23 +202,18 @@ namespace Oxide.Plugins
                     return false;
             return true;
         }
-
-        private string TryForImage(string shortname, ulong skin = 99, bool localimage = true)
+        private string TryForImage(string shortname, ulong skin = 99)
         {
-            if (localimage)
-                if (skin == 99)
-                    return GetImage(shortname, (ulong)ResourceId);
-                else return GetImage(shortname, skin);
-            else if (skin == 99)
-                return GetImageURL(shortname, (ulong)ResourceId);
-            else return GetImageURL(shortname, skin);
+            if (shortname.Contains("http")) return shortname;
+            if (skin == 99) skin = (ulong)ResourceId;
+            return GetImage(shortname, skin, true);
         }
 
-        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
-        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
-        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
-        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname);
-
+        public string GetImage(string shortname, ulong skin = 0, bool returnUrl = false) => (string)ImageLibrary.Call("GetImage", shortname.ToLower(), skin, returnUrl);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname.ToLower(), skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
+        public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
         #endregion
 
         #region MailBox Functions
@@ -485,14 +471,14 @@ namespace Oxide.Plugins
 
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (img.Contains("http"))
+                if (img.StartsWith("http") || img.StartsWith("www"))
                 {
                     container.Add(new CuiElement
                     {
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -503,7 +489,7 @@ namespace Oxide.Plugins
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });

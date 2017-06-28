@@ -1,0 +1,19 @@
+{
+    "name": "Gyrocopter",
+    "description": "Allows players to fly there very own scrap build gyrocopter ingame",
+    "author": "Colon Blow",
+    "version": "1.0.10",
+    "configuration": true,
+    "suggest": {
+        "FauxAdmin": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/gyrocopter.2521",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

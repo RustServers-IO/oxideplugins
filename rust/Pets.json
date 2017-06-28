@@ -1,8 +1,8 @@
 {
     "name": "Pets",
     "description": "Do you want a pet? This plugin is for you!",
-    "author": "Nogrod",
-    "version": "0.5.5",
+    "author": "k1lly0u",
+    "version": "0.6.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/pets.851",

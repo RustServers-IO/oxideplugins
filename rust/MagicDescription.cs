@@ -2,80 +2,127 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("MagicDescription", "Wulf/lukespragg", "1.2.4", ResourceId = 1447)]
+    [Info("Magic Description", "Wulf/lukespragg", "1.3.1", ResourceId = 1447)]
     [Description("Adds dynamic information in the server description")]
-
-    class MagicDescription : RustPlugin
+    public class MagicDescription : RustPlugin
     {
-        #region Initialization
+        #region Configuration
 
-        readonly Regex varRegex = new Regex(@"\{([^\}]+)\}");
-        List<object> exclusions;
-        bool listPlugins;
-        bool serverInitialized;
-        int updateInterval;
-        string description;
+        private Configuration config;
 
-        protected override void LoadDefaultConfig()
+        public class Configuration
         {
-            Config["Description"] = description = GetConfig("Description", "Powered by {oxide.version}\n\n{version}\n\n{server.pve}");
-            Config["ListPlugins"] = listPlugins = GetConfig("ListPlugins", true);
-            Config["PluginExclusions"] = exclusions = GetConfig("PluginExclusions", new List<object> { "PrivateStuff", "OtherName" });
-            Config["UpdateInterval"] = updateInterval = GetConfig("UpdateInterval", 300);
-            SaveConfig();
+            [JsonProperty(PropertyName = "Server description")]
+            public string Description;
+
+            [JsonProperty(PropertyName = "Update interval (seconds)")]
+            public int UpdateInterval;
+
+            [JsonProperty(PropertyName = "Show loaded plugins (true/false)")]
+            public bool ShowPlugins;
+
+            [JsonProperty(PropertyName = "Hidden plugins (filename or title)")]
+            public List<string> HiddenPlugins;
+
+            public static Configuration DefaultConfig()
+            {
+                return new Configuration
+                {
+                    Description = "Powered by Oxide {magic.version} for Rust {magic.version protocol}\\n\\n{server.pve}",
+                    UpdateInterval = 300,
+                    ShowPlugins = false,
+                    HiddenPlugins = new List<string> { "PrivateStuff", "OtherName", "Epic Stuff" }
+                };
+            }
         }
 
-        void OnServerInitialized()
+        protected override void LoadConfig()
         {
-            LoadDefaultConfig();
-            serverInitialized = true;
+            base.LoadConfig();
+            try
+            {
+                config = Config.ReadObject<Configuration>();
+                if (config?.Description == null)
+                {
+                    LoadDefaultConfig();
+                    SaveConfig();
+                }
+            }
+            catch
+            {
+                PrintWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+                LoadDefaultConfig();
+            }
+        }
+
+        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+
+        protected override void SaveConfig() => Config.WriteObject(config);
+
+        #endregion
+
+        #region Initialization
+
+        private static readonly Regex varRegex = new Regex(@"\{(.*?)\}");
+        private static bool serverInitialized;
+
+        private void OnServerInitialized()
+        {
             UpdateDescription();
-            timer.Every(updateInterval, () => UpdateDescription());
+            serverInitialized = true;
+            timer.Every(config.UpdateInterval, () => UpdateDescription());
+
+            if (!config.ShowPlugins) { Unsubscribe(nameof(OnPluginLoaded)); Unsubscribe(nameof(OnPluginUnloaded)); }
         }
 
         #endregion
 
-        #region Description Updating
+        #region Description Handling
 
-        void OnPluginLoaded()
+        private void OnPluginLoaded()
         {
             if (serverInitialized) UpdateDescription();
         }
 
-        void OnPluginUnloaded() => UpdateDescription();
+        private void OnPluginUnloaded() => UpdateDescription();
 
-        void UpdateDescription(string text = "")
+        private void UpdateDescription(string text = "")
         {
             if (!string.IsNullOrEmpty(text))
             {
                 Config["Description"] = text;
-                description = text;
+                config.Description = text;
                 SaveConfig();
             }
 
-            var newDescription = new StringBuilder(description);
-            var matches = varRegex.Matches(description);
-            foreach (var match in matches)
+            var newDescription = new StringBuilder(config.Description);
+
+            var matches = varRegex.Matches(config.Description);
+            foreach (Match match in matches)
             {
-                if (match == null) continue;
-                var matchString = match.ToString();
-                var reply = ConsoleSystem.Run.Server.Quiet(matchString.Replace("{", "").Replace("}", ""));
-                newDescription.Replace(matchString, reply ?? "");
+                var command = match.Groups[1].Value;
+                if (string.IsNullOrEmpty(command)) continue;
+
+                var reply = ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), command);
+                newDescription.Replace(match.ToString(), reply.Replace("\"", "") ?? "");
             }
 
-            if (listPlugins)
+            if (config.ShowPlugins)
             {
                 var loaded = plugins.GetAll();
                 if (loaded.Length == 0) return;
 
-                string pluginList = null;
                 var count = 0;
-                foreach (var plugin in loaded)
+                string pluginList = null;
+                foreach (var plugin in loaded.Where(p => !p.IsCorePlugin))
                 {
-                    if (plugin.IsCorePlugin || exclusions.Contains(plugin.Title)) continue;
+                    if (config.HiddenPlugins.Contains(plugin.Title) || config.HiddenPlugins.Contains(plugin.Name)) continue;
+
                     pluginList += plugin.Title + ", ";
                     count++;
                 }
@@ -87,6 +134,7 @@ namespace Oxide.Plugins
             }
 
             if (newDescription.ToString() == ConVar.Server.description) return;
+
             ConVar.Server.description = newDescription.ToString();
             Puts("Server description updated!");
         }
@@ -95,22 +143,52 @@ namespace Oxide.Plugins
 
         #region Command Handling
 
-        object OnServerCommand(ConsoleSystem.Arg arg)
+        private object OnServerCommand(ConsoleSystem.Arg arg)
         {
             if (!serverInitialized) return null;
 
             var command = arg.cmd.FullName;
-            if (command != "server.description" || !arg.isAdmin) return null;
+            if (command != "server.description" || !arg.IsAdmin) return null;
             if (!arg.HasArgs() || arg.Args.GetValue(0) == null) return null;
 
             var newDescription = string.Join(" ", arg.Args.ToArray());
             UpdateDescription(newDescription);
-            UnityEngine.Debug.Log($"server.description: {newDescription}");
+            Interface.Oxide.LogInfo($"server.description: {newDescription}");
             return true;
         }
 
-        #endregion
+        [ConsoleCommand("magic.version")]
+        private void VersionCommand(ConsoleSystem.Arg arg)
+        {
+            var oxide = Core.OxideMod.Version.ToString();
+            var protocol = Rust.Protocol.printable;
+            var branch = Facepunch.BuildInfo.Current.Scm.Branch;
+            var date = Facepunch.BuildInfo.Current.BuildDate.ToLocalTime().ToString();
 
-        T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)System.Convert.ChangeType(Config[name], typeof(T));
+            var args = arg.FullString.ToLower();
+            switch(args)
+            {
+                default:
+                case "oxide":
+                    arg.ReplyWith(oxide);
+                    break;
+                
+                case "rust":
+                case "protocol":
+                    arg.ReplyWith(protocol);
+                    break;
+
+                case "branch":
+                    arg.ReplyWith(branch);
+                    break;
+
+                case "date":
+                case "builddate":
+                    arg.ReplyWith(date);
+                    break;
+            }
+        }
+
+        #endregion
     }
 }

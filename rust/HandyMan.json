@@ -1,8 +1,8 @@
 {
     "name": "HandyMan",
     "description": "AOE repair.",
-    "author": "",
-    "version": "1.0.2.1",
+    "author": "nivex",
+    "version": "1.0.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/handyman.1737",

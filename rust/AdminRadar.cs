@@ -1,45 +1,110 @@
-﻿using System;
+﻿using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
-using Oxide.Core;
-using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Player Radar", "Austinv900 & Speedy2M", "2.0.3", ResourceId = 978)]
-    [Description("Allows admins to have a Radar to help detect cheaters")]
-
-    class AdminRadar : RustPlugin
+    [Info("Admin Radar", "Austinv900 & Speedy2M", "3.0.0", ResourceId = 978)]
+    [Description("Allows admins to have a radar to help detect cheaters")]
+    public class AdminRadar : RustPlugin
     {
-        #region External Refs
-        [PluginReference]
-        Plugin Godmode;
-        [PluginReference]
-        Plugin Vanish;
-        #endregion
-        public AdminRadar Return() => this;
-
-        private static AdminRadar Instance;
-
         #region Libraries
-        Dictionary<string, PlSettings> LoadedData = new Dictionary<string, PlSettings>();
-        Dictionary<string, string> NameList = new Dictionary<string, string>();
-        List<string> FilterList = new List<string>();
-        List<string> ActiveRadars = new List<string>();
+
+        [Flags]
+        public enum RadarFilter
+        {
+            None = 0,
+            Player = 1,
+            Sleeper = 2,
+            NPC = 4,
+            ToolCupboard = 8,
+            Container = 16,
+            ResourceNode = 32,
+            All = Player | Sleeper | NPC | ToolCupboard | Container | ResourceNode
+        }
+
+        private List<string> FilterList = new List<string>();
+        private List<string> ActiveRadars = new List<string>();
+
         #endregion
 
         #region Radar Class
-        class Radar : MonoBehaviour
-        {
-            // Static Variables
-            BasePlayer player;
-            Vector3 bodyheight = new Vector3(0f, 0.9f, 0f);
-            int arrowheight = 15;
-            int arrowsize = 1;
-            Vector3 textheight = new Vector3(0f, 0.0f, 0f);
 
-            Dictionary<string, string> ExtMessages = new Dictionary<string, string>()
+        public class Radar : MonoBehaviour
+        {
+            private static Color GetColor(string ConfigVariable)
+            {
+                var rgba = Array.ConvertAll(ConfigVariable.Split(','), float.Parse);
+                return new Color(rgba[0], rgba[1], rgba[2]);
+            }
+
+            // Static Variables
+            private static readonly Covalence covalence = Interface.Oxide.GetLibrary<Covalence>();
+
+            private static readonly Game.Rust.Libraries.Rust rust = Interface.Oxide.GetLibrary<Game.Rust.Libraries.Rust>();
+            private BasePlayer player;
+
+            private Vector3 bodyheight = new Vector3(0f, 0.9f, 0f);
+            private int arrowheight = 15;
+            private int arrowsize = 1;
+            private Vector3 textheight = new Vector3(0f, 0.0f, 0f);
+
+            private class EntityList
+            {
+                public List<BasePlayer> ActivePlayerList { get; set; }
+
+                public List<BasePlayer> SleepingPlayerList { get; set; }
+
+                public List<BaseNpc> NPCList { get; set; }
+
+                public List<BuildingPrivlidge> TCList { get; set; }
+
+                public List<StorageContainer> ContainerList { get; set; }
+
+                public List<ResourceDispenser> NodeList { get; set; }
+
+                public bool Reloading = false;
+
+                public void UpdateLists(RadarFilter Filter)
+                {
+                    Reloading = true;
+
+                    if (HasFlag(Filter, RadarFilter.Player))
+                        ActivePlayerList = BasePlayer.activePlayerList;
+
+                    if (HasFlag(Filter, RadarFilter.Sleeper))
+                        SleepingPlayerList = BasePlayer.sleepingPlayerList;
+
+                    if (HasFlag(Filter, RadarFilter.NPC))
+                        NPCList = GameObject.FindObjectsOfType<BaseNpc>().Where(n => n.transform.position != Vector3.zero).ToList();
+
+                    if (HasFlag(Filter, RadarFilter.ToolCupboard))
+                        TCList = GameObject.FindObjectsOfType<BuildingPrivlidge>().Where(t => t.transform.position != Vector3.zero).ToList();
+
+                    if (HasFlag(Filter, RadarFilter.Container))
+                        ContainerList = GameObject.FindObjectsOfType<StorageContainer>().Where(c => c.transform.position != Vector3.zero && c.inventorySlots > 3).ToList();
+
+                    if (HasFlag(Filter, RadarFilter.ResourceNode))
+                        NodeList = GameObject.FindObjectsOfType<ResourceDispenser>().Where(c => c.transform.position != Vector3.zero).ToList();
+                    Reloading = false;
+                }
+
+                public void RemoveNullEnt(BaseNetworkable networkable)
+                {
+                    if (networkable is BaseNpc)
+                        NPCList.Remove(networkable as BaseNpc);
+                    if (networkable is BuildingPrivlidge)
+                        TCList.Remove(networkable as BuildingPrivlidge);
+                    if (networkable is StorageContainer)
+                        ContainerList.Remove(networkable as StorageContainer);
+                }
+            }
+
+            private Dictionary<string, string> ExtMessages = new Dictionary<string, string>()
             {
                 ["player"] = "{0} - |H: {1}|CW: {2}|AT: {3}|D: {4}m",
                 ["sleeper"] = "{0}(<color=red>Sleeping</color>) - |H: {1}|D: {2}m",
@@ -47,7 +112,7 @@ namespace Oxide.Plugins
                 ["npc"] = "{0} - |H: {1}|D: {2}m"
             };
 
-            Dictionary<string, string> Messages = new Dictionary<string, string>()
+            private Dictionary<string, string> Messages = new Dictionary<string, string>()
             {
                 ["player"] = "{0} - |D: {4}m",
                 ["sleeper"] = "{0}(<color=red>Sleeping</color>) - |D: {2}m",
@@ -56,155 +121,228 @@ namespace Oxide.Plugins
             };
 
             // Changable Variables
-            
-            public string filter;
-            public float RefreshTime;
-            public bool ExtDetails;
-            public float setdistance;
-            public Dictionary<string, string> PlayerNameList;
 
-            public bool players;
-            public bool sleepers;
-            public bool npcs;
-            public bool storages;
-            public bool toolcupboards;
+            public RadarFilter filter;
 
-            public bool playerbox;
-            public bool arrows;
+            private EntityList list { get; set; }
 
-            AdminRadar ar = Instance;
+            private void UpdateEntList()
+            {
+                if (list == null)
+                    list = new EntityList();
+                list.UpdateLists(filter);
+            }
 
             void Awake()
             {
                 player = GetComponent<BasePlayer>();
-                ar.Puts($"{ar.ConfigVersion} {ar.ChatIcon} {ar.ChatPrefix} {ar.defaultAllDistance}");
             }
 
-            void radar()
+            public void InitRadar()
             {
-                if (players)
-                {
-                    if (filter == "all" || filter == "player")
-                    {
-                        string message = (ExtDetails) ? ExtMessages["player"] : Messages["player"];
-                        foreach (var target in BasePlayer.activePlayerList)
-                        {
-                            bool posval = target.transform.position != new Vector3(0, 0, 0);
-                            var distance = Math.Round(Vector3.Distance(target.transform.position, player.transform.position), 1);
-                            if (distance < setdistance && target != player && posval)
-                            {
-                                var health = Math.Round(target.Health(), 0).ToString();
-                                var cw = target?.GetActiveItem()?.info?.displayName?.english ?? "None";
-								var weapon = target?.GetHeldEntity()?.GetComponent<BaseProjectile>() ?? null;
-								var attachments = string.Empty;
-								var contents = weapon?.GetItem()?.contents ?? null;
-								if (weapon != null && contents != null && contents.itemList.Count >= 1)
-								{
-								attachments += "";
-								for (int ii = 0; ii < contents.itemList.Count; ii++)
-  								{
-								var item = contents.itemList[ii];
-								if (item == null) continue;
-								attachments += item?.info?.displayName?.english ?? "None";
-								}
-								attachments += "";
-								}
-                                var msg = message.Replace("{0}", target.displayName).Replace("{1}", health).Replace("{2}", cw).Replace("{3}", attachments).Replace("{4}", distance.ToString());
+                if (list == null)
+                    list = new EntityList();
 
-                                if (playerbox) player.SendConsoleCommand("ddraw.box", RefreshTime, Color.green, target.transform.position + bodyheight, target.GetHeight());
-                                player.SendConsoleCommand("ddraw.text", RefreshTime, Color.yellow, target.transform.position + textheight, msg);
-                            }
-                        }
-                    }
-                }
-                if (sleepers)
-                {
-                    if (filter == "all" || filter == "sleeper")
-                    {
-                        string message = (ExtDetails) ? ExtMessages["sleeper"] : Messages["sleeper"];
-                        foreach (var sleeper in BasePlayer.sleepingPlayerList)
-                        {
-                            bool posval = sleeper.transform.position != new Vector3(0, 0, 0);
-                            var distance = Math.Round(Vector3.Distance(sleeper.transform.position, player.transform.position), 1);
-                            var msg = message.Replace("{0}", sleeper.displayName).Replace("{1}", Math.Round(sleeper.Health(), 0).ToString()).Replace("{2}", distance.ToString());
-                            if (distance < setdistance && posval)
-                            {
-                                player.SendConsoleCommand("ddraw.text", RefreshTime, UnityEngine.Color.grey, sleeper.transform.position + textheight, msg);
-                            }
-                        }
-                    }
-                }
-                if (toolcupboards)
-                {
-                    if (filter == "all" || filter == "toolcupboard")
-                    {
-                        string message = (ExtDetails) ? ExtMessages["thing"] : Messages["thing"];
-                        foreach (var Cupboard in Resources.FindObjectsOfTypeAll<BuildingPrivlidge>())
-                        {
-                            bool posval = Cupboard.transform.position != new Vector3(0, 0, 0);
-                            var distance = Math.Round(Vector3.Distance(Cupboard.transform.position, player.transform.position), 1);
-                            if (distance < setdistance && posval)
-                            {
-                                var arrowSky = Cupboard.transform.position;
-                                var arrowGround = arrowSky + new Vector3(0, 0.9f, 0);
-                                arrowGround.y = arrowGround.y + arrowheight;
-                                var owner = FindOwner(Cupboard.OwnerID);
-                                var msg = message.Replace("{0}", replacement(Cupboard.ShortPrefabName)).Replace("{1}", $"[{owner}]").Replace("{2}", distance.ToString());
+                InvokeRepeating(nameof(UpdateEntList), 0, 60);
 
-                                if (arrows) player.SendConsoleCommand("ddraw.arrow", RefreshTime, Color.yellow, arrowGround, arrowSky, arrowsize);
-                                player.SendConsoleCommand("ddraw.text", RefreshTime, UnityEngine.Color.magenta, Cupboard.transform.position + new Vector3(0f, 0.05f, 0f), msg);
-                            }
-                        }
-                    }
-                }
-                if (storages)
-                {
-                    if (filter == "all" || filter == "storage")
-                    {
-                        string message = (ExtDetails) ? ExtMessages["thing"] : Messages["thing"];
-                        foreach (var storage in Resources.FindObjectsOfTypeAll<StorageContainer>().Where(storage => storage.name.Contains("box.wooden.large.prefab") || storage.name.Contains("woodbox_deployed.prefab") || storage.name.Contains("heli_crate.prefab") || storage.name.Contains("small_stash_deployed.prefab")))
-                        {
-                            bool posval = storage.transform.position != new Vector3(0, 0, 0);
-                            var distance = Math.Round(Vector3.Distance(storage.transform.position, player.transform.position), 1);
-                            if (distance < setdistance && posval)
-                            {
-                                var owner = FindOwner(storage.OwnerID);
-                                var arrowSky = storage.transform.position;
-                                var arrowGround = arrowSky;
-                                var msg = message.Replace("{0}", replacement(storage.ShortPrefabName)).Replace("{1}", $"[{owner}]").Replace("{2}", distance.ToString());
-                                arrowGround.y = arrowGround.y + arrowheight;
+                if (Configuration.Filter_Player && HasFlag(filter, RadarFilter.Player))
+                    InvokeRepeating(nameof(ConnectedPlayerInvoke), 1, Configuration.RefreshRate_Player);
+                if (Configuration.Filter_Sleeper && HasFlag(filter, RadarFilter.Sleeper))
+                    InvokeRepeating(nameof(SleepingPlayerInvoke), 1, Configuration.RefreshRate_Sleeper);
+                if (Configuration.Filter_NPC && HasFlag(filter, RadarFilter.NPC))
+                    InvokeRepeating(nameof(NPCInvoke), 1, Configuration.RefreshRate_NPC);
+                if (Configuration.Filter_Container && HasFlag(filter, RadarFilter.Container))
+                    InvokeRepeating(nameof(ContainerInvoke), 1, Configuration.RefreshRate_Container);
+                if (Configuration.Filter_BuildingPrivledge && HasFlag(filter, RadarFilter.ToolCupboard))
+                    InvokeRepeating(nameof(ToolCupboardInvoke), 1, Configuration.RefreshRate_BuildingPrivledge);
+                if (Configuration.Filter_Node && HasFlag(filter, RadarFilter.ResourceNode))
+                    InvokeRepeating(nameof(NodeInvoke), 1, Configuration.RefreshRate_Node);
+                enabled = true;
+            }
 
-                                if (arrows) player.SendConsoleCommand("ddraw.arrow", RefreshTime, Color.blue, arrowGround, arrowSky, arrowsize);
-                                player.SendConsoleCommand("ddraw.text", RefreshTime, Color.green, storage.transform.position + new Vector3(0f, 0.05f, 0f), msg);
-                            }
-                        }
-                    }
-                }
-                if (npcs)
+            void ConnectedPlayerInvoke()
+            {
+                if (list.Reloading)
+                    return;
+                string message = (Configuration.ShowExtendedData) ? ExtMessages["player"] : Messages["player"];
+                foreach (var target in list.ActivePlayerList)
                 {
-                    if (filter == "all" || filter == "npc")
+                    if (target == null)
                     {
-                        string message = (ExtDetails) ? ExtMessages["npc"] : Messages["npc"];
-                        foreach (var npc in Resources.FindObjectsOfTypeAll<BaseNPC>())
+                        continue;
+                    }
+                    var distance = Vector3.Distance(target.transform.position, player.transform.position);
+                    if (distance < Configuration.ViewDistance_Player && target != player)
+                    {
+                        var health = Math.Round(target.Health(), 0).ToString();
+                        var cw = target?.GetActiveItem()?.info?.displayName?.english ?? "None";
+                        var weapon = target?.GetHeldEntity()?.GetComponent<BaseProjectile>() ?? null;
+                        var attachments = string.Empty;
+                        var contents = weapon?.GetItem()?.contents ?? null;
+                        if (weapon != null && contents != null && contents.itemList.Count >= 1)
                         {
-                            bool posval = npc.transform.position != new Vector3(0, 0, 0);
-                            var distance = Math.Round(Vector3.Distance(npc.transform.position, player.transform.position), 1);
-                            if (distance < setdistance && posval)
+                            attachments += "";
+                            for (int ii = 0; ii < contents.itemList.Count; ii++)
                             {
-                                var health = Math.Round(npc.Health(), 0).ToString();
-                                var msg = message.Replace("{0}", npc.ShortPrefabName.Replace(".prefab", string.Empty)).Replace("{1}", health).Replace("{2}", distance.ToString());
-
-                                player.SendConsoleCommand("ddraw.text", RefreshTime, Color.yellow, npc.transform.position + textheight, msg);
+                                var item = contents.itemList[ii];
+                                if (item == null) continue;
+                                attachments += item?.info?.displayName?.english ?? "None";
                             }
+                            attachments += "";
                         }
+                        var msg = message.Replace("{0}", target.displayName).Replace("{1}", health).Replace("{2}", cw).Replace("{3}", attachments).Replace("{4}", distance.ToString("0.00"));
+
+                        if (Configuration.RadarBoxes) player.SendConsoleCommand("ddraw.box", Configuration.RefreshRate_Player, GetColor(Configuration.BoxColor_Player), target.transform.position + bodyheight, target.GetHeight());
+                        if (Configuration.RadarText) player.SendConsoleCommand("ddraw.text", Configuration.RefreshRate_Player, GetColor(Configuration.TextColor_Player), target.transform.position + textheight, msg);
                     }
                 }
             }
+
+            void SleepingPlayerInvoke()
+            {
+                if (list.Reloading)
+                    return;
+
+                string message = (Configuration.ShowExtendedData) ? ExtMessages["sleeper"] : Messages["sleeper"];
+                foreach (var sleeper in list.SleepingPlayerList)
+                {
+                    if (sleeper == null)
+                    {
+                        continue;
+                    }
+                    var distance = Vector3.Distance(sleeper.transform.position, player.transform.position);
+                    var msg = message.Replace("{0}", sleeper.displayName).Replace("{1}", Math.Round(sleeper.Health(), 0).ToString()).Replace("{2}", distance.ToString("0.00"));
+                    if (distance < Configuration.ViewDistance_Sleeper)
+                    {
+                        if (Configuration.RadarText) player.SendConsoleCommand("ddraw.text", Configuration.RefreshRate_Sleeper, GetColor(Configuration.TextColor_Sleeper), sleeper.transform.position + textheight, msg);
+                    }
+                }
+            }
+
+            void ToolCupboardInvoke()
+            {
+                if (list.Reloading)
+                    return;
+                string message = (Configuration.ShowExtendedData) ? ExtMessages["thing"] : Messages["thing"];
+                foreach (var Cupboard in list.TCList.ToList())
+                {
+                    try
+                    {
+                        if (Cupboard == null)
+                        {
+                            continue;
+                        }
+                        var distance = Vector3.Distance(Cupboard.transform.position, player.transform.position);
+                        if (distance < Configuration.ViewDistance_BuildingPrivledge)
+                        {
+                            var arrowSky = Cupboard.transform.position;
+                            var arrowGround = arrowSky + new Vector3(0, 0.9f, 0);
+                            arrowGround.y = arrowGround.y + arrowheight;
+                            var owner = FindOwner(Cupboard.OwnerID);
+                            var msg = message.Replace("{0}", replacement(Cupboard.ShortPrefabName)).Replace("{1}", $"[{owner}]").Replace("{2}", distance.ToString("0.00"));
+
+                            if (Configuration.RadarArrows) player.SendConsoleCommand("ddraw.arrow", Configuration.RefreshRate_BuildingPrivledge, GetColor(Configuration.ArrowColor_BuildingPrivledge), arrowGround, arrowSky, arrowsize);
+                            if (Configuration.RadarText) player.SendConsoleCommand("ddraw.text", Configuration.RefreshRate_BuildingPrivledge, GetColor(Configuration.TextColor_BuildingPrivledge), Cupboard.transform.position + new Vector3(0f, 0.05f, 0f), msg);
+                        }
+                    }
+                    catch
+                    {
+                        list.RemoveNullEnt(Cupboard);
+                    }
+                }
+            }
+
+            void ContainerInvoke()
+            {
+                if (list.Reloading)
+                    return;
+                string message = (Configuration.ShowExtendedData) ? ExtMessages["thing"] : Messages["thing"];
+                foreach (var storage in list.ContainerList.ToList())
+                {
+                    try
+                    {
+                        if (storage == null)
+                            continue;
+                        var distance = Vector3.Distance(storage.transform.position, player.transform.position);
+                        if (distance < Configuration.ViewDistance_Container)
+                        {
+                            var owner = FindOwner(storage.OwnerID);
+                            var arrowSky = storage.transform.position;
+                            var arrowGround = arrowSky;
+                            var msg = message.Replace("{0}", replacement(storage.ShortPrefabName)).Replace("{1}", (owner == "Null") ? string.Empty : $"[{owner}]").Replace("{2}", distance.ToString("0.00"));
+                            arrowGround.y = arrowGround.y + arrowheight;
+
+                            if (Configuration.RadarArrows) player.SendConsoleCommand("ddraw.arrow", Configuration.RefreshRate_Container, GetColor(Configuration.ArrowColor_Container), arrowGround, arrowSky, arrowsize);
+                            if (Configuration.RadarText) player.SendConsoleCommand("ddraw.text", Configuration.RefreshRate_Container, GetColor(Configuration.TextColor_Container), storage.transform.position + new Vector3(0f, 0.05f, 0f), msg);
+                        }
+                    }
+                    catch
+                    {
+                        list.RemoveNullEnt(storage);
+                    }
+                }
+            }
+
+            void NPCInvoke()
+            {
+                if (list.Reloading)
+                    return;
+                string message = (Configuration.ShowExtendedData) ? ExtMessages["npc"] : Messages["npc"];
+                foreach (var npc in list.NPCList.ToList())
+                {
+                    try
+                    {
+                        if (npc == null)
+                            continue;
+                        var distance = Vector3.Distance(npc.transform.position, player.transform.position);
+                        if (distance < Configuration.ViewDistance_NPC)
+                        {
+                            var health = Math.Round(npc.Health(), 0).ToString();
+                            var msg = message.Replace("{0}", npc.ShortPrefabName.Replace(".prefab", string.Empty)).Replace("{1}", health).Replace("{2}", distance.ToString("0.00"));
+
+                            if (Configuration.RadarText) player.SendConsoleCommand("ddraw.text", Configuration.RefreshRate_NPC, GetColor(Configuration.TextColor_NPC), npc.transform.position + textheight, msg);
+                        }
+                    }
+                    catch
+                    {
+                        list.RemoveNullEnt(npc);
+                    }
+                }
+            }
+
+            void NodeInvoke()
+            {
+                if (list.Reloading)
+                    return;
+                string message = (Configuration.ShowExtendedData) ? ExtMessages["thing"] : Messages["thing"];
+                foreach (var node in list.NodeList.ToList())
+                {
+                    try
+                    {
+                        var distance = Vector3.Distance(node.transform.position, player.transform.position);
+                        if (distance < Configuration.ViewDistance_Node)
+                        {
+                            var arrowSky = node.transform.position;
+                            var arrowGround = arrowSky;
+                            var msg = message.Replace("{0}", replacement(node.gatherType.ToString())).Replace("{1}", $"[World]").Replace("{2}", distance.ToString("0.00"));
+                            arrowGround.y = arrowGround.y + arrowheight;
+
+                            if (Configuration.RadarArrows) player.SendConsoleCommand("ddraw.arrow", Configuration.RefreshRate_Node, GetColor(Configuration.ArrowColor_Nodes), arrowGround, arrowSky, arrowsize);
+                            if (Configuration.RadarText) player.SendConsoleCommand("ddraw.text", Configuration.RefreshRate_Node, GetColor(Configuration.TextColor_Nodes), node.transform.position + new Vector3(0f, 0.05f, 0f), msg);
+                        }
+                    }
+                    catch
+                    {
+                        list.NodeList.Remove(node);
+                    }
+                }
+            }
+
             string FindOwner(ulong id)
             {
-                string ID = id.ToString();
-                return (PlayerNameList.ContainsKey(ID)) ? PlayerNameList[ID] : "MAP";
+                return covalence.Players.FindPlayerById(id.ToString())?.Name ?? "Null";
             }
+
             bool SpectateCheck(BasePlayer player, BasePlayer target) => player.IsSpectating() && target.HasChild(player);
 
             string replacement(string name)
@@ -212,32 +350,32 @@ namespace Oxide.Plugins
                 return name.Replace(".prefab", string.Empty).Replace(".wooden.", string.Empty).Replace("_deployed", string.Empty).Replace("small_", string.Empty).Replace("_deployed", string.Empty).Replace(".tool.deployed", string.Empty).Replace("_", " ").ToUpper();
             }
         }
+
         #endregion
 
         #region Oxide
-        void Init()
+
+        void OnServerInitialized()
         {
-            LoadDefaultConfig();
+            cmd.AddChatCommand(Configuration.Command, this, nameof(ccmdRadar));
+        }
+
+        void Loaded()
+        {
+            LoadConfig();
             LoadFilterList();
             LoadMessages();
-            LoadSavedData();
-            permission.RegisterPermission("adminradar." + permAllowed, this);
-            Instance = this;
         }
+
         void Unload()
         {
-            SaveLoadedData();
-
             foreach (var pl in BasePlayer.activePlayerList)
             {
                 if (pl.GetComponent<Radar>()) GameObject.Destroy(pl.GetComponent<Radar>());
                 if (ActiveRadars.Contains(pl.UserIDString)) ActiveRadars.Remove(pl.UserIDString);
             }
         }
-        void OnServerSave()
-        {
-            SaveLoadedData();
-        }
+
         void OnPlayerDisconnected(BasePlayer player)
         {
             if (player.GetComponent<Radar>()) { GameObject.Destroy(player.GetComponent<Radar>()); if (ActiveRadars.Contains(player.UserIDString)) ActiveRadars.Remove(player.UserIDString); }
@@ -246,215 +384,284 @@ namespace Oxide.Plugins
         #endregion
 
         #region Configuration
-        // General Settings
-        string permAllowed;
-        bool playerRadar;
-        bool ShowExtData;
-        string ChatIcon;
-        string ChatPrefix;
-        string ConfigVersion { get { return GetConfig("2.0.0", "DoNotTouch", "ConfigVersion"); } }
 
-        // Filters
-        bool Tplayer;
-        bool Tstorage;
-        bool Tsleeper;
-        bool Ttoolcupboard;
-        bool Tnpc;
-        bool Tall;
-
-        // Default Values
-        string defaultFilter;
-        float defaultAllInvoke;
-        float defaultAllDistance;
-        float defaultPlayerInvoke;
-        float defaultPlayerMaxDistance;
-        float defaultSleeperInvoke;
-        float defaultSleeperMaxDistance;
-        float defaultstorageInvoke;
-        float defaultStorageMaxDistance;
-        float defaultToolCupboardInvoke;
-        float defaultToolCupboardMaxDistance;
-        float defaultNPCInvoke;
-        float defaultNPCMaxDistance;
-
-        // Invoke Limiting
-        float limitAllInvokeHigh;
-        float limitAllInvokeLow;
-        float limitPlayerInvokeHigh;
-        float limitPlayerInvokeLow;
-        float limitSleeperInvokeHigh;
-        float limitSleeperInvokeLow;
-        float limitstorageInvokeHigh;
-        float limitstorageInvokeLow;
-        float limitToolCupboardInvokeHigh;
-        float limitToolCupboardInvokeLow;
-        float limitNPCInvokeHigh;
-        float limitNPCInvokeLow;
-
-        // Distance Limiting
-        float limitAllDistanceHigh;
-        float limitAllDistanceLow;
-        float limitPlayerDistanceHigh;
-        float limitPlayerDistanceLow;
-        float limitSleeperDistanceHigh;
-        float limitSleeperDistanceLow;
-        float limitstorageDistanceHigh;
-        float limitstorageDistanceLow;
-        float limitToolCupboardDistanceHigh;
-        float limitToolCupboardDistanceLow;
-        float limitNPCDistanceHigh;
-        float limitNPCDistanceLow;
-
-        // Misc Settings
-        bool radarboxs;
-        bool radararrows;
-
-        protected override void LoadDefaultConfig()
+        /// <summary>
+        /// Hold Configuration Values
+        /// </summary>
+        public static class Configuration
         {
-            // General Settings
-            SetConfig("General", "Permission (adminradar.?)", "allowed");
-            SetConfig("General", "Radar", "ShowExtendedDetails", true);
-            SetConfig("General", "Radar", "ShowPlayerBox", true);
-            SetConfig("General", "Radar", "ShowArrow", true);
-            SetConfig("General", "Chat", "IconProfile", string.Empty);
-            SetConfig("General", "Chat", "ChatPrefix", "AdminRadar");
-            SetConfig("General", "Commands", "GiveRadar", false);
+            #region General Configuration
 
-            // Enabled Filters
-            SetConfig("Settings", "Filters", "DefaultFilter | player | storage | sleeper | toolcupboard | npc", "player");
-            SetConfig("Settings", "Filters", "Players", "Enabled", true);
-            SetConfig("Settings", "Filters", "Storage", "Enabled", true);
-            SetConfig("Settings", "Filters", "SleepingPlayers", "Enabled", true);
-            SetConfig("Settings", "Filters", "ToolCupboards", "Enabled", true);
-            SetConfig("Settings", "Filters", "NPCS", "Enabled", true);
-            SetConfig("Settings", "Filters", "All", "Enabled (Can Cause Server Lag)", true);
+            /// <summary>
+            /// SteamId of desired icon
+            /// </summary>
+            public static string IconProfile = "0";
 
-            // Default Values
-            /* All Settings */
-            SetConfig("Settings", "Filters", "All", "DefaultInvoke", 1.5f);
-            SetConfig("Settings", "Filters", "All", "MaxDistance", 300f);
-            SetConfig("Settings", "Filters", "All", "Distance-Lowest", 30f);
-            SetConfig("Settings", "Filters", "All", "Distance-Highest", 400f);
-            SetConfig("Settings", "Filters", "All", "Invoke-Lowest", 1f);
-            SetConfig("Settings", "Filters", "All", "Invoke-Highest", 3f);
-            /* Player Settings */
-            SetConfig("Settings", "Filters", "Players", "DefaultInvoke", 0.30f);
-            SetConfig("Settings", "Filters", "Players", "MaxDistance", 2000f);
-            SetConfig("Settings", "Filters", "Players", "Distance-Lowest", 100f);
-            SetConfig("Settings", "Filters", "Players", "Distance-Highest", 1000f);
-            SetConfig("Settings", "Filters", "Players", "Invoke-Lowest", 0.10f);
-            SetConfig("Settings", "Filters", "Players", "Invoke-Highest", 1.00f);
-            /* Storage Settings */
-            SetConfig("Settings", "Filters", "Storage", "DefaultInvoke", 5.00f);
-            SetConfig("Settings", "Filters", "Storage", "MaxDistance", 300f);
-            SetConfig("Settings", "Filters", "Storage", "Distance-Lowest", 50f);
-            SetConfig("Settings", "Filters", "Storage", "Distance-Highest", 300f);
-            SetConfig("Settings", "Filters", "Storage", "Invoke-Lowest", 1.00f);
-            SetConfig("Settings", "Filters", "Storage", "Invoke-Highest", 10.00f);
-            /* Sleepers Settings */
-            SetConfig("Settings", "Filters", "SleepingPlayers", "DefaultInvoke", 5.00f);
-            SetConfig("Settings", "Filters", "SleepingPlayers", "MaxDistance", 300f);
-            SetConfig("Settings", "Filters", "SleepingPlayers", "Distance-Lowest", 50f);
-            SetConfig("Settings", "Filters", "SleepingPlayers", "Distance-Highest", 300f);
-            SetConfig("Settings", "Filters", "SleepingPlayers", "Invoke-Lowest", 1.00f);
-            SetConfig("Settings", "Filters", "SleepingPlayers", "Invoke-Highest", 10.00f);
-            /* ToolCupboard Settings */
-            SetConfig("Settings", "Filters", "ToolCupboards", "DefaultInvoke", 5.00f);
-            SetConfig("Settings", "Filters", "ToolCupboards", "MaxDistance", 300f);
-            SetConfig("Settings", "Filters", "ToolCupboards", "Distance-Lowest", 50f);
-            SetConfig("Settings", "Filters", "ToolCupboards", "Distance-Highest", 300f);
-            SetConfig("Settings", "Filters", "ToolCupboards", "Invoke-Lowest", 1.00f);
-            SetConfig("Settings", "Filters", "ToolCupboards", "Invoke-Highest", 10.00f);
-            /* NPC Settings */
-            SetConfig("Settings", "Filters", "NPCS", "DefaultInvoke", 0.30f);
-            SetConfig("Settings", "Filters", "NPCS", "MaxDistance", 300f);
-            SetConfig("Settings", "Filters", "NPCS", "Distance-Lowest", 50f);
-            SetConfig("Settings", "Filters", "NPCS", "Distance-Highest", 300f);
-            SetConfig("Settings", "Filters", "NPCS", "Invoke-Lowest", 0.10f);
-            SetConfig("Settings", "Filters", "NPCS", "Invoke-Highest", 1.00f);
+            /// <summary>
+            /// The Prefix that shows in chat
+            /// </summary>
+            public static string ChatPrefix = "AdminRadar";
 
-            SetConfig("DoNotTouch", "ConfigVersion", "2.0.0");
+            /// <summary>
+            /// The command used to call the radar to life
+            /// </summary>
+            public static string Command = "radar";
+
+            #endregion
+
+            #region Filter Toggles
+
+            /// <summary>
+            /// Enables the All Filter
+            /// </summary>
+            public static bool Filter_All = false;
+
+            /// <summary>
+            /// Enables the Player Filter
+            /// </summary>
+            public static bool Filter_Player = true;
+
+            /// <summary>
+            /// Enables the Container Filter
+            /// </summary>
+            public static bool Filter_Container = true;
+
+            /// <summary>
+            /// Enables the Sleeper Filter
+            /// </summary>
+            public static bool Filter_Sleeper = true;
+
+            /// <summary>
+            /// Enables the BuildingPrivledge Filter
+            /// </summary>
+            public static bool Filter_BuildingPrivledge = true;
+
+            /// <summary>
+            /// Enables the NPC Filter
+            /// </summary>
+            public static bool Filter_NPC = true;
+
+            /// <summary>
+            /// Enables the Node Filter
+            /// </summary>
+            public static bool Filter_Node = true;
+
+            #endregion
+
+            #region Default Filter Settings
+
+            /// <summary>
+            /// Default Filter
+            /// </summary>
+            public static string DefaultSelectedFilter = "Player";
+
+            /// <summary>
+            /// Default Player RefreshRate
+            /// </summary>
+            public static float RefreshRate_Player = 1.0f;
+
+            /// <summary>
+            /// Default Sleeper RefreshRate
+            /// </summary>
+            public static float RefreshRate_Sleeper = 10.0f;
+
+            /// <summary>
+            /// Default Container RefreshRate
+            /// </summary>
+            public static float RefreshRate_Container = 10.0f;
+
+            /// <summary>
+            /// Default BuildingPrivledge RefreshRate
+            /// </summary>
+            public static float RefreshRate_BuildingPrivledge = 10.0f;
+
+            /// <summary>
+            /// Default NPC RefreshRate
+            /// </summary>
+            public static float RefreshRate_NPC = 2.0f;
+
+            /// <summary>
+            /// Default Node RefreshRate
+            /// </summary>
+            public static float RefreshRate_Node = 10.0f;
+
+            /// <summary>
+            /// Default Player Distance
+            /// </summary>
+            public static float ViewDistance_Player = 800f;
+
+            /// <summary>
+            /// Default Sleeper Distance
+            /// </summary>
+            public static float ViewDistance_Sleeper = 200f;
+
+            /// <summary>
+            /// Default Container Distance
+            /// </summary>
+            public static float ViewDistance_Container = 300f;
+
+            /// <summary>
+            /// Default BuildingPrivledge Distance
+            /// </summary>
+            public static float ViewDistance_BuildingPrivledge = 300f;
+
+            /// <summary>
+            /// Default NPC Distance
+            /// </summary>
+            public static float ViewDistance_NPC = 150f;
+
+            /// <summary>
+            /// Default Node Distance
+            /// </summary>
+            public static float ViewDistance_Node = 250f;
+
+            #endregion
+
+            #region Radar Options
+
+            /// <summary>
+            /// Shows more detailed status during radar
+            /// </summary>
+            public static bool ShowExtendedData = true;
+
+            /// <summary>
+            /// Enables/Disables Radar Boxes
+            /// </summary>
+            public static bool RadarBoxes = true;
+
+            /// <summary>
+            /// Radar Box Color
+            /// </summary>
+            public static string BoxColor_Player = "0,0.255,0";
+
+            /// <summary>
+            /// Enables/Disables Radar Arrows
+            /// </summary>
+            public static bool RadarArrows = true;
+
+            /// <summary>
+            /// Sets Arrow Color for Container
+            /// </summary>
+            public static string ArrowColor_Container = "0,0,0.255";
+
+            /// <summary>
+            /// Sets Arrow Color for BuildingPrivledge
+            /// </summary>
+            public static string ArrowColor_BuildingPrivledge = "0.255,0.255,0";
+
+            /// <summary>
+            /// Sets Arrow Color for ResourceNodes
+            /// </summary>
+            public static string ArrowColor_Nodes = "0.255,0.255,0";
+
+            /// <summary>
+            /// Enables/Disables Radar Text
+            /// </summary>
+            public static bool RadarText = true;
+
+            /// <summary>
+            /// Sets Text Color for Player
+            /// </summary>
+            public static string TextColor_Player = "1,1,0";
+
+            /// <summary>
+            /// Sets Text Color for Sleeper
+            /// </summary>
+            public static string TextColor_Sleeper = "0.255,0.255,0.255";
+
+            /// <summary>
+            /// Sets Text Color for Container
+            /// </summary>
+            public static string TextColor_Container = "0,1,0";
+
+            /// <summary>
+            /// Sets Text Color for Building Privledge
+            /// </summary>
+            public static string TextColor_BuildingPrivledge = "1,0,1";
+
+            /// <summary>
+            /// Sets Text Color for NPC
+            /// </summary>
+            public static string TextColor_NPC = "0,1,1";
+
+            /// <summary>
+            /// Sets Text Color for Nodes
+            /// </summary>
+            public static string TextColor_Nodes = "0.255,0.255,0";
+
+            #endregion
+        }
+
+        private new void LoadConfig()
+        {
+            GetConfig(ref Configuration.IconProfile, "General", "ChatIconSteamId");
+            GetConfig(ref Configuration.ChatPrefix, "General", "ChatPrefix", "AdminRadar");
+            GetConfig(ref Configuration.Command, "General", "Command");
+
+            // Settings | Player
+            GetConfig(ref Configuration.Filter_Player, "Settings", "Player", "Enabled");
+            GetConfig(ref Configuration.RefreshRate_Player, "Settings", "Player", "RefreshRate");
+            GetConfig(ref Configuration.ViewDistance_Player, "Settings", "Player", "ViewDistance");
+            GetConfig(ref Configuration.BoxColor_Player, "Settings", "Player", "Colors", "Box");
+            GetConfig(ref Configuration.TextColor_Player, "Settings", "Player", "Colors", "Text");
+
+            // Settings | Sleeper
+            GetConfig(ref Configuration.Filter_Sleeper, "Settings", "Sleeper", "Enabled");
+            GetConfig(ref Configuration.RefreshRate_Sleeper, "Settings", "Sleeper", "RefreshRate");
+            GetConfig(ref Configuration.ViewDistance_Sleeper, "Settings", "Sleeper", "ViewDistance");
+            GetConfig(ref Configuration.TextColor_Sleeper, "Settings", "Sleeper", "Colors", "Text");
+
+            // Settings | Container
+            GetConfig(ref Configuration.Filter_Container, "Settings", "Container", "Enabled");
+            GetConfig(ref Configuration.RefreshRate_Container, "Settings", "Container", "RefreshRate");
+            GetConfig(ref Configuration.ViewDistance_Container, "Settings", "Container", "ViewDistance");
+            GetConfig(ref Configuration.ArrowColor_Container, "Settings", "Container", "Colors", "Arrow");
+            GetConfig(ref Configuration.TextColor_Container, "Settings", "Container", "Colors", "Text");
+
+            // Settings | BuildingPrivledge
+            GetConfig(ref Configuration.Filter_BuildingPrivledge, "Settings", "BuildingPrivledge", "Enabled");
+            GetConfig(ref Configuration.RefreshRate_BuildingPrivledge, "Settings", "BuildingPrivledge", "RefreshRate");
+            GetConfig(ref Configuration.ViewDistance_BuildingPrivledge, "Settings", "BuildingPrivledge", "ViewDistance");
+            GetConfig(ref Configuration.ArrowColor_BuildingPrivledge, "Settings", "BuildingPrivledge", "Colors", "Arrow");
+            GetConfig(ref Configuration.TextColor_BuildingPrivledge, "Settings", "BuildingPrivledge", "Colors", "Text");
+
+            // Settings | NPC
+            GetConfig(ref Configuration.Filter_NPC, "Settings", "NPC", "Enabled");
+            GetConfig(ref Configuration.RefreshRate_NPC, "Settings", "NPC", "RefreshRate");
+            GetConfig(ref Configuration.ViewDistance_NPC, "Settings", "NPC", "ViewDistance");
+            GetConfig(ref Configuration.TextColor_NPC, "Settings", "NPC", "Colors", "Text");
+
+            // Settings | Node
+            GetConfig(ref Configuration.Filter_Node, "Settings", "Node", "Enabled");
+            GetConfig(ref Configuration.RefreshRate_Node, "Settings", "Node", "RefreshRate");
+            GetConfig(ref Configuration.ViewDistance_Node, "Settings", "Node", "ViewDistance");
+            GetConfig(ref Configuration.TextColor_Nodes, "Settings", "Node", "Colors", "Text");
+            GetConfig(ref Configuration.TextColor_Nodes, "Settings", "Node", "Colors", "Arrow");
+
+            // Settings | MISC
+            GetConfig(ref Configuration.ShowExtendedData, "Settings", "MISC", "ShowExtendedData");
+            GetConfig(ref Configuration.RadarBoxes, "Settings", "MISC", "ShowBoxes");
+            GetConfig(ref Configuration.RadarText, "Settings", "MISC", "ShowText");
+            GetConfig(ref Configuration.RadarArrows, "Settings", "MISC", "ShowArrows");
+            GetConfig(ref Configuration.DefaultSelectedFilter, "Settings", "MISC", "DefaultFilter");
+            GetConfig(ref Configuration.Filter_All, "Settings", "MISC", "AllowAllFilter");
 
             SaveConfig();
-
-            ////////////////////////////////////////////////////////////////////
-            ////                    Setting the Values                      ////
-            ////////////////////////////////////////////////////////////////////
-
-            // General Settings
-            permAllowed = GetConfig("allowed", "General", "Permission (adminradar.?)");
-            ShowExtData = GetConfig(true, "General", "Radar", "ShowExtendedDetails");
-            radarboxs = GetConfig(true, "General", "Radar", "ShowPlayerBox");
-            radararrows = GetConfig(true, "General", "Radar", "ShowArrow");
-            ChatIcon = GetConfig(string.Empty, "General", "Chat", "IconProfile");
-            ChatPrefix = GetConfig("AdminRadar", "General", "Chat", "ChatPrefix");
-            playerRadar = GetConfig(false, "General", "Commands", "GiveRadar");
-
-            // Enabled Filters
-            defaultFilter = GetConfig("player", "Settings", "Filters", "DefaultFilter | player | storage | sleeper | toolcupboard | npc");
-            Tplayer = GetConfig(true, "Settings", "Filters", "Players", "Enabled");
-            Tstorage = GetConfig(true, "Settings", "Filters", "Storage", "Enabled");
-            Tsleeper = GetConfig(true, "Settings", "Filters", "SleepingPlayers", "Enabled");
-            Ttoolcupboard = GetConfig(true, "Settings", "Filters", "ToolCupboards", "Enabled");
-            Tnpc = GetConfig(true, "Settings", "Filters", "NPCS", "Enabled");
-            Tall = GetConfig(true, "Settings", "Filters", "All", "Enabled (Can Cause Server Lag)");
-
-            // Default Values
-            defaultPlayerInvoke = GetConfig(0.30f, "Settings", "Filters", "Players", "DefaultInvoke");
-            defaultPlayerMaxDistance = GetConfig(2000f, "Settings", "Filters", "Players", "MaxDistance");
-            limitPlayerDistanceHigh = GetConfig(1000f, "Settings", "Filters", "Players", "Distance-Highest");
-            limitPlayerDistanceLow = GetConfig(100f, "Settings", "Filters", "Players", "Distance-Lowest");
-            limitPlayerInvokeHigh = GetConfig(1.00f, "Settings", "Filters", "Players", "Invoke-Highest");
-            limitPlayerInvokeLow = GetConfig(0.10f, "Settings", "Filters", "Players", "Invoke-Lowest");
-
-            defaultSleeperInvoke = GetConfig(5.00f, "Settings", "Filters", "SleepingPlayers", "DefaultInvoke");
-            defaultSleeperMaxDistance = GetConfig(300f, "Settings", "Filters", "SleepingPlayers", "MaxDistance");
-            limitSleeperDistanceHigh = GetConfig(300f, "Settings", "Filters", "SleepingPlayers", "Distance-Highest");
-            limitSleeperDistanceLow = GetConfig(50f, "Settings", "Filters", "SleepingPlayers", "Distance-Lowest");
-            limitSleeperInvokeHigh = GetConfig(10.00f, "Settings", "Filters", "SleepingPlayers", "Invoke-Highest");
-            limitSleeperInvokeLow = GetConfig(1.00f, "Settings", "Filters", "SleepingPlayers", "Invoke-Lowest");
-
-            defaultstorageInvoke = GetConfig(5.00f, "Settings", "Filters", "Storage", "DefaultInvoke");
-            defaultStorageMaxDistance = GetConfig(300f, "Settings", "Filters", "Storage", "MaxDistance");
-            limitstorageDistanceHigh = GetConfig(300f, "Settings", "Filters", "Storage", "Distance-Highest");
-            limitstorageDistanceLow = GetConfig(50f, "Settings", "Filters", "Storage", "Distance-Lowest");
-            limitstorageInvokeHigh = GetConfig(10.00f, "Settings", "Filters", "Storage", "Invoke-Highest");
-            limitstorageInvokeLow = GetConfig(1.00f, "Settings", "Filters", "Storage", "Invoke-Lowest");
-
-            defaultToolCupboardInvoke = GetConfig(5.00f, "Settings", "Filters", "ToolCupboards", "DefaultInvoke");
-            defaultToolCupboardMaxDistance = GetConfig(300f, "Settings", "Filters", "ToolCupboards", "MaxDistance");
-            limitToolCupboardDistanceHigh = GetConfig(300f, "Settings", "Filters", "ToolCupboards", "Distance-Highest");
-            limitToolCupboardDistanceLow = GetConfig(50f, "Settings", "Filters", "ToolCupboards", "Distance-Lowest");
-            limitToolCupboardInvokeHigh = GetConfig(10.00f, "Settings", "Filters", "ToolCupboards", "Invoke-Highest");
-            limitToolCupboardInvokeLow = GetConfig(1.00f, "Settings", "Filters", "ToolCupboards", "Invoke-Lowest");
-
-            defaultNPCInvoke = GetConfig(0.30f, "Settings", "Filters", "NPCS", "DefaultInvoke");
-            defaultNPCMaxDistance = GetConfig(300f, "Settings", "Filters", "NPCS", "MaxDistance");
-            limitNPCDistanceHigh = GetConfig(300f, "Settings", "Filters", "NPCS", "Distance-Highest");
-            limitNPCDistanceLow = GetConfig(50f, "Settings", "Filters", "NPCS", "Distance-Lowest");
-            limitNPCInvokeHigh = GetConfig(1.00f, "Settings", "Filters", "NPCS", "Invoke-Highest");
-            limitNPCInvokeLow = GetConfig(0.10f, "Settings", "Filters", "NPCS", "Invoke-Lowest");
-
-            defaultAllInvoke = GetConfig(1.5f, "Settings", "Filters", "All", "DefaultInvoke");
-            defaultAllDistance = GetConfig(300f, "Settings", "Filters", "All", "MaxDistance");
-            limitAllDistanceHigh = GetConfig(400f, "Settings", "Filters", "All", "Distance-Highest");
-            limitAllDistanceLow = GetConfig(30f, "Settings", "Filters", "All", "Distance-Lowest");
-            limitAllInvokeHigh = GetConfig(3f, "Settings", "Filters", "All", "Invoke-Highest");
-            limitAllInvokeLow = GetConfig(1f, "Settings", "Filters", "All", "Invoke-Lowest");
-            //ConfigVersion = GetConfig("2.0.0", "DoNotTouch", "ConfigVersion");
-
-            if (ConfigVersion != "2.0.0") Puts("Config File is Outdated - Please delete current config and reload the plugin");
         }
+
+        protected override void LoadDefaultConfig() => PrintWarning("Generating new configuration file. . .");
+
         #endregion
 
         #region Localization
+
         void LoadMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
                 ["RadarOff"] = "Radar has been <color=red>DEACTIVATED</color>",
                 ["NoAccess"] = "Unknown command: {0}",
-                ["RadarOn"] = "Radar has been <color=green>ACTIVATED</color> | <color=aqua>Filter <color=green>{0}</color>, RefreshTime <color=yellow>{1}</color>, Distance <color=purple>{2}</color></color>",
+                ["RadarActive"] = "Radar has been <color=green>ACTIVATED</color> | <color=aqua>Filter <color=green>{0}</color></color>",
                 ["InvalidSyntax"] = "Invalid command syntax: /{0} help",
                 ["CommandDisabled"] = "The Command /{0} {1} has been disabled by the server administrator",
                 ["RadarGive"] = "Radar has been {0} for {1}",
@@ -465,38 +672,19 @@ namespace Oxide.Plugins
                 ["NoRadars"] = "No players are currently using radar"
             }, this, "en");
         }
+
         #endregion
 
         #region Commands
+
         [ChatCommand("radar")]
         void ccmdRadar(BasePlayer player, string command, string[] args)
         {
             if (!Allowed(player)) { player.ChatMessage(Lang("NoAccess", player.UserIDString, command)); return; }
-            if (args.Length == 0) { ToggleRadar(player); return; }
-            if (args.Length == 1 && FilterList.Contains(filterValidation(args[0]))) { ToggleRadar(player, filterValidation(args[0])); return; }
+            if (args.Length == 0) { ToggleRadar(player, RadarFilter.None); return; }
 
             switch (args[0].ToLower())
             {
-                case "give":
-                    if (!playerRadar) { SendMessage(player, Lang("CommandDisabled", player.UserIDString, command, args[0])); return; }
-                    if (args.Length < 2 || args.Length > 3) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                    var target = player;
-                    string enabled = string.Empty;
-                    if (args.Length == 2)
-                    {
-                        target = rust.FindPlayer(args[1]);
-                        if (target.GetComponent<Radar>()) { enabled = Lang("Disabled", player.UserIDString); } else { enabled = Lang("Enabled", player.UserIDString); }
-                        ToggleRadar(target);
-                    }
-                    if (args.Length == 3)
-                    {
-                        target = rust.FindPlayer(args[1]);
-                        if (target.GetComponent<Radar>()) { enabled = Lang("Disabled", player.UserIDString); } else { enabled = Lang("Enabled", player.UserIDString); }
-                        ToggleRadar(target, args[2]);
-                    }
-                    SendMessage(player, Lang("RadarGive", player.UserIDString, enabled, target.displayName));
-                    break;
-
                 case "list":
                     if (args.Length > 1) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
                     string activeplayers = string.Empty;
@@ -522,361 +710,95 @@ namespace Oxide.Plugins
                     SendMessage(player, msg);
                     break;
 
-                case "setting":
-                    if (args.Length == 1) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                    switch (args[1].ToLower())
-                    {
-                        case "player":
-                            if (!HasPlayerData(player.UserIDString)) CreatePlayerData(player.UserIDString);
-                            if (args.Length > 4 || args.Length <= 3) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                            if (args.Length == 4 && settingValidation(args[2]) == "invoke")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].playerinvoke;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = invokeClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].playerinvoke = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            if (args.Length == 4 && settingValidation(args[2]) == "distance")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].playerdistance;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = distanceClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].playerdistance = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            break;
-
-                        case "sleeper":
-                            if (!HasPlayerData(player.UserIDString)) CreatePlayerData(player.UserIDString);
-                            if (args.Length > 4 || args.Length <= 3) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                            if (args.Length == 4 && settingValidation(args[2]) == "invoke")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].sleeperinvoke;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = invokeClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].sleeperinvoke = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            if (args.Length == 4 && settingValidation(args[2]) == "distance")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].sleeperdistance;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = distanceClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].sleeperdistance = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            break;
-
-                        case "npc":
-                            if (!HasPlayerData(player.UserIDString)) CreatePlayerData(player.UserIDString);
-                            if (args.Length > 4 || args.Length <= 3) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                            if (args.Length == 4 && settingValidation(args[2]) == "invoke")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].npcinvoke;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = invokeClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].npcinvoke = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            if (args.Length == 4 && settingValidation(args[2]) == "distance")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].npcdistance;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = distanceClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].npcdistance = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            break;
-
-                        case "storage":
-                            if (!HasPlayerData(player.UserIDString)) CreatePlayerData(player.UserIDString);
-                            if (args.Length > 4 || args.Length <= 3) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                            if (args.Length == 4 && settingValidation(args[2]) == "invoke")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].storageinvoke;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = invokeClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].storageinvoke = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            if (args.Length == 4 && settingValidation(args[2]) == "distance")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].storagedistance;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = distanceClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].storagedistance = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            break;
-
-                        case "toolcupboard":
-                            if (!HasPlayerData(player.UserIDString)) CreatePlayerData(player.UserIDString);
-                            if (args.Length > 4 || args.Length <= 3) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                            if (args.Length == 4 && settingValidation(args[2]) == "invoke")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].toolcupboardinvoke;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = invokeClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].toolcupboardinvoke = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            if (args.Length == 4 && settingValidation(args[2]) == "distance")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].toolcupboarddistance;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = distanceClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].toolcupboarddistance = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            break;
-
-                        case "all":
-                            if (!HasPlayerData(player.UserIDString)) CreatePlayerData(player.UserIDString);
-                            if (args.Length > 4 || args.Length <= 3) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                            if (args.Length == 4 && settingValidation(args[2]) == "invoke")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].allinvoke;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = invokeClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].allinvoke = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            if (args.Length == 4 && settingValidation(args[2]) == "distance")
-                            {
-                                var oldsetting = LoadedData[player.UserIDString].alldistance;
-                                float updatevalue;
-                                float.TryParse(args[3], out updatevalue);
-                                var newsetting = distanceClamp(args[1], updatevalue);
-                                LoadedData[player.UserIDString].alldistance = newsetting;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, args[1], settingValidation(args[2]), oldsetting.ToString(), newsetting.ToString()));
-                            }
-                            break;
-
-                        case "filter":
-                            if (!HasPlayerData(player.UserIDString)) CreatePlayerData(player.UserIDString);
-                            if (args.Length > 3 || args.Length <= 2) { SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command)); return; }
-                            if (args.Length == 3)
-                            {
-                                var oldvalue = LoadedData[player.UserIDString].filter;
-                                var newvalue = filterValidation(args[2]);
-                                LoadedData[player.UserIDString].filter = newvalue;
-                                SendMessage(player, Lang("SettingUpdate", player.UserIDString, "Default" , args[1], oldvalue, newvalue));
-                            }
-                            break;
-                        default:
-                            SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command));
-                            break;
-                    }
-                    break;
-
                 default:
-                    SendMessage(player, Lang("InvalidSyntax", player.UserIDString, command));
+                    var filtersel = filterValidation(string.Join(" ", args));
+                    ToggleRadar(player, filtersel);
                     break;
             }
         }
+
         #endregion
 
         #region Plugin Methods
-        void ToggleRadar(BasePlayer player, string filter = "")
+
+        void ToggleRadar(BasePlayer player, RadarFilter filter)
         {
             if (IsRadar(player.UserIDString))
             {
                 if (ActiveRadars.Contains(player.UserIDString)) ActiveRadars.Remove(player.UserIDString);
                 GameObject.Destroy(player.GetComponent<Radar>());
-                SendMessage(player, Lang("RadarOff", player.UserIDString));
-                return;
+                if (filter == RadarFilter.None)
+                {
+                    SendMessage(player, Lang("RadarOff", player.UserIDString));
+                    return;
+                }
             }
 
-            if (filter == "") { filter = (LoadedData.ContainsKey(player.UserIDString)) ? LoadedData[player.UserIDString].filter : defaultFilter; }
-            var repeat = SelectPlayerInvoke(player.UserIDString, filter);
-            LoadNameList();
+            if (filter == RadarFilter.None) filter = filterValidation(Configuration.DefaultSelectedFilter);
 
             if (!ActiveRadars.Contains(player.UserIDString)) ActiveRadars.Add(player.UserIDString);
             Radar whrd = player.gameObject.AddComponent<Radar>();
 
-            whrd.CancelInvoke();
-            whrd.InvokeRepeating("radar", 1f, repeat);
-            whrd.RefreshTime = repeat;
             whrd.filter = filter;
-            whrd.setdistance = SelectPlayerDistance(player.UserIDString, filter);
-            whrd.PlayerNameList = NameList;
-            whrd.ExtDetails = ShowExtData;
-            whrd.players = Tplayer;
-            whrd.sleepers = Tsleeper;
-            whrd.storages = Tstorage;
-            whrd.npcs = Tnpc;
-            whrd.toolcupboards = Ttoolcupboard;
-            whrd.arrows = radararrows;
-            whrd.playerbox = radarboxs;
-            SendMessage(player, Lang("RadarOn", player.UserIDString, filter.ToUpper(), repeat.ToString(), whrd.setdistance.ToString()));
-        }
-        #endregion
-
-        #region Data Storage
-        // DataSystem
-        class PlSettings
-        {
-            public string filter;
-            public float playerinvoke;
-            public float sleeperinvoke;
-            public float storageinvoke;
-            public float toolcupboardinvoke;
-            public float npcinvoke;
-            public float allinvoke;
-
-            public float playerdistance;
-            public float sleeperdistance;
-            public float storagedistance;
-            public float toolcupboarddistance;
-            public float npcdistance;
-            public float alldistance;
-        }
-        StoredData storedData;
-        class StoredData { public Dictionary<string, PlSettings> SavedData = new Dictionary<string, PlSettings>(); }
-        void LoadSavedData()
-        {
-            try
-            {
-                storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
-                LoadedData = storedData.SavedData;
-            }
-            catch
-            {
-                Puts("Failed to load data, creating new file");
-                storedData = new StoredData();
-            }
-        }
-        void SaveLoadedData()
-        {
-            storedData.SavedData = LoadedData;
-            Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
+            whrd.InitRadar();
+            SendMessage(player, Lang("RadarActive", player.UserIDString, filter.ToString().ToUpper()));
         }
 
-        void CreatePlayerData(string id)
-        {
-            if (!LoadedData.ContainsKey(id))
-            {
-                LoadedData.Add(id, new PlSettings
-                {
-                    filter = defaultFilter,
-                    alldistance = defaultAllDistance,
-                    allinvoke = defaultAllInvoke,
-                    npcdistance = defaultNPCMaxDistance,
-                    npcinvoke = defaultPlayerInvoke,
-                    playerdistance = defaultPlayerMaxDistance,
-                    playerinvoke = defaultPlayerInvoke,
-                    sleeperdistance = defaultSleeperMaxDistance,
-                    sleeperinvoke = defaultSleeperInvoke,
-                    storagedistance = defaultStorageMaxDistance,
-                    storageinvoke = defaultstorageInvoke,
-                    toolcupboarddistance = defaultToolCupboardMaxDistance,
-                    toolcupboardinvoke = defaultToolCupboardInvoke
-                });
-                SendMessage(rust.FindPlayer(id), "<color=yellow>Player Data File Created!</color>");
-            }
-        }
         #endregion
 
         #region Clamping & Value Validation
 
-        float distanceClamp(string filter, float distance)
+        RadarFilter filterValidation(string filter)
         {
-            if (filter == "player") return (distance <= limitPlayerDistanceLow) ? limitPlayerDistanceLow : (distance >= limitPlayerDistanceHigh) ? limitPlayerDistanceHigh : distance;
-            if (filter == "sleeper") return (distance <= limitSleeperDistanceLow) ? limitSleeperDistanceLow : (distance >= limitSleeperDistanceHigh) ? limitSleeperDistanceHigh : distance;
-            if (filter == "storage") return (distance <= limitstorageDistanceLow) ? limitstorageDistanceLow : (distance >= limitstorageDistanceHigh) ? limitstorageDistanceHigh : distance;
-            if (filter == "toolcupboard") return (distance <= limitToolCupboardDistanceLow) ? limitToolCupboardDistanceLow : (distance >= limitToolCupboardDistanceHigh) ? limitToolCupboardDistanceHigh : distance;
-            if (filter == "npc") return (distance <= limitNPCDistanceLow) ? limitNPCDistanceLow : (distance >= limitNPCDistanceHigh) ? limitNPCDistanceHigh : distance;
-            if (filter == "all") return (distance <= limitAllDistanceLow) ? limitAllDistanceLow : (distance >= limitAllDistanceHigh) ? limitAllDistanceHigh : distance;
-            return defaultAllDistance;
-        }
-        float invokeClamp(string filter, float invokes)
-        {
-            if (filter == "player") return (invokes < limitPlayerInvokeLow) ? limitPlayerInvokeLow : (invokes > limitPlayerInvokeHigh) ? limitPlayerInvokeHigh : invokes;
-            if (filter == "sleeper") return (invokes < limitSleeperInvokeLow) ? limitSleeperInvokeLow : (invokes > limitSleeperInvokeHigh) ? limitSleeperInvokeHigh : invokes;
-            if (filter == "storage") return (invokes < limitstorageInvokeLow) ? limitstorageInvokeLow : (invokes > limitstorageInvokeHigh) ? limitstorageInvokeHigh : invokes;
-            if (filter == "toolcupboard") return (invokes < limitToolCupboardInvokeLow) ? limitToolCupboardInvokeLow : (invokes > limitToolCupboardInvokeHigh) ? limitToolCupboardInvokeHigh : invokes;
-            if (filter == "npc") return (invokes < limitNPCInvokeLow) ? limitNPCInvokeLow : (invokes > limitNPCInvokeHigh) ? limitNPCInvokeHigh : invokes;
-            if (filter == "all") return (invokes < limitAllInvokeLow) ? limitAllInvokeLow : (invokes > limitAllInvokeHigh) ? limitAllInvokeHigh : invokes;
-            return defaultAllInvoke;
-        }
-
-        string filterValidation(string filter)
-        {
-            if (Tplayer && filter.Contains("pla")) return "player";
-            else if (Tsleeper && filter.Contains("sle")) return "sleeper";
-            else if (Tstorage && filter.Contains("sto") || filter.Contains("bo") || filter.Contains("con")) return "storage";
-            else if (Ttoolcupboard && filter.Contains("tool") || filter.Contains("cup") || filter.Contains("cab") || filter == "tc" || filter == "auth") return "toolcupboard";
-            else if (Tnpc && filter == "npc" || filter.Contains("ani")) return "npc";
-            else if (Tall && filter.Contains("al")) return "all";
-            else return string.Empty;
-        }
-
-        string settingValidation(string arg) { return (arg.Contains("dis")) ? "distance" : (arg.Contains("inv")) ? "invoke" : arg; }
-
-        float SelectPlayerInvoke(string id, string filter)
-        {
-            if (filter == "player") return (HasPlayerData(id)) ? invokeClamp(filter, LoadedData[id].playerinvoke) : invokeClamp(filter, defaultPlayerInvoke);
-            if (filter == "sleeper") return (HasPlayerData(id)) ? invokeClamp(filter, LoadedData[id].sleeperinvoke) : invokeClamp(filter, defaultSleeperInvoke);
-            if (filter == "storage") return (HasPlayerData(id)) ? invokeClamp(filter, LoadedData[id].storageinvoke) : invokeClamp(filter, defaultstorageInvoke);
-            if (filter == "toolcupboard") return (HasPlayerData(id)) ? invokeClamp(filter, LoadedData[id].toolcupboardinvoke) : invokeClamp(filter, defaultToolCupboardInvoke);
-            if (filter == "npc") return (HasPlayerData(id)) ? invokeClamp(filter, LoadedData[id].npcinvoke) : invokeClamp(filter, defaultNPCInvoke);
-            if (filter == "all") return (HasPlayerData(id)) ? invokeClamp(filter, LoadedData[id].allinvoke) : invokeClamp(filter, defaultAllInvoke);
-            return defaultAllInvoke;
-        }
-
-        float SelectPlayerDistance(string id, string filter)
-        {
-            if (filter == "player") return (HasPlayerData(id)) ? distanceClamp(filter, LoadedData[id].playerdistance) : distanceClamp(filter, defaultPlayerMaxDistance);
-            if (filter == "sleeper") return (HasPlayerData(id)) ? distanceClamp(filter, LoadedData[id].sleeperdistance) : distanceClamp(filter, defaultSleeperMaxDistance);
-            if (filter == "storage") return (HasPlayerData(id)) ? distanceClamp(filter, LoadedData[id].storagedistance) : distanceClamp(filter, defaultStorageMaxDistance);
-            if (filter == "toolcupboard") return (HasPlayerData(id)) ? distanceClamp(filter, LoadedData[id].toolcupboarddistance) : distanceClamp(filter, defaultToolCupboardMaxDistance);
-            if (filter == "npc") return (HasPlayerData(id)) ? distanceClamp(filter, LoadedData[id].npcdistance) : distanceClamp(filter, defaultNPCMaxDistance);
-            if (filter == "all") return (HasPlayerData(id)) ? distanceClamp(filter, LoadedData[id].alldistance) : distanceClamp(filter, defaultAllDistance);
-            return defaultAllDistance;
-        }
-
-        void LoadNameList()
-        {
-            foreach (var pl in covalence.Players.All)
-            {
-                if (!NameList.ContainsKey(pl.Id)) NameList.Add(pl.Id, pl.Name);
-            }
+            RadarFilter filters = 0;
+            if (Configuration.Filter_Player && Regex.IsMatch(filter, @"(pla|hack|ply)", RegexOptions.IgnoreCase)) filters |= RadarFilter.Player;
+            if (Configuration.Filter_Sleeper && Regex.IsMatch(filter, @"(sle)", RegexOptions.IgnoreCase)) filters |= RadarFilter.Sleeper;
+            if (Configuration.Filter_Container && Regex.IsMatch(filter, @"(sto|con|box)", RegexOptions.IgnoreCase)) filters |= RadarFilter.Container;
+            if (Configuration.Filter_BuildingPrivledge && Regex.IsMatch(filter, @"(tool|cup|cab|tc|auth|priv)", RegexOptions.IgnoreCase)) filters |= RadarFilter.ToolCupboard;
+            if (Configuration.Filter_NPC && Regex.IsMatch(filter, @"(ani|npc|bear|stag|deer|boar|chic)", RegexOptions.IgnoreCase)) filters |= RadarFilter.NPC;
+            if (Configuration.Filter_Node && Regex.IsMatch(filter, @"(nod|col|roc|tre|res)", RegexOptions.IgnoreCase)) filters |= RadarFilter.ResourceNode;
+            if (Configuration.Filter_All && filter.ToLower() == "all") filters = RadarFilter.All;
+            return filters;
         }
 
         void LoadFilterList()
         {
             FilterList.Clear();
-            if (Tplayer) FilterList.Add("player");
-            if (Tsleeper) FilterList.Add("sleeper");
-            if (Tstorage) FilterList.Add("storage");
-            if (Ttoolcupboard) FilterList.Add("toolcupboard");
-            if (Tnpc) FilterList.Add("npc");
-            if (Tall) FilterList.Add("all");
+            if (Configuration.Filter_Player) FilterList.Add("player");
+            if (Configuration.Filter_Sleeper) FilterList.Add("sleeper");
+            if (Configuration.Filter_Container) FilterList.Add("storage");
+            if (Configuration.Filter_BuildingPrivledge) FilterList.Add("toolcupboard");
+            if (Configuration.Filter_NPC) FilterList.Add("npc");
+            if (Configuration.Filter_Node) FilterList.Add("node");
+            if (Configuration.Filter_All) FilterList.Add("all");
         }
+
         #endregion
 
         #region Helper
-        void SendMessage(BasePlayer player, string message) => rust.SendChatMessage(player, $"<color=grey>[<color=teal>{ChatPrefix}</color>]</color>","<color=grey>" + message + "</color>", ChatIcon);
-        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
-        bool IsRadar(string id) => ActiveRadars.Contains(id);
-        bool Allowed(BasePlayer player) => permission.UserHasGroup(player.UserIDString, "admin") || permission.UserHasPermission(player.UserIDString, "adminradar." + permAllowed);
-        private bool HasPlayerData(string id) => LoadedData.ContainsKey(id);
 
-        string ListToString<T>(List<T> list, int first = 0, string seperator = ", ") => string.Join(seperator, (from val in list select val.ToString()).Skip(first).ToArray());
-        void SetConfig(params object[] args) { List<string> stringArgs = (from arg in args select arg.ToString()).ToList(); stringArgs.RemoveAt(args.Length - 1); if (Config.Get(stringArgs.ToArray()) == null) Config.Set(args); }
-        T GetConfig<T>(T defaultVal, params object[] args) { List<string> stringArgs = (from arg in args select arg.ToString()).ToList(); if (Config.Get(stringArgs.ToArray()) == null) { PrintError($"The plugin failed to read something from the config: {ListToString(stringArgs, 0, "/")}{Environment.NewLine}Please reload the plugin and see if this message is still showing. If so, please post this into the support thread of this plugin."); return defaultVal; } return (T)System.Convert.ChangeType(Config.Get(stringArgs.ToArray()), typeof(T)); }
+        void SendMessage(BasePlayer player, string message) => rust.SendChatMessage(player, $"<color=grey>[<color=teal>{Configuration.ChatPrefix ?? Title}</color>]</color>", "<color=grey>" + message + "</color>", Configuration.IconProfile ?? "0");
+
+        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
+        bool IsRadar(string id) => ActiveRadars.Contains(id);
+
+        bool Allowed(BasePlayer player) => ServerUsers.Is(player.userID, ServerUsers.UserGroup.Owner) || ServerUsers.Is(player.userID, ServerUsers.UserGroup.Moderator);
+
+        private void GetConfig<T>(ref T variable, params string[] path)
+        {
+            if (path.Length == 0)
+                return;
+
+            if (Config.Get(path) == null)
+            {
+                Config.Set(path.Concat(new object[] { variable }).ToArray());
+                PrintWarning($"Added field to config: {string.Join("/", path)}");
+            }
+
+            variable = (T)Convert.ChangeType(Config.Get(path), typeof(T));
+        }
+
         bool RadarList(out string list)
         {
             string namelist = string.Empty;
@@ -894,18 +816,19 @@ namespace Oxide.Plugins
                 "<size=13>---- Radar Commands ----\n" +
                 "<color=red>/radar</color> <color=green>(filter)</color> - <color=yellow>activates radar with default settings or with optional filter</color>\n" +
                 "<color=red>/radar list</color> - <color=yellow>Shows a list of players using Radar</color>\n" +
-                "<color=red>/radar give</color> <color=green>[target] (filter)</color> - <color=yellow>Give a player radar with filter</color>\n" +
-                "<color=red>/radar filterlist</color> - <color=yellow>shows available filters</color>\n" +
-                "<color=red>/radar setting</color> <color=green>[filter] [invoke/distance] [value]</color> - <color=yellow>Set custom default filter setting for self</color>\n" +
-                "<color=red>/radar setting filter</color> <color=green>[NewDefaultFilter]</color> - <color=yellow>Set a new default filter for self</color></size>";
+                "<color=red>/radar filterlist</color> - <color=yellow>shows available filters</color>";
 
             if (Allowed(player))
             {
                 player.ChatMessage(message);
             }
-
         }
-        #endregion
 
+        public static bool HasFlag(RadarFilter instance, RadarFilter selected)
+        {
+            return ((instance & selected) == selected);
+        }
+
+        #endregion
     }
 }

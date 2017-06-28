@@ -1,11 +1,13 @@
 using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Hammer Time", "Shady", "1.0.15", ResourceId = 1711)]
+    [Info("Hammer Time", "Shady", "1.0.18", ResourceId = 1711)]
     [Description("Tweak settings for building blocks like demolish time, and rotate time.")]
     class HammerTime : RustPlugin
     {
@@ -13,6 +15,9 @@ namespace Oxide.Plugins
         Plugin Friends;
         [PluginReference]
         Plugin Clans;
+
+        FieldInfo curList = typeof(InvokeHandler).GetField("curList", (BindingFlags.Instance | BindingFlags.NonPublic));
+
         #region Config/Init
         float DemolishTime;
         float RotateTime;
@@ -36,7 +41,6 @@ namespace Oxide.Plugins
 		//--------------------------------------------------------------*/
         protected override void LoadDefaultConfig()
         {
-            if (Config["AuthLevelOverrideDemolish"] != null) Config.Remove("AuthLevelOverrideDemolish");
             Config["DemolishTime"] = DemolishTime = GetConfig("DemolishTime", 600f);
             Config["RotateTime"] = RotateTime = GetConfig("RotateTime", 600f);
             Config["MustOwnToDemolish"] = MustOwnDemolish = GetConfig("MustOwnToDemolish", false);
@@ -77,7 +81,7 @@ namespace Oxide.Plugins
                 var doRotate = false;
                 if (RotateAfterRestart) doRotate = block?.blockDefinition?.canRotate ?? RotateAfterRestart;
                 if (!doRotate && !DemolishAfterRestart) continue;
-                DoInvokes(block, DemolishAfterRestart, doRotate, false);
+                DoInvokes(block, DemolishAfterRestart, doRotate);
             }
         }
 
@@ -85,11 +89,11 @@ namespace Oxide.Plugins
         //			Localization Stuff			                        //
         //--------------------------------------------------------------*/
 
-        private void LoadDefaultMessages()
+        protected override void LoadDefaultMessages()
         {
             var messages = new Dictionary<string, string>
             {
-                //DO NOT EDIT LANGUAGE FILES HERE! Navigate to oxide\lang\HammerTime.en.json
+                //DO NOT EDIT LANGUAGE FILES HERE! Navigate to oxide\lang
                 {"doesNotOwnDemo", "You do not have access to demolish this object!"},
                 {"doesNotOwnRotate", "You do not have access to rotate this object!" }
             };
@@ -97,20 +101,20 @@ namespace Oxide.Plugins
         }
         #endregion;
         #region InvokeBlocks
-        void DoInvokes(BuildingBlock block, bool demo, bool rotate, bool justCreated)
+        void DoInvokes(BuildingBlock block, bool demo, bool rotate)
         {
             if (block == null || (block?.IsDestroyed ?? true)) return;
             if (demo)
             {
                 if (DemolishTime < 0)
                 {
-                    block.CancelInvoke("StopBeingDemolishable");
+                    CancelInvoke("StopBeingDemolishable", block);
                     block.SetFlag(BaseEntity.Flags.Reserved2, true, false);
                 }
                 if (DemolishTime == 0) block.Invoke("StopBeingDemolishable", 0.01f);
                 if (DemolishTime >= 1 && DemolishTime != 600) //if time is = to 600, then it's default, and there's no point in changing anything
                 {
-                    block.CancelInvoke("StopBeingDemolishable");
+                    CancelInvoke("StopBeingDemolishable", block);
                     block.SetFlag(BaseEntity.Flags.Reserved2, true, false); //reserved2 is demolishable
                     block.Invoke("StopBeingDemolishable", DemolishTime);
                 }
@@ -119,13 +123,13 @@ namespace Oxide.Plugins
             {
                 if (RotateTime < 0)
                 {
-                    block.CancelInvoke("StopBeingRotatable");
+                    CancelInvoke("StopBeingRotatable", block);
                     block.SetFlag(BaseEntity.Flags.Reserved1, true, false); //reserved1 is rotatable
                 }
                 if (RotateTime == 0) block.Invoke("StopBeingRotatable", 0.01f);
                 if (RotateTime >= 1 && RotateTime != 600) //if time is = to 600, then it's default, and there's no point in changing anything
                 {
-                    block.CancelInvoke("StopBeingRotatable");
+                    CancelInvoke("StopBeingRotatable", block);
                     block.SetFlag(BaseEntity.Flags.Reserved1, true, false); //reserved1 is rotatable
                     block.Invoke("StopBeingRotatable", RotateTime);
                 }
@@ -138,20 +142,20 @@ namespace Oxide.Plugins
         {
             var block = objectBlock?.ToBaseEntity()?.GetComponent<BuildingBlock>() ?? null;
             if (block == null || !HasPerms(plan?.GetOwnerPlayer()?.UserIDString ?? string.Empty, "hammertime.allowed")) return;
-            var doRotate = block?.blockDefinition?.canRotate ?? true;
-            NextTick(() => DoInvokes(block, true, doRotate, true));
+            NextTick(() => DoInvokes(block, true, block?.blockDefinition?.canRotate ?? true));
         }
 
         private void OnStructureUpgrade(BuildingBlock block, BasePlayer player, BuildingGrade.Enum grade)
         {
+            if (block == null || player == null) return;
             if (!HasPerms(player.UserIDString, "hammertime.allowed")) return;
-            NextTick(() => DoInvokes(block, false, block?.blockDefinition?.canRotate ?? true, false));
+            NextTick(() => DoInvokes(block, false, block?.blockDefinition?.canRotate ?? true));
         }
 
        object OnStructureRepair(BaseCombatEntity block, BasePlayer player)
         {
             if (block == null || player == null || !HasPerms(player.UserIDString, "hammertime.repaircooldown") || RepairCooldown == 8f) return null;
-            if (block.TimeSinceAttacked() < RepairCooldown) return false;
+            if (block.SecondsSinceAttacked < RepairCooldown) return false;
             return null;
         }
 
@@ -159,7 +163,7 @@ namespace Oxide.Plugins
         {
             if (!HasPerms(player.UserIDString, "hammertime.repaircooldown")) return null;
             var entity = hitInfo?.HitEntity?.GetComponent<BaseCombatEntity>() ?? null;
-            if (entity != null && entity.TimeSinceAttacked() < RepairCooldown) return false;
+            if (entity != null && entity.SecondsSinceAttacked < RepairCooldown) return false;
             return null;
         }
 
@@ -201,7 +205,7 @@ namespace Oxide.Plugins
                 var targetClan = Clans?.Call<string>("GetClanOf", player.UserIDString) ?? string.Empty;
                 if (!string.IsNullOrEmpty(ownerClan) && !string.IsNullOrEmpty(targetClan) && (targetClan == ownerClan)) return null;
             }
-            
+
             if (block.OwnerID != player.userID)
             {
                 SendReply(player, GetMessage("doesNotOwnRotate", player.UserIDString));
@@ -211,6 +215,18 @@ namespace Oxide.Plugins
         }
         #endregion
         #region Util
+        private ListDictionary<InvokeAction, float> InvokeList { get { return (ListDictionary<InvokeAction, float>)curList.GetValue(InvokeHandler.Instance); } }
+
+        private void CancelInvoke(string methodName, object obj)
+        {
+            if (string.IsNullOrEmpty(methodName) || obj == null) return;
+            if (!IsInvoking(methodName, obj)) return;
+            var action = InvokeList.Where(p => (p.Key.action?.Target ?? null) == obj && (p.Key.action?.Method?.Name ?? string.Empty) == methodName).FirstOrDefault().Key;
+            if (action != null) InvokeHandler.CancelInvoke(action.sender, action.action);
+        }
+
+        private bool IsInvoking(string methodName, object obj) { return InvokeList?.Any(p => (p.Key.action?.Method?.Name ?? string.Empty) == methodName && (p.Key.action?.Target ?? null) == obj) ?? false; }
+
         T GetConfig<T>(string name, T defaultValue)
         {
             if (Config[name] == null) return defaultValue;

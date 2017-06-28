@@ -1,15 +1,15 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
-using Oxide.Core.Plugins;
-using Newtonsoft.Json;
 using System.Linq;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
-using System;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Death Notes", "LaserHydra", "5.2.9", ResourceId = 819)]
+    [Info("Death Notes", "LaserHydra", "5.2.12", ResourceId = 819)]
     [Description("Broadcast deaths with many details")]
     class DeathNotes : RustPlugin
     {
@@ -85,6 +85,7 @@ namespace Oxide.Plugins
                     bool WriteToChat;
                     bool UsePopupNotifications;
                     bool UseSimpleUI;
+                    bool SnowNpcBattles;
 
                 //  Attachments
                     string AttachmentSplit;
@@ -96,7 +97,7 @@ namespace Oxide.Plugins
                     string ConsoleFormatting;
 
             // ------->   Colors
-            
+
                     string TitleColor;
                     string VictimColor;
                     string AttackerColor;
@@ -133,13 +134,13 @@ namespace Oxide.Plugins
 
                 //  Timer
                     float SimpleUI_HideTimer;
-        
+
         // ----------------------------------------------------
 
         #endregion
 
         #endregion
-        
+
         #region Classes
 
         class UIColor
@@ -187,7 +188,7 @@ namespace Oxide.Plugins
                     CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList(uiName));
             }
 
-            public string AddText(string name, double left, double top, double width, double height, UIColor color, string text, int textsize = 15, string parent = "Hud.Under", int alignmode = 0, float fadeIn = 0f, float fadeOut = 0f)
+            public string AddText(string name, double left, double top, double width, double height, UIColor color, string text, int textsize = 15, string parent = "Hud", int alignmode = 0, float fadeIn = 0f, float fadeOut = 0f)
             {
                 //name = name + RandomString();
                 text = text.Replace("\n", "{NEWLINE}");
@@ -285,6 +286,8 @@ namespace Oxide.Plugins
                         return "Chicken";
                     if (entity.name.Contains("bear"))
                         return "Bear";
+                    if (entity.name.Contains("zombie"))
+                        return "Zombie";
                 }
                 else if (type == AttackerType.Structure)
                 {
@@ -324,7 +327,7 @@ namespace Oxide.Plugins
                     return AttackerType.Player;
                 if (entity is BaseHelicopter)// entity.name.Contains("patrolhelicopter.prefab") && !entity.name.Contains("gibs"))
                     return AttackerType.Helicopter;
-                if (entity.name.Contains("animals/"))
+                if (entity.name.Contains("agents/"))
                     return AttackerType.Animal;
                 if (entity.name.Contains("barricades/") || entity.name.Contains("wall.external.high"))
                     return AttackerType.Structure;
@@ -364,6 +367,8 @@ namespace Oxide.Plugins
                         return "Chicken";
                     if (entity.name.Contains("bear"))
                         return "Bear";
+                    if (entity.name.Contains("zombie"))
+                        return "Zombie";
                 }
 
                 return "No Victim";
@@ -377,7 +382,7 @@ namespace Oxide.Plugins
                     return VictimType.Player;
                 if (entity.name.Contains("patrolhelicopter.prefab") && entity.name.Contains("gibs"))
                     return VictimType.Helicopter;
-                if ((bool)entity?.name?.Contains("animals/"))
+                if ((bool)entity?.name?.Contains("agents/"))
                     return VictimType.Animal;
 
                 return VictimType.Invalid;
@@ -463,7 +468,7 @@ namespace Oxide.Plugins
                     return JsonConvert.SerializeObject(this, Formatting.Indented);
                 }
             }
-            
+
             internal static DeathData Get(object obj)
             {
                 JObject jobj = (JObject) obj;
@@ -489,7 +494,7 @@ namespace Oxide.Plugins
 
                 if (attackertypes.Count != 0)
                     data.attacker.type = attackertypes[0];
-                
+
                 /// Reason
                 List<DeathReason> reasons = (from DeathReason current in Enum.GetValues(typeof(DeathReason)) where current.GetHashCode().ToString() == jobj["reason"].ToString() select current).ToList();
                 if (reasons.Count != 0)
@@ -500,7 +505,7 @@ namespace Oxide.Plugins
         }
 
         #endregion
-        
+
         #region Enums / Types
 
         enum VictimType
@@ -674,6 +679,7 @@ namespace Oxide.Plugins
             SetConfig("Settings", "Simple UI - Left", 0.1f);
             SetConfig("Settings", "Simple UI - Max Width", 0.8f);
             SetConfig("Settings", "Simple UI - Max Height", 0.05f);
+            SetConfig("Settings", "Show NPC Battles", false);
 
             SetConfig("Settings", "Simple UI Hide Timer", 5f);
 
@@ -726,7 +732,7 @@ namespace Oxide.Plugins
             SetConfig("Messages", "Trap", new List<object> { "{victim} ran into a {attacker}" });
             SetConfig("Messages", "Turret", new List<object> { "A {attacker} defended its home against {victim}." });
             SetConfig("Messages", "Unknown", new List<object> { "{victim} died. Nobody knows why, it just happened." });
-            
+
             SetConfig("Messages", "Blunt Sleeping", new List<object> { "{attacker} used a {weapon} to turn {victim}'s dream into a nightmare." });
             SetConfig("Messages", "Bullet Sleeping", new List<object> { "Sleeping {victim} was shot in the {bodypart} by {attacker} with a {weapon}{attachments} from {distance}m." });
             SetConfig("Messages", "Flamethrower Sleeping", new List<object> { "{victim} was burned to ashes by sleeping by {attacker} using a {weapon}." });
@@ -757,6 +763,7 @@ namespace Oxide.Plugins
             SimpleUI_Left = GetConfig(0.1f, "Settings", "Simple UI - Left");
             SimpleUI_MaxWidth = GetConfig(0.8f, "Settings", "Simple UI - Max Width");
             SimpleUI_MaxHeight = GetConfig(0.05f, "Settings", "Simple UI - Max Height");
+            SnowNpcBattles = GetConfig(false, "Settings", "Show NPC Battles");
 
             SimpleUI_HideTimer = GetConfig(5f, "Settings", "Simple UI Hide Timer");
 
@@ -846,7 +853,7 @@ namespace Oxide.Plugins
         [ChatCommand("deaths")]
         void cmdDeaths(BasePlayer player, string cmd, string[] args)
         {
-            if(!HasPerm(player.userID, "customize"))
+            if (!HasPerm(player.userID, "customize"))
             {
                 SendChatMessage(player, GetMsg("No Permission", player.userID));
                 return;
@@ -863,18 +870,18 @@ namespace Oxide.Plugins
             switch(args[0].ToLower())
             {
                 case "set":
-                    if(args.Length != 3)
+                    if (args.Length != 3)
                     {
                         SendChatMessage(player, "Syntax: /deaths set <field> <value>");
                         return;
                     }
 
-                    if(!playerSettingFields.Contains(args[1].ToLower()))
+                    if (!playerSettingFields.Contains(args[1].ToLower()))
                     {
                         SendChatMessage(player, GetMsg("Field Not Found", player.userID));
                         return;
                     }
-                    
+
                     bool value = false;
 
                     try
@@ -914,13 +921,13 @@ namespace Oxide.Plugins
                 hasPerm = true;
             else
             {
-                if((BasePlayer)arg.Connection.player != null)
+                if ((BasePlayer)arg.Connection.player != null)
                 {
                     if (HasPerm(arg.Connection.userid, "reproduce"))
                         hasPerm = true;
                 }
             }
-            
+
             if (hasPerm)
             {
                 if (arg.Args == null || arg.Args.Length != 1)
@@ -928,8 +935,8 @@ namespace Oxide.Plugins
                     arg.ReplyWith("Syntax: reproducekill <datetime>");
                     return;
                 }
-                
-                if(reproduceableKills.ContainsKey(arg.Args[0]))
+
+                if (reproduceableKills.ContainsKey(arg.Args[0]))
                 {
                     DeathData data = DeathData.Get(JsonConvert.DeserializeObject(reproduceableKills[arg.Args[0]]));
                     PrintWarning("Reproduced Kill: " + Environment.NewLine + data.JSON);
@@ -952,7 +959,7 @@ namespace Oxide.Plugins
         void GetInfo(BasePlayer player)
         {
             webrequest.EnqueueGet("http://oxidemod.org/plugins/819/", (code, response) => {
-                if(code != 200)
+                if (code != 200)
                 {
                     PrintWarning("Failed to get information!");
                     return;
@@ -962,7 +969,7 @@ namespace Oxide.Plugins
                 string version_installed = this.Version.ToString();
 
                 Match version = new Regex(@"<h3>Version (\d{1,2}(\.\d{1,2})+?)<\/h3>").Match(response);
-                if(version.Success)
+                if (version.Success)
                 {
                     version_published = version.Groups[1].ToString();
                 }
@@ -989,9 +996,9 @@ namespace Oxide.Plugins
 
         void OnEntityTakeDamage(BaseCombatEntity victim, HitInfo info)
         {
-            if(victim?.ToPlayer() != null && info?.Initiator?.ToPlayer() != null)
+            if (victim?.ToPlayer() != null && info?.Initiator?.ToPlayer() != null)
             {
-                NextTick(() => 
+                NextTick(() =>
                 {
                     if (victim.ToPlayer().IsWounded())
                         LastWounded[victim.ToPlayer().userID] = info;
@@ -1004,7 +1011,16 @@ namespace Oxide.Plugins
             if (victim == null)
                 return;
 
-            if(victim.ToPlayer() != null)
+            var corpse = victim as BaseCorpse;
+            if (corpse != null)
+                return;
+
+            var npc1 = info?.Initiator as BaseNpc;
+            var npc2 = victim as BaseNpc;
+            if (!SnowNpcBattles && npc1 != null && npc2 != null)
+                return;
+
+            if (victim.ToPlayer() != null)
             {
                 if (victim.ToPlayer().IsWounded())
                     info = TryGetLastWounded(victim.ToPlayer().userID, info);
@@ -1021,6 +1037,8 @@ namespace Oxide.Plugins
                 return;
 
             data.victim.name = data.victim.TryGetName();
+            if (data.victim.name == "No Attacker")
+                return;
 
             if (info?.Initiator != null)
             {
@@ -1032,11 +1050,13 @@ namespace Oxide.Plugins
 
             data.attacker.type = data.attacker.TryGetType();
             data.attacker.name = StripTags(data.attacker.TryGetName());
+            if (data.attacker.name == "No Attacker")
+                return;
             data.weapon = info?.Weapon?.GetItem()?.info?.displayName?.english ?? FormatThrownWeapon(info?.WeaponPrefab?.name ?? "No Weapon");
             data.attachments = GetAttachments(info);
             data.damageType = FirstUpper(victim.lastDamage.ToString());
 
-            if(data.weapon == "Heli Rocket")
+            if (data.weapon == "Heli Rocket")
             {
                 data.attacker.name = "Patrol Helicopter";
                 data.reason = DeathReason.Helicopter;
@@ -1078,7 +1098,7 @@ namespace Oxide.Plugins
                 Puts(StripTags(GetDeathMessage(newData, true)));
 
             if (LogToFile)
-                ConVar.Server.Log("oxide/logs/Kills.txt", StripTags(GetDeathMessage(newData, true)));
+                LogToFile("kills", StripTags(GetDeathMessage(newData, true)), this);
 
             if (UsePopupNotifications)
                 PopupMessage(GetDeathMessage(newData, false));
@@ -1159,7 +1179,7 @@ namespace Oxide.Plugins
         #region Death Variables Methods
 
         List<string> GetMessages(string reason) => Messages.ContainsKey(reason) ? Messages[reason] : new List<string>();
-        
+
         List<string> GetAttachments(HitInfo info)
         {
             List<string> attachments = new List<string>();
@@ -1205,7 +1225,7 @@ namespace Oxide.Plugins
 
             if (data.victim.type == VictimType.Player && data.victim.entity?.ToPlayer() != null && data.victim.entity.ToPlayer().IsSleeping())
             {
-                if(SleepingDeaths.Contains(data.reason))
+                if (SleepingDeaths.Contains(data.reason))
                 {
                     reason = data.reason + " Sleeping";
                 }
@@ -1328,7 +1348,7 @@ namespace Oxide.Plugins
             }
             else
             {
-                if(HasPerm(player.userID, "see"))
+                if (HasPerm(player.userID, "see"))
                 {
                     if (type == "ui")
                     {
@@ -1439,12 +1459,12 @@ namespace Oxide.Plugins
 
             UIObject ui = new UIObject();
 
-            ui.AddText("DeathNotice_DropShadow", SimpleUI_Left + 0.001, SimpleUI_Top + 0.001, SimpleUI_MaxWidth, SimpleUI_MaxHeight, deathNoticeShadowColor, StripTags(message), SimpleUI_FontSize, "Hud.Under", 3, fadeIn, 0.2f);
-            ui.AddText("DeathNotice", SimpleUI_Left, SimpleUI_Top, SimpleUI_MaxWidth, SimpleUI_MaxHeight, deathNoticeColor, message, SimpleUI_FontSize, "Hud.Under", 3, fadeIn, 0.2f);
+            ui.AddText("DeathNotice_DropShadow", SimpleUI_Left + 0.001, SimpleUI_Top + 0.001, SimpleUI_MaxWidth, SimpleUI_MaxHeight, deathNoticeShadowColor, StripTags(message), SimpleUI_FontSize, "Hud", 3, fadeIn, 0.2f);
+            ui.AddText("DeathNotice", SimpleUI_Left, SimpleUI_Top, SimpleUI_MaxWidth, SimpleUI_MaxHeight, deathNoticeColor, message, SimpleUI_FontSize, "Hud", 3, fadeIn, 0.2f);
 
             ui.Destroy(player);
 
-            if(replaced)
+            if (replaced)
             {
                 timer.Once(0.1f, () =>
                 {

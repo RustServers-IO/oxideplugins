@@ -1,11 +1,11 @@
 {
-    "name": "RockBlock",
+    "name": "Rock Block",
     "description": "Blocks players from building in rocks",
     "author": "Wulf",
-    "version": "1.0.6",
+    "version": "1.1.0",
     "configuration": true,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rockblock.1831",
+    "url": "http:\/\/oxidemod.org\/plugins\/rock-block.1831",
     "games": [
         "rust"
     ],

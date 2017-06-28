@@ -1,0 +1,16 @@
+{
+    "name": "SaveAlerter",
+    "description": "A small save icon when the server saves.",
+    "author": "PsychoTea",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/savealerter.2472",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

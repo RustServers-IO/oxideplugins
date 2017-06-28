@@ -1,312 +1,421 @@
-using Random=System.Random;
 using System;
-using Rust.Xp;
 using System.Collections.Generic;
 using Oxide.Core.Plugins;
+using System.Text;
 
-namespace Oxide.Plugins {
-  
-  [Info("Guess The Number", "Dora", "1.2.1", ResourceId = 2023)]
-  [Description("Rewards the user with XP when they say the correct number.")]
-  
-  class GuessTheNumber : RustPlugin {
+namespace Oxide.Plugins
+{
 
-    Random rng = new Random();
-    int number = 0;
-    bool hasEconomics = false;
-    bool hasServerRewards = false;
-    Timer endEventTimer = null;
-    Timer autoRepeatTimer = null;
+                //
+                // Credit to the original author, Dora
+                //
 
-    [PluginReference] Plugin Economics;
-    [PluginReference] Plugin ServerRewards;
+    [Info("GuessTheNumber", "redBDGR", "2.0.2", ResourceId = 2023)]
+    [Description("An event that requires player to guess the correct number")]
 
-    public class LimitTries {
-      public int attemptedTries = 1;
-    }
+    class GuessTheNumber : RustPlugin
+    {
+        public Dictionary<ulong, int> playerInfo = new Dictionary<ulong, int>();
 
-    public static Dictionary<ulong, LimitTries> playerInfo = new Dictionary<ulong, LimitTries>();
+        bool useEconomics = true;
+        bool useServerRewards = false;
+        bool autoEventsEnabled = false;
+        float autoEventTime = 600f;
+        float eventLength = 30f;
+        int minDefault = 1;
+        int maxDefault = 1000;
+        int maxTries = 1;
+        int economicsWinReward = 20;
+        int serverRewardsWinReward = 20;
 
-    private void OnServerInitialized() {
+        const string permissionNameADMIN = "guessthenumber.admin";
+        const string permissionNameENTER = "guessthenumber.enter";
 
-      permission.RegisterPermission("GuessTheNumber.startEvent", this);
-      LoadVariables();
-      LoadDefaultMessages();
+        [PluginReference] Plugin Economics;
+        [PluginReference] Plugin ServerRewards;
 
-      if(configData.autoEventEnabler == true) {
-        repeatNumberEvent();
-      }
+        bool Changed = false;
+        bool eventActive = false;
+        Timer eventTimer;
+        Timer autoRepeatTimer;
+        int minNumber = 0;
+        int maxNumber = 0;
+        bool hasEconomics = false;
+        bool hasServerRewards = false;
+        int number = 0;
 
-      if(Economics == null) {
-        hasEconomics = false;
-      } else {
-        hasEconomics = true;
-      }
+        void LoadVariables()
+        {
+            useEconomics = Convert.ToBoolean(GetConfig("Settings", "Use Economics", true));
+            useServerRewards = Convert.ToBoolean(GetConfig("Settings", "Use ServerRewards", false));
+            autoEventsEnabled = Convert.ToBoolean(GetConfig("Settings", "Auto Events Enabled", false));
+            autoEventTime = Convert.ToSingle(GetConfig("Settings", "Auto Event Repeat Time", 600f));
+            eventLength = Convert.ToSingle(GetConfig("Settings", "Event Length", 30f));
+            minDefault = Convert.ToInt32(GetConfig("Settings", "Min Default Number", 1));
+            maxDefault = Convert.ToInt32(GetConfig("Settings", "Max Default Number", 100));
+            maxTries = Convert.ToInt32(GetConfig("Settings", "Max Tries", 1));
+            economicsWinReward = Convert.ToInt32(GetConfig("Settings", "Economics Win Reward", 20));
+            serverRewardsWinReward = Convert.ToInt32(GetConfig("Settings", "ServerRewards Win Reward", 20));
 
-      if(ServerRewards == null) {
-        hasServerRewards = false;
-      } else {
-        hasServerRewards = true;
-      }
-
-    }
-
-    private void repeatNumberEvent() {
-      autoRepeatTimer = timer.Repeat(configData.autoEventInterval, 0, () => GuessNumberEvent(configData.minNumber, configData.maxNumber));
-    }
-
-    private void GuessNumberEvent(int minNumber, int maxNumber) {
-      if(number == 0) {
-        number = rng.Next(minNumber, maxNumber);
-        broadcastChat(Lang("pluginPrefix", null), Lang("numberNotice", null, minNumber, (maxNumber - 1)));
-        if(configData.autoEndEventEnabler == true) {
-          endEventTimer = timer.Once(configData.autoEndEventTimer, () => endEvent());     
+            if (!Changed) return;
+            SaveConfig();
+            Changed = false;
         }
-      }
-    }
 
-    [ChatCommand("startNumber")]
-    private void startGuessNumberEvent(BasePlayer player, string cmd, string[] args) {
-      int minNumber = 0;
-      int maxNumber = 0;
-
-      if(!hasPermission(player, "GuessTheNumber.startEvent")) {
-        sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("noPermission", player.UserIDString));
-        return;
-      }
-
-      if(number != 0) {
-        sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("eventStarted", player.UserIDString, number));
-        return;
-      }
-
-      if(args.Length == 2) {
-        Int32.TryParse(args[0], out minNumber);
-        Int32.TryParse(args[1], out maxNumber);
-        if(minNumber != 0 && maxNumber != 0) {
-          number = rng.Next(minNumber, maxNumber);
-          broadcastChat(Lang("pluginPrefix", player.UserIDString), Lang("numberNotice", player.UserIDString, minNumber, (maxNumber - 1)));
-        } else {
-          sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("invalidParam2", player.UserIDString));
-          return;
+        protected override void LoadDefaultConfig()
+        {
+            Config.Clear();
+            LoadVariables();
         }
-      } else {
-        number = rng.Next(configData.minNumber, configData.maxNumber);
-        broadcastChat(Lang("pluginPrefix", player.UserIDString), Lang("numberNotice", player.UserIDString, configData.minNumber, (configData.maxNumber - 1)));
-      }
- 
-      sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("winNumber", player.UserIDString, number));
-      if(configData.autoEndEventEnabler == true) {
-        endEventTimer = timer.Once(configData.autoEndEventTimer, () => endEvent());     
-      }
-    }
 
-    [ChatCommand("endNumber")]
-    private void stopGuessNumberEvent(BasePlayer player) {
-      if(!hasPermission(player, "GuessTheNumber.startEvent")) {
-        sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("noPermission", player.UserIDString));
-        return;
-      }
-
-      if(number == 0) {
-        sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("eventNotStarted", player.UserIDString));
-        return;
-      }
-
-      broadcastChat(Lang("pluginPrefix", player.UserIDString), Lang("eventForcedEnd", player.UserIDString, player.displayName, number));
-      number = 0;
-      playerInfo.Clear();
-      if(endEventTimer != null && !endEventTimer.Destroyed) {
-        endEventTimer.Destroy();
-      }
-    }
-
-    [ChatCommand("number")]
-    private void numberReply(BasePlayer player, string cmd, string[] args) {
-      if(number == 0) {
-        sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("eventNotStarted", player.UserIDString));
-        return;
-      }
-
-      if(args.Length == 1) {
-        
-        int playerNum;
-        Int32.TryParse(args[0], out playerNum);
-
-        if(configData.maxAttemptsEnabler == true) {
-          if(playerInfo.ContainsKey(player.userID)) {
-            if(playerInfo[player.userID].attemptedTries == configData.maxAttempts) {
-              sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("maxAttempts", player.UserIDString));
-              return;
-            } else {
-              playerInfo[player.userID].attemptedTries += 1;
-            }    
-          } else {
-            playerInfo.Add(player.userID, new LimitTries());
-          }
+        void Init()
+        {
+            permission.RegisterPermission(permissionNameADMIN, this);
+            permission.RegisterPermission(permissionNameENTER, this);
+            LoadVariables();
         }
-        
-        if(playerNum == number) {
-          
-          float xpToGive;
-          bool showEconomics = false;
-          bool showServerRewards = false;
-          bool showXP = false;
-          
-          if(configData.xpPercentEnabler == true) {
-            xpToGive = player.xp.UnspentXp * (float) configData.xpPercentToGive;
-          } else {
-            xpToGive = configData.xpToGive;
-          }
-          
-          if(configData.xpEnabler == true) {
-            player.xp.Add(Definitions.Cheat, xpToGive); 
-            showXP = true;
-          } 
 
-          if(hasEconomics == true) {
-            if(configData.economicsEnabler == true) {
-              Economics.CallHook("Deposit", player.userID, configData.economicsWinReward);
-              showEconomics = true;
+        private void OnServerInitialized()
+        {
+            LoadVariables();
+
+            if (autoEventsEnabled)
+                autoRepeatTimer = timer.Repeat(autoEventTime, 0, () =>
+                {
+                    minNumber = minDefault;
+                    maxNumber = maxDefault;
+                    StartEvent();
+                });
+            
+            // External plugin checking
+            if (!Economics)
+                hasEconomics = false;
+            else
+                hasEconomics = true;
+
+            if (!ServerRewards)
+                hasServerRewards = false;
+            else
+                hasServerRewards = true;
+        }
+
+        void Loaded()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                //chat
+                ["No Permission"] = "You cannot use this command!",
+                ["Event Already Active"] = "There is currently already an event that is active!",
+                ["Event Started"] = "A random number event has started, correctly guess the random number (between {0} and {1}) to win a prize! use /guess <number> to enter",
+                ["Help Message"] = "<color=#cccc00>/gtn start</color> (this will use the default min/max set in the config)",
+                ["Help Message1"] = "<color=#cccc00>/gtn start <min number> <max number></color> (allows you to set custom min/max numbers)",
+                ["Help Message2"] = "<color=#cccc00>/gtn end</color> (will end the current event)",
+                ["No Event"] = "There are no current events active",
+                ["Max Tries"] = "You have already guessed the maximum number of times",
+                ["Event Win"] = "{0} has won the event! (correct number was {1})",
+                ["Economics Reward"] = "You have earned ${0} for guessing the correct number!",
+                ["ServerRewards Reward"] = "You have earned {0} RP for guessing the correct number!",
+                ["Wrong Number"] = "You guessed the wrong number (you have {0} tries left)",
+                ["/guess Invalid Syntax"] = "Invalid syntax! /guess <number>",
+                ["Event Timed Out"] = "The event time has run out and no one successfully guessed the number!",
+                ["Invalid Guess Entry"] = "The guess you entered was invalid! numbers only please",
+                ["Event Created"] = "The event has been succesfully created, the winning number is {0}",
+                ["GTN console invalid syntax"] = "Invalid syntax! gtn <start/end> <min number> <max number>",
+
+            }, this);
+        }
+
+        [ConsoleCommand("gtn")]
+        void GTNCONSOLECMD(ConsoleSystem.Arg args)
+        {
+            //args.ReplyWith("test");
+            if (args.Connection != null)
+                return;
+            if (args.Args == null)
+            {
+                args.ReplyWith(msg("GTN console invalid syntax"));
+                return;
             }
-          }
-
-          if(hasServerRewards == true) {
-            if(configData.serverRewardsEnabler == true) {
-              ServerRewards?.Call("AddPoints", new object[] {player.userID, configData.serverRewardsPoints});
-              showServerRewards = true;
+            if (args.Args.Length == 0)
+            {
+                args.ReplyWith(msg("GTN console invalid syntax"));
+                return;
             }
-          }
-
-          string xpMsg = showXP ? Lang("eventWonExperiences", player.UserIDString, xpToGive) : "";
-          string economicsMsg = showEconomics ? Lang("eventWonEconomics", player.UserIDString, configData.economicsWinReward) : "";
-          string serverRewardsMsg = showServerRewards ? Lang("eventWonServerRewards", player.UserIDString, configData.serverRewardsPoints) : "";
-          broadcastChat(Lang("pluginPrefix", player.UserIDString), Lang("eventWon", player.UserIDString, player.displayName, number) + xpMsg + economicsMsg + serverRewardsMsg);
-
-          number = 0;
-          playerInfo.Clear();
-          if(endEventTimer != null && !endEventTimer.Destroyed) {
-            endEventTimer.Destroy();
-          }
-        
-        } else {
-          sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("wrongNumber", player.UserIDString));
+            if (args.Args.Length > 3)
+            {
+                args.ReplyWith(msg("GTN console invalid syntax"));
+                return;
+            }
+            if (args.Args[0] == null)
+            {
+                args.ReplyWith(msg("GTN console invalid syntax"));
+                return;
+            }
+            if (args.Args[0] == "start")
+            {
+                if (eventActive)
+                {
+                    args.ReplyWith(msg("Event Already Active"));
+                    return;
+                }
+                if (args.Args.Length == 3)
+                {
+                    minNumber = Convert.ToInt32(args.Args[1]);
+                    maxNumber = Convert.ToInt32(args.Args[2]);
+                    if (minNumber != 0 && maxNumber != 0)
+                    {
+                        number = Convert.ToInt32(Math.Round(Convert.ToDouble(UnityEngine.Random.Range(Convert.ToSingle(minNumber), Convert.ToSingle(maxNumber)))));
+                        StartEvent();
+                        args.ReplyWith(string.Format(msg("Event Created"), number.ToString()));
+                    }
+                    else
+                    {
+                        args.ReplyWith(msg("Invalid Params"));
+                        return;
+                    }
+                }
+                else
+                {
+                    minNumber = minDefault;
+                    maxNumber = maxDefault;
+                    number = Convert.ToInt32(Math.Round(Convert.ToDouble(UnityEngine.Random.Range(Convert.ToSingle(minNumber), Convert.ToSingle(maxNumber)))));
+                    StartEvent();
+                    args.ReplyWith(string.Format(msg("Event Created"), number.ToString()));
+                }
+                if (autoEventsEnabled)
+                    if (!autoRepeatTimer.Destroyed)
+                    {
+                        autoRepeatTimer.Destroy();
+                        autoRepeatTimer = timer.Repeat(autoEventTime, 0, () => StartEvent());
+                    }
+                return;
+            }
+            else if (args.Args[0] == "end")
+            {
+                if (eventActive == false)
+                {
+                    args.ReplyWith(msg("No Event"));
+                    return;
+                }
+                if (!eventTimer.Destroyed || eventTimer != null)
+                    eventTimer.Destroy();
+                if (autoEventsEnabled)
+                    if (!autoRepeatTimer.Destroyed)
+                    {
+                        autoRepeatTimer.Destroy();
+                        autoRepeatTimer = timer.Repeat(autoEventTime, 0, () => StartEvent());
+                    }
+                eventActive = false;
+                args.ReplyWith("The current event has been cancelled");
+                rust.BroadcastChat(msg("Event Timed Out"));
+            }
+            else
+                args.ReplyWith(msg("GTN console invalid syntax"));
+            return;
         }
 
-      } else {
-        sendChatMessage(player, Lang("pluginPrefix", player.UserIDString), Lang("invalidParam", player.UserIDString));
-        return;
-      }
+        [ChatCommand("gtn")]
+        private void startGuessNumberEvent(BasePlayer player, string cmd, string[] args)
+        {
+            if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+            {
+                player.ChatMessage(msg("No Permission", player.UserIDString));
+                return;
+            }
+            if (args.Length == 0)
+            {
+                player.ChatMessage(DoHelpMenu());
+                return;
+            }
+            if (args.Length > 3)
+            {
+                player.ChatMessage(DoHelpMenu());
+                return;
+            }
+            if (args[0] == null)
+            {
+                player.ChatMessage(DoHelpMenu());
+                return;
+            }
+            if (args[0] == "start")
+            {
+                if (eventActive)
+                {
+                    player.ChatMessage(msg("Event Already Active", player.UserIDString));
+                    return;
+                }
+                if (args.Length == 3)
+                {
+                    minNumber = Convert.ToInt32(args[1]);
+                    maxNumber = Convert.ToInt32(args[2]);
+                    if (minNumber != 0 && maxNumber != 0)
+                    {
+                        number = Convert.ToInt32(Math.Round(Convert.ToDouble(UnityEngine.Random.Range(Convert.ToSingle(minNumber), Convert.ToSingle(maxNumber)))));
+                        StartEvent();
+                        player.ChatMessage(string.Format(msg("Event Created", player.UserIDString), number.ToString()));
+                    }
+                    else
+                    {
+                        player.ChatMessage(msg("Invalid Params", player.UserIDString));
+                        return;
+                    }
+                }
+                else
+                {
+                    minNumber = minDefault;
+                    maxNumber = maxDefault;
+                    number = Convert.ToInt32(Math.Round(Convert.ToDouble(UnityEngine.Random.Range(Convert.ToSingle(minNumber), Convert.ToSingle(maxNumber)))));
+                    StartEvent();
+                    player.ChatMessage(string.Format(msg("Event Created", player.UserIDString), number.ToString()));
+                }
+                if (autoEventsEnabled)
+                    if (!autoRepeatTimer.Destroyed)
+                    {
+                        autoRepeatTimer.Destroy();
+                        autoRepeatTimer = timer.Repeat(autoEventTime, 0, () => StartEvent());
+                    }
+                return;
+            }
+            else if (args[0] == "end")
+            {
+                if (eventActive == false)
+                {
+                    player.ChatMessage(msg("No Event", player.UserIDString));
+                    return;
+                }
+                if (!eventTimer.Destroyed || eventTimer != null)
+                    eventTimer.Destroy();
+                if (autoEventsEnabled)
+                    if (!autoRepeatTimer.Destroyed)
+                    {
+                        autoRepeatTimer.Destroy();
+                        autoRepeatTimer = timer.Repeat(autoEventTime, 0, () => StartEvent());
+                    }
+                eventActive = false;
+                rust.BroadcastChat(msg("Event Timed Out"));
+            }
+            else
+                player.ChatMessage(msg("Help Message", player.UserIDString));
+            return;
+        }
+
+        [ChatCommand("guess")]
+        private void numberReply(BasePlayer player, string cmd, string[] args)
+        {
+            if (!permission.UserHasPermission(player.UserIDString, permissionNameENTER))
+            {
+                player.ChatMessage(msg("No Permission", player.UserIDString));
+                return;
+            }
+            if (!eventActive)
+            {
+                player.ChatMessage(msg("No Event", player.UserIDString));
+                return;
+            }
+
+            if (args.Length == 1)
+            {
+                if (!IsNumber(args[0]))
+                {
+                    player.ChatMessage(msg("Invalid Guess Entry", player.UserIDString));
+                    return;
+                }
+                int playerNum = Convert.ToInt32(args[0]);
+                if (!playerInfo.ContainsKey(player.userID))
+                    playerInfo.Add(player.userID, 0);
+                if (playerInfo[player.userID] >= maxTries)
+                {
+                    player.ChatMessage(msg("Max Tries", player.UserIDString));
+                    return;
+                }
+
+                if (playerNum == number)
+                {
+                    rust.BroadcastChat(string.Format(msg("Event Win", player.UserIDString), player.displayName, number.ToString()));
+                    if (hasEconomics)
+                    {
+                        if (useEconomics)
+                        {
+                            Economics.CallHook("Deposit", player.userID, economicsWinReward);
+                            player.ChatMessage(string.Format(msg("Economics Reward", player.UserIDString), economicsWinReward.ToString()));
+                        }
+                    }
+
+                    if (hasServerRewards)
+                    {
+                        if (useServerRewards)
+                        {
+                            ServerRewards?.Call("AddPoints", new object[] { player.userID, serverRewardsWinReward });
+                            player.ChatMessage(string.Format(msg("ServerRewards Reward", player.UserIDString), economicsWinReward.ToString()));
+                        }
+                    }
+                    number = 0;
+                    eventActive = false;
+                    playerInfo.Clear();
+                    eventTimer.Destroy();
+                    autoRepeatTimer = timer.Repeat(autoEventTime, 0, () => StartEvent());
+                }
+                else
+                {
+                    playerInfo[player.userID]++;
+                    player.ChatMessage(string.Format(msg("Wrong Number", player.UserIDString), (playerInfo[player.userID] - maxTries).ToString()));
+                }
+            }
+            else
+                player.ChatMessage(msg("/guess Invalid Syntax", player.UserIDString));
+            return;
+        }
+
+        void StartEvent()
+        {
+            if (eventActive)
+                return;
+            rust.BroadcastChat(string.Format(msg("Event Started"), minNumber.ToString(), maxNumber.ToString()));
+            eventActive = true;
+            eventTimer = timer.Once(eventLength, () =>
+            {
+                rust.BroadcastChat(msg("Event Timed Out"));
+                eventActive = false;
+                playerInfo.Clear();
+            });
+        }
+
+        string DoHelpMenu()
+        {
+            StringBuilder x = new StringBuilder();
+            x.AppendLine(msg("Help Message"));
+            x.AppendLine(msg("Help Message1"));
+            x.AppendLine(msg("Help Message2"));
+            return x.ToString().TrimEnd();
+        }
+
+        bool IsNumber(string str)
+        {
+            foreach (char c in str)
+                if (c < '0' || c > '9')
+                    return false;
+            return true;
+        }
+
+        object GetConfig(string menu, string datavalue, object defaultValue)
+        {
+            var data = Config[menu] as Dictionary<string, object>;
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[menu] = data;
+                Changed = true;
+            }
+            object value;
+            if (!data.TryGetValue(datavalue, out value))
+            {
+                value = defaultValue;
+                data[datavalue] = value;
+                Changed = true;
+            }
+            return value;
+        }
+
+        string msg(string key, string id = null) => lang.GetMessage(key, this, id);
     }
-
-    private void endEvent() {
-      broadcastChat(Lang("pluginPrefix", null), Lang("autoEventEnd", null, number));
-      number = 0;
-      playerInfo.Clear();
-      if(endEventTimer != null && !endEventTimer.Destroyed) {
-        endEventTimer.Destroy();
-      } 
-    }
-
-    private void sendChatMessage(BasePlayer player, string prefix, string msg) {
-      SendReply(player, prefix + ": " + msg);
-    }
-
-    private void broadcastChat(string prefix, string msg) {
-      PrintToChat(prefix + ": " + msg);
-    }
-
-    private bool hasPermission(BasePlayer player, string perm) {
-      if(player.net.connection.authLevel > 1) {
-        return true;
-      }
-      return permission.UserHasPermission(player.userID.ToString(), perm);
-    }
-
-    private ConfigData configData;
-    class ConfigData {
-      public bool autoEventEnabler { get; set; }
-      public int autoEventInterval { get; set; }
-
-      public int minNumber { get; set; }
-      public int maxNumber { get; set; }
-
-      public bool xpEnabler { get; set; }
-      public bool xpPercentEnabler { get; set; }
-      public float xpPercentToGive { get; set; }
-      public int xpToGive { get; set; }
-      
-      public bool economicsEnabler { get; set; }
-      public int economicsWinReward { get; set; }
-      
-      public bool serverRewardsEnabler { get; set; }
-      public int serverRewardsPoints { get; set; }
-
-      public bool maxAttemptsEnabler { get; set; }
-      public int maxAttempts { get; set; }
-      
-      public bool autoEndEventEnabler { get; set; }
-      public int autoEndEventTimer { get; set; }
-
-    }
-
-    private void LoadVariables() {
-      LoadConfigVariables();
-      SaveConfig();
-    }
-
-    protected override void LoadDefaultConfig() {
-      Config.Clear();
-      Config["autoEventEnabler"] = true;
-      Config["autoEventInterval"] = 1800;
-
-      Config["minNumber"] = 1;
-      Config["maxNumber"] = 101;
-
-      Config["xpEnabler"] = true;
-      Config["xpPercentEnabler"] = false;
-      Config["xpPercentToGive"] = 0.10;
-      Config["xpToGive"] = 10;
-
-      Config["economicsEnabler"] = false;
-      Config["economicsWinReward"] = 100;
-
-      Config["serverRewardsEnabler"] = false;
-      Config["serverRewardsPoints"] = 5;
-
-      Config["maxAttemptsEnabler"] = true;
-      Config["maxAttempts"] = 10;
-
-      Config["autoEndEventEnabler"] = true;
-      Config["autoEndEventTimer"] = 300;
-      SaveConfig();
-    }
-
-    void LoadDefaultMessages() {
-      lang.RegisterMessages(new Dictionary<string, string> {
-        ["pluginPrefix"] = "<color=orange>Guess The Number</color>",
-        ["wrongNumber"] = "Ops, that is not the correct number!",
-        ["invalidParam"] = "Invalid Parameter - /number <number>",
-        ["invalidParam2"] = "Invalid Parameters - /startNumber <minNumber> <maxNumber>",
-        ["noPermission"] = "You do not have the permission to use this.",
-        ["winNumber"] = "Winning number: <color=orange>{0}</color>",
-        ["numberNotice"] = "Event has started, guess a number! ({0} - {1}). Reply using /number <number>",
-        ["maxAttempts"] = "You have reached the maximum attempts to guess a number.",
-        ["autoEventEnd"] = "Event has auto-ended due to time limit. The winning number was <color=orange>{0}</color>.",
-        ["eventWon"] = "<color=orange>{0}</color> won!\nThe winning number was <color=orange>{1}</color>.",
-        ["eventNotStarted"] = "Event has not started.",
-        ["eventForcedEnd"] = "Event has been ended by <color=orange>{0}</color>. The winning number was <color=orange>{1}</color>.",
-        ["eventStarted"] = "Someone has already started the event.\nWinning number: <color=orange>{0}</color>\n/endNumber - To end the event forcefully.",
-        ["eventWonEconomics"] = "\n<color=orange>${0}</color> to has been added to his balance.",
-        ["eventWonServerRewards"] = "\n<color=orange>{0}</color> server points has been added.",
-        ["eventWonExperiences"] = "\n<color=orange>{0}</color> experiences has been awarded."
-      }, this);
-    }
-
-    string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
-
-    private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-    void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
-
-  }
 }

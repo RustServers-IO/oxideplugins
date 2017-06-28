@@ -1,0 +1,19 @@
+{
+    "name": "WipeKits",
+    "description": "Puts a configurable cooldown from the wipe on each kit depending on their kitname.",
+    "author": "Ryan",
+    "version": "1.0.1",
+    "configuration": true,
+    "require": {
+        "Kits": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/wipekits.2474",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

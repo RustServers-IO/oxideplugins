@@ -2,7 +2,7 @@
     "name": "Hammer Time",
     "description": "Tweak \"Demolish\" and \"Rotate\" time when using the hammer",
     "author": "Shady757",
-    "version": "1.0.15",
+    "version": "1.0.18",
     "configuration": true,
     "suggest": {
         "Clans": "*",

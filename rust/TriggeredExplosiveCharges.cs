@@ -1,19 +1,19 @@
 ﻿using System;
 using System.IO;
-using System.Reflection;
 using System.Collections.Generic;
 
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.4")]
+    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.7")]
     [Description("Adds the option to set off C4 manually without a timer")]
     class TriggeredExplosiveCharges : RustPlugin
     {
         #region Constants
         private const string PERMISSION_PLACE = "triggeredexplosivecharges.place";
         private const string PERMISSION_NOTRIGGER = "triggeredexplosivecharges.notrigger";
+        private const string PERMISSION_CRAFTING = "triggeredexplosivecharges.crafting";
 
         private const int TRIGGER_ITEM_ID = 919780768; // bone.club
         private const ulong TRIGGER_SKIN_TIMED_MODE = 881325138;
@@ -33,6 +33,7 @@ namespace Oxide.Plugins
 
             public static Dictionary<ulong, TriggeredExplosivesManager> allManagers
                 = new Dictionary<ulong, TriggeredExplosivesManager>();
+            private static Dictionary<uint, ulong> fakeC4_To_PlayerID = new Dictionary<uint, ulong>();
 
             private BasePlayer player;
             private List<TimedExplosive> triggeredExplosives;
@@ -63,8 +64,12 @@ namespace Oxide.Plugins
                         if (bn)
                         {
                             DroppedItem fakeC4 = bn.GetComponent<DroppedItem>();
-                            if (fakeC4) 
+                            if (fakeC4)
+                            {
+                                fakeC4_To_PlayerID[fakeC4.net.ID] = player.userID;
+                                fakeC4.allowPickup = configuration.C4_ALLOW_PICKUP;
                                 fakeExplosives.Add(fakeC4);
+                            }
                             else
                                 triggeredExplosives.Add(bn.GetComponent<TimedExplosive>());
                         }
@@ -129,14 +134,19 @@ namespace Oxide.Plugins
 
                 worldModel.transform.rotation = realC4.transform.localRotation * Quaternion.Euler(90, 0, 0);
 
-                worldModel.allowPickup = false;
-                worldModel.Invoke("IdleDestroy", float.MaxValue);
+                worldModel.allowPickup = configuration.C4_ALLOW_PICKUP;
+                worldModel.CancelInvoke((Action)Delegate.CreateDelegate(typeof(Action), worldModel, "IdleDestroy"));
                 worldModel.item.amount = worldModel.item.info.stackable;
 
                 BaseEntity.saveList.Remove(worldModel);
 
                 fakeExplosives.Add(worldModel);
                 triggeredExplosives.Remove(realC4);
+                fakeC4_To_PlayerID[worldModel.net.ID] = player.userID;
+
+                saveData.deployedExplosives[player.userID].Remove(realC4.net.ID);
+                saveData.deployedExplosives[player.userID].Add(worldModel.net.ID);
+                SaveDataToFile();
 
                 realC4.Kill();
             }
@@ -164,6 +174,11 @@ namespace Oxide.Plugins
 
                 triggeredExplosives.Add(realC4);
                 fakeExplosives.Remove(fakeC4);
+                fakeC4_To_PlayerID.Remove(fakeC4.net.ID);
+
+                saveData.deployedExplosives[player.userID].Remove(fakeC4.net.ID);
+                saveData.deployedExplosives[player.userID].Add(realC4.net.ID);
+                SaveDataToFile();
 
                 fakeC4.Kill();
             }
@@ -273,6 +288,26 @@ namespace Oxide.Plugins
 
                 return given;
             }
+
+            public static void Pickup(Item item)
+            {
+                BaseEntity entity = item.GetWorldEntity();
+                ulong playerID;
+
+                if (fakeC4_To_PlayerID.TryGetValue(entity.net.ID, out playerID))
+                {
+                    allManagers[playerID].Pickup(entity.GetComponent<DroppedItem>());
+                    item.amount = 1;
+                }
+                    
+            }
+
+            private void Pickup(DroppedItem item)
+            {
+                fakeExplosives.Remove(item);
+                saveData.deployedExplosives[player.userID].Remove(item.net.ID);
+                SaveDataToFile();
+            }
         }
 
         static class TriggerShop
@@ -347,7 +382,6 @@ namespace Oxide.Plugins
                                                                                   new Vector3(0f, 180f, 0f),
                                                                                   "assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab");
 
-            private static MethodInfo NewBuildingID = typeof(BuildingBlock).GetMethod("NewBuildingID", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
             public static VendingMachine Place(Vector3 position, float y_rotation, BasePlayer player)
             {
                 BaseEntity entity;
@@ -364,12 +398,11 @@ namespace Oxide.Plugins
                     buildingBlock.blockDefinition = PrefabAttribute.server.Find<Construction>(buildingBlock.prefabID);
                     buildingBlock.SetGrade((BuildingGrade.Enum)ci_BB.grade);
                     if (buidlingID == null)
-                        buidlingID = (uint)NewBuildingID.Invoke(buildingBlock, null);
+                        buidlingID = BuildingBlock.NewBuildingID();
                     buildingBlock.buildingID = (uint)buidlingID;
 
                     entity.Spawn();
                     saveData.shopEntities.Add(entity.net.ID);
-
                     basecombat = entity.GetComponentInParent<BaseCombatEntity>();
                     basecombat.ChangeHealth(basecombat.MaxHealth());
                 }
@@ -577,7 +610,7 @@ namespace Oxide.Plugins
         [ChatCommand("tec.craft")]
         void CraftTrigger(BasePlayer player, string command, string[] args)
         {
-            if (!configuration.CRAFTING_ENABLED && (player.net.connection.authLevel < 2))
+            if (!configuration.CRAFTING_ENABLED && (player.net.connection.authLevel < 2) && !PermissionGranted(player, PERMISSION_CRAFTING))
             {
                 ChatMessage(player, L_PERMISSION_FAILED);
                 return;
@@ -620,14 +653,15 @@ namespace Oxide.Plugins
         void Init()
         {
             permission.RegisterPermission(PERMISSION_PLACE, this);
+            permission.RegisterPermission(PERMISSION_CRAFTING, this);
             permission.RegisterPermission(PERMISSION_NOTRIGGER, this);
-
+            
             Instance = this;
 
             LoadDefaultMessages();
             LoadDefaultConfig();
         }
-
+        
         void Unload()
         {
             foreach (BasePlayer player in BasePlayer.activePlayerList)
@@ -677,6 +711,12 @@ namespace Oxide.Plugins
             if (saveData.vendingMachines.Contains(entity.net.ID) || saveData.shopEntities.Contains(entity.net.ID))
                 info.damageTypes = new Rust.DamageTypeList();
         }
+
+        void OnItemPickup(Item item, BasePlayer player)
+        {
+            if (configuration.C4_ALLOW_PICKUP && item.info.itemid == 498591726)
+                TriggeredExplosivesManager.Pickup(item);
+        }
         #endregion
 
         #region Configuration & Data
@@ -693,6 +733,7 @@ namespace Oxide.Plugins
             public const string S_CRAFTING_ITEM_2_NEEDED =  "CRAFTING | Needed amount of ingredient 2 [number]";
 
             public const string S_C4_BEEP_DURATION = "TRIGGERED C4 | Disable beeping sound after duration (minimum: 5; infinite: -1) [seconds]";
+            public const string S_C4_ALLOW_PICKUP = "TRIGGERED C4 | Allow C4 pickup (only after beeping got disabled) [true, false]";
 
             public readonly int CURRENCY_ID;
             public readonly int CURRENCY_NEEDED;
@@ -705,10 +746,11 @@ namespace Oxide.Plugins
             public readonly int CRAFTING_ITEM_2_NEEDED;
 
             public readonly int C4_BEEP_DURATION;
+            public readonly bool C4_ALLOW_PICKUP;
 
             public Configuration(int currency_id, int currency_needed, bool crafting_enabled, 
                                  int item_1_id, int item_1_needed, int item_2_id, int item_2_needed,
-                                 int beepDuration)
+                                 int beepDuration, bool allowPickup)
             {
 
                 CURRENCY_ID = currency_id;
@@ -721,6 +763,7 @@ namespace Oxide.Plugins
                 CRAFTING_ITEM_2_NEEDED = item_2_needed;
 
                 C4_BEEP_DURATION = beepDuration;
+                C4_ALLOW_PICKUP = allowPickup;
             }
         }
 
@@ -735,6 +778,7 @@ namespace Oxide.Plugins
             int item_1_needed, item_2_needed;
 
             int beepDuration;
+            bool allowPickup;
 
             Config[Configuration.S_CURRENCY_ID] = currency_shortname = GetConfig(Configuration.S_CURRENCY_ID, "techparts");
             Config[Configuration.S_CURRENCY_NEEDED] = currency_needed = GetConfig(Configuration.S_CURRENCY_NEEDED, 5);
@@ -746,6 +790,7 @@ namespace Oxide.Plugins
             Config[Configuration.S_CRAFTING_ITEM_2_NEEDED] = item_2_needed = GetConfig(Configuration.S_CRAFTING_ITEM_2_NEEDED, 2);
 
             Config[Configuration.S_C4_BEEP_DURATION] = beepDuration = GetConfig(Configuration.S_C4_BEEP_DURATION, 10);
+            Config[Configuration.S_C4_ALLOW_PICKUP] = allowPickup = GetConfig(Configuration.S_C4_ALLOW_PICKUP, false);
 
             ItemDefinition item_1_definition = ItemManager.FindItemDefinition(item_1_shortname);
             ItemDefinition item_2_definition = ItemManager.FindItemDefinition(item_2_shortname);
@@ -764,7 +809,9 @@ namespace Oxide.Plugins
 
             if (beepDuration!=-1 && beepDuration < 5.0f) beepDuration = 5;
 
-            configuration = new Configuration(currency_id, currency_needed, craft, item_1_id, item_1_needed, item_2_id, item_2_needed, beepDuration);
+            configuration = new Configuration(currency_id, currency_needed, 
+                craft, item_1_id, item_1_needed, item_2_id, item_2_needed, 
+                beepDuration, allowPickup);
 
             SaveConfig(); 
         }
@@ -774,6 +821,8 @@ namespace Oxide.Plugins
         public static void LoadDataFromFile()
         {
             saveData = Core.Interface.Oxide.DataFileSystem.ReadObject<SaveData>(Instance.Name);
+            if (saveData == null)
+                saveData = new SaveData();
 
             saveData.vendingMachines.RemoveWhere(s => BaseNetworkable.serverEntities.Find(s) == null);
             saveData.shopEntities.RemoveWhere(s => BaseNetworkable.serverEntities.Find(s) == null);

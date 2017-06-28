@@ -1,0 +1,16 @@
+{
+    "name": "No Despawning",
+    "description": "Items will stay around for a long time, without impacting server performance.",
+    "author": "Jake Rich",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/no-despawning.2467",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -6,7 +6,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("LastManStanding", "k1lly0u", "2.0.1", ResourceId = 1663)]
+    [Info("LastManStanding", "k1lly0u", "2.0.22", ResourceId = 1663)]
     class LastManStanding : RustPlugin
     {
         #region Fields
@@ -107,7 +107,7 @@ namespace Oxide.Plugins
         #region Scoreboard        
         private void UpdateScores()
         {
-            if (usingLMS && hasStarted)
+            if (usingLMS && hasStarted && configData.EventSettings.ShowScoreboard)
             {
                 var remainingPlayers = new Dictionary<ulong, EventManager.Scoreboard>();
                 foreach (var player in LMSPlayers)
@@ -117,6 +117,12 @@ namespace Oxide.Plugins
                 }
                 EventManager.UpdateScoreboard(new EventManager.ScoreData { Additional = $"Players remaining : {LMSPlayers.Count}", Scores = remainingPlayers, ScoreType = null });
             }
+        }
+        void SendMessage(string message)
+        {
+            if (configData.EventSettings.UseUINotifications)
+                EventManager.PopupMessage(message);
+            else PrintToChat(message);
         }
         #endregion
 
@@ -134,13 +140,13 @@ namespace Oxide.Plugins
         {
             if (usingLMS && hasStarted && !isEnding)
             {
+                if (!player.GetComponent<LMSPlayer>()) return;
                 if (player.IsSleeping())
                 {
                     player.EndSleeping();
                     timer.In(1, () => OnEventPlayerSpawn(player));
                     return;
-                }
-                if (!player.GetComponent<LMSPlayer>()) return;
+                }                
                 EventManager.GivePlayerKit(player, Kit);
                 player.health = configData.GameSettings.StartHealth;
             }
@@ -155,7 +161,8 @@ namespace Oxide.Plugins
         object OnEventCancel()
         {
             if (usingLMS && hasStarted)
-                CheckScores();
+                EventManager.EndEvent();
+            //CheckScores();
             return null;
         }        
         object OnEventEndPost()
@@ -172,6 +179,7 @@ namespace Oxide.Plugins
             if (usingLMS)
             {
                 hasStarted = true;
+                isEnding = false;
             }
             return null;
         }
@@ -245,7 +253,7 @@ namespace Oxide.Plugins
                         }
                         else if (attacker == null || attacker == victim)
                         {
-                            EventManager.PopupMessage(string.Format("Suicide is not the answer {0}. {1} player(s) remaining!", victim.displayName, LMSPlayers.Count - 1));                            
+                            SendMessage(string.Format("Suicide is not the answer {0}. {1} player(s) remaining!", victim.displayName, LMSPlayers.Count - 1));                            
                             EventManager.LeaveEvent(victim);                            
                             CheckScores();
                             SendReply(victim, "You died and were kicked from the event");
@@ -277,7 +285,7 @@ namespace Oxide.Plugins
 
             player.GetComponent<LMSPlayer>().kills++;
             EventManager.AddTokens(player.userID, configData.EventSettings.TokensOnKill);
-            EventManager.PopupMessage(string.Format("{0} has killed {1}. {2} player(s) remaining!", player.displayName, victim.displayName, LMSPlayers.Count - 1));
+            SendMessage(string.Format("{0} has killed {1}. {2} player(s) remaining!", player.displayName, victim.displayName, LMSPlayers.Count - 1));
             EventManager.LeaveEvent(victim);
             CheckScores();
             SendReply(victim, "You died and were kicked from the event");
@@ -287,10 +295,10 @@ namespace Oxide.Plugins
             if (isEnding) return;
             if (LMSPlayers.Count == 0)
             {
+                isEnding = true;
                 EventManager.BroadcastToChat("There are no more players in the event.");
-                timer.Once(8, () => 
-                {
-                    isEnding = true;
+                timer.Once(10, () => 
+                {                    
                     EventManager.EndEvent();
                 });
             }            
@@ -305,7 +313,7 @@ namespace Oxide.Plugins
             isEnding = true;
             EventManager.AddTokens(player.userID, configData.EventSettings.TokensOnWin, true);
             EventManager.BroadcastToChat(string.Format("{0} has won the event by being the last player alive!", player.displayName));
-            timer.Once(8, () => 
+            timer.Once(10, () => 
             {
                 EventManager.EndEvent();
             });         
@@ -322,6 +330,8 @@ namespace Oxide.Plugins
             public string DefaultZoneID { get; set; }
             public int TokensOnKill { get; set; }
             public int TokensOnWin { get; set; }
+            public bool ShowScoreboard { get; set; }
+            public bool UseUINotifications { get; set; }
         }
         class GameSettings
         {
@@ -347,7 +357,9 @@ namespace Oxide.Plugins
                     DefaultSpawnfile = "lmsspawns",
                     DefaultZoneID = "lmszone",
                     TokensOnKill = 1,
-                    TokensOnWin = 5
+                    TokensOnWin = 5,
+                    ShowScoreboard = true,
+                    UseUINotifications = true
                 },
                 GameSettings = new GameSettings
                 {

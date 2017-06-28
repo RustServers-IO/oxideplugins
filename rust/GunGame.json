@@ -2,7 +2,7 @@
     "name": "GunGame",
     "description": "GunGame event for EventManager",
     "author": "k1lly0u",
-    "version": "0.4.11",
+    "version": "0.4.22",
     "configuration": true,
     "require": {
         "EventManager": "*",

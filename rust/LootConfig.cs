@@ -7,18 +7,15 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-
 using Newtonsoft.Json;
-
 using Oxide.Core;
-
 using Rust;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.19")]
+    [Info("LootConfig", "Nogrod", "1.0.21", ResourceId = 861)]
+    [Description("Allows you to adjust the server's loot list")]
     internal class LootConfig : RustPlugin
     {
         private const int VersionConfig = 10;
@@ -55,7 +52,7 @@ namespace Oxide.Plugins
         {
             if (!LoadConfig())
                 return;
-            var allPrefabs = GameManifest.Get().pooledStrings.ToList().ConvertAll(p => p.str);
+            var allPrefabs = GameManifest.Current.pooledStrings.ToList().ConvertAll(p => p.str);
             var prefabs = allPrefabs.Where(p => _findLoot.IsMatch(p)).ToArray();
 #if DEBUG
             Puts(string.Join(Environment.NewLine, allPrefabs.ToArray()));
@@ -184,7 +181,7 @@ namespace Oxide.Plugins
                 }
             }
             var containerData = new Dictionary<string, LootContainer>();
-            var allPrefabs = GameManifest.Get().pooledStrings.ToList().ConvertAll(p => p.str).Where(p => _findLoot.IsMatch(p)).ToArray();
+            var allPrefabs = GameManifest.Current.pooledStrings.ToList().ConvertAll(p => p.str).Where(p => _findLoot.IsMatch(p)).ToArray();
             Array.Sort(allPrefabs, (a, b) => caseInsensitiveComparer.Compare(a, b));
             foreach (var strPrefab in allPrefabs)
             {
@@ -419,7 +416,6 @@ namespace Oxide.Plugins
             container.minSecondsBetweenRefresh = containerConfig.MinSecondsBetweenRefresh;
             container.maxSecondsBetweenRefresh = containerConfig.MaxSecondsBetweenRefresh;
             container.destroyOnEmpty = containerConfig.DestroyOnEmpty;
-            container.distributeFragments = containerConfig.DistributeFragments;
             container.lootDefinition = GetLootSpawn(containerConfig.LootDefinition, lootSpawns);
             container.inventorySlots = containerConfig.InventorySlots;
             container.SpawnType = containerConfig.SpawnType;
@@ -741,8 +737,6 @@ namespace Oxide.Plugins
                 writer.WriteValue(container.minSecondsBetweenRefresh);
                 writer.WritePropertyName("MaxSecondsBetweenRefresh");
                 writer.WriteValue(container.maxSecondsBetweenRefresh);
-                writer.WritePropertyName("DistributeFragments");
-                writer.WriteValue(container.distributeFragments);
                 writer.WritePropertyName("InitialLootSpawn");
                 writer.WriteValue(container.initialLootSpawn);
                 writer.WritePropertyName("SpawnType");
@@ -774,7 +768,6 @@ namespace Oxide.Plugins
             public int MaxDefinitionsToSpawn { get; set; }
             public float MinSecondsBetweenRefresh { get; set; } = 3600f;
             public float MaxSecondsBetweenRefresh { get; set; } = 7200f;
-            public bool DistributeFragments { get; set; } = true;
             public LootContainer.spawnType SpawnType { get; set; }
             public int InventorySlots { get; set; }
         }

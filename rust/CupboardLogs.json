@@ -2,7 +2,7 @@
     "name": "CupboardLogs",
     "description": "Creates a log for cupboard placements",
     "author": "DylanSMR",
-    "version": "1.0.3",
+    "version": "1.0.5",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/cupboardlogs.1904",

@@ -1,8 +1,8 @@
 {
     "name": "Rewards",
-    "description": "Reward players for killing animals, players, entities, and activity using Economics\/ServerRewards",
+    "description": "Reward players for activities using Economic and\/or ServerRewards",
     "author": "",
-    "version": "1.3.5",
+    "version": "1.3.10",
     "configuration": true,
     "suggest": {
         "Friends": "*",

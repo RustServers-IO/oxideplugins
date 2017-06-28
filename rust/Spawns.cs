@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Spawns", "Reneb / k1lly0u", "2.0.3", ResourceId = 720)]
+    [Info("Spawns", "Reneb / k1lly0u", "2.0.34", ResourceId = 720)]
     class Spawns : RustPlugin
     {
         #region Fields
@@ -157,13 +157,8 @@ namespace Oxide.Plugins
                                 SpawnCreation.Add(player.userID, (List<Vector3>)spawns);
                                 SendReply(player, string.Format(MSG("opened", player.UserIDString), SpawnCreation[player.userID].Count));
                                 IsEditing.Add(player.userID);
-                                return;
                             }
-                            else
-                            {
-                                SendReply(player, MSG("invalidFile", player.UserIDString));
-                                return;
-                            }
+                            else SendReply(player, MSG("invalidFile", player.UserIDString));                            
                         }
                         else SendReply(player, MSG("fileName", player.UserIDString));
                         return;
@@ -196,21 +191,16 @@ namespace Oxide.Plugins
                                 int number;
                                 if (int.TryParse(args[1], out number))
                                 {
-                                    number = int.Parse(args[1]);
-                                    if (number < SpawnCreation[player.userID].Count)
+                                    if (number <= SpawnCreation[player.userID].Count)
                                     {
                                         SpawnCreation[player.userID].RemoveAt(number - 1);
                                         SendReply(player, string.Format(MSG("remSuccess", player.UserIDString), number));
-                                        return;
                                     }
-                                    SendReply(player, MSG("nexistNum", player.UserIDString));
-                                    return;
+                                    else SendReply(player, MSG("nexistNum", player.UserIDString));
                                 }
-                                SendReply(player, MSG("noNum", player.UserIDString));
-                                return;
+                                else SendReply(player, MSG("noNum", player.UserIDString));
                             }
-                            SendReply(player, MSG("noSpawnpoints", player.UserIDString));
-                            return;
+                            else SendReply(player, MSG("noSpawnpoints", player.UserIDString));
                         }
                         else SendReply(player, "/spawns remove <number>");
                         return;
@@ -223,7 +213,7 @@ namespace Oxide.Plugins
                                 SendReply(player, MSG("noCreate", player.UserIDString));
                                 return;
                             }
-                            if (SpawnCreation[player.userID].Count > 0)
+                            if (SpawnCreation.ContainsKey(player.userID) && SpawnCreation[player.userID].Count > 0)
                             {
                                 if (!spawnsData.Spawnfiles.Contains(args[1]) && !LoadedSpawnfiles.ContainsKey(args[1]))
                                 {
@@ -241,8 +231,7 @@ namespace Oxide.Plugins
                                 SendReply(player, MSG("spawnfileExists", player.UserIDString));
                                 return;
                             }
-                            SendReply(player, MSG("noSpawnpoints", player.UserIDString));
-                            return;
+                            else SendReply(player, MSG("noSpawnpoints", player.UserIDString));
                         }
                         else SendReply(player, "/spawns save <filename>");
                         return;

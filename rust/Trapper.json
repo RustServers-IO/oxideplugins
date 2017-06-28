@@ -1,0 +1,19 @@
+{
+    "name": "Trapper",
+    "description": "Adds a few new features to traps",
+    "author": "redBDGR",
+    "version": "1.0.4",
+    "configuration": true,
+    "suggest": {
+        "Friends": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/trapper.2417",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

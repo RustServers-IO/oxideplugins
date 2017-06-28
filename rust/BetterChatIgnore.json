@@ -1,0 +1,20 @@
+{
+    "name": "BetterChat Ignore",
+    "description": "Players can ignore chat messages from other players",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": false,
+    "require": {
+        "BetterChat": "*",
+        "Ignore": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/betterchat-ignore.2490",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

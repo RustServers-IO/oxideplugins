@@ -1,0 +1,16 @@
+{
+    "name": "NoteTracker",
+    "description": "Tracks the who, when, and what of note edits",
+    "author": "PsychoTea",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/notetracker.2500",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

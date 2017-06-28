@@ -4,24 +4,20 @@ using Oxide.Game.Rust.Cui;
 using System;
 using System.Linq;
 using Oxide.Core.Plugins;
-using Oxide.Core.Libraries.Covalence;
 using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("UniversalUI", "Absolut", "2.1.3", ResourceId = 2226)]
+    [Info("UniversalUI", "Absolut", "2.1.4", ResourceId = 2226)]
 
     class UniversalUI : RustPlugin
     {
         [PluginReference]
-        Plugin ImageLibrary;
-
-        [PluginReference]
-        Plugin Kits;
+        Plugin ImageLibrary, Kits;
 
         string TitleColor = "<color=orange>";
         string MsgColor = "<color=#A9A9A9>";
-        bool localimages = true;
+        bool SkinsReady = false;
         private Dictionary<ulong, screen> UniversalUIInfo = new Dictionary<ulong, screen>();
         class screen
         {
@@ -77,8 +73,6 @@ namespace Oxide.Plugins
             foreach (BasePlayer p in BasePlayer.activePlayerList)
                 OnPlayerInit(p);
             GetAllImages();
-            //foreach (var entry in configData.buttons)
-            //    messages.Add(entry.Value.name, entry.Value.name);
             timers.Add("info", timer.Once(configData.InfoInterval * 60, () => InfoLoop()));
         }
 
@@ -86,9 +80,12 @@ namespace Oxide.Plugins
         {
             if (player != null)
             {
-                //player.Command("bind tab \"UI_DestroyUniversalUI;inventory.toggle\"");
-                //player.Command("bind q \"inventory.togglecrafting;UI_DestroyUniversalUI\"");
-                //player.Command("bind escape \"UI_DestroyUniversalUI\"");
+                if (player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+                {
+                    timer.Once(5, () => OnPlayerInit(player));
+                    return;
+
+                }
                 if (configData.MenuKeyBinding != "")
                     player.Command($"bind {configData.MenuKeyBinding} \"UI_OpenUniversalUI\"");
                 if (configData.InfoInterval != 0)
@@ -170,11 +167,12 @@ namespace Oxide.Plugins
 
         private void OpenUniversalUI(BasePlayer player)
         {
+            if (!SkinsReady) { GetSendMSG(player, "ImageLibraryNotReady"); return; }
             if (!UniversalUIInfo.ContainsKey(player.userID))
                 UniversalUIInfo.Add(player.userID, new screen { page = 0, section = 0, showSection = 0, open = true });
             UniversalUIPanel(player);
             if (!NoInfo.Contains(player.userID))
-                UIInfoPanel(player);
+                BackgroundPanel(player);
             return;
         }
 
@@ -512,6 +510,7 @@ namespace Oxide.Plugins
             if (UniversalUIInfo.ContainsKey(player.userID))
                 if (UniversalUIInfo[player.userID].open)
                     UniversalUIInfo[player.userID].open = false;
+            CuiHelper.DestroyUi(player, PanelStatic);
             CuiHelper.DestroyUi(player, PanelUUI);
             CuiHelper.DestroyUi(player, PanelInfo);
         }
@@ -587,37 +586,31 @@ namespace Oxide.Plugins
             return true;
         }
 
-        private string TryForImage(string shortname, ulong skin = 99, bool localimage = true)
+        private string TryForImage(string shortname, ulong skin = 99)
         {
-            if (localimage)
-                if (skin == 99)
-                    return GetImage(shortname, (ulong)ResourceId);
-                else return GetImage(shortname, skin);
-            else if (skin == 99)
-                return GetImageURL(shortname, (ulong)ResourceId);
-            else return GetImageURL(shortname, skin);
+            if (shortname.Contains("http")) return shortname;
+            if (skin == 99) skin = (ulong)ResourceId;
+            return GetImage(shortname, skin, true);
         }
 
         private bool Valid(string name, ulong id = 99)
         {
-            if (id == 99)
-                return HasImage(name, (ulong)ResourceId);
+            if (id == 99) id = (ulong)ResourceId;
             return HasImage(name, id);
         }
 
-        public string GetImageURL(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImageURL", shortname, skin);
-        public string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin);
-        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
-        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname, skin);
-
-
+        public string GetImage(string shortname, ulong skin = 0, bool returnUrl = false) => (string)ImageLibrary.Call("GetImage", shortname.ToLower(), skin, returnUrl);
+        public bool HasImage(string shortname, ulong skin = 0) => (bool)ImageLibrary.Call("HasImage", shortname.ToLower(), skin);
+        public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
+        public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
+        public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
         #endregion
 
         #region UI Creation
 
+        private string PanelStatic = "PanelStatic";
         private string PanelUUI = "PanelUUI";
         private string PanelInfo = "PanelInfo";
-
         public class UI
         {
             static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
@@ -670,18 +663,17 @@ namespace Oxide.Plugins
 
             static public void LoadImage(ref CuiElementContainer container, string panel, string img, string aMin, string aMax)
             {
-                if (img.Contains("http"))
+                if (img.StartsWith("http") || img.StartsWith("www"))
                 {
                     container.Add(new CuiElement
                     {
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Url = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
-
                 }
                 else
                     container.Add(new CuiElement
@@ -689,7 +681,7 @@ namespace Oxide.Plugins
                         Parent = panel,
                         Components =
                     {
-                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/generic textures/fulltransparent.tga" },
+                        new CuiRawImageComponent {Png = img, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                     });
@@ -761,7 +753,6 @@ namespace Oxide.Plugins
             if (configData.UseButtonPanel)
             {
                 var element = UI.CreateElementContainer(PanelUUI, "0 0 0 0", "0.85 0.225", "1.0 0.725", true);
-                //UI.CreatePanel(ref element, PanelUUI, UIColors["light"], "0 0", "1 1");
                 foreach (var entry in configData.buttons)
                         if (!string.IsNullOrEmpty(entry.Value.command) && isAllowed(player, entry.Value.adminOnly, entry.Value.permission))
                             CreateButtonOnUI(ref element, PanelUUI, entry.Value, entry.Key);
@@ -786,12 +777,20 @@ namespace Oxide.Plugins
             }
         }
 
+        void BackgroundPanel(BasePlayer player)
+        {
+            CuiHelper.DestroyUi(player, PanelStatic);
+            if (!UniversalUIInfo.ContainsKey(player.userID))
+                UniversalUIInfo.Add(player.userID, new screen { page = 0, section = 0, showSection = 0 });
+            CuiElementContainer element = element = UI.CreateElementContainer(PanelStatic, "0 0 0 0", "0.2 0.2", "0.8 0.8", true);
+            CuiHelper.AddUi(player, element);
+            UIInfoPanel(player);
+        }
+
         void UIInfoPanel(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, PanelInfo);
-            if (!UniversalUIInfo.ContainsKey(player.userID))
-                UniversalUIInfo.Add(player.userID, new screen { page = 0, section = 0, showSection = 0 });
-            CuiElementContainer element = element = UI.CreateElementContainer(PanelInfo, "0 0 0 0", "0.2 0.2", "0.8 0.8", true);
+            CuiElementContainer element = element = UI.CreateElementContainer(PanelInfo, "0 0 0 0", "0.2 0.2", "0.8 0.8");
             //if (UniversalUIInfo[player.userID].section != 0)
             foreach (var entry in configData.sections.Where(k => k.Key == UniversalUIInfo[player.userID].section))
             {
@@ -1004,11 +1003,18 @@ namespace Oxide.Plugins
                     if (Debugging) Puts($"Section Didn't Match: {entry.Key}");
                     if (Valid($"UUISectionButton{entry.Key}"))
                     {
-                        UI.LoadImage(ref element, PanelInfo, TryForImage($"UUISectionButton{entry.Key}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
-                        if (!string.IsNullOrEmpty(entry.Value.name))
-                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
+                        if (HasImage($"UUISectionButton{entry.Key}", (ulong)ResourceId))
+                        {
+                            UI.LoadImage(ref element, PanelInfo, TryForImage($"UUISectionButton{entry.Key}"), $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}");
+                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
+                        }
                         else
-                            UI.CreateButton(ref element, PanelInfo, "0 0 0 0", $"Section:{entry.Key.ToString().ToUpper()}", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
+                        {
+                            if (!string.IsNullOrEmpty(entry.Value.name))
+                                UI.CreateButton(ref element, PanelInfo, "0 0 0 0", entry.Value.name.ToUpper(), 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
+                            else
+                                UI.CreateButton(ref element, PanelInfo, "0 0 0 0", $"Section:{entry.Key.ToString().ToUpper()}", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SwitchSection {entry.Key} {admin} {entry.Value.permission}");
+                        }
                     }
                     else
                     {
@@ -1429,6 +1435,12 @@ namespace Oxide.Plugins
 
         private void GetAllImages()
         {
+            if (timers.ContainsKey("skins"))
+            {
+                timers["skins"].Destroy();
+                timers.Remove("skins");
+            }
+            if (!isReady()) { Puts(GetMSG("WaitingImageLibrary")); timers.Add("skins", timer.Once(60, () => GetAllImages())); return; };
             AddImage("http://i.imgur.com/GT0ngNJ.png", "text", (ulong)ResourceId);
             AddImage("http://i.imgur.com/9IpSF2b.png", "buttons", (ulong)ResourceId);
             AddImage("http://i.imgur.com/DUpRzdb.png", "standard", (ulong)ResourceId);
@@ -1451,6 +1463,13 @@ namespace Oxide.Plugins
                             AddImage(button.PageButtonImage, $"UUIPageButton{entry.Key}-{page.page}-{button.order}", (ulong)ResourceId);
                 }
             }
+            if (timers.ContainsKey("skins"))
+            {
+                timers["skins"].Destroy();
+                timers.Remove("skins");
+            }
+            SkinsReady = true;
+            Puts(GetMSG("AllImagesInitialized"));
         }
 
         private void CheckNewImages()
@@ -1657,7 +1676,9 @@ namespace Oxide.Plugins
             {"DelayedCMD", "You have selected a Delayed Command. To finish the command please type a 'parameter' for command: {0}. Or Type 'quit' to exit." },
             {"ExitDelayed", "You have exited the Delayed Command." },
             {"Type", "Type: {0}" },
-
+            {"ImageLibraryNotReady", "ImageLibrary is not loaded. Unable to open the GUI." },
+            {"WaitingImageLibrary", "Waiting on Image Library to initialize. Trying again in 60 Seconds" },
+            {"AllImagesInitialized", "All Images Initiailized" },
         };
         #endregion
 

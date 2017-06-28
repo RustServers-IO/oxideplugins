@@ -10,7 +10,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ChopperSurvival", "k1lly0u", "0.2.71", ResourceId = 1590)]
+    [Info("ChopperSurvival", "k1lly0u", "0.2.82", ResourceId = 1590)]
     class ChopperSurvival : RustPlugin
     {        
         [PluginReference] EventManager EventManager;
@@ -50,6 +50,7 @@ namespace Oxide.Plugins
             public BasePlayer player;
             public int deaths;
             public int points;
+            public List<string> openUi;
 
             void Awake()
             {
@@ -57,6 +58,28 @@ namespace Oxide.Plugins
                 enabled = false;
                 deaths = 0;
                 points = 0;
+                openUi = new List<string>();
+            }                        
+            void OnDestroy()
+            {
+                DestroyAllUI();
+            }
+            public void AddUi(CuiElementContainer container, string name)
+            {
+                openUi.Add(name);
+                CuiHelper.AddUi(player, container);
+            }
+            public void DestroyUi(string name)
+            {
+                CuiHelper.DestroyUi(player, name);
+                if (openUi.Contains(name))
+                    openUi.Remove(name);
+            }
+            public void DestroyAllUI()
+            {
+                foreach (var element in openUi)
+                    CuiHelper.DestroyUi(player, element);
+                openUi.Clear();
             }
         } 
        
@@ -155,7 +178,7 @@ namespace Oxide.Plugins
                     KillHelicopter(true);
                     isDieing = true;
                     if (info?.InitiatorPlayer != null)
-                        instance.EventManager.AddStats(info.InitiatorPlayer, EventManager.StatType.Choppers);
+                        instance.EventManager.AddStats(info.InitiatorPlayer, EventManager.StatType.Choppers);                    
                 }
                 return pointValue;
             }
@@ -222,7 +245,7 @@ namespace Oxide.Plugins
         #region UI Elements
         private void UpdateScores()
         {
-            if (usingCS && hasStarted)
+            if (usingCS && hasStarted && configData.EventSettings.ShowScoreboard)
             {
                 var sortedList = CSPlayers.OrderByDescending(pair => pair.points).ToList();
                 var scoreList = new Dictionary<ulong, EventManager.Scoreboard>();
@@ -262,12 +285,18 @@ namespace Oxide.Plugins
         private void DestroyHealthUI(string heliId)
         {
             foreach (var entry in CSPlayers)
-                CuiHelper.DestroyUi(entry.player, heliId);
+                entry.DestroyUi(heliId);
         }
         private void DestroyAllHealthUI(BasePlayer player)
         {
-            foreach (var heli in CSHelicopters)
-                CuiHelper.DestroyUi(player, heli.heliId);
+            var csPlayer = player.GetComponent<CSPlayer>();
+            if (csPlayer != null)            
+                csPlayer.DestroyAllUI();
+            else
+            {
+                foreach (var heli in CSHelicopters)
+                    CuiHelper.DestroyUi(player, heli.heliId);
+            }
         }        
         private void RefreshHealthUI(CSHelicopter heli)
         {
@@ -276,19 +305,20 @@ namespace Oxide.Plugins
             {
                 foreach (var entry in CSPlayers)
                 {
-                    CuiHelper.DestroyUi(entry.player, heli.heliId);
-                    CuiHelper.AddUi(entry.player, CreateHealthIndicator(heli, CSHelicopters.IndexOf(heli)));
+                    entry.DestroyUi(heli.heliId);
+                    entry.AddUi(CreateHealthIndicator(heli, CSHelicopters.IndexOf(heli)), heli.heliId);
                 }
             }
         }
-        private void RefreshPlayerHealthUI(BasePlayer player)
+        private void RefreshPlayerHealthUI(CSPlayer player)
         {
+            if (player == null) return;
             if (configData.EventSettings.ShowHeliHealthUI)
             {
                 foreach (var heli in CSHelicopters)
                 {
-                    CuiHelper.DestroyUi(player, heli.heliId);
-                    CuiHelper.AddUi(player, CreateHealthIndicator(heli, CSHelicopters.IndexOf(heli)));
+                    player.DestroyUi(heli.heliId);
+                    player.AddUi(CreateHealthIndicator(heli, CSHelicopters.IndexOf(heli)), heli.heliId);
                 }
             }
         }        
@@ -345,14 +375,15 @@ namespace Oxide.Plugins
         }    
         void Unload()
         {
-            foreach (var player in BasePlayer.activePlayerList) { DestroyAllHealthUI(player); }
+            foreach (var eventPlayer in CSPlayers)
+                eventPlayer.DestroyAllUI();
             if (usingCS && hasStarted)                                    
                 EventManager.EndEvent(); 
 			else DestroyEvent();
         }        
 		void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
-			if (usingCS && hasStarted && entity != null)
+			if (usingCS && hasStarted && entity != null && !isEnding)
             {
                 var attacker = hitInfo.InitiatorPlayer;
                 if (attacker == null) return;
@@ -366,11 +397,11 @@ namespace Oxide.Plugins
                     hitInfo.PointStart = Vector3.zero;
                     return;
 				}
-				if (attacker.GetComponent<CSPlayer>())
-				{
-					if (entity is BasePlayer)
-					{
-						if (entity.ToPlayer() == null || hitInfo == null) return;
+                if (attacker.GetComponent<CSPlayer>())
+                {
+                    if (entity is BasePlayer)
+                    {
+                        if (entity.ToPlayer() == null || hitInfo == null) return;
                         if (entity.ToPlayer().userID != hitInfo.Initiator.ToPlayer().userID)
                         {
                             if (entity.GetComponent<CSPlayer>())
@@ -379,18 +410,18 @@ namespace Oxide.Plugins
                                 SendReply(attacker, MSG("fFire"));
                             }
                         }
-					}
-					if (helicopter != null)
-					{
-						int points = entity.GetComponent<CSHelicopter>().TakeDamage(hitInfo);
+                    }
+                    if (helicopter != null)
+                    {
+                        int points = entity.GetComponent<CSHelicopter>().TakeDamage(hitInfo);
                         RefreshHealthUI(helicopter);
                         hitInfo.damageTypes = new DamageTypeList();
                         hitInfo.HitEntity = null;
                         hitInfo.HitMaterial = 0;
                         hitInfo.PointStart = Vector3.zero;
                         attacker.GetComponent<CSPlayer>().points += points;
-					}
-				}
+                    }
+                }
 			}
         } 		
         void OnEntitySpawned(BaseNetworkable entity)
@@ -450,7 +481,7 @@ namespace Oxide.Plugins
         private void StartRounds()
         {
             currentWave = 1;
-            EventManager.PopupMessage(string.Format(MSG("firstWave"), configData.HelicopterSettings.SpawnBeginTimer));
+            SendMessage(string.Format(MSG("firstWave"), configData.HelicopterSettings.SpawnBeginTimer));
             SetPlayers();
             GameTimers.Add(timer.Once(configData.HelicopterSettings.SpawnBeginTimer, () => SpawnWave()));
             GameTimers.Add(timer.Repeat(5, 0, () => UpdateScores()));
@@ -470,7 +501,7 @@ namespace Oxide.Plugins
                 }
             }
             SetPlayers();
-            EventManager.PopupMessage(string.Format(MSG("nextWave"), configData.HelicopterSettings.SpawnWaveTimer));
+            SendMessage(string.Format(MSG("nextWave"), configData.HelicopterSettings.SpawnWaveTimer));
             GameTimers.Add(timer.Once(configData.HelicopterSettings.SpawnWaveTimer, () => SpawnWave()));
         }
         private void SetPlayers()
@@ -511,19 +542,17 @@ namespace Oxide.Plugins
 				ConVar.PatrolHelicopter.lifetimeMinutes = 1;
 				lifetime = true;
 			}
-			
-			for (int i = 0; i < num; i++)
+
+            for (int i = 0; i < num; i++)
             {
                 BaseHelicopter entity = (BaseHelicopter)GameManager.server.CreateEntity("assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab", new Vector3(), new Quaternion(), true);
-                if (entity)
-                {
-                    entity.enableSaving = false;
-                    entity.Spawn();
-                    var component = entity.gameObject.AddComponent<CSHelicopter>();
-                    component.SpawnHelicopter(GetDestination(), adjMainRotorHealth, adjTailRotorHealth, adjEngineHealth, adjHeliHealth, adjHeliBulletDamage);
-                    CSHelicopters.Add(component);									
-                }
-            }			
+                entity.enableSaving = false;
+                entity.Spawn();
+                var component = entity.gameObject.AddComponent<CSHelicopter>();
+                component.SpawnHelicopter(GetDestination(), adjMainRotorHealth, adjTailRotorHealth, adjEngineHealth, adjHeliHealth, adjHeliBulletDamage);
+                CSHelicopters.Add(component);
+                if (entity == null) Puts("null heli");
+            }	
 			if(lifetime)
 				timer.Once(5f, () => ConVar.PatrolHelicopter.lifetimeMinutes = 0);
             ConVar.PatrolHelicopter.bulletAccuracy = adjHeliAccuracy;
@@ -626,15 +655,14 @@ namespace Oxide.Plugins
         }        
         #endregion
 
-        static Vector3 FindGround(Vector3 sourcePos) // credit Wulf & Nogrod
+        private Vector3 FindGround(Vector3 sourcePos)
         {
             RaycastHit hitInfo;
             if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, LayerMask.GetMask("Terrain", "World", "Construction")))            
                 sourcePos.y = hitInfo.point.y;            
             sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
             return sourcePos;
-        }        
-        
+        }   
 
         #region EventManager hooks
         void RegisterGame()
@@ -668,6 +696,7 @@ namespace Oxide.Plugins
                 CanPlayBattlefield = true,
                 ForceCloseOnStart = true,
                 IsRoundBased = true,
+                LockClothing = false,
                 RequiresKit = true,
                 RequiresMultipleSpawns = false,
                 RequiresSpawns = true,
@@ -690,7 +719,8 @@ namespace Oxide.Plugins
         {
             if (usingCS && hasStarted && !isEnding)
             {
-                if (!player.GetComponent<CSPlayer>()) return;
+                if (!player.GetComponent<CSPlayer>())
+                    CSPlayers.Add(player.gameObject.AddComponent<CSPlayer>());
                 if (player.IsSleeping())
                 {
                     player.EndSleeping();
@@ -701,7 +731,7 @@ namespace Oxide.Plugins
 				player.metabolism.hydration.value = configData.PlayerSettings.StartHydration;
 				player.metabolism.calories.value = configData.PlayerSettings.StartCalories;
 				player.health = configData.PlayerSettings.StartHealth;
-				timer.Once(3, ()=> { RefreshPlayerHealthUI(player); });
+				timer.Once(3, ()=> { RefreshPlayerHealthUI(player.GetComponent<CSPlayer>()); });
             }
         }       
         object OnEventOpenPost()
@@ -723,10 +753,12 @@ namespace Oxide.Plugins
         object OnEventEndPre()
         {
             if (usingCS)
-            {
+            {     
                 DestroyTimers();
-                FindWinner();
                 DestroyHelicopters();
+                foreach (var eventPlayer in CSPlayers)
+                    eventPlayer.DestroyAllUI();
+                FindWinner();                
             }           
             return null;
         }    
@@ -739,7 +771,7 @@ namespace Oxide.Plugins
                 if (players != null)
                     foreach (var player in players)
                         UnityEngine.Object.Destroy(player);
-                CSPlayers.Clear();
+                CSPlayers.Clear();                
             }
             return null;
         }       
@@ -747,7 +779,8 @@ namespace Oxide.Plugins
         {
             if (usingCS)
             {
-                hasStarted = true;                
+                hasStarted = true;
+                isEnding = false;
             }          
             return null;
         }        
@@ -778,11 +811,12 @@ namespace Oxide.Plugins
         {
             if (usingCS)
             {
-                if (player.GetComponent<CSPlayer>())
+                var csPlayer = player.GetComponent<CSPlayer>();
+                if (csPlayer != null)
                 {
-                    CSPlayers.Remove(player.GetComponent<CSPlayer>());
-                    UnityEngine.Object.Destroy(player.GetComponent<CSPlayer>());
-                    DestroyAllHealthUI(player);
+                    csPlayer.DestroyAllUI();
+                    CSPlayers.Remove(csPlayer);
+                    UnityEngine.Object.Destroy(csPlayer);
                 }
             }
             if (hasStarted && CSPlayers.Count == 0)
@@ -800,7 +834,7 @@ namespace Oxide.Plugins
                 victim.GetComponent<CSPlayer>().deaths++;
                 int LivesLeft = (configData.PlayerSettings.DeathLimit - victim.GetComponent<CSPlayer>().deaths);
 
-                EventManager.PopupMessage(string.Format(MSG("eventDeath"), victim.displayName, victim.GetComponent<CSPlayer>().deaths, configData.PlayerSettings.DeathLimit));               
+                SendMessage(string.Format(MSG("eventDeath"), victim.displayName, victim.GetComponent<CSPlayer>().deaths, configData.PlayerSettings.DeathLimit));               
                 SendReply(victim, string.Format(MSG("livesLeft"), LivesLeft));
 
                 if (victim.GetComponent<CSPlayer>().deaths >= configData.PlayerSettings.DeathLimit)
@@ -828,18 +862,23 @@ namespace Oxide.Plugins
         }
         void SetEnemyCount(int number) => enemyCount = number;
         void SetGameRounds(int number) => gameRounds = number;
-        void SetSpawnfile(bool isTeamA, string spawnfile) => spawnFile = spawnfile;        
+        void SetSpawnfile(bool isTeamA, string spawnfile) => spawnFile = spawnfile;
         #endregion
 
         #region Messaging
+        void SendMessage(string message)
+        {
+            if (configData.EventSettings.UseUINotifications)
+                EventManager.PopupMessage(message);
+            else PrintToChat(message);
+        }
         private string MSG(string msg) => lang.GetMessage(msg, this);
         
         private void MessageAllPlayers(string msg, string keyword = "", bool title = false)
         {
             string titlestring = "";
             if (title) titlestring = lang.GetMessage("title", this);
-            foreach (var csplayer in CSPlayers)
-                SendReply(csplayer.player, $"{configData.Messaging.MainColor} {titlestring} {keyword}</color> {configData.Messaging.MSGColor} {msg}</color>");
+            EventManager.BroadcastEvent($"{configData.Messaging.MainColor} {titlestring} {keyword}</color> {configData.Messaging.MSGColor} {msg}</color>");
         }        
         private void RegisterMessages() => lang.RegisterMessages(new Dictionary<string, string>()
         {
@@ -871,6 +910,8 @@ namespace Oxide.Plugins
             public int MaximumHelicopters { get; set; }
             public bool ShowStatsInConsole { get; set; }
             public bool ShowHeliHealthUI { get; set; }
+            public bool ShowScoreboard { get; set; }
+            public bool UseUINotifications { get; set; }
         }
         class PlayerSettings
         {
@@ -934,7 +975,9 @@ namespace Oxide.Plugins
                     MaximumHelicopters = 4,
                     MaximumWaves = 10,
                     ShowHeliHealthUI = true,
-                    ShowStatsInConsole = true
+                    ShowStatsInConsole = true,
+                    ShowScoreboard = true,
+                    UseUINotifications = true
                 },
                 HelicopterSettings = new HeliSettings
                 {
@@ -1016,8 +1059,7 @@ namespace Oxide.Plugins
                     winnerNames += ", ";
             }
             EventManager.BroadcastToChat(string.Format(MSG("eventWin"), winnerNames));
-            EventManager.CloseEvent();
-            EventManager.EndEvent();
+            EventManager.EndEvent();            
         }
         #endregion
     }

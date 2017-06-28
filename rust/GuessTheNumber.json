@@ -1,16 +1,15 @@
 {
-    "name": "Guess The Number",
+    "name": "GuessTheNumber",
     "description": "An event that requires player to guess the correct number",
-    "author": "Dora",
-    "version": "1.2.1",
+    "author": "redBDGR",
+    "version": "2.0.2",
     "configuration": true,
     "suggest": {
         "ServerRewards": "*",
-        "Economics": "*",
-        "Updater": "*"
+        "Economics": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/guess-the-number.2023",
+    "url": "http:\/\/oxidemod.org\/plugins\/guessthenumber.2023",
     "games": [
         "rust"
     ],
