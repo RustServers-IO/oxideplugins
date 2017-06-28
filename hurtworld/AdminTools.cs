@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminTools", "Noviets", "1.3.3", ResourceId = 1584)]
+    [Info("AdminTools", "Noviets", "1.3.4", ResourceId = 1584)]
     [Description("Provides chat commands")]
 
     class AdminTools : HurtworldPlugin
@@ -154,7 +154,7 @@ namespace Oxide.Plugins
 			return null;
 		}
 
-		object OnPlayerDeath(PlayerSession session, EntityEffectSourceData source)
+		void OnPlayerDeath(PlayerSession session, EntityEffectSourceData source)
 		{
 			if(permission.UserHasPermission(session.SteamId.ToString(),"admintools.godmode") || permission.UserHasPermission(session.SteamId.ToString(),"admintools.all") || session.IsAdmin)
 			{
@@ -196,11 +196,20 @@ namespace Oxide.Plugins
 					{
 						stats.GetFluidEffect(EEntityFluidEffectType.Health).SetValue(100f);
 					});
-					return false;
 				}
 			}
-			return null;
 		}
+		void OnPlayerTakeDamage(PlayerSession session, EntityEffectSourceData source)
+		{
+			if(permission.UserHasPermission(session.SteamId.ToString(),"admintools.godmode") || permission.UserHasPermission(session.SteamId.ToString(),"admintools.all") || session.IsAdmin)
+			{
+				if (Godlist.Contains((ulong)session.SteamId))
+				{
+					source.Value = 0;
+				}
+			}
+		}
+
 
 		void CanClientLogin(PlayerSession session)
         {

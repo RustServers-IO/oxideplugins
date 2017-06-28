@@ -1,4 +1,4 @@
-﻿//Reference: UnityEngine.UI
+//Reference: UnityEngine.UI
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -9,7 +9,7 @@ using Emotes;
 
 namespace Oxide.Plugins
 {
-    [Info("Teleportation", "LaserHydra", "1.4.5", ResourceId = 1519)]
+    [Info("Teleportation", "LaserHydra", "1.5.0", ResourceId = 1519)]
     [Description("Teleportation plugin with many different teleportation features")]
     class Teleportation : HurtworldPlugin
     {
@@ -73,6 +73,39 @@ namespace Oxide.Plugins
         int maxHomes = 3;
 
         float warpTeleportTimer = 15;
+        #endregion
+
+        #region TOMS VERIFICATION FUNCTIONS
+
+        public bool IsSafeLocation(Vector3 pos)
+        {
+            var playerCenterOffset = 1.1f; // offset from position to player center in Y-axis
+            var crouchHalfHeight = .75f; // half the capsule height of crouching character
+            var playerRadius = .36f;
+            var capsuleBottom = pos + (playerCenterOffset-crouchHalfHeight+playerRadius)*Vector3.up;
+            var capsuleTop = pos + (playerCenterOffset+crouchHalfHeight-playerRadius)*Vector3.up;
+
+            if(Physics.CheckCapsule(capsuleBottom, capsuleTop, playerRadius, LayerMaskManager.TerrainConstructionsMachines, QueryTriggerInteraction.Ignore))
+            {
+                return false;
+            }
+
+            return !PhysicsHelpers.IsInRock(pos+Vector3.up*playerCenterOffset);
+        }
+
+        public bool IsSafePlayer(PlayerSession player)
+        {
+            GameObject playerEntity = player.WorldPlayerEntity;
+
+            // unsafe to teleport to a player in vehicle
+            if(playerEntity.GetComponent<CharacterMotorSimple>().InsideVehicle!=null)
+            {
+                return false;
+            }
+
+            return IsSafeLocation(playerEntity.transform.position);
+        }
+
         #endregion
 
         #region Basic plugin Hooks
@@ -230,6 +263,7 @@ namespace Oxide.Plugins
         [ChatCommand("tp")]
         void cmdTeleport(PlayerSession player, string command, string[] args)
         {
+
             if (!HasPerm(player.SteamId, "admin"))
             {
                 SendChatMessage(player, GetMsg("No Permission", player.SteamId));
@@ -243,6 +277,12 @@ namespace Oxide.Plugins
                     PlayerSession target = GetPlayer(args[0], player);
                     if (target == null) return;
 
+                    if(!IsSafePlayer(target))
+                    {
+                        SendChatMessage(player, "Teleport denied");
+                        return;
+                    }
+
                     TeleportPlayer(player, target);
                     SendChatMessage(player, GetMsg("Teleported", player.SteamId).Replace("{target}", target.Name));
 
@@ -254,6 +294,12 @@ namespace Oxide.Plugins
                     PlayerSession targetPlayer = GetPlayer(args[1], player);
                     if (targetPlayer == null || teleportPlayer == null) return;
 
+                    if(!IsSafePlayer(targetPlayer))
+                    {
+                        SendChatMessage(player, "Teleport denied");
+                        return;
+                    }
+
                     TeleportPlayer(teleportPlayer, targetPlayer);
                     SendChatMessage(teleportPlayer, GetMsg("Teleported", teleportPlayer.SteamId).Replace("{target}", targetPlayer.Name));
 
@@ -264,6 +310,12 @@ namespace Oxide.Plugins
                     float x = Convert.ToSingle(args[0].Replace("~", player.WorldPlayerEntity.transform.position.x.ToString()));
                     float y = Convert.ToSingle(args[1].Replace("~", player.WorldPlayerEntity.transform.position.y.ToString()));
                     float z = Convert.ToSingle(args[2].Replace("~", player.WorldPlayerEntity.transform.position.z.ToString()));
+
+                    if(!IsSafeLocation(new Vector3(x,y,z)))
+                    {
+                        SendChatMessage(player, "Teleport denied");
+                        return;
+                    }
 
                     Teleport(player, new Vector3(x, y, z));
                     SendChatMessage(player, GetMsg("Teleported", player.SteamId).Replace("{target}", $"(X: {x}, Y: {y}, Z: {z})."));
@@ -819,12 +871,22 @@ namespace Oxide.Plugins
         void TeleportPlayer(PlayerSession player, PlayerSession target)
         {
             GameObject playerEntity = target.WorldPlayerEntity;
+            if(!IsSafePlayer(target))
+            {
+                SendChatMessage(player, "Teleport denied");
+                return;
+            }
             Teleport(player, playerEntity.transform.position);
         }
 
         void Teleport(PlayerSession player, Vector3 location)
         {
             GameObject playerEntity = player.WorldPlayerEntity;
+            if(!IsSafeLocation(location))
+            {
+                SendChatMessage(player, "Teleport denied");
+                return;
+            }
             playerEntity.transform.position = location;
         }
         

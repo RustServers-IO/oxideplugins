@@ -9,12 +9,13 @@ using Emotes;
 namespace Oxide.Plugins
 {
     /*
-    [B]Changelog 0.1.2[/B]
+    [B]Changelog 0.1.3[/B]
     [LIST]
-    [*] Fixed references to make plugin work again.
+    [*] Added function to enable reverting infamy back to what it was before starting the duel.
+    /duel setup infamy false/revert = false sets it that a user will get infamous, revert will set it that their infamy gets changed back to what it was before the duel. 
     [/LIST]
     */
-    [Info("Wager of battle", "Pho3niX90", "0.1.2", ResourceId = 1726)]
+    [Info("Wager of battle", "Pho3niX90", "0.1.3", ResourceId = 1726)]
     class Duel : HurtworldPlugin
     {
         [PluginReference]
@@ -43,7 +44,8 @@ namespace Oxide.Plugins
                 {"msg_TopPlayersList", "{rank}: {playername} has {totalwins} total wins"},
                 {"msg_TransportBackIn", "You will be transported back in {time}"},
                 {"admin_msg_ArenaSaved", "Arena {playerN} has been saved at {position}"},
-                {"admin_lootTimeSaved", "Loot Time has been set to {time} seconds"}
+                {"admin_lootTimeSaved", "Loot Time has been set to {time} seconds"},
+                {"admin_infamySaved", "Infamy changed to {infamy}"}
             }, this, "en");
         }
         protected override void LoadDefaultConfig()
@@ -55,6 +57,7 @@ namespace Oxide.Plugins
             Config["lootTime"] = 30;
             Config["arenaP1"] = "";
             Config["arenaP2"] = "";
+            Config["revertInfamy"] = "false";
             SaveConfig();
         }
         #endregion
@@ -96,11 +99,20 @@ namespace Oxide.Plugins
                 PrintWarning(murdererName + " got " + thisDuel.Wager);
                 AddCash(murderer, thisDuel.Wager);
 
+                // Set infamy back
+                if (!GetConf("revertInfamy", "false").ToString().Equals("false"))
+                {
+                    getSession(thisDuel.Requester.ToString()).WorldPlayerEntity.GetComponent<EntityStats>().GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(thisDuel.ReqInfamy);
+                    getSession(thisDuel.Accepter.ToString()).WorldPlayerEntity.GetComponent<EntityStats>().GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(thisDuel.AccInfamy);
+                }
+                    //
+
                 //announce the winner.
                 hurt.BroadcastChat(GetMsg("broadcast_DuelWinner", player).Replace("{playerName}", murdererName));
                 PrintToChat(murderer, GetMsg("msg_DuelWon", player)
                                                 .Replace("{moneySymbol}", MoneySym)
                                                 .Replace("{money}", (thisDuel.Wager / 2).ToString()));
+                
                 //Make loser infamouse.
                 //announce that the loser is now infamouse, due to duel laws.
                 //Duels.Remove(thisDuel);
@@ -130,7 +142,7 @@ namespace Oxide.Plugins
 
         public class DuelData
         {
-            public DuelData(ulong Requester, string RequesterName, ulong Accepter, string AccepterName, double Wager, string RequesterPos, string AccepterPos = "", ulong Winner = 0, int Accepted = 0, string WinnerName = "")
+            public DuelData(ulong Requester, string RequesterName, ulong Accepter, string AccepterName, double Wager, string RequesterPos, string AccepterPos = "", ulong Winner = 0, int Accepted = 0, string WinnerName = "", float ReqInfamy = 0, float AccInfamy = 0)
             {
                 this.Requester = Requester;
                 this.RequesterPos = RequesterPos;
@@ -142,6 +154,8 @@ namespace Oxide.Plugins
                 this.Winner = Winner;
                 this.WinnerName = WinnerName;
                 this.Accepted = Accepted;
+                this.ReqInfamy = ReqInfamy;
+                this.AccInfamy = AccInfamy;
             }
 
             public ulong Requester { get; set; }
@@ -154,6 +168,8 @@ namespace Oxide.Plugins
             public ulong Winner { get; set; }
             public string WinnerName { get; set; }
             public int Accepted { get; set; }
+            public float AccInfamy { get; set; }
+            public float ReqInfamy { get; set; }
         }
         #endregion
 
@@ -331,6 +347,10 @@ namespace Oxide.Plugins
 
                     switch (ActionSetup)
                     {
+                        case "infamy":
+                            PrintToChat(player, GetMsg("admin_infamySaved", player).Replace("{infamy}", args[2]));
+                            Config["revertInfamy"] = args[2];
+                            break;
                         case "loottime":
                             PrintToChat(player, GetMsg("admin_lootTimeSaved", player).Replace("{time}", args[2]));
 
@@ -393,7 +413,6 @@ namespace Oxide.Plugins
             GameObject playerEntity2;
 
             PlayerSession player1 = getSession(Duel.Accepter.ToString());
-
             PlayerSession player2 = getSession(Duel.Requester.ToString());
 
 
@@ -423,6 +442,13 @@ namespace Oxide.Plugins
                     Quaternion lookRotation2 = Quaternion.LookRotation(vector2);
                     fps1.ResetViewAngleServer(lookRotation1);
                     fps2.ResetViewAngleServer(lookRotation2);
+
+                    // TODO fetch infamy level
+                    if(!GetConf("revertInfamy","false").ToString().Equals("false")) { 
+                    Duel.AccInfamy = player1.WorldPlayerEntity.GetComponent<EntityStats>().GetFluidEffect(EEntityFluidEffectType.Infamy).GetValue();
+                    Duel.ReqInfamy = player2.WorldPlayerEntity.GetComponent<EntityStats>().GetFluidEffect(EEntityFluidEffectType.Infamy).GetValue();
+                    }
+                    //
 
                     doEmote(player1); doEmote(player2);
 

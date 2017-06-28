@@ -7,12 +7,13 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("LootChests", "Noviets", "1.0.8")]
+    [Info("LootChests", "Noviets", "1.1.0")]
     [Description("Spawns Storage Chests with loot around the map")]
 
     class LootChests : HurtworldPlugin
     {
 		Dictionary<int, int> ItemList = new Dictionary<int, int>();
+		DateTime nextspawn = new DateTime();
 		Dictionary<uLink.NetworkView, Vector3> ChestList = new Dictionary<uLink.NetworkView, Vector3>();
 		void Loaded()
 		{
@@ -41,7 +42,8 @@ namespace Oxide.Plugins
 				{"NoItems","There's no items in the item list. Use the chat command: /lootchest add (ItemID) (Amount). Then: /reload LootChests"},
 				{"Save","<color=#ffa500>LootChests</color>: Item List has been saved"},
 				{"Spawned","<color=#ffa500>LootChests</color>: Loot Chests have Spawned"},
-				{"Despawned","<color=#ffa500>LootChests</color>: Loot Chests have Despawned"}
+				{"Despawned","<color=#ffa500>LootChests</color>: Loot Chests have Despawned"},
+				{"NextSpawn","<color=#ffa500>LootChests</color>: Next Spawn will occur in: {Time}"}
             };
 			
 			lang.RegisterMessages(messages, this);
@@ -71,6 +73,15 @@ namespace Oxide.Plugins
 				{
 					hurt.SendChatMessage(session, Msg("Error",session.SteamId.ToString()));
 					return;
+				}
+				if(args.Length == 1)
+				{
+					if(args[0].ToLower() == "time")
+					{
+						TimeSpan ns = nextspawn - DateTime.Now;
+						hurt.SendChatMessage(session, Msg("NextSpawn",session.SteamId.ToString()).Replace("{Time}",ns.Hours+":"+ns.Minutes+":"+ns.Seconds));
+						return;
+					}
 				}
 				if(args.Length == 2)
 				{
@@ -150,9 +161,14 @@ namespace Oxide.Plugins
 			else
 				hurt.SendChatMessage(session, Msg("NoPermission",session.SteamId.ToString()));
 		}
-		void OnServerInitialized(){timer.Once(1f, () => {ChestSpawns();});}
+		void OnServerInitialized(){
+			timer.Once(1f, () => {
+				ChestSpawns();
+			});
+			nextspawn = DateTime.Now.AddSeconds(Convert.ToSingle(Config["SecondsForSpawn"]));
+		}
         void ChestSpawns()
-        {
+		{
 			if(ItemList.Count > 0)
 			{
 				string chest = "StorageChestDynamicConstructed";
@@ -160,6 +176,7 @@ namespace Oxide.Plugins
 					chest = "LootCache";
 				timer.Repeat(Convert.ToSingle(Config["SecondsForSpawn"]), 0, () =>
 				{
+					nextspawn = DateTime.Now.AddSeconds(Convert.ToSingle(Config["SecondsForSpawn"]));
 					if((bool)Config["ShowSpawnMessage"])
 						hurt.BroadcastChat(Msg("Spawned"));
 					var LocList = Config.Get<List<string>>("StartPoints");
@@ -185,6 +202,8 @@ namespace Oxide.Plugins
 								{
 									GameObject Obj = Singleton<HNetworkManager>.Instance.NetInstantiate(chest, hitInfo.point, Quaternion.identity, GameManager.GetSceneTime());
 									Inventory inv = Obj.GetComponent<Inventory>() as Inventory;
+									if(chest == "LootCache")
+										inv.Capacity = Convert.ToInt32(Config["ItemsPerChest"]);
 									uLink.NetworkView nwv = uLink.NetworkView.Get(Obj);
 									if((bool)Config["DestroyOnEmpty"])
 										inv.DestroyOnEmpty = true;
