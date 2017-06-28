@@ -1,13 +1,13 @@
-﻿// Reference: RustBuild
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using Facepunch;
 using UnityEngine;
-using System.Linq;
-using System.Reflection;
+using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+
 
 namespace Oxide.Plugins
 {
-    [Info("RadtownAnimals", "k1lly0u", "0.2.2", ResourceId = 1561)]
+    [Info("RadtownAnimals", "k1lly0u", "0.2.6", ResourceId = 1561)]
     class RadtownAnimals : RustPlugin
     {
         #region Fields
@@ -21,7 +21,7 @@ namespace Oxide.Plugins
             lang.RegisterMessages(messages, this);
         }
         void OnServerInitialized()
-        {
+        {            
             LoadVariables();
             InitializeAnimalSpawns();
         }
@@ -29,7 +29,7 @@ namespace Oxide.Plugins
         {
             try
             {
-                if (entity.GetComponent<BaseNPC>() != null)
+                if (entity.GetComponent<BaseNpc>() != null)
                 {
                     if (animalList.ContainsKey(entity as BaseEntity))
                     {
@@ -158,8 +158,8 @@ namespace Oxide.Plugins
                             continue;
                         }
                     }
-                }
-            }            
+                }               
+            }
         }
         private Dictionary<string, int> GetSpawnList(AnimalCounts counts)
         {
@@ -170,10 +170,11 @@ namespace Oxide.Plugins
                 {"chicken", counts.Chickens },
                 {"horse", counts.Horses },
                 {"stag", counts.Stags },
-                {"wolf", counts.Wolfs }
+                {"wolf", counts.Wolfs },
+                {"zombie", counts.Zombies }
             };
             return spawnList;
-        }
+        }        
         private void SpawnAnimals(Vector3 position, Dictionary<string,int> spawnList)
         {
             if (animalList.Count >= configData.a_Options.TotalMaximumAmount)
@@ -182,12 +183,10 @@ namespace Oxide.Plugins
                 return;
             }
             foreach (var type in spawnList)
-            {
-                
+            {                
                 for (int i = 0; i < type.Value; i++)
                 {
-                    var entity = SpawnAnimalEntity(type.Key, position);
-                    animalList.Add(entity, position);
+                    SpawnAnimalEntity(type.Key, position); 
                 }
             }
         }
@@ -198,164 +197,82 @@ namespace Oxide.Plugins
         {
             var position = animal.transform.position;
             var type = animal.ShortPrefabName.Replace(".prefab", "");
-            refreshTimers.Add(timer.Once(configData.a_Options.RespawnTimer * 60, () =>
-            {
-                InitializeNewSpawn(type, position);
-            }));
+            refreshTimers.Add(timer.Once(configData.a_Options.RespawnTimer * 60, () => InitializeNewSpawn(type, position)));
             animalList.Remove(animal);
         }
-        private void InitializeNewSpawn(string type, Vector3 position)
+        private void InitializeNewSpawn(string type, Vector3 position) => SpawnAnimalEntity(type, position);          
+        private void SpawnAnimalEntity(string type, Vector3 pos)
         {
-            var newAnimal = SpawnAnimalEntity(type, position);
-            animalList.Add(newAnimal, position);
+            Vector3 point;
+            if (FindPointOnNavmesh(pos, 50, out point))
+            {
+                BaseEntity entity = InstantiateEntity($"assets/rust.ai/agents/{type}/{type}.prefab", point);                
+                entity.Spawn();
+                var npc = entity.gameObject.AddComponent<RAController>();
+                npc.SetHome(point);
+                animalList.Add(entity, point);
+            }
         }
-        private BaseEntity SpawnAnimalEntity(string type, Vector3 pos)
+        private BaseEntity InstantiateEntity(string type, Vector3 position)
         {
-            var newPos = AdjustPosition(pos);
-            BaseEntity entity = GameManager.server.CreateEntity($"assets/bundled/prefabs/autospawn/animals/{type}.prefab", newPos, new Quaternion(), true);
-            entity.Spawn();
-            var npc = entity.gameObject.AddComponent<RAController>();
-            npc.SetHome(pos);
-            return entity;
+            var prefab = GameManager.server.FindPrefab(type);
+            var gameObject = Instantiate.GameObject(prefab, position, new Quaternion());
+            gameObject.name = type;
+            SceneManager.MoveGameObjectToScene(gameObject, Rust.Server.EntityScene);
+            if (!gameObject.activeSelf)                                       
+                gameObject.SetActive(true);            
+            if (gameObject.GetComponent<Spawnable>())
+                UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
+            BaseEntity component = gameObject.GetComponent<BaseEntity>();
+            return component;
         }
-        private Vector3 AdjustPosition(Vector3 pos)
-        {
-            Vector3 randomPos = Quaternion.Euler(UnityEngine.Random.Range((float)(-configData.a_Options.SpawnSpread * 0.2), configData.a_Options.SpawnSpread * 0.2f), UnityEngine.Random.Range((float)(-configData.a_Options.SpawnSpread * 0.2), configData.a_Options.SpawnSpread * 0.2f), UnityEngine.Random.Range((float)(-configData.a_Options.SpawnSpread * 0.2), configData.a_Options.SpawnSpread * 0.2f)) * pos;
-            Vector3 correctPos = GetGroundPosition(randomPos);
-            return correctPos;
-        }
-        #endregion
 
-        #region Helper Methods
-        static Vector3 GetGroundPosition(Vector3 sourcePos) // credit Wulf & Nogrod
+        private bool FindPointOnNavmesh(Vector3 center, float range, out Vector3 result)
         {
-            RaycastHit hitInfo;
-
-            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, LayerMask.GetMask("Terrain", "World", "Construction")))            
-                sourcePos.y = hitInfo.point.y;            
-            sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
-            return sourcePos;
+            for (int i = 0; i < 30; i++)
+            {
+                Vector3 randomPoint = center + Random.insideUnitSphere * range;
+                NavMeshHit hit;
+                if (NavMesh.SamplePosition(randomPoint, out hit, 50f, NavMesh.AllAreas))
+                {
+                    if (hit.position.y - TerrainMeta.HeightMap.GetHeight(hit.position) > 3)
+                        continue;
+                    result = hit.position;
+                    return true;
+                }
+            }
+            result = Vector3.zero;
+            return false;
         }
         #endregion
 
         #region NPCController
         class RAController : MonoBehaviour
         {
-            private static double targetAttackRange = 70;
+            public BaseNpc npc;
+            private Vector3 homePos;
 
-            private Vector3 Home;
-            private Vector3 NextPos;
-            private BaseCombatEntity Target;
-
-            private bool isAttacking;
-
-            public BaseNPC NPC;
-            public NPCAI AI;
-            public NPCMetabolism Metabolism;
-
-            void Awake()
+            private void Awake()
             {
-                AI = GetComponent<NPCAI>();
-                NPC = GetComponent<BaseNPC>();
-                Metabolism = GetComponent<NPCMetabolism>();
-                isAttacking = false;
-                Target = null;
-                NPC.state = BaseNPC.State.Normal;
-                NPC.enableSaving = false;
-                BaseEntity.saveList.Remove(NPC);
+                npc = GetComponent<BaseNpc>();
+                enabled = false;
             }
-            void FixedUpdate()
+            private void OnDestroy()
             {
-                if (AI.deltaTime < ConVar.Server.TickDelta()) return;
-                if (NPC.IsStunned()) return;
-                NPC.Tick();
-                if (NPC.attack.IsActive())
+                InvokeHandler.CancelInvoke(this, CheckLocation);
+            }
+            public void SetHome(Vector3 homePos)
+            {
+                this.homePos = homePos;
+                InvokeHandler.InvokeRepeating(this, CheckLocation, 1f, 20f);
+            }
+
+            private void CheckLocation()
+            {
+                if (Vector3.Distance(npc.transform.position, homePos) > 100)
                 {
-                    NPC.attack.gameObject.SetActive(false);
-                    Move(NextPos);
-                    return;
+                    npc.UpdateDestination(homePos);
                 }
-                if (Vector3.Distance(transform.position, Home) > 140)
-                {
-                    Move(Home);
-                    return;
-                }
-                if (isAttacking && Target != null)
-                {
-                    var distance = Vector3.Distance(transform.position, Target.transform.position);
-                    if (distance >= 70)
-                    {
-                        isAttacking = false;
-                        Target = null;
-                        return;
-                    }
-                    else if (distance < targetAttackRange)
-                    {
-                        var normalized = (Target.transform.position - transform.position).XZ3D().normalized;
-                        if (NPC.diet.Eat(Target))
-                        {
-                            NPC.Heal(NPC.MaxHealth() / 10);
-                            Metabolism.calories.Add(Metabolism.calories.max / 10);
-                            Metabolism.hydration.Add(Metabolism.hydration.max / 10);
-                        }
-                        else if (NPC.attack.Hit(Target, 1, false))
-                            transform.rotation = Quaternion.LookRotation(normalized);
-                        NPC.steering.Face(normalized);
-                    }
-                    else Move(Target.transform.position);
-                }
-                else if (Vector3.Distance(transform.position, NextPos) < 20)
-                {
-                    CalculateNextPos();
-
-                    if (Metabolism.calories.value < 20f)
-                        NPC.diet.Forage();
-                    else if (Metabolism.sleep.value < 20f)
-                        Sleep();
-                }
-                else Move(NextPos);
-            }
-            public void SetHome(Vector3 pos)
-            {
-                Home = pos;
-                NextPos = pos;
-            }
-            void CalculateNextPos()
-            {
-                RaycastHit hitInfo;
-
-                NextPos = Home;
-                NextPos.x += UnityEngine.Random.Range(-100, 100);
-
-                if (Physics.Raycast(NextPos, Vector3.down, out hitInfo, LayerMask.GetMask("Terrain", "World", "Construction")))
-                    NextPos.y = hitInfo.point.y;
-                NextPos.y = Mathf.Max(NextPos.y, TerrainMeta.HeightMap.GetHeight(NextPos));
-
-                NextPos.z += UnityEngine.Random.Range(-100, 100);
-            }
-            void Move(Vector3 pos)
-            {
-                NPC.state = BaseNPC.State.Normal;
-                AI.sense.Think();
-                NPC.steering.Move((pos - transform.position).XZ3D().normalized, pos, (int)NPCSpeed.Trot);
-            }
-            void Sleep()
-            {
-                NPC.state = BaseNPC.State.Sleeping;
-                NPC.sleep.Recover(20f);
-                Metabolism.stamina.Run(20f);
-                NPC.StartCooldown(20f, true);
-            }
-            internal void OnAttacked(HitInfo info)
-            {
-                if (info.Initiator)
-                    Attack(info.Initiator.GetComponent<BaseCombatEntity>());
-            }
-            internal void Attack(BaseCombatEntity ent)
-            {
-                Target = ent;
-                isAttacking = true;
-                targetAttackRange = Math.Pow(NPC._collider.bounds.XZ3D().extents.Max() + NPC.attack.range + ent._collider.bounds.XZ3D().extents.Max(), 2);
             }
         }
         #endregion
@@ -364,7 +281,7 @@ namespace Oxide.Plugins
         [ChatCommand("ra_killall")]
         private void chatKillAnimals(BasePlayer player, string command, string[] args)
         {
-            if (player.IsAdmin) return;
+            if (!player.IsAdmin) return;
             foreach(var animal in animalList)
             {
                 UnityEngine.Object.Destroy(animal.Key.GetComponent<RAController>());
@@ -400,6 +317,7 @@ namespace Oxide.Plugins
             public int Horses;
             public int Stags;
             public int Wolfs;
+            public int Zombies;
         }
         class LightHouses
         {
@@ -500,6 +418,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -513,6 +432,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -526,6 +446,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -539,6 +460,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -552,6 +474,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -565,6 +488,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -578,6 +502,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -591,6 +516,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -604,6 +530,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },
@@ -617,6 +544,7 @@ namespace Oxide.Plugins
                         Horses = 0,
                         Stags = 0,
                         Wolfs = 0,
+                        Zombies = 0
                     },
                     Enabled = false
                 },

@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("BuildCost", "ignignokt84", "0.0.1")]
+	[Info("BuildCost", "ignignokt84", "0.0.2", ResourceId = 2388)]
 	[Description("Build cost utility")]
 	class BuildCost : RustPlugin
 	{
@@ -22,13 +21,13 @@ namespace Oxide.Plugins
 		Dictionary<uint, int> deployableLookup = new Dictionary<uint, int>();
 		// aggregation helper
 		CostAggregator aggregator = new CostAggregator();
-		
+
 		// groups
 		enum Group { All, BuildingBlocks, Deployables }
-		
+
 		#endregion
 
-		
+
 		#region Lang
 
 		// load default messages to Lang
@@ -52,9 +51,8 @@ namespace Oxide.Plugins
 		#region Loading/Unloading
 
 		// on load
-		void Loaded()
+		void Init()
 		{
-			LoadDefaultMessages();
 			permission.RegisterPermission(PermCanUse, this);
 			cmd.AddChatCommand("cost", this, "CalculateCost");
 		}
@@ -64,7 +62,7 @@ namespace Oxide.Plugins
 		{
 			BuildDeployableLookups();
 		}
-		
+
 		#endregion
 
 		#region Messaging
@@ -111,7 +109,7 @@ namespace Oxide.Plugins
 				SendMessage(player, "NoBuildingFound");
 				return;
 			}
-			
+
 			HashSet<BuildingBlock> blocks;
 			HashSet<BaseEntity> deployables;
 			if (GetStructure(initialBlock, out blocks, out deployables))
@@ -119,7 +117,7 @@ namespace Oxide.Plugins
 				CalculateBuildingBlockCost(blocks);
 				CalculateDeployableCost(deployables);
 			}
-			if(aggregator.counter.Values.Sum() == 0)
+			if (aggregator.counter.Values.Sum() == 0)
 			{
 				SendMessage(player, "NoBuildingFound");
 				return;
@@ -149,9 +147,9 @@ namespace Oxide.Plugins
 			deployables = new HashSet<BaseEntity>();
 			List<Vector3> checkFrom = new List<Vector3>();
 			BuildingBlock block;
-			
+
 			checkFrom.Add(initialBlock.transform.position);
-			if(initialBlock is BuildingBlock)
+			if (initialBlock is BuildingBlock)
 				structure.Add(initialBlock as BuildingBlock);
 
 			int current = 0;
@@ -174,7 +172,7 @@ namespace Oxide.Plugins
 							structure.Add(block);
 						}
 					}
-					else if(hit != null)
+					else if (hit != null)
 					{
 						deployables.Add(hit);
 						if (hit.HasSlot(BaseEntity.Slot.Lock))
@@ -198,7 +196,7 @@ namespace Oxide.Plugins
 				if (block == null) continue;
 				// only calculate twig and current grade
 				aggregator.AddCosts(block.blockDefinition.grades[(int)block.grade].costToBuild, Group.BuildingBlocks);
-				if(block.grade != BuildingGrade.Enum.Twigs)
+				if (block.grade != BuildingGrade.Enum.Twigs)
 					aggregator.AddCosts(block.blockDefinition.grades[(int)BuildingGrade.Enum.Twigs].costToBuild, Group.BuildingBlocks, false);
 			}
 		}
@@ -257,7 +255,7 @@ namespace Oxide.Plugins
 				if (!costs.ContainsKey(group))
 					costs[group] = new List<ItemAmount>();
 				List<ItemAmount> groupCosts = costs[group];
-				
+
 				ItemAmount existing = groupCosts.SingleOrDefault(i => i.itemid == amount.itemid);
 				if (existing == null)
 					groupCosts.Add(new ItemAmount(amount.itemDef, amount.amount));
@@ -274,7 +272,7 @@ namespace Oxide.Plugins
 				List<ItemAmount> itemList = costs[group];
 				List<string> costStrings = new List<string>();
 				foreach (ItemAmount amount in itemList)
-					if(amount != null)
+					if (amount != null)
 						costStrings.Add(amount.itemDef.displayName.translated + ": " + amount.amount);
 
 				return new object[] { counter[group], string.Join(Environment.NewLine, costStrings.ToArray()) };

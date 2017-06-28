@@ -10,7 +10,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("HeliRide", "ColonBlow", "1.1.10", ResourceId = 2274)]
+    [Info("HeliRide", "ColonBlow", "1.1.11", ResourceId = 2274)]
     public class HeliRide : RustPlugin
     {
         [PluginReference]
@@ -263,7 +263,6 @@ namespace Oxide.Plugins
             		cockpitcui.Add(new CuiElement
                 	{
                     	Name = "CockpitGuiOverlay",
-			Parent = "Hud.Under",
                     	Components =
                     		{
                         	new CuiRawImageComponent { Color = "1 1 1 1", Url = "http://i.imgur.com/6O0hMC5.png", Sprite = "assets/content/textures/generic/fulltransparent.tga" },
@@ -280,7 +279,6 @@ namespace Oxide.Plugins
             		crosshaircui.Add(new CuiElement
                 	{
                     	Name = "CrosshairGuiOverlay",
-			Parent = "Hud.Under",
                     	Components =
                     		{
                         	new CuiRawImageComponent { Color = "1 1 1 1", Url = "http://i.imgur.com/yweKHFT.png", Sprite = "assets/content/textures/generic/fulltransparent.tga" },
@@ -297,7 +295,6 @@ namespace Oxide.Plugins
             		damageoverlay.Add(new CuiElement
                 	{
                     	Name = "DamageGuiOverlay",
-			Parent = "Hud.Under",
                     	Components =
                     		{
                         	new CuiRawImageComponent { Color = "1 1 1 1", Url = "http://i.imgur.com/XrpqTdP.png", Sprite = "assets/content/textures/generic/fulltransparent.tga" },
@@ -528,6 +525,7 @@ namespace Oxide.Plugins
         void chatFlyHeli(BasePlayer player, string command, string[] args)
 	{
 
+		string SteamID = player.userID.ToString();
 		if (isAllowed(player, "heliride.allowed"))
 		{
 			var playerheli = player.GetComponent<FlyHelicopter>();
@@ -549,7 +547,7 @@ namespace Oxide.Plugins
 
 			if (playerheli == null)
 			{
-				if (!player.IsFlying) { rust.RunClientCommand(player, "noclip"); }
+				if (!player.IsFlying) { SendReply(player, lang.GetMessage("notflying", this, SteamID)); return; }
 				if (Vanish != null && UseAutoVanish) { Vanish.Call("Disappear", player); }
 				timer.Once(1f, () => AddHeli(player));
 				return;
@@ -557,7 +555,6 @@ namespace Oxide.Plugins
 		}
 		if (!isAllowed(player, "heliride.allowed"))
 		{
-			string SteamID = player.userID.ToString();
 			SendReply(player, lang.GetMessage("notallowed", this, SteamID));
 			return;	
 		}
@@ -568,7 +565,7 @@ namespace Oxide.Plugins
         void cmdConsoleFlyHeli(ConsoleSystem.Arg arg)
 	{
 		BasePlayer player = arg.Player();
-
+		string SteamID = player.userID.ToString();
 		if (isAllowed(player, "heliride.allowed"))
 		{
 			var playerheli = player.GetComponent<FlyHelicopter>();
@@ -590,7 +587,7 @@ namespace Oxide.Plugins
 
 			if (playerheli == null)
 			{
-				if (!player.IsFlying) { rust.RunClientCommand(player, "noclip"); }
+				if (!player.IsFlying) { SendReply(player, lang.GetMessage("notflying", this, SteamID)); return; }
 				if (Vanish != null && UseAutoVanish) { Vanish.Call("Disappear", player); }
 				timer.Once(1f, () => AddHeli(player));
 				return;
@@ -598,7 +595,6 @@ namespace Oxide.Plugins
 		}
 		if (!isAllowed(player, "heliride.allowed"))
 		{
-			string SteamID = player.userID.ToString();
 			SendReply(player, lang.GetMessage("notallowed", this, SteamID));
 			return;	
 		}

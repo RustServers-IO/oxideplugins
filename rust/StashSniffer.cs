@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("StashSniffer", "k1lly0u", "0.1.1", ResourceId = 2062)]
+    [Info("StashSniffer", "k1lly0u", "0.1.2", ResourceId = 2062)]
     class StashSniffer : RustPlugin
     {
         #region Fields
@@ -58,7 +58,7 @@ namespace Oxide.Plugins
         }
         private void OnEntityKill(BaseNetworkable entity)
         {
-            if (isInit)
+            if (entity != null && isInit)
             {
                 if (stashCache.ContainsKey(entity.net.ID))
                 {
@@ -84,7 +84,7 @@ namespace Oxide.Plugins
         [ChatCommand("stash")]
         void cmdSniff(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin()) return;
+            if (!player.IsAdmin) return;
             if (args == null || args.Length == 0)
             {
                 SendReply(player, lang.GetMessage("nearSyn",this,player.UserIDString));

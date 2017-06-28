@@ -10,14 +10,12 @@ using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomLootSpawns", "k1lly0u", "0.2.4", ResourceId = 1655)]
+    [Info("CustomLootSpawns", "k1lly0u", "0.2.5", ResourceId = 1655)]
     class CustomLootSpawns : RustPlugin
     {
         #region Fields
         CLSData clsData;
         private DynamicConfigFile clsdata;
-
-        private FieldInfo serverinput;
 
         private Dictionary<BaseEntity, int> boxCache = new Dictionary<BaseEntity, int>();
         private Dictionary<int, CustomBoxData> boxTypes = new Dictionary<int, CustomBoxData>();
@@ -33,7 +31,6 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission("customlootspawns.admin", this);
             lang.RegisterMessages(messages, this);
-            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             clsdata = Interface.Oxide.DataFileSystem.GetFile("CustomSpawns/cls_data");
             clsdata.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter() };
         }
@@ -128,15 +125,18 @@ namespace Oxide.Plugins
                 var customLoot = clsData.customBoxes[boxData.customLoot];
                 if (customLoot.itemList.Count > 0)
                 {
-                    ClearContainer(newBox);
-                    for (int i = 0; i < customLoot.itemList.Count; i++)
+                    timer.In(3, () =>
                     {
-                        var itemInfo = customLoot.itemList[i];
-                        var item = CreateItem(itemInfo.ID, itemInfo.Amount, itemInfo.SkinID);
-                        if (newBox is LootContainer)
-                            item.MoveToContainer((newBox as LootContainer).inventory);
-                        else item.MoveToContainer((newBox as StorageContainer).inventory);
-                    }
+                        ClearContainer(newBox);
+                        for (int i = 0; i < customLoot.itemList.Count; i++)
+                        {
+                            var itemInfo = customLoot.itemList[i];
+                            var item = CreateItem(itemInfo.ID, itemInfo.Amount, itemInfo.SkinID);
+                            if (newBox is LootContainer)
+                                item.MoveToContainer((newBox as LootContainer).inventory);
+                            else item.MoveToContainer((newBox as StorageContainer).inventory);
+                        }
+                    });
                 }
             }            
             boxCache.Add(newBox, ID);           
@@ -301,8 +301,7 @@ namespace Oxide.Plugins
         {
             Vector3 closestHitpoint;
             Vector3 sourceEye = player.transform.position + new Vector3(0f, 1.5f, 0f);
-            var input = serverinput.GetValue(player) as InputState;
-            Quaternion currentRot = Quaternion.Euler(input.current.aimAngles);
+            Quaternion currentRot = Quaternion.Euler(player.serverInput.current.aimAngles);
             Ray ray = new Ray(sourceEye, currentRot * Vector3.forward);
 
             var hits = Physics.RaycastAll(ray);
@@ -323,8 +322,7 @@ namespace Oxide.Plugins
         }
         private BaseEntity FindContainer(BasePlayer player)
         {
-            var input = serverinput.GetValue(player) as InputState;
-            var currentRot = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
+            var currentRot = Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward;
             Vector3 eyesAdjust = new Vector3(0f, 1.5f, 0f);
 
             var rayResult = CastRay(player.transform.position + eyesAdjust, currentRot);

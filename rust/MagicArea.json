@@ -1,8 +1,8 @@
 {
     "name": "Magic Area",
     "description": "PvP\/PvE areas and developer API",
-    "author": "Norn",
-    "version": "0.2",
+    "author": "Wulf",
+    "version": "0.2.1",
     "configuration": true,
     "suggest": {
         "Kits": "*"

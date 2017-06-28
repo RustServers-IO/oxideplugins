@@ -1,0 +1,19 @@
+{
+    "name": "FactionsTax",
+    "description": "A Tax System for Factions Core",
+    "author": "Absolut",
+    "version": "1.0.0",
+    "configuration": true,
+    "require": {
+        "FactionsCore": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/factionstax.2424",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

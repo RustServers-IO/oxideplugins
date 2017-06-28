@@ -1,11 +1,11 @@
 {
-    "name": "Waypoints Database",
+    "name": "Waypoints",
     "description": "Waypoints database to give paths for plugins that require it",
     "author": "Nogrod",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/waypoints-database.982",
+    "url": "http:\/\/oxidemod.org\/plugins\/waypoints.982",
     "games": [
         "rust"
     ],

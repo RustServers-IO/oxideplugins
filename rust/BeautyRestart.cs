@@ -9,7 +9,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("BeautyRestart", "Reynostrum", "1.0.0")]
+    [Info("BeautyRestart", "Reynostrum", "1.0.3", ResourceId = 2176)]
     [Description("Restart the server with a cooldown GUI timer.")]
     class BeautyRestart : RustPlugin
     {
@@ -42,7 +42,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("brestart")]
         void CMDConsoleRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 if (arg.Args == null || arg.Args.Length != 2)
                 {
@@ -56,7 +56,7 @@ namespace Oxide.Plugins
         [ChatCommand("brestart")]
         void CMDCommandRestart(BasePlayer player, string cmd, string[] args)
         {
-            if (HasPermission(player, "BeautyRestart.Restart") || player.IsAdmin())
+            if (HasPermission(player, "BeautyRestart.Restart") || player.IsAdmin)
             {
                 if (args == null || args.Length != 2)
                 {
@@ -70,7 +70,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("bcancelrestart")]
         void CMDConsoleCancelRestart(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 Abort();
                 SendReply(arg, Lang("CancelRestart"));
@@ -80,7 +80,7 @@ namespace Oxide.Plugins
         [ChatCommand("bcancelrestart")]
         void CMDCommandCancelRestart(BasePlayer player, string cmd, string[] args)
         {
-            if (HasPermission(player, "BeautyRestart.Restart") || player.IsAdmin())
+            if (HasPermission(player, "BeautyRestart.Restart") || player.IsAdmin)
             {
                 Abort();
                 SendReply(player, Lang("CancelRestart", player.UserIDString));
@@ -157,7 +157,7 @@ namespace Oxide.Plugins
                 BasePlayer basePlayer = array[i];
                 basePlayer.Kick(TimerMessage);
             }
-            timer.Once(2, () => ConsoleSystem.Run.Server.Normal("quit"));
+            timer.Once(2, () => ConsoleSystem.Run(ConsoleSystem.Option.Server, "quit"));
         }
         void TimeIn()
         {
@@ -165,7 +165,7 @@ namespace Oxide.Plugins
             TimerRefresh = timer.Repeat(1f, TimerSeconds, () =>
             {
                 TimerSeconds--;
-                
+
                 if (Seconds == 1 && Minutes == 0 && Hours == 0)
                 {
                     Puts("Restarting...");
@@ -186,7 +186,7 @@ namespace Oxide.Plugins
                     }
                 });
             });
-        }     
+        }
         void CreatingTimer(int CreatingTimerMinutes, string TimerName)
         {
             if (IsTiming) return;
@@ -199,7 +199,7 @@ namespace Oxide.Plugins
                 FULLGUIHandler(player, "Load");
             };
             TimeIn();
-        }      
+        }
         void FULLGUIHandler(BasePlayer player, string Command)
         {
             if (Command == "Unload")
@@ -215,7 +215,7 @@ namespace Oxide.Plugins
             }
         }
         #endregion
-        
+
         #region GUI
         void GUITexto(BasePlayer player)
         {

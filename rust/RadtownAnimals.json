@@ -2,7 +2,7 @@
     "name": "Radtown Animals",
     "description": "Spawns animals at designated monuments",
     "author": "k1lly0u",
-    "version": "0.2.2",
+    "version": "0.2.6",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/radtown-animals.1561",

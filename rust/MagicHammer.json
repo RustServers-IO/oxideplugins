@@ -2,7 +2,7 @@
     "name": "Magic Hammer",
     "description": "Hit stuff with the hammer and do things",
     "author": "Werkrat",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "configuration": true,
     "suggest": {
         "PopupNotifications": "*"

@@ -1,5 +1,3 @@
-// Reference: RustBuild
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,13 +10,11 @@ using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
 
-
 namespace Oxide.Plugins
 {
-    [Info("Waypoints", "Reneb", "1.1.1")]
+    [Info("Waypoints", "Reneb", "1.1.2", ResourceId = 982)]
     class Waypoints : RustPlugin
     {
-
         void Loaded()
         {
             LoadData();

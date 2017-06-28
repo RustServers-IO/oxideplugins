@@ -5,7 +5,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("RainOfFire", "emu / k1lly0u", "0.2.5", ResourceId = 1249)]
+    [Info("RainOfFire", "emu / k1lly0u", "0.2.51", ResourceId = 1249)]
     class RainOfFire : RustPlugin
     {
         #region Fields
@@ -304,7 +304,7 @@ namespace Oxide.Plugins
                         isValid = float.TryParse(args[1], out newDropMultiplier);
                         if (isValid)
                         {
-                            SetDamageMult(newDropMultiplier);
+                            SetDropRate(newDropMultiplier);
                             SendReply(player, msg("dropMulti", player.UserIDString) + newDropMultiplier);
                         }
                         else

@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lottery", "Sami37", "1.1.5", ResourceId = 2145)]
+    [Info("Lottery", "Sami37", "1.1.7", ResourceId = 2145)]
     internal class Lottery : RustPlugin
     {
         #region Economy Support
@@ -82,7 +82,7 @@ namespace Oxide.Plugins
         private string container, containerwin, BackgroundUrl, BackgroundColor, WinBackgroundUrl, WinBackgroundColor;
         private DynamicConfigFile data;
         private List<object> NPCID = new List<object>();
-        private double jackpot, SRMinBet, SRjackpot, MinBetjackpot;
+        private double jackpot, SRMinBet, SRjackpot, MinBetjackpot, MinBetjackpotEco;
         private int JackpotNumber, SRJackpotNumber, DefaultMaxRange, DefaultMinRange;
         public Dictionary<string, object> IndividualRates { get; private set; }
         public Dictionary<string, int> SRRates { get; private set; }
@@ -140,6 +140,7 @@ namespace Oxide.Plugins
             SRjackpot = GetConfigValue("ServerRewards", "Jackpot", 10);
             SRMinBet = GetConfigValue("ServerRewards", "MinBet", 1000);
             MinBetjackpot = GetConfigValue("ServerRewards", "MinBetJackpot", 100000);
+            MinBetjackpotEco = GetConfigValue("Global", "MinBetJackpot", 100000);
             SRJackpotNumber = GetConfigValue("ServerRewards", "JackpotMatch", 1869);
             JackpotNumber = GetConfigValue("Global", "JackpotMatch", 1058);
             DefaultMinRange = GetConfigValue("Global", "RollMinRange", 1000);
@@ -352,7 +353,7 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, "ButtonBackLotery");
             CuiHelper.DestroyUi(player, "ButtonForwardLotery");
 
-            if(Economy.IsLoaded && !UseSR)
+            if(Economy != null && Economy.IsLoaded && !UseSR)
                 ShowLotery(player, args);
             else if(ServerRewards.IsLoaded)
                 ShowSrLotery(player,  args);
@@ -384,9 +385,9 @@ namespace Oxide.Plugins
             else
             {
                 Currentbet.Add(player.userID, new playerinfo());
-                Currentbet.TryGetValue(player.userID, out playerbet);
             }
-            if (args != null && args.Length > 0)
+            playerbet = Currentbet[player.userID];
+            if (args != null && args.Length > 0 && playerbet != null)
             {
                 if (args[0].Contains("less") || args[0].Contains("plus"))
                 {
@@ -394,20 +395,20 @@ namespace Oxide.Plugins
                     {
                         if (currentBalance >= playerbet.currentbet*(playerbet.multiplicator + 1))
                         {
-                            var multiplier = 1;
+                            int multiplier;
                             int.TryParse(args[1], out multiplier);
-                            playerbet.multiplicator += multiplier;                            
+                            playerbet.multiplicator += multiplier;
                         }
                     }
                     if (args[0].Contains("less"))
                     {
-                        if (playerbet != null && playerbet.multiplicator > 1)
+                        if (playerbet.multiplicator > 1)
                             playerbet.multiplicator -= 1;
                     }
                 }
                 if (args[0].Contains("bet"))
                 {
-                    var bet = 0;
+                    int bet;
                     int.TryParse(args[1], out bet);
                     if(currentBalance < (playerbet.currentbet+bet)*playerbet.multiplicator)
                         SendReply(player, lang.GetMessage("NotEnoughMoney", this, player.UserIDString));
@@ -855,42 +856,40 @@ namespace Oxide.Plugins
                     Currentbet.Add(player.userID, new playerinfo());
                     Currentbet.TryGetValue(player.userID, out playerbet);
                 }
-                if (args != null && args.Length > 0)
+                playerbet = Currentbet[player.userID];
+                if (playerbet != null && args != null && args.Length > 0)
                 {
-                    if (playerbet != null)
+                    if (args[0].Contains("less") || args[0].Contains("plus"))
                     {
-                        if (args[0].Contains("less") || args[0].Contains("plus"))
+                        if (args[0].Contains("plus"))
                         {
-                            if (args[0].Contains("plus"))
+                            if ((int) currentBalance >= playerbet.currentbet*(playerbet.multiplicator + 1))
                             {
-                                if ((int) currentBalance >= playerbet.currentbet*(playerbet.multiplicator + 1))
-                                {
-                                    var multiplier = 1;
-                                    int.TryParse(args[1], out multiplier);
-                                    playerbet.multiplicator += multiplier;
-                                }
-                            }
-                            if (args[0].Contains("less"))
-                            {
-                                if (playerbet.multiplicator > 1)
-                                    playerbet.multiplicator -= 1;
+                                int multiplier;
+                                int.TryParse(args[1], out multiplier);
+                                playerbet.multiplicator += multiplier;
                             }
                         }
-                        if (args[0].Contains("bet"))
+                        if (args[0].Contains("less"))
                         {
-                            var bet = 0;
-                            int.TryParse(args[1], out bet);
-                            if ((int) currentBalance < (playerbet.currentbet + bet)*playerbet.multiplicator)
-                                SendReply(player, lang.GetMessage("NotEnoughMoney", this, player.UserIDString));
-                            else playerbet.currentbet += bet;
-                        }
-                        if (args[0].Contains("page"))
-                        {
-                            int.TryParse(args[1], out @from);
+                            if (playerbet.multiplicator > 1)
+                                playerbet.multiplicator -= 1;
                         }
                     }
+                    if (args[0].Contains("bet"))
+                    {
+                        int bet;
+                        int.TryParse(args[1], out bet);
+                        if ((int) currentBalance < (playerbet.currentbet + bet)*playerbet.multiplicator)
+                            SendReply(player, lang.GetMessage("NotEnoughMoney", this, player.UserIDString));
+                        else playerbet.currentbet += bet;
+                    }
+                    if (args[0].Contains("page"))
+                    {
+                        int.TryParse(args[1], out @from);
+                    }
                 }
-                int i = 0;
+                var i = 0;
                 double jackpots = Math.Round(Currentbet.Sum(v => v.Value.totalbet));
                 jackpots += jackpot;
                 var win = new CuiElementContainer();
@@ -1347,10 +1346,7 @@ namespace Oxide.Plugins
                         findReward = (int)findReward*bet*multiplicator + (int) SRjackpot;
                         return (int)findReward;
                     }
-                    else
-                    {
-                        SendReply(player, string.Format(lang.GetMessage("BetMore", this, player.UserIDString), MinBetjackpot));
-                    }
+                    SendReply(player, string.Format(lang.GetMessage("BetMore", this, player.UserIDString), MinBetjackpot));
                 }
 
                 #endregion
@@ -1471,8 +1467,12 @@ namespace Oxide.Plugins
                 #region jackpot
                 if (reference == JackpotNumber)
                 {
-                    int jackpots = (int) Math.Round(Currentbet.Sum(v => v.Value.totalbet));
-                    return bet * multiplicator + jackpots + Convert.ToInt32(jackpot);
+                    if (bet*multiplicator >= MinBetjackpotEco)
+                    {
+                        int jackpots = (int) Math.Round(Currentbet.Sum(v => v.Value.totalbet));
+                        return bet*multiplicator + jackpots + Convert.ToInt32(jackpot);
+                    }
+                    SendReply(player, string.Format(lang.GetMessage("BetMore", this, player.UserIDString), MinBetjackpotEco));
                 }
                 #endregion
 
@@ -1683,11 +1683,12 @@ namespace Oxide.Plugins
 
         void OnUseNPC(BasePlayer npc, BasePlayer player, Vector3 destination)
         {
-            if (NPCID != null && NPCID.Contains(npc.UserIDString))
+            if (NPCID != null && NPCID.Contains(npc.UserIDString) && UseNPC)
             {
                 RefreshUI(player, null);
             }
         }
+
         [ConsoleCommand("cmdDestroyUI")]
         void cmdDestroyUI(ConsoleSystem.Arg arg)
         {
@@ -1822,22 +1823,24 @@ namespace Oxide.Plugins
                     if (reward != null && Convert.ToInt32(reward) != 0)
                     {
                         rwd = (int) reward;
-                        if (random == JackpotNumber)
-                        {
-                            foreach (var resetbet in Currentbet)
+                        if (playerbet.currentbet*playerbet.multiplicator >= MinBetjackpotEco)
+                            if (random == JackpotNumber)
                             {
-                                resetbet.Value.totalbet = 0;
-                                resetbet.Value.multiplicator = 1;
-                                playerinfos.Add(resetbet.Key, resetbet.Value);
+                                foreach (var resetbet in Currentbet)
+                                {
+                                    resetbet.Value.totalbet = 0;
+                                    resetbet.Value.multiplicator = 1;
+                                    playerinfos.Add(resetbet.Key, resetbet.Value);
+                                }
+                                Currentbet.Clear();
+                                Currentbet = playerinfos;
+                                Economy?.CallHook("Deposit", arg.Player().userID, rwd);
+                                SendReply(arg.Player(),
+                                    string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random,
+                                        rwd));
+                                return;
                             }
-                            Currentbet.Clear();
-                            Currentbet = playerinfos;
-                            Economy?.CallHook("Deposit", arg.Player().userID, rwd);
-                            SendReply(arg.Player(),
-                                string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random,
-                                    rwd));
-                        }
-                        else if (Math.Abs(rwd) > 0 && random != JackpotNumber)
+                        if (Math.Abs(rwd) > 0 && random != JackpotNumber)
                         {
                             Currentbet.Remove(arg.Player().userID);
                             Currentbet.Add(arg.Player().userID, playerbet);

@@ -23,7 +23,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg", "0.3.6", ResourceId = 1420)]
+    [Info("Vanish", "Wulf/lukespragg", "0.3.7", ResourceId = 1420)]
     [Description("Allows players with permission to become truly invisible.")]
 
     class Vanish : RustPlugin
@@ -297,7 +297,7 @@ namespace Oxide.Plugins
             if (player == null || !player.IsConnected || !onlinePlayers[player].IsInvisible) return null;
 
             // Block damage to animals
-            if (entity is BaseNPC)
+            if (entity is BaseNpc)
             {
                 if (canHurtAnimals) return null;
                 PrintToChat(player, Lang("CantHurtAnimals", player.UserIDString));

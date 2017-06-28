@@ -1,0 +1,16 @@
+{
+    "name": "VIP No Decay",
+    "description": "No decay damage for player or group with permissions",
+    "author": "Colon Blow",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/vip-no-decay.2449",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

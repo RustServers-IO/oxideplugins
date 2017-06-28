@@ -1,9 +1,9 @@
 {
     "name": "MultiCupboard",
-    "description": "Allows you to put multiple cupboards with a vanilla sphere",
+    "description": "Allows you to put multiple cupboards. Radius for the next Cupboard can be set in the config",
     "author": "",
-    "version": "0.0.2",
-    "configuration": false,
+    "version": "0.0.6",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/multicupboard.2244",
     "games": [

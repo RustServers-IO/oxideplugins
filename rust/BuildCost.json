@@ -2,7 +2,7 @@
     "name": "BuildCost",
     "description": "Displays an approximate build cost for a structure and deployables",
     "author": "ignignokt84",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/buildcost.2388",

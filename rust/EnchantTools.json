@@ -1,0 +1,16 @@
+{
+    "name": "EnchantTools",
+    "description": "Add enchanted tools to the game that mining melted resources.",
+    "author": "MalkoR",
+    "version": "1.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/enchanttools.2432",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

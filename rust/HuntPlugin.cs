@@ -25,8 +25,7 @@ using Timer = Oxide.Plugins.Timer;
 
 namespace Oxide.Plugins
 {
-
-    [Info("Hunt RPG", "PedraozauM / SW / Nogrod", "1.5.12", ResourceId = 841)]
+    [Info("Hunt RPG", "PedraozauM / SW / Nogrod", "1.5.13", ResourceId = 841)]
     public class HuntPlugin : RustPlugin
     {
         [PluginReference]
@@ -441,7 +440,7 @@ namespace Oxide.Plugins
         private bool OnAttackedInternal(BasePlayer player, HitInfo hitInfo)
         {
             var attacker = hitInfo.Initiator as BasePlayer;
-            if (!(hitInfo.Initiator is BaseNPC || attacker != null && player.userID != attacker.userID)) return false;
+            if (!(hitInfo.Initiator is BaseNpc || attacker != null && player.userID != attacker.userID)) return false;
             var rpgInfo = FindRpgInfo(player);
             if (Random.Range(0f, 1f) <= rpgInfo.GetEvasion())
             {

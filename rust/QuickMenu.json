@@ -1,0 +1,16 @@
+{
+    "name": "Quick Menu",
+    "description": "A easily accessible menu that contains configurable buttons.",
+    "author": "Xianith",
+    "version": "0.0.7",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/quick-menu.2419",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

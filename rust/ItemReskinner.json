@@ -1,0 +1,16 @@
+{
+    "name": "Item Reskinner",
+    "description": "Allow players to reskin items with the skins they own.",
+    "author": "",
+    "version": "1.08",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/item-reskinner.2423",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

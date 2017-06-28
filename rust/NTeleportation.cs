@@ -16,7 +16,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "Nogrod", "1.0.20", ResourceId = 1832)]
+    [Info("NTeleportation", "Nogrod", "1.0.21", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
         private const string NewLine = "\n";
@@ -195,7 +195,7 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig()
         {
             Config.Settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
-            Config.Settings.Converters = new JsonConverter[] {new UnityVector3Converter()};
+            Config.Settings.Converters = new JsonConverter[] { new UnityVector3Converter() };
             Config.WriteObject(new ConfigData
             {
                 Settings = new SettingsData
@@ -216,13 +216,13 @@ namespace Oxide.Plugins
                 Home = new HomesSettingsData
                 {
                     HomesLimit = 2,
-                    VIPHomesLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
+                    VIPHomesLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
                     Cooldown = 600,
                     Countdown = 15,
                     DailyLimit = 5,
-                    VIPDailyLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
-                    VIPCooldowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
-                    VIPCountdowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
+                    VIPDailyLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
+                    VIPCooldowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
+                    VIPCountdowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
                     LocationRadius = 25,
                     ForceOnTopOfFoundation = true,
                     CheckFoundationForOwner = true,
@@ -236,9 +236,9 @@ namespace Oxide.Plugins
                     Cooldown = 600,
                     Countdown = 15,
                     DailyLimit = 5,
-                    VIPDailyLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
-                    VIPCooldowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
-                    VIPCountdowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
+                    VIPDailyLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
+                    VIPCooldowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
+                    VIPCountdowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
                     RequestDuration = 30,
                     BlockTPAOnCeiling = true,
                     CupOwnerAllowOnBuildingBlocked = true
@@ -248,9 +248,9 @@ namespace Oxide.Plugins
                     Cooldown = 600,
                     Countdown = 15,
                     DailyLimit = 5,
-                    VIPDailyLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
-                    VIPCooldowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}},
-                    VIPCountdowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}}
+                    VIPDailyLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
+                    VIPCooldowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } },
+                    VIPCountdowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } }
                 },
                 Version = Version
             }, true);
@@ -615,7 +615,7 @@ namespace Oxide.Plugins
                 {"LogTeleportBack", "{0} teleported back to previous location."}
             }, this);
             Config.Settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
-            Config.Settings.Converters = new JsonConverter[] {new UnityVector3Converter()};
+            Config.Settings.Converters = new JsonConverter[] { new UnityVector3Converter() };
             try
             {
                 configData = Config.ReadObject<ConfigData>();
@@ -629,19 +629,19 @@ namespace Oxide.Plugins
             {
                 if (configData.Home.VIPHomesLimits == null)
                 {
-                    configData.Home.VIPHomesLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.Home.VIPDailyLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.Home.VIPCooldowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.TPR.VIPDailyLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.TPR.VIPCooldowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.Town.VIPDailyLimits = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.Town.VIPCooldowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
+                    configData.Home.VIPHomesLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.Home.VIPDailyLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.Home.VIPCooldowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.TPR.VIPDailyLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.TPR.VIPCooldowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.Town.VIPDailyLimits = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.Town.VIPCooldowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
                 }
                 if (configData.Home.VIPCountdowns == null)
                 {
-                    configData.Home.VIPCountdowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.TPR.VIPCountdowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
-                    configData.Town.VIPCountdowns = new Dictionary<string, int> {{ConfigDefaultPermVip, 5}};
+                    configData.Home.VIPCountdowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.TPR.VIPCountdowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
+                    configData.Town.VIPCountdowns = new Dictionary<string, int> { { ConfigDefaultPermVip, 5 } };
                 }
                 if (configData.Version <= new VersionNumber(1, 0, 4))
                     configData.Home.AllowAboveFoundation = true;
@@ -706,13 +706,13 @@ namespace Oxide.Plugins
         {
             var file = Interface.Oxide.DataFileSystem.GetFile(name);
             file.Settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
-            file.Settings.Converters = new JsonConverter[] {new UnityVector3Converter(), new CustomComparerDictionaryCreationConverter<string>(StringComparer.OrdinalIgnoreCase)};
+            file.Settings.Converters = new JsonConverter[] { new UnityVector3Converter(), new CustomComparerDictionaryCreationConverter<string>(StringComparer.OrdinalIgnoreCase) };
             return file;
         }
 
         void OnServerInitialized()
         {
-            boundary = TerrainMeta.Size.x/2;
+            boundary = TerrainMeta.Size.x / 2;
             CheckPerms(configData.Home.VIPHomesLimits);
             CheckPerms(configData.Home.VIPDailyLimits);
             CheckPerms(configData.Home.VIPCooldowns);
@@ -938,7 +938,7 @@ namespace Oxide.Plugins
                     if (args.Length != 2 || !int.TryParse(args[1], out distance))
                         distance = configData.Admin.TeleportNearDefaultDistance;
                     float x = UnityEngine.Random.Range(-distance, distance);
-                    var z = (float) System.Math.Sqrt(System.Math.Pow(distance, 2) - System.Math.Pow(x, 2));
+                    var z = (float)System.Math.Sqrt(System.Math.Pow(distance, 2) - System.Math.Pow(x, 2));
                     var destination = target.transform.position;
                     destination.x = destination.x - x;
                     destination.z = destination.z - z;
@@ -1376,7 +1376,7 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "TPBlockedItem", err);
                 return;
             }
-            if (configData.Home.Pay > 0 && (double) (Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Home.Pay)
+            if (configData.Home.Pay > 0 && (double)(Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Home.Pay)
             {
                 PrintMsgL(player, "TPMoney", configData.Home.Pay);
                 return;
@@ -1411,7 +1411,7 @@ namespace Oxide.Plugins
                         TeleportTimers.Remove(player.userID);
                         return;
                     }
-                    if (configData.Home.Pay > 0 && (double) (Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Home.Pay)
+                    if (configData.Home.Pay > 0 && (double)(Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Home.Pay)
                     {
                         PrintMsgL(player, "Interrupted");
                         PrintMsgL(player, "TPMoney", configData.Home.Pay);
@@ -1608,7 +1608,7 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "TPBlockedItem", err);
                 return;
             }
-            if (configData.TPR.Pay > 0 && (double) (Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.TPR.Pay)
+            if (configData.TPR.Pay > 0 && (double)(Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.TPR.Pay)
             {
                 PrintMsgL(player, "TPMoney", configData.TPR.Pay);
                 return;
@@ -1716,7 +1716,7 @@ namespace Oxide.Plugins
                         TeleportTimers.Remove(originPlayer.userID);
                         return;
                     }
-                    if (configData.TPR.Pay > 0 && (double) (Economics?.CallHook("GetPlayerMoney", originPlayer.userID) ?? 0) < configData.TPR.Pay)
+                    if (configData.TPR.Pay > 0 && (double)(Economics?.CallHook("GetPlayerMoney", originPlayer.userID) ?? 0) < configData.TPR.Pay)
                     {
                         PrintMsgL(player, "InterruptedTarget", originPlayer.displayName);
                         PrintMsgL(originPlayer, "TPMoney", configData.TPR.Pay);
@@ -1986,7 +1986,7 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "TPBlockedItem", err);
                 return;
             }
-            if (configData.Town.Pay > 0 && (double) (Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Town.Pay)
+            if (configData.Town.Pay > 0 && (double)(Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Town.Pay)
             {
                 PrintMsgL(player, "TPMoney", configData.Town.Pay);
                 return;
@@ -2021,7 +2021,7 @@ namespace Oxide.Plugins
                         TeleportTimers.Remove(player.userID);
                         return;
                     }
-                    if (configData.Town.Pay > 0 && (double) (Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Town.Pay)
+                    if (configData.Town.Pay > 0 && (double)(Economics?.CallHook("GetPlayerMoney", player.userID) ?? 0) < configData.Town.Pay)
                     {
                         PrintMsgL(player, "Interrupted");
                         PrintMsgL(player, "TPMoney", configData.Home.Pay);
@@ -2190,7 +2190,7 @@ namespace Oxide.Plugins
 
         private double ConvertToRadians(double angle)
         {
-            return System.Math.PI/180*angle;
+            return System.Math.PI / 180 * angle;
         }
 
         #region Teleport
@@ -2259,16 +2259,16 @@ namespace Oxide.Plugins
             }
             if (buildingBlock == null) return position;
             var blockRotation = buildingBlock.transform.rotation.eulerAngles.y;
-            var angles = new[] {360 - blockRotation, 180 - blockRotation};
+            var angles = new[] { 360 - blockRotation, 180 - blockRotation };
             var location = default(Vector3);
             const double r = 1.9;
             var locationDistance = 100f;
             for (var i = 0; i < angles.Length; i++)
             {
                 var radians = ConvertToRadians(angles[i]);
-                var newX = r*System.Math.Cos(radians);
-                var newZ = r*System.Math.Sin(radians);
-                var newLoc = new Vector3((float) (buildingBlock.transform.position.x + newX), buildingBlock.transform.position.y + .2f, (float) (buildingBlock.transform.position.z + newZ));
+                var newX = r * System.Math.Cos(radians);
+                var newZ = r * System.Math.Sin(radians);
+                var newLoc = new Vector3((float)(buildingBlock.transform.position.x + newX), buildingBlock.transform.position.y + .2f, (float)(buildingBlock.transform.position.z + newZ));
                 if (Vector3.Distance(position, newLoc) < locationDistance)
                 {
                     location = newLoc;
@@ -2393,12 +2393,12 @@ namespace Oxide.Plugins
                 if (entities[i].OwnerID == userID) return null;
             if (!configData.Home.UseFriends)
                 return "HomeFoundationNotOwned";
-            var moderator = (bool) (Clans?.CallHook("IsModerator", userID) ?? false);
+            var moderator = (bool)(Clans?.CallHook("IsModerator", userID) ?? false);
             var userIdString = userID.ToString();
             for (var i = 0; i < entities.Count; i++)
             {
                 var entity = entities[i];
-                if ((bool) (Friends?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) || (bool) (Clans?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) && moderator || (bool) (RustIO?.CallHook("HasFriend", entity.OwnerID.ToString(), userIdString) ?? false))
+                if ((bool)(Friends?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) || (bool)(Clans?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) && moderator || (bool)(RustIO?.CallHook("HasFriend", entity.OwnerID.ToString(), userIdString) ?? false))
                     return null;
             }
             return "HomeFoundationNotFriendsOwned";
@@ -2414,12 +2414,12 @@ namespace Oxide.Plugins
                 if (entities[i].OwnerID == userID) return entities[i];
             if (!configData.Home.UseFriends)
                 return null;
-            var moderator = (bool) (Clans?.CallHook("IsModerator", userID) ?? false);
+            var moderator = (bool)(Clans?.CallHook("IsModerator", userID) ?? false);
             var userIdString = userID.ToString();
             for (var i = 0; i < entities.Count; i++)
             {
                 var entity = entities[i];
-                if ((bool) (Friends?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) || (bool) (Clans?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) && moderator || (bool) (RustIO?.CallHook("HasFriend", entity.OwnerID.ToString(), userIdString) ?? false))
+                if ((bool)(Friends?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) || (bool)(Clans?.CallHook("HasFriend", entity.OwnerID, userID) ?? false) && moderator || (bool)(RustIO?.CallHook("HasFriend", entity.OwnerID.ToString(), userIdString) ?? false))
                     return entity;
             }
             return null;
@@ -2456,7 +2456,7 @@ namespace Oxide.Plugins
             var done = false;
             if (Physics.SphereCast(sourcePos, .1f, Vector3.down, out hitinfo, 250, groundLayer))
             {
-                if (configData.Home.AllowIceberg && hitinfo.collider.name.Contains("iceberg") || configData.Home.AllowCave && hitinfo.collider.name.Contains("cave_"))
+                if ((configData.Home.AllowIceberg && hitinfo.collider.name.Contains("iceberg")) || (configData.Home.AllowCave && hitinfo.collider.name.Contains("cave_")))
                 {
                     sourcePos.y = hitinfo.point.y;
                     done = true;
@@ -2565,7 +2565,7 @@ namespace Oxide.Plugins
 
         private static void DrawBox(BasePlayer player, Vector3 center, Quaternion rotation, Vector3 size)
         {
-            size = size/2;
+            size = size / 2;
             var point1 = RotatePointAroundPivot(new Vector3(center.x + size.x, center.y + size.y, center.z + size.z), center, rotation);
             var point2 = RotatePointAroundPivot(new Vector3(center.x + size.x, center.y - size.y, center.z + size.z), center, rotation);
             var point3 = RotatePointAroundPivot(new Vector3(center.x + size.x, center.y + size.y, center.z - size.z), center, rotation);
@@ -2592,7 +2592,7 @@ namespace Oxide.Plugins
 
         private static Vector3 RotatePointAroundPivot(Vector3 point, Vector3 pivot, Quaternion rotation)
         {
-            return rotation*(point - pivot) + pivot;
+            return rotation * (point - pivot) + pivot;
         }
 
         #endregion
@@ -2687,7 +2687,7 @@ namespace Oxide.Plugins
                 playerObj = Convert.ToUInt64(playerObj);
             if (!(playerObj is ulong))
                 throw new ArgumentException("playerObj");
-            var playerId = (ulong) playerObj;
+            var playerId = (ulong)playerObj;
             HomeData homeData;
             if (!Home.TryGetValue(playerId, out homeData) || homeData.Locations.Count == 0)
                 return null;
@@ -2803,7 +2803,7 @@ namespace Oxide.Plugins
         {
             public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
             {
-                var vector = (Vector3) value;
+                var vector = (Vector3)value;
                 writer.WriteValue($"{vector.x} {vector.y} {vector.z}");
             }
 
@@ -2852,7 +2852,7 @@ namespace Oxide.Plugins
 
             private static bool HasCompatibleConstructor(Type objectType)
             {
-                return objectType.GetConstructor(new[] {typeof(IEqualityComparer<T>)}) != null;
+                return objectType.GetConstructor(new[] { typeof(IEqualityComparer<T>) }) != null;
             }
 
             public override IDictionary Create(Type objectType)

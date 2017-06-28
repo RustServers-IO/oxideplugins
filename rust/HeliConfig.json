@@ -1,0 +1,16 @@
+{
+    "name": "HeliConfig",
+    "description": "Disable, enable, and control the amount of time between helicopter spawns.",
+    "author": "Kappasaurus",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/heliconfig.2408",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

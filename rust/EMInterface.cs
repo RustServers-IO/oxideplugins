@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Event Manager Menu Interface", "k1lly0u", "1.0.24", ResourceId = 2258)]
+    [Info("Event Manager Menu Interface", "k1lly0u", "1.0.5", ResourceId = 2258)]
     class EMInterface : RustPlugin
     {
         #region Fields
@@ -36,6 +36,8 @@ namespace Oxide.Plugins
         private string UIPanel = "EMUI_Panel";
         private string UIPopup = "EMUI_Popup";
         private string UIEntry = "EMUI_Entry";
+
+        private Dictionary<string, string> UIColors = new Dictionary<string, string>();
         private string Color1;
         private string Color2;
 
@@ -79,35 +81,29 @@ namespace Oxide.Plugins
                 EventVotes.Clear();
                 PlayerVotes.Clear();
                 OpenVotes.Clear();
-            }
+            }           
             public static void OpenEventVoting(bool enable)
             {
                 ClearVotes();
                 if (enable)
                 {
+                    int i = 0;
+                    foreach (var autocfg in eminterface.Event_Config.AutoEvent_Config.AutoEvent_List)
+                    {
+                        EventVotes.Add(i, 0);
+                        i++;
+                    }
+
                     if (eminterface.EventManager._Launched && eminterface.configData.Voting.Auto_AllowEventVoting)
                     {
-                        int i = 0;
-                        foreach (var autocfg in eminterface.Event_Config.AutoEvent_Config.AutoEvent_List)
-                        {
-                            EventVotes.Add(i, 0);
-                            i++;
-                        }
-                        
                         eminterface.VotingOpen = true;
-                        eminterface.VoteTallyTimer = eminterface.timer.Once(eminterface.Event_Config.AutoEvent_Config.GameInterval - 30, () => eminterface.EventVotes.ProcessEventVotes());
+                        eminterface.VoteTallyTimer = eminterface.timer.Once((eminterface.Event_Config.AutoEvent_Config.GameInterval * 60) - 30, () => eminterface.EventVotes.ProcessEventVotes());
                     }
-                    else if (!eminterface.EventManager._Launched && eminterface.configData.Voting.Standard_AllowVoteToOpen)
-                    {
-                        int i = 0;
-                        foreach (var autocfg in eminterface.Event_Config.Event_List)
-                        {
-                            EventVotes.Add(i, 0);
-                            i++;
-                        }
-                    }                 
                 }
-                else eminterface.VotingOpen = false;
+                else
+                {
+                    eminterface.VotingOpen = false;
+                }
             }
             public void ProcessEventVotes()
             {
@@ -126,12 +122,14 @@ namespace Oxide.Plugins
                 {
                     if (!eminterface.EventManager._Launched)
                     {
-                        eminterface.EventManager._Event = eminterface.Event_Config.Event_List.Values.ToList()[eventIndex];
+                        eminterface.EventManager._Event = eminterface.Event_Config.Event_List[eminterface.EventManager.ValidAutoEvents[eventIndex].EventConfig];
                         eminterface.EventManager.OpenEvent();
                     }
                     else
                     {
-                        eminterface.EventManager._NextAutoConfig = eventIndex;
+                        eminterface.EventManager._AutoEventNum = eventIndex;
+                        eminterface.EventManager._NextConfigName = eminterface.EventManager.ValidAutoEvents[eventIndex].EventConfig;
+                        eminterface.EventManager._ForceNextConfig = true;
                         eminterface.EventManager.BroadcastToChat(string.Format("Event votes have been tallied. The next event will be: {0}", eminterface.Event_Config.Event_List.ToList()[eventIndex].Key));
                     }
                 }
@@ -145,6 +143,7 @@ namespace Oxide.Plugins
                 {
                     eminterface.VotingOpen = true;
                     eminterface.StartEventVoteTimer();
+                    OpenVotes.Clear();
                 }
             }
             public void AddPlayerVote(ulong playerid, int index)
@@ -189,7 +188,8 @@ namespace Oxide.Plugins
         {
             LoadVariables();
             LoadData();
-            eminterface = this;            
+            eminterface = this;
+            SetUIColors();
             CollectItemDetails();
             CollectClassList();
             GetRequiredVoteLoop();
@@ -330,76 +330,12 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, UIPanel);
             CuiHelper.AddUi(player, MainCont);
         }
-                
+
         private void CreateVoting(BasePlayer player, int page = 0)
-        {            
+        {
             var MainCont = EventManager.UI.CreateElementContainer(UIPanel, UIColors["dark"], "0 0", "1 0.92", false);
             EventManager.UI.CreatePanel(ref MainCont, UIPanel, UIColors["light"], "0.01 0.01", "0.99 0.99", true);
-            if (!configData.Voting.Standard_AllowVoteToOpen && !EventManager._Launched)
-            {
-                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Voting requires auto events to be launched", player), 18, "0.2 0.92", "0.8 0.98");
-                CuiHelper.DestroyUi(player, UIPanel);
-                CuiHelper.AddUi(player, MainCont);
-                return;
-            }
-            else if (configData.Voting.Standard_AllowVoteToOpen && !VotingOpen && !EventManager._Launched)
-            {
-                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Vote to open a new event", player), 18, "0.2 0.92", "0.8 0.98");
-                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", string.Format(msg("Total Votes : {0}{1}</color>", player), Color1, EventVotes.GetVoteOpenCount()), 18, "0.2 0.75", "0.8 0.8");
-                
-                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", string.Format(msg("Required Votes : {0}{1}</color>", player), Color1, EventVotes.GetRequiredCount()), 18, "0.2 0.7", "0.8 0.75");
-
-                if (EventVotes.HasVotedOpen(player.userID))
-                    EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], msg("Voted", player), 18, "0.45 0.4", "0.55 0.45", "");
-                else EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], msg("Vote", player), 18, "0.45 0.4", "0.55 0.45", "EMI_EventVote open");
-
-                CuiHelper.DestroyUi(player, UIPanel);
-                CuiHelper.AddUi(player, MainCont);
-                return;
-            }  
-            else if (configData.Voting.Standard_AllowVoteToOpen && VotingOpen && !EventManager._Launched)
-            {
-                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Vote for the next event to play!", player), 18, "0.2 0.92", "0.8 0.98");
-                if (Event_Config.Event_List.Count > 9)
-                {
-                    var maxpages = (Event_Config.Event_List.Count - 1) / 9 + 1;
-                    if (page < maxpages - 1)
-                        EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], msg("Next", player), 18, "0.84 0.925", "0.97 0.98", $"EMI_ChangePage vote {page + 1}");
-                    if (page > 0)
-                        EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], msg("Back", player), 18, "0.03 0.925", "0.16 0.98", $"EMI_ChangePage vote {page - 1}");
-                }
-                int maxentries = (9 * (page + 1));
-                if (maxentries > Event_Config.Event_List.Count)
-                    maxentries = Event_Config.Event_List.Count;
-                int eventcount = 9 * page;
-
-                if (Event_Config.Event_List.Count == 0)
-                    EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("There are no saved events", player), 18, "0.2 0.92", "0.8 0.98");
-
-                CuiHelper.DestroyUi(player, UIPanel);
-                CuiHelper.AddUi(player, MainCont);
-
-
-                int votedEvent = -1;
-                var hasVoted = EventVotes.GetVotedEvent(player.userID);
-                if (hasVoted != null)
-                    votedEvent = (int)hasVoted;
-
-                var eventList = Event_Config.Event_List.Values.ToList();
-
-                int i = 0;
-                for (int n = eventcount; n < maxentries; n++)
-                {
-                    var voteCount = EventVotes.GetVoteCount(n);
-                    if (n == votedEvent)
-                        CreateEventEntry(player, $"Event {n}", eventList[n], $"EMI_EventVote unvote", $"{Color1}Unvote</color> ({Color2}{voteCount}</color>)", i, 0.32f);
-                    else if (votedEvent > -1) CreateEventEntry(player, $"Event {n}", eventList[n], $"", $"({voteCount})", i, 0.32f);
-                    else CreateEventEntry(player, $"Event {n}", eventList[n], $"EMI_EventVote vote {n}", $"{Color1}Vote</color> ({Color2}{voteCount}</color>)", i, 0.32f);
-                    i++;
-                }
-            } 
-                      
-            else if (configData.Voting.Auto_AllowEventVoting && VotingOpen && EventManager._Launched)
+            if (((configData.Voting.Standard_AllowVoteToOpen && !EventManager._Launched) || (configData.Voting.Auto_AllowEventVoting && EventManager._Launched)) && VotingOpen && !EventManager._Open && !EventManager._Started)
             {
                 EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", $"Vote for the next event to play!", 18, "0.2 0.92", "0.8 0.98");
                 if (Event_Config.AutoEvent_Config.AutoEvent_List.Count > 9)
@@ -425,7 +361,7 @@ namespace Oxide.Plugins
                 int votedEvent = -1;
                 var hasVoted = EventVotes.GetVotedEvent(player.userID);
                 if (hasVoted != null)
-                    votedEvent = (int)hasVoted;                    
+                    votedEvent = (int)hasVoted;
 
                 int i = 0;
                 for (int n = eventcount; n < maxentries; n++)
@@ -438,12 +374,31 @@ namespace Oxide.Plugins
                     i++;
                 }
             }
-            else
+            else if (!configData.Voting.Standard_AllowVoteToOpen)
             {
-                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", "Voting is currently disabled", 18, "0.2 0.92", "0.8 0.98");                
+                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Voting requires auto events to be launched", player), 18, "0.2 0.92", "0.8 0.98");
                 CuiHelper.DestroyUi(player, UIPanel);
                 CuiHelper.AddUi(player, MainCont);
-                return;
+            }
+            else if (configData.Voting.Standard_AllowVoteToOpen && !VotingOpen && !EventManager._Launched && !EventManager._Open && !EventManager._Started)
+            {
+                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Vote to open a new event", player), 18, "0.2 0.92", "0.8 0.98");
+                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", string.Format(msg("Total Votes : {0}{1}</color>", player), Color1, EventVotes.GetVoteOpenCount()), 18, "0.2 0.75", "0.8 0.8");
+
+                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", string.Format(msg("Required Votes : {0}{1}</color>", player), Color1, EventVotes.GetRequiredCount()), 18, "0.2 0.7", "0.8 0.75");
+
+                if (EventVotes.HasVotedOpen(player.userID))
+                    EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], msg("Voted", player), 18, "0.45 0.4", "0.55 0.45", "");
+                else EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], msg("Vote", player), 18, "0.45 0.4", "0.55 0.45", "EMI_EventVote open");
+
+                CuiHelper.DestroyUi(player, UIPanel);
+                CuiHelper.AddUi(player, MainCont);
+            }
+            else
+            {
+                EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", "Voting is currently disabled", 18, "0.2 0.92", "0.8 0.98");
+                CuiHelper.DestroyUi(player, UIPanel);
+                CuiHelper.AddUi(player, MainCont);
             }
         }
         private void CreateStatistics(BasePlayer player)
@@ -590,19 +545,19 @@ namespace Oxide.Plugins
                 if (EventManager.EventGames[EventManager._Event.EventType].CanUseClassSelector)
                 {
                     AddInfoEntry(ref MainCont, UIPanel, msg("Class Selector", player), EventManager._Event.UseClassSelector.ToString(), i);
-                    if (!EventManager._Event.UseClassSelector) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Control csenable", 0.88f - (0.05f * i), 0);
-                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Control csdisable", 0.88f - (0.05f * i), 0); i++;
+                    if (!EventManager._Event.UseClassSelector) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Control classtoggle", 0.88f - (0.05f * i), 0);
+                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Control classtoggle", 0.88f - (0.05f * i), 0); i++;
                 }
 
                 AddInfoEntry(ref MainCont, UIPanel, msg("Disable Item Pickup", player), EventManager._Event.DisableItemPickup.ToString(), i);
-                if (!EventManager._Event.DisableItemPickup) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Control ipenable", 0.88f - (0.05f * i), 0);
-                else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Control ipdisable", 0.88f - (0.05f * i), 0); i++;
+                if (!EventManager._Event.DisableItemPickup) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Control pickuptoggle", 0.88f - (0.05f * i), 0);
+                else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Control pickuptoggle", 0.88f - (0.05f * i), 0); i++;
 
                 if (!EventManager.EventGames[EventManager._Event.EventType].ForceCloseOnStart)
                 {
                     AddInfoEntry(ref MainCont, UIPanel, msg("Close On Start", player), EventManager._Event.CloseOnStart.ToString(), i);
-                    if (!EventManager._Event.CloseOnStart) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Control cosenable", 0.88f - (0.05f * i), 0);
-                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Control cosdisable", 0.88f - (0.05f * i), 0); i++; i++;
+                    if (!EventManager._Event.CloseOnStart) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Control costoggle", 0.88f - (0.05f * i), 0);
+                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Control costoggle", 0.88f - (0.05f * i), 0); i++; i++;
                 }
                 if (EventManager.EventGames[EventManager._Event.EventType].CanChooseRespawn)
                 {
@@ -630,8 +585,8 @@ namespace Oxide.Plugins
             EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Add or remove kits from the class selector", player), 18, "0.2 0.92", "0.8 0.98");
             EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Available Kits", player), 18, "0.05 0.86", "0.76 0.92");
             EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Available Classes", player), 18, "0.8 0.86", "0.95 0.92");
-            EventManager.UI.CreatePanel(ref MainCont, UIPanel, UIColors["dark"], "0.05 0.05", "0.76 0.85", true);
-            EventManager.UI.CreatePanel(ref MainCont, UIPanel, UIColors["dark"], "0.8 0.05", "0.95 0.85", true);
+            EventManager.UI.CreatePanel(ref MainCont, UIPanel, UIColors["medium"], "0.05 0.05", "0.76 0.85", true);
+            EventManager.UI.CreatePanel(ref MainCont, UIPanel, UIColors["medium"], "0.8 0.05", "0.95 0.85", true);
             var classList = Event_Config.Classes;
             var kitList = GetKits();
             var Kits = GetKits();
@@ -675,7 +630,7 @@ namespace Oxide.Plugins
             if (!EventManager._Launched) CreateControlButtonSmall(ref MainCont, UIPanel, msg("Enable", player), "EMI_Control aeenable", 0.88f - (0.06f * info), 0);
             else CreateControlButtonSmall(ref MainCont, UIPanel, msg("Disable", player), "EMI_Control aedisable", 0.88f - (0.06f * info), 0); info++;
 
-            AddInfoAuto(ref MainCont, UIPanel, msg("Next Event", player), EventManager._NextEventConfig, info);
+            AddInfoAuto(ref MainCont, UIPanel, msg("Next Event", player), EventManager._NextConfigName, info);
             CreateControlButtonSmall(ref MainCont, UIPanel, msg("Change", player), "EMI_Control nextevent", 0.88f - (0.06f * info), 0); info++;
 
             AddInfoAuto(ref MainCont, UIPanel, msg("Auto Cancel", player), Event_Config.AutoEvent_Config.AutoCancel.ToString(), info); 
@@ -714,7 +669,7 @@ namespace Oxide.Plugins
 
             CreateControlButtonSmall(ref MainCont, UIPanel, msg("Save Config", player), $"EMI_NewAutoConfig saveconfig {autocfg.TimeLimit + 1}", 0.88f - (0.06f * info), 0);
             EventManager.UI.CreateLabel(ref MainCont, UIPanel, "", msg("Auto-Event Roster", player), 18, "0.45 0.86", "0.98 0.92");            
-            EventManager.UI.CreatePanel(ref MainCont, UIPanel, UIColors["dark"], "0.45 0.075", "0.98 0.85", true);
+            EventManager.UI.CreatePanel(ref MainCont, UIPanel, UIColors["medium"], "0.45 0.075", "0.98 0.85", true);
 
 
             var autoList = Event_Config.AutoEvent_Config.AutoEvent_List;            
@@ -829,19 +784,19 @@ namespace Oxide.Plugins
                 if (EventManager.EventGames[newEvent.EventType].CanUseClassSelector)
                 {
                     AddInfoEntry(ref MainCont, UIPanel, msg("Class Selector", player), newEvent.UseClassSelector.ToString(), i);
-                    if (!newEvent.UseClassSelector) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Creator csenable", 0.88f - (0.05f * i), 0);
-                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Creator csdisable", 0.88f - (0.05f * i), 0); i++;
+                    if (!newEvent.UseClassSelector) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Creator classtoggle", 0.88f - (0.05f * i), 0);
+                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Creator classtoggle", 0.88f - (0.05f * i), 0); i++;
                 }
 
                 AddInfoEntry(ref MainCont, UIPanel, msg("Disable Item Pickup", player), newEvent.DisableItemPickup.ToString(), i);
-                if (!newEvent.DisableItemPickup) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Creator ipenable", 0.88f - (0.05f * i), 0);
-                else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Creator ipdisable", 0.88f - (0.05f * i), 0); i++;
+                if (!newEvent.DisableItemPickup) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Creator pickuptoggle", 0.88f - (0.05f * i), 0);
+                else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Creator pickuptoggle", 0.88f - (0.05f * i), 0); i++;
 
                 if (!EventManager.EventGames[newEvent.EventType].ForceCloseOnStart)
                 {
                     AddInfoEntry(ref MainCont, UIPanel, msg("Close On Start", player), newEvent.CloseOnStart.ToString(), i);
-                    if (!newEvent.CloseOnStart) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Creator cosenable", 0.88f - (0.05f * i), 0);
-                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Creator cosdisable", 0.88f - (0.05f * i), 0); i++;
+                    if (!newEvent.CloseOnStart) CreateControlButton(ref MainCont, UIPanel, msg("Enable", player), "EMI_Creator costoggle", 0.88f - (0.05f * i), 0);
+                    else CreateControlButton(ref MainCont, UIPanel, msg("Disable", player), "EMI_Creator costoggle", 0.88f - (0.05f * i), 0); i++;
                 }
                 if (EventManager.EventGames[newEvent.EventType].CanChooseRespawn)
                 {
@@ -934,7 +889,7 @@ namespace Oxide.Plugins
 
             if (!string.IsNullOrEmpty(Kit))            
                 EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonopen"], msg("Select", player), 18, "0.8 0.1", "0.93 0.17", $"EMI_ChangeClass {Kit}");            
-            else EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["dark"], "---", 18, "0.8 0.1", "0.93 0.17", "");
+            else EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttongrey"], "---", 18, "0.8 0.1", "0.93 0.17", "");
 
             CuiHelper.DestroyUi(player, UIPanel);
             CuiHelper.AddUi(player, MainCont);
@@ -1204,7 +1159,7 @@ namespace Oxide.Plugins
                 var pos = CalcEntryPos(i);
                 var config = Event_Config.Event_List[entry.EventConfig];
                 if (config == null) continue;
-                EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], string.Format(msg("   Config: {0}\n   Type: {1}\n   Spawns: {2}   {3}\n   Kit: {4}{5}\n   Zone: {6}", player), entry.EventConfig, config.EventType, config.Spawnfile, config.Spawnfile2, config.Kit, config.WeaponSet, config.ZoneID), 11, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"EMI_NextAutoConfig {i}", TextAnchor.MiddleLeft);
+                EventManager.UI.CreateButton(ref MainCont, UIPanel, UIColors["buttonbg"], string.Format(msg("   Config: {0}\n   Type: {1}\n   Spawns: {2}   {3}\n   Kit: {4}{5}\n   Zone: {6}", player), entry.EventConfig, config.EventType, config.Spawnfile, config.Spawnfile2, config.Kit, config.WeaponSet, config.ZoneID), 11, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"EMI_NextAutoConfig {i} {entry.EventConfig}", TextAnchor.MiddleLeft);
                 i++;
 
             }
@@ -1608,18 +1563,15 @@ namespace Oxide.Plugins
             return "";
         }
         #region Colors
-        private Dictionary<string, string> UIColors = new Dictionary<string, string>
+        private void SetUIColors()
         {
-            {"dark", "0.1 0.1 0.1 0.98" },
-            {"light", "0.7 0.7 0.7 0.3" },
-            {"grey1", "0.6 0.6 0.6 1.0" },
-            {"buttonbg", "0.2 0.2 0.2 0.7" },
-            {"buttonopen", "0.2 0.8 0.2 0.9" },
-            {"buttoncompleted", "0 0.5 0.1 0.9" },
-            {"buttonred", "0.85 0 0.35 0.9" },
-            {"buttongrey", "0.8 0.8 0.8 0.9" },
-            {"grey8", "0.8 0.8 0.8 1.0" }
-        };
+            UIColors.Add("dark", EventManager.UI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha));
+            UIColors.Add("medium", EventManager.UI.Color(configData.Colors.Background_Medium.Color, configData.Colors.Background_Medium.Alpha));
+            UIColors.Add("light", EventManager.UI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha));
+            UIColors.Add("buttonbg", EventManager.UI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha));
+            UIColors.Add("buttonopen", EventManager.UI.Color(configData.Colors.Button_Accept.Color, configData.Colors.Button_Accept.Alpha));
+            UIColors.Add("buttongrey", EventManager.UI.Color(configData.Colors.Button_Inactive.Color, configData.Colors.Button_Inactive.Alpha));
+        }        
         #endregion
         #endregion
 
@@ -1772,9 +1724,7 @@ namespace Oxide.Plugins
                     EventAutoEvent(player);
                     return;
                 case "randomize":
-                    if (EventManager._RandomizeAuto)
-                        EventManager._RandomizeAuto = false;
-                    else EventManager._RandomizeAuto = true;
+                    EventManager._RandomizeAuto = !EventManager._RandomizeAuto;                    
                     EventAutoEvent(player);
                     return;
                 default:
@@ -1987,30 +1937,18 @@ namespace Oxide.Plugins
                     }
                     else ZoneSelection(player, "EMI_Control");
                     return;
-                case "csenable":
-                    EventManager._Event.UseClassSelector = true;
+                case "classtoggle":
+                    EventManager._Event.UseClassSelector = !EventManager._Event.UseClassSelector;
                     EventControl(player);
-                    return;
-                case "csdisable":
-                    EventManager._Event.UseClassSelector = false;
+                    return;                
+                case "pickuptoggle":
+                    EventManager._Event.DisableItemPickup = !EventManager._Event.DisableItemPickup;
                     EventControl(player);
-                    return;
-                case "ipenable":
-                    EventManager._Event.DisableItemPickup = true;
+                    return;               
+                case "costoggle":
+                    EventManager._Event.CloseOnStart = !EventManager._Event.CloseOnStart;
                     EventControl(player);
-                    return;
-                case "ipdisable":
-                    EventManager._Event.DisableItemPickup = false;
-                    EventControl(player);
-                    return;
-                case "cosenable":
-                    EventManager._Event.CloseOnStart = true;
-                    EventControl(player);
-                    return;
-                case "cosdisable":
-                    EventManager._Event.CloseOnStart = false;
-                    EventControl(player);
-                    return;
+                    return;               
                 case "respawn":
                     {
                         if (EventManager._Started || EventManager._Open)
@@ -2161,30 +2099,18 @@ namespace Oxide.Plugins
                     }
                     else ZoneSelection(player, "EMI_Creator");
                     return;
-                case "csenable":
-                    newEvent.UseClassSelector = true;
+                case "classtoggle":
+                    newEvent.UseClassSelector = !newEvent.UseClassSelector;
                     EventCreator(player);
-                    return;
-                case "csdisable":
-                    newEvent.UseClassSelector = false;
+                    return;                
+                case "pickuptoggle":
+                    newEvent.DisableItemPickup = !newEvent.DisableItemPickup;
                     EventCreator(player);
-                    return;
-                case "ipenable":
-                    newEvent.DisableItemPickup = true;
+                    return;               
+                case "costoggle":
+                    newEvent.CloseOnStart = !newEvent.CloseOnStart;
                     EventCreator(player);
-                    return;
-                case "ipdisable":
-                    newEvent.DisableItemPickup = false;
-                    EventCreator(player);
-                    return;
-                case "cosenable":
-                    newEvent.CloseOnStart = true;
-                    EventCreator(player);
-                    return;
-                case "cosdisable":
-                    newEvent.CloseOnStart = false;
-                    EventCreator(player);
-                    return;
+                    return;               
                 case "min":
                     var min = arg.GetInt(1);
                     if (min < 0) min = 0;
@@ -2392,8 +2318,9 @@ namespace Oxide.Plugins
                 return;
             if (HasPerm(player))
             {
-                EventManager._NextAutoConfig = int.Parse(arg.Args[0]);
-                EventManager._NextEventConfig = EventManager.ValidAutoEvents[int.Parse(arg.Args[0])].EventConfig;
+                EventManager._NextEventNum = arg.GetInt(0);
+                EventManager._NextConfigName = arg.GetString(1);
+                EventManager._ForceNextConfig = true;
                 EventAutoEvent(player);
             }
         }
@@ -2646,10 +2573,10 @@ namespace Oxide.Plugins
                 timer.Once(60, () => GetRequiredVoteLoop());
             }
         }
-        private void StartEventVoteTimer()
+        public void StartEventVoteTimer()
         {
             VotingOpen = true;
-            timer.Once(180, () => EventVotes.ProcessEventVotes()); 
+            eminterface.VoteTallyTimer = timer.Once((Event_Config.AutoEvent_Config.GameInterval * 60) - 30, () => EventVotes.ProcessEventVotes()); 
         }
         
         private void CollectItemDetails()
@@ -2772,31 +2699,48 @@ namespace Oxide.Plugins
             public float Standard_RequiredVoteFraction { get; set; }
             public int Standard_MinPlayersRequired { get; set; }
         }
-        class Messaging
+        class Colors
         {
-            public string MSG_MainColor { get; set; }
-            public string MSG_OtherColor { get; set; }
+            public string TextColor_Primary { get; set; }
+            public string TextColor_Secondary { get; set; }
+            public UIColor Background_Dark { get; set; }
+            public UIColor Background_Medium { get; set; }
+            public UIColor Background_Light { get; set; }
+            public UIColor Button_Standard { get; set; }
+            public UIColor Button_Accept { get; set; }
+            public UIColor Button_Inactive { get; set; }
+        }
+        class UIColor
+        {
+            public string Color { get; set; }
+            public float Alpha { get; set; }
         }
         class ConfigData
         {
-            public Messaging Messaging { get; set; }
+            public Colors Colors { get; set; }
             public Voting Voting { get; set; }
         }
         private void LoadVariables()
         {
             LoadConfigVariables();
             SaveConfig();
-            Color1 = configData.Messaging.MSG_MainColor;
-            Color2 = configData.Messaging.MSG_OtherColor;
+            Color1 = $"<color={configData.Colors.TextColor_Primary}>";
+            Color2 = $"<color={configData.Colors.TextColor_Secondary}>";
         }
         protected override void LoadDefaultConfig()
         {
             var config = new ConfigData
             {
-                Messaging = new Messaging
-                {                
-                    MSG_MainColor = "<color=#FF8C00>",
-                    MSG_OtherColor = "<color=#939393>"
+                Colors = new Colors
+                {
+                    Background_Dark = new UIColor { Color = "#2a2a2a", Alpha = 0.98f },
+                    Background_Medium = new UIColor { Color = "#373737", Alpha = 0.98f },
+                    Background_Light = new UIColor { Color = "#696969", Alpha = 0.3f },
+                    Button_Accept = new UIColor { Color = "#00cd00", Alpha = 0.9f },
+                    Button_Inactive = new UIColor { Color = "#a8a8a8", Alpha = 0.9f },
+                    Button_Standard = new UIColor { Color = "#2a2a2a", Alpha = 0.9f },
+                    TextColor_Primary = "#ce422b",
+                    TextColor_Secondary = "#939393"
                 },
                 Voting = new Voting
                 {
@@ -2830,6 +2774,8 @@ namespace Oxide.Plugins
             }
         }
         #endregion
+
+        #region Commands
         [ChatCommand("renameevent")]
         void cmdRenameEvent(BasePlayer player, string command, string[] args)
         {
@@ -2873,7 +2819,7 @@ namespace Oxide.Plugins
         }
         
         [ConsoleCommand("event")]
-        void ccmdEventCancel(ConsoleSystem.Arg arg)
+        void ccmdEvent(ConsoleSystem.Arg arg)
         {
             if (!HasAccess(arg)) return;
             if (arg.Args == null || arg.Args.Length == 0)
@@ -2902,15 +2848,47 @@ namespace Oxide.Plugins
                 SendReply(arg, msg("event zone \"zoneID\" - Change the event zone"));
                 return;
             }
+            if (arg.Args[0].ToLower() == "config")
+            {
+                if (arg.Args.Length == 2)
+                {
+                    if (arg.Args[1].ToLower() == "list")
+                    {
+                        if (Event_Config.Event_List.Count > 0)
+                        {
+                            SendReply(arg, msg("Config List:"));
+                            foreach (var conf in Event_Config.Event_List)
+                                SendReply(arg, conf.Key);
+                        }
+                        else SendReply(arg, msg("No configs have been saved"));
+                        return;
+                    }
+                    if (Event_Config.Event_List.ContainsKey(arg.Args[1]))
+                    {
+                        EventManager._Event = Event_Config.Event_List[arg.Args[1]];
+                        EventManager._CurrentEventConfig = arg.Args[1];
+
+                        SendReply(arg, string.Format(msg("{0} has been set as the current event config"), arg.Args[1]));
+                    }
+                    else SendReply(arg, string.Format(msg("{0} is not a valid event config"), arg.Args[1]));
+                }
+                else SendReply(arg, string.Format(msg("Current event config: {0}"), EventManager._CurrentEventConfig));
+                return;
+            }
             if (arg.Args[0].ToLower() == "game")
             {
-                object game = EventManager.SelectEvent(arg.Args[1]);
-                if (game is string)
+                if (arg.Args.Length > 1)
                 {
-                    SendReply(arg, (string)game);
+                    object game = EventManager.SelectEvent(arg.Args[1]);
+                    if (game is string)
+                    {
+                        SendReply(arg, (string)game);
+                        return;
+                    }
+                    SendReply(arg, string.Format(msg("{0} is now the next Event game."), arg.Args[1]));
                     return;
                 }
-                SendReply(arg, string.Format(msg("{0} is now the next Event game."), arg.Args[1]));
+                else SendReply(arg, string.Format(msg("{0} is the next Event game."), EventManager._Event.EventType));
                 return;
             }
             if (EventManager._Event == null || string.IsNullOrEmpty(EventManager._Event.EventType))
@@ -3191,32 +3169,7 @@ namespace Oxide.Plugins
                         else SendReply(arg, msg("You must enter a valid number"));
                     }
                     else SendReply(arg, string.Format(msg("Rounds to play: {0}"), _Event.GameRounds));
-                    return;
-                case "config":
-                    if (arg.Args.Length == 2)
-                    {
-                        if (arg.Args[1].ToLower() == "list")
-                        {
-                            if (Event_Config.Event_List.Count > 0)
-                            {
-                                SendReply(arg, msg("Config List:"));
-                                foreach (var conf in Event_Config.Event_List)
-                                    SendReply(arg, conf.Key);
-                            }
-                            else SendReply(arg, msg("No configs have been saved"));                            
-                            return;
-                        }
-                        if (Event_Config.Event_List.ContainsKey(arg.Args[1]))
-                        {
-                            EventManager._Event = Event_Config.Event_List[arg.Args[1]];
-                            EventManager._CurrentEventConfig = arg.Args[1];
-
-                            SendReply(arg, string.Format(msg("{0} has been set as the current event config"), arg.Args[1]));
-                        }
-                        else SendReply(arg, string.Format(msg("{0} is not a valid event config"), arg.Args[1]));
-                    }
-                    else SendReply(arg, string.Format(msg("Current event config: {0}"), EventManager._CurrentEventConfig));
-                    return;
+                    return;               
                 case "game":                    
                     if (arg.Args.Length == 2)
                     {
@@ -3236,9 +3189,14 @@ namespace Oxide.Plugins
                     return;
             }
         }
+        #endregion
+
+        #region Authorization
         bool HasAccess(ConsoleSystem.Arg arg) => arg.Connection == null || arg.Connection?.authLevel < 1;
         bool HasPerm(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "eminterface.admin") || player.IsAdmin;
+        #endregion
 
+        #region Localization
         Dictionary<string, string> Messages = new Dictionary<string, string>
         {
             {"Event Manager", "Event Manager" },
@@ -3499,5 +3457,6 @@ namespace Oxide.Plugins
             {"Switch Class", "Switch Class" },
             {"endingEvent", "The event is now ending" }
         };
+        #endregion
     }
 }

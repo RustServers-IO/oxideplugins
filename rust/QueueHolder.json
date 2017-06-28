@@ -1,0 +1,16 @@
+{
+    "name": "Queue Holder",
+    "description": "If you disconnect when the server is full, you can rejoin",
+    "author": "Jake Rich",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/queue-holder.2411",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

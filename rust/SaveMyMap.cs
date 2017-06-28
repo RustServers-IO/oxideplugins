@@ -8,7 +8,7 @@ using IEnumerator = System.Collections.IEnumerator;
 
 namespace Oxide.Plugins
 {
-	[Info("SaveMyMap", "Fujikura", "1.2.1", ResourceId = 2111)] 
+	[Info("SaveMyMap", "Fujikura", "1.2.2", ResourceId = 2111)] 
 	class SaveMyMap : RustPlugin
 	{
 		bool Changed;
@@ -161,6 +161,7 @@ namespace Oxide.Plugins
 			Interface.Oxide.DataFileSystem.WriteObject(this.Title, new List<object>(new object[] { file, type }) );
 		}
 		
+		/*
 		object OnSaveLoad(Dictionary<BaseEntity, ProtoBuf.Entity> dictionary)
 		{
 			if (Initialized || loadReload || !enableLoadOverride) return null;
@@ -182,6 +183,7 @@ namespace Oxide.Plugins
 			}
 			return null;
 		}
+		*/
 		
 		void OnNewSave(string strFilename)
 		{

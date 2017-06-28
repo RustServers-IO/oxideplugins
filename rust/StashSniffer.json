@@ -2,7 +2,7 @@
     "name": "StashSniffer",
     "description": "Keeps track of all small stashes and where they are placed",
     "author": "k1lly0u",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/stashsniffer.2062",

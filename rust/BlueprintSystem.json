@@ -2,7 +2,7 @@
     "name": "BlueprintSystem",
     "description": "Bring back the old blueprint system, with some small changes",
     "author": "redBDGR",
-    "version": "1.0.4",
+    "version": "2.1.4",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/blueprintsystem.2381",

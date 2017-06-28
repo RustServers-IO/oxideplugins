@@ -1,17 +1,34 @@
-﻿using Oxide.Core;
+using Oxide.Core;
+using Oxide.Core.Plugins;
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using Facepunch;
+using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("MultiCupboard", "Lucky Luciano & Frank Costello", "0.0.2")]
+    [Info("MultiCupboard", "Lucky Luciano / Def", "0.0.6")]
     public class MultiCupboard : RustPlugin
     {
+        private static float CupboardRadius;
         private bool multicupboard;
         private MultiCupboardPersistence pst = null;
         private bool initialized = false;
 
-        void OnServerInitialized ()
+        protected override void LoadDefaultConfig()
+        {
+            Config["CupboardRadius - Radius to place the next ToolCupboard"] = CupboardRadius = GetConfig("CupboardRadius - Radius to place the next ToolCupboard", 5.0f);
+            SaveConfig();
+        }
+
+        private void Init()
+        {
+            LoadDefaultConfig();
+        }
+
+        private void OnServerInitialized()
         {
             if (initialized)
                 return;
@@ -44,7 +61,25 @@ namespace Oxide.Plugins
             initialized = true;
         }
 
-        void OnEntitySpawned (BaseNetworkable ent)
+        private object CanBuild(Planner plan, Construction prefab, Vector3 pos)
+        {
+            if (!plan || !prefab || !plan.GetOwnerPlayer())
+                return null;
+            if (!prefab.hierachyName.StartsWith("cupboard.tool"))
+                return null;
+            var list = Pool.GetList<BuildingPrivlidge>();
+            Vis.Entities(pos, CupboardRadius, list, Layers.Server.Deployed, QueryTriggerInteraction.Ignore);
+            //var result = list.Any(col => col.GetComponent<BuildPrivilegeTrigger>());
+            var result = list.Count > 0;
+            Pool.FreeList(ref list);
+            if (!result)
+                return null;
+            var player = plan.GetOwnerPlayer();
+            rust.SendChatMessage(player,string.Empty, "You\'re placing cupboard too close to another.", player.UserIDString);
+            return false;
+        }
+
+        private void onEntitySpawned(BaseNetworkable ent)
         {
             if (!initialized || !(ent is BuildingPrivlidge))
                 return;
@@ -90,5 +125,6 @@ namespace Oxide.Plugins
             public bool ignorecupboard = false;
 
         }
+	    T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)System.Convert.ChangeType(Config[name], typeof(T));
     }
 }

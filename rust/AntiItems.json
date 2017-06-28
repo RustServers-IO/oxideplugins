@@ -1,0 +1,16 @@
+{
+    "name": "AntiItems",
+    "description": "Remove the need for certain items in crafting and repairing",
+    "author": "redBDGR",
+    "version": "1.0.7",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/antiitems.2405",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

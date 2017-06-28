@@ -1,4 +1,3 @@
-// Reference: RustBuild
 // Reference: Newtonsoft.Json
 // Requires: PathFinding
 
@@ -22,7 +21,7 @@ using Oxide.Game.Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("HumanNPC", "Reneb/Nogrod/Calytic", "0.3.15", ResourceId = 856)]
+    [Info("HumanNPC", "Reneb/Nogrod/Calytic", "0.3.17", ResourceId = 856)]
     public class HumanNPC : RustPlugin
     {
         //////////////////////////////////////////////////////
@@ -33,7 +32,6 @@ namespace Oxide.Plugins
         private static Vector3 Vector3Down;
         private static int groundLayer;
 
-        private readonly FieldInfo serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
         private static readonly FieldInfo viewangles = typeof(BasePlayer).GetField("viewAngles", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
         private static readonly FieldInfo displayName = typeof(BasePlayer).GetField("_displayName", (BindingFlags.Instance | BindingFlags.NonPublic));
         private static readonly Collider[] colBuffer = (Collider[]) typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic)).GetValue(null);
@@ -139,9 +137,10 @@ namespace Oxide.Plugins
                         if (triggerPlayers.Add(player)) OnEnterCollision(player);
                         continue;
                     }
-                    var ai = collider.GetComponentInParent<NPCAI>();
+                    //temp fix
+                    /*var ai = collider.GetComponentInParent<NPCAI>();
                     if (ai != null && ai.decider.hatesHumans)
-                        npc.StartAttackingEntity(collider.GetComponentInParent<BaseNPC>());
+                        npc.StartAttackingEntity(collider.GetComponentInParent<BaseNpc>());*/
                 }
 
                 var removePlayers = new HashSet<BasePlayer>();
@@ -669,7 +668,7 @@ namespace Oxide.Plugins
                     npc.SetActive(attackitem.uid);
 
                 float dmg = npc.info.damageAmount * UnityEngine.Random.Range(0.8f, 1.2f);
-                if (target is BaseNPC)
+                if (target is BaseNpc)
                     dmg *= 1.5f;
                 else if (target is AutoTurret)
                     dmg *= 3f;
@@ -1634,9 +1633,8 @@ namespace Oxide.Plugins
         bool TryGetPlayerView(BasePlayer player, out Quaternion viewAngle)
         {
             viewAngle = new Quaternion(0f, 0f, 0f, 0f);
-            var input = serverinput.GetValue(player) as InputState;
-            if (input?.current == null) return false;
-            viewAngle = Quaternion.Euler(input.current.aimAngles);
+            if (player.serverInput?.current == null) return false;
+            viewAngle = Quaternion.Euler(player.serverInput.current.aimAngles);
             return true;
         }
 

@@ -7,13 +7,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Shrinking Radiation Zone", "k1lly0u", "0.1.0", ResourceId = 0)]
+    [Info("Shrinking Radiation Zone", "k1lly0u", "0.1.2", ResourceId = 2214)]
     class ShrinkingRadZone : RustPlugin
     {
         #region Fields
         static ShrinkingRadZone instance;
         private Dictionary<string, ShrinkZone> activeZones;
-        
+
         private const string sphereEnt = "assets/prefabs/visualization/sphere.prefab";
         #endregion
 
@@ -42,7 +42,7 @@ namespace Oxide.Plugins
             void Awake()
             {
                 gameObject.layer = (int)Layer.Reserved1;
-                gameObject.name = "ShrinkZone";
+                gameObject.name = $"ShrinkZone {UnityEngine.Random.Range(0, int.MaxValue)}";
                 enabled = false;
 
                 isDisabled = true;
@@ -52,12 +52,12 @@ namespace Oxide.Plugins
                 targetRadius = instance.configData.FinalZoneSize;
                 timeToTake = instance.configData.ShrinkTime;
                 timeTaken = 0;
-            }      
+            }
             void OnDestroy()
-            {                
+            {
                 CancelInvoke();
                 innerSphere.Kill();
-                outerSphere.Kill();               
+                outerSphere.Kill();
                 Destroy(gameObject);
             }
 
@@ -71,22 +71,22 @@ namespace Oxide.Plugins
                 modifiedRadius = initialRadius * (1 - single);
 
                 innerSphere.currentRadius = (initialRadius * 2) * (1 - single);
-                outerSphere.currentRadius = ((initialRadius * 2) * (1 - single)) + bufferSize;
+                //outerSphere.currentRadius = ((initialRadius * 2) * (1 - single)) + bufferSize;
 
                 innerSphere.SendNetworkUpdateImmediate();
-                outerSphere.SendNetworkUpdateImmediate();
+                //outerSphere.SendNetworkUpdateImmediate();
 
                 innerCollider.radius = modifiedRadius;
-                radTrigger.radiationSize = modifiedRadius + bufferSize;
+                //radTrigger.radiationSize = modifiedRadius + bufferSize;
 
                 if (modifiedRadius <= targetRadius)
                 {
                     isDisabled = true;
                     RadzoneFinished();
                 }
-            }           
+            }
             void OnTriggerEnter(Collider obj)
-            {     
+            {
                 var player = obj?.GetComponentInParent<BasePlayer>();
                 if (player != null)
                 {
@@ -136,11 +136,17 @@ namespace Oxide.Plugins
                 radTrigger.radiationSize = initialRadius + bufferSize;
                 radTrigger.interestLayers = LayerMask.GetMask("Player (Server)");
                 radTrigger.enabled = true;
-               
+
                 isDisabled = false;
 
                 gameObject.SetActive(true);
                 enabled = true;
+            }
+            public void PauseShrink()
+            {
+                if (!isDisabled)
+                    isDisabled = true;
+                else isDisabled = false;
             }
             void RemoveFromTrigger(BasePlayer player)
             {
@@ -154,7 +160,7 @@ namespace Oxide.Plugins
             {
                 Interface.CallHook("RadzoneEnd", zoneId);
             }
-        }       
+        }
         #endregion
 
         #region Oxide Hooks
@@ -165,35 +171,42 @@ namespace Oxide.Plugins
             lang.RegisterMessages(messages, this);
             instance = this;
         }
-        void OnServerInitialized() => LoadVariables();        
+        void OnServerInitialized() => LoadVariables();
         void Unload()
         {
             var shrinkZones = UnityEngine.Object.FindObjectsOfType<ShrinkZone>();
             if (shrinkZones != null)
                 foreach (var obj in shrinkZones)
-                    UnityEngine.Object.Destroy(obj);          
+                    UnityEngine.Object.Destroy(obj);
         }
         #endregion
 
-        #region Functions        
+        #region Functions
         public void RemoveRadzone(string id)
         {
             if (activeZones.ContainsKey(id))
             {
                 UnityEngine.Object.DestroyImmediate(activeZones[id]);
                 activeZones.Remove(id);
-            }           
+            }
         }
         #endregion
 
         #region API
         private string CreateShrinkZone(Vector3 position, float radius, float time)
-        {           
+        {
             var zoneId = CuiHelper.GetGuid();
             var zone = new GameObject().gameObject.AddComponent<ShrinkZone>();
             activeZones.Add(zoneId, zone);
-            zone.CreateZones(zoneId, position, radius, time);            
+            zone.CreateZones(zoneId, position, radius, time);
             return zoneId;
+        }
+        private void ToggleZoneShrink(string id)
+        {
+            if (activeZones.ContainsKey(id))
+            {
+                activeZones[id].PauseShrink();
+            }
         }
         private void DestroyShrinkZone(string id)
         {
@@ -209,7 +222,7 @@ namespace Oxide.Plugins
         [ChatCommand("shrink")]
         void cmdShrink(BasePlayer player, string command, string[] args)
         {
-            if (!player.IsAdmin() && !permission.UserHasPermission(player.UserIDString, "shrinkingradzone.use")) return;
+            if (!player.IsAdmin && !permission.UserHasPermission(player.UserIDString, "shrinkingradzone.use")) return;
             if (args.Length == 0)
             {
                 SendReply(player, $"<color=#00CC00>{Title}</color>  <color=#939393>v</color><color=#00CC00>{Version}</color> <color=#939393>-</color> <color=#00CC00>{Author}</color>");
@@ -229,8 +242,8 @@ namespace Oxide.Plugins
                     if (args.Length >= 2)
                     {
                         object position = null;
-                        if (args[1].ToLower() == "me")                        
-                            position = player.transform.position; 
+                        if (args[1].ToLower() == "me")
+                            position = player.transform.position;
                         else if (args.Length > 2)
                         {
                             float x;
@@ -241,13 +254,13 @@ namespace Oxide.Plugins
                                 var height = TerrainMeta.HeightMap.GetHeight((Vector3)temp);
                                 position = new Vector3(x, height, z);
                             }
-                        }                       
+                        }
                         if (position is Vector3)
                         {
                             CreateShrinkZone((Vector3) position, configData.InitialZoneSize, configData.ShrinkTime);
                             SendReply(player, "Zone Created!");
                             return;
-                        }                        
+                        }
                     }
                     else
                     {
@@ -273,7 +286,7 @@ namespace Oxide.Plugins
                         {
                             configData.RadiationBuffer = value;
                             SaveConfig();
-                            SendReply(player, string.Format(msg("Radiation buffer set to : {0}", player.UserIDString), value));                            
+                            SendReply(player, string.Format(msg("Radiation buffer set to : {0}", player.UserIDString), value));
                         }
                         else SendReply(player, msg("You must enter a number value", player.UserIDString));
                     }
@@ -340,9 +353,9 @@ namespace Oxide.Plugins
             }
         }
         [ConsoleCommand("shrink")]
-        void cxmdShrink(ConsoleSystem.Arg arg)
+        void ccmdShrink(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null) return;
+            if (arg.Connection != null) return;
             if (arg.Args.Length == 0)
             {
                 SendReply(arg, $"{Title}  v{Version} - {Author}");
@@ -471,7 +484,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Config        
+        #region Config
         private ConfigData configData;
         class ConfigData
         {

@@ -1,6 +1,4 @@
-﻿// Reference: Newtonsoft.Json
-
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries;
 using Oxide.Core.Plugins;
@@ -11,9 +9,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins {
-    [Info("Clans", "playrust.io / dcode", "1.7.2", ResourceId = 842)]
-    public class Clans : RustPlugin {
-
+    [Info("Rust:IO Clans", "playrust.io / dcode", "1.7.3", ResourceId = 842)]
+    [Description("Allows your players to form and manage clans with Rust:IO")]
+    public class Clans : RustPlugin
+    {
         #region Rust:IO Bindings
 
         private Library lib;
@@ -21,34 +20,37 @@ namespace Oxide.Plugins {
         private MethodInfo hasFriend;
         private MethodInfo addFriend;
         private MethodInfo deleteFriend;
-        internal static Clans Instance = null;
 
-        FieldInfo displayName = typeof(BasePlayer).GetField("_displayName", (BindingFlags.Instance | BindingFlags.NonPublic));
-
-        private void ioInitialize() {
-            lib = Interface.GetMod().GetLibrary<Library>("RustIO");
-            if (lib == null || (isInstalled = lib.GetFunction("IsInstalled")) == null || (hasFriend = lib.GetFunction("HasFriend")) == null || (addFriend = lib.GetFunction("AddFriend")) == null || (deleteFriend = lib.GetFunction("DeleteFriend")) == null) {
+        private void ioInitialize()
+        {
+            lib = Interface.Oxide.GetLibrary<Library>("RustIO");
+            if (lib == null || (isInstalled = lib.GetFunction("IsInstalled")) == null || (hasFriend = lib.GetFunction("HasFriend")) == null || (addFriend = lib.GetFunction("AddFriend")) == null || (deleteFriend = lib.GetFunction("DeleteFriend")) == null)
+            {
                 lib = null;
-                Puts("{0}: {1}", Title, "Rust:IO is not present. You need to install Rust:IO first in order to use this plugin!");
+                Puts("Rust:IO is not present. You need to install Rust:IO first in order to use this plugin!");
             }
         }
 
-        private bool ioIsInstalled() {
+        private bool ioIsInstalled()
+        {
             if (lib == null) return false;
             return (bool)isInstalled.Invoke(lib, new object[] { });
         }
 
-        private bool ioHasFriend(string playerId, string friendId) {
+        private bool ioHasFriend(string playerId, string friendId)
+        {
             if (lib == null) return false;
             return (bool)hasFriend.Invoke(lib, new object[] { playerId, friendId });
         }
 
-        private bool ioAddFriend(string playerId, string friendId) {
+        private bool ioAddFriend(string playerId, string friendId)
+        {
             if (lib == null) return false;
             return (bool)addFriend.Invoke(lib, new object[] { playerId, friendId });
         }
 
-        private bool ioDeleteFriend(string playerId, string friendId) {
+        private bool ioDeleteFriend(string playerId, string friendId)
+        {
             if (lib == null) return false;
             return (bool)deleteFriend.Invoke(lib, new object[] { playerId, friendId });
         }
@@ -64,10 +66,10 @@ namespace Oxide.Plugins {
         private int limitMembers = -1;
         private int limitModerators = -1;
 
-        // Loads the data file
-        private void loadData() {
+        private void loadData()
+        {
             clans.Clear();
-            var data = Interface.GetMod().DataFileSystem.GetDatafile("rustio_clans");
+            var data = Interface.Oxide.DataFileSystem.GetDatafile("rustio_clans");
             if (data["clans"] != null) {
                 var clansData = (Dictionary<string, object>)Convert.ChangeType(data["clans"], typeof(Dictionary<string, object>));
                 foreach (var iclan in clansData) {
@@ -103,9 +105,9 @@ namespace Oxide.Plugins {
             }
         }
 
-        // Saves the data file
-        private void saveData() {
-            var data = Interface.GetMod().DataFileSystem.GetDatafile("rustio_clans");
+        private void saveData()
+        {
+            var data = Interface.Oxide.DataFileSystem.GetDatafile("rustio_clans");
             var clansData = new Dictionary<string, object>();
             foreach (var clan in clans) {
                 var clanData = new Dictionary<string, object>();
@@ -127,10 +129,9 @@ namespace Oxide.Plugins {
                 clansData.Add(clan.Value.tag, clanData);
             }
             data["clans"] = clansData;
-            Interface.GetMod().DataFileSystem.SaveDatafile("rustio_clans");
+            Interface.Oxide.DataFileSystem.SaveDatafile("rustio_clans");
         }
 
-        // A list of all translateable texts
         private List<string> texts = new List<string>() {
             "%NAME% has come online!",
             "%NAME% has gone offline.",
@@ -211,12 +212,11 @@ namespace Oxide.Plugins {
             "<color=\"#ffd479\">/clan help</color> - Learn how to create or join a clan"
         };
 
-        // Loads the default configuration
         protected override void LoadDefaultConfig() {
             var messages = new Dictionary<string, object>();
             foreach (var text in texts) {
                 if (messages.ContainsKey(text))
-                    Puts("{0}: {1}", Title, "Duplicate translation string: " + text);
+                    Puts("Duplicate translation string: " + text);
                 else
                     messages.Add(text, text);
             }
@@ -226,8 +226,8 @@ namespace Oxide.Plugins {
             Config.Set("limit", "moderators", -1);
         }
 
-        // Translates a string
-        private string _(string text, Dictionary<string, string> replacements = null) {
+        private string _(string text, Dictionary<string, string> replacements = null)
+        {
             if (messages.ContainsKey(text) && messages[text] != null)
                 text = messages[text];
             if (replacements != null)
@@ -236,30 +236,30 @@ namespace Oxide.Plugins {
             return text;
         }
 
-        // Finds a clan by tag
-        private Clan findClan(string tag) {
+        private Clan findClan(string tag)
+        {
             Clan clan;
             if (clans.TryGetValue(tag, out clan))
                 return clan;
             return null;
         }
 
-        // Finds a user's clan
-        private Clan findClanByUser(string userId) {
+        private Clan findClanByUser(string userId)
+        {
             Clan clan;
             if (lookup.TryGetValue(userId, out clan))
                 return clan;
             return null;
         }
 
-        // Finds a player by partial name
-        private BasePlayer findPlayerByPartialName(string name) {
+        private BasePlayer findPlayerByPartialName(string name)
+        {
             if (string.IsNullOrEmpty(name))
                 return null;
             BasePlayer player = null;
             name = name.ToLower();
             var allPlayers = BasePlayer.activePlayerList.ToArray();
-            // Try to find an exact match first
+
             foreach (var p in allPlayers) {
                 if (p.displayName == name) {
                     if (player != null)
@@ -269,7 +269,7 @@ namespace Oxide.Plugins {
             }
             if (player != null)
                 return player;
-            // Otherwise try to find a partial match
+
             foreach (var p in allPlayers) {
                 if (p.displayName.ToLower().IndexOf(name) >= 0) {
                     if (player != null)
@@ -280,8 +280,8 @@ namespace Oxide.Plugins {
             return player;
         }
 
-        // Strips the tag from a player's name
-        private string stripTag(string name, Clan clan) {
+        private string stripTag(string name, Clan clan)
+        {
             if (clan == null)
                 return name;
             var re = new Regex(@"^\[" + clan.tag + @"\]\s");
@@ -290,12 +290,12 @@ namespace Oxide.Plugins {
             return name;
         }
 
-        // Sets up a player to use the correct clan tag
-        private void setupPlayer(BasePlayer player) {
+        private void setupPlayer(BasePlayer player)
+        {
             var prevName = player.displayName;
-            var playerId = player.userID.ToString();
+            var playerId = player.UserIDString;
             var clan = findClanByUser(playerId);
-            displayName.SetValue(player, stripTag(player.displayName, clan));
+            player.displayName = stripTag(player.displayName, clan);
             string originalName = null;
             if (!originalNames.ContainsKey(playerId)) {
                 originalNames.Add(playerId, originalName = player.displayName);
@@ -303,18 +303,18 @@ namespace Oxide.Plugins {
                 originalName = originalNames[playerId];
             }
             if (clan == null) {
-                displayName.SetValue(player, originalName);
+                player.displayName = originalName;
             } else {
                 var tag = "[" + clan.tag + "]" + " ";
                 if (!player.displayName.StartsWith(tag))
-                    displayName.SetValue(player, tag + originalName);
+                    player.displayName = tag + originalName;
             }
             if (player.displayName != prevName)
                 player.SendNetworkUpdate();
         }
 
-        // Sets up all players contained in playerIds
-        private void setupPlayers(List<string> playerIds) {
+        private void setupPlayers(List<string> playerIds)
+        {
             foreach (var playerId in playerIds) {
                 var uid = Convert.ToUInt64(playerId);
                 var player = BasePlayer.FindByID(uid);
@@ -328,13 +328,8 @@ namespace Oxide.Plugins {
             }
         }
 
-        [HookMethod("Init")]
-        void Init() {
-            Instance = this;
-        }
-
-        [HookMethod("OnServerInitialized")]
-        void OnServerInitialized() {
+        private void OnServerInitialized()
+        {
             try {
                 ioInitialize();
                 LoadConfig();
@@ -345,7 +340,7 @@ namespace Oxide.Plugins {
                             messages[pair.Key] = (string)pair.Value;
                     loadData();
                 } catch (Exception ex2) {
-                    warn("oxide/config/Clans.json seems to contain an invalid 'messages' structure. Please delete the config file once and reload the plugin.");
+                    PrintWarning("oxide/config/Clans.json seems to contain an invalid 'messages' structure. Please delete the config file once and reload the plugin.");
                 }
                 foreach (var player in BasePlayer.activePlayerList)
                     setupPlayer(player);
@@ -355,64 +350,62 @@ namespace Oxide.Plugins {
                 try { limitMembers = Config.Get<int>("limit", "members"); } catch { }
                 try { limitModerators = Config.Get<int>("limit", "moderators"); } catch { }
             } catch (Exception ex) {
-                error("OnServerInitialized failed", ex);
+                PrintError("OnServerInitialized failed", ex);
             }
         }
 
-        [HookMethod("OnUserApprove")]
-        void OnUserApprove(Network.Connection connection) {
-            // Override whatever there is
+        private void OnUserApprove(Network.Connection connection)
+        {
             originalNames[connection.userid.ToString()] = connection.username;
         }
 
-        [HookMethod("OnPlayerInit")]
-        void OnPlayerInit(BasePlayer player) {
+        private void OnPlayerInit(BasePlayer player)
+        {
             string originalName;
-            if (originalNames.TryGetValue(player.userID.ToString(), out originalName))
-                displayName.SetValue(player, originalName);
+            if (originalNames.TryGetValue(player.UserIDString, out originalName))
+                player.displayName = originalName;
             try {
                 setupPlayer(player);
-                var clan = findClanByUser(player.userID.ToString());
+                var clan = findClanByUser(player.UserIDString);
                 if (clan != null)
                     clan.Broadcast(_("%NAME% has come online!", new Dictionary<string, string>() { { "NAME", stripTag(player.displayName, clan) } }));
             } catch (Exception ex) {
-                error("OnPlayerInit failed", ex);
+                PrintError("OnPlayerInit failed", ex);
             }
         }
 
-        [HookMethod("OnPlayerDisconnected")]
-        void OnPlayerDisconnected(BasePlayer player) {
+        private void OnPlayerDisconnected(BasePlayer player)
+        {
             try {
-                var clan = findClanByUser(player.userID.ToString());
+                var clan = findClanByUser(player.UserIDString);
                 if (clan != null)
                     clan.Broadcast(_("%NAME% has gone offline.", new Dictionary<string, string>() { { "NAME", stripTag(player.displayName, clan) } }));
             } catch (Exception ex) {
-                error("OnPlayerDisconnected failed", ex);
+                PrintError("OnPlayerDisconnected failed", ex);
             }
         }
 
-        [HookMethod("Unload")]
-        void OnUnload() {
+        private void Unload()
+        {
             try {
-                // Reset player names to originals
                 foreach (var pair in originalNames) {
                     var playerId = Convert.ToUInt64(pair.Key);
                     var player = BasePlayer.FindByID(playerId);
                     if (player != null)
-                        displayName.SetValue(player, pair.Value);
+                        player.displayName = pair.Value;
                     else {
                         player = BasePlayer.FindSleeping(playerId);
                         if (player != null)
-                            displayName.SetValue(player, pair.Value);
+                            player.displayName = pair.Value;
                     }
                 }
             } catch (Exception ex) {
-                error("Unload failed", ex);
+                PrintError("Unload failed", ex);
             }
         }
 
-        [HookMethod("SendHelpText")]
-        private void SendHelpText(BasePlayer player) {
+        private void SendHelpText(BasePlayer player)
+        {
             var sb = new StringBuilder()
                .Append("<size=18>Clans</size> by <color=#ce422b>http://playrust.io</color>\n")
                .Append("  ").Append(_("<color=\"#ffd479\">/clan</color> - Displays your current clan status")).Append("\n")
@@ -420,17 +413,13 @@ namespace Oxide.Plugins {
             player.ChatMessage(sb.ToString());
         }
 
-        [HookMethod("BuildServerTags")]
-        private void BuildServerTags(IList<string> taglist) {
-            taglist.Add("clans");
-        }
-
         [ChatCommand("clan")]
-        private void cmdChatClan(BasePlayer player, string command, string[] args) {
-            var userId = player.userID.ToString();
+        private void ClanCommand(BasePlayer player, string command, string[] args)
+        {
+            var userId = player.UserIDString;
             var myClan = findClanByUser(userId);
             var sb = new StringBuilder();
-            // No arguments: List clans and get help how to create one
+
             if (args.Length == 0) {
                 sb.Append("<size=22>Clans</size> " + Version + " by <color=#ce422b>http://playrust.io</color>\n");
                 if (myClan == null) {
@@ -530,7 +519,7 @@ namespace Oxide.Plugins {
                         sb.Append(_("No such player or player name not unique:")).Append(" ").Append(args[1]);
                         break;
                     }
-                    var invUserId = invPlayer.userID.ToString();
+                    var invUserId = invPlayer.UserIDString;
                     if (myClan.members.Contains(invUserId)) {
                         sb.Append(_("This player is already a member of your clan:")).Append(" ").Append(invPlayer.displayName);
                         break;
@@ -597,7 +586,7 @@ namespace Oxide.Plugins {
                         sb.Append(_("No such player or player name not unique:") + " " + args[1]);
                         break;
                     }
-                    var promotePlayerUserId = promotePlayer.userID.ToString();
+                    var promotePlayerUserId = promotePlayer.UserIDString;
                     if (!myClan.IsMember(promotePlayerUserId)) {
                         sb.Append(_("This player is not a member of your clan:") + " " + promotePlayer.displayName);
                         break;
@@ -633,7 +622,7 @@ namespace Oxide.Plugins {
                         sb.Append(_("No such player or player name not unique:") + " " + args[1]);
                         break;
                     }
-                    var demotePlayerUserId = demotePlayer.userID.ToString();
+                    var demotePlayerUserId = demotePlayer.UserIDString;
                     if (!myClan.IsMember(demotePlayerUserId)) {
                         sb.Append(_("This player is not a member of your clan:") + " " + demotePlayer.displayName);
                         break;
@@ -691,7 +680,7 @@ namespace Oxide.Plugins {
                         sb.Append(_("No such player or player name not unique:") + " " + args[1]);
                         break;
                     }
-                    var kickPlayerUserId = kickPlayer.userID.ToString();
+                    var kickPlayerUserId = kickPlayer.UserIDString;
                     if (!myClan.IsMember(kickPlayerUserId) && !myClan.IsInvited(kickPlayerUserId)) {
                         sb.Append(_("This player is not a member of your clan:") + " " + kickPlayer.displayName);
                         break;
@@ -776,8 +765,9 @@ namespace Oxide.Plugins {
         }
 
         [ChatCommand("c")]
-        private void cmdChatClanchat(BasePlayer player, string command, string[] args) {
-            var playerId = player.userID.ToString();
+        private void ClanChatCommand(BasePlayer player, string command, string[] args)
+        {
+            var playerId = player.UserIDString;
             var myClan = findClanByUser(playerId);
             if (myClan == null) {
                 SendReply(player, "{0}", _("You are currently not a member of a clan."));
@@ -791,8 +781,8 @@ namespace Oxide.Plugins {
             Puts("[CLANCHAT] {0} - {1}: {2}", myClan.tag, playerName, message);
         }
 
-        // Represents a clan
-        public class Clan {
+        public class Clan
+        {
             public string tag;
             public string description;
             public string owner;
@@ -851,15 +841,16 @@ namespace Oxide.Plugins {
                 return obj;
             }
 
-            internal void onCreate() => Interface.CallHook("OnClanCreate", tag);
-            internal void onUpdate() => Interface.CallHook("OnClanUpdate", tag);
-            internal void onDestroy() => Interface.CallHook("OnClanDestroy", tag);
+            internal void onCreate() => Interface.Call("OnClanCreate", tag);
+            internal void onUpdate() => Interface.Call("OnClanUpdate", tag);
+            internal void onDestroy() => Interface.Call("OnClanDestroy", tag);
         }
 
         #region Plugin API
 
         [HookMethod("GetClan")]
-        private JObject GetClan(string tag) {
+        private JObject GetClan(string tag)
+        {
             var clan = findClan(tag);
             if (clan == null)
                 return null;
@@ -867,12 +858,14 @@ namespace Oxide.Plugins {
         }
 
         [HookMethod("GetAllClans")]
-        private JArray GetAllClans() {
+        private JArray GetAllClans()
+        {
             return new JArray(clans.Keys);
         }
 
         [HookMethod("GetClanOf")]
-        private string GetClanOf(object player) {
+        private string GetClanOf(object player)
+        {
             if (player == null)
                 throw new ArgumentException("player");
             if (player is ulong)
@@ -885,31 +878,6 @@ namespace Oxide.Plugins {
             if (clan == null)
                 return null;
             return clan.tag;
-        }
-
-        // Available hooks
-        // --------------------------------------------------------------------
-        // OnClanCreate CLANTAG      Called when a new clan has been created
-        // OnClanUpdate CLANTAG      Called when clan members or invites change
-        // OnClanDestroy CLANTAG     Called when a clan is disbanded or deleted
-
-        #endregion
-
-        #region Utility Methods
-
-        private void log(string message) {
-            Interface.Oxide.LogInfo("{0}: {1}", Title, message);
-        }
-        
-        private void warn(string message) {
-            Interface.Oxide.LogWarning("{0}: {1}", Title, message);
-        }
-
-        private void error(string message, Exception ex = null) {
-            if (ex != null)
-                Interface.Oxide.LogException(string.Format("{0}: {1}", Title, message), ex);
-            else
-                Interface.Oxide.LogError("{0}: {1}", Title, message);
         }
 
         #endregion

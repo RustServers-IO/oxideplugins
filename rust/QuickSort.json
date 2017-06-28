@@ -2,7 +2,7 @@
     "name": "QuickSort",
     "description": "Adds a GUI that allows players to quickly sort items into containers",
     "author": "Wulf",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/quicksort.1263",

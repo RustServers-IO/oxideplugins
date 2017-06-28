@@ -11,10 +11,11 @@ using Rust;
 using Facepunch;
 using UnityEngine;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Bank", "rustservers.io", "0.0.10", ResourceId = 2116)]
+    [Info("Bank", "rustservers.io", "0.1.0", ResourceId = 2116)]
     [Description("Safe player storage")]
     class Bank : RustPlugin
     {
@@ -786,8 +787,8 @@ namespace Oxide.Plugins
 
         ItemLimit GetItemLimit(Item item) {
             object limit;
-            if(itemLimits.TryGetValue(item.info.shortname, out limit)) {
-                return (ItemLimit)limit;
+            if(itemLimits.TryGetValue(item.info.shortname, out limit) && limit is JObject) {
+                return ((JObject)limit).ToObject<ItemLimit>();
             }
 
             return null;

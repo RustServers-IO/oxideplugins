@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-     	[Info("FreezeArrows", "Colon Blow", "1.0.9", ResourceId = 1601)]
+     	[Info("FreezeArrows", "Colon Blow", "1.0.10", ResourceId = 1601)]
      	class FreezeArrows : RustPlugin
 	{
 
@@ -173,7 +173,7 @@ namespace Oxide.Plugins
         {
 		if (hitInfo == null) return;
 		if (!(hitInfo.Initiator is BasePlayer)) return;
-		if (entity is BaseNPC || entity is BasePlayer)
+		if (entity is BaseNpc || entity is BasePlayer)
 		{
 			var player = (BasePlayer)hitInfo.Initiator;
 
@@ -193,10 +193,10 @@ namespace Oxide.Plugins
 		void findTarget(BasePlayer player, HitInfo hitInfo, Vector3 newPos)
 		{
         		List<BasePlayer> plist = new List<BasePlayer>();
-			List<BaseNPC> nlist = new List<BaseNPC>();
+			List<BaseNpc> nlist = new List<BaseNpc>();
 
         		Vis.Entities<BasePlayer>(hitInfo.HitPositionWorld, FreezeRadius, plist);
-			Vis.Entities<BaseNPC>(hitInfo.HitPositionWorld, FreezeRadius, nlist);
+			Vis.Entities<BaseNpc>(hitInfo.HitPositionWorld, FreezeRadius, nlist);
 
 			if (freezePlayers)
 			{
@@ -215,11 +215,10 @@ namespace Oxide.Plugins
 			}
 			if (freezeNPCs)
 			{
-				foreach (BaseNPC n in nlist)
+				foreach (BaseNpc n in nlist)
 				{
-                			n.state = BaseNPC.State.Sleeping;
-                			n.sleep.Recover(FreezeTime);
-                			n.StartCooldown(FreezeTime, true);
+					timer.Repeat(0.1f, FreezeTime*10,() => n.StopMoving());
+					timer.Once(FreezeTime+1f, () => n.UpdateDestination(newPos)); 
 				}
 			}
 		}

@@ -2,7 +2,7 @@
     "name": "Human NPC - Core",
     "description": "Add Interactive Human NPC Ingame, can be modded by other plugins",
     "author": "Nogrod",
-    "version": "0.3.15",
+    "version": "0.3.17",
     "configuration": true,
     "require": {
         "Waypoints": "*",

@@ -5,18 +5,18 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Random Spawner", "LaserHydra", "1.0.1", ResourceId = 1456)]
+    [Info("Random Spawner", "LaserHydra", "1.2.1", ResourceId = 1456)]
     [Description("Randomly Spawn a specific amount of an entity on the map")]
     class RandomSpawner : RustPlugin
     {
         ////////////////////////////////////////
-        ///     On Plugin Loaded
+        ///     On Plugin Init
         ////////////////////////////////////////
 
-        void Loaded()
+        void Init()
         {
-            permission.RegisterPermission("rspawn.getprefabs", this);
-            permission.RegisterPermission("rspawn.use", this);
+            permission.RegisterPermission("randomspawner.getprefabs", this);
+            permission.RegisterPermission("randomspawner.use", this);
         }
 
         ////////////////////////////////////////
@@ -27,20 +27,20 @@ namespace Oxide.Plugins
         void ccmdGetPrefabs(ConsoleSystem.Arg arg)
         {
             if (arg == null) return;
-            
+
             BasePlayer player = null;
 
-            if (arg.connection != null && arg.connection.player != null)
+            if (arg.Connection != null && arg.Connection.player != null)
             {
-                player = arg.connection.player as BasePlayer;
+                player = arg.Connection.player as BasePlayer;
 
-                if (!permission.UserHasPermission(player.UserIDString, "rspawn.getprefabs"))
+                if (!permission.UserHasPermission(player.UserIDString, "randomspawner.getprefabs"))
                     return;
             }
-            
-            List<string> prefabs = (from prefab in GameManifest.Get().pooledStrings
+
+            List<string> prefabs = (from prefab in GameManifest.Current.pooledStrings
                                     select prefab.str).ToList();
-            
+
             ConVar.Server.Log("oxide/logs/Prefabs.txt", ListToString(prefabs, 0, Environment.NewLine));
 
             if (player == null)
@@ -61,7 +61,7 @@ namespace Oxide.Plugins
         [ChatCommand("rspawn")]
         void cmdSpawnRandom(BasePlayer player, string cmd, string[] args)
         {
-            if(!permission.UserHasPermission(player.UserIDString, "rspawn.use"))
+            if(!permission.UserHasPermission(player.UserIDString, "randomspawner.use"))
             {
                 SendChatMessage(player, "You don't have permission to use this command.");
                 return;
@@ -121,7 +121,7 @@ namespace Oxide.Plugins
             object terrainHeight = GetTerrainHeight(new Vector3(x, 300, z));
 
             if (terrainHeight is Vector3)
-                return (Vector3) terrainHeight; 
+                return (Vector3) terrainHeight;
             else
                 return new Vector3(x, y, z);
         }
@@ -140,29 +140,6 @@ namespace Oxide.Plugins
         }
 
         ////////////////////////////////////////
-        ///     Teleporting
-        ////////////////////////////////////////
-
-        void Teleport(BasePlayer player, Vector3 destination)
-        {
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.Sleeping, true);
-            if (!BasePlayer.sleepingPlayerList.Contains(player)) BasePlayer.sleepingPlayerList.Add(player);
-
-            player.CancelInvoke("InventoryUpdate");
-            player.inventory.crafting.CancelAll(true);
-
-            player.MovePosition(destination);
-            player.ClientRPCPlayer(null, player, "ForcePositionTo", destination, null, null, null, null);
-            player.TransformChanged();
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
-            player.UpdateNetworkGroup();
-
-            player.SendNetworkUpdateImmediate(false);
-            player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
-            player.SendFullSnapshot();
-        }
-
-        ////////////////////////////////////////
         ///     Console Command Handling
         ////////////////////////////////////////
 
@@ -175,10 +152,10 @@ namespace Oxide.Plugins
             string[] args = new string[0];
 
             if (arg.HasArgs()) args = arg.Args;
-            if (arg.connection.player == null) return;
+            if (arg.Connection.player == null) return;
 
-            player = arg.connection.player as BasePlayer;
-            cmd = arg.cmd?.name ?? "unknown";
+            player = arg.Connection.player as BasePlayer;
+            cmd = arg.cmd?.Name ?? "unknown";
 
             command(player, cmd, args);
         }

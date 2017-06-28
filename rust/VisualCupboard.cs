@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using Oxide.Core.Plugins;
 namespace Oxide.Plugins
 {
-     	[Info("VisualCupboard", "Colon Blow", "1.0.7", ResourceId = 2030)]
+     	[Info("VisualCupboard", "Colon Blow", "1.0.8", ResourceId = 2030)]
     	class VisualCupboard : RustPlugin
      	{
 		void OnServerInitialized() { serverInitialized = true; }
@@ -39,28 +39,16 @@ namespace Oxide.Plugins
 		bool Changed;
 
 		private static float UseCupboardRadius = 25f;
-
-		bool ShowOnlyOwnCupboards = false;
-		bool ShowRadiusWhenDeploying = false;
-
 		float DurationToShowRadius = 60f;
 		float ShowCupboardsWithinRangeOf = 50f;
-
-		bool AdminShowOwnerID = false;
 
 		private static bool serverInitialized = false;
 
         	private void LoadConfigVariables()
         	{
         		CheckCfgFloat("My Cupboard Radius is (25 is default)", ref UseCupboardRadius);
-			
-        		CheckCfg("Show Visuals On OWN Cupboards Only", ref ShowOnlyOwnCupboards);
-			CheckCfg("Show Visuals When Placing Cupboard", ref ShowRadiusWhenDeploying);
-
         		CheckCfgFloat("Show Visuals On Cupboards Withing Range Of", ref ShowCupboardsWithinRangeOf);
 			CheckCfgFloat("Show Visuals For This Long", ref DurationToShowRadius);
-
-			CheckCfg("Admin : Show Cupboard Owners ID", ref AdminShowOwnerID);
         	}
 
         	private void LoadVariables()
@@ -116,6 +104,7 @@ namespace Oxide.Plugins
 			
 			BaseEntity sphere;
 			BaseEntity entity;
+			public bool showall;
 
 			Vector3 pos = new Vector3(0, 0, 0);
 			Quaternion rot = new Quaternion();
@@ -129,7 +118,7 @@ namespace Oxide.Plugins
 				ball.currentRadius = 1f;
 				ball.lerpRadius = 2.0f*UseCupboardRadius;
 				ball.lerpSpeed = 100f;
-
+				showall = false;
 				sphere.SetParent(entity, "");
 				sphere?.Spawn();
 			}
@@ -146,28 +135,17 @@ namespace Oxide.Plugins
 	//	When player places a cupbaord, a Visual cupboard radius will pop up
 	////////////////////////////////////////////////////////////////////////////////////////////
 
-		void OnEntitySpawned(BaseEntity entity, UnityEngine.GameObject gameObject)
-		{
-			if (!serverInitialized) return;
-			if (!ShowRadiusWhenDeploying) return;
-			if (entity == null) return;
-
-			if (ShowRadiusWhenDeploying) 
+        	object CanNetworkTo(BaseEntity entity, BasePlayer target)
+        	{
+			var sphereobj = entity.GetComponent<ToolCupboardSphere>();
+			if (sphereobj == null) return null;
+            		if (sphereobj !=null && sphereobj.showall == false)
+     
 			{
-				if (entity.name.Contains("cupboard.tool"))
-				{
-					var player = BasePlayer.FindByID(entity.OwnerID);
-					if (player != null)
-					{
-						if (!isAllowed(player, "visualcupboard.allowed")) return;
-            					var sphereobj = entity.gameObject.AddComponent<ToolCupboardSphere>();
-						GameManager.Destroy(sphereobj, DurationToShowRadius);	
-						return;
-					}
-				}
+				if (target.userID != entity.OwnerID) return false;
 			}
-			else return;
-		}
+            		return null;           
+        	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////
 	//	When player runs chat command, shows Cupboard Radius of nearby Tool Cupboards
@@ -176,11 +154,34 @@ namespace Oxide.Plugins
 		[ChatCommand("showsphere")]
         	void cmdChatShowSphere(BasePlayer player, string command)
 		{	
+			AddSphere(player, false, false);
+		}
+
+		[ChatCommand("showsphereall")]
+        	void cmdChatShowSphereAll(BasePlayer player, string command)
+		{
+			AddSphere(player, true, false);
+		}
+
+		[ChatCommand("showsphereadmin")]
+        	void cmdChatShowSphereAdmin(BasePlayer player, string command)
+		{
+			if (isAllowed(player, "visualcupboard.admin"))
+			{
+				AddSphere(player, true, true);
+				return;
+			}
+			else if (!isAllowed(player, "visualcupboard.admin"))
+			{
+				SendReply(player, lang.GetMessage("notallowed", this));
+			 	return;	
+			}
+		}
+
+		void AddSphere(BasePlayer player, bool showall, bool adminshow)
+		{
 			if (isAllowed(player, "visualcupboard.allowed"))
 			{
-				bool ShowAdmin = false;
-				if (isAllowed(player, "visualcupboard.admin")) { ShowAdmin = true; }
-
 				List<BaseCombatEntity> cblist = new List<BaseCombatEntity>();
 				Vis.Entities<BaseCombatEntity>(player.transform.position, ShowCupboardsWithinRangeOf, cblist);
 			
@@ -192,22 +193,19 @@ namespace Oxide.Plugins
 						{
 							Vector3 pos = bp.transform.position;
 							
-							if (!ShowAdmin)
+							if (!adminshow)
 							{
-								if ((ShowOnlyOwnCupboards) && (player.userID != bp.OwnerID)) return;
+								if (player.userID != bp.OwnerID) return;
 								var sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
+								if (showall) sphereobj.showall = true;
 								GameManager.Destroy(sphereobj, DurationToShowRadius);
 							}
-							if (ShowAdmin)
+							if (adminshow)
 							{
 								var sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
+								sphereobj.showall = true;
 								GameManager.Destroy(sphereobj, DurationToShowRadius);
-								if (AdminShowOwnerID)
-								{
-									string tcradius = "Radius: " + UseCupboardRadius;							
-									player.SendConsoleCommand("ddraw.text", 10, UnityEngine.Color.red, pos+Vector3.up, FindPlayerName(bp.OwnerID));
-									PrintWarning("Tool Cupboard Owner " + bp.OwnerID + " : " + FindPlayerName(bp.OwnerID));
-								}
+								PrintWarning("Tool Cupboard Owner " + bp.OwnerID + " : " + FindPlayerName(bp.OwnerID));
 							}	
 						}
 					}
@@ -220,6 +218,7 @@ namespace Oxide.Plugins
 			}
 			else return;
 		}
+
 
 		[ChatCommand("killsphere")]
         	void cmdChatDestroySphere(BasePlayer player, string command)

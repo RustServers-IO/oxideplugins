@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Build", "Reneb & NoGrod", "1.1.7", ResourceId = 715)]
+    [Info("Build", "Reneb & NoGrod", "1.1.8", ResourceId = 715)]
     class Build : RustPlugin
     {
         class BuildPlayer : MonoBehaviour
@@ -253,7 +253,7 @@ namespace Oxide.Plugins
         void InitializeAnimals()
         {
             animalList = new Dictionary<string, string>();
-            foreach (var str in GameManifest.Get().pooledStrings)
+            foreach (var str in GameManifest.Current.pooledStrings)
             {
                 if (str.str.Contains("autospawn/animals"))
                 {

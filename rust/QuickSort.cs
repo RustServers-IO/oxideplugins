@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("QuickSort", "Wulf/lukespragg", "1.1.0", ResourceId = 1263)]
+    [Info("QuickSort", "Wulf/lukespragg", "1.1.1", ResourceId = 1263)]
     [Description("Adds a GUI that allows players to quickly sort items into containers")]
 
     class QuickSort : CovalencePlugin
@@ -165,6 +165,12 @@ namespace Oxide.Plugins
         void OnLootEntity(BasePlayer player, BaseEntity entity)
         {
             if (permission.UserHasPermission(player.UserIDString, permUse) && !(entity is VendingMachine) && !(entity is ShopFront)) UserInterface(player);
+        }
+
+        void OnPlayerLootEnd(PlayerLoot inventory)
+        {
+            var player = inventory.GetComponent<BasePlayer>();
+            if (player != null) DestroyUi(player);
         }
 
         #endregion

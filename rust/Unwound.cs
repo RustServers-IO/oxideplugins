@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Unwound", "mk_sky", "1.0.10", ResourceId = 1352)]
+    [Info("Unwound", "mk_sky", "1.0.11", ResourceId = 1352)]
     [Description("The sky presents the newest technology in calling the MEDIC!")]
 
     class Unwound : RustPlugin
@@ -175,7 +176,7 @@ namespace Oxide.Plugins
 
         void ConfigUpdater()
         {
-            PrintWarning(String.Format("Unwoud updates config from v{0} to v{1}.", Config["Version"].ToString(), this.Version.ToString()));
+            PrintWarning(String.Format("Config updated from v{0} to v{1}.", Config["Version"].ToString(), this.Version.ToString()));
 
             while (Config["Version"].ToString() != this.Version.ToString())
                 switch (Config["Version"].ToString())

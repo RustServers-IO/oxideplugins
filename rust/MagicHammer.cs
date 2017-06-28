@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("MagicHammer", "Norn/Werkrat", "0.5.1", ResourceId = 1375)]
+    [Info("MagicHammer", "Norn/Werkrat", "0.5.2", ResourceId = 1375)]
     [Description("Hit stuff with the hammer and do things.")]
     public class MagicHammer : RustPlugin
     {
@@ -18,6 +18,7 @@ namespace Oxide.Plugins
         int MAX_MODES = 2;
 		int Modes_Enabled = 0;
 		int RETURNED;
+		
         [PluginReference]
         Plugin PopupNotifications;
         class StoredData
@@ -43,7 +44,7 @@ namespace Oxide.Plugins
 		static FieldInfo buildingPrivilege = typeof(BasePlayer).GetField("buildingPrivilege", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
         void Loaded()
         {
-            if (!permission.PermissionExists("magichammer.allowed")) permission.RegisterPermission("magichammer.allowed", this);
+			if (!permission.PermissionExists("magichammer.allowed")) permission.RegisterPermission("magichammer.allowed", this);
             hammerUserData = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(this.Title + "_users");
 		}
 		void OnPlayerInit(BasePlayer player)
@@ -358,7 +359,7 @@ namespace Oxide.Plugins
         }
 		private object repairStructure(BaseCombatEntity entity, BasePlayer player)
 		{
-			if (entity.TimeSinceAttacked() <= (int)Config["nTimeSinceAttacked"])
+			if (entity.SecondsSinceAttacked <= (int)Config["nTimeSinceAttacked"])
 				return null;
 			if (!(bool)Config["bChargeForRepairs"])
 			{

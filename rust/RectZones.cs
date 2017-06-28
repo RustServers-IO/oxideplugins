@@ -11,7 +11,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("RectZones", "deer_SWAG", "0.0.25", ResourceId = 000)]
+	[Info("RectZones", "deer_SWAG", "0.0.26", ResourceId = 2029)]
 	[Description("Creates polygonal zones")]
 	public class RectZones : RustPlugin
 	{
@@ -828,7 +828,7 @@ namespace Oxide.Plugins
 			return true;
 		}
 
-		bool IsPlayerPermitted(BasePlayer player, string permissionName) => (player.IsAdmin() || permission.UserHasPermission(player.UserIDString, permissionName));
+		bool IsPlayerPermitted(BasePlayer player, string permissionName) => (player.IsAdmin || permission.UserHasPermission(player.UserIDString, permissionName));
 
 		// --------------------------- HELPERS -----------------------------
 		// -----------------------------------------------------------------
@@ -1073,20 +1073,18 @@ namespace Oxide.Plugins
 
 						if(batch != null)
 						{
-							FieldInfo info = batch.GetType().GetField("instances", BindingFlags.NonPublic | BindingFlags.Instance);
-							var batchColliders = (ListDictionary<Component, ColliderCombineInstance>)info.GetValue(batch);
-
-							List<ColliderCombineInstance> batchCollidersList = batchColliders.Values;
-
-							for(int i = 0; i < batchCollidersList.Count; i++)
-							{
-								ColliderCombineInstance instance = batchCollidersList[i];
-
-								if(this.collider.bounds.Intersects(instance.bounds.ToBounds()))
-								{
-									instance.collider.GetComponentInParent<BaseCombatEntity>()?.Kill(BaseNetworkable.DestroyMode.Gib);
-								}
-							}
+							/* Disabled for now, needs to be fixed
+                             * FieldInfo info = batch.GetType().GetField("instances", BindingFlags.NonPublic | BindingFlags.Instance);
+                             * var batchColliders = (ListDictionary<Component, ColliderCombineInstance>)info.GetValue(batch);
+                             * 
+                             * List<ColliderCombineInstance> batchCollidersList = batchColliders.Values;
+                             * for(int i = 0; i < batchCollidersList.Count; i++)
+                             * {
+                             *     ColliderCombineInstance instance = batchCollidersList[i];
+                             *     if(this.collider.bounds.Intersects(instance.bounds.ToBounds()))
+                             *         instance.collider.GetComponentInParent<BaseCombatEntity>()?.Kill(BaseNetworkable.DestroyMode.Gib);
+                             * }
+                             */
 						}
 					}
 				}

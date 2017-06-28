@@ -1,4 +1,3 @@
-// Reference: RustBuild
 
 using System;
 using System.Collections.Generic;
@@ -8,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Prod", "Reneb", "2.2.8", ResourceId = 683)]
+    [Info("Prod", "Reneb", "2.2.9", ResourceId = 683)]
     class Prod : RustPlugin
     {
         private int prodAuth;
@@ -26,7 +25,6 @@ namespace Oxide.Plugins
         private FieldInfo serverinput;
         private FieldInfo codelockwhitelist;
         private FieldInfo codenum;
-        private FieldInfo npcnextTick;
         private FieldInfo meshinstances;
 
         private Vector3 eyesAdjust;
@@ -42,7 +40,6 @@ namespace Oxide.Plugins
             serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             codelockwhitelist = typeof(CodeLock).GetField("whitelistPlayers", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             codenum = typeof(CodeLock).GetField("code", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-            npcnextTick = typeof(NPCAI).GetField("nextTick", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             meshinstances = typeof(MeshColliderBatch).GetField("instances", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
         }
 
@@ -277,23 +274,23 @@ namespace Oxide.Plugins
         }
         private void Dump(BaseEntity col)
         {
-            Debug.Log(col.GetComponent<StabilityEntity>().ToString());
-            Debug.Log("==================================================");
-            Debug.Log(col + " " + LayerMask.LayerToName(col.gameObject.layer));
-            Debug.Log("========= NORMAL ===========");
+            Puts(col.GetComponent<StabilityEntity>().ToString());
+            Puts("==================================================");
+            Puts(col + " " + LayerMask.LayerToName(col.gameObject.layer));
+            Puts("========= NORMAL ===========");
             foreach (Component com in col.GetComponents(typeof(Component)))
             {
-                Debug.Log(com.GetType() + " " + com);
+                Puts(com.GetType() + " " + com);
             }
-            Debug.Log("========= PARENT ===========");
+            Puts("========= PARENT ===========");
             foreach (Component com in col.GetComponentsInParent(typeof(Component)))
             {
-                Debug.Log(com.GetType() + " " + com);
+                Puts(com.GetType() + " " + com);
             }
-            Debug.Log("========= CHILDREN ===========");
+            Puts("========= CHILDREN ===========");
             foreach (Component com in col.GetComponentsInChildren(typeof(Component)))
             {
-                Debug.Log(com.GetType() + " " + com);
+                Puts(com.GetType() + " " + com);
             }
         }
         private BaseEntity DoRay(Vector3 Pos, Vector3 Aim)

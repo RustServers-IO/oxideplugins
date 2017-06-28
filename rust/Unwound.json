@@ -2,7 +2,7 @@
     "name": "Unwound",
     "description": "The sky presents the newest technology in calling the MEDIC!",
     "author": "Wulf",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "configuration": true,
     "suggest": {
         "Economics": "*",

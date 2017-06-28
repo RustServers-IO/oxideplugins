@@ -1,27 +1,14 @@
-﻿using System.Collections.Generic;
-using System.Collections;
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
-using System.Reflection;
-
 using Oxide.Core;
-using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
-using Oxide.Core.Configuration;
-using Oxide.Core.Logging;
 using Rust;
-using ProtoBuf;
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System.Reflection;
-
-using Oxide.Core.Libraries.Covalence;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("CraftUI", "EinTime", "1.2.1")]
+    [Info("CraftUI", "EinTime", "1.2.3", ResourceId = 2273)]
     [Description("A fully customizable custom crafting UI, which allows admins to change item ingredients.")]
     class CraftUI : RustPlugin
     {
@@ -181,16 +168,16 @@ namespace Oxide.Plugins
             displaynameToShortname.Clear();
             originalCraftTimes.Clear();
             originalIngredients.Clear();
-            foreach(var itemdef in ItemManager.itemList)
+            foreach (var itemdef in ItemManager.itemList)
             {
-                if(itemdef)
+                if (itemdef)
                 {
                     displaynameToShortname.Add(itemdef.displayName.english.ToLower(), itemdef.shortname);
-                    if(itemdef.Blueprint)
+                    if (itemdef.Blueprint)
                     {
                         originalCraftTimes.Add(itemdef.itemid, itemdef.Blueprint.time);
                         List<ItemIngredient> ingredients = new List<ItemIngredient>();
-                        foreach(var ingredient in itemdef.Blueprint.ingredients)
+                        foreach (var ingredient in itemdef.Blueprint.ingredients)
                         {
                             ingredients.Add(new ItemIngredient(ingredient.itemid, ingredient.amount));
                         }
@@ -207,7 +194,7 @@ namespace Oxide.Plugins
                 RefreshCraftQueue();
             });
 
-            foreach(BasePlayer player in BasePlayer.activePlayerList)
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
                 AddPlayer(player);
             }
@@ -220,7 +207,7 @@ namespace Oxide.Plugins
             CloseCraftUI_AllPlayers();
             CloseOverlay_AllPlayers();
             SaveItemInfoDic();
-            foreach(var kvp in playerDic)
+            foreach (var kvp in playerDic)
             {
                 ResetBinding(kvp.Value.basePlayer);
             }
@@ -253,15 +240,15 @@ namespace Oxide.Plugins
         {
             PlayerInfo playerInfo = GetPlayer(crafter);
 
-            if(AllowOldCrafting)
+            if (AllowOldCrafting)
             {
                 RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
                 RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
                 return null;
             }
-            if(!customItemCrafts.Contains(task.taskUID))
+            if (!customItemCrafts.Contains(task.taskUID))
             {
-                foreach(var ingredient in task.blueprint.ingredients)
+                foreach (var ingredient in task.blueprint.ingredients)
                 {
                     crafter.inventory.GiveItem(ItemManager.CreateByItemID(ingredient.itemid, (int)ingredient.amount * task.amount, 0));
                 }
@@ -282,10 +269,10 @@ namespace Oxide.Plugins
         void OnItemCraftCancelled(ItemCraftTask task)
         {
 
-            if(task.owner == null) return;
+            if (task.owner == null) return;
             PlayerInfo playerInfo = GetPlayer(task.owner);
-            if(playerInfo == null) return;
-            if(!playerInfo.uiOpen) return;
+            if (playerInfo == null) return;
+            if (!playerInfo.uiOpen) return;
 
             RenderHudPanelDelayed(refreshTime, CraftQueueName, playerInfo);
             RenderHudPanelDelayed(refreshTime, CraftQueueTimerName, playerInfo);
@@ -296,17 +283,17 @@ namespace Oxide.Plugins
         {
             PlayerInfo playerInfo = GetPlayer(player);
             StorageContainer storage = entity as StorageContainer;
-            if(storage == null) return;
+            if (storage == null) return;
             float columns = Mathf.Max(1, Mathf.CeilToInt((float)storage.inventorySlots / 6f));
-            if(storage is BaseOven)
+            if (storage is BaseOven)
                 columns += 1.5f;
-            else if(storage is RepairBench)
+            else if (storage is RepairBench)
                 columns += 1;
-            else if(storage is LiquidContainer)
+            else if (storage is LiquidContainer)
                 columns += 3.5f;
-            else if(storage is SupplyDrop)
+            else if (storage is SupplyDrop)
                 columns += 2f;
-            else if(storage is LootContainer)
+            else if (storage is LootContainer)
                 columns += 2f;
 
             RenderOverlay(playerInfo, true, columns);
@@ -314,9 +301,9 @@ namespace Oxide.Plugins
 
         void RefreshCraftQueue()
         {
-            foreach(var kvp in playerDic)
+            foreach (var kvp in playerDic)
             {
-                if(kvp.Value.uiOpen)
+                if (kvp.Value.uiOpen)
                 {
                     RenderHudPanel(CraftQueueTimerName, kvp.Value);
                 }
@@ -330,7 +317,7 @@ namespace Oxide.Plugins
 
             AllowOldCrafting = GetConfigValue("_Settings", "Allow Old Crafting", AllowOldCrafting);
             var tempBinding = GetConfigValue("_Settings", "Open CraftUI Binding", OpenCraftUIBinding);
-            if(defaultBinds.ContainsKey(tempBinding))
+            if (defaultBinds.ContainsKey(tempBinding))
                 OpenCraftUIBinding = tempBinding;
             CategoryNames = GetConfigValue("_Settings", "Category Names", CategoryNames);
             IncludeUncraftableItems = GetConfigValue("_Settings", "Include Uncraftable Items", IncludeUncraftableItems);
@@ -340,7 +327,7 @@ namespace Oxide.Plugins
         T GetConfigValue<T>(string category, string name, T defaultValue)
         {
             var catDic = GetConfigCategory(category);
-            if(!catDic.ContainsKey(name))
+            if (!catDic.ContainsKey(name))
             {
                 catDic.Add(name, defaultValue);
                 SaveConfig();
@@ -352,7 +339,7 @@ namespace Oxide.Plugins
         {
             var catDic = GetConfigCategory(category);
             object value = null;
-            if(!catDic.TryGetValue(name, out value))
+            if (!catDic.TryGetValue(name, out value))
             {
                 catDic[name] = defaultValue;
                 Config[category] = catDic;
@@ -361,7 +348,7 @@ namespace Oxide.Plugins
             }
             List<object> objectList = value as List<object>;
             List<T> ret = new List<T>();
-            foreach(object o in objectList)
+            foreach (object o in objectList)
             {
                 ret.Add((T)o);
             }
@@ -370,7 +357,7 @@ namespace Oxide.Plugins
         Dictionary<string, object> GetConfigCategory(string category)
         {
             var catDic = Config[category] as Dictionary<string, object>;
-            if(catDic == null)
+            if (catDic == null)
             {
                 catDic = new Dictionary<string, object>();
                 Config[category] = catDic;
@@ -424,18 +411,18 @@ namespace Oxide.Plugins
             {
                 CraftInfo info = new CraftInfo();
 
-                if(selectedItem == null || selectedItem.itemID == 0)
+                if (selectedItem == null || selectedItem.itemID == 0)
                 {
                     info.canCraft = false;
                     return info;
                 }
 
-                foreach(ItemIngredient ingredient in selectedItem.ingredients)
+                foreach (ItemIngredient ingredient in selectedItem.ingredients)
                 {
                     float amountValue = ingredient.amount;
                     float haveValue = basePlayer.inventory.GetAmount(ingredient.ingredientID);
                     float totalValue = ingredient.amount * currentCraftAmount;
-                    if(haveValue < totalValue)
+                    if (haveValue < totalValue)
                         info.canCraft = false;
 
 
@@ -456,7 +443,7 @@ namespace Oxide.Plugins
         /// </summary>
         bool AddPlayer(BasePlayer player)
         {
-            if(!playerDic.ContainsKey(player.userID))
+            if (!playerDic.ContainsKey(player.userID))
             {
                 PlayerInfo playerInfo = new PlayerInfo(player);
                 playerDic.Add(player.userID, playerInfo);
@@ -468,7 +455,7 @@ namespace Oxide.Plugins
         PlayerInfo GetPlayer(BasePlayer player)
         {
             PlayerInfo playerInfo = null;
-            if(!playerDic.TryGetValue(player.userID, out playerInfo))
+            if (!playerDic.TryGetValue(player.userID, out playerInfo))
             {
                 playerInfo = new PlayerInfo(player);
                 playerDic.Add(player.userID, playerInfo);
@@ -504,9 +491,9 @@ namespace Oxide.Plugins
                 blocked = false;
                 craftRate = 1;
                 ingredients = new List<ItemIngredient>();
-                if(itemDef.Blueprint != null && itemDef.Blueprint.ingredients != null)
+                if (itemDef.Blueprint != null && itemDef.Blueprint.ingredients != null)
                 {
-                    foreach(var ingredient in itemDef.Blueprint.ingredients)
+                    foreach (var ingredient in itemDef.Blueprint.ingredients)
                     {
                         ingredients.Add(new ItemIngredient(ingredient.itemid, ingredient.amount));
                     }
@@ -522,12 +509,12 @@ namespace Oxide.Plugins
             }
             public bool GetCraftable(PlayerInfo playerInfo)
             {
-                if(playerInfo == null)
+                if (playerInfo == null)
                     return false;
 
-                foreach(var ingredient in ingredients)
+                foreach (var ingredient in ingredients)
                 {
-                    if(playerInfo.basePlayer.inventory.GetAmount(ingredient.ingredientID) < ingredient.amount)
+                    if (playerInfo.basePlayer.inventory.GetAmount(ingredient.ingredientID) < ingredient.amount)
                         return false;
                 }
 
@@ -535,14 +522,14 @@ namespace Oxide.Plugins
             }
             public int GetCraftCount(PlayerInfo playerInfo)
             {
-                if(playerInfo == null)
+                if (playerInfo == null)
                     return -1;
 
                 int num = -1;
-                foreach(var ingredient in ingredients)
+                foreach (var ingredient in ingredients)
                 {
                     num = Mathf.FloorToInt((float)playerInfo.basePlayer.inventory.GetAmount(ingredient.ingredientID) / ingredient.amount);
-                    if(num <= 0)
+                    if (num <= 0)
                         return -1;
                 }
                 return num;
@@ -555,7 +542,7 @@ namespace Oxide.Plugins
             public static ItemInfo FromObject(object obj)
             {
                 Dictionary<string, object> dic = obj as Dictionary<string, object>;
-                if(dic == null)
+                if (dic == null)
                     return null;
 
                 ItemInfo itemInfo = new ItemInfo();
@@ -570,10 +557,10 @@ namespace Oxide.Plugins
 
                 itemInfo.ingredients = new List<ItemIngredient>();
                 List<object> ingredientList = dic[nameof(ingredients)] as List<object>;
-                foreach(var iObj in ingredientList)
+                foreach (var iObj in ingredientList)
                 {
                     ItemIngredient ingredient = ItemIngredient.FromObject(iObj);
-                    if(ingredient != null)
+                    if (ingredient != null)
                         itemInfo.ingredients.Add(ingredient);
                 }
 
@@ -611,7 +598,7 @@ namespace Oxide.Plugins
             public static ItemIngredient FromObject(object obj)
             {
                 Dictionary<string, object> dic = obj as Dictionary<string, object>;
-                if(dic == null)
+                if (dic == null)
                     return null;
 
                 ItemIngredient ingredient = new ItemIngredient();
@@ -630,16 +617,16 @@ namespace Oxide.Plugins
 
         bool CanAddItemInfo(ItemDefinition itemDef)
         {
-            if(itemDef == null || itemDef.displayName == null)
+            if (itemDef == null || itemDef.displayName == null)
                 return false;
-            if(itemInfoDic.ContainsKey(itemDef.itemid))
+            if (itemInfoDic.ContainsKey(itemDef.itemid))
                 return false;
 
             return true;
         }
         void AddItemInfo(ItemDefinition itemDef, bool forceAdd = false)
         {
-            if(forceAdd || CanAddItemInfo(itemDef))
+            if (forceAdd || CanAddItemInfo(itemDef))
                 itemInfoDic.Add(itemDef.itemid, new ItemInfo(itemDef));
         }
         void SaveItemInfoDic()
@@ -650,17 +637,17 @@ namespace Oxide.Plugins
         void LoadItemInfoDic()
         {
             var objList = Config[ItemInfoListName] as List<object>;
-            if(objList == null)
+            if (objList == null)
             {
                 objList = new List<object>();
                 Config[ItemInfoListName] = objList;
                 SaveConfig();
             }
             itemInfoDic = new Dictionary<int, ItemInfo>();
-            foreach(var obj in objList)
+            foreach (var obj in objList)
             {
                 ItemInfo itemInfo = ItemInfo.FromObject(obj);
-                if(itemInfo == null) continue;
+                if (itemInfo == null) continue;
 
                 itemInfoDic.Add(itemInfo.itemID, itemInfo);
             }
@@ -669,96 +656,96 @@ namespace Oxide.Plugins
         }
         void VerifyItemInfoDic()
         {
-            if(ItemManager.itemList == null)
+            if (ItemManager.itemList == null)
             {
                 PrintError("ItemManager item list is null at a crucial stage of initilization. Cannot populate ItemInfoDic");
                 return;
             }
-            if(itemInfoDic == null)
+            if (itemInfoDic == null)
                 PrintError("Item Info Dic is Null");
 
             bool changeMade = false;
 
             List<ItemInfo> values = new List<ItemInfo>(itemInfoDic.Values);
             List<int> toRemove = new List<int>();
-            foreach(ItemInfo value in values)
+            foreach (ItemInfo value in values)
             {
                 ItemDefinition itemDef = ItemManager.FindItemDefinition(value.itemID);
-                if(itemDef == null)
+                if (itemDef == null)
                 {
                     toRemove.Add(value.itemID);
                     continue;
                 }
 
-                if(value.realName != itemDef.displayName.english)
+                if (value.realName != itemDef.displayName.english)
                 {
                     value.realName = itemDef.displayName.english;
                     changeMade = true;
                 }
-                if(value.category == null)
+                if (value.category == null)
                 {
                     value.category = itemDef.category.ToString();
                     changeMade = true;
                 }
-                if(value.iconURL == "")
+                if (value.iconURL == "")
                 {
                     value.iconURL = GetItemIconURL(value.itemID);
                     changeMade = true;
                 }
 
-                if(value.ingredients == null)
+                if (value.ingredients == null)
                     value.ingredients = new List<ItemIngredient>();
                 List<int> ingredientIndicesToRemove = new List<int>();
-                for(int i = 0; i < value.ingredients.Count; i++)
+                for (int i = 0; i < value.ingredients.Count; i++)
                 {
                     ItemDefinition ingredientDef = ItemManager.FindItemDefinition(value.ingredients[i].ingredientID);
-                    if(ingredientDef == null)
+                    if (ingredientDef == null)
                         ingredientIndicesToRemove.Add(i);
-                    else if(value.ingredients[i].realName != ingredientDef.displayName.english)
+                    else if (value.ingredients[i].realName != ingredientDef.displayName.english)
                     {
                         value.ingredients[i].realName = ingredientDef.displayName.english;
                         changeMade = true;
                     }
                 }
 
-                foreach(int index in ingredientIndicesToRemove)
+                foreach (int index in ingredientIndicesToRemove)
                 {
                     value.ingredients.RemoveAt(index);
                     changeMade = true;
                 }
             }
 
-            foreach(int id in toRemove)
+            foreach (int id in toRemove)
             {
                 itemInfoDic.Remove(id);
                 changeMade = true;
             }
 
-            foreach(var item in ItemManager.bpList)
+            foreach (var item in ItemManager.bpList)
             {
-                if(CanAddItemInfo(item.targetItem))
+                if (CanAddItemInfo(item.targetItem))
                 {
                     AddItemInfo(item.targetItem, true);
                     changeMade = true;
                 }
             }
-            foreach(var item in ItemManager.itemList)
+            foreach (var item in ItemManager.itemList)
             {
-                if(CanAddItemInfo(item))
+                if (CanAddItemInfo(item))
                 {
                     AddItemInfo(item, true);
                     changeMade = true;
                 }
             }
 
-            if(changeMade)
+            if (changeMade)
                 SaveItemInfoDic();
         }
         void CreateMissingBlueprints()
         {
-            foreach(ItemDefinition itemDef in ItemManager.itemList)
+            foreach (ItemDefinition itemDef in ItemManager.itemList)
             {
-                if(itemDef == null || itemDef.Blueprint != null)
+                if (itemDef == null || itemDef.Blueprint != null)
                     continue;
 
                 CreateMissingBlueprint(itemDef);
@@ -766,7 +753,7 @@ namespace Oxide.Plugins
         }
         ItemBlueprint CreateMissingBlueprint(ItemDefinition itemDef)
         {
-            if(itemDef.Blueprint != null)
+            if (itemDef.Blueprint != null)
                 return itemDef.Blueprint;
 
             ItemBlueprint bp = itemDef.gameObject.AddComponent<ItemBlueprint>();
@@ -799,24 +786,24 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.add")]
         void AddIngredient_ChatCommands(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 3, command, AddRemoveFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 3, command, AddRemoveFormat)) return;
 
             int ingredientAmount;
-            if(!int.TryParse(args[0], out ingredientAmount))
+            if (!int.TryParse(args[0], out ingredientAmount))
             {
                 PlayerChat(player, Invalid, args[0], "ingredient amount");
                 return;
             }
 
             ItemDefinition ingredientDef = DisplayNameToItemDef(player, args[1]);
-            if(ingredientDef == null) return;
+            if (ingredientDef == null) return;
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[2]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo itemInfo = FindItemInfo(itemDef);
-            if(itemInfo == null) return;
+            if (itemInfo == null) return;
 
-            if(itemInfo.ingredients.Any(x => x.ingredientID == ingredientDef.itemid))
+            if (itemInfo.ingredients.Any(x => x.ingredientID == ingredientDef.itemid))
             {
                 itemInfo.ingredients.First(x => x.ingredientID == ingredientDef.itemid).amount += ingredientAmount;
             }
@@ -829,31 +816,31 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.remove")]
         void RemoveIngredient_ChatCommands(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 3, command, AddRemoveFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 3, command, AddRemoveFormat)) return;
 
             int ingredientAmount;
-            if(!int.TryParse(args[0], out ingredientAmount))
+            if (!int.TryParse(args[0], out ingredientAmount))
             {
                 PlayerChat(player, Invalid, args[0], "ingredient amount");
                 return;
             }
 
             ItemDefinition ingredientDef = DisplayNameToItemDef(player, args[1]);
-            if(ingredientDef == null) return;
+            if (ingredientDef == null) return;
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[2]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo itemInfo = FindItemInfo(itemDef);
-            if(itemInfo == null) return;
+            if (itemInfo == null) return;
 
-            if(!itemInfo.ingredients.Any(x => x.ingredientID == ingredientDef.itemid))
+            if (!itemInfo.ingredients.Any(x => x.ingredientID == ingredientDef.itemid))
             {
                 PlayerChat(player, DoesNotContainIngredient, itemDef.displayName.english, ingredientDef.displayName.english);
                 return;
             }
 
             ItemIngredient ingredient = itemInfo.ingredients.First(x => x.ingredientID == ingredientDef.itemid);
-            if(ingredientAmount < ingredient.amount)
+            if (ingredientAmount < ingredient.amount)
             {
                 ingredient.amount -= ingredientAmount;
                 PlayerChat(player, RemovedIngredient, ingredientAmount, ingredientDef.displayName.english, itemDef.displayName.english);
@@ -869,22 +856,22 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.ingredients")]
         void IngredientsList_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo info = FindItemInfo(itemDef);
-            if(info == null) return;
+            if (info == null) return;
 
-            if(info.ingredients.Count == 0)
+            if (info.ingredients.Count == 0)
             {
                 PlayerChat(player, HasNoIngredients, itemDef.displayName.english);
             }
             else
             {
                 PlayerChat(player, IngredientsList, itemDef.displayName.english);
-                foreach(ItemIngredient ingredient in info.ingredients)
+                foreach (ItemIngredient ingredient in info.ingredients)
                 {
                     SendReply(player, ingredient.amount + " " + ingredient.GetItemDef().displayName.english);
                 }
@@ -893,13 +880,13 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.clearingredients")]
         void ClearIngredients_ChatCommands(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo itemInfo = FindItemInfo(itemDef);
-            if(itemInfo == null) return;
+            if (itemInfo == null) return;
 
             itemInfo.ingredients.Clear();
 
@@ -909,15 +896,15 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.resetingredients")]
         void ResetIngredients_ChatCommands(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemBlueprint bp = itemDef.Blueprint;
-            if(bp == null) return;
+            if (bp == null) return;
             ItemInfo itemInfo = FindItemInfo(itemDef);
-            if(itemInfo == null) return;
+            if (itemInfo == null) return;
 
             itemInfo.ingredients = new List<ItemIngredient>(originalIngredients[itemInfo.itemID]);
 
@@ -928,16 +915,16 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.craftrate")]
         void CraftRate_ChatCommands(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 2, command, CraftrateFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 2, command, CraftrateFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo itemInfo = FindItemInfo(itemDef);
-            if(itemInfo == null) return;
+            if (itemInfo == null) return;
 
             float rate = 0;
-            if(!float.TryParse(args[1], out rate))
+            if (!float.TryParse(args[1], out rate))
             {
                 PlayerChat(player, Invalid, args[1], "crafting rate");
                 return;
@@ -961,17 +948,17 @@ namespace Oxide.Plugins
         }
         void BlockItem(BasePlayer player, string command, string[] args, bool block)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 1, command, IngredientsFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo info = FindItemInfo(itemDef);
-            if(info == null) return;
+            if (info == null) return;
 
             info.blocked = block;
 
-            if(block)
+            if (block)
             {
                 PlayerChat(player, ItemBlocked, itemDef.displayName.english);
                 Puts("Player '" + player.displayName + "' blocked item " + itemDef.displayName.english);
@@ -985,9 +972,9 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.blockall")]
         void BlockAll(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
+            if (!AdminCheck(player)) return;
 
-            foreach(var kvp in itemInfoDic)
+            foreach (var kvp in itemInfoDic)
             {
                 kvp.Value.blocked = true;
             }
@@ -998,9 +985,9 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.unblockall")]
         void UnblockAll(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
+            if (!AdminCheck(player)) return;
 
-            foreach(var kvp in itemInfoDic)
+            foreach (var kvp in itemInfoDic)
             {
                 kvp.Value.blocked = false;
             }
@@ -1012,8 +999,8 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.rename")]
         void Rename_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 2, command, RenameFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 2, command, RenameFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
             if (itemDef == null) return;
@@ -1028,13 +1015,13 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.description")]
         void ChangeDrescription_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 2, command, ChangeDescriptionFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 2, command, ChangeDescriptionFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo itemInfo = FindItemInfo(itemDef);
-            if(itemInfo == null) return;
+            if (itemInfo == null) return;
 
             itemInfo.customDescription = args[1];
 
@@ -1045,23 +1032,23 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.category")]
         void Category_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 2, command, CategoryFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 2, command, CategoryFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemInfo itemInfo = FindItemInfo(itemDef);
-            if(itemInfo == null) return;
+            if (itemInfo == null) return;
             string category = "";
-            foreach(var cat in CategoryNames)
+            foreach (var cat in CategoryNames)
             {
-                if(cat.ToLower() == args[1].ToLower())
+                if (cat.ToLower() == args[1].ToLower())
                 {
                     category = cat;
                     break;
                 }
             }
-            if(category == "")
+            if (category == "")
             {
                 PlayerChat(player, Invalid, "Category Name");
                 return;
@@ -1074,8 +1061,8 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.seticon")]
         void SetIcon_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
-            if(!ArgsCheck(player, args, 2, command, IconFormat)) return;
+            if (!AdminCheck(player)) return;
+            if (!ArgsCheck(player, args, 2, command, IconFormat)) return;
 
             ItemDefinition itemDef = DisplayNameToItemDef(player, args[0]);
             if (itemDef == null) return;
@@ -1090,7 +1077,7 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.load")]
         void Load_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
+            if (!AdminCheck(player)) return;
 
             LoadItemInfoDic();
             PlayerChat(player, ItemListLoaded);
@@ -1098,7 +1085,7 @@ namespace Oxide.Plugins
         [ChatCommand("craftui.save")]
         void Save_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
+            if (!AdminCheck(player)) return;
 
             SaveItemInfoDic();
             PlayerChat(player, ItemListSaved);
@@ -1106,14 +1093,14 @@ namespace Oxide.Plugins
         [ChatCommand("craftui")]
         void CraftUI_ChatCommand(BasePlayer player, string command, string[] args)
         {
-            if(!AdminCheck(player)) return;
+            if (!AdminCheck(player)) return;
             ShowHelpMessage(player);
         }
         void ShowHelpMessage(BasePlayer player)
         {
-            if(!AdminCheck(player)) return;
+            if (!AdminCheck(player)) return;
 
-            for(int i = 0; i < 14; i++)
+            for (int i = 0; i < 14; i++)
             {
                 PlayerChat(player, "HelpLine" + (i + 1).ToString());
             }
@@ -1121,7 +1108,7 @@ namespace Oxide.Plugins
 
         bool AdminCheck(BasePlayer player)
         {
-            if(!player.IsAdmin())
+            if (!player.IsAdmin)
             {
                 PlayerChat(player, NotAdmin);
                 return false;
@@ -1130,12 +1117,12 @@ namespace Oxide.Plugins
         }
         bool ArgsCheck(BasePlayer player, string[] args, int minLength, string command, string formatKey)
         {
-            if(args == null || args.Length == 0 || args[0].ToLower() == "help")
+            if (args == null || args.Length == 0 || args[0].ToLower() == "help")
             {
                 PlayerChat(player, FormatHelp, command, Lang(formatKey, player.UserIDString));
                 return false;
             }
-            if(args.Length < minLength)
+            if (args.Length < minLength)
             {
                 PlayerChat(player, InvalidFormat, command, Lang(formatKey, player.UserIDString));
                 return false;
@@ -1301,7 +1288,7 @@ namespace Oxide.Plugins
                 PlayerChat(playerInfo.basePlayer, UnknownError);
                 return;
             }
-            
+
             if (!playerInfo.uiOpen)
                 return;
 
@@ -1315,8 +1302,8 @@ namespace Oxide.Plugins
                 RectTransform = { AnchorMin = panelRect.AnchorMin, AnchorMax = panelRect.AnchorMax },
                 CursorEnabled = true
             }, "Hud", panelName);
-            
-            switch(panelName)
+
+            switch (panelName)
             {
                 case CategoriesName:
                     RenderCategories(elements, playerInfo);
@@ -1356,10 +1343,10 @@ namespace Oxide.Plugins
         }
         void RenderCategories(CuiElementContainer elements, PlayerInfo playerInfo)
         {
-            
+
             List<string> itemCategories = new List<string>(CategoryNames);
             itemCategories.Reverse();
-            
+
             for (int i = 0; i < itemCategories.Count; i++)
             {
                 bool selected = playerInfo.selectedCategory == itemCategories[i];
@@ -1376,7 +1363,7 @@ namespace Oxide.Plugins
             string backgroundColor = selected ? "0 0.5 0.9 0.8" : "0.35 0.35 0.35 0.8";
 
             string cName = name;
-            if(CategoryShortNames.ContainsKey(cName))
+            if (CategoryShortNames.ContainsKey(cName))
                 cName = CategoryShortNames[cName];
 
             PanelRect rect = new PanelRect(0, bottom, 1, top);
@@ -1391,7 +1378,7 @@ namespace Oxide.Plugins
                 Text = { Text = cName.ToUpper(), FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "0.8 0.8 0.8 1" }
             }, CategoriesName);
         }
-        
+
         void RenderItemList(CuiElementContainer elements, PlayerInfo playerInfo)
         {
             if (playerInfo == null || itemInfoDic == null)
@@ -1399,14 +1386,14 @@ namespace Oxide.Plugins
 
             List<ItemInfo> craftableItems = new List<ItemInfo>();
             List<ItemInfo> uncraftableItems = new List<ItemInfo>();
-            foreach(var itemInfo in itemInfoDic.Values)
+            foreach (var itemInfo in itemInfoDic.Values)
             {
                 if (itemInfo == null) continue;
-                if(itemInfo.category != playerInfo.selectedCategory) continue;
+                if (itemInfo.category != playerInfo.selectedCategory) continue;
                 if (itemInfo.blocked) continue;
                 ItemDefinition itemDef = itemInfo.GetItemDef();
                 if (itemDef == null) continue;
-                if(!IncludeUncraftableItems && !itemDef.Blueprint.userCraftable)
+                if (!IncludeUncraftableItems && !itemDef.Blueprint.userCraftable)
                     continue;
 
                 if (itemInfo.GetCraftable(playerInfo))
@@ -1414,27 +1401,27 @@ namespace Oxide.Plugins
                 else
                     uncraftableItems.Add(itemInfo);
             }
-            
+
 
             float lowestBottom = 1f;
-            for(int i = 0; i < craftableItems.Count; i++)
+            for (int i = 0; i < craftableItems.Count; i++)
             {
-                if(craftableItems[i] == null)
+                if (craftableItems[i] == null)
                     continue;
 
                 float bottom = AddItem(elements, i, craftableItems[i], playerInfo, true);
                 if (bottom < lowestBottom)
                     lowestBottom = bottom;
             }
-            for(int i = 0; i < uncraftableItems.Count; i++)
+            for (int i = 0; i < uncraftableItems.Count; i++)
             {
-                if(uncraftableItems[i] == null)
+                if (uncraftableItems[i] == null)
                     continue;
 
                 AddItem(elements, i, uncraftableItems[i], playerInfo, false, lowestBottom);
             }
 
-            
+
         }
         float AddItem(CuiElementContainer elements, float index, ItemInfo itemInfo, PlayerInfo playerInfo, bool craftable, float startTop = 1)
         {
@@ -1479,7 +1466,7 @@ namespace Oxide.Plugins
                 PanelRect textRect = new PanelRect(-width / 2f, 1.05f, 1 + width / 2f, 1.35f).RelativeTo(rect);
                 elements.Add(new CuiButton
                 {
-                    Button = {Color = "0 0.6 1 1" },
+                    Button = { Color = "0 0.6 1 1" },
                     RectTransform = { AnchorMin = textRect.AnchorMin, AnchorMax = textRect.AnchorMax },
                     Text = { Text = itemInfo.customName, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1", FontSize = 16 }
                 }, ItemListName);
@@ -1513,7 +1500,7 @@ namespace Oxide.Plugins
                 Components =
                 {
                     new CuiTextComponent { Text = playerInfo.selectedItem.customName, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1", FontSize = 24 },
-                    new CuiRectTransformComponent { AnchorMin = textRect.AnchorMin, AnchorMax = textRect.AnchorMax }   
+                    new CuiRectTransformComponent { AnchorMin = textRect.AnchorMin, AnchorMax = textRect.AnchorMax }
                 }
             });
 
@@ -1548,7 +1535,7 @@ namespace Oxide.Plugins
             elements.Add(new CuiButton
             {
                 Button = { Color = "0.2 0.2 0.2 0.8" },
-                Text = { Text = (craftTime * playerInfo.selectedItem.craftRate).ToString("F0") + "s", Align = TextAnchor.MiddleCenter, Color = "1 1 1 1", FontSize = 16},
+                Text = { Text = (craftTime * playerInfo.selectedItem.craftRate).ToString("F0") + "s", Align = TextAnchor.MiddleCenter, Color = "1 1 1 1", FontSize = 16 },
                 RectTransform = { AnchorMin = craftTimeRect.AnchorMin, AnchorMax = craftTimeRect.AnchorMax }
             }, ItemInfoName);
 
@@ -1718,7 +1705,7 @@ namespace Oxide.Plugins
 
             }, CraftQueueName);
 
-            if(task.amount > 1)
+            if (task.amount > 1)
             {
                 PanelRect amountRect = new PanelRect(0.7f, 0f, 1f, 0.3f).RelativeTo(rect);
                 elements.Add(new CuiButton
@@ -1749,26 +1736,26 @@ namespace Oxide.Plugins
 
         void RenderOverlay(PlayerInfo playerInfo, bool looting, float lootColumns = 3)
         {
-            if(playerInfo == null)
+            if (playerInfo == null)
                 return;
 
             playerInfo.overlayOpen = true;
             playerInfo.overlayLooting = looting;
             playerInfo.overlayLootingColumns = lootColumns;
 
-            foreach(var panel in overlayAnchors)
+            foreach (var panel in overlayAnchors)
             {
-                if((looting && panel.Key == QuickCraftOverlayName) || (!looting && panel.Key == QuickCraftOverlayLootingName))
+                if ((looting && panel.Key == QuickCraftOverlayName) || (!looting && panel.Key == QuickCraftOverlayLootingName))
                     continue;
                 RenderOverlayPanel(panel.Key, playerInfo);
             }
         }
         void CloseOverlay(PlayerInfo playerInfo)
         {
-            if(playerInfo == null)
+            if (playerInfo == null)
                 return;
 
-            foreach(var kvp in overlayAnchors)
+            foreach (var kvp in overlayAnchors)
             {
                 CuiHelper.DestroyUi(playerInfo.basePlayer, kvp.Key);
             }
@@ -1776,38 +1763,38 @@ namespace Oxide.Plugins
         }
         void CloseOverlay_AllPlayers()
         {
-            if(BasePlayer.activePlayerList == null || BasePlayer.activePlayerList.Count == 0)
+            if (BasePlayer.activePlayerList == null || BasePlayer.activePlayerList.Count == 0)
                 return;
 
-            foreach(var p in BasePlayer.activePlayerList)
+            foreach (var p in BasePlayer.activePlayerList)
             {
                 PlayerInfo playerInfo = GetPlayer(p);
-                if(playerInfo != null)
+                if (playerInfo != null)
                     CloseOverlay(playerInfo);
             }
         }
 
         void RenderOverlayPanel(string panelName, PlayerInfo playerInfo)
         {
-            if(playerInfo == null || playerInfo.basePlayer == null)
+            if (playerInfo == null || playerInfo.basePlayer == null)
             {
                 PrintError("Render Overlay Panel called with a null PlayerInfo");
                 return;
             }
 
-            if(!overlayAnchors.ContainsKey(panelName))
+            if (!overlayAnchors.ContainsKey(panelName))
             {
                 PrintError("Cannot render overlay panel '" + panelName + "' for player '" + playerInfo.basePlayer.displayName + "'. It does not exist");
                 PlayerChat(playerInfo.basePlayer, UnknownError);
                 return;
             }
 
-            if(!playerInfo.overlayOpen)
+            if (!playerInfo.overlayOpen)
                 return;
 
-            
+
             PanelRect panelRect = overlayAnchors[panelName].rect;
-            if(panelName == QuickCraftOverlayLootingName)
+            if (panelName == QuickCraftOverlayLootingName)
                 panelRect = lootableOverlayAnchors[playerInfo.overlayLootingColumns];
 
             CuiHelper.DestroyUi(playerInfo.basePlayer, panelName);
@@ -1819,7 +1806,7 @@ namespace Oxide.Plugins
                 RectTransform = { AnchorMin = panelRect.AnchorMin, AnchorMax = panelRect.AnchorMax }
             }, "Overlay", panelName);
 
-            switch(panelName)
+            switch (panelName)
             {
                 case CraftingButtonOverlayName:
                     RenderCraftingButtonBlocker(elements, playerInfo);
@@ -1834,7 +1821,7 @@ namespace Oxide.Plugins
         }
         void RenderCraftingButtonBlocker(CuiElementContainer elements, PlayerInfo playerInfo)
         {
-            if(playerInfo == null)
+            if (playerInfo == null)
                 return;
 
             elements.Add(new CuiButton
@@ -1846,21 +1833,21 @@ namespace Oxide.Plugins
         }
         void RenderQuickCraft(CuiElementContainer elements, PlayerInfo playerInfo)
         {
-            if(playerInfo == null || itemInfoDic == null)
+            if (playerInfo == null || itemInfoDic == null)
                 return;
 
             List<ItemInfo> craftableItems = new List<ItemInfo>();
-            foreach(var itemInfo in itemInfoDic.Values)
+            foreach (var itemInfo in itemInfoDic.Values)
             {
-                if(itemInfo == null) continue;
-                if(!CategoryNames.Contains(itemInfo.category)) continue;
-                if(itemInfo.blocked) continue;
+                if (itemInfo == null) continue;
+                if (!CategoryNames.Contains(itemInfo.category)) continue;
+                if (itemInfo.blocked) continue;
                 ItemDefinition itemDef = itemInfo.GetItemDef();
-                if(itemDef == null) continue;
-                if(!IncludeUncraftableItems && !itemDef.Blueprint.userCraftable)
+                if (itemDef == null) continue;
+                if (!IncludeUncraftableItems && !itemDef.Blueprint.userCraftable)
                     continue;
-                
-                if(itemInfo.GetCraftable(playerInfo))
+
+                if (itemInfo.GetCraftable(playerInfo))
                     craftableItems.Add(itemInfo);
             }
 
@@ -1868,15 +1855,15 @@ namespace Oxide.Plugins
 
             string parentName = playerInfo.overlayLooting ? QuickCraftOverlayLootingName : QuickCraftOverlayName;
 
-            for(int i = 0; i < craftableItems.Count; i++)
+            for (int i = 0; i < craftableItems.Count; i++)
             {
                 AddQuickCraftItem(elements, i, craftableItems[i], playerInfo, parentName);
             }
 
             elements.Add(new CuiLabel
             {
-                RectTransform = { AnchorMin = "0 0.8", AnchorMax = "1 0.97"},
-                Text = {Text = "QUICK CRAFT", Align = TextAnchor.MiddleLeft, Color = "1 1 1 1", FontSize = 20}
+                RectTransform = { AnchorMin = "0 0.8", AnchorMax = "1 0.97" },
+                Text = { Text = "QUICK CRAFT", Align = TextAnchor.MiddleLeft, Color = "1 1 1 1", FontSize = 20 }
             }, parentName);
         }
         float AddQuickCraftItem(CuiElementContainer elements, float index, ItemInfo itemInfo, PlayerInfo playerInfo, string parentName)
@@ -1928,7 +1915,7 @@ namespace Oxide.Plugins
                 Text = { Text = "", FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "0 0 0 0" },//, Color = "0.8 0.8 0.8 1" }
             }, parentName);
 
-            
+
             return bottom;
         }
         #endregion
@@ -1940,7 +1927,7 @@ namespace Oxide.Plugins
             BasePlayer player = arg.Player();
             PlayerInfo playerInfo = GetPlayer(player);
 
-            if(!playerInfo.overlayOpen)
+            if (!playerInfo.overlayOpen)
                 RenderOverlay(playerInfo, false);
             else
                 CloseOverlay(playerInfo);
@@ -1990,8 +1977,8 @@ namespace Oxide.Plugins
             PlayerInfo playerInfo = GetPlayer(player);
             if (playerInfo == null) return;
 
-            var categoryName = arg.ArgsStr;
-            
+            var categoryName = arg.FullString;
+
             playerInfo.selectedCategory = categoryName;
 
             RenderHudPanel(CategoriesName, playerInfo);
@@ -2010,7 +1997,7 @@ namespace Oxide.Plugins
 
             ItemInfo itemInfo = FindItemInfo(itemID);
             if (itemInfo == null) return;
-            
+
             playerInfo.selectedItem = itemInfo;
 
             RenderHudPanel(ItemListName, playerInfo);
@@ -2049,7 +2036,7 @@ namespace Oxide.Plugins
             if (itemInfo == null) return;
 
             int curMax = int.MaxValue;
-            foreach(var ingredient in itemInfo.ingredients)
+            foreach (var ingredient in itemInfo.ingredients)
             {
                 float haveValue = player.inventory.GetAmount(ingredient.ingredientID);
                 int possibleMax = ingredient.amount == 0 ? 999 : Mathf.FloorToInt(haveValue / ingredient.amount);
@@ -2075,23 +2062,23 @@ namespace Oxide.Plugins
             ItemInfo itemInfo = FindItemInfo(itemID);
             if (itemInfo == null) return;
             ItemDefinition itemDef = itemInfo.GetItemDef();
-            if(itemDef == null) return;
+            if (itemDef == null) return;
             ItemBlueprint bp = itemDef.Blueprint;
-            if(bp == null) return;
+            if (bp == null) return;
 
-            if(!itemInfo.GetCraftable(playerInfo))
+            if (!itemInfo.GetCraftable(playerInfo))
                 return;
 
             bp.ingredients.Clear();
-            foreach(var ingredient in itemInfo.ingredients)
+            foreach (var ingredient in itemInfo.ingredients)
             {
-                if(player.inventory.GetAmount(ingredient.ingredientID) < ingredient.amount)
+                if (player.inventory.GetAmount(ingredient.ingredientID) < ingredient.amount)
                     return;
                 bp.ingredients.Add(ingredient.GetItemAmount());
             }
 
             bp.time = originalCraftTimes[itemDef.itemid] * itemInfo.craftRate;
-            
+
             CraftItem(bp, player, playerInfo.currentCraftAmount, 0);
 
             playerInfo.currentCraftAmount = 1;
@@ -2113,9 +2100,9 @@ namespace Oxide.Plugins
 
             int taskID = arg.GetInt(0);
             ItemCraftTask task = null;
-            foreach(var t in player.inventory.crafting.queue)
+            foreach (var t in player.inventory.crafting.queue)
             {
-                if(t.taskUID == taskID)
+                if (t.taskUID == taskID)
                 {
                     task = t;
                     break;
@@ -2129,7 +2116,7 @@ namespace Oxide.Plugins
                 return;
             }
             ItemInfo itemInfo = FindItemInfo(task.blueprint.targetItem);
-            foreach(var ingredient in itemInfo.ingredients)
+            foreach (var ingredient in itemInfo.ingredients)
             {
                 player.inventory.GiveItem(ItemManager.CreateByItemID(ingredient.ingredientID, (int)ingredient.amount * task.amount, 0));
             }
@@ -2143,7 +2130,7 @@ namespace Oxide.Plugins
         #region Helper Functions
         Item BuildItem(int itemid, int amount, ulong skin)
         {
-            
+
             if (amount < 1) amount = 1;
             Item item = ItemManager.CreateByItemID(itemid, amount, skin);
             return item;
@@ -2176,9 +2163,9 @@ namespace Oxide.Plugins
             RenderHudPanelDelayed(refreshTime, ResourceCostName, playerInfo);
 
             owner.inventory.crafting.queue.Enqueue(itemCraftTask);
-            if(itemCraftTask.owner != null)
+            if (itemCraftTask.owner != null)
             {
-                if(!nullBlueprintSet.Contains(itemCraftTask.blueprint.targetItem.itemid))
+                if (!nullBlueprintSet.Contains(itemCraftTask.blueprint.targetItem.itemid))
                     itemCraftTask.owner.Command("note.craft_add", new object[] { itemCraftTask.taskUID, itemCraftTask.blueprint.targetItem.itemid, amount });
             }
             return true;
@@ -2257,7 +2244,7 @@ namespace Oxide.Plugins
 
             public UStopWatch(bool startNow = true)
             {
-                if(startNow)
+                if (startNow)
                     Start();
             }
 
@@ -2292,13 +2279,13 @@ namespace Oxide.Plugins
         {
             string url = string.Empty;
             idToURL.TryGetValue(itemID, out url);
-            if(url == "null" || url == null)
+            if (url == "null" || url == null)
                 url = "";
             return url;
         }
         readonly Dictionary<int, string> idToURL = new Dictionary<int, string>()
         {
-            { 2033918259, "http://vignette2.wikia.nocookie.net/play-rust/images/d/d4/Python_Revolver_icon.png/revision/latest/scale-to-width-down/{0}" },   
+            { 2033918259, "http://vignette2.wikia.nocookie.net/play-rust/images/d/d4/Python_Revolver_icon.png/revision/latest/scale-to-width-down/{0}" },
             { 3655341, "http://vignette4.wikia.nocookie.net/play-rust/images/f/f2/Wood_icon.png/revision/latest/scale-to-width-down/{0}" },
             { 547302405, "http://vignette3.wikia.nocookie.net/play-rust/images/f/f2/Water_Jug_icon.png/revision/latest/scale-to-width-down/{0}" },
             { 112903447, "http://vignette3.wikia.nocookie.net/play-rust/images/7/7f/Water_icon.png/revision/latest/scale-to-width-down/{0}" },

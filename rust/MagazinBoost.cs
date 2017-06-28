@@ -6,7 +6,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("MagazinBoost", "Fujikura", "1.6.0", ResourceId = 1962)]
+    [Info("MagazinBoost", "Fujikura", "1.6.1", ResourceId = 1962)]
     [Description("Can change magazines, ammo and conditon for most projectile weapons")]
     public class MagazinBoost : RustPlugin
     {	
@@ -211,7 +211,7 @@ namespace Oxide.Plugins
 		void OnServerInitialized()
         {
 			LoadVariables();
-			guidToPathCopy = (Dictionary<string, string>)_guidToPath.GetValue(GameManifest.Get());
+			guidToPathCopy = (Dictionary<string, string>)_guidToPath.GetValue(GameManifest.Current);
 			GetWeapons();
 			if (!permission.PermissionExists(permissionAll)) permission.RegisterPermission(permissionAll, this);
 			if (!permission.PermissionExists(permissionMaxAmmo)) permission.RegisterPermission(permissionMaxAmmo, this);

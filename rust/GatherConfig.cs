@@ -3,21 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
-
 using Rust;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherConfig", "Nogrod", "1.0.1")]
+    [Info("GatherConfig", "Nogrod", "1.0.2", ResourceId = 1569)]
     class GatherConfig : RustPlugin
     {
         private const int VersionConfig = 1;
         private ConfigData _config;
         private Dictionary<string, ItemDefinition> _itemsDict;
         private readonly Regex _findLoot = new Regex(@"(autospawn\/resource\/(beachside|forest|field|roadside|ores).*|\/(npc|player)\/.*_corpse)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
 
         private new void LoadDefaultConfig()
         {
@@ -42,7 +39,7 @@ namespace Oxide.Plugins
 
         private bool CreateDefaultConfig()
         {
-            var allPrefabs = GameManifest.Get().pooledStrings.ToList().ConvertAll(p => p.str);
+            var allPrefabs = GameManifest.Current.pooledStrings.ToList().ConvertAll(p => p.str);
             var prefabNames = allPrefabs.Where(p => _findLoot.IsMatch(p)).ToArray();
             Array.Sort(prefabNames);
             var prefabData = new Dictionary<string, ExportPrefabData>();
@@ -93,7 +90,7 @@ namespace Oxide.Plugins
         {
             if (!LoadConfig())
                 return;
-            var allPrefabs = GameManifest.Get().pooledStrings.ToList().ConvertAll(p => p.str);
+            var allPrefabs = GameManifest.Current.pooledStrings.ToList().ConvertAll(p => p.str);
             var prefabNames = allPrefabs.Where(p => _findLoot.IsMatch(p)).ToArray();
             //Puts(string.Join(Environment.NewLine, prefabNames));
             //Puts("Count: " + prefabNames.Length + " Config: " + _config.Prefabs.Count);

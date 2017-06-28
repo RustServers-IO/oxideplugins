@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FireArrows", "Colon Blow", "1.2.6")]
+    [Info("FireArrows", "Colon Blow", "1.2.8", ResourceId = 1574)]
     class FireArrows : RustPlugin
     {
 
@@ -181,7 +181,10 @@ namespace Oxide.Plugins
 				if (Cooldown.ContainsKey(player.userID)) return;
 				if ((FireArrowOn.ContainsKey(player.userID)) || (FireBallOn.ContainsKey(player.userID)) || (FireBombOn.ContainsKey(player.userID)))
 				{
-					ArrowFX(player, hitInfo);
+					if (hitInfo.ProjectilePrefab.ToString().Contains("arrow"))
+					{
+						ArrowFX(player, hitInfo);
+					}
 				}
 				return;
 		}
@@ -213,7 +216,6 @@ namespace Oxide.Plugins
 
 	void ArrowCooldownControl(BasePlayer player)
 	{
-		if (UsageCooldown == null) return;
 		if (UsageCooldown <= 0f) return;
 		if (UsageCooldown >= 1f)
 			{
@@ -225,7 +227,6 @@ namespace Oxide.Plugins
 
 	void ArrowCooldownToggle(BasePlayer player)
 	{
-		if (UsageCooldown == null) return;
 		if (UsageCooldown <= 0f) return;
 		NormalArrowToggle(player);
 	}
@@ -233,6 +234,7 @@ namespace Oxide.Plugins
 	void FireArrowFX(BasePlayer player, HitInfo hitInfo)
 	{
 		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); NormalArrowToggle(player); return; }
+		if (!hitInfo.ProjectilePrefab.ToString().Contains("arrow")) return;
 		applyBlastDamage(player, DamageFireArrow, Rust.DamageType.Heat, hitInfo);
 
 		Effect.server.Run("assets/bundled/prefabs/fx/impacts/additive/fire.prefab", hitInfo.HitPositionWorld);
@@ -247,6 +249,7 @@ namespace Oxide.Plugins
 	{
 		if (!notZoneRestricted(player)) { tellRestricted(player); return; }
 		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); NormalArrowToggle(player); return; }
+		if (!hitInfo.ProjectilePrefab.ToString().Contains("arrow")) return;
 
 		applyBlastDamage(player, DamageFireBall, Rust.DamageType.Heat, hitInfo);
 		timer.Once(1, () => applyBlastDamage(player, DamageFireBall, Rust.DamageType.Heat, hitInfo));
@@ -265,7 +268,7 @@ namespace Oxide.Plugins
 	{
 		if (!notZoneRestricted(player)) { tellRestricted(player); return; }
 		if (!hasResources(player)) { tellDoesNotHaveMaterials(player); NormalArrowToggle(player); return; }
-
+		if (!hitInfo.ProjectilePrefab.ToString().Contains("arrow")) return;
 		applyBlastDamage(player, DamageFireBomb, Rust.DamageType.Explosion, hitInfo);
 
 		Effect.server.Run("assets/bundled/prefabs/fx/weapons/landmine/landmine_explosion.prefab", hitInfo.HitPositionWorld);
@@ -279,7 +282,8 @@ namespace Oxide.Plugins
 
 	void applyBlastDamage(BasePlayer player, float damageamount, Rust.DamageType damagetype, HitInfo hitInfo)
 	{
-	playerBlastDamage(player, damageamount, damagetype, hitInfo);
+		if (!hitInfo.ProjectilePrefab.ToString().Contains("arrow")) return;
+		playerBlastDamage(player, damageamount, damagetype, hitInfo);
 	}
 
 	void playerBlastDamage(BasePlayer player, float damageamount, Rust.DamageType damagetype, HitInfo hitInfo)
@@ -292,6 +296,7 @@ namespace Oxide.Plugins
                 {
 		if (!(p is BuildingPrivlidge))
 			{
+			if (!hitInfo.ProjectilePrefab.ToString().Contains("arrow")) return;
 			p.Hurt(damageamount, damagetype, player, UseProt);
 			}
                 }

@@ -1,8 +1,8 @@
 {
     "name": "BeautyRestart",
     "description": "Restart the server with a cooldown GUI timer",
-    "author": "Reynostrum",
-    "version": "1.0.0",
+    "author": "Wulf",
+    "version": "1.0.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/beautyrestart.2176",

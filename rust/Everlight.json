@@ -1,9 +1,9 @@
 {
     "name": "Everlight",
-    "description": "Lanterns will never consume fuel",
-    "author": "",
-    "version": "1.0",
-    "configuration": false,
+    "description": "Creates infinite fuel and light from configured objects",
+    "author": "Wulf",
+    "version": "3.0.0",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/everlight.2170",
     "games": [

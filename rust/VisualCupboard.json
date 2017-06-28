@@ -1,8 +1,8 @@
 {
     "name": "Visual Cupboard Radius",
-    "description": "Allows Authorized Players to Visually See Building Privildge Radius of Tool Cupboards",
+    "description": "Allows Authorized Players to Visually See Building Privildge Radius of Owned Tool Cupboards",
     "author": "Colon Blow",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/visual-cupboard-radius.2030",

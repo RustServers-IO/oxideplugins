@@ -7,7 +7,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("OilCrate", "Kaleidos", "0.6.3", ResourceId = 2339)]
+    [Info("OilCrate", "Kaleidos", "0.6.5", ResourceId = 2339)]
     class OilCrate : RustPlugin
     {
         private const string oilCrateAllow = "oilcrate.allow";
@@ -89,11 +89,18 @@ namespace Oxide.Plugins
                 });                
                 return;
             }
-            if (!IsAllowed((BasePlayer)survey.creatorEntity, true) || dryOnly && TerrainMeta.BiomeMap.GetBiome(pos, TerrainBiome.ARID) < 0.5f)
+            if (!IsAllowed((BasePlayer)survey.creatorEntity, true))
             {
                 item.Remove();
                 DeSpawn("survey_crater", pos, 0f);
                 if (missingPermission) SendReply((BasePlayer)survey.creatorEntity, "You don't have the privileges to perform an oil drilling");
+                return;
+            }
+            if (dryOnly && TerrainMeta.BiomeMap.GetBiome(pos, TerrainBiome.ARID) < 0.5f)
+            {
+                item.Remove();
+                DeSpawn("survey_crater", pos, 0f);
+                if (missingPermission) SendReply((BasePlayer)survey.creatorEntity, "You can only find oil in the southern desert");
                 return;
             }
             if (!quarryLiquid) DeSpawn("survey_crater.prefab", pos, 0f);
@@ -166,6 +173,7 @@ namespace Oxide.Plugins
 
                 SendReply(player, "You can use the following commands:"
                     + "\n\t- regenerate\t|- to <color=yellow>regenerate</color> each crude oil source"
+                    + "\n\t- refill\t\t\t\t|- to <color=yellow>refill</color> each pump jack"
                     + "\n\t- clear\t\t\t\t|- to <color=red>remove</color> crude oil out of every source"
                     + "\n\t\t\t\t\t\t\t|  (can't be undone)"
                     + "\n\t- destroy\t\t\t|- like clear, but <color=red>destroys</color> blank ones");
@@ -186,6 +194,12 @@ namespace Oxide.Plugins
                         SendReply(player, "The gather rate crude oil in each pump jack and quarry was successfully updated.");
                     else
                         SendReply(player, "The gather rate crude oil in each pump jack was successfully updated.");
+                    break;
+                case "refill":
+                    RefreshQuarries("refill");
+                    if (player == null)
+                        Puts("The crude oil was successfully added to each pump jack.");
+                    SendReply(player, "The crude oil was successfully added to each pump jack.");
                     break;
                 case "clear":
                     RefreshQuarries("clear");
@@ -249,6 +263,12 @@ namespace Oxide.Plugins
                             quarry.SendNetworkUpdateImmediate();
                             break;
                         }
+                        continue;
+                    case "refill":
+                        if (quarry.ShortPrefabName == "mining_quarry") continue;
+                        depo._resources.Clear();
+                        depo.Add(ItemManager.FindItemDefinition("crude.oil"), 1f, 50000, Random.Range(oilGatherWorkNeededMin, oilGatherWorkNeededMax), ResourceDepositManager.ResourceDeposit.surveySpawnType.ITEM, true);
+                        quarry.SendNetworkUpdateImmediate();
                         continue;
                     case "clear":
                         if (quarry.ShortPrefabName == "mining_quarry")

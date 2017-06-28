@@ -1,0 +1,16 @@
+{
+    "name": "CapacityController",
+    "description": "Allows you to modify the sizes of certain containers",
+    "author": "redBDGR",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/capacitycontroller.2413",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

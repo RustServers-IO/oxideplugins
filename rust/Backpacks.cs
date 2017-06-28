@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.0.5", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.0.8", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -17,15 +17,14 @@ namespace Oxide.Plugins
 
         private static class Configuration
         {
-            public static StorageSize BackpackSize = StorageSize.Middle;
+            public static StorageSize BackpackSize = StorageSize.Medium;
 
             public static int BackpackSizeInt
             {
-                get { return (int) BackpackSize; }
-                set { BackpackSize = (StorageSize) value; }
+                get { return (int)BackpackSize; }
+                set { BackpackSize = (StorageSize)value; }
             }
-            
-            public static string BackpackHotkey = "B";
+
             public static bool ShowOnBack = true;
             public static bool HideOnBackIfEmpty = true;
             public static bool DropOnDeath = true;
@@ -52,6 +51,11 @@ namespace Oxide.Plugins
             private StorageContainer container => entity.GetComponent<StorageContainer>();
             public bool IsOpen => entity != null;
 
+            public StorageSize Size =>
+                Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.large") ? StorageSize.Large :
+                (Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.medium") ? StorageSize.Medium :
+                (Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.medium") ? StorageSize.Small : Configuration.BackpackSize));
+
             public Backpack(ulong id)
             {
                 ownerID = id;
@@ -74,14 +78,14 @@ namespace Oxide.Plugins
 
                     StorageContainer container = entity.GetComponent<StorageContainer>();
 
-                    switch (Configuration.BackpackSize)
+                    switch (Size)
                     {
-                        case StorageSize.Big:
+                        case StorageSize.Large:
                             container.panelName = "largewoodbox";
                             container.inventorySlots = 30;
                             container.inventory.capacity = 30;
                             break;
-                        case StorageSize.Middle:
+                        case StorageSize.Medium:
                             container.panelName = "smallwoodbox";
                             container.inventorySlots = 12;
                             container.inventory.capacity = 12;
@@ -113,7 +117,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                entity = SpawnContainer(Configuration.BackpackSize, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
+                entity = SpawnContainer(Size, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
 
                 foreach (var backpackItem in Inventory.Items)
                     backpackItem.ToItem().MoveToContainer(container.inventory);
@@ -280,8 +284,8 @@ namespace Oxide.Plugins
 
         public enum StorageSize
         {
-            Big = 3,
-            Middle = 2,
+            Large = 3,
+            Medium = 2,
             Small = 1
         }
 
@@ -293,9 +297,9 @@ namespace Oxide.Plugins
         {
             switch (size)
             {
-                case StorageSize.Big:
+                case StorageSize.Large:
                     return "assets/prefabs/deployable/large wood storage/box.wooden.large.prefab";
-                case StorageSize.Middle:
+                case StorageSize.Medium:
                     return "assets/prefabs/deployable/woodenbox/woodbox_deployed.prefab";
                 case StorageSize.Small:
                     return "assets/prefabs/deployable/small stash/small_stash_deployed.prefab";
@@ -304,7 +308,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private static BaseEntity SpawnContainer(StorageSize size = StorageSize.Middle, Vector3 position = default(Vector3))
+        private static BaseEntity SpawnContainer(StorageSize size = StorageSize.Medium, Vector3 position = default(Vector3))
         {
             var ent = GameManager.server.CreateEntity(GetContainerPrefab(size), position);
 
@@ -345,7 +349,6 @@ namespace Oxide.Plugins
         private new void LoadConfig()
         {
             Configuration.BackpackSizeInt = GetConfig(Configuration.BackpackSizeInt, "Backpack Size (1-3)");
-            GetConfig(ref Configuration.BackpackHotkey, "Backpack Hotkey");
 
             GetConfig(ref Configuration.DropOnDeath, "Drop On Death");
             GetConfig(ref Configuration.EraseOnDeath, "Erase On Death");
@@ -359,7 +362,7 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig() => PrintWarning("Generating new configuration file...");
 
         #endregion
-        
+
         #region Hooks
 
         private void Loaded()
@@ -370,6 +373,9 @@ namespace Oxide.Plugins
             LoadMessages();
 
             permission.RegisterPermission("backpacks.use", this);
+            permission.RegisterPermission("backpacks.use.small", this);
+            permission.RegisterPermission("backpacks.use.medium", this);
+            permission.RegisterPermission("backpacks.use.large", this);
             permission.RegisterPermission("backpacks.admin", this);
 
             foreach (var basePlayer in BasePlayer.activePlayerList)
@@ -387,15 +393,11 @@ namespace Oxide.Plugins
             foreach (var ent in Resources.FindObjectsOfTypeAll<StorageContainer>().Where(cont => cont.name == "droppedbackpack" && cont.inventory.itemList.Count == 0))
                 ent.KillMessage();
         }
-        
+
         private void OnPlayerInit(BasePlayer player)
         {
             Backpack backpack = Backpack.LoadOrCreate(player.userID);
 
-            //=====> Bind hotkey
-            player.SendConsoleCommand($"bind {Configuration.BackpackHotkey} backpack.open");
-
-            //=====> Spawn visual backpack
             if (permission.UserHasPermission(player.UserIDString, "backpacks.use") && Configuration.ShowOnBack)
             {
                 if (backpack.Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
@@ -407,8 +409,6 @@ namespace Oxide.Plugins
 
         private void OnPlayerDisconnected(BasePlayer player)
         {
-            player.SendConsoleCommand($"bind {Configuration.BackpackHotkey} \"\"");
-
             if (backpacks.ContainsKey(player.userID))
                 backpacks.Remove(player.userID);
         }
@@ -431,7 +431,7 @@ namespace Oxide.Plugins
         {
             if (victim is BasePlayer)
             {
-                BasePlayer player = (BasePlayer) victim;
+                BasePlayer player = (BasePlayer)victim;
                 Backpack backpack = Backpack.LoadOrCreate(player.userID);
 
                 backpack.ForceClose(player);
@@ -494,7 +494,7 @@ namespace Oxide.Plugins
         }
 
         #endregion
-        
+
         #region Data & Config Helper
 
         private static void GetConfig<T>(ref T variable, params string[] path) => variable = GetConfig(variable, path);

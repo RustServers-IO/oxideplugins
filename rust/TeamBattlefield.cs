@@ -7,7 +7,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("TeamBattlefield", "BodyweightEnergy / k1lly0u", "2.1.41", ResourceId = 1330)]
+    [Info("TeamBattlefield", "BodyweightEnergy / k1lly0u", "2.1.42", ResourceId = 1330)]
     class TeamBattlefield : RustPlugin
     {
         #region Fields
@@ -94,7 +94,7 @@ namespace Oxide.Plugins
                 UI.CreateLabel(ref MainCont, UIMain, "", $"{configData.Spectators.Chat_Color}Spectators : {CountPlayers(Team.SPECTATOR)}</color>", 20, "0.6 0.55", "0.8 0.65");
                 UI.CreateButton(ref MainCont, UIMain, "0.2 0.2 0.2 0.7", $"{configData.Spectators.Chat_Color}Spectate</color>", 35, "0.605 0.45", "0.795 0.55", "TBUI_TeamSelect spectator");
             }
-            if (player.IsAdmin())
+            if (player.IsAdmin)
             {
                 UI.CreateButton(ref MainCont, UIMain, "0.2 0.2 0.2 0.7", $"{configData.Admin.Chat_Color}Admin</color>", 35, "0.4 0.25", "0.6 0.35", "TBUI_TeamSelect admin");
             }
@@ -103,7 +103,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Scoreboard       
+        #region Scoreboard
         public void Scoreboard(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, UIScoreboard);
@@ -112,10 +112,10 @@ namespace Oxide.Plugins
 
             CuiHelper.AddUi(player, MainCont);
         }
-        #endregion               
         #endregion
-        
-        #region Hooks       
+        #endregion
+
+        #region Hooks
         void OnServerInitialized()
         {
             LoadVariables();
@@ -171,7 +171,7 @@ namespace Oxide.Plugins
                                 {
                                     attacker.GetComponent<TBPlayer>().kills++;
                                     AddPoints(attacker, victim);
-                                }                                
+                                }
                             }
                         }
                     }
@@ -180,7 +180,7 @@ namespace Oxide.Plugins
             catch (Exception ex)
             {
             }
-        }       
+        }
         private void RefreshScoreboard()
         {
             foreach(var player in BasePlayer.activePlayerList)
@@ -200,9 +200,9 @@ namespace Oxide.Plugins
                         OnPlayerInit(player);
                     });
                 }
-                else InitPlayer(player);               
+                else InitPlayer(player);
             }
-        }  
+        }
         private void InitPlayer(BasePlayer player)
         {
             if (!player.GetComponent<TBPlayer>())
@@ -220,8 +220,8 @@ namespace Oxide.Plugins
                     player.Respawn();
                 }
                 else OpenTeamSelection(player);
-            }            
-        }   
+            }
+        }
         private void OnPlayerDisconnected(BasePlayer player)
         {
             if (UseTB)
@@ -234,14 +234,14 @@ namespace Oxide.Plugins
                 {
                     DCPlayers.Add(player.userID, new PlayerData { kills = tbPlayer.kills, team = tbPlayer.team });
                     DCTimers.Add(player.userID, timer.Once(configData.Options.RemoveSleeper_Timer * 60, () => { DCPlayers.Remove(player.userID); DCTimers[player.userID].Destroy(); DCTimers.Remove(player.userID); }));
-                                
+
                     if (TBPlayers.Contains(tbPlayer))
                         TBPlayers.Remove(tbPlayer);
                     UnityEngine.Object.Destroy(tbPlayer);
-                }                
+                }
             }
-        }      
-        private void OnPlayerRespawned(BasePlayer player) 
+        }
+        private void OnPlayerRespawned(BasePlayer player)
         {
             if (UseTB)
             {
@@ -265,7 +265,7 @@ namespace Oxide.Plugins
                     }
                 }
                 else OnPlayerInit(player);
-            }           
+            }
         }
         private object OnPlayerChat(ConsoleSystem.Arg arg)
         {
@@ -321,7 +321,7 @@ namespace Oxide.Plugins
             {
                 PrintWarning($"Spawns Database could not be found!");
                 return false;
-            }            
+            }
             return true;
         }
         private bool CheckSpawnfiles()
@@ -345,7 +345,7 @@ namespace Oxide.Plugins
             {
                 configData.Admin.Spawnfile = null;
                 SaveConfig(configData);
-                Puts("Error finding the Admin spawn file, removing admin spawn points");                
+                Puts("Error finding the Admin spawn file, removing admin spawn points");
             }
             return true;
         }
@@ -366,7 +366,7 @@ namespace Oxide.Plugins
             player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
             player.SendFullSnapshot();
         }
-        
+
         private void StartSpectating(BasePlayer player, BasePlayer target)
         {
             if (!player.IsSpectating())
@@ -391,7 +391,7 @@ namespace Oxide.Plugins
                 player.metabolism.Reset();
                 player.InvokeRepeating("InventoryUpdate", 1f, 0.1f * UnityEngine.Random.Range(0.99f, 1.01f));
             }
-        }       
+        }
         private void AddPoints(BasePlayer player, BasePlayer victim)
         {
             string colorAttacker = "";
@@ -404,13 +404,13 @@ namespace Oxide.Plugins
                     return;
                 case Team.A:
                     TeamA_Score++;
-                    colorAttacker = configData.TeamA.Chat_Color; 
-                    prefixAttacker = configData.TeamA.Chat_Prefix;                    
+                    colorAttacker = configData.TeamA.Chat_Color;
+                    prefixAttacker = configData.TeamA.Chat_Prefix;
                     break;
                 case Team.B:
                     TeamB_Score++;
-                    colorAttacker = configData.TeamB.Chat_Color;                    
-                    prefixAttacker = configData.TeamB.Chat_Prefix;                    
+                    colorAttacker = configData.TeamB.Chat_Color;
+                    prefixAttacker = configData.TeamB.Chat_Prefix;
                     break;
                 case Team.ADMIN:
                     colorAttacker = configData.Admin.Chat_Color;
@@ -436,7 +436,7 @@ namespace Oxide.Plugins
                 case Team.ADMIN:
                     colorVictim = configData.Admin.Chat_Color;
                     prefixVictim = configData.Admin.Chat_Prefix;
-                    break;               
+                    break;
             }
             RefreshScoreboard();
             if (configData.Options.BroadcastDeath)
@@ -460,7 +460,7 @@ namespace Oxide.Plugins
         }
         private void GivePlayerGear(BasePlayer player, Team team)
         {
-            foreach (var entry in configData.Gear.CommonGear)            
+            foreach (var entry in configData.Gear.CommonGear)
                 GiveItem(player, BuildItem(entry.shortname, entry.amount, entry.skin), entry.container);
 
             var teamGear = new List<Gear>();
@@ -527,12 +527,12 @@ namespace Oxide.Plugins
         #endregion
 
         #region Console Commands
-        
+
         [ConsoleCommand("tbf.list")]
         private void cmdList(ConsoleSystem.Arg arg)
         {
             for (int i = 0; i < TBPlayers.Count; i++)
-                SendReply(arg, "Name: " + TBPlayers[i].player.displayName + ", Team: " + TBPlayers[i].team.ToString()); 
+                SendReply(arg, "Name: " + TBPlayers[i].player.displayName + ", Team: " + TBPlayers[i].team.ToString());
         }
         [ConsoleCommand("tbf.clearscore")]
         private void cmdClearscore(ConsoleSystem.Arg arg)
@@ -550,11 +550,11 @@ namespace Oxide.Plugins
         private void cmdAssign(ConsoleSystem.Arg arg)
         {
             if (!isAuth(arg)) return;
-            if (arg.Args == null || arg.Args.Length == 0)            
+            if (arg.Args == null || arg.Args.Length == 0)
             {
                 SendReply(arg, "Format: tbf.assign <PARTIAL_PLAYERNAME> <[\"a\",\"b\",\"spectator\"]>");
                 return;
-            }           
+            }
             if (arg.Args.Length == 2)
             {
                 var partialPlayerName = arg.Args[0];
@@ -604,7 +604,7 @@ namespace Oxide.Plugins
 
         [ConsoleCommand("tbf.version")]
         private void cmdVersion(ConsoleSystem.Arg arg) => SendReply(arg, Title + "  --  V " + Version.ToString() + "  --  by " + Author);
-       
+
         [ConsoleCommand("tbf.help")]
         private void cmdHelp(ConsoleSystem.Arg arg)
         {
@@ -652,7 +652,7 @@ namespace Oxide.Plugins
 
                 var sendingPlayer = player.GetComponent<TBPlayer>();
                 var team = sendingPlayer.team;
-                string color = "";                
+                string color = "";
                 switch (team)
                 {
                     case Team.A:
@@ -667,7 +667,7 @@ namespace Oxide.Plugins
                     case Team.SPECTATOR:
                         color = configData.Spectators.Chat_Color;
                         return;
-                }               
+                }
 
                 foreach (var p in TBPlayers)
                 {
@@ -690,7 +690,7 @@ namespace Oxide.Plugins
             var team = ConvertStringToTeam(arg.GetString(0));
             AssignPlayerToTeam(player, team);
         }
-        
+
         private Team ConvertStringToTeam(string team)
         {
             switch (team)
@@ -783,16 +783,16 @@ namespace Oxide.Plugins
                 if (target != null)
                     StartSpectating(player, target);
                 else StartSpectating(player, BasePlayer.activePlayerList[UnityEngine.Random.Range(0, BasePlayer.activePlayerList.Count - 1)]);
-                return;               
+                return;
             }
 
             player.GetComponent<TBPlayer>().team = team;
-           
+
             if (isSpec)
                 EndSpectating(player);
-            player.DieInstantly();            
+            player.DieInstantly();
             player.Respawn();
-        } 
+        }
         private BasePlayer GetRandomTeammate(BasePlayer player)
         {
             var teammates = new List<BasePlayer>();
@@ -806,7 +806,7 @@ namespace Oxide.Plugins
             if (teammates.Count > 0)
                 return teammates[UnityEngine.Random.Range(0, teammates.Count - 1)];
             else return null;
-        }      
+        }
         #endregion
 
         #region Externally Called Functions
@@ -815,19 +815,19 @@ namespace Oxide.Plugins
             foreach (var entry in TBPlayers)
                 if (entry.player.userID == playerID)
                     return entry.team.ToString();
-            return null;            
+            return null;
         }
         Dictionary<ulong, string> GetTeams()
         {
             Dictionary<ulong, string> returnedList = new Dictionary<ulong, string>();
             foreach (var player in TBPlayers)
                 returnedList.Add(player.player.userID, player.team.ToString());
-            
+
             return returnedList;
         }
         #endregion
 
-        #region Config        
+        #region Config
         private ConfigData configData;
         class TeamOptions
         {
@@ -843,7 +843,7 @@ namespace Oxide.Plugins
             public float FF_DamageScale { get; set; }
             public bool UsePluginChatControl { get; set; }
             public bool BroadcastDeath { get; set; }
-            
+
         }
         class GUI
         {
@@ -864,14 +864,14 @@ namespace Oxide.Plugins
             public string Chat_Prefix { get; set; }
         }
         class ConfigData
-        {            
+        {
             public TeamOptions TeamA { get; set; }
             public TeamOptions TeamB { get; set; }
             public TeamOptions Admin { get; set; }
             public ConfigGear Gear { get; set; }
             public Options Options { get; set; }
             public Spectators Spectators { get; set; }
-            public GUI ScoreboardUI { get; set; }               
+            public GUI ScoreboardUI { get; set; }
         }
         private void LoadVariables()
         {
@@ -1105,7 +1105,7 @@ namespace Oxide.Plugins
             SaveConfig(config);
         }
         private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);        
+        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
         #endregion
 
         #region Classes
@@ -1114,7 +1114,7 @@ namespace Oxide.Plugins
             public BasePlayer player;
             public int kills;
             public Team team;
-            
+
             void Awake()
             {
                 player = GetComponent<BasePlayer>();
@@ -1122,7 +1122,7 @@ namespace Oxide.Plugins
                 kills = 0;
                 team = Team.NONE;
             }
-        }        
+        }
         class PlayerData
         {
             public int kills;

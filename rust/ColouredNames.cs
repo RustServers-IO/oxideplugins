@@ -4,10 +4,13 @@ using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
+using System.Text.RegularExpressions;
+
+//Reference: System.Drawing
 
 namespace Oxide.Plugins
 {
-    [Info("ColouredNames", "PsychoTea", "1.3.0", ResourceId = 1362)]
+    [Info("ColouredNames", "PsychoTea", "1.3.1", ResourceId = 1362)]
     [Description("Allows players to change their name colour in chat.")]
 
     class ColouredNames : RustPlugin
@@ -17,6 +20,7 @@ namespace Oxide.Plugins
         const string permUse = "colourednames.use";
         const string permBypass = "colourednames.bypass";
         const string permSetOthers = "colourednames.setothers";
+        const string colourRegex = "^#(?:[0-9a-fA-f]{3}){1,2}$";
         readonly string[] blockedValues = { "{", "}", "size" };
 
         Dictionary<ulong, string> colour = new Dictionary<ulong, string>();
@@ -50,7 +54,8 @@ namespace Oxide.Plugins
                 { "CantUseClientside", "You may not use this command from ingame - server cosole only." },
                 { "ConsoleColourIncorrectUsage", "Incorrect usage! colour {{userid}} {{colour}}" },
                 { "InvalidIDConsole", "Error! {0} is not a SteamID!" },
-                { "ConsoleColourChanged", "Colour of {0} changed to {1}." }
+                { "ConsoleColourChanged", "Colour of {0} changed to {1}." },
+                { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." }
             }, this);
 
             ReadData();
@@ -146,6 +151,12 @@ namespace Oxide.Plugins
                 }
             }
 
+            if (!IsValidColour(args[0]))
+            {
+                SendReply(player, GetMessage("InvalidColour", player));
+                return;
+            }
+
             if (args.Length > 1)
             {
                 if (!CanSetOthers(player))
@@ -189,9 +200,9 @@ namespace Oxide.Plugins
         [ConsoleCommand("colour")]
         void colourConsoleCommand(ConsoleSystem.Arg arg)
         {
-            if (!arg.IsServerside)
+            if (!arg.IsAdmin)
             {
-                arg.ReplyWith(lang.GetMessage("CantUseClientside", this));
+                arg.ReplyWith(GetConsoleMessage("NoPermission"));
                 return;
             }
 
@@ -261,6 +272,8 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
+
+        bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success || System.Drawing.Color.FromName(input).IsKnownColor;
 
         bool BetterChatIns() => (BetterChat != null);
 

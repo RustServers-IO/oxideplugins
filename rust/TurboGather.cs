@@ -15,7 +15,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("TurboGather", "redBDGR", "1.1.9", ResourceId = 2221)]
+    [Info("TurboGather", "redBDGR", "1.1.10", ResourceId = 2221)]
     [Description("Lets players activate a resouce gather boost for a certain amount of time")]
 
     class TurboGather : RustPlugin
@@ -140,7 +140,10 @@ namespace Oxide.Plugins
 
         public bool effectEnabled = true;
         public const string effect = "assets/prefabs/locks/keypad/effects/lock.code.shock.prefab";
+
         public bool GUIEnabled = true;
+        public string minAnchor = "0.77 0.025";
+        public string maxAnchor = "0.85 0.13";
 
         protected override void LoadDefaultConfig()
         {
@@ -178,6 +181,8 @@ namespace Oxide.Plugins
             activateTurboOnAnimalKill = Convert.ToBoolean(GetConfig("Settings", "Activate Turbo on Animal Kill", false));
 
             GUIEnabled = Convert.ToBoolean(GetConfig("Settings", "GUI Enabled", GUIEnabled));
+            minAnchor = Convert.ToString(GetConfig("Settings", "GUI Min Anchor", ""));
+            maxAnchor = Convert.ToString(GetConfig("Settings", "GUI Max Anchor", ""));
 
             if (!Changed) return;
             SaveConfig();
@@ -456,7 +461,7 @@ namespace Oxide.Plugins
 
         // chat command /turbo
         [ChatCommand("turbo")]
-        void turboCommand(BasePlayer player, string command, string[] args)
+        void TurboCommand(BasePlayer player, string command, string[] args)
         {
             if (!permission.UserHasPermission(player.UserIDString, permissionName))
             {
@@ -502,7 +507,7 @@ namespace Oxide.Plugins
             // WORK ON THIS
             //
         [ChatCommand("cancelturbo")]
-        void cancelturboCMD(BasePlayer player, string command, string[] args)
+        void CancelturboCMD(BasePlayer player, string command, string[] args)
         {
             if (args.Length > 0)
             {
@@ -528,7 +533,7 @@ namespace Oxide.Plugins
 
         //chat command /giveturbo
         [ChatCommand("giveturbo")]
-        void giveturboCommand(BasePlayer player, string command, string[] args)
+        void GiveturboCommand(BasePlayer player, string command, string[] args)
         {
             if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
             {
@@ -573,7 +578,7 @@ namespace Oxide.Plugins
 
         // chat command /global turbo
         [ChatCommand("globalturbo")]
-        void globalturboCMD(BasePlayer player, string command, string[] args)
+        void GlobalturboCMD(BasePlayer player, string command, string[] args)
         {
             if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
             {
@@ -607,7 +612,7 @@ namespace Oxide.Plugins
 
         // console command for starting / stopping global turbogather
         [ConsoleCommand("globalturbo")]
-        void globalturboconsoleCMD(ConsoleSystem.Arg arg)
+        void GlobalturboconsoleCMD(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             //start
@@ -655,7 +660,7 @@ namespace Oxide.Plugins
 
         // cancelling globalturbo (emergency?)
         [ChatCommand("cancelglobalturbo")]
-        void cancelglobalturboCMD(BasePlayer player, string command, string[] args)
+        void CancelglobalturboCMD(BasePlayer player, string command, string[] args)
         {
             if (permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
             {
@@ -677,7 +682,7 @@ namespace Oxide.Plugins
 
         // console command giveturbo
         [ConsoleCommand("giveturbo")]
-        void giveturboconsoleCMD(ConsoleSystem.Arg arg)
+        void GiveturboconsoleCMD(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             if (arg.Args == null || arg.Args.Length != 3)
@@ -771,7 +776,7 @@ namespace Oxide.Plugins
                 if (!GUIinfo[player.UserIDString])
                 {
                     var element = UI.CreateElementContainer(Panel, "1 1 1 0", "0 0", "1 1", false);
-                    UI.CreateImage(ref element, Panel, "http://i.imgur.com/eLFi2Gd.png", "0.77 0.025", "0.85 0.13");
+                    UI.CreateImage(ref element, Panel, "http://i.imgur.com/eLFi2Gd.png", minAnchor, maxAnchor);
                     CuiHelper.AddUi(player, element);
                     GUIinfo[player.UserIDString] = true;
                 }
@@ -780,7 +785,7 @@ namespace Oxide.Plugins
             else
             {
                 var element = UI.CreateElementContainer(Panel, "1 1 1 0", "0 0", "1 1", false);
-                UI.CreateImage(ref element, Panel, "http://i.imgur.com/eLFi2Gd.png", "0.77 0.025", "0.85 0.13");
+                UI.CreateImage(ref element, Panel, "http://i.imgur.com/eLFi2Gd.png", minAnchor, maxAnchor);
                 CuiHelper.AddUi(player, element);
                 GUIinfo[player.UserIDString] = true;
             }
@@ -798,14 +803,6 @@ namespace Oxide.Plugins
                 }
             }
         }
-
-        /*
-        [ChatCommand("dogui")]
-        void doguiCMD(BasePlayer player, string command, string[] args)
-        {
-            StartGui(player);
-        }
-        */
 
         object GetConfig(string menu, string datavalue, object defaultValue)
         {
@@ -828,11 +825,6 @@ namespace Oxide.Plugins
 
         double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
         string msg(string key, string id = null) => lang.GetMessage(key, this, id);
-
-
-        //
-        // Shoutouts to Nogrod for the snippet below taken from PrivateMessage ( http://oxidemod.org/plugins/private-messaging.659/ )
-        //
 
         private static BasePlayer FindPlayer(string nameOrId)
         {

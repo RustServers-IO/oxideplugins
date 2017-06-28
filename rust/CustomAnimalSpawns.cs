@@ -1,27 +1,35 @@
-﻿// Reference: RustBuild
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-using System.Reflection;
-using Oxide.Core;
+﻿using Facepunch;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+using Oxide.Core;
 using Oxide.Core.Configuration;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
+using UnityEngine.SceneManagement;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomAnimalSpawns", "k1lly0u", "0.1.21", ResourceId = 2015)]
+    [Info("CustomAnimalSpawns", "k1lly0u", "0.1.5", ResourceId = 2015)]
     class CustomAnimalSpawns : RustPlugin
     {
         #region Fields
         CASData casData;
         private DynamicConfigFile casdata;
 
-        private FieldInfo serverinput;
-
         private List<BaseEntity> animalCache = new List<BaseEntity>();
-        private Dictionary<int, string> animalTypes = new Dictionary<int, string>();
+        private Dictionary<int, string> animalTypes = new Dictionary<int, string>
+        {
+            {0, "assets/rust.ai/agents/zombie/zombie.prefab" },
+            {1, "assets/rust.ai/agents/bear/bear.prefab" },
+            {2, "assets/rust.ai/agents/boar/boar.prefab" },
+            {3, "assets/rust.ai/agents/chicken/chicken.prefab" },
+            {4, "assets/rust.ai/agents/horse/horse.prefab" },
+            {5, "assets/rust.ai/agents/stag/stag.prefab" },
+            {6, "assets/rust.ai/agents/wolf/wolf.prefab" }
+        };
         private List<Timer> refreshTimers = new List<Timer>();
 
         private Dictionary<ulong, int> animalCreators = new Dictionary<ulong, int>();
@@ -33,7 +41,6 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission("customanimalspawns.admin", this);
             lang.RegisterMessages(messages, this);
-            serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
             casdata = Interface.Oxide.DataFileSystem.GetFile("CustomSpawns/cas_data");
             casdata.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter() };
         }
@@ -41,19 +48,13 @@ namespace Oxide.Plugins
         {
             LoadVariables();
             LoadData();
-            FindAnimalTypes();
             InitializeAnimalSpawns();
-        }
-        void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
-        {
-            if (entity is BaseNPC)
-                entity.GetComponent<NPCController>()?.OnAttacked(hitInfo);
-        }
+        }        
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             try
             {
-                if (entity.GetComponent<BaseNPC>() != null)
+                if (entity.GetComponent<BaseNpc>() != null)
                 {
                     if (animalCache.Contains(entity as BaseEntity))
                     {
@@ -112,140 +113,78 @@ namespace Oxide.Plugins
             }));
             animalCache.Remove(resource);
         }
-        private void InitializeNewSpawn(string type, Vector3 position)
-        {
-            var newAnimal = SpawnAnimalEntity(type, position);
+        private void InitializeNewSpawn(string type, Vector3 position) => SpawnAnimalEntity(type, position);
 
-            animalCache.Add(newAnimal);
-        }
-        private BaseEntity SpawnAnimalEntity(string type, Vector3 pos)
+        private Vector3 SpawnAnimalEntity(string type, Vector3 pos)
         {
-            BaseEntity entity = GameManager.server.CreateEntity(type, pos, new Quaternion(), true);            
-            entity.Spawn();
-            var npc = entity.gameObject.AddComponent<NPCController>();
-            npc.SetHome(pos);
-            return entity;
+            Vector3 point;
+            if (FindPointOnNavmesh(pos, 1, out point))
+            {
+                BaseEntity entity = InstantiateEntity(type, point);
+                entity.Spawn();
+                var npc = entity.gameObject.AddComponent<NPCController>();
+                npc.SetHome(point);
+                animalCache.Add(entity);
+                return point;
+            }
+            return Vector3.zero;
+        }
+        private BaseEntity InstantiateEntity(string type, Vector3 position)
+        {
+            var prefab = GameManager.server.FindPrefab(type);
+            var gameObject = Instantiate.GameObject(prefab, position, new Quaternion());
+            gameObject.name = type;
+            SceneManager.MoveGameObjectToScene(gameObject, Rust.Server.EntityScene);
+            if (!gameObject.activeSelf)
+                gameObject.SetActive(true);
+            if (gameObject.GetComponent<Spawnable>())
+                UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
+            BaseEntity component = gameObject.GetComponent<BaseEntity>();
+            return component;
+        }
+
+        private bool FindPointOnNavmesh(Vector3 center, float range, out Vector3 result)
+        {
+            for (int i = 0; i < 30; i++)
+            {
+                Vector3 randomPoint = center + UnityEngine.Random.insideUnitSphere * range;
+                NavMeshHit hit;
+                if (NavMesh.SamplePosition(randomPoint, out hit, 50f, NavMesh.AllAreas))
+                {                    
+                    result = hit.position;
+                    return true;
+                }
+            }
+            result = Vector3.zero;
+            return false;
         }
 
         class NPCController : MonoBehaviour
         {
-            private readonly MethodInfo SetDeltaTimeMethod = typeof(NPCAI).GetProperty("deltaTime", (BindingFlags.Public | BindingFlags.Instance)).GetSetMethod(true);
+            public BaseNpc npc;
+            private Vector3 homePos;
 
-            internal static double targetAttackRange = 70;
-
-            internal Vector3 Home;
-            internal Vector3 NextPos;
-            internal BaseCombatEntity Target;
-
-            internal bool isAttacking;
-
-            public BaseNPC NPC;
-            public NPCAI AI;
-            public NPCMetabolism Metabolism;
-            
-            void Awake()
+            private void Awake()
             {
-                AI = GetComponent<NPCAI>();
-                NPC = GetComponent<BaseNPC>();
-                Metabolism = GetComponent<NPCMetabolism>();
-                isAttacking = false;
-                Target = null;                              
-                NPC.state = BaseNPC.State.Normal;
-                NPC.enableSaving = false;
-                BaseEntity.saveList.Remove(NPC);
+                npc = GetComponent<BaseNpc>();
+                enabled = false;
             }
-            void FixedUpdate()
+            private void OnDestroy()
             {
-                if (AI.deltaTime < ConVar.Server.TickDelta()) return;
-                if (NPC.IsStunned()) return;
-                NPC.Tick();
-                if (NPC.attack.IsActive())
+                InvokeHandler.CancelInvoke(this, CheckLocation);
+            }
+            public void SetHome(Vector3 homePos)
+            {
+                this.homePos = homePos;
+                InvokeHandler.InvokeRepeating(this, CheckLocation, 1f, 20f);
+            }
+
+            private void CheckLocation()
+            {
+                if (Vector3.Distance(npc.transform.position, homePos) > 100)
                 {
-                    NPC.attack.gameObject.SetActive(false);
-                    Move(NextPos);
-                    return;
+                    npc.UpdateDestination(homePos);
                 }
-                if (Vector3.Distance(transform.position, Home) > 100)
-                {
-                    Move(Home);
-                    return;
-                }                
-                if (isAttacking && Target != null)
-                {
-                    var distance = Vector3.Distance(transform.position, Target.transform.position);
-                    if (distance >= 70)
-                    {
-                        isAttacking = false;
-                        Target = null;
-                        return;
-                    }
-                    else if (distance < targetAttackRange)
-                    {
-                        var normalized = (Target.transform.position - transform.position).XZ3D().normalized;
-                        if (NPC.diet.Eat(Target))
-                        {
-                            NPC.Heal(NPC.MaxHealth() / 10);
-                            Metabolism.calories.Add(Metabolism.calories.max / 10);
-                            Metabolism.hydration.Add(Metabolism.hydration.max / 10);
-                        }
-                        else if (NPC.attack.Hit(Target, 1, false))
-                            transform.rotation = Quaternion.LookRotation(normalized);
-                        NPC.steering.Face(normalized);
-                    }
-                    else Move(Target.transform.position);
-                }
-                else if (Vector3.Distance(transform.position, NextPos) < 20)
-                {
-                    CalculateNextPos();
-
-                    if (Metabolism.calories.value < 20f)
-                        NPC.diet.Forage();                    
-                    else if (Metabolism.sleep.value < 20f)
-                        Sleep();                    
-                }
-                else Move(NextPos);
-            }
-            public void SetHome(Vector3 pos)
-            {
-                Home = pos;
-                NextPos = pos;                
-            }            
-            void CalculateNextPos()
-            {
-                RaycastHit hitInfo;
-
-                NextPos = Home;
-                NextPos.x += UnityEngine.Random.Range(-70, 70);
-
-                if (Physics.Raycast(NextPos, Vector3.down, out hitInfo, LayerMask.GetMask("Terrain", "World", "Construction")))                
-                    NextPos.y = hitInfo.point.y;                
-                NextPos.y = Mathf.Max(NextPos.y, TerrainMeta.HeightMap.GetHeight(NextPos));
-
-                NextPos.z += UnityEngine.Random.Range(-70, 70);   
-            }
-            void Move(Vector3 pos)
-            {
-                NPC.state = BaseNPC.State.Normal;
-                AI.sense.Think();
-                NPC.steering.Move((pos - transform.position).XZ3D().normalized, pos, (int)NPCSpeed.Trot);
-            }
-            void Sleep()
-            {
-                NPC.state = BaseNPC.State.Sleeping;
-                NPC.sleep.Recover(20f);
-                Metabolism.stamina.Run(20f);
-                NPC.StartCooldown(20f, true);
-            }
-            internal void OnAttacked(HitInfo info)
-            {
-                if (info.Initiator)
-                    Attack(info.Initiator.GetComponent<BaseCombatEntity>());
-            }
-            internal void Attack(BaseCombatEntity ent)
-            {
-                Target = ent;
-                isAttacking = true;
-                targetAttackRange = Math.Pow(NPC._collider.bounds.XZ3D().extents.Max() + NPC.attack.range + ent._collider.bounds.XZ3D().extents.Max(), 2);
             }
         }
 
@@ -256,36 +195,22 @@ namespace Oxide.Plugins
         {
             string animal = animalTypes[type];
             var pos = GetSpawnPos(player);
-            BaseEntity entity = SpawnAnimalEntity(animal, pos);
-            casData.animals.Add(new CLAnimal { Position = entity.transform.position, Type = animal });
-            animalCache.Add(entity);
-            SaveData();
+            pos = SpawnAnimalEntity(animal, pos);
+            if (pos != Vector3.zero)
+            {
+                casData.animals.Add(new CLAnimal { Position = pos, Type = animal });
+                SaveData();
+            }            
         }        
         #endregion
 
-        #region Helper Methods       
-        private void FindAnimalTypes()
-        {
-            var filesField = typeof(FileSystem_AssetBundles).GetField("files", BindingFlags.Instance | BindingFlags.NonPublic);
-            var files = (Dictionary<string, AssetBundle>)filesField.GetValue(FileSystem.iface);
-            int i = 1;
-            foreach (var str in files.Keys)
-                if (str.StartsWith("assets/bundled/prefabs/autospawn/animals/"))
-                {
-                    var gmobj = GameManager.server.FindPrefab(str);
-                    if (gmobj?.GetComponent<BaseEntity>() != null)
-                    {
-                        animalTypes.Add(i, str);
-                        i++;
-                    }
-                }
-        }
+        #region Helper Methods      
+       
         private Vector3 GetSpawnPos(BasePlayer player)
         {
             Vector3 closestHitpoint;
             Vector3 sourceEye = player.transform.position + new Vector3(0f, 1.5f, 0f);
-            var input = serverinput.GetValue(player) as InputState;
-            Quaternion currentRot = Quaternion.Euler(input.current.aimAngles);
+            Quaternion currentRot = Quaternion.Euler(player.serverInput.current.aimAngles);
             Ray ray = new Ray(sourceEye, currentRot * Vector3.forward);
 
             var hits = Physics.RaycastAll(ray);

@@ -5,7 +5,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("RestoreUponDeath", "k1lly0u", "0.1.5", ResourceId = 1859)]
+    [Info("RestoreUponDeath", "k1lly0u", "0.1.51", ResourceId = 1859)]
     class RestoreUponDeath : RustPlugin
     {
         #region Fields
@@ -97,7 +97,7 @@ namespace Oxide.Plugins
                                 string perm = args[1].ToLower();
                                 if (!perm.StartsWith(Title.ToLower() + "."))
                                     perm = Title.ToLower() + "." + perm;
-                                if (!permission.PermissionExists(perm) && !rodData.Permissions.ContainsKey(perm))                                
+                                if (!rodData.Permissions.ContainsKey(perm))                                
                                 {
                                     int percentage = 0;
                                     if (int.TryParse(args[2], out percentage))

@@ -1,19 +1,18 @@
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Plugins;
-using Oxide.Core.Configuration;
+
 namespace Oxide.Plugins
 {
-    [Info("MagicArea", "Norn", 0.1, ResourceId = 1551)]
+    [Info("MagicArea", "Norn", "0.2.1", ResourceId = 1551)]
     [Description("Areas to practice building/pvp.")]
     public class MagicArea : RustPlugin
     {
-        [PluginReference] Plugin Kits;
-        [PluginReference] Plugin MagicTeleportation;
+        [PluginReference] Plugin Kits, MagicTeleportation;
 
-        // -------------- [ SAVING VARIABLES ] -------------- 
+        // -------------- [ SAVING VARIABLES ] --------------
 
         class MA
         {
@@ -70,7 +69,7 @@ namespace Oxide.Plugins
 
         #region Localization
 
-        void LoadDefaultMessages()
+        private void LoadDefaultMessages()
         {
             var messages = new Dictionary<string, string>
             {
@@ -89,7 +88,7 @@ namespace Oxide.Plugins
         // -----------------------------------------------
 
         Timer AreaSync;
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             Puts("Loaded " + MAData.Areas.Count.ToString() + " area(s).");
 
@@ -123,12 +122,12 @@ namespace Oxide.Plugins
             foreach (BasePlayer connected_player in BasePlayer.activePlayerList)
             {
                 bool found = false;
-                if(connected_player != null && connected_player.IsConnected())
+                if (connected_player != null && connected_player.IsConnected)
                 {
-                    if(!PlayerExists(connected_player)) { InitPlayer(connected_player); }
+                    if (!PlayerExists(connected_player)) { InitPlayer(connected_player); }
                     foreach(var area in MAData.Areas.Values)
                     {
-                        if(PlayerToPoint(connected_player, area.fRadius, area.fMinX, area.fMinY, area.fMinZ))
+                        if (PlayerToPoint(connected_player, area.fRadius, area.fMinX, area.fMinY, area.fMinZ))
                         {
                             if (MAData.PlayerData[connected_player.userID].iInArea != area.iID)
                             {
@@ -154,9 +153,9 @@ namespace Oxide.Plugins
                             found = true;
                         }
                     }
-                    if(!found && MAData.PlayerData[connected_player.userID].iInArea != -1)
+                    if (!found && MAData.PlayerData[connected_player.userID].iInArea != -1)
                     {
-                        if(MAData.Areas[MAData.PlayerData[connected_player.userID].iInArea].bResetInv)
+                        if (MAData.Areas[MAData.PlayerData[connected_player.userID].iInArea].bResetInv)
                         {
                             PrintToChat(connected_player, GetMessage("InventoryReset", connected_player.UserIDString));
                             connected_player.inventory.Strip();
@@ -186,7 +185,7 @@ namespace Oxide.Plugins
             {
                 AreaInfo Area = new AreaInfo();
                 Area.iID = GetRandomNumber(0, 25);
-                if(title == "-1") { title = "Area" + Area.iID.ToString(); }
+                if (title == "-1") { title = "Area" + Area.iID.ToString(); }
                 Area.tTitle = title;
                 Area.tDescription = description;
                 Area.uEnabled = enabled;
@@ -211,7 +210,7 @@ namespace Oxide.Plugins
         private bool MagicAreaExists(int id)
         {
             AreaInfo item = null;
-            if(MAData.Areas.TryGetValue(id, out item)) { return true; }
+            if (MAData.Areas.TryGetValue(id, out item)) { return true; }
             return false;
         }
 
@@ -225,7 +224,7 @@ namespace Oxide.Plugins
         private void OnEntityBuilt(Planner planner, GameObject gameObject)
         {
             BaseEntity e = gameObject.ToBaseEntity();
-            BasePlayer player = planner.ownerPlayer;
+            BasePlayer player = planner.GetOwnerPlayer();
             if (!(e is BaseEntity) || player == null)
             {
                 return;
@@ -253,7 +252,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             if (entity is BasePlayer)
             {
@@ -275,7 +274,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnEntitySpawned(BaseNetworkable entity)
+        private void OnEntitySpawned(BaseNetworkable entity)
         {
             uint id = entity.net.ID;
             if (MAData.Entities.ContainsKey(id))
@@ -291,10 +290,10 @@ namespace Oxide.Plugins
 
         private object OnItemResearch(Item item, BasePlayer player)
         {
-            if(PlayerExists(player))
+            if (PlayerExists(player))
             {
                 int id = MAData.PlayerData[player.userID].iInArea;
-                if (id != -1 && MagicAreaExists(id)) { if(!MAData.Areas[id].bCanResearch) { PrintToChat(player, GetMessage("ResearchBlocked", player.UserIDString)); return false; } }
+                if (id != -1 && MagicAreaExists(id)) { if (!MAData.Areas[id].bCanResearch) { PrintToChat(player, GetMessage("ResearchBlocked", player.UserIDString)); return false; } }
             }
             return null;
         }
@@ -304,9 +303,9 @@ namespace Oxide.Plugins
         [ConsoleCommand("area.create")]
         private void ccmdCreateArea(ConsoleSystem.Arg arg)
         {
-            if (arg.connection.authLevel >= Convert.ToInt32(Config["Admin", "MaxLevel"]))
+            if (arg.Connection.authLevel >= Convert.ToInt32(Config["Admin", "MaxLevel"]))
             {
-                var player = arg.connection?.player as BasePlayer;
+                var player = arg.Connection?.player as BasePlayer;
                 if (player == null) return;
                 int id = CreateMagicArea(player.transform.position, 50);
                 Puts(GetMessage("AreaCreated", player.UserIDString).Replace("{area_id}", id.ToString()));
@@ -353,17 +352,17 @@ namespace Oxide.Plugins
             return false;
         }
 
-        void Loaded()
+        private void Loaded()
         {
-            MAData = Interface.GetMod().DataFileSystem.ReadObject<MA>(this.Title);
+            MAData = Interface.Oxide.DataFileSystem.ReadObject<MA>(this.Title);
         }
 
-        void Unload()
+        private void Unload()
         {
             SaveData();
         }
 
-        void SaveData()
+        private void SaveData()
         {
             Interface.Oxide.DataFileSystem.WriteObject(this.Title, MAData);
         }
@@ -399,10 +398,9 @@ namespace Oxide.Plugins
 
         private bool IsPlayerInArea(BasePlayer player, float MinX, float MinY, float MaxX, float MaxY)
         {
-            if (player != null && player.isConnected)
+            if (player != null && player.IsConnected)
             { float X = player.transform.position.x; float Y = player.transform.position.y; float Z = player.transform.position.z; if (X >= MinX && X <= MaxX && Y >= MinY && Y <= MaxY) { return true; } }
             return false;
-            
         }
 
         protected override void LoadDefaultConfig()
@@ -412,8 +410,6 @@ namespace Oxide.Plugins
             Config["Settings", "Debug"] = false;
             Config["Settings", "DefaultExpire"] = 10800; // 3 hours
             Config["Admin", "MaxLevel"] = 2;
-            
-            
         }
 
         private HitInfo OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)

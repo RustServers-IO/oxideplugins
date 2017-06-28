@@ -9,7 +9,7 @@ using System.IO;
 using System.Linq;
 using Rust;
 namespace Oxide.Plugins {
-	[Info("HitIcon", "serezhadelaet", "1.5", ResourceId = 1917)]
+	[Info("HitIcon", "serezhadelaet", "1.5.3", ResourceId = 1917)]
     [Description("Configurable precached icon when you hit player|friend|clanmate")]
     class HitIcon : RustPlugin {
 
@@ -247,7 +247,7 @@ namespace Oxide.Plugins {
                     else
                     {
                         Debug.LogWarning("\n\n!!!!!!!!!!!!!!!!!!!!!\n\nError downloading image files (death.png and hit.png)\nThey must be in your oxide/data/ !\n\n!!!!!!!!!!!!!!!!!!!!!\n\n");
-                        ConsoleSystem.Run.Server.Normal("oxide.unload HitIcon");
+                        ConsoleSystem.Run(ConsoleSystem.Option.Unrestricted, "oxide.unload HitIcon");
                     }
                 }
             }
@@ -273,62 +273,52 @@ namespace Oxide.Plugins {
         }
         #endregion
 
-        #region GUI
-        public class GUIv4
-        {
-            public string guiname { get; set; }
-            public CuiElementContainer container = new CuiElementContainer();
+        #region CUI
 
-            public void add(string uiname, string image, string start, string end, string colour)
+        public void Png(BasePlayer player, string uiname, string image, string start, string end, string colour)
+        {
+            CuiElementContainer container = new CuiElementContainer();
+            container.Add(new CuiElement
             {
-                guiname = uiname;
-                CuiElement element = new CuiElement
-                {
-                    Name = guiname,
-                    Components = {
-                        new CuiRawImageComponent {
-                            Png = image,
-                            Color = colour,
-                            Sprite = "assets/content/textures/generic/fulltransparent.tga"
+                Name = uiname,
+                Components = {
+                    new CuiRawImageComponent {
+                        Png = image,
+                        Color = colour,
+                        Sprite = "assets/content/textures/generic/fulltransparent.tga"
+                    },
+                    new CuiRectTransformComponent {
+                        AnchorMin = start,
+                        AnchorMax = end
+                    }
+                }
+            });
+            CuiHelper.AddUi(player, container);
+        }
+
+        public void Dmg(BasePlayer player, string uiname, string uitext, string start, string end, string uicolor, int uisize)
+        {
+            CuiElementContainer container = new CuiElementContainer();
+            container.Add(new CuiElement
+            {
+                Name = uiname,
+                Components = {
+                        new CuiTextComponent {
+                            Text = uitext,
+                            FontSize = uisize,
+                            Font = "robotocondensed-regular.ttf",
+                            Color = uicolor,
+                            Align = TextAnchor.MiddleCenter
                         },
                         new CuiRectTransformComponent {
                             AnchorMin = start,
                             AnchorMax = end
                         }
                     }
-                };
-                container.Add(element);
-            }
-
-            public void dmg(string uiname, string uitext, string start, string end, string uicolor, int uisize)
-            {
-                guiname = uiname;
-                CuiElement element = new CuiElement
-                {
-                    Name = uiname,
-                    Components = {
-                            new CuiTextComponent {
-                                Text = uitext,
-                                FontSize = uisize,
-                                Font = "robotocondensed-regular.ttf",
-                                Color = uicolor,
-                                Align = TextAnchor.MiddleCenter
-                            },
-                            new CuiRectTransformComponent {
-                                AnchorMin = start,
-                                AnchorMax = end
-                            }
-                        }
-                };
-                container.Add(element);
-            }
-
-            public void send(BasePlayer player)
-            {
-                CuiHelper.DestroyUi(player, guiname);
-                CuiHelper.AddUi(player, container);
-            }
+            });
+            CuiHelper.AddUi(player, container);
         }
+
         #endregion
 
         #region Oxide
@@ -372,12 +362,13 @@ namespace Oxide.Plugins {
         }
         #endregion
 
-        #region GUI Class
+        #region CUI Destroyer
+
         class HitGui : MonoBehaviour
         {
             public BasePlayer player;
             public bool isDestroyed = false;
-            
+
             void Awake()
             {
                 player = GetComponent<BasePlayer>();
@@ -396,19 +387,20 @@ namespace Oxide.Plugins {
                 CuiHelper.DestroyUi(player, "hitdmg");
                 CuiHelper.DestroyUi(player, "hitpng");
             }
-            
+
             public void DestroyClass()
             {
                 UnityEngine.Object.Destroy(this);
             }
         }
+
         #endregion
 
         #region MainMethods
         
         private void SendHit(BasePlayer attacker, HitInfo hitinfo)
         {
-            var npc = hitinfo.HitEntity as BaseNPC;
+            var npc = hitinfo.HitEntity as BaseNpc;
             if (npc != null) //NPC
             {
                 if (shownpc) GuiDisplay(attacker, colornpc, hitinfo);
@@ -447,7 +439,7 @@ namespace Oxide.Plugins {
         void SendDeath(BaseCombatEntity entity, HitInfo info)
         {
             if (!showdeathskull) return;
-            var npc = (entity as BaseNPC);
+            var npc = (entity as BaseNpc);
             var initiator = (info?.Initiator as BasePlayer);
             if (initiator == null) return;
             if (storedData.DisabledUsers.Contains(initiator.userID)) return;
@@ -471,16 +463,13 @@ namespace Oxide.Plugins {
             hitGui.player = player;
             hitGui.isDestroyed = false;
             hitGui.DestroyUI();
-            GUIv4 gui = new GUIv4();
             if (isKill)
             {
-                gui.add("hitpng", fetchImage("deathimage"), "0.487 0.482", "0.513 0.518", colordeath); //death png
-                gui.send(player);
+                Png(player, "hitpng", fetchImage("deathimage"), "0.487 0.482", "0.513 0.518", colordeath); //death png
             }
             if (showhit && !isKill)
             {
-                gui.add("hitpng", fetchImage("hitimage"), "0.492 0.4905", "0.506 0.5095", color); // hit png
-                gui.send(player);
+                Png(player, "hitpng", fetchImage("hitimage"), "0.492 0.4905", "0.506 0.5095", color); // hit png
             }
             if (showdmg)
             {
@@ -492,11 +481,11 @@ namespace Oxide.Plugins {
                     {
                         CuiHelper.DestroyUi(player, "hitdmg");
                         float damage = (int)hitinfo.damageTypes.Total();
-                        gui.dmg("hitdmg", damage.ToString(), "0.45 0.45", "0.55 0.50", dmgcolor, dmgtextsize);
-                        gui.send(player);
+                        Dmg(player, "hitdmg", damage.ToString(), "0.45 0.45", "0.55 0.50", dmgcolor, dmgtextsize);
                     }
                 });
             }
+            
         }
 
         #endregion

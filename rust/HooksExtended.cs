@@ -13,7 +13,7 @@ using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("HooksExtended", "Calytic @ RustServers.IO", "0.0.11", ResourceId = 2239)]
+    [Info("HooksExtended", "Calytic @ RustServers.IO", "0.0.12", ResourceId = 2239)]
     public class HooksExtended : RustPlugin
     {
         #region Variables
@@ -242,7 +242,7 @@ namespace Oxide.Plugins
 
         void Init()
         {
-            UnsubscribeAll();
+            UnsubscribeHooks();
         }
 
         void OnServerInitialized()
@@ -255,7 +255,7 @@ namespace Oxide.Plugins
             SubscribeHooks();
         }
 
-        void UnsubscribeAll()
+        void UnsubscribeHooks()
         {
             Unsubscribe(nameof(OnPlayerTick));
             Unsubscribe(nameof(OnPlayerAttack));
@@ -316,7 +316,7 @@ namespace Oxide.Plugins
             }
 
             SaveSettings();
-            UnsubscribeAll();
+            UnsubscribeHooks();
             SubscribeHooks();
         }
 
@@ -333,7 +333,7 @@ namespace Oxide.Plugins
             }
 
             SaveSettings();
-            UnsubscribeAll();
+            UnsubscribeHooks();
             SubscribeHooks();
         }
 
@@ -388,7 +388,7 @@ namespace Oxide.Plugins
             if (save)
             {
                 SaveSettings();
-                UnsubscribeAll();
+                UnsubscribeHooks();
                 SubscribeHooks();
             }
         }
@@ -413,6 +413,54 @@ namespace Oxide.Plugins
             settings = Config.ReadObject<PluginSettings>();
         }
 
+        #endregion
+
+        #region Console Commands
+        [ConsoleCommand("hookx")]
+        void ccHooksExtendedStatus(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection == null)
+            {
+                if (arg.Args == null)
+                {
+                    
+                    Puts("Hook Configuration:");
+                    foreach (var prop in typeof(HookSettings).GetFields())
+                    {
+                        var val = prop.GetValue(settings.HookSettings);
+                        if(val == null) {
+                            val = false;
+                        }
+
+                        Puts("{0} = {1}", prop.Name, val);
+                    }
+                    
+                }
+                else if (arg.Args.Length > 0)
+                {
+                    var cmd = arg.Args[0];
+                    UnsubscribeHooks();
+                    switch (cmd)
+                    {
+                        case "enable":
+                            foreach (var prop in typeof(HookSettings).GetFields())
+                            {
+                                prop.SetValue(settings.HookSettings, true);
+                            }
+                            Puts("All hooks enabled");
+                            break;
+                        case "disable":
+                            foreach (var prop in typeof(HookSettings).GetFields())
+                            {
+                                prop.SetValue(settings.HookSettings, false);
+                            }
+                            Puts("All hooks disabled");
+                            break;
+                    }
+                    SubscribeHooks();
+                }
+            }
+        }
         #endregion
 
         #region Extended Hooks
@@ -462,51 +510,56 @@ namespace Oxide.Plugins
         /// <param name="player"></param>
         private void OnPlayerTick(BasePlayer player)
         {
-            Item item = onlinePlayers[player].Player.GetActiveItem();
-            if (item != null && item != onlinePlayers[player].activeItem)
+            PlayerProfile profile;
+            if (!TryGetPlayer(player, out profile))
+            {
+                return;
+            }
+
+            Item item = player.GetActiveItem();
+            if (item != null && item != profile.activeItem)
             {
                 Interface.CallHook("OnItemActivate", player, item);
-                onlinePlayers[player].activeItem = item;
+                profile.activeItem = item;
             }
             else if (item == null)
             {
-                if (onlinePlayers[player].activeItem != null)
+                if (profile.activeItem != null)
                 {
                     Interface.CallHook("OnItemDeactivate", player, item);
                 }
-                onlinePlayers[player].activeItem = item;
+                profile.activeItem = item;
             }
-
-            if (onlinePlayers[player].modelState.ducked)
+            if (player.IsDucked())
             {
-                if (!onlinePlayers[player].wasDucked)
+                if (!profile.wasDucked)
                 {
-                    onlinePlayers[player].wasDucked = true;
+                    profile.wasDucked = true;
                     Interface.CallHook("OnPlayerDuck", player);
                 }
             }
             else
             {
-                if (onlinePlayers[player].wasDucked)
+                if (profile.wasDucked)
                 {
-                    onlinePlayers[player].wasDucked = false;
+                    profile.wasDucked = false;
                     Interface.CallHook("OnPlayerStand", player);
                 }
             }
 
-            if (onlinePlayers[player].modelState.sprinting)
+            if (player.IsRunning())
             {
-                if (!onlinePlayers[player].wasSprinting)
+                if (!profile.wasSprinting)
                 {
-                    onlinePlayers[player].wasSprinting = true;
+                    profile.wasSprinting = true;
                     Interface.CallHook("OnStartSprint", player);
                 }
             }
             else
             {
-                if (onlinePlayers[player].wasSprinting)
+                if (profile.wasSprinting)
                 {
-                    onlinePlayers[player].wasSprinting = false;
+                    profile.wasSprinting = false;
                     Interface.CallHook("OnStopSprint", player);
                 }
             }
@@ -695,9 +748,9 @@ namespace Oxide.Plugins
         /// <param name="info"></param>
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            if (info.Initiator != null && info.Initiator is BaseNPC)
+            if (info.Initiator != null && info.Initiator is BaseNpc)
             {
-                Interface.CallHook("OnAnimalAttack", entity, (BaseNPC)info.Initiator, info);
+                Interface.CallHook("OnAnimalAttack", entity, (BaseNpc)info.Initiator, info);
             }
 
             if (info.Initiator != null && info.Initiator.name.Contains("patrolhelicopter.prefab") && !info.Initiator.name.Contains("gibs"))
@@ -733,9 +786,9 @@ namespace Oxide.Plugins
             {
                 Interface.CallHook("OnSleepingBagDamage", (SleepingBag)entity, info);
             }
-            else if (entity is BaseNPC)
+            else if (entity is BaseNpc)
             {
-                Interface.CallHook("OnNPCDamage", (BaseNPC)entity, info);
+                Interface.CallHook("OnNPCDamage", (BaseNpc)entity, info);
             }
         }
 
@@ -753,7 +806,7 @@ namespace Oxide.Plugins
             {
                 Interface.Oxide.CallHook("OnHelicopterDebrisSpawned", entity);
             }
-            else if (entity is BaseNPC)
+            else if (entity is BaseNpc)
             {
                 Interface.Oxide.CallHook("OnNPCSpawned", entity);
             }
@@ -836,9 +889,9 @@ namespace Oxide.Plugins
             {
                 Interface.CallHook("OnSleepingBagDeath", (SleepingBag)entity, info);
             }
-            else if (entity is BaseNPC)
+            else if (entity is BaseNpc)
             {
-                Interface.CallHook("OnNPCDeath", (BaseNPC)entity, info);
+                Interface.CallHook("OnNPCDeath", (BaseNpc)entity, info);
             }
         }
 
@@ -955,7 +1008,7 @@ namespace Oxide.Plugins
                     Interface.Oxide.CallHook("OnUsePlayer", player, targetEntity);
                     break;
                 }
-                else if ((targetEntity = target.GetComponentInParent<BaseNPC>()) != null)
+                else if ((targetEntity = target.GetComponentInParent<BaseNpc>()) != null)
                 {
                     Interface.Oxide.CallHook("OnUseNPC", player, targetEntity);
                     break;
@@ -1012,7 +1065,7 @@ namespace Oxide.Plugins
                 {
                     spot = true;
                 }
-                else if (hitEntity is BaseNPC)
+                else if (hitEntity is BaseNpc)
                 {
                     spot = true;
                 }
@@ -1057,7 +1110,7 @@ namespace Oxide.Plugins
             {
                 spotCooldown[player].Add(target);
 
-                if (hitEntity is BaseNPC)
+                if (hitEntity is BaseNpc)
                 {
                     Interface.Oxide.CallHook("OnSpotNPC", player, hitEntity, distanceTo);
                 }
@@ -1083,6 +1136,10 @@ namespace Oxide.Plugins
                     this.spotCooldown[player].Remove(target);
                 });
             }
+        }
+
+        bool TryGetPlayer(BasePlayer player, out PlayerProfile profile) {
+            return onlinePlayers.TryGetValue(player, out profile);
         }
 
         bool TryGetPlayerView(BasePlayer player, out Quaternion viewAngle)
