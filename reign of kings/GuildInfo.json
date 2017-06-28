@@ -2,7 +2,7 @@
     "name": "Guild Info",
     "description": "Know thy Enemy! Find out how many members a guild has and which of them are online!",
     "author": "D-Kay",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "configuration": true,
     "suggest": {
         "HelpText": "*"

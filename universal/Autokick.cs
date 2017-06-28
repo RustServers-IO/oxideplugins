@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Autokick", "Exel80", "1.1.2", ResourceId = 2138)]
+    [Info("Autokick", "Exel80", "1.1.5", ResourceId = 2138)]
     [Description("Autokick help you change your server to \"maintenance break\" mode, if you need it!")]
     class Autokick : CovalencePlugin
     {
@@ -20,6 +20,11 @@ namespace Oxide.Plugins
         private void Loaded()
         {
             LoadConfigValues();
+
+            #region Permission
+            permission.RegisterPermission("autokick.use", this);
+            permission.RegisterPermission("autokick.join", this);
+            #endregion
 
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -132,34 +137,14 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region PlayerJoin
-        void OnPlayerInit(IPlayer client)
+        #region Connected & Spawned
+        void OnUserConnected(IPlayer client)
         {
-            // If Autokick is enabled, then start timer (8sec)
-            if (_config.Settings["Enabled"]?.ToLower() == "true")
-            {
-                timer.Once(8f, () =>
-                {
-                    try
-                    {
-                        foreach (IPlayer player in players.Connected.ToList())
-                        {
-                            string _name = player.Name;
-                            string _id = player.Id.ToString();
-                            string message = _config.Settings["KickMessage"];
-
-                            if (DEBUG) Puts($"[Deubg] Name: {_name}, Id: {_id}, isAdmin: {player.IsAdmin}");
-
-                            if (hasPermission(player, "autokick.join"))
-                                return;
-
-                            if (player.IsConnected)
-                                player.Kick(message);
-                        }
-                    }
-                    catch (Exception e) { PrintWarning($"{e.GetBaseException()}"); }
-                });
-            }
+            timer.Once(2.55f, () => { KickerFromList(); });
+        }
+        void OnUserSpawn(IPlayer player)
+        {
+            KickerFromList();
         }
         #endregion
 
@@ -185,13 +170,38 @@ namespace Oxide.Plugins
             }
             catch (Exception e) { PrintWarning($"{e.GetBaseException()}"); }
         }
+        private void KickerFromList()
+        {
+            // If Autokick is enabled, then start timer (8sec)
+            if (_config.Settings["Enabled"]?.ToLower() == "true")
+            {
+                try
+                {
+                    foreach (IPlayer player in players.Connected.ToList())
+                    {
+                        string _name = player.Name;
+                        string _id = player.Id.ToString();
+                        string message = _config.Settings["KickMessage"];
+
+                        if (DEBUG) Puts($"[Deubg] Name: {_name}, Id: {_id}, isAdmin: {player.IsAdmin}");
+
+                        if (hasPermission(player, "autokick.join"))
+                            return;
+
+                        if (player.IsConnected)
+                            player.Kick(message);
+                    }
+                }
+                catch (Exception e) { PrintWarning($"{e.GetBaseException()}"); }
+            }
+        }
         #endregion
 
         #region Helper
         private void _chat(IPlayer player, string msg) => player.Reply(covalence.FormatText($"{_config.Settings["Prefix"]} {msg}"));
         private void _debug(IPlayer player, string msg)
         {
-            if(DEBUG)
+            if (DEBUG)
                 Puts($"[Debug] {player.Name} - {msg}");
         }
         bool hasPermission(IPlayer player, string permissionName)

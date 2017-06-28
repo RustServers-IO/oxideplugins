@@ -2,7 +2,7 @@
     "name": "Voting System",
     "description": "Players can vote to change the time and weather",
     "author": "D-Kay",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "configuration": true,
     "suggest": {
         "LevelSystem": "*",

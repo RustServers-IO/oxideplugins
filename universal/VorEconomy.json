@@ -1,0 +1,16 @@
+{
+    "name": "VorEconomy",
+    "description": "Universal economy plugin using a custom user-defined currency.",
+    "author": "",
+    "version": "1.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/voreconomy.2387",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

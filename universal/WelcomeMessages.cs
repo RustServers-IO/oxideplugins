@@ -4,13 +4,19 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("WelcomeMessages", "Ankawi", "1.0.1", ResourceId = 0)]
+    [Info("WelcomeMessages", "Ankawi", "1.0.4", ResourceId = 2219)]
     [Description("Sends players welcome messages")]
 
     class WelcomeMessages : CovalencePlugin
     {
+        protected override void LoadDefaultConfig()
+        {
+            PrintWarning("Creating new configuration file for " + this.Title + "--Version#: " + this.Version);
+            Config["WaitIntervalInSeconds"] = 25f;
+        }
         void Init()
         {
+            LoadDefaultConfig();
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 ["Welcome"] = "[#cyan]Welcome to the server {0}![/#]"
@@ -29,7 +35,10 @@ namespace Oxide.Plugins
 
         void OnUserConnected(IPlayer player)
         {
-            player.Reply(covalence.FormatText(string.Format(lang.GetMessage("Welcome", this, player.Id), player.Name.Sanitize())));
+            timer.Once((float)(Config["WaitIntervalInSeconds"]), () =>
+            {
+                player.Reply(covalence.FormatText(string.Format(lang.GetMessage("Welcome", this, player.Id), player.Name.Sanitize())));
+            });        
         }
     }
 }

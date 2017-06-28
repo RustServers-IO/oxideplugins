@@ -1,16 +1,17 @@
 ﻿using Oxide.Core.Libraries.Covalence;
+using System.Collections.Generic;
 using Oxide.Core.Plugins;
 using System;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Emote", "Hirsty", "1.0.8", ResourceId = 1353)]
+    [Info("Emote", "Hirsty", "1.0.10", ResourceId = 1353)]
     [Description("This will allow players to express their feelings!")]
     class Emote : CovalencePlugin
     {
-
-        public static string version = "1.0.8";
+		public static Dictionary<string, object> ChatDict = new Dictionary<string, object>();
+        public static string version = "1.0.10";
         public string template = "";
         public string EnableEmotes = "false";
         #region Config Data
@@ -67,13 +68,13 @@ namespace Oxide.Plugins
         }
         private void Loaded() => LoadConfigData(); // What to do when plugin loaded
         [PluginReference] Plugin BetterChat;
+        [PluginReference] Plugin BetterChatMute;
         private void LoadConfigData()
         {
             if(BetterChat){
                 Puts("We found BetterChat! Enabling Support.");
                 Config["Config", "BetterChat"] = "true";
             } else {
-                
                 Puts("No BetterChat found! Disabling Support.");
                 Config["Config", "BetterChat"] = "false";
             }
@@ -163,55 +164,44 @@ namespace Oxide.Plugins
         {
             if (player.LastCommand == CommandType.Console) return null;
             string uid = player.Id.ToString();
-            if(BetterChat){
-                if ((bool)BetterChat.Call("API_IsPlayerMuted",player.Id)){
+			object muted = BetterChatMute?.Call("CheckMuted",player.Id);
+            if(muted is bool && !(bool)muted){
                     return false;
-                }
             }
             string full = string.Join(" ", args);
             SendChatMessage(player, full);
-            return null;
+            return true;
         
         }
         #endregion
+		
+        object OnBetterChat(Dictionary<string, object> Chat){
+			IPlayer player = (IPlayer)Chat["Player"];
+			if (Config["Emotes", Chat["Text"].ToString()] != null && EnableEmotes == "true" && player.HasPermission("emote.use"))
+           {
+				return false;
+		   }
+		   return Chat;
+		}
         object OnUserChat(IPlayer player, string message)
         {
-            string uid = player.Id;
-
-            if(BetterChat){
-                return null;
-            }
-           if (Config["Emotes", message] != null && EnableEmotes == "true" && player.HasPermission("emote.canemote"))
+           string uid = player.Id;
+           if (Config["Emotes", message] != null && EnableEmotes == "true" && player.HasPermission("emote.use"))
            {
-               SendChatMessage(player, Config["Emotes", message].ToString());
-               return false;
-               
+					SendChatMessage(player, Config["Emotes", message].ToString());
+				
+				return false;
             }
             return null;
         }
-        object OnBetterChat(IPlayer player, string message)
-        {
-            
-            if(player==null){
-                return false;
-            }
-            string uid = player.Id;
-           if (Config["Emotes", message] != null && EnableEmotes == "true" && player.HasPermission("emote.canemote"))
-           {
-               SendChatMessage(player, Config["Emotes", message].ToString());
-               return false;
-            }
-            return null;
-        }
-
         object SendChatMessage(IPlayer player, string msg)
         {
             string build = template;
             build = build.Replace("{Player}", player.Name);
             build = build.Replace("{Message}", msg);
             server.Broadcast(build);
-            Puts(player.Name + " emoted: " + msg);
-            return false;
+            //Puts(player.Name + " emoted: " + msg);
+            return true;
         }
     }
 }

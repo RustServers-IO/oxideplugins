@@ -3,17 +3,18 @@ using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Libraries.Covalence;
 using System.Linq;
+using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Univeral Economics", "k1lly0u", "0.1.1", ResourceId = 2129)]
+    [Info("Univeral Economics", "k1lly0u", "0.1.2", ResourceId = 2129)]
     class UEconomics : CovalencePlugin
     {
         #region Fields
         StoredData storedData;
         private DynamicConfigFile data;
 
-        private Dictionary<string, int> moneyCache;
+        private Dictionary<string, double> moneyCache;
         #endregion
 
         #region Oxide Hooks
@@ -22,7 +23,7 @@ namespace Oxide.Plugins
             data = Interface.Oxide.DataFileSystem.GetFile("ueconomics_data");
             lang.RegisterMessages(Messages, this);
             permission.RegisterPermission("ueconomics.admin", this);
-            moneyCache = new Dictionary<string, int>();
+            moneyCache = new Dictionary<string, double>();
         }
         void OnServerInitialized()
         {
@@ -51,16 +52,16 @@ namespace Oxide.Plugins
             if (!moneyCache.ContainsKey(ID))
                 moneyCache.Add(ID, configData.StartingMoney);
         }
-        private void Deposit(string ID, int amount)
+        private void Deposit(string ID, double amount)
         {
             CheckUser(ID);
             moneyCache[ID] += amount;
         }
-        private bool Withdraw(string ID, int amount)
+        private bool Withdraw(string ID, double amount)
         {
             if (amount <= 0) return false;
             CheckUser(ID);
-            int userMoney = GetUserMoney(ID);
+            double userMoney = GetUserMoney(ID);
             if (userMoney >= amount)
             {
                 moneyCache[ID] -= amount;
@@ -68,9 +69,9 @@ namespace Oxide.Plugins
             }
             return false;
         }
-        private int GetUserMoney(string ID)
-        {            
-            int amount;
+        private double GetUserMoney(string ID)
+        {
+            double amount;
             CheckUser(ID);
             moneyCache.TryGetValue(ID, out amount);
             return amount;
@@ -118,14 +119,14 @@ namespace Oxide.Plugins
                         var target = GetUser(args[1]);
                         if (target is IPlayer)
                         {
-                            int amount = GetUserMoney((target as IPlayer).Id);
+                            double amount = Math.Round(GetUserMoney((target as IPlayer).Id), 2);
                             player.Reply(string.Format(msg("{0}'s Account Balance: {1} {2}(s)", player.Id), (target as IPlayer).Name, amount, configData.CurrencyName));
                         }
                         else player.Reply((string)target);
                     }
                     else
                     {
-                        int amount = GetUserMoney(player.Id);
+                        double amount = Math.Round(GetUserMoney((player as IPlayer).Id), 2);
                         player.Reply(string.Format(msg("Account Balance: {0} {1}(s)", player.Id), amount, configData.CurrencyName));
                     }
                     return;
@@ -135,8 +136,8 @@ namespace Oxide.Plugins
                         var target = GetUser(args[1]);
                         if (target is IPlayer)
                         {
-                            int sending;
-                            if (!int.TryParse(args[2], out sending))
+                            double sending;
+                            if (!double.TryParse(args[2], out sending))
                             {
                                 player.Reply(msg("You must enter an amount", player.Id));
                                 return;
@@ -162,8 +163,8 @@ namespace Oxide.Plugins
                             var target = GetUser(args[1]);
                             if (target is IPlayer)
                             {
-                                int sending = 0;
-                                if (!int.TryParse(args[2], out sending))
+                                double sending = 0;
+                                if (!double.TryParse(args[2], out sending))
                                 {
                                     player.Reply(msg("You must enter an amount", player.Id));
                                     return;
@@ -186,8 +187,8 @@ namespace Oxide.Plugins
                             var target = GetUser(args[1]);
                             if (target is IPlayer)
                             {
-                                int amount = 0;
-                                if (!int.TryParse(args[2], out amount))
+                                double amount = 0;
+                                if (!double.TryParse(args[2], out amount))
                                 {
                                     player.Reply(msg("You must enter an amount", player.Id));
                                     return;
@@ -213,8 +214,8 @@ namespace Oxide.Plugins
                             var target = GetUser(args[1]);
                             if (target is IPlayer)
                             {
-                                int amount = 0;
-                                if (!int.TryParse(args[2], out amount))
+                                double amount = 0;
+                                if (!double.TryParse(args[2], out amount))
                                 {
                                     player.Reply(msg("You must enter an amount", player.Id));
                                     return;
@@ -284,7 +285,7 @@ namespace Oxide.Plugins
         }
         class StoredData
         {
-            public Dictionary<string, int> money = new Dictionary<string, int>();
+            public Dictionary<string, double> money = new Dictionary<string, double>();
         }
         #endregion
 

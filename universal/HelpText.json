@@ -2,7 +2,7 @@
     "name": "HelpText",
     "description": "Allows people to use \/help to get help info from all plugins",
     "author": "Calytic",
-    "version": "2.0.41",
+    "version": "2.0.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/helptext.676",

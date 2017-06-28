@@ -44,7 +44,7 @@ interface IBattleLinkFriends // BattleLink integration interface for reference
 
 namespace Oxide.Plugins
 {
-    [Info("Friends", "dcode", "2.5.2", ResourceId = 2120)]
+    [Info("Friends", "dcode", "2.5.3", ResourceId = 2120)]
     [Description("Universal friends plugin.")]
     public class Friends : CovalencePlugin, IBattleLinkFriends
     {
@@ -748,7 +748,7 @@ namespace Oxide.Plugins
         }
 
         // Allows door usage if ShareCodeLocks is enabled and player is a friend of the door's owner.
-        object CanUseLock(BasePlayer player, BaseLock codeLock)
+        object CanUseLockedEntity(BasePlayer player, BaseLock codeLock)
         {
             ulong ownerId;
             return configData.Rust.ShareCodeLocks

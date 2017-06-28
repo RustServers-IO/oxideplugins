@@ -1,0 +1,19 @@
+{
+    "name": "Gangs",
+    "description": "A plug-in gang to help in battle and shows the main gangs and best.",
+    "author": "Gute",
+    "version": "2.0.0",
+    "configuration": true,
+    "suggest": {
+        "AdminControl": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/gangs.2347",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

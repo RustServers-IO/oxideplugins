@@ -1,9 +1,9 @@
 {
     "name": "The Grand Exchange",
     "description": "Buy and Sell your items and resources on the Grand Exchange Market!",
-    "author": "Scorpyon",
-    "version": "1.3.4",
-    "configuration": false,
+    "author": "D-Kay",
+    "version": "2.1.1",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/the-grand-exchange.1145",
     "games": [

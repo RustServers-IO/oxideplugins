@@ -1,0 +1,19 @@
+{
+    "name": "BetterChat Flood",
+    "description": "Puts a cooldown on peoples messages preventing them flooding the chat.",
+    "author": "Ryan",
+    "version": "1.0.2",
+    "configuration": true,
+    "suggest": {
+        "BetterChat": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/betterchat-flood.2484",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

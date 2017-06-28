@@ -9,7 +9,7 @@ using CodeHatch.Engine.Modules.SocialSystem;
 
 namespace Oxide.Plugins
 {
-    [Info("GuildInfo", "Scorpyon & D-Kay", "1.2.0", ResourceId = 1125)]
+    [Info("GuildInfo", "Scorpyon & D-Kay", "1.2.1", ResourceId = 1125)]
     public class GuildInfo : ReignOfKingsPlugin
     {
         #region Variables
@@ -72,36 +72,32 @@ namespace Oxide.Plugins
         [ChatCommand("guildinfo")]
         private void ShowGuildInfo(Player player, string cmd, string[] args)
         {
-            if (useAdminOnly && !player.HasPermission("guildinfo.guild")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (useAdminOnly && !player.HasPermission("guildinfo.guild")) { GetMessage("NoPermission", player); return; }
 
-            if (args.Length < 1)
-            {
-                PrintToChat(player, GetMessage("InvalidArgs", player.Id.ToString()));
-                return;
-            }
-            string name = ConvertArrayToString(args);
-            ShowListByGuild(player, name);
+            if (args.Length < 1) { PrintToChat(player, GetMessage("InvalidArgs", player)); return; }
+
+            ShowListByGuild(player, args.JoinToString(" "));
         }
 
         [ChatCommand("playerinfo")]
         private void ShowPlayerInfo(Player player, string cmd, string[] args)
         {
-            if (useAdminOnly && !player.HasPermission("guildinfo.player")) { GetMessage("NoPermission", player.Id.ToString()); return; }
-            if (args.Length < 1)
-            {
-                PrintToChat(player, GetMessage("InvalidArgs", player.Id.ToString()));
-                return;
-            }
-            string name = ConvertArrayToString(args);
-            ShowListByPlayer(player, name);
+            if (useAdminOnly && !player.HasPermission("guildinfo.player")) { GetMessage("NoPermission", player); return; }
+
+            if (args.Length < 1) { PrintToChat(player, GetMessage("InvalidArgs", player)); return; }
+
+            ShowListByPlayer(player, args.JoinToString(" "));
         }
         
         [ChatCommand("giadminonly")]
         private void ToggleAdminOnly(Player player, string cmd, string[] args)
         {
-            if (useAdminOnly && !player.HasPermission("guildinfo.toggle")) { GetMessage("NoPermission", player.Id.ToString()); return; }
-            if (useAdminOnly) { useAdminOnly = false; PrintToChat(player, string.Format(GetMessage("ToggleAdminOnly", player.Id.ToString()), "off")); }
-            else { useAdminOnly = true; PrintToChat(player, string.Format(GetMessage("ToggleAdminOnly", player.Id.ToString()), "on")); }
+            if (useAdminOnly && !player.HasPermission("guildinfo.toggle")) { GetMessage("NoPermission", player); return; }
+
+            if (useAdminOnly) { useAdminOnly = false; PrintToChat(player, string.Format(GetMessage("ToggleAdminOnly", player), "off")); }
+            else { useAdminOnly = true; PrintToChat(player, string.Format(GetMessage("ToggleAdminOnly", player), "on")); }
+
+            SaveConfigData();
         }
 
         #endregion
@@ -111,27 +107,33 @@ namespace Oxide.Plugins
         private void ShowListByGuild(Player player, string guildName)
         {
             Guild guild = GetGuildByGuild(guildName);
-            if(guild == null) { PrintToChat(player, GetMessage("NoGuild", player.Id.ToString())); return; }
+            if(guild == null) { PrintToChat(player, GetMessage("NoGuild", player)); return; }
             ListGuildInfo(guild, player);
         }
 
         private void ShowListByPlayer(Player player, string playerName)
         {
             Guild guild = GetGuildByPlayer(playerName);
-            if (guild == null) { PrintToChat(player, GetMessage("NoPlayer", player.Id.ToString())); return; }
+            if (guild == null) { PrintToChat(player, GetMessage("NoPlayer", player)); return; }
             ListGuildInfo(guild, player);
         }
 
         private void ListGuildInfo(Guild guild, Player player)
         {
+            string message = "";
+
             ReadOnlyCollection<Member> members = guild.Members().GetAllMembers();
-            PrintToChat(player, string.Format(GetMessage("GuildlistTitle", player.Id.ToString()), guild.DisplayName, members.Count));
+
+            message += string.Format(GetMessage("GuildlistTitle", player), guild.DisplayName, members.Count);
+            message += "\n";
+
             foreach (Member member in members)
             {
-                string onlineStatus = GetMessage("GuildlistIsOffline", player.Id.ToString());
-                if (member.OnlineStatus) onlineStatus = GetMessage("GuildlistIsOnline", player.Id.ToString());
-                PrintToChat(player, string.Format(GetMessage("GuildlistPlayerStatus", player.Id.ToString()), member.Name, onlineStatus));
+                message += "\n";
+                message += string.Format(GetMessage("GuildlistPlayerStatus", player), member.Name, GetMessage(member.OnlineStatus ? "GuildlistIsOnline" : "GuildlistIsOffline", player));
             }
+
+            player.ShowPopup("Guild info", message);
         }
 
         private Guild GetGuildByPlayer(Player player)
@@ -199,27 +201,14 @@ namespace Oxide.Plugins
 
         private void SendHelpText(Player player)
         {
-            PrintToChat(player, GetMessage("HelpTextTitle", player.Id.ToString()));
-            PrintToChat(player, GetMessage("HelpTextGuildinfo", player.Id.ToString()));
-            PrintToChat(player, GetMessage("HelpTextPlayerinfo", player.Id.ToString()));
+            PrintToChat(player, GetMessage("HelpTextTitle", player));
+            PrintToChat(player, GetMessage("HelpTextGuildinfo", player));
+            PrintToChat(player, GetMessage("HelpTextPlayerinfo", player));
         }
 
         #endregion
 
         #region Utility
-
-        private string ConvertArrayToString(string[] args)
-        {
-            string name = args[0];
-            if (args.Length > 1)
-            {
-                for (int i = 1; i < args.Length; i++)
-                {
-                    name = name + " " + args[i];
-                }
-            }
-            return name;
-        }
 
         private T GetConfig<T>(string name, T defaultValue)
         {
@@ -227,7 +216,7 @@ namespace Oxide.Plugins
             return (T)Convert.ChangeType(Config[name], typeof(T));
         }
 
-        string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
+        string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, player == null ? null : player.Id.ToString());
 
         #endregion
     }

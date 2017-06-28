@@ -1,20 +1,20 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using Oxide.Core;
-using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Configuration;
+using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Playtime Tracker", "k1lly0u", "0.1.31", ResourceId = 2125)]
+    [Info("Playtime Tracker", "k1lly0u", "0.1.6", ResourceId = 2125)]
+    [Description("Tracks playtime and AFK time of players with a built-in reward system")]
     class PlaytimeTracker : CovalencePlugin
     {
         #region Fields
-        [PluginReference] Plugin ServerRewards;
-        [PluginReference] Plugin Economics;
-        [PluginReference] Plugin Economy;
-        [PluginReference] Plugin UEconomics;
+        [PluginReference]
+        Plugin Economics, Economy, ServerRewards, UEconomics;
 
         PlayData playData;
         private DynamicConfigFile TimeData;
@@ -27,7 +27,7 @@ namespace Oxide.Plugins
 
         private Dictionary<string, TimeInfo> timeCache;
         private Dictionary<string, Timer> updateTimers;
-        private Dictionary<string, double> timeStamps;        
+        private Dictionary<string, double> timeStamps;
         private Dictionary<string, GenericPosition> posCache;
 
         private Timer saveTimer;
@@ -35,7 +35,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Oxide Hooks
-        void Loaded()
+        void Init()
         {
             TimeData = Interface.Oxide.DataFileSystem.GetFile("PTTracker/playtime_data");
             PermissionData = Interface.Oxide.DataFileSystem.GetFile("PTTracker/permission_data");
@@ -63,20 +63,17 @@ namespace Oxide.Plugins
         }
         void OnUserConnected(IPlayer player)
         {
-            if (player == null) return;
-                InitPlayerData(player);
+            InitPlayerData(player);
         }
         void OnUserDisconnected(IPlayer player)
         {
-            if (player == null) return;
-
             if (updateTimers.ContainsKey(player.Id))
             {
                 if (updateTimers[player.Id] != null)
                     updateTimers[player.Id].Destroy();
                 updateTimers.Remove(player.Id);
             }
-            
+
             AddTime(player);
 
             if (posCache.ContainsKey(player.Id))
@@ -94,7 +91,7 @@ namespace Oxide.Plugins
 
             SaveData();
         }
-        void HasValidRewardSystem()
+        void HasValidRewardSystem(int attempts = 0)
         {
             bool success = false;
             if (configData.RewardSystem.Enabled)
@@ -112,9 +109,17 @@ namespace Oxide.Plugins
                 if (configData.RewardSystem.RewardPlugins.Universal.UEconomics && UEconomics)
                     success = true;
                 if (!success)
-                    PrintWarning("Unable to initialize any reward plugins. Rewards will not be issued!");
+                {
+                    if (attempts == 0)
+                    {
+                        PrintWarning("Unable to find any supported reward plugins. This may be caused by PTT loading before them. Will check again in 1 minute");
+                        timer.In(60, () => HasValidRewardSystem(1));
+                        return;
+                    }
+                    PrintWarning("Still unable to find any supported reward plugins. Rewards will not be issued!");
+                }
             }
-           
+
             canIssueRewards = success;
         }
         #endregion
@@ -132,13 +137,13 @@ namespace Oxide.Plugins
             ResetTimer(player, true);
         }
         void ResetTimer(IPlayer player, bool isNew = false)
-        {            
+        {
             AddTime(player);
-            if (isNew)
-            {                
+            if (isNew && !updateTimers.ContainsKey(player.Id))
+            {
                 updateTimers.Add(player.Id, timer.Once(60, () => ResetTimer(player)));
             }
-            else updateTimers[player.Id] = timer.Once(60, () => ResetTimer(player));            
+            else updateTimers[player.Id] = timer.Once(60, () => ResetTimer(player));
         }
         void CheckForData(IPlayer player)
         {
@@ -150,27 +155,36 @@ namespace Oxide.Plugins
                     referrals = 0,
                     playTime = 0
                 });
+
+            if (!timeStamps.ContainsKey(player.Id))
+                timeStamps.Add(player.Id, GrabCurrentTime());
         }
         void AddTime(IPlayer player)
         {
+            if (!player.IsConnected)
+                return;
+
             var ID = player.Id;
             bool isAFK = false;
+            CheckForData(player);
+
             var time = GrabCurrentTime() - timeStamps[ID];
-            timeStamps[ID] = GrabCurrentTime();            
+            timeStamps[ID] = GrabCurrentTime();
+
             if (configData.Options.TrackAFKTime)
             {
                 isAFK = CheckPosition(player);
                 AddPosition(player);
             }
-            if (isAFK)            
-                timeCache[ID].afkTime += time;            
-            else            
+            if (isAFK)
+                timeCache[ID].afkTime += time;
+            else
                 timeCache[ID].playTime += time;
-            
+
             if (canIssueRewards)
                 CheckForReward(player);
         }
-        
+
         void AddPosition(IPlayer player)
         {
             if (player?.Position() == null)
@@ -179,18 +193,18 @@ namespace Oxide.Plugins
                 posCache.Add(player.Id, player.Position());
             else posCache[player.Id] = player.Position();
         }
-        
+
         bool CheckPosition(IPlayer player)
         {
             if (player?.Position() == null)
                 return false;
             if (posCache.ContainsKey(player.Id))
             {
-                if (posCache[player.Id] == player.Position())
+                if (posCache[player.Id].Equals(player.Position()))
                     return true;
             }
             return false;
-        }        
+        }
         #endregion
 
         #region Reward Management
@@ -207,9 +221,15 @@ namespace Oxide.Plugins
             object multiplier = GetRewardMultiplier(player);
             if (multiplier == null) multiplier = 1f;
             amount = Convert.ToInt32(Math.Floor(amount * (float)multiplier));
+            if (amount == 0) amount = 1;
+
+            string currency = Msg("currencyNameEco", player.Id);
             #if RUST
             if (ServerRewards && configData.RewardSystem.RewardPlugins.Rust.ServerRewards)
+            {
                 ServerRewards?.Call("AddPoints", ulong.Parse(player.Id), amount);
+                currency = Msg("currencyNameRP", player.Id);
+            }
 
             if (Economics && configData.RewardSystem.RewardPlugins.Rust.Economics)
                 Economics?.Call("Deposit", ulong.Parse(player.Id), (double)amount);
@@ -219,8 +239,11 @@ namespace Oxide.Plugins
             if (Economy && configData.RewardSystem.RewardPlugins.Hurtworld.Economy)
                 Economy?.Call("AddMoney", player.Object as PlayerSession, (double)amount);
             #endif
-            if (UEconomics && configData.RewardSystem.RewardPlugins.Universal.UEconomics)            
-                UEconomics?.Call("Deposit", player.Id, amount);            
+            if (UEconomics && configData.RewardSystem.RewardPlugins.Universal.UEconomics)
+                UEconomics?.Call("Deposit", player.Id, amount);
+
+            if (configData.RewardSystem.SendDepositMessage)
+                player.Reply(string.Format(Msg("depositMsg", player.Id), amount, currency));
         }
         object GetRewardMultiplier(IPlayer player)
         {
@@ -250,7 +273,7 @@ namespace Oxide.Plugins
                 {
                     var additional = GrabCurrentTime() - timeStamps[playerid];
                     return timeCache[playerid].playTime + additional;
-                }                
+                }
                 else return timeCache[playerid].playTime;
             }
             else return null;
@@ -279,13 +302,46 @@ namespace Oxide.Plugins
                 if (time != null)
                 {
                     player.Reply(GetPlaytimeClock((double)time));
+                    player.Reply(Msg("topPTSyn", player.Id));
                     return;
                 }
                 else player.Reply(Msg("notime", player.Id));
             }
-            if (player.IsAdmin)
+            if (args.Length >= 1)
             {
-                if (args.Length >= 1)
+                if (args[0].ToLower() == "top")
+                {
+                    string topPlayers = Msg("topPlaytime", player.Id);
+                    int amount = 10;
+                    if (args.Length > 1)
+                    {
+                        if (!int.TryParse(args[1], out amount))
+                            amount = 10;
+                    }
+                    foreach (var topTime in timeCache.OrderByDescending(x => x.Value.playTime).Take(amount))
+                    {
+                        double playTime = topTime.Value.playTime;
+                        if (timeStamps.ContainsKey(topTime.Key))
+                            playTime += GrabCurrentTime() - timeStamps[topTime.Key];
+                        topPlayers += $"\n{players.FindPlayerById(topTime.Key)?.Name ?? "Unnamed"} - {GetPlaytimeClock(playTime)}";
+                    }
+                    player.Reply(topPlayers);
+                    return;
+                }
+                if (args[0].ToLower() == "all")
+                {
+                    string topPlayers = Msg("topPlaytime");
+                    foreach (var topTime in timeCache.OrderByDescending(x => x.Value.playTime))
+                    {
+                        double playTime = topTime.Value.playTime;
+                        if (timeStamps.ContainsKey(topTime.Key))
+                            playTime += GrabCurrentTime() - timeStamps[topTime.Key];
+                        topPlayers += $"\n{players.FindPlayerById(topTime.Key)?.Name ?? "Unnamed"} - {GetPlaytimeClock(playTime)}";
+                    }
+                    player.Reply(topPlayers);
+                    return;
+                }
+                if (player.IsAdmin)
                 {
                     var target = players.FindPlayer(args[0]);
                     if (target != null)
@@ -304,7 +360,7 @@ namespace Oxide.Plugins
         }
         [Command("ptt")]
         void cmdPTT(IPlayer player, string command, string[] args)
-        {            
+        {
             if (player.IsAdmin)
             {
                 if (args == null || args.Length == 0)
@@ -346,6 +402,7 @@ namespace Oxide.Plugins
                             if (permData.permissions.ContainsKey(args[1]))
                             {
                                 permData.permissions.Remove(args[1]);
+                                SavePermission();
                                 player.Reply(string.Format(Msg("permrem",player.Id), args[1]));
                             }
                             else player.Reply(string.Format(Msg("noperm",player.Id), args[1]));
@@ -388,9 +445,9 @@ namespace Oxide.Plugins
                             player.Reply(Msg("noself",player.Id));
                             return;
                         }
-                        if (timeCache.ContainsKey(referee.Id))                        
-                            timeCache[referee.Id].referrals++;                                                       
-                        
+                        if (timeCache.ContainsKey(referee.Id))
+                            timeCache[referee.Id].referrals++;
+
                         referData.referrals.Add(player.Id);
                         if (canIssueRewards && configData.ReferralSystem.IssueRewardForReferral)
                         {
@@ -398,7 +455,7 @@ namespace Oxide.Plugins
                             AddPoints(referee, configData.RewardSystem.Points.Referral_InvitePoints);
 
                             if (referee.IsConnected)
-                                referee.Reply(string.Format(Msg("referacceptref", referee.Id), configData.RewardSystem.Points.Referral_InvitePoints));
+                                referee.Reply(string.Format(Msg("referacceptref", referee.Id), player.Name, configData.RewardSystem.Points.Referral_InvitePoints));
                             player.Reply(string.Format(Msg("referacceptplayer", player.Id), configData.RewardSystem.Points.Referral_JoinPoints));
                         }
                         else
@@ -406,7 +463,7 @@ namespace Oxide.Plugins
                             if (referee.IsConnected)
                                 referee.Reply(string.Format(Msg("referaccept1ref",referee.Id),player.Name));
                             player.Reply(Msg("referaccept1player",player.Id));
-                        }                        
+                        }
                     }
                     else player.Reply(Msg("noplayer", player.Id));
                 }
@@ -414,13 +471,14 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Config      
+        #region Config
         class Rewards
         {
-            public bool Enabled { get; set; }            
-            public RPlugins RewardPlugins { get; set; }            
+            public bool Enabled { get; set; }
+            public RPlugins RewardPlugins { get; set; }
             public Points Points { get; set; }
-        }  
+            public bool SendDepositMessage { get; set; }
+        }
         class RPlugins
         {
             public RRust Rust { get; set; }
@@ -443,7 +501,7 @@ namespace Oxide.Plugins
         class Referrals
         {
             public bool UseReferralSystem { get; set; }
-            public bool IssueRewardForReferral { get; set; }            
+            public bool IssueRewardForReferral { get; set; }
         }
         class Points
         {
@@ -456,13 +514,13 @@ namespace Oxide.Plugins
         {
             public bool TrackAFKTime { get; set; }
             public int SaveTimer { get; set; }
-        }        
+        }
         private ConfigData configData;
         class ConfigData
         {
             public Rewards RewardSystem { get; set; }
             public Referrals ReferralSystem { get; set; }
-            public Options Options { get; set; }            
+            public Options Options { get; set; }
         }
         private void LoadVariables()
         {
@@ -503,7 +561,8 @@ namespace Oxide.Plugins
                         Playtime_PointTimer = 3600,
                         Referral_InvitePoints = 5,
                         Referral_JoinPoints = 3
-                    }                    
+                    },
+                    SendDepositMessage = true
                 },
                 ReferralSystem = new Referrals
                 {
@@ -517,7 +576,7 @@ namespace Oxide.Plugins
         void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
 #endregion
 
-#region Data Management
+        #region Data Management
         void SaveLoop() => saveTimer = timer.Once(configData.Options.SaveTimer * 60, () => { SaveData(); SaveLoop(); });
         void SaveData()
         {
@@ -604,6 +663,11 @@ namespace Oxide.Plugins
             {"notime", "Unable to get your playtime" },
             {"notimetarget", "Unable to get that players playtime" },
             {"notarget", "Unable to find the specified player" },
+            {"currencyNameRP", "RP" },
+            {"currencyNameEco", "Coins" },
+            {"depositMsg", "{0} {1} have been deposited to your account!" },
+            {"topPlaytime", "Top Playtimes:" },
+            {"topPTSyn", "You can see the top scoring playtimes by typing \"/playtime top (optional:number)\"" }
         };
         #endregion
     }

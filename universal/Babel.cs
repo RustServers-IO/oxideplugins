@@ -1,34 +1,74 @@
-/*
-TODO:
-- Implement the silly access token method for Bing/Microsoft
-- Add API method to get all shared supported languages
-- Add warning if an invalid language code is used
-*/
+//#define DEBUG
 
 using System;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Babel", "Wulf/lukespragg", "0.3.3", ResourceId = 1963)]
+    [Info("Babel", "Wulf/lukespragg", "1.0.0", ResourceId = 1963)]
     [Description("Plugin API for translating messages using free or paid translation services")]
-
-    class Babel : CovalencePlugin
+    public class Babel : CovalencePlugin
     {
-        #region Initialization
+        #region Configuration
 
-        string apiKey;
-        string service;
+        private Configuration config;
 
-        protected override void LoadDefaultConfig()
+        public class Configuration
         {
-            Config["ApiKey"] = apiKey = GetConfig("ApiKey", "");
-            Config["Service"] = service = GetConfig("Service", "google");
-            SaveConfig();
+            [JsonProperty(PropertyName = "API key (if required)")]
+            public string ApiKey;
+
+            [JsonProperty(PropertyName = "Translation service")]
+            public string Service;
+
+            public static Configuration DefaultConfig()
+            {
+                return new Configuration
+                {
+                    ApiKey = "",
+                    Service = "google"
+                };
+            }
         }
 
-        void Init() => LoadDefaultConfig();
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            try
+            {
+                config = Config.ReadObject<Configuration>();
+                if (config?.Service == null)
+                {
+                    LoadDefaultConfig();
+                    SaveConfig();
+                }
+            }
+            catch
+            {
+                LogWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+                LoadDefaultConfig();
+            }
+        }
+
+        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+
+        protected override void SaveConfig() => Config.WriteObject(config);
+
+        #endregion
+
+        #region Initialization
+
+        private static Regex googleRegex = new Regex(@"\[\[\[""((?:\s|.)+?)"",""(?:\s|.)+?""");
+        private static Regex microsoftRegex = new Regex("\"(.*)\"");
+
+        private void Init()
+        {
+            if (string.IsNullOrEmpty(config.ApiKey) && config.Service.ToLower() != "google")
+                LogWarning("Invalid API key, please check that it is set and valid");
+        }
 
         #endregion
 
@@ -41,106 +81,148 @@ namespace Oxide.Plugins
         /// <param name="to"></param>
         /// <param name="from"></param>
         /// <param name="callback"></param>
-        void Translate(string text, string to, string from = "auto", Action<string> callback = null)
+        private void Translate(string text, string to, string from = "auto", Action<string> callback = null)
         {
-            if (string.IsNullOrEmpty(apiKey) && service.ToLower() != "google")
+            var apiKey = config.ApiKey;
+            var service = config.Service.ToLower();
+
+            if (string.IsNullOrEmpty(config.ApiKey) && service != "google")
             {
-                PrintWarning("Invalid ApiKey, please check that it is valid and try again");
+                LogWarning("Invalid API key, please check that it is set and valid");
                 return;
             }
 
-            // Reference: https://www.microsoft.com/en-us/translator/getstarted.aspx
-            if (service.ToLower() == "bing" || service.ToLower() == "microsoft")
+            switch (service)
             {
-                webrequest.EnqueueGet($"http://api.microsofttranslator.com/V2/Ajax.svc/Detect?appId={apiKey}&text={Uri.EscapeUriString(text)}", (c, r) =>
-                {
-                    if (c != 200 || r == null || r.Contains("<html>")) return;
-
-                    if (r.Contains("ArgumentException: Invalid appId"))
+                case "google":
                     {
-                        PrintWarning("Invalid ApiKey, please check that it is valid and try again");
-                        return;
+                        // Reference: https://cloud.google.com/translate/v2/quickstart
+                        var url = string.IsNullOrEmpty(apiKey) 
+                            ? $"https://translate.googleapis.com/translate_a/single?client=gtx&tl={to}&sl={from}&dt=t&q={Uri.EscapeUriString(text)}"
+                            : $"https://www.googleapis.com/language/translate/v2?key={apiKey}&target={to}&source={from}&q={Uri.EscapeUriString(text)}";
+                        webrequest.EnqueuePost(url, null, (code, response) =>
+                        {
+                            if (code != 200 || response == null || response.Equals("[null,null,\"\"]"))
+                            {
+                                LogWarning($"No valid response received from {service.Humanize()}, try again later");
+                                return;
+                            }
+
+                            Callback(code, response, text, callback);
+                        }, this);
+                        break;
                     }
 
-                    if (r.Contains("ArgumentOutOfRangeException: 'to' must be a valid language"))
+                case "bing":
+                case "microsoft":
                     {
-                        PrintWarning("Invalid language code, please check that it is valid and try again");
-                        return;
+                        // Reference: https://www.microsoft.com/en-us/translator/getstarted.aspx
+                        // Supported language codes: https://msdn.microsoft.com/en-us/library/hh456380.aspx
+                        // TODO: Implement the new access token method for Bing/Microsoft
+                        webrequest.EnqueueGet($"http://api.microsofttranslator.com/V2/Ajax.svc/Detect?appId={apiKey}&text={Uri.EscapeUriString(text)}", (c, r) =>
+                        {
+                            if (r == null || r.Contains("<html>"))
+                            {
+                                LogWarning($"No valid response received from {service.Humanize()}, try again later");
+                                return;
+                            }
+
+                            if (r.Contains("ArgumentException: Invalid appId"))
+                            {
+                                LogWarning("Invalid API key, please check that it is valid and try again");
+                                return;
+                            }
+
+                            if (r.Contains("ArgumentOutOfRangeException: 'to' must be a valid language"))
+                            {
+                                LogWarning($"Invalid language code, please check that it is valid and try again (to: {to}, from: {from})");
+                                return;
+                            }
+
+                            var url = $"http://api.microsofttranslator.com/V2/Ajax.svc/Translate?appId={apiKey}&to={to}&from={r}&text={Uri.EscapeUriString(text)}";
+                            webrequest.EnqueuePost(url, null, (code, response) => 
+                            {
+                                if (r == null || r.Contains("<html>"))
+                                {
+                                    LogWarning($"No valid response received from {service.Humanize()}, try again later");
+                                    return;
+                                }
+
+                                if (r.Contains("ArgumentOutOfRangeException: 'from' must be a valid language"))
+                                {
+                                    LogWarning($"Invalid language code, please check that it is valid and try again (to: {to}, from: {from})");
+                                    return;
+                                }
+
+                                Callback(code, response, text, callback);
+                            }, this);
+                        }, this);
+                        break;
                     }
 
-                    var url = $"http://api.microsofttranslator.com/V2/Ajax.svc/Translate?appId={apiKey}&to={to}&from={r}&text={Uri.EscapeUriString(text)}";
-                    webrequest.EnqueuePost(url, null, (code, response) => Callback(code, response, text, callback), this);
-                }, this);
-                return;
-            }
+                case "yandex":
+                    {
+                        // Reference: https://tech.yandex.com/keys/get/?service=trnsl
+                        webrequest.EnqueueGet($"https://translate.yandex.net/api/v1.5/tr.json/detect?key={apiKey}&hint={from}&text={Uri.EscapeUriString(text)}", (c, r) =>
+                        {
+                            if (r == null)
+	                        {
+                                LogWarning($"No valid response received from {service.Humanize()}, try again later");
+                                return;
+	                        }
 
-            // Reference: https://cloud.google.com/translate/v2/quickstart
-            if (service.ToLower() == "google")
-            {
-                var url = string.IsNullOrEmpty(apiKey)
-                    ? $"https://translate.googleapis.com/translate_a/single?client=gtx&tl={to}&sl={from}&dt=t&q={Uri.EscapeUriString(text)}"
-                    : $"https://www.googleapis.com/language/translate/v2?key={apiKey}&target={to}&source={from}&q={Uri.EscapeUriString(text)}";
-                webrequest.EnqueuePost(url, null, (code, response) => Callback(code, response, text, callback), this);
-                return;
-            }
+                            if (c == 502 || r.Contains("Invalid parameter: hint"))
+                            {
+                                LogWarning($"Invalid language code, please check that it is valid and try again (to: {to}, from: {from})");
+                                return;
+                            }
 
-            // Reference: https://tech.yandex.com/keys/get/?service=trnsl
-            if (service.ToLower() == "yandex")
-            {
-                webrequest.EnqueueGet($"https://translate.yandex.net/api/v1.5/tr.json/detect?key={apiKey}&hint={from}&text={Uri.EscapeUriString(text)}", (c, r) =>
-                {
-                    if (c != 200 || r == null) return;
+                            from = (string)JObject.Parse(r).GetValue("lang");
+                            var url = $"https://translate.yandex.net/api/v1.5/tr.json/translate?key={apiKey}&lang={from}-{to}&text={Uri.EscapeUriString(text)}";
+                            webrequest.EnqueuePost(url, null, (code, response) =>
+                            {
+	                            if (c == 501 || c == 502 || r.Contains("The specified translation direction is not supported") || r.Contains("Invalid parameter: lang"))
+	                            {
+                                    LogWarning($"Invalid language code, please check that it is valid and try again (to: {to}, from: {from})");
+	                                return;
+	                            }
 
-                    from = (string)JObject.Parse(r).GetValue("lang");
-                    var url = $"https://translate.yandex.net/api/v1.5/tr.json/translate?key={apiKey}&lang={from}-{to}&text={Uri.EscapeUriString(text)}";
-                    webrequest.EnqueuePost(url, null, (code, response) => Callback(code, response, text, callback), this);
-                }, this);
+                                Callback(code, response, text, callback);
+	                        }, this);
+                        }, this);
+                        break;
+                    }
+
+                default:
+                    LogWarning($"Translation service '{service}' is not a valid setting");
+                    break;
             }
         }
 
-        void Callback(int code, string response, string text, Action<string> callback = null)
+        private void Callback(int code, string response, string text, Action<string> callback = null)
         {
-            if (code != 200 || response == null || response.Contains("<html>"))
+            if (code != 200 || response == null)
             {
-                PrintWarning($"Translation failed! {UppercaseFirst(service)} responded with: {response} ({code})");
-                return;
-            }
-
-            if (response.Contains("ArgumentOutOfRangeException: 'from'"))
-            {
-                PrintWarning("Translation failed! Invalid 'from' language, make sure a valid language code is used");
+                LogWarning($"Translation failed! {config.Service.Humanize()} responded with: {response} ({code})");
                 return;
             }
 
             string translated = null;
-            if (service.ToLower() == "google" && string.IsNullOrEmpty(apiKey))
-                translated = new Regex(@"\[\[\[""((?:\s|.)+?)"",""(?:\s|.)+?""").Match(response).Groups[1].ToString();
-            else if (service.ToLower() == "google" && !string.IsNullOrEmpty(apiKey))
+            var service = config.Service.ToLower();
+            if (service == "google" && string.IsNullOrEmpty(config.ApiKey))
+                translated = googleRegex.Match(response).Groups[1].ToString();
+            else if (service == "google" && !string.IsNullOrEmpty(config.ApiKey))
                 translated = (string)JObject.Parse(response)["data"]["translations"]["translatedText"];
-            else if (service.ToLower() == "microsoft" || service.ToLower() == "bing")
-                translated = new Regex("\"(.*)\"").Match(response).Groups[1].ToString();
-            else if (service.ToLower() == "yandex")
+            else if (service == "microsoft" || service.ToLower() == "bing")
+                translated = microsoftRegex.Match(response).Groups[1].ToString();
+            else if (service == "yandex")
                 translated = (string)JObject.Parse(response).GetValue("text").First;
 #if DEBUG
-            PrintWarning($"Original: {text}");
-            PrintWarning($"Translated: {translated}");
-            if (translated == text) PrintWarning("Translated text is the same as original text");
+            LogWarning($"Original: {text}");
+            LogWarning($"Translated: {translated}");
+            if (translated == text) LogWarning("Translated text is the same as original text");
 #endif
-
             callback?.Invoke(string.IsNullOrEmpty(translated) ? text : Regex.Unescape(translated));
-        }
-
-        #endregion
-
-        #region Helpers
-
-        T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
-
-        static string UppercaseFirst(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            s.ToCharArray()[0] = char.ToUpper(s.ToCharArray()[0]);
-            return new string(s.ToCharArray());
         }
 
         #endregion

@@ -1,0 +1,16 @@
+{
+    "name": "Analytics",
+    "description": "Real-time collection and reporting of server data to Google Analytics",
+    "author": "Wulf",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/analytics.679",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

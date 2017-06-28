@@ -2,10 +2,11 @@ using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Oxide.Core;
+using System;
 
 namespace Oxide.Plugins
 {
-    [Info("ConnectMessages", "Spicy", "1.1.6", ResourceId = 2178)]
+    [Info("ConnectMessages", "Spicy", "1.1.8", ResourceId = 2178)]
     [Description("Provides connect and disconnect messages.")]
 
     class ConnectMessages : CovalencePlugin
@@ -15,8 +16,22 @@ namespace Oxide.Plugins
         private class Response
         {
             [JsonProperty("country")]
-            public string Country;
+            public string Country { get; set; }
         }
+
+        #endregion
+
+        #region Helpers
+
+        private void Broadcast(string key, params object[] args)
+        {
+            foreach (var player in players.Connected)
+                player.Message(GetLangValue(key, player.Id), args);
+        }
+
+        private bool GetConfigValue(string key) => Config.Get<bool>("Settings", key);
+
+        private string GetLangValue(string key, string userId) => lang.GetMessage(key, this, userId);
 
         #endregion
 
@@ -27,8 +42,6 @@ namespace Oxide.Plugins
         private bool showDisconnectMessage;
         private bool showDisconnectReason;
         private bool showAdminMessages;
-
-        private bool GetConfigValue(string key) => Config.Get<bool>("Settings", key);
 
         protected override void LoadDefaultConfig()
         {
@@ -44,18 +57,23 @@ namespace Oxide.Plugins
 
         private void InitialiseConfig()
         {
-            showConnectMessage = GetConfigValue("ShowConnectMessage");
-            showConnectCountry = GetConfigValue("ShowConnectCountry");
-            showDisconnectMessage = GetConfigValue("ShowDisconnectMessage");
-            showDisconnectReason = GetConfigValue("ShowDisconnectReason");
-            showAdminMessages = GetConfigValue("ShowAdminMessages");
+            try
+            {
+                showConnectMessage = GetConfigValue("ShowConnectMessage");
+                showConnectCountry = GetConfigValue("ShowConnectCountry");
+                showDisconnectMessage = GetConfigValue("ShowDisconnectMessage");
+                showDisconnectReason = GetConfigValue("ShowDisconnectReason");
+                showAdminMessages = GetConfigValue("ShowAdminMessages");
+            }
+            catch (InvalidCastException)
+            {
+                Puts("Your configuration file seems to be invalid. Please make sure only true/false values are being used and check the file isn't corrupt using \"http://pro.jsonlint.com/\".");
+            }
         }
 
         #endregion
 
         #region Lang
-
-        private string GetLangValue(string key, string userId) => lang.GetMessage(key, this, userId);
 
         private void InitialiseLang()
         {
@@ -105,9 +123,7 @@ namespace Oxide.Plugins
 
             if (!showConnectCountry)
             {
-                foreach (IPlayer _player in players.Connected)
-                    _player.Message(string.Format(GetLangValue("ConnectMessage", _player.Id), player.Name.Sanitize()));
-
+                Broadcast("ConnectMessage", player.Name.Sanitize());
                 return;
             }
 
@@ -115,16 +131,15 @@ namespace Oxide.Plugins
 
             webrequest.EnqueueGet(apiUrl + player.Address, (code, response) =>
             {
-                if (code != 200)
+                if (code != 200 || response == null)
                 {
-                    Puts($"WebRequest to {apiUrl} failed.");
+                    Puts($"WebRequest to {apiUrl} failed, sending connect message without the country.");
+                    Broadcast("ConnectMessage", player.Name.Sanitize());
                     return;
                 }
 
                 string country = JsonConvert.DeserializeObject<Response>(response).Country;
-
-                foreach (IPlayer _player in players.Connected)
-                    _player.Message(string.Format(GetLangValue("ConnectMessageCountry", _player.Id), player.Name.Sanitize(), country));
+                Broadcast("ConnectMessageCountry", player.Name.Sanitize(), country);
             }, this);
         }
 
@@ -133,13 +148,10 @@ namespace Oxide.Plugins
             if (!showDisconnectMessage || (player.IsAdmin && !showAdminMessages))
                 return;
 
-            foreach (IPlayer _player in players.Connected)
-            {
-                if (!showDisconnectReason)
-                    _player.Message(string.Format(GetLangValue("DisconnectMessage", _player.Id), player.Name.Sanitize()));
-                else
-                    _player.Message(string.Format(GetLangValue("DisconnectMessageReason", _player.Id), player.Name.Sanitize(), reason));
-            }
+            if (!showDisconnectReason)
+                Broadcast("DisconnectMessage", player.Name.Sanitize());
+            else
+                Broadcast("DisconnectMessageReason", player.Name.Sanitize(), reason);
         }
 
         #endregion

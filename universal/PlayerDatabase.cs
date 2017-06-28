@@ -15,7 +15,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerDatabase", "Reneb", "1.5.6", ResourceId = 1939)]
+    [Info("PlayerDatabase", "Reneb", "1.5.7", ResourceId = 1939)]
     class PlayerDatabase : CovalencePlugin
     {
         List<string> changedPlayersData = new List<string>();
@@ -580,7 +580,10 @@ namespace Oxide.Plugins
                     {
                         foreach (var p in entry)
                         {
-                            sqlData[userid][p.Key] = (string)p.Value;
+                            if (p.Value is string)
+                            {
+                                sqlData[userid][p.Key] = (string)p.Value;
+                            }
                         }
                         newplayer = false;
                     }

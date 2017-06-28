@@ -1,0 +1,16 @@
+{
+    "name": "Spiritwalk",
+    "description": "Leave your body behind and enter the spirit realm",
+    "author": "Wulf",
+    "version": "2.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/spiritwalk.1406",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

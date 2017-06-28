@@ -15,13 +15,13 @@ using CodeHatch.Blocks.Networking.Events;
 
 namespace Oxide.Plugins
 {
-    [Info("No Friendly Fire", "D-Kay", "1.1", ResourceId = 1091)]
+    [Info("No Friendly Fire", "CrZy & D-Kay", "1.2", ResourceId = 1091)]
     public class NoFriendlyFire : ReignOfKingsPlugin
     {
-        #region Vriables
+        #region Variables
 
         private bool Active = true;
-        private Collection<string> _NoFriendlyFire = new Collection<string>();
+        private Collection<ulong> _NoFriendlyFire = new Collection<ulong>();
 
         #endregion
 
@@ -29,8 +29,8 @@ namespace Oxide.Plugins
 
         private void LoadData()
         {
-            _NoFriendlyFire = Interface.GetMod().DataFileSystem.ReadObject<Collection<string>>("SavedExceptionList");
-            Active = Interface.GetMod().DataFileSystem.ReadObject<bool>("SavedNffActivity");
+            _NoFriendlyFire = Interface.GetMod().DataFileSystem.ReadObject<Collection<ulong>>("NffExceptionList");
+            Active = Interface.GetMod().DataFileSystem.ReadObject<bool>("NffActivity");
         }
 
         private void SaveData()
@@ -67,59 +67,29 @@ namespace Oxide.Plugins
         [ChatCommand("nff")]
         private void NoFriendlyFireOnOrOff(Player player, string cmd, string[] input)
         {
-            var onoffall = input[0];
-            switch (onoffall)
+            switch (input[0])
             {
                 case "off":
-                    var position = -1;
-                    for (var i = 0; i < _NoFriendlyFire.Count; i++)
-                    {
-                        if (_NoFriendlyFire[i] == player.DisplayName.ToLower())
-                        {
-                            position = i;
-                            break;
-                        }
-                    }
+                    if (!_NoFriendlyFire.Contains(player.Id)) { PrintToChat(player, string.Format(GetMessage("AlreadyTurnedOnOff", player), "off")); return; }
 
-                    if (position < 0)
-                    {
-                        PrintToChat(player, string.Format(GetMessage("AlreadyTurnedOnOff", player.Id.ToString()), "off") );
-                        return;
-                    }
-
-                    _NoFriendlyFire.RemoveAt(position);
-                    PrintToChat(player, string.Format(GetMessage("TurnedOnOff", player.Id.ToString()), "off"));
+                    _NoFriendlyFire.Remove(player.Id);
+                    PrintToChat(player, string.Format(GetMessage("TurnedOnOff", player), "off"));
                     SaveData();
                     break;
                 case "on":
-                    //Check if player is already on the list
-                    foreach (var tradeMaster in _NoFriendlyFire)
-                    {
-                        if (tradeMaster.ToLower() == player.DisplayName.ToLower())
-                        {
-                            PrintToChat(player, string.Format(GetMessage("AlreadyTurnedOnOff", player.Id.ToString()), "on"));
-                            return;
-                        }
-                    }
+                    if (_NoFriendlyFire.Contains(player.Id)) { PrintToChat(player, string.Format(GetMessage("AlreadyTurnedOnOff", player), "on")); return; }
 
-                    // Add the player to the list
-                    _NoFriendlyFire.Add(player.DisplayName.ToLower());
-                    PrintToChat(player, string.Format(GetMessage("TurnedOnOff", player.Id.ToString()), "on"));
+                    _NoFriendlyFire.Add(player.Id);
+                    PrintToChat(player, string.Format(GetMessage("TurnedOnOff", player), "on"));
                     SaveData();
                     break;
                 case "all":
-                    if (Active) { Active = false; PrintToChat(player, string.Format(GetMessage("ToggleAll", player.Id.ToString()), "deactivated")); }
-                    else { Active = true; PrintToChat(player, string.Format(GetMessage("ToggleAll", player.Id.ToString()), "activated")); }
+                    if (Active) { Active = false; PrintToChat(player, string.Format(GetMessage("ToggleAll", player), "deactivated")); }
+                    else { Active = true; PrintToChat(player, string.Format(GetMessage("ToggleAll", player), "activated")); }
                     SaveData();
                     break;
                 case "help":
-                    PrintToChat(player, GetMessage("Help", player.Id.ToString()) );
-                    PrintToChat(player, GetMessage("HelpOn", player.Id.ToString()) );
-                    PrintToChat(player, GetMessage("HelpOff", player.Id.ToString()) );
-                    if (player.HasPermission("NoFriendlyFire.Toggle"))
-                    {
-                        PrintToChat(player, GetMessage("HelpToggleAll", player.Id.ToString()) );
-                    }
+                    SendHelpText(player);
                     break;
             }
         }
@@ -133,24 +103,30 @@ namespace Oxide.Plugins
             if (!Active) return;
             if (damageEvent == null) return;
             if (damageEvent.Damage == null) return;
+            if (damageEvent.Damage.Amount <= 0) return;
             if (damageEvent.Damage.DamageSource == null) return;
             if (damageEvent.Entity == null) return;
-            foreach (var player in _NoFriendlyFire)
+            if (damageEvent.Damage.DamageSource == damageEvent.Entity) return;
+            if (!damageEvent.Damage.DamageSource.IsPlayer) return;
+            if (!damageEvent.Entity.IsPlayer) return;
+
+            if ((_NoFriendlyFire.Contains(damageEvent.Damage.DamageSource.Owner.Id) || _NoFriendlyFire.Contains(damageEvent.Entity.Owner.Id))
+                && damageEvent.Entity.Owner.GetGuild() == damageEvent.Damage.DamageSource.Owner.GetGuild())
             {
-                if (player.ToLower() == damageEvent.Entity.Owner.DisplayName.ToLower())
-                {
-                    if (
-                        damageEvent.Damage.Amount > 0 // taking damage
-                        && damageEvent.Entity.IsPlayer // entity taking damage is player
-                        && damageEvent.Damage.DamageSource.IsPlayer // entity delivering damage is a player
-                        && damageEvent.Entity != damageEvent.Damage.DamageSource // entity taking damage is not taking damage from self
-                        && damageEvent.Entity.Owner.GetGuild().DisplayName == damageEvent.Damage.DamageSource.Owner.GetGuild().DisplayName // both entities are in the same guild
-                        )
-                    {
-                        damageEvent.Cancel("No Friendly Fire");
-                        damageEvent.Damage.Amount = 0f;
-                    }
-                }
+                damageEvent.Cancel("No Friendly Fire");
+                damageEvent.Damage.Amount = 0f;
+                return;
+            }
+        }
+
+        private void SendHelpText(Player player)
+        {
+            PrintToChat(player, GetMessage("Help", player));
+            PrintToChat(player, GetMessage("HelpOn", player));
+            PrintToChat(player, GetMessage("HelpOff", player));
+            if (player.HasPermission("NoFriendlyFire.Toggle"))
+            {
+                PrintToChat(player, GetMessage("HelpToggleAll", player));
             }
         }
 
@@ -158,7 +134,7 @@ namespace Oxide.Plugins
 
         #region Helpers
 
-        string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
+        string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, player == null ? null : player.Id.ToString());
 
         #endregion
     }

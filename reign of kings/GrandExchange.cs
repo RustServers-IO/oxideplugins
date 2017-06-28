@@ -1,2723 +1,2653 @@
 ﻿using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using CodeHatch.Damaging;
-using CodeHatch.Engine.Networking;
-using CodeHatch.Common;
-using CodeHatch.Inventory.Blueprints;
-using Oxide.Core;
-using CodeHatch.Networking.Events.Entities;
-using CodeHatch.ItemContainer;
-using CodeHatch.UserInterface.Dialogues;
-using CodeHatch.Engine.Events.Prefab;
 using CodeHatch.Blocks.Networking.Events;
+using CodeHatch.Common;
+using CodeHatch.Engine.Networking;
+using CodeHatch.Networking.Events.Entities;
+using Oxide.Core;
+using CodeHatch.ItemContainer;
+using UnityEngine;
+using CodeHatch.UserInterface.Dialogues;
+using CodeHatch.Engine.Core.Cache;
+using CodeHatch.Inventory.Blueprints;
+using CodeHatch.Blocks;
+using CodeHatch.Thrones.Weapons.Salvage;
 
 namespace Oxide.Plugins
 {
-    [Info("Grand Exchange", "Scorpyon", "1.3.4")]
+    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.1.1", ResourceId = 1145)]
     public class GrandExchange : ReignOfKingsPlugin
     {
-        #region MODIFIABLE VARIABLES (For server admin)
+        #region Variables
 
-        private const double Inflation = 1; // This is the inflation modifier. More means bigger jumps in price changes (Currently raises at approx 1%
-		private const double MaxDeflation = 5; // This is the deflation modifier. This is the most that a price can drop below its average price to buy and above it's price to sell(Percentage)
-		private const int PriceDeflationTime = 3600; // This dictates the number of seconds for each tick which brings the prices back towards their original values
-// (DEPRECATED)		private const int goldRewardForPvp = 10000; // This is the maximum amount of gold that can be stolen from a player for killing them.
-        private const int GoldStealPercentage = 20; // This is the maximum percentage of gold that can be stolen from a player
-		private const int GoldRewardForPve = 20; // This is the maximum amount rewarded to a player for killing monsters, etc. (When harvesting the dead body)
-		private bool _allowPvpGold = true; // Turns on/off gold for PVP
-		private bool _allowPveGold = true; // Turns on/off gold for PVE
-		private bool _tradeAreaIsSafe; // Determines whether the marked safe area is Safe against being attacked / PvP
-        private const int PlayerShopStackLimit = 5; // Determines the maximum number of stacks of an item a player can have in their shop
-        private const int PlayerShopMaxSlots = 10; // Determines the maximum number of individual items the player can stock (Prevents using this as a 'Bag of Holding' style Chest!!)
-        #endregion
+        private const int MaxPossibleGold = int.MaxValue;
+        private static double SellPercentage = 50;
+        private static double Inflation = 1; // This is the inflation modifier. More means bigger jumps in price changes (Currently raises at approx 1%
+        private static double MaxDeflation = 5; // This is the deflation modifier. This is the most that a price can drop below its average price to buy and above it's price to sell(Percentage)
+        private int PriceDeflationTime = 3600; // This dictates the number of seconds for each tick which brings the prices back towards their original values
+        private double GoldStealPercentage = 20; // This is the maximum percentage of gold that can be stolen from a player
+        private int GoldRewardForPve = 20; // This is the maximum amount rewarded to a player for killing monsters, etc. (When harvesting the dead body)
+        private bool PvpGold = true; // Turns on/off gold for PVP
+        private bool PveGold = true; // Turns on/off gold for PVE
+        private bool SafeTrade = false; // Determines whether the marked safe area is Safe against being attacked / PvP
+        private static int PlayerShopStackLimit = 5; // Determines the maximum number of stacks of an item a player can have in their shop
+        private static int PlayerShopMaxSlots = 10; // Determines the maximum number of individual items the player can stock (Prevents using this as a 'Bag of Holding' style Chest!!)
+        private bool CanUseGE = true;
+        private bool UseDeflation = true;
 
-        #region Default Trade Values
-        private Collection<string[]> LoadDefaultTradeValues()
+        private class GrandExchangeData
         {
-            var defaultTradeList = new Collection<string[]>
-            {
-                new [] {"Apple", "45000", "25"},
-                new [] {"Baked Clay", "100000", "1000"},
-                new [] {"Bandage", "300000", "25"},
-                new [] {"Bear Hide", "1000000", "1000"},
-                new [] {"Bent Horn", "1000000", "1000"},
-                new [] {"Berries", "35000", "25"},
-                new [] {"Blood", "100000", "1000"},
-                new [] {"Bone", "50000", "1000"},
-                new [] {"Bone Axe", "1050000", "1"},
-                new [] {"Bone Dagger", "325000", "1"},
-                new [] {"Bone Horn", "850000", "1"},
-                new [] {"Bone Spiked Club", "2125000", "1"},
-                new [] {"Bread", "35000", "25"},
-                new [] {"Cabbage", "45000", "25"},
-                new [] {"Candlestand", "1000000", "1"},
-                new [] {"Carrot", "45000", "25"},
-                new [] {"Chandelier", "3750000", "1"},
-                new [] {"Charcoal", "100000", "1000"},
-                new [] {"Chicken", "250000", "25"},
-                new [] {"Clay", "10000", "1000"},
-                new [] {"Clay Block", "100000", "1000"},
-                new [] {"Clay Ramp", "100000", "1000"},
-                new [] {"Clay Stairs", "100000", "1000"},
-                new [] {"Cobblestone Block", "750000", "1000"},
-                new [] {"Cobblestone Ramp", "750000", "1000"},
-                new [] {"Cobblestone Stairs", "750000", "1000"},
-                new [] {"Cooked Bird", "35000", "25"},
-                new [] {"Cooked Meat", "35000", "25"},
-                new [] {"Crossbow", "5215000", "1"},
-                new [] {"Deer Leg Club", "250000", "1"},
-                new [] {"Diamond", "5000000", "500000"},
-                new [] {"Dirt", "10000", "20000"},
-                new [] {"Driftwood Club", "10000", "1"},
-                new [] {"Duck Feet", "350000", "25"},
-                new [] {"Fang", "75000", "1000"},
-                new [] {"Fat", "45000", "1000"},
-                new [] {"Feather", "25000", "1000"},
-                new [] {"Fire Water", "5000000", "25"},
-                new [] {"Firepit", "925000", "1"},
-                new [] {"Great FirePlace", "4250000", "1"},
-                new [] {"Stone FirePlace", "3125000", "1"},
-                new [] {"Flax", "25000", "1000"},
-                new [] {"Flowers", "25000", "1000"},
-                new [] {"Fluffy Bed", "7750000", "1"},
-                new [] {"Fuse", "500000", "1"},
-                new [] {"Grain", "15000", "1000"},
-                new [] {"Granary", "51500000", "1"},
-                new [] {"Guillotine", "21250000", "1"},
-                new [] {"Ground Torch", "4750000", "1"},
-                new [] {"Hanging Lantern", "800000", "1"},
-                new [] {"Hanging Torch", "3750000", "1"},
-                new [] {"Hay", "10000", "1000"},
-                new [] {"Hay Bale Target", "5250000", "1"},
-                new [] {"Heart", "50000", "25"},
-                new [] {"Holdable Candle", "500000", "1"},
-                new [] {"Holdable Lantern", "800000", "1"},
-                new [] {"Holdable Torch", "700000", "1"},
-                new [] {"Iron", "100000", "1000"},
-                new [] {"Iron Axe", "1450000", "1"},
-                new [] {"Iron Bar Window", "2500000", "1"},
-                new [] {"Iron Battle Axe", "7800000", "1"},
-                new [] {"Iron Chest", "5625000", "10"},
-                new [] {"Iron Crest", "77500000", "1"},
-                new [] {"Iron Door", "20000000", "1"},
-                new [] {"Iron Flanged Mace", "1950000", "1"},
-                new [] {"Iron Floor Torch", "5000000", "1"},
-                new [] {"Iron Gate", "40000000", "1"},
-                new [] {"Iron Halberd", "10600000", "1"},
-                new [] {"Iron Hatchet", "4125000", "1"},
-                new [] {"Iron Ingot", "1250000", "1000"},
-                new [] {"Iron Javelin", "434000", "50"},
-                new [] {"Iron Pickaxe", "8000000", "1"},
-                new [] {"Iron Plate Boots", "1375000", "1"},
-                new [] {"Iron Plate Gauntlets", "1375000", "1"},
-                new [] {"Iron Plate Helmet", "3250000", "1"},
-                new [] {"Iron Plate Pants", "2875000", "1"},
-                new [] {"Iron Plate Vest", "2875000", "1"},
-                new [] {"Iron Star Mace", "1850000", "1"},
-                new [] {"Iron Sword", "3000000", "1"},
-                new [] {"Iron Tipped Arrow", "153000", "100"},
-                new [] {"Iron Wood Cutters Axe", "7750000", "1"},
-                new [] {"Large Gallows", "9500000", "1"},
-                new [] {"Leather Crest", "1175000", "1"},
-                new [] {"Leather Hide", "175000", "1000"},
-                new [] {"Light Leather Boots", "325000", "1"},
-                new [] {"Light Leather Bracers", "325000", "1"},
-                new [] {"Light Leather Helmet", "1025000", "1"},
-                new [] {"Light Leather Pants", "750000", "1"},
-                new [] {"Light Leather Vest", "750000", "1"},
-                new [] {"Liver", "75000", "25"},
-                new [] {"Lockpick", "5100000", "25"},
-                new [] {"Log Block", "70000", "1000"},
-                new [] {"Log Ramp", "70000", "1000"},
-                new [] {"Log Stairs", "70000", "1000"},
-                new [] {"Long Horn", "2925000", "1"},
-                new [] {"Lumber", "2000", "1000"},
-                new [] {"Meat", "15000", "25"},
-                new [] {"Medium Banner", "850000", "1"},
-                new [] {"Oil", "125000", "1000"},
-                new [] {"Pillory", "750000", "1"},
-                new [] {"Potion Of Antidote", "375000", "25"},
-                new [] {"Potion Of Appearance", "0", "25"},
-                new [] {"Rabbit Pelt", "50000", "25"},
-                new [] {"Raw Bird", "15000", "25"},
-                new [] {"Reinforced Wood (Iron) Block", "1750000", "1000"},
-                new [] {"Reinforced Wood (Iron) Door", "5750000", "10"},
-                new [] {"Reinforced Wood (Iron) Gate", "21750000", "10"},
-                new [] {"Reinforced Wood (Iron) Ramp", "1750000", "1000"},
-                new [] {"Reinforced Wood (Iron) Stairs", "1750000", "1000"},
-                new [] {"Reinforced Wood (Steel) Door", "20750000", "10"},
-                new [] {"Repair Hammer", "500000", "1"},
-                new [] {"Roses", "50000", "25"},
-                new [] {"Small Banner", "525000", "1"},
-                new [] {"Small Gallows", "4900000", "1"},
-                new [] {"Small Wall Lantern", "2500000", "1"},
-                new [] {"Small Wall Torch", "2500000", "1"},
-                new [] {"Sod Block", "50000", "1000"},
-                new [] {"Sod Ramp", "50000", "1000"},
-                new [] {"Sod Stairs", "50000", "1000"},
-                new [] {"Splintered Club", "500000", "1"},
-                new [] {"Spruce Branches Block", "20000", "1000"},
-                new [] {"Spruce Branches Ramp", "20000", "1000"},
-                new [] {"Spruce Branches Stairs", "20000", "1000"},
-                new [] {"Standing Iron Torch", "5000000", "1"},
-                new [] {"Steel Axe", "10000000", "1"},
-                new [] {"Steel Battle Axe", "30450000", "1"},
-                new [] {"Steel Battle War Hammer", "30750000", "1"},
-                new [] {"Steel Bolt", "409000", "100"},
-                new [] {"Steel Chest", "16760000", "10"},
-                new [] {"Steel Compound", "325000", "1000"},
-                new [] {"Steel Dagger", "5000000", "1"},
-                new [] {"Steel Flanged Mace", "10750000", "1"},
-                new [] {"Steel Greatsword", "25625000", "1"},
-                new [] {"Steel Halberd", "40500000", "1"},
-                new [] {"Steel Hatchet", "15875000", "1"},
-                new [] {"Steel Ingot", "5000000", "1000"},
-                new [] {"Steel Javelin", "1683000", "50"},
-                new [] {"Steel Morning Star Mace", "30625000", "1"},
-                new [] {"Steel Pickaxe", "30500000", "1"},
-                new [] {"Steel Plate Boots", "5200000", "1"},
-                new [] {"Steel Plate Gauntlets", "5200000", "1"},
-                new [] {"Steel Plate Helmet", "15500000", "1"},
-                new [] {"Steel Plate Pants", "10300000", "1"},
-                new [] {"Steel Plate Vest", "10300000", "1"},
-                new [] {"Steel Star Mace", "30750000", "1"},
-                new [] {"Steel Sword", "10750000", "1"},
-                new [] {"Steel Throwing Knife", "1717000", "1"},
-                new [] {"Steel Tipped Arrow", "580000", "100"},
-                new [] {"Steel War Hammer", "30750000", "1"},
-                new [] {"Steel Wood Cutters Axe", "30250000", "1"},
-                new [] {"Sticks", "10000", "1000"},
-                new [] {"Stiff Bed", "1050000", "1"},
-                new [] {"Stone", "25000", "1000"},
-                new [] {"Stone Arch", "1000000", "1"},
-                new [] {"Stone Arrow", "50000", "100"},
-                new [] {"Stone Block", "3090000", "1000"},
-                new [] {"Stone Cutter", "100000", "1"},
-                new [] {"Stone Dagger", "250000", "1"},
-                new [] {"Stone Hatchet", "475000", "1"},
-                new [] {"Stone Javelin", "42000", "50"},
-                new [] {"Stone Pickaxe", "1125000", "1"},
-                new [] {"Stone Ramp", "3090000", "1000"},
-                new [] {"Stone Slab", "3040000", "1000"},
-                new [] {"Stone Slit Window", "3050000", "1"},
-                new [] {"Stone Stairs", "3090000", "1000"},
-                new [] {"Stone Sword", "1250000", "1"},
-                new [] {"Stone Wood Cutters Axe", "900000", "1"},
-                new [] {"Tabard", "1000000", "1"},
-                new [] {"Tears Of The Gods", "5000000", "10"},
-                new [] {"Thatch Block", "50000", "1000"},
-                new [] {"Thatch Ramp", "50000", "1000"},
-                new [] {"Thatch Stairs", "50000", "1000"},
-                new [] {"Throwing Stone", "25000", "100"},
-                new [] {"Tinker", "250000", "1"},
-                new [] {"Wall Lantern", "3750000", "1"},
-                new [] {"Wall Torch", "3750000", "1"},
-                new [] {"Water", "5000", "1000"},
-                new [] {"Whip", "675000", "1"},
-                new [] {"Wood", "5000", "1000"},
-                new [] {"Wolf Pelt", "750000", "1"},
-                new [] {"Wood Arrow", "28000", "100"},
-                new [] {"Wood Block", "150000", "1000"},
-                new [] {"Wood Bracers", "175000", "1"},
-                new [] {"Wood Chest", "500000", "10"},
-                new [] {"Wood Door", "500000", "1"},
-                new [] {"Wood Gate", "1500000", "1"},
-                new [] {"Wood Helmet", "700000", "1"},
-                new [] {"Wood Ramp", "150000", "1000"},
-                new [] {"Wood Sandals", "175000", "1"},
-                new [] {"Wood Shutters", "150000", "1"},
-                new [] {"Wood Skirt", "525000", "1"},
-                new [] {"Wood Stairs", "150000", "1000"},
-                new [] {"Wood Vest", "525000", "1"},
-                new [] {"Wooden Flute", "1250000", "1"},
-                new [] {"Wooden Javelin", "18000", "1"},
-                new [] {"Wooden Mace", "1050000", "1"},
-                new [] {"Wooden Short Bow", "150000", "1"},
-                new [] {"Wool", "50000", "1000"}
-            };
-			
-			// Default list prices ::: "Resource Name" ; "Price (x priceModifier)" ; "Maximum stack size"
-			// YOU CAN EDIT THESE PRICES, BUT TO SEE THEM IN GAME YOU WILL EITHER NEED TO USE /restoredefaultprices WHICH WILL RESET ALL PRICES TO THE ONES HERE, OR USE /removestoreitem TO REMOVE THE OLD VERSION FROM THE EXISTING TRADE LIST AND THEN /addstoreitem TO INCLUDE THE NEW ONE. MAKE SURE YOU PAY ATTENTION TO THE ALPHABETICAL ORDER HERE, TOO!
+            public float X1 { get; set; } = 0f;
+            public float Z1 { get; set; } = 0f;
+            public float X2 { get; set; } = 0f;
+            public float Z2 { get; set; } = 0f;
+            public SortedDictionary<string, TradeData> TradeList { get; set; } = new SortedDictionary<string, TradeData>();
 
-            SaveTradeData();
-            return defaultTradeList;
+            public GrandExchangeData() { }
+
+            public GrandExchangeData(Vector3 pos1, Vector3 pos2)
+            {
+                X1 = pos1.x;
+                Z1 = pos1.z;
+                X2 = pos2.x;
+                Z2 = pos2.z;
+            }
+
+            public void AddPosition(Vector3 position, int type)
+            {
+                switch (type)
+                {
+                    case 1:
+                        X1 = position.x;
+                        Z1 = position.z;
+                        break;
+                    case 2:
+                        X2 = position.x;
+                        Z2 = position.z;
+                        break;
+                }
+            }
+
+            public void AddItem(string resource, int price)
+            {
+                TradeList.Add(resource, new TradeData(price, _ItemList[resource]));
+            }
+
+            public int HasPosition()
+            {
+                if (X1 == 0f || Z1 == 0f) return 0;
+                else if (X2 == 0f || Z2 == 0f) return 1;
+                else return 2;
+            }
+
+            public void RemoveGEMarks()
+            {
+                X1 = 0f;
+                Z1 = 0f;
+                X2 = 0f;
+                Z2 = 0f;
+            }
+
+            public bool IsInTradeArea(Vector3 position)
+            {
+                if (HasPosition() != 2) return true;
+
+                if ((position.x < X1 && position.x > X2) && (position.z > Z1 && position.z < Z2)) return true;
+                if ((position.x < X1 && position.x > X2) && (position.z < Z1 && position.z > Z2)) return true;
+                if ((position.x > X1 && position.x < X2) && (position.z < Z1 && position.z > Z2)) return true;
+                if ((position.x > X1 && position.x < X2) && (position.z > Z1 && position.z < Z2)) return true;
+
+                return false;
+            }
+        }
+        private class TradeData
+        {
+            public int OriginalPrice { get; set; } = 0;
+            public int MaxStackSize { get; set; } = 0;
+            public int BuyPrice { get; set; } = 0;
+            public int SellPrice { get; set; } = 0;
+
+            public TradeData() { }
+
+            public TradeData(int originalPrice, int maxStackSize)
+            {
+                OriginalPrice = originalPrice;
+                MaxStackSize = maxStackSize;
+                BuyPrice = originalPrice;
+                SellPrice = (int)(originalPrice * (SellPercentage / 100));
+            }
+
+            public void SetPrice(int price)
+            {
+                OriginalPrice = price;
+                BuyPrice = price;
+                SellPrice = (int)(price * (SellPercentage / 100));
+            }
+
+            public int GetPrice(int amount, int type)
+            {
+                int price = 0;
+                switch (type)
+                {
+                    case 1:
+                        price = BuyPrice;
+                        break;
+                    case 2:
+                        price = SellPrice;
+                        break;
+                }
+
+                return price * amount;
+            }
+
+            public int GetStacks(int amount)
+            {
+                return (int)Math.Ceiling((double)amount / MaxStackSize);
+            }
+
+            public void UpdatePrices(int amount, int type)
+            {
+                switch (type)
+                {
+                    case 1:
+                        BuyPrice = (int)(BuyPrice + ((OriginalPrice * (Inflation / 100)) * (amount / MaxStackSize)));
+                        if (BuyPrice < 1) BuyPrice = 1;
+                        break;
+                    case 2:
+                        SellPrice = (int)(SellPrice - ((OriginalPrice * (Inflation / 100)) * (amount / MaxStackSize)));
+                        if (SellPrice < 1) SellPrice = 1;
+                        break;
+                }
+            }
+
+            public void DeflatePrice()
+            {
+                double inflationModifier = Inflation / 100;
+                double deflationModifier = MaxDeflation / 100;
+                double stackModifier = 1;
+                int newBuyPrice = (int)(BuyPrice - ((OriginalPrice * inflationModifier) * stackModifier));
+                int newSellPrice = (int)(SellPrice + ((OriginalPrice * inflationModifier) * stackModifier));
+
+                int priceBottomShelf = (int)(OriginalPrice - ((OriginalPrice * deflationModifier) * stackModifier));
+                int priceTopShelf = (int)((OriginalPrice + ((OriginalPrice * deflationModifier) * stackModifier)) * (SellPercentage / 100));
+
+                if (newBuyPrice < priceBottomShelf) newBuyPrice = priceBottomShelf;
+                if (newSellPrice > priceTopShelf) newSellPrice = priceTopShelf;
+
+                BuyPrice = newBuyPrice;
+                SellPrice = newSellPrice;
+            }
+        }
+        private class PlayerData
+        {
+            public string Name { get; set; } = "";
+            public int Gold { get; set; } = 0;
+            public ShopData Shop { get; set; } = new ShopData();
+
+            public PlayerData() { }
+
+            public PlayerData(string name)
+            {
+                Name = name;
+            }
+
+            public PlayerData(string name, int gold)
+            {
+                Name = name;
+                Gold = gold;
+            }
+        }
+        private class ShopData
+        {
+            public string Name { get; set; } = "Local Store";
+            public SortedDictionary<string, ItemData> ItemList { get; set; } = new SortedDictionary<string, ItemData>();
+            public float X1 { get; set; } = 0f;
+            public float Z1 { get; set; } = 0f;
+            public float X2 { get; set; } = 0f;
+            public float Z2 { get; set; } = 0f;
+
+            public ShopData() { }
+
+            public ShopData(string name)
+            {
+                Name = name;
+                ItemList = new SortedDictionary<string, ItemData>();
+            }
+
+            public ShopData(string name, SortedDictionary<string, ItemData> itemList)
+            {
+                Name = name;
+                ItemList = itemList;
+            }
+
+            public int HasPosition()
+            {
+                if (X1 == 0 || Z1 == 0) return 0;
+                else if (X2 == 0f || Z2 == 0f) return 1;
+                else return 2;
+            }
+
+            public void AddPosition(Vector3 position, int type)
+            {
+                switch (type)
+                {
+                    case 1:
+                        X1 = position.x;
+                        Z1 = position.z;
+                        break;
+                    case 2:
+                        X2 = position.x;
+                        Z2 = position.z;
+                        break;
+                }
+            }
+
+            public Vector3 GetPosition(int type)
+            {
+                switch (type)
+                {
+                    case 1:
+                        return new Vector3(X1, 0, Z1);
+                    case 2:
+                        return new Vector3(X2, 0, Z2);
+                }
+                return new Vector3();
+            }
+
+            public void RemoveShop()
+            {
+                X1 = 0f;
+                Z1 = 0f;
+                X2 = 0f;
+                Z2 = 0f;
+            }
+
+            public bool IsInShopArea(Vector3 position)
+            {
+                if (HasPosition() != 2) return false;
+
+                if ((position.x < X1 && position.x > X2) && (position.z > Z1 && position.z < Z2)) return true;
+                if ((position.x < X1 && position.x > X2) && (position.z < Z1 && position.z > Z2)) return true;
+                if ((position.x > X1 && position.x < X2) && (position.z < Z1 && position.z > Z2)) return true;
+                if ((position.x > X1 && position.x < X2) && (position.z > Z1 && position.z < Z2)) return true;
+
+                return false;
+            }
+
+            public void RemoveItem(string item, int amount)
+            {
+                if (ItemList[item].Amount == amount) ItemList.Remove(item);
+                else ItemList[item].Amount -= amount;
+            }
+
+            public int AddItem(string resource, int price, int amount)
+            {
+                if (ItemList.ContainsKey(resource))
+                {
+                    if (!ItemList[resource].AddAmount(amount)) return 1;
+                    if (price > 0) ItemList[resource].Price = price;
+                    return 2;
+                }
+
+                if (ItemList.Count >= PlayerShopMaxSlots) return 0;
+                if (amount > PlayerShopStackLimit * _ItemList[resource]) return 1;
+
+                ItemList.Add(resource, new ItemData(price, amount, _ItemList[resource]));
+                return 2;
+            }
+        }
+        private class ItemData
+        {
+            public int Price { get; set; } = 0;
+            public int Amount { get; set; } = 0;
+            public int MaxStackSize { get; set; } = 0;
+
+            public ItemData() { }
+
+            public ItemData(int price, int amount, int maxStackSize)
+            {
+                Price = price;
+                Amount = amount;
+                MaxStackSize = maxStackSize;
+            }
+
+            public int GetAmount()
+            {
+                if (Amount < MaxStackSize) return Amount;
+                return MaxStackSize;
+            }
+
+            public int GetPrice(int amount)
+            {
+                return Price * amount;
+            }
+
+            public int GetStacks()
+            {
+                return (int)Math.Ceiling((double)Amount / MaxStackSize);
+            }
+
+            public bool AddAmount(int amount)
+            {
+                if (Amount + amount > PlayerShopStackLimit * MaxStackSize) return false;
+
+                Amount += amount;
+                return true;
+            }
         }
 
-#endregion
-		
-		// ================================================================================================================================
-		// ================================================================================================================================
-		// YOU SHOULDN'T NEED TO EDIT ANYTHING BELOW HERE =================================================================================
-		// ================================================================================================================================
-		// ================================================================================================================================
-		
-#region Server Variables (Do not modify!)
+        private GrandExchangeData _GEData = new GrandExchangeData();
+        private Dictionary<ulong, PlayerData> _PlayerData = new Dictionary<ulong, PlayerData>();
+        private static SortedDictionary<string, int> _ItemList = new SortedDictionary<string, int>();
 
-        void Log(string msg) => Puts($"{Title} : {msg}");
-        
-        private Collection<string[]> _tradeDefaults = new Collection<string[]>();
-        // 0 - Resource name
-        // 1 - Original Price
-        // 2 - Max Stack size
-        private Collection<string[]> _tradeList = new Collection<string[]>();
-        // 0 - Resource name
-        // 1 - Original Price
-        // 2 - Max Stack size
-        // 3 - Buy Price
-        // 4 - Sell Price
-        private Dictionary<string, int> _wallet = new Dictionary<string, int>();
-        private Dictionary<ulong, int> _playerWallet = new Dictionary<ulong, int>();
+        private readonly System.Random _Random = new System.Random();
 
-		private const int PriceModifier = 1000; // Best not to change this unless you have to! I don't know what would happen to prices! 
-		private readonly System.Random _random = new System.Random();
+        #region Full Item List
+        private Dictionary<string, object> _DefaultItemList = new Dictionary<string, object>()
+        {
+            { "Advanced Fletcher", 1 },
+            { "African Mask", 1 },
+            { "Amberjack Fish", 1 },
+            { "Anvil", 1 },
+            { "Apple", 25 },
+            { "Apple Seed", 100 },
+            { "Archery Target", 25 },
+            { "Asian Mask", 1 },
+            { "Asian Tribal Mask", 1 },
+            { "Baked Clay", 1000 },
+            { "Ballista", 1 },
+            { "Ballista Bolt", 1000 },
+            { "Bandage", 25 },
+            { "Banquet Table", 25 },
+            { "Bascinet Helmet", 1 },
+            { "Bascinet Pointed Helmet", 1 },
+            { "Bass Fish", 1 },
+            { "Bat Wing", 1000 },
+            { "Bean Seed", 100 },
+            { "Bear Hide", 1000 },
+            { "Bear Skin Rug", 25 },
+            { "Beet", 25 },
+            { "Beet Seed", 100 },
+            { "Bell Gong", 25 },
+            { "Bellows", 1 },
+            { "Bent Horn", 1 },
+            { "Berries", 25 },
+            { "Berry Seed", 100 },
+            { "Bladed Pillar", 25 },
+            { "Blood", 1000 },
+            { "Bone", 1000 },
+            { "Bone Axe", 1 },
+            { "Bone Dagger", 1 },
+            { "Bone Horn", 1 },
+            { "Bone Longbow", 1 },
+            { "Bone Spiked Club", 1 },
+            { "Bread", 25 },
+            { "Bug Net", 1 },
+            { "Burnt Bird", 25 },
+            { "Burnt Meat", 25 },
+            { "Butterfly", 100 },
+            { "Cabbage", 25 },
+            { "Cabbage Seed", 100 },
+            { "Campfire", 1 },
+            { "Candle", 1 },
+            { "Candle Stand", 25 },
+            { "Carrot", 25 },
+            { "Carrot Seed", 100 },
+            { "Cat Mask", 1 },
+            { "Chandelier", 25 },
+            { "Chapel De Fer Helmet", 1 },
+            { "Chapel De Fer Rounded Helmet", 1 },
+            { "Charcoal", 1000 },
+            { "Clay", 1000 },
+            { "Clay Block", 1000 },
+            { "Clay Corner", 1000 },
+            { "Clay Inverted Corner", 1000 },
+            { "Clay Ramp", 1000 },
+            { "Clay Stairs", 1000 },
+            { "Cobblestone Block", 1000 },
+            { "Cobblestone Corner", 1000 },
+            { "Cobblestone Inverted Corner", 1000 },
+            { "Cobblestone Ramp", 1000 },
+            { "Cobblestone Stairs", 1000 },
+            { "Cooked Beans", 25 },
+            { "Cooked Bird", 25 },
+            { "Cooked Meat", 25 },
+            { "Crossbow", 1 },
+            { "Deer Head Trophy", 25 },
+            { "Deer Leg Club", 1 },
+            { "Defensive Barricade", 25 },
+            { "Diamond", 1000 },
+            { "Dirt", 1000 },
+            { "Djembe Drum", 1 },
+            { "Driftwood Club", 1 },
+            { "Duck Feet", 1000 },
+            { "Executioners Axe", 1 },
+            { "Fang", 1000 },
+            { "Fat", 1000 },
+            { "Feather", 1000 },
+            { "Fern", 1000 },
+            { "Fern Bracers", 1 },
+            { "Fern Helmet", 1 },
+            { "Fern Sandals", 1 },
+            { "Fern Skirt", 1 },
+            { "Fern Vest", 1 },
+            { "Fire Fly", 100 },
+            { "Fire Water", 1000 },
+            { "Firepit", 1 },
+            { "Fishing Rod", 1 },
+            { "Flat Top Helmet", 1 },
+            { "Flax", 1000 },
+            { "Fletcher", 1 },
+            { "Flour", 10 },
+            { "Flower Bracers", 1 },
+            { "Flower Helmet", 1 },
+            { "Flower Sandals", 1 },
+            { "Flower Skirt", 1 },
+            { "Flower Vest", 1 },
+            { "Flowers", 1000 },
+            { "Fluffy Bed", 1 },
+            { "Fly", 100 },
+            { "Forest Sprite", 1 },
+            { "Fuse", 1000 },
+            { "Gazebo", 1 },
+            { "Grain", 1000 },
+            { "Grain Seed", 100 },
+            { "Granary", 1 },
+            { "Grave Mask", 1 },
+            { "Great Fireplace", 25 },
+            { "Ground Torch", 25 },
+            { "Guillotine", 1 },
+            { "Hanging Lantern", 25 },
+            { "Hanging Torch", 25 },
+            { "Hay", 1000 },
+            { "Hay Bale Target", 25 },
+            { "Hay Bracers", 1 },
+            { "Hay Helmet", 1 },
+            { "Hay Sandals", 1 },
+            { "Hay Skirt", 1 },
+            { "Hay Vest", 1 },
+            { "Heart", 1000 },
+            { "High Quality Bed", 1 },
+            { "High Quality Bench", 25 },
+            { "High Quality Cabinet", 25 },
+            { "Hoe", 1 },
+            { "Iron", 1000 },
+            { "Iron Axe", 1 },
+            { "Iron Bar Window", 10 },
+            { "Iron Battle Axe", 1 },
+            { "Iron Battle Hammer", 1 },
+            { "Iron Bear Trap", 25 },
+            { "Iron Buckler", 1 },
+            { "Iron Chest", 10 },
+            { "Iron Crest", 1 },
+            { "Iron Dagger", 1 },
+            { "Iron Door", 10 },
+            { "Iron Flanged Mace", 1 },
+            { "Iron Floor Torch", 25 },
+            { "Iron Forked Spear", 1 },
+            { "Iron Gate", 10 },
+            { "Iron Halberd", 1 },
+            { "Iron Hatchet", 1 },
+            { "Iron Heater", 1 },
+            { "Iron Ingot", 1000 },
+            { "Iron Javelin", 50 },
+            { "Iron Morning Star Mace", 1 },
+            { "Iron Pickaxe", 1 },
+            { "Iron Plate Boots", 1 },
+            { "Iron Plate Gauntlets", 1 },
+            { "Iron Plate Helmet", 1 },
+            { "Iron Plate Pants", 1 },
+            { "Iron Plate Vest", 1 },
+            { "Iron Shackles", 1 },
+            { "Iron Spear", 1 },
+            { "Iron Spikes", 25 },
+            { "Iron Spikes (Hidden)", 25 },
+            { "Iron Star Mace", 1 },
+            { "Iron Sword", 1 },
+            { "Iron Throwing Axe", 50 },
+            { "Iron Throwing Battle Axe", 50 },
+            { "Iron Throwing Knife", 50 },
+            { "Iron Tipped Arrow", 100 },
+            { "Iron Totem", 1 },
+            { "Iron Tower", 1 },
+            { "Iron War Hammer", 1 },
+            { "Iron Wood Cutters Axe", 1 },
+            { "Japanese Demon", 1 },
+            { "Japanese Mask", 1 },
+            { "Jester Hat (Green & Pink)", 1 },
+            { "Jester Hat (Orange & Black)", 1 },
+            { "Jester Hat (Rainbow)", 1 },
+            { "Jester Hat (Red)", 1 },
+            { "Jester Mask (Gold & Blue)", 1 },
+            { "Jester Mask (Gold & Red)", 1 },
+            { "Jester Mask (White & Blue)", 1 },
+            { "Jester Mask (White & Gold)", 1 },
+            { "Kettle Board Helmet", 1 },
+            { "Kettle Hat", 1 },
+            { "Koi Fish", 1 },
+            { "Large Gallows", 1 },
+            { "Large Iron Cage", 1 },
+            { "Large Iron Hanging Cage", 1 },
+            { "Large Wood Billboard", 10 },
+            { "Leather Crest", 1 },
+            { "Leather Hide", 1000 },
+            { "Light Leather Boots", 1 },
+            { "Light Leather Bracers", 1 },
+            { "Light Leather Helmet", 1 },
+            { "Light Leather Pants", 1 },
+            { "Light Leather Vest", 1 },
+            { "Liver", 1000 },
+            { "Lockpick", 50 },
+            { "Log Block", 1000 },
+            { "Log Corner", 1000 },
+            { "Log Fence", 1000 },
+            { "Log Inverted Corner", 1000 },
+            { "Log Ramp", 1000 },
+            { "Log Stairs", 1000 },
+            { "Long Horn", 1 },
+            { "Long Wood Drawbridge", 10 },
+            { "Lord's Bath", 25 },
+            { "Lord's Bed", 1 },
+            { "Lord's Large Chair", 25 },
+            { "Lord's Small Chair", 25 },
+            { "Low Quality Bed", 1 },
+            { "Low Quality Bench", 25 },
+            { "Low Quality Chair", 25 },
+            { "Low Quality Fence", 1000 },
+            { "Low Quality Shelf", 25 },
+            { "Low Quality Stool", 25 },
+            { "Low Quality Table", 25 },
+            { "Lumber", 1000 },
+            { "Meat", 1000 },
+            { "Medium Banner", 10 },
+            { "Medium Quality Bed", 1 },
+            { "Medium Quality Bench", 25 },
+            { "Medium Quality Bookcase", 25 },
+            { "Medium Quality Chair", 25 },
+            { "Medium Quality Dresser", 25 },
+            { "Medium Quality Stool", 25 },
+            { "Medium Quality Table", 25 },
+            { "Medium Steel Hanging Sign", 10 },
+            { "Medium Stick Billboard", 10 },
+            { "Medium Wood Billboard", 10 },
+            { "Nasal Helmet", 1 },
+            { "Oil", 1000 },
+            { "Onion", 25 },
+            { "Onion Seed", 100 },
+            { "Pillory", 1 },
+            { "Pine Cone", 100 },
+            { "Plague Doctor Mask", 1 },
+            { "Poplar Seed", 100 },
+            { "Potion Of Antidote", 25 },
+            { "Potion Of Appearance", 25 },
+            { "Rabbit Pelt", 1000 },
+            { "Raw Bird", 1000 },
+            { "Reinforced Wood (Iron) Block", 1000 },
+            { "Reinforced Wood (Iron) Corner", 1000 },
+            { "Reinforced Wood (Iron) Door", 10 },
+            { "Reinforced Wood (Iron) Gate", 10 },
+            { "Reinforced Wood (Iron) Inverted Corner", 1000 },
+            { "Reinforced Wood (Iron) Ramp", 1000 },
+            { "Reinforced Wood (Iron) Stairs", 1000 },
+            { "Reinforced Wood (Iron) Trap Door", 10 },
+            { "Reinforced Wood (Steel) Door", 10 },
+            { "Repair Hammer", 1 },
+            { "Rocking Horse", 25 },
+            { "Rope", 1 },
+            { "Roses", 1000 },
+            { "Salmon Fish", 1 },
+            { "Sawmill", 1 },
+            { "Scythe", 1 },
+            { "Shardana Mask", 1 },
+            { "Sharp Rock", 50 },
+            { "Siegeworks", 1 },
+            { "Simple Helmet", 1 },
+            { "Small Banner", 10 },
+            { "Small Gallows", 1 },
+            { "Small Iron Cage", 1 },
+            { "Small Iron Hanging Cage", 1 },
+            { "Small Steel Hanging Sign", 10 },
+            { "Small Steel Signpost", 10 },
+            { "Small Stick Signpost", 10 },
+            { "Small Wall Lantern", 25 },
+            { "Small Wall Torch", 25 },
+            { "Small Wood Hanging Sign", 10 },
+            { "Small Wood Signpost", 10 },
+            { "Smelter", 1 },
+            { "Smithy", 1 },
+            { "Sod Block", 1000 },
+            { "Sod Corner", 1000 },
+            { "Sod Inverted Corner", 1000 },
+            { "Sod Ramp", 1000 },
+            { "Sod Stairs", 1000 },
+            { "Spinning Wheel", 1 },
+            { "Splintered Club", 1 },
+            { "Spruce Branches Block", 1000 },
+            { "Spruce Branches Corner", 1000 },
+            { "Spruce Branches Inverted Corner", 1000 },
+            { "Spruce Branches Ramp", 1000 },
+            { "Spruce Branches Stairs", 1000 },
+            { "Standing Iron Torch", 25 },
+            { "Steel Axe", 1 },
+            { "Steel Battle Axe", 1 },
+            { "Steel Battle Hammer", 1 },
+            { "Steel Bolt", 100 },
+            { "Steel Buckler", 1 },
+            { "Steel Cage", 1 },
+            { "Steel Chest", 10 },
+            { "Steel Compound", 1000 },
+            { "Steel Crest", 1 },
+            { "Steel Dagger", 1 },
+            { "Steel Flanged Mace", 1 },
+            { "Steel Greatsword", 1 },
+            { "Steel Halberd", 1 },
+            { "Steel Hatchet", 1 },
+            { "Steel Heater", 1 },
+            { "Steel Ingot", 1000 },
+            { "Steel Javelin", 50 },
+            { "Steel Morning Star Mace", 1 },
+            { "Steel Pickaxe", 1 },
+            { "Steel Picture Frame", 10 },
+            { "Steel Plate Boots", 1 },
+            { "Steel Plate Gauntlets", 1 },
+            { "Steel Plate Helmet", 1 },
+            { "Steel Plate Pants", 1 },
+            { "Steel Plate Vest", 1 },
+            { "Steel Spear", 1 },
+            { "Steel Star Mace", 1 },
+            { "Steel Sword", 1 },
+            { "Steel Throwing Battle Axe", 50 },
+            { "Steel Throwing Knife", 50 },
+            { "Steel Tipped Arrow", 100 },
+            { "Steel Tower", 1 },
+            { "Steel War Hammer", 1 },
+            { "Steel Wood Cutters Axe", 1 },
+            { "Sticks", 1000 },
+            { "Stiff Bed", 1 },
+            { "Stone", 1000 },
+            { "Stone Arch", 10 },
+            { "Stone Arrow", 100 },
+            { "Stone Block", 1000 },
+            { "Stone Corner", 1000 },
+            { "Stone Cutter", 1 },
+            { "Stone Dagger", 1 },
+            { "Stone Fireplace", 25 },
+            { "Stone Hatchet", 1 },
+            { "Stone Inverted Corner", 1000 },
+            { "Stone Javelin", 50 },
+            { "Stone Pickaxe", 1 },
+            { "Stone Ramp", 1000 },
+            { "Stone Slab", 1000 },
+            { "Stone Slit Window", 10 },
+            { "Stone Spear", 1 },
+            { "Stone Stairs", 1000 },
+            { "Stone Sword", 1 },
+            { "Stone Throwing Axe", 50 },
+            { "Stone Throwing Knife", 50 },
+            { "Stone Totem", 1 },
+            { "Stone Wood Cutters Axe", 1 },
+            { "Tabard", 1 },
+            { "Tannery", 1 },
+            { "Tears Of The Gods", 1000 },
+            { "Thatch Block", 1000 },
+            { "Thatch Corner", 1000 },
+            { "Thatch Inverted Corner", 1000 },
+            { "Thatch Ramp", 1000 },
+            { "Thatch Stairs", 1000 },
+            { "Theater Mask (Gold & Red)", 1 },
+            { "Theater Mask (White & Blue)", 1 },
+            { "Theater Mask (White & Gold)", 1 },
+            { "Theater Mask (White & Red)", 1 },
+            { "Theatre Mask (Comedy)", 1 },
+            { "Theatre Mask (Tragedy)", 1 },
+            { "Throwing Stone", 50 },
+            { "Tinker", 1 },
+            { "Torch", 1 },
+            { "Trebuchet", 1 },
+            { "Trebuchet Hay Bale", 50 },
+            { "Trebuchet Stone", 50 },
+            { "Wall Lantern", 25 },
+            { "Wall Torch", 25 },
+            { "War Drum", 1 },
+            { "Wasp", 100 },
+            { "Water", 1000 },
+            { "Watering Pot", 1 },
+            { "Well", 1 },
+            { "Wenceslas Helmet", 1 },
+            { "Whip", 1 },
+            { "Wolf Pelt", 1000 },
+            { "Wood", 1000 },
+            { "Wood Arrow", 100 },
+            { "Wood Barricade", 25 },
+            { "Wood Block", 1000 },
+            { "Wood Bracers", 1 },
+            { "Wood Buckler", 1 },
+            { "Wood Cage", 1 },
+            { "Wood Chest", 10 },
+            { "Wood Corner", 1000 },
+            { "Wood Door", 10 },
+            { "Wood Drawbridge", 10 },
+            { "Wood Flute", 1 },
+            { "Wood Gate", 10 },
+            { "Wood Heater", 1 },
+            { "Wood Helmet", 1 },
+            { "Wood Inverted Corner", 1000 },
+            { "Wood Javelin", 50 },
+            { "Wood Ledge", 1000 },
+            { "Wood Mace", 1 },
+            { "Wood Picture Frame", 10 },
+            { "Wood Ramp", 1000 },
+            { "Wood Sandals", 1 },
+            { "Wood Short Bow", 1 },
+            { "Wood Shutters", 10 },
+            { "Wood Skirt", 1 },
+            { "Wood Spear", 1 },
+            { "Wood Spikes", 25 },
+            { "Wood Stairs", 1000 },
+            { "Wood Stick", 1 },
+            { "Wood Sword", 1 },
+            { "Wood Totem", 1 },
+            { "Wood Tower", 1 },
+            { "Wood Vest", 1 },
+            { "Woodworking", 1 },
+            { "Wool", 1000 },
+            { "Work Bench", 1 },
+            { "Worms", 100 }
+        };
+        #endregion
+        #region Default Trade List
+        private SortedDictionary<string, int> _DefaultTradeList = new SortedDictionary<string, int>()
+        {
+            { "Apple", 25 },
+            { "Bear Hide", 6250 },
+            { "Beet", 38 },
+            { "Berries", 38 },
+            { "Bread", 150 },
+            { "Cabbage",  25},
+            { "Carrot", 38 },
+            { "Charcoal", 15 },
+            { "Clay", 10 },
+            { "Cobblestone Block", 625 },
+            { "Diamond", 6250 },
+            { "Dirt", 5 },
+            { "Flax", 25 },
+            { "Iron", 25 },
+            { "Iron Ingot", 350 },
+            { "Leather Hide", 25 },
+            { "Log Block", 500 },
+            { "Lumber", 4 },
+            { "Oil", 20 },
+            { "Onion", 38 },
+            { "Reinforced Wood (Iron) Block", 700 },
+            { "Steel Compound", 75 },
+            { "Steel Ingot", 1000 },
+            { "Stone", 20 },
+            { "Stone Block", 3500 },
+            { "Stone Slab", 2700 },
+            { "Water", 20 },
+            { "Wood", 10 },
+            { "Wood Block", 250 },
+        };
+        #endregion
 
-        //void Log(string msg) => Puts($"{Title} : {msg}");
-		private const int MaxPossibleGold = 2100000000; // DO NOT RAISE THIS ANY HIGHER - 32-bit INTEGER FLOOD WARNING	
+        #endregion
 
-		private Collection<double[]> _markList = new Collection<double[]>();
-        private Dictionary<string, double[]> _shopMarks = new Dictionary<string, double[]>();
-        private Dictionary<ulong, double[]> _shopLocs = new Dictionary<ulong, double[]>();
-        private double _sellPercentage = 50; // Use the /sellPercentage command to change this NOT here!
+        #region Save and Load Data
 
-        private Dictionary<string, Collection<string[]>> _playerShop = new Dictionary<string, Collection<string[]>>();
-        // 0 - Item name
-        // 1 - Price
-        // 2 - Amount
-        private Dictionary<ulong, Collection<string[]>> _shopPlayer = new Dictionary<ulong, Collection<string[]>>();
-        // 0 - Item name
-        // 1 - Price
-        // 2 - Amount
+        void Loaded()
+        {
+            LoadTradeData();
+            LoadConfigData();
+            LoadDefaultMessages();
 
-        private Collection<string> _tradeMasters = new Collection<string>();
+            timer.Repeat(PriceDeflationTime, 0, DeflatePrices);
 
-#endregion
+            if (SellPercentage == 0) SellPercentage = 50;
+            SaveConfigData();
 
-#region Save and Load Data Methods
+            permission.RegisterPermission("GrandExchange.Modify.Settings", this);
+            permission.RegisterPermission("GrandExchange.Modify.Itemlist", this);
+            permission.RegisterPermission("GrandExchange.Show", this);
+        }
 
-        // SAVE DATA ===============================================================================================
         private void LoadTradeData()
         {
-            _tradeDefaults = Interface.GetMod().DataFileSystem.ReadObject<Collection<string[]>>("SavedTradeDefaults");
-            _tradeList = Interface.GetMod().DataFileSystem.ReadObject<Collection<string[]>>("SavedTradeList");
-            _wallet = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<string, int>>("SavedTradeWallet");
-            _playerWallet = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, int>>("SavedTradeWalletById");
-            _markList = Interface.GetMod().DataFileSystem.ReadObject<Collection<double[]>>("SavedMarkList");
-            _sellPercentage = Interface.GetMod().DataFileSystem.ReadObject<double>("SavedSellPercentage");
-            _playerShop = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<string, Collection<string[]>>>("SavedPlayerShop");
-            _shopPlayer = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, Collection<string[]>>>("SavedPlayerShopById");
-            _tradeMasters = Interface.GetMod().DataFileSystem.ReadObject<Collection<string>>("SavedTradeMasters");
-            _shopMarks = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<string, double[]>>("SavedPlayerShopMarks");
-            _shopLocs = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, double[]>>("SavedPlayerShopLocs");
-            _allowPveGold = Interface.GetMod().DataFileSystem.ReadObject<bool>("SavedPvEGoldStatus");
-            _allowPvpGold = Interface.GetMod().DataFileSystem.ReadObject<bool>("SavedPvPGoldStatus");
+            _GEData = Interface.Oxide.DataFileSystem.ReadObject<GrandExchangeData>("GrandExchangeData");
+            _PlayerData = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, PlayerData>>("GrandExchangePlayerData");
         }
 
         private void SaveTradeData()
         {
-            Interface.GetMod().DataFileSystem.WriteObject("SavedTradeDefaults", _tradeDefaults);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedTradeList", _tradeList);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedTradeWallet", _wallet);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedTradeWalletById", _playerWallet);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedMarkList", _markList);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedSellPercentage", _sellPercentage);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedPlayerShop", _playerShop);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedPlayerShopById", _shopPlayer);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedTradeMasters", _tradeMasters);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedPlayerShopMarks", _shopMarks);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedPlayerShopLocs", _shopLocs);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedPvEGoldStatus", _allowPveGold);
-            Interface.GetMod().DataFileSystem.WriteObject("SavedPvPGoldStatus", _allowPvpGold);
+            Interface.Oxide.DataFileSystem.WriteObject("GrandExchangeData", _GEData);
+            Interface.Oxide.DataFileSystem.WriteObject("GrandExchangePlayerData", _PlayerData);
         }
-		
-		private void OnPlayerConnected(Player player)
-		{
-			CheckWalletExists(player);
-			CheckShopExists(player);
 
-
-            // This should port over the previous player shop and wallet system to the new Id version 
-            if (_playerShop.ContainsKey(player.Name.ToLower()))
-            {
-                if (!_shopPlayer.ContainsKey(player.Id))
-                {
-                    var shop = _playerShop[player.Name.ToLower()];
-                    _shopPlayer.Add(player.Id, shop);
-                }
-                _playerShop.Remove(player.Name.ToLower());
-            }
-
-            if(_wallet.ContainsKey(player.Name.ToLower()))
-            {
-                if(!_playerWallet.ContainsKey(player.Id)) _playerWallet.Add(player.Id, _wallet[player.Name.ToLower()]);
-                _wallet.Remove(player.Name.ToLower());
-            }
-
-            if(_shopMarks.ContainsKey(player.Name.ToLower()))
-            {
-                if (!_shopLocs.ContainsKey(player.Id)) _shopLocs.Add(player.Id, _shopMarks[player.Name.ToLower()]);
-                _shopMarks.Remove(player.Name.ToLower());
-            }
-            // ---------------------------------------------------------------
-
-			// Save the trade data
-            SaveTradeData();
-		}
-		
-		
-		private void CheckWalletExists(Player player)
-		{
-			//Check if the player has a wallet yet
-			if(_playerWallet.Count < 1) _playerWallet.Add(player.Id,0);
-			if(!_playerWallet.ContainsKey(player.Id))
-			{
-				_playerWallet.Add(player.Id,0);
-			}
-		}
-
-		private void CheckWalletExists(ulong playerId)
-		{
-			//Check if the player has a wallet yet
-			if(_playerWallet.Count < 1) _playerWallet.Add(playerId,0);
-			if(!_playerWallet.ContainsKey(playerId))
-			{
-				_playerWallet.Add(playerId,0);
-			}
-		}
-        
-		private void CheckShopExists(Player player)
-		{
-			//Check if the player has a wallet yet
-			if(_shopPlayer.Count < 1) _shopPlayer.Add(player.Id,new Collection<string[]>());
-			if(!_shopPlayer.ContainsKey(player.Id))
-			{
-				_shopPlayer.Add(player.Id,new Collection<string[]>());
-			}
-		}
-		
-        void Loaded()
+        protected override void LoadDefaultConfig()
         {
-            LoadTradeData();
-			_tradeDefaults = LoadDefaultTradeValues();
+            LoadConfigData();
+            SaveConfigData();
+        }
 
-			//If there's no trade data stored, then set up the new trade data from the defaults
-            if(_tradeList.Count < 1)
+        private void LoadConfigData()
+        {
+            PvpGold = GetConfig("Gold", "PvpGold", true);
+            PveGold = GetConfig("Gold", "PveGold", true);
+            GoldRewardForPve = GetConfig("Gold", "GoldRewardForPve", 75);
+            GoldStealPercentage = GetConfig("Gold", "GoldStealPercentage", 30);
+            CanUseGE = GetConfig("Trading", "CanUseGE", true);
+            SafeTrade = GetConfig("Trading", "SafeTrade", true);
+            UseDeflation = GetConfig("Trading", "UseDeflation", true);
+            PlayerShopStackLimit = GetConfig("Trading", "PlayerShopStackLimit", 5);
+            PlayerShopMaxSlots = GetConfig("Trading", "PlayerShopMaxSlots", 10);
+            SellPercentage = GetConfig("Trading", "SellPercentage", 50);
+            Inflation = GetConfig("Trading", "Inflation", 1);
+            MaxDeflation = GetConfig("Trading", "MaxDeflation", 5);
+
+            Dictionary<string, object> list = GetConfig("Database", "Items", _DefaultItemList);
+            foreach (KeyValuePair<string, object> item in list)
             {
-                foreach(var item in _tradeDefaults)
+                if (_ItemList.ContainsKey(item.Key)) continue;
+                _ItemList.Add(item.Key, Convert.ToInt32(item.Value));
+            }
+        }
+
+        private void SaveConfigData()
+        {
+            Config["Gold", "PvpGold"] = PvpGold;
+            Config["Gold", "PveGold"] = PveGold;
+            Config["Gold", "GoldRewardForPve"] = GoldRewardForPve;
+            Config["Gold", "GoldStealPercentage"] = GoldStealPercentage;
+            Config["Trading", "CanUseGE"] = CanUseGE;
+            Config["Trading", "SafeTrade"] = SafeTrade;
+            Config["Trading", "UseDeflation"] = UseDeflation;
+            Config["Trading", "PlayerShopStackLimit"] = PlayerShopStackLimit;
+            Config["Trading", "PlayerShopMaxSlots"] = PlayerShopMaxSlots;
+            Config["Trading", "SellPercentage"] = SellPercentage;
+            Config["Trading", "Inflation"] = Inflation;
+            Config["Trading", "MaxDeflation"] = MaxDeflation;
+            Config["Database", "Items"] = _ItemList;
+
+            SaveConfig();
+        }
+
+        private void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>()
+            {
+                { "No Permission", "You don't have permission to use this command."},
+                { "No Marks", "There are no marks to remove."},
+                { "Invalid Args", "Oops, something went wrong! Please use /gehelp to see if you used the correct format."},
+                { "Invalid Amount", "That is not a recognised amount."},
+                { "Invalid Player", "That player could not be found."},
+                { "Location", "Current Location: x:{0} y:{1} z:{2}" },
+
+                { "Toggle Pvp Gold", "PvP gold farming was turned {0}." },
+                { "Toggle Pve Gold", "PvE gold farming was turned {0}." },
+                { "Toggle Safe Trade", "Pvp and attacks in trading areas was turned {0}." },
+                { "Toggle Grand Exchange", "Player access to the Grand Exchange was turned {0}" },
+                { "Toggle Deflation", "Price deflation over time was turned {0}" },
+
+                { "Trade Defense", "You cannot attack people in a designated trade area, scoundrel!" },
+
+                { "Default Itemlist", "{0}: {1}." },
+
+                { "Chat Title", "[FF0000]Grand Exchange[FFFFFF] : " },
+
+                { "Store Closed", "The Grand Exchange is closed for business. Please try again later." },
+                { "Shop Closed", "This shop doesn't appear to be open." },
+
+                { "Sellpercentage Set", "The Sell percentage has been set to {0}%." },
+                { "Inflation Set", "The inflation percentage has been set to {0}%." },
+                { "Max Deflation Set", "The max deflation percentage has been set to {0}%." },
+
+                { "Wallet Own", "You have [00FF00]{0}[FFFF00] gold[FFFFFF]."},
+                { "Wallet Other", "{0} has {1} gold."},
+
+                { "Gold Available", "[FF0000]Gold Available[FFFFFF] : [00FF00]{0}." },
+                { "Gold Maxed", "You cannot gain any more gold than you now have. Congratulations. You are the richest player. Goodbye." },
+                { "Gold Give", "Giving {0} gold to {1}." },
+                { "Gold Remove", "Removing {0} gold from {1}." },
+                { "Gold Remove All", "All players' gold has been removed!" },
+                { "Gold Gained", "You have gained {0} gold." },
+                { "Gold Lost", "You have lost {0} gold." },
+                { "Gold Set", "You have set the gold amount for {0} to {1}." },
+                { "Gold Collected", "[00FF00]{0}[FFFF00] gold[FFFFFF] collected." },
+                { "Gold Kill", "[FF00FF]{0}[FFFFFF] had no gold for you to steal." },
+                { "Gold Kill Global", "[FF00FF]{0}[FFFFFF] has stolen [00FF00]{1}[FFFF00] gold [FFFFFF] from the dead body of [00FF00]{2}[FFFFFF]!" },
+                { "Gold Guild", "There is no honor (or more importantly, gold) in killing a member of your own guild!" },
+                { "Gold Send Steal", "Don't try to steal gold from others!" },
+                { "Gold Send Not Enough", "You can't send more gold then you have!" },
+                { "Gold Send", "Sending {0} gold to {1}." },
+                { "Gold Received", "You received {0} gold from {1}." },
+
+                { "Popup Title", "Grand Exchange" },
+
+                { "Store Item Data", "[888800]{0}[FFFFFF]; Buy: {1}{2}[FFFF00]g  [FFFFFF]Sell: {3}{4}[FFFF00]g" },
+                { "Shop Item Data", "[00FFFF]{0} [FFFFFF]( [FF0000]{1}[FFFFFF] );  Price: {2}{3}[FFFF00]g" },
+
+                { "Shop Empty", "The shop is currently empty." },
+                { "No Store", "You cannot trade outside of the designated trade area."},
+                { "No Shop", "There is no shop here."},
+                { "No Shop Own", "You need to be in your shop to do this."},
+
+                { "Store Wipe", "The Grand Exhange has been emptied out." },
+                { "Store Reset", "The Grand Exchange has been reset to it's default values." },
+                { "Store Price Reset", "The prices of the items in the Grand Exchange have been reset to their default values." },
+
+                { "Store Buy Item", "What [00FF00]item [FFFFFF]would you like to buy on the [00FFFF]Grand Exchange[FFFFFF]?"},
+                { "Store Buy No Item", "I'm afraid that item is currently not for sale."},
+                { "Store Buy Amount", "Of course!\n [00FF00]{0}[FFFFFF] is currently selling for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\n It can be bought in stacks of up to [00FF00]{2}[FFFFFF].\n How much would you like to buy?"},
+                { "Store Buy Amount Wrong", "I'm afraid we cannot fulfill an order of that size."},
+                { "Store Buy Confirm", "Very good!\n [00FFFF]{0} [00FF00]{1}[FFFFFF] will cost you a total of [FF0000]{2} [FFFF00]gold.[FFFFFF]\n Do you want to complete the purchase?"},
+                { "Store Buy No Gold", "It looks like you don't have enough gold for this transaction."},
+                { "Store Buy No Inventory Space", "I'm afraid you don't have enough inventory slots free. Come back when you have freed up some space."},
+                { "Store Buy Complete", "{0} {1} has been added to your inventory and your wallet has been debited the appropriate amount."},
+                { "Store Buy Finish", "Congratulations on your purchase. Please come again!"},
+
+                { "Store Sell Item", "What [00FF00]item [FFFFFF]would you like to sell on the [00FFFF]Grand Exchange[FFFFFF]?"},
+                { "Store Sell No Item", "Sorry, we currently can't take that item from you."},
+                { "Store Sell Amount", "Hmmm!\n I believe that [00FF00]{0}[FFFFFF] is currently being purchased for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\n I'd be happy to buy this item in stacks of up to [00FF00]{2}[FFFFFF].\n How much did you want to sell?"},
+                { "Store Sell Amount Wrong", "I'm afraid we cannot fulfill an order of that size."},
+                { "Store Sell Confirm", "I suppose I can do that.\n [00FFFF]{0} [00FF00]{1}[FFFFFF] will give you a total of [FF0000]{2} [FFFF00]gold.[FFFFFF]\n Do you want to complete the sale?"},
+                { "Store Sell No Resources", "It looks like you don't have the goods! What are you trying to pull here?"},
+                { "Store Sell Complete", "{0} {1} has been removed from your inventory and your wallet has been credited for the sale."},
+                { "Store Sell Finish", "Thanks for your custom, friend! Please come again!"},
+
+                { "Shop Buy Item", "What [00FF00]item [FFFFFF]would you like to buy at this shop?"},
+                { "Shop Buy No Item", "I'm afraid that item is currently not for sale."},
+                { "Shop Buy Amount", "Yes, we have that!\n[00FF00]{0}[FFFFFF] is currently selling for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\nIt can be bought in stacks of up to [00FF00]{2}[FFFFFF].\n How much would you like to buy?"},
+                { "Shop Buy Amount Wrong", "I'm afraid we cannot fulfill an order of that size."},
+                { "Shop Buy Confirm", "Very good!\n [00FFFF]{0} [00FF00]{1}[FFFFFF] will cost you a total of [FF0000]{2} [FFFF00]gold.[FFFFFF]\n Do you want to complete the purchase?"},
+                { "Shop Buy No Gold", "It looks like you don't have enough gold for this transaction."},
+                { "Shop Buy No Inventory Space", "I'm afraid you don't have enough inventory slots free. Come back when you have freed up some space."},
+                { "Shop Buy Complete", "{0} {1} has been added to your inventory and your wallet has been debited the appropriate amount."},
+                { "Shop Buy Finish", "Congratulations on your purchase. Please come again!"},
+
+                { "Store Mark Exists", "You have already marked two locations. Please use /ge.removemarks to start again."},
+                { "Store Mark First", "Added the first corner position for the Grand Exchange."},
+                { "Store Mark Second", "Added the second and final position for the Grand Exchange."},
+                { "Store Mark Removed", "All marks for the Grand Exchange have been removed."},
+
+                { "Shop Mark Occupied", "There already exists a shop in this area."},
+                { "Shop Mark Limit", "This area is too big for your shop. It can only be a maximum size of 13x13 blocks."},
+                { "Shop Mark Exists", "You have already marked two locations. Please use /ge.removemarks to start again."},
+                { "Shop Mark First", "Added the first corner position for your shop. Now you will need to add the OPPOSITE corner for your shop as well."},
+                { "Shop Mark Second", "Added the second and final corner position for your shop."},
+                { "Shop Mark Removed", "You have removed all of your shop markers. Your shop is not accessible until you place new markers using /addshopmarker."},
+
+                { "Position Mark", "Position has been marked at [00FF00]{0}[FFFFFF], [00FF00]{1}."},
+
+                { "Store Item Exists", "{0} is already in the Grand Exchange."},
+                { "Store Item Added", "{0} has been added to the Grand Exchange."},
+                { "Store Item Removed", "{0} has been removed from the Grand Exchange."},
+                { "Store Item Price Changed", "Changing price of {0} to {1}." },
+                { "Store No Item", "{0} does not appear to be in the Grand Exchange."},
+
+                { "Shop Item Added", "{0} has been added to your shop."},
+                { "Shop Item Removed", "{0} has been removed from your shop."},
+                { "Shop Item Max", "You have reached the max amount you can store of this item."},
+                { "Shop Prices updated", "You have updated your shop prices." },
+                { "Shop No Item", "{0} does not appear to be in the store." },
+                { "Shop No Item Text", "{0}  does not appear to be a recognised item. Did you spell it correct?"},
+                { "Shop No Resources", "You don't appear to have that much of the resource in the shop."},
+                { "Shop No Inventory Resources", "You don't appear to have that much of the resource in your inventory."},
+                { "Shop No Inventory Space", "You don't have enough space in your inventory. Please make sure you have at least {0} free slots." },
+                { "Shop Full", "You cannot stock any more items in your shop."},
+
+                { "Item Non-Existing", "{0} does not appear in our item database."}
+            }, this);
+
+            //GetMessage("Chat Title", player) + ;
+            //GetMessage("Popup Title", player);
+            //GetMessage("No Permission", player);
+            //GetMessage("Invalid Args", player);
+            //GetMessage("Invalid Amount", player);
+            //GetMessage("Invalid Player", player);
+            //GetMessage("", player);
+            //string.Format(GetMessage("", player), )
+        }
+
+        #endregion
+
+        #region Commands
+
+        [ChatCommand("gehelp")]
+        private void SendPlayerHelpText(Player player, string cmd)
+        {
+            SendHelpText(player);
+        }
+
+        [ChatCommand("wallet")]
+        private void CheckOwnGold(Player player, string cmd)
+        {
+            CheckWallet(player);
+        }
+
+        [ChatCommand("topgold")]
+        private void ShowTopPlayerGold(Player player, string cmd, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (input.Length > 0)
+            {
+                if (input[0].ToLower() == "all")
                 {
-					var sellPrice = Int32.Parse(item[1]) * (_sellPercentage/100);
-                    var newItem = new string[5]{ item[0], item[1], item[2], item[1], sellPrice.ToString() };
-                    _tradeList.Add(newItem);
+                    Dictionary<ulong, PlayerData> TopPlayers = new Dictionary<ulong, PlayerData>(_PlayerData);
+                    int topListMax = 10;
+                    if (TopPlayers.Keys.Count < 10) topListMax = TopPlayers.Keys.Count;
+                    for (int i = 0; i < topListMax; i++)
+                    {
+                        int TopGoldAmount = 0;
+                        KeyValuePair<ulong, PlayerData> target = new KeyValuePair<ulong, PlayerData>();
+                        foreach (KeyValuePair<ulong, PlayerData> data in TopPlayers)
+                        {
+                            if (data.Value.Gold >= TopGoldAmount)
+                            {
+                                target = data;
+                                TopGoldAmount = data.Value.Gold;
+                            }
+                        }
+                        PrintToChat(player, $"{i + 1}. {target.Value.Name} : {target.Value.Gold} gold");
+                        TopPlayers.Remove(target.Key);
+                    }
                 }
             }
-			
-			// Start deflation timer
-			timer.Repeat(PriceDeflationTime,0,DeflatePrices);
-			
-			//Make sure the sellPercentage hasn't been overwritten to 0 somehow!
-			if(_sellPercentage == 0)
-			{
-				_sellPercentage = 50;
-			}
+            else
+            {
+                List<Player> onlinePlayers = Server.ClientPlayers as List<Player>;
 
-            // Save the trade data
+                int topList = onlinePlayers.Count;
+
+                for (int i = 0; i < topList; i++)
+                {
+                    int topGoldAmount = 0;
+                    Player topPlayer = null;
+
+                    foreach (Player oPlayer in onlinePlayers)
+                    {
+                        CheckPlayerExists(oPlayer);
+                        if (_PlayerData[oPlayer.Id].Gold >= topGoldAmount)
+                        {
+                            topGoldAmount = _PlayerData[oPlayer.Id].Gold;
+                            topPlayer = oPlayer;
+                        }
+                    }
+
+                    if (topPlayer == null) continue;
+
+                    PrintToChat(player, $"{i + 1}. {topPlayer.DisplayName} : {topGoldAmount} gold.");
+                    onlinePlayers.Remove(topPlayer);
+                }
+            }
+        }
+
+        [ChatCommand("store")]
+        private void ViewTExchangeStore(Player player, string cmd)
+        {
+            ShowExchangeStore(player);
+        }
+
+        [ChatCommand("buy")]
+        private void BuyItem(Player player, string cmd)
+        {
+            BuyItemExchange(player);
+        }
+
+        [ChatCommand("sell")]
+        private void SellItem(Player player, string cmd)
+        {
+            SellItemExchange(player);
+        }
+
+        [ChatCommand("sendgold")]
+        private void SendCredits(Player player, string cmd, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (input.Length < 2) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+
+            int amount = 0;
+            if (!int.TryParse(input[0], out amount)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+
+            if (amount < 1) { PrintToChat(player, GetMessage("Gold Send Steal", player)); return; }
+
+            if (_PlayerData[player.Id].Gold < amount) { PrintToChat(player, GetMessage("Gold Send Not Enough", player)); return; }
+
+            string text = input.JoinToString(" ");
+            string playerName = text.Substring(text.IndexOf(' ') + 1);
+
+            Player target = Server.GetPlayerByName(playerName);
+
+            if (target == null) { PrintToChat(player, GetMessage("Invalid Player", player)); return; }
+
+            CheckPlayerExists(target);
+
+            PrintToChat(player, string.Format(GetMessage("Gold Send", player), amount, target.DisplayName));
+            PrintToChat(target, string.Format(GetMessage("Gold Received", player), amount, player.DisplayName));
+
+            GiveGold(target, amount);
+            RemoveGold(player, amount);
+
             SaveTradeData();
         }
-        // ===========================================================================================================
-		
-#endregion
 
-#region User Commands
-        
-		// View the items in a player's shop
-        [ChatCommand("shophelp")]
-        private void SeeTheShopCommands(Player player, string cmd)
+        [ChatCommand("ge.addmark")]
+        private void AddExchangeMark(Player player, string cmd, string[] input)
         {
-            PrintToChat(player, "[00FF00]/shop [FFFFFF] - View the current shop you are visiting.");
-            PrintToChat(player, "[00FF00]/myshop [FFFFFF] - View your own shop.");
-            PrintToChat(player, "[00FF00]/addshopmarker [FFFFFF] - Add a marker to create your own shop");
-            PrintToChat(player, "[00FF00]/removeshopmarkers [FFFFFF] - Remove any markers you have made previously.");
-            PrintToChat(player, "[00FF00]/addshopitem '<itemname>' <amount> [FFFFFF] - Add items to your shop stock.");
-            PrintToChat(player, "[00FF00]/removeshopitem '<itemname>' <amount> [FFFFFF] - Remove items from your shop stock.");
-            PrintToChat(player, "[00FF00]/setitemprice '<itemname>' <amount> [FFFFFF] - Set the price for your shop items.");
+            AddExchangeMark(player);
         }
-        
-		
-        // View the items in a player's shop
+
+        [ChatCommand("ge.removemarks")]
+        private void RemoveTheExchangeMarks(Player player, string cmd, string[] input)
+        {
+            RemoveExchangeMarks(player, input);
+        }
+
+        [ChatCommand("ge.additem")]
+        private void AddAnExchangeItem(Player player, string cmd, string[] input)
+        {
+            AddExchangeItem(player, input);
+        }
+
+        [ChatCommand("ge.removeitem")]
+        private void RemoveANExchangeItem(Player player, string cmd, string[] input)
+        {
+            RemoveExchangeItem(player, input);
+        }
+
+        [ChatCommand("ge.removeallitems")]
+        private void RemoveAllTheExchangeItems(Player player, string cmd, string[] input)
+        {
+            RemoveAllExchangeItems(player, input);
+        }
+
+        [ChatCommand("ge.setprice")]
+        private void SetTheExchangeItemPrice(Player player, string cmd, string[] input)
+        {
+            SetExchangeItemPrice(player, input);
+        }
+
+        [ChatCommand("ge.defaultitems")]
+        private void ShowTheDefaultTradeList(Player player, string cmd, string[] input)
+        {
+            ShowDefaultTradeList(player, input);
+        }
+
+        [ChatCommand("ge.restoredefaultitems")]
+        private void RestoreDefaultGEItems(Player player, string cmd)
+        {
+            RestoreDefaultItems(player);
+        }
+
+        [ChatCommand("ge.restoredefaultprices")]
+        private void RestoreDefaultGEPrices(Player player, string cmd)
+        {
+            RestoreDefaultPrices(player);
+        }
+
+        [ChatCommand("ge.restoreshops")]
+        private void RestoreThePlayerShops(Player player, string cmd)
+        {
+            RestoreShops(player);
+        }
+
+        [ChatCommand("ge.pvp")]
+        private void TogglePvpGoldGain(Player player, string cmd)
+        {
+            TogglePvpGold(player);
+        }
+
+        [ChatCommand("ge.pve")]
+        private void TogglePveGoldGain(Player player, string cmd)
+        {
+            TogglePveGold(player);
+        }
+
+        [ChatCommand("ge.safetrade")]
+        private void ToggleSafeTradingProtection(Player player, string cmd)
+        {
+            ToggleSafeTrading(player);
+        }
+
+        [ChatCommand("ge.toggle")]
+        private void TogglePlayerAccessGE(Player player, string cmd)
+        {
+            ToggleAccessGE(player);
+        }
+
+        [ChatCommand("ge.deflation")]
+        private void ToggleDeflationModifier(Player player, string cmd)
+        {
+            ToggleDeflation(player);
+        }
+
+        [ChatCommand("ge.setinflation")]
+        private void SetInflation(Player player, string cmd, string[] input)
+        {
+            SetInflationModifier(player, input);
+        }
+
+        [ChatCommand("ge.setmaxdeflation")]
+        private void SetMaxDeflation(Player player, string cmd, string[] input)
+        {
+            SetMaxDeflationModifier(player, input);
+        }
+
+        [ChatCommand("ge.setsellpercentage")]
+        private void SetTheSellPercentage(Player player, string cmd, string[] input)
+        {
+            SetSellPercentage(player, input);
+        }
+
+        [ChatCommand("loc")]
+        private void GetPlayerLocation(Player player, string cmd, string[] input)
+        {
+            GetLocation(player, input);
+        }
+
+        [ChatCommand("setgold")]
+        private void SetThePlayerGold(Player player, string cmd, string[] input)
+        {
+            SetPlayerGold(player, input);
+        }
+
+        [ChatCommand("resetgold")]
+        private void RemoveAllTheGold(Player player, string cmd)
+        {
+            RemoveAllGold(player);
+        }
+
+        [ChatCommand("givegold")]
+        private void GiveAPlayerGold(Player player, string cmd, string[] input)
+        {
+            GivePlayerGold(player, input);
+        }
+
+        [ChatCommand("removegold")]
+        private void AdminRemoveCredits(Player player, string cmd, string[] input)
+        {
+            RemovePlayerGold(player, input);
+        }
+
+        [ChatCommand("checkgold")]
+        private void AdminCheckPlayerCredits(Player player, string cmd, string[] input)
+        {
+            CheckPlayerGold(player, input);
+        }
+
         [ChatCommand("shop")]
-        private void VisitAShop(Player player, string cmd)
+        private void ViewThisShop(Player player, string cmd)
         {
-            ViewAPlayersShop(player, cmd);
+            ViewShop(player);
         }
-        
-		// View the items in a player's shop
-        [ChatCommand("setitemprice")]
-        private void SetPriceForItem(Player player, string cmd, string[] input)
+
+        [ChatCommand("myshop")]
+        private void ViewMyShopItems(Player player, string cmd)
         {
-            SetThePriceOfAnItemInYourShop(player, cmd, input);
+            ViewMyShop(player);
         }
-        
-        // View the items in a player's shop
-        [ChatCommand("addshopmarker")]
+
+        [ChatCommand("addshopmark")]
         private void AddAShopMarker(Player player, string cmd)
         {
-            AddAPlayerShopMarker(player, cmd);
+            AddShopMarker(player);
         }
-        
-        // View the items in a player's shop
-        [ChatCommand("removeshopmarkers")]
+
+        [ChatCommand("removeshopmarks")]
         private void RemoveAShopMarker(Player player, string cmd)
         {
-            RemoveAPlayerShopMarker(player, cmd);
+            RemoveShopMarker(player);
         }
 
-        // View the items in your shop
-        [ChatCommand("myshop")]
-        private void CheckMyShopStock(Player player, string cmd)
-        {
-            ViewMyShop(player, cmd);
-        }
-
-        // Stock items in your shop
         [ChatCommand("addshopitem")]
-        private void AddAnItemToThePlayerShop(Player player, string cmd,string[] input)
+        private void AddAShopItem(Player player, string cmd, string[] input)
         {
-            AddStockToThePlayerShop(player, cmd, input);
+            AddShopItem(player, input);
         }
 
-        // Remove items in your shop
         [ChatCommand("removeshopitem")]
-        private void RemoveAnItemToThePlayerShop(Player player, string cmd,string[] input)
+        private void RemoveAShopItem(Player player, string cmd, string[] input)
         {
-            RemoveStockToThePlayerShop(player, cmd, input);
+            RemoveShopItem(player, input);
         }
-        
-        // Add a new trademaster
-        [ChatCommand("viewtrademasters")]
-        private void SeeAllTheTradeMasters(Player player, string cmd)
+
+        [ChatCommand("setitemprice")]
+        private void SetTheShopItemPrice(Player player, string cmd, string[] input)
         {
-            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : The current Trade Masters are : ");
-            foreach (var tradeMaster in _tradeMasters)
+            SetShopItemPrice(player, input);
+        }
+
+        [ChatCommand("setshopname")]
+        private void SetPlayerShopName(Player player, string cmd, string[] input)
+        {
+            SetShopName(player, input);
+        }
+
+        #endregion
+
+        #region Command Functions
+
+        private void ShowDefaultTradeList(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            foreach (KeyValuePair<string, int> item in _DefaultTradeList) PrintToChat(player, string.Format(GetMessage("Default Itemlist", player), item.Key, item.Value)); 
+        }
+
+        private void ShowExchangeStore(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!CanUseGE && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
+
+            if (_GEData.TradeList.Count == 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Closed", player)); return; }
+
+            string buyIcon = "";
+            string sellIcon = "";
+            string itemText = "";
+            int itemsPerPage = 25;
+            bool singlePage = false;
+            if (itemsPerPage > _GEData.TradeList.Count)
             {
-                PrintToChat(player, "[00FF00]" + tradeMaster);
+                singlePage = true;
+                itemsPerPage = _GEData.TradeList.Count;
+            }
+
+            for (int i = 0; i < itemsPerPage; i++)
+            {
+                buyIcon = "[008888]";
+                sellIcon = "[008888]";
+                KeyValuePair<string, TradeData> resource = _GEData.TradeList.GetAt(i);
+                int originalSellPrice = (int)(resource.Value.OriginalPrice * (SellPercentage / 100));
+
+                if (resource.Value.BuyPrice >= resource.Value.OriginalPrice) buyIcon = "[00FF00]";
+                if (resource.Value.BuyPrice > resource.Value.OriginalPrice + (resource.Value.OriginalPrice * 0.1)) buyIcon = "[888800]";
+                if (resource.Value.BuyPrice > resource.Value.OriginalPrice + (resource.Value.OriginalPrice * 0.2)) buyIcon = "[FF0000]";
+                if (resource.Value.SellPrice <= originalSellPrice) sellIcon = "[00FF00]";
+                if (resource.Value.SellPrice < originalSellPrice - (originalSellPrice * 0.1)) sellIcon = "[888800]";
+                if (resource.Value.SellPrice < originalSellPrice - (originalSellPrice * 0.2)) sellIcon = "[FF0000]";
+
+                itemText += string.Format(GetMessage("Store Item Data", player), resource.Key, buyIcon, resource.Value.BuyPrice, sellIcon, resource.Value.SellPrice);
+                itemText += "\n";
+            }
+
+            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+
+            if (singlePage) { player.ShowPopup(GetMessage("Popup Title", player), itemText, "Exit"); return; }
+
+            player.ShowConfirmPopup(GetMessage("Popup Title", player), itemText, "Next Page", "Exit", (selection, dialogue, data) => ContinueWithTradeList(player, selection, dialogue, data, itemsPerPage, itemsPerPage));
+        }
+
+        private void ViewShop(Player player)
+        {
+            CheckPlayerExists(player);
+
+            ShowShopList(player, 1);
+        }
+
+        private void ViewMyShop(Player player)
+        {
+            CheckPlayerExists(player);
+
+            ShowShopList(player, 2);
+        }
+
+        private void BuyItemExchange(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!CanUseGE && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
+
+            if (!_GEData.IsInTradeArea(player.Entity.Position))
+            {
+                PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Store", player));
+                return;
+            }
+
+            player.ShowInputPopup(GetMessage("Popup Title", player), GetMessage("Store Buy Item", player), "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeItem(player, options, dialogue1, 1));
+        }
+
+        private void SellItemExchange(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!CanUseGE && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
+
+            if (!_GEData.IsInTradeArea(player.Entity.Position)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Store", player)); return; }
+
+            player.ShowInputPopup(GetMessage("Popup Title", player), GetMessage("Store Sell Item", player), "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeItem(player, options, dialogue1, 2));
+        }
+
+        private void CheckWallet(Player player)
+        {
+            CheckPlayerExists(player);
+
+            PrintToChat(player, string.Format(GetMessage("Wallet Own", player), _PlayerData[player.Id].Gold));
+        }
+
+        private void CheckPlayerGold(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            string playerName = input.JoinToString(" ");
+            Player target = Server.GetPlayerByName(playerName);
+            if (target == null)
+            {
+                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                {
+                    if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
+                    {
+                        PrintToChat(player, string.Format(GetMessage("Wallet Other", player), data.Value.Name, _PlayerData[data.Key].Gold));
+                        return;
+                    }
+                }
+                PrintToChat(player, GetMessage("Invalid Player", player));
+                return;
+            }
+            else
+            {
+                CheckPlayerExists(target);
+                PrintToChat(player, string.Format(GetMessage("Wallet Other", player), target.DisplayName, _PlayerData[target.Id].Gold));
             }
         }
-        
-        // Add a new trademaster
-        [ChatCommand("addtrademaster")]
-        private void AddTradeMasterToList(Player player, string cmd,string[] input)
+
+        private void GivePlayerGold(Player player, string[] input)
         {
-            AddPlayerAsATradeMaster(player, cmd, input);
-        }
-        
-        // Add a new trademaster
-        [ChatCommand("removetrademaster")]
-        private void RemoveTradeMasterToList(Player player, string cmd,string[] input)
-        {
-            RemovePlayerAsATradeMaster(player, cmd, input);
-        }
-        
-		// Buying an item from the exchange
-        [ChatCommand("listtradedefaults")]
-        private void ListTheDefaultTrades(Player player, string cmd,string[] input)
-        {
-            DisplayDefaultTradeList(player, cmd, input);
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (input.Length < 1) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+
+            int amount = 0;
+            if (!int.TryParse(input[0], out amount)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+
+            string playerName = "";
+            ulong playerId = 0;
+
+            if (input.Length > 1)
+            {
+                playerName = input.JoinToString(" ");
+                playerName = playerName.Substring(playerName.IndexOf(' ') + 1);
+
+                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                {
+                    if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
+                    {
+                        playerName = data.Value.Name;
+                        playerId = data.Key;
+                    }
+                }
+                
+                if (playerId == 0) { PrintToChat(player, GetMessage("Invalid Player", player)); return; }
+            }
+            else
+            {
+                playerName = player.DisplayName;
+                playerId = player.Id;
+            }
+
+            PrintToChat(player, string.Format(GetMessage("Gold Give", player), amount, playerName));
+
+            if (Server.GetPlayerByName(playerName) != null) PrintToChat(Server.GetPlayerByName(playerName), string.Format(GetMessage("Gold Gained", Server.GetPlayerByName(playerName)), amount));
+
+            GiveGold(playerId, amount);
+
+            SaveTradeData();
         }
 
-		// Buying an item from the exchange
-        [ChatCommand("setprice")]
-        private void AdminSetResourcePrice(Player player, string cmd,string[] input)
+        private void RemovePlayerGold(Player player, string[] input)
         {
-            SetThePriceOfAnItem(player, cmd, input);
-        }
-		
-		// Check my wallet
-        [ChatCommand("wallet")]
-        private void CheckHowMuchMoneyAPlayerhas(Player player, string cmd)
-        {
-            CheckHowMuchGoldICurrentlyHave(player, cmd);
-        }
+            CheckPlayerExists(player);
 
-        // Change the current sell percentage amount
-		[ChatCommand("setsellpercentage")]
-        private void SetTheSellingPercentageAmount(Player player, string cmd, string[] input)
-		{
-		    SetTheNewSellPercentageAmount(player, cmd, input);
-		}
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-        // Set a players gold to a specific amount
-		[ChatCommand("setplayergold")]
-        private void SetAPlayersGoldAmount(Player player, string cmd, string[] input)
-		{
-		    AdminSetAPlayersGoldAmount(player, cmd, input);
-		}
+            if (input.Length < 1) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
 
-		// Wipe all gold from EVERY player 
-		[ChatCommand("removeallgold")]
-        private void SetAllPlayersGoldAmount(Player player, string cmd)
-		{
-		    RemoveTheGoldFromAllPlayers(player, cmd);
-		}
-		
-        // Get the current location
-		[ChatCommand("loc")]
-        private void LocationCommand(Player player, string cmd, string[] args)
-		{
-		    GetThePlayersCurrentLocation(player, cmd, args);
-		}
-		
-		// USE /markadd <int> to designate marks for that position
-		[ChatCommand("markadd")]
-        private void MarkAreaForTrade(Player player, string cmd, string[] input)
-		{
-		    AddTheTradeAreaMark(player, cmd, input);
-		}
-		
-        
-		// Remove all marks that have been made
-		[ChatCommand("markremoveall")]
-        private void RemoveAllMarkedPoints(Player player, string cmd, string[] input)
-		{
-		    RemoveAllMarksForTradeArea(player, cmd, input);
-		}
-		
-		// Toggle safe area mode for trade areas
-		[ChatCommand("safetrade")]
-        private void MakeTradeAreasSafe(Player player, string cmd)
-		{
-		    ToggleTheSafeTradingArea(player, cmd);
-		}
-		
-        
-		// Buying an item from the exchange
-        [ChatCommand("givecredits")]
-        private void AdminGiveCredits(Player player, string cmd,string[] input)
-        {
-            GiveGoldToAPlayer(player, cmd, input);
-        }
-		
-		// Check a player's credits
-        [ChatCommand("checkcredits")]
-        private void AdminCheckPlayerCredits(Player player, string cmd,string[] input)
-        {
-            CheckTheGoldAPlayerHas(player, cmd, input);
-        }
-		
-		// Remove an item from the store
-        [ChatCommand("removestoreitem")]
-        private void AdminRemoveItemFromStore(Player player, string cmd,string[] input)
-        {
-            RemoveAnItemFromTheExchange(player, cmd, input);
+            int amount = 0;
+            if (!int.TryParse(input[0], out amount)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+
+            string playerName = "";
+            ulong playerId = 0;
+
+            if (input.Length > 1)
+            {
+                playerName = input.JoinToString(" ");
+                playerName = playerName.Substring(playerName.IndexOf(' ') + 1);
+
+                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                {
+                    if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
+                    {
+                        playerName = data.Value.Name;
+                        playerId = data.Key;
+                    }
+                }
+
+                if (playerId == 0) { PrintToChat(player, GetMessage("Invalid Player", player)); return; }
+            }
+            else
+            {
+                playerName = player.DisplayName;
+                playerId = player.Id;
+            }
+
+            PrintToChat(player, string.Format(GetMessage("Gold Remove", player), amount, playerName));
+
+            if (Server.GetPlayerByName(playerName) != null) PrintToChat(Server.GetPlayerByName(playerName), string.Format(GetMessage("Gold Lost", Server.GetPlayerByName(playerName)), amount));
+
+            RemoveGold(playerId, amount);
+
+            SaveTradeData();
         }
 
-		// Remove all items from the store
-        [ChatCommand("removeallstoreitems")]
-        private void AdminRemoveAllItemsFromStore(Player player, string cmd,string[] input)
+        private void AddExchangeMark(Player player)
         {
-            RemoveAllExchangeItems(player, cmd, input);
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (_GEData.HasPosition() == 2) { PrintToChat(player, GetMessage("Store Mark Exists", player)); return; }
+
+            if (_GEData.HasPosition() == 0)
+            {
+                _GEData.AddPosition(player.Entity.Position, 1);
+                PrintToChat(player, GetMessage("Store Mark First", player));
+            }
+            else
+            {
+                _GEData.AddPosition(player.Entity.Position, 2);
+                PrintToChat(player, GetMessage("Store Mark Second", player));
+            }
+
+            PrintToChat(player, string.Format(GetMessage("Position Mark", player), player.Entity.Position.x, player.Entity.Position.z));
+            SaveTradeData();
         }
 
-		// Enable the PvP gold stealing
-        [ChatCommand("pvpgold")]
-        private void AllowGoldForPvP(Player player, string cmd)
+        private void AddShopMarker(Player player)
         {
-            TogglePvpGoldStealing(player, cmd);
-        }
-			
-		// Enable the PvE gold farming
-        [ChatCommand("pvegold")]
-        private void AllowGoldForPvE(Player player, string cmd)
-        {
-            TogglePveGoldFarming(player, cmd);
-        }
-			
-		// Remove an item from the store
-        [ChatCommand("restoredefaultprices")]
-        private void RevertAllPricesToDefaultValues(Player player, string cmd)
-        {
-            RestoreTheDefaultExchangePrices(player, cmd);
-        }
+            CheckPlayerExists(player);
 
-		// Add an item to the store
-        [ChatCommand("addstoreitem")]
-        private void AdminAddItemToStore(Player player, string cmd,string[] input)
-        {
-            AddANewItemToTheExchange(player,cmd,input);
-        }
-		
+            if (_PlayerData[player.Id].Shop.HasPosition() == 2) { PrintToChat(player, GetMessage("Shop Mark Exists", player)); return; }
 
-        // Buying an item from the exchange
-        [ChatCommand("buy")]
-        private void BuyAnItem(Player player, string cmd)
-        {
-            BuyAnItemOnTheExchange(player, cmd);
-        }
-		
-        
-        // Selling an item on the exchange
-        [ChatCommand("sell")]
-        private void SellAnItem(Player player, string cmd)
-        {
-            SellAnItemOnTheExchange(player, cmd);
+            if (GetShopOwner(player.Entity.Position) != 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Mark Occupied", player)); return; }
+
+            if (_PlayerData[player.Id].Shop.HasPosition() != 1)
+            {
+                _PlayerData[player.Id].Shop.AddPosition(player.Entity.Position, 1);
+                PrintToChat(player, GetMessage("Shop Mark First", player));
+            }
+            else
+            {
+                if (BlocksAreTooFarApart(_PlayerData[player.Id].Shop.GetPosition(1), player.Entity.Position)) { PrintToChat(player, GetMessage("Shop Mark Limit", player)); return; }
+
+                _PlayerData[player.Id].Shop.AddPosition(player.Entity.Position, 2);
+                PrintToChat(player, GetMessage("Shop Mark Second", player));
+            }
+
+            SaveTradeData();
         }
 
-        
-        // View the prices of items on the exchange
-        [ChatCommand("store")]
-        private void ViewTheExchangeStore(Player player, string cmd)
+        private void AddExchangeItem(Player player, string[] input)
         {
-            ShowThePlayerTheGrandExchangeStore(player, cmd);
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (input.Length < 2 || input.Length > 2) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+
+            string resource = Capitalise(input[0]);
+
+            if (_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Store Item Exists", player), resource)); return; }
+            if (!_ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Item Non-Existing", player), resource)); return; }
+
+            int price = 0;
+            if (!int.TryParse(input[1], out price)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+            if (price < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            _GEData.TradeList.Add(resource, new TradeData(price, _ItemList[resource]));
+
+            PrintToChat(player, string.Format(GetMessage("Store Item Added", player), resource));
+
+            SaveTradeData();
         }
 
-#endregion
-
-#region Private Methods
-
-        #region LOCATION COMMANDS
-
-        private void MarkLocation(Player player, double[] locSet, int locPosition)
+        private void AddShopItem(Player player, string[] input)
         {
-            double posX = player.Entity.Position.x;
-            double posZ = player.Entity.Position.z;
+            CheckPlayerExists(player);
+            
+            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
-            locSet[locPosition] = posX;
-            locSet[locPosition + 1] = posZ;
+            if (input.Length < 2 || input.Length > 3) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
 
-            PrintToChat(player, "Position has been marked at [00FF00]" + posX.ToString() + "[FFFFFF], [00FF00]" + posZ.ToString());
+            string resource = Capitalise(input[0]);
+            if (!_ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Item Non-Existing", player), resource)); return; }
+
+            int amount = 0;
+            if (!int.TryParse(input[1], out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            int price = 0;
+            if (input.Length == 3) if (!int.TryParse(input[2], out price)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+            if (price < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            if (!CanRemoveResource(player, resource, amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop No Inventory Resources", player)); return; }
+
+            switch (_PlayerData[player.Id].Shop.AddItem(resource, price, amount))
+            {
+                case 0:
+                    PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Full", player));
+                    return;
+                case 1:
+                    PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Item Max", player));
+                    return;
+                case 2:
+                    break;
+            }
+
+            PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Shop Item Added", player), resource));
+
+            RemoveItemsFromInventory(player, resource, amount);
+
+            SaveTradeData();
         }
-		
-        private bool BlocksAreTooFarApart(double posX1, double posZ1, double posX2, double posZ2)
+
+        private void RemoveExchangeMarks(Player player, string[] input)
         {
-            if (Math.Abs(posX2 - posX1) > 15) return true;
-            if (Math.Abs(posZ2 - posZ1) > 15) return true;
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (_GEData.HasPosition() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
+
+            _GEData.RemoveGEMarks();
+            PrintToChat(player, GetMessage("Store Mark Removed", player));
+
+            SaveTradeData();
+        }
+
+        private void RemoveShopMarker(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (_PlayerData[player.Id].Shop.HasPosition() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
+
+            _PlayerData[player.Id].Shop.RemoveShop();
+            PrintToChat(player, GetMessage("Shop Mark Removed", player));
+
+            SaveTradeData();
+        }
+
+        private void RemoveAllGold(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+            {
+                data.Value.Gold = 0;
+            }
+
+            PrintToChat(player, GetMessage("Gold Remove All", player));
+
+            SaveTradeData();
+        }
+
+        private void RemoveExchangeItem(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            string resource = Capitalise(input.JoinToString(" "));
+
+            if (!_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Store No Item", player), resource)); return; }
+
+            _GEData.TradeList.Remove(resource);
+            PrintToChat(player, string.Format(GetMessage("Store Item Removed", player), resource));
+
+            SaveTradeData();
+        }
+
+        private void RemoveShopItem(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (input.Length > 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
+            
+            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
+
+            string resource = Capitalise(input[0]);
+
+            if (!_PlayerData[player.Id].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Shop No Item Text", player), resource)); return; }
+
+            int amount = 0;
+
+            if (input.Length < 2) amount = _PlayerData[player.Id].Shop.ItemList[resource].Amount;
+            else if (!int.TryParse(input[1], out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            if (_PlayerData[player.Id].Shop.ItemList[resource].Amount < amount) { PrintToChat(player, GetMessage("Shop No Resources", player)); return; }
+
+            ItemCollection inventory = player.GetInventory().Contents;
+
+            if (inventory.FreeSlotCount < _PlayerData[player.Id].Shop.ItemList[resource].GetStacks()) { PrintToChat(player, string.Format(GetMessage("Shop No Inventory Space", player), _PlayerData[player.Id].Shop.ItemList[resource].GetStacks())); return; }
+
+            InvItemBlueprint blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
+            InvGameItemStack invGameItemStack = new InvGameItemStack(blueprintForName, amount, null);
+            ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
+
+            _PlayerData[player.Id].Shop.ItemList.Remove(resource);
+
+            PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Shop Item Removed", player), resource));
+            SaveTradeData();
+        }
+
+        private void RemoveAllExchangeItems(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            _GEData.TradeList = new SortedDictionary<string, TradeData>();
+
+            PrintToChat(player, GetMessage("Store Wipe", player));
+
+            SaveTradeData();
+        }
+
+        private void GetLocation(Player player, string[] args)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            PrintToChat(player, string.Format(GetMessage("Location", player), player.Entity.Position.x, player.Entity.Position.y, player.Entity.Position.z));
+        }
+
+        private void RestoreDefaultItems(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            _GEData.TradeList = new SortedDictionary<string, TradeData>();
+            foreach (KeyValuePair<string, int> item in _DefaultTradeList) _GEData.AddItem(item.Key, item.Value);
+
+            PrintToChat(player, GetMessage("Store Reset", player));
+
+            SaveTradeData();
+        }
+
+        private void RestoreDefaultPrices(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            ForcePriceAdjustment();
+
+            PrintToChat(player, GetMessage("Store Price Reset", player));
+
+            SaveTradeData();
+        }
+
+        private void RestoreShops(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+            {
+                data.Value.Shop.Name = "Local Store";
+                data.Value.Shop.RemoveShop();
+            }
+
+            SaveTradeData();
+        }
+
+        private void SetPlayerGold(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (input.Length < 1) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+
+            int amount = 0;
+            if (!int.TryParse(input[0], out amount)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+            
+            string playerName = "";
+            ulong playerId = 0;
+
+            if (input.Length > 1)
+            {
+                playerName = input.JoinToString(" ");
+                playerName = playerName.Substring(playerName.IndexOf(' ') + 1);
+
+                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                {
+                    if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
+                    {
+                        playerName = data.Value.Name;
+                        playerId = data.Key;
+                    }
+                }
+
+                if (playerId == 0) { PrintToChat(player, GetMessage("Invalid Player", player)); return; }
+            }
+            else
+            {
+                playerName = player.DisplayName;
+                playerId = player.Id;
+            }
+
+            _PlayerData[playerId].Gold = amount;
+            PrintToChat(player, string.Format(GetMessage("Gold Set", player), playerName, amount));
+
+            SaveTradeData();
+        }
+
+        private void SetInflationModifier(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (!double.TryParse(input[0], out Inflation)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+
+            PrintToChat(player, string.Format(GetMessage("Inflation Set", player), Inflation));
+
+            SaveConfigData();
+        }
+
+        private void SetMaxDeflationModifier(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (!double.TryParse(input[0], out MaxDeflation)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+
+            PrintToChat(player, string.Format(GetMessage("Max Deflation Set", player), MaxDeflation));
+
+            SaveConfigData();
+        }
+
+        private void SetSellPercentage(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            double percentage = 0;
+            if (double.TryParse(input[0], out percentage) == false) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+
+            SellPercentage = percentage;
+
+            ForcePriceAdjustment();
+            PrintToChat(player, string.Format(GetMessage("Sellpercentage Set", player), percentage));
+
+            SaveConfigData();
+        }
+
+        private void SetExchangeItemPrice(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (input.Length < 2 || input.Length > 2) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+
+            string resource = Capitalise(input[0]);
+
+            if (!_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, GetMessage("Item Non-Existing", player)); return; }
+
+            int price = 0;
+            if (!int.TryParse(input[1], out price)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+            if (price < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            _GEData.TradeList[resource].SetPrice(price);
+
+            PrintToChat(player, string.Format(GetMessage("Store Item Price Changed", player), resource, price));
+
+            SaveTradeData();
+        }
+
+        private void SetShopItemPrice(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
+
+            if (input.Length != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
+
+            string resource = Capitalise(input[0]);
+
+            if (!_PlayerData[player.Id].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Shop No Item", player), resource)); return; }
+
+            int amount = 0;
+            if (!int.TryParse(input[1], out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+            if (amount < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            _PlayerData[player.Id].Shop.ItemList[resource].Price = amount;
+
+            SaveTradeData();
+            PrintToChat(player, GetMessage("Shop Prices updated", player));
+        }
+
+        private void SetShopName(Player player, string[] input)
+        {
+            CheckPlayerExists(player);
+
+            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
+
+            if (input.Length < 1) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
+
+            _PlayerData[player.Id].Shop.Name = input.JoinToString(" ");
+        }
+
+        private void TogglePveGold(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (PveGold) { PveGold = false; PrintToChat(player, string.Format(GetMessage("Toggle Pve Gold", player), "[FF0000]OFF")); }
+            else { PveGold = true; PrintToChat(player, string.Format(GetMessage("Toggle Pve Gold", player), "[00FF00]ON")); }
+
+            SaveConfigData();
+        }
+
+        private void TogglePvpGold(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (PvpGold) { PvpGold = false; PrintToChat(player, string.Format(GetMessage("Toggle Pvp Gold", player), "[FF0000]OFF")); }
+            else { PvpGold = true; PrintToChat(player, string.Format(GetMessage("Toggle Pvp Gold", player), "[00FF00]ON")); }
+
+            SaveConfigData();
+        }
+
+        private void ToggleSafeTrading(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (SafeTrade) { SafeTrade = false; PrintToChat(player, string.Format(GetMessage("Toggle Safe Trade", player), "[FF0000]OFF")); }
+            else { SafeTrade = true; PrintToChat(player, string.Format(GetMessage("Toggle Safe Trade", player), "[00FF00]ON")); }
+
+            SaveConfigData();
+        }
+
+        private void ToggleAccessGE(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (CanUseGE) { CanUseGE = false; PrintToChat(player, string.Format(GetMessage("Toggle Grand Exchange", player), "[FF0000]OFF")); }
+            else { CanUseGE = true; PrintToChat(player, string.Format(GetMessage("Toggle Grand Exchange", player), "[00FF00]ON")); }
+
+            SaveConfigData();
+        }
+
+        private void ToggleDeflation(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (UseDeflation) { UseDeflation = false; PrintToChat(player, string.Format(GetMessage("Toggle Deflation", player), "[FF0000]OFF")); }
+            else { UseDeflation = true; PrintToChat(player, string.Format(GetMessage("Toggle Deflation", player), "[00FF00]ON")); }
+
+            SaveConfigData();
+        }
+
+        #endregion
+
+        #region System Functions
+
+        private void ContinueWithTradeList(Player player, Options selection, Dialogue dialogue, object contextData, int itemsPerPage, int currentItemCount)
+        {
+            if (selection != Options.Yes) return;
+
+            if ((currentItemCount + itemsPerPage) > _GEData.TradeList.Count) itemsPerPage = _GEData.TradeList.Count - currentItemCount;
+
+            string buyIcon = "";
+            string sellIcon = "";
+            string itemText = "";
+
+            for (int i = currentItemCount; i < itemsPerPage + currentItemCount; i++)
+            {
+                buyIcon = "[008888]";
+                sellIcon = "[008888]";
+                KeyValuePair<string, TradeData> resource = _GEData.TradeList.GetAt(i);
+                int originalSellPrice = (int)(resource.Value.OriginalPrice * (SellPercentage / 100));
+
+                if (resource.Value.BuyPrice >= resource.Value.OriginalPrice) buyIcon = "[00FF00]";
+                if (resource.Value.BuyPrice > resource.Value.OriginalPrice + (resource.Value.OriginalPrice * 0.1)) buyIcon = "[888800]";
+                if (resource.Value.BuyPrice > resource.Value.OriginalPrice + (resource.Value.OriginalPrice * 0.2)) buyIcon = "[FF0000]";
+                if (resource.Value.SellPrice <= originalSellPrice) sellIcon = "[00FF00]";
+                if (resource.Value.SellPrice < originalSellPrice - (originalSellPrice * 0.1)) sellIcon = "[888800]";
+                if (resource.Value.SellPrice < originalSellPrice - (originalSellPrice * 0.2)) sellIcon = "[FF0000]";
+
+
+                itemText += string.Format(GetMessage("Store Item Data", player), resource.Key, buyIcon, resource.Value.BuyPrice, sellIcon, resource.Value.SellPrice);
+                itemText += "\n";
+            }
+
+            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+
+            currentItemCount = currentItemCount + itemsPerPage;
+
+            if (currentItemCount < _GEData.TradeList.Count)
+            {
+                player.ShowConfirmPopup(GetMessage("Popup Title", player), itemText, "Next Page", "Exit", (options, dialogue1, data) => ContinueWithTradeList(player, options, dialogue1, data, itemsPerPage, currentItemCount));
+            }
+            else
+            {
+                PlayerExtensions.ShowPopup(player, GetMessage("Popup Title", player), itemText, "Yes");
+            }
+        }
+
+        private void SelectExchangeItem(Player player, Options selection, Dialogue dialogue, int type)
+        {
+            if (selection == Options.Cancel) return;
+
+            string resource = Capitalise(dialogue.ValueMessage);
+
+            if (!_GEData.TradeList.ContainsKey(resource))
+            {
+                switch (type)
+                {
+                    case 1:
+                        PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy No Item", player));
+                        break;
+                    case 2:
+                        PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell No Item", player));
+                        break;
+                }
+                return;
+            }
+
+            if (_GEData.TradeList[resource] == null) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+
+            string message = "";
+            switch (type)
+            {
+                case 1:
+                    message = string.Format(GetMessage("Store Buy Amount", player), resource, _GEData.TradeList[resource].BuyPrice, _GEData.TradeList[resource].MaxStackSize);
+                    player.ShowInputPopup(GetMessage("Popup Title", player), message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeAmount(player, options, dialogue1, resource, 1));
+                    break;
+                case 2:
+                    message = string.Format(GetMessage("Store Sell Amount", player), resource, _GEData.TradeList[resource].SellPrice, _GEData.TradeList[resource].MaxStackSize);
+                    player.ShowInputPopup(GetMessage("Popup Title", player), message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeAmount(player, options, dialogue1, resource, 2));
+                    break;
+            }
+        }
+
+        private void SelectExchangeAmount(Player player, Options selection, Dialogue dialogue, string resource, int type)
+        {
+            if (selection == Options.Cancel) return;
+
+            string amountText = dialogue.ValueMessage;
+
+            int amount = 0;
+            if (!int.TryParse(amountText, out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            if (amount < 1)
+            {
+                switch (type)
+                {
+                    case 1:
+                        PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy Amount Wrong", player));
+                        break;
+                    case 2:
+                        PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell Amount Wrong", player));
+                        break;
+                }
+                return;
+            }
+
+            int totalValue = 0;
+            string message = "";
+
+            switch (type)
+            {
+                case 1:
+                    totalValue = _GEData.TradeList[resource].GetPrice(amount, 1);
+                    message = string.Format(GetMessage("Store Buy Confirm", player), amount, resource, totalValue);
+                    message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+                    player.ShowConfirmPopup(GetMessage("Popup Title", player), message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, options, dialogue, resource, totalValue, amount));
+                    break;
+                case 2:
+                    totalValue = _GEData.TradeList[resource].GetPrice(amount, 2);
+                    message = string.Format(GetMessage("Store Sell Confirm", player), amount, resource, totalValue);
+                    message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+                    player.ShowConfirmPopup(GetMessage("Popup Title", player), message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerHasTheResourceToSell(player, options, dialogue, resource, totalValue, amount));
+                    break;
+            }
+        }
+
+        private void CheckIfThePlayerCanAffordThis(Player player, Options selection, Dialogue dialogue, string resource, int totalValue, int amount)
+        {
+            if (selection != Options.Yes) return;
+
+            if (!CanRemoveGold(player, totalValue)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy No Gold", player)); return; }
+
+            ItemCollection inventory = player.GetInventory().Contents;
+
+            int stacks = _GEData.TradeList[resource].GetStacks(amount);
+            if (inventory.FreeSlotCount < stacks) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy No Inventory Space", player)); return; }
+
+            InvItemBlueprint blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
+            int amountRemaining = amount;
+            for (int i = 0; i < stacks; i++)
+            {
+                InvGameItemStack invGameItemStack = new InvGameItemStack(blueprintForName, amountRemaining, null);
+                ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
+                amountRemaining -= _ItemList[resource];
+            }
+
+            RemoveGold(player, totalValue);
+
+            _GEData.TradeList[resource].UpdatePrices(amount, 1);
+
+            PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Store Buy Complete", player), amount, resource));
+            PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy Finish", player));
+
+            SaveTradeData();
+        }
+
+        private void CheckIfThePlayerHasTheResourceToSell(Player player, Options selection, Dialogue dialogue, string resource, int totalValue, int amount)
+        {
+            if (selection != Options.Yes) return;
+
+            if (!CanRemoveResource(player, resource, amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell No Resources", player)); return; }
+
+            RemoveItemsFromInventory(player, resource, amount);
+
+            GiveGold(player, totalValue);
+            
+            _GEData.TradeList[resource].UpdatePrices(amount, 2);
+
+            PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Store Sell Complete", player), amount, resource));
+            PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell Finish", player));
+
+            SaveTradeData();
+        }
+
+        private void ShowShopList(Player player, int type)
+        {
+            ulong shopOwner = type == 1 ? GetShopOwner(player.Entity.Position) : player.Id;
+
+            if (shopOwner == 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop", player)); return; }
+            
+            if (_PlayerData[shopOwner].Shop == null || _PlayerData[shopOwner].Shop.ItemList == null) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Closed", player)); return; }
+            
+            if (_PlayerData[shopOwner].Shop.ItemList.Count < 1) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage(type == 1? "Shop Closed": "Shop Empty", player)); return; }
+
+            string buyIcon = "[008888]";
+            string itemText = "";
+
+            foreach (KeyValuePair<string, ItemData> item in _PlayerData[shopOwner].Shop.ItemList)
+            {
+                buyIcon = "[00FF00]";
+
+                itemText += string.Format(GetMessage("Shop Item Data", player), item.Key, item.Value.Amount, buyIcon, item.Value.Price);
+                itemText += "\n";
+            }
+
+            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+
+            player.ShowConfirmPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, itemText, "Buy", "Exit", (selection, dialogue, data) => BuyItemFromPlayerShop(player, shopOwner, selection));
+        }
+
+        private void BuyItemFromPlayerShop(Player player, ulong shopOwner, Options selection)
+        {
+            if (selection != Options.Yes) return;
+            
+            player.ShowInputPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, GetMessage("Shop Buy Item", player), "", "Submit", "Cancel", (options, dialogue1, data) => SelectItemToBeBoughtFromPlayer(player, shopOwner, options, dialogue1));
+        }
+
+        private void SelectItemToBeBoughtFromPlayer(Player player, ulong shopOwner, Options selection, Dialogue dialogue)
+        {
+            if (selection == Options.Cancel) return;
+
+            string resource = Capitalise(dialogue.ValueMessage);
+
+            if (!_PlayerData[shopOwner].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Item", player)); return; }
+
+            string message = string.Format(GetMessage("Shop Buy Amount", player), resource, _PlayerData[shopOwner].Shop.ItemList[resource].Price, _PlayerData[shopOwner].Shop.ItemList[resource].GetAmount());
+
+            message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+
+            player.ShowInputPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectAmountToBeBoughtFromPlayerStore(player, shopOwner, options, dialogue1, resource));
+        }
+
+        private void SelectAmountToBeBoughtFromPlayerStore(Player player, ulong shopOwner, Options selection, Dialogue dialogue, string resource)
+        {
+            if (selection == Options.Cancel) return;
+
+            string amountText = dialogue.ValueMessage;
+
+            int amount = 0;
+            if (!int.TryParse(amountText, out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+
+            if (amount < 1 || amount > _PlayerData[shopOwner].Shop.ItemList[resource].GetAmount()) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy Amount Wrong", player)); return; }
+
+            int totalValue = _PlayerData[shopOwner].Shop.ItemList[resource].GetPrice(amount);
+
+            string message = string.Format(GetMessage("Shop Buy Confirm", player), amount, resource, totalValue);
+
+            message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+
+            player.ShowConfirmPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, options, shopOwner, resource, totalValue, amount));
+        }
+
+        private void CheckIfThePlayerCanAffordThis(Player player, Options selection, ulong shopOwner, string resource, int totalValue, int amount)
+        {
+            if (selection != Options.Yes) return;
+
+            if (!CanRemoveGold(player, totalValue)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Gold", player)); return; }
+
+            ItemCollection inventory = player.GetInventory().Contents;
+
+            int stacks = _PlayerData[shopOwner].Shop.ItemList[resource].GetStacks();
+            if (inventory.FreeSlotCount < stacks) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Inventory Space", player)); return; }
+
+            InvItemBlueprint blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
+            int amountRemaining = amount;
+            for (int i = 0; i < stacks; i++)
+            {
+                InvGameItemStack invGameItemStack = new InvGameItemStack(blueprintForName, amountRemaining, null);
+                ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
+                amountRemaining -= _ItemList[resource];
+            }
+
+            RemoveGold(player, totalValue);
+            GiveGold(shopOwner, totalValue);
+            _PlayerData[shopOwner].Shop.RemoveItem(resource, amount);
+
+            PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Shop Buy Complete", player), amount, resource));
+            PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy Finish", player));
+
+            SaveTradeData();
+        }
+
+        private bool BlocksAreTooFarApart(Vector3 pos1, Vector3 pos2)
+        {
+            if (Math.Abs(pos2.x - pos1.x) > 15) return true;
+            if (Math.Abs(pos2.z - pos1.z) > 15) return true;
             return false;
         }
 
-        private void AddTheTradeAreaMark(Player player, string cmd, string[] input)
+        private void CheckPlayerExists(Player player)
         {
-            var newLocSet = new double[4];
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
+            if (!_PlayerData.ContainsKey(player.Id)) _PlayerData.Add(player.Id, new PlayerData(player.DisplayName));
+            else
             {
-                PrintToChat(player, "For now, only admins can alter locations.");
-                return;
+                if (_PlayerData[player.Id].Name.IsNullOrEmpty()) _PlayerData[player.Id].Name = player.Name;
+                if (_PlayerData[player.Id].Name != player.Name) _PlayerData[player.Id].Name = player.Name;
             }
-            if (_markList.Count > 0)
-            {
-                if (_markList[0][2] != 0)
-                {
-                    PrintToChat(player, "You have already marked two locations. Please use /markremoveall to start again.");
-                    return;
-                }
-                PrintToChat(player, "Adding the second and final position for this area.");
-                MarkLocation(player, _markList[0], 2);
-                SaveTradeData();
-                return;
-            }
-
-            PrintToChat(player, "Adding the first corner position for this area.");
-            _markList.Add(newLocSet);
-            MarkLocation(player, _markList[0], 0);
-
+            if (_PlayerData[player.Id].Shop == null) _PlayerData[player.Id].Shop = new ShopData();
             SaveTradeData();
         }
 
-        private void RemoveAPlayerShopMarker(Player player, string cmd)
+        //private void CheckExchangeItemList()
+        //{
+        //    if (_GEData.TradeList == null) _GEData.TradeList = new SortedDictionary<string, TradeData>();
+        //    if (_GEData.TradeList.Count > 0) return;
+
+        //    foreach (KeyValuePair<string, TradeData> item in _DefaultTradeList)
+        //    {
+        //        TradeData newItem = new TradeData(item.Value.OriginalPrice, _ItemList[item.Key], SellPercentage);
+        //        _GEData.TradeList.Add(item.Key, newItem);
+        //    }
+
+        //    SaveTradeData();
+        //}
+
+        private bool CanRemoveGold(Player player, int amount)
         {
-            if (!_shopLocs.ContainsKey(player.Id))
+            if (_PlayerData[player.Id].Gold - amount < 0) return false;
+            return true;
+        }
+
+        private bool CanRemoveResource(Player player, string resource, int amount)
+        {
+            ItemCollection inventory = player.GetInventory().Contents;
+
+            InvItemBlueprint blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
+            InvGameItemStack invGameItemStack = new InvGameItemStack(blueprintForName, amount, null);
+
+            int totalAmount = 0;
+
+            foreach (InvGameItemStack item in inventory.Where(item => item != null))
             {
-                PrintToChat(player, "You do not currently have any shop markers set.");
-                return;
+                if (item.Name != resource) continue;
+                totalAmount += item.StackAmount;
             }
 
-            _shopLocs.Remove(player.Id);
-            PrintToChat(player, "You have removed all of your shop markers. Your shop is not accessible until you place new markers down using /addshopmarker");
-
-            SaveTradeData();
+            if (totalAmount < amount) return false;
+            return true;
         }
 
-        private void RemoveAllMarksForTradeArea(Player player, string cmd, string[] input)
+        private bool IsAnimal(Entity e)
         {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
+            if (e.Has<MonsterEntity>() || e.Has<CritterEntity>()) return true;
+            return false;
+        }
+
+        private ulong GetShopOwner(Vector3 position)
+        {
+            if (_PlayerData.Count < 1) return 0;
+
+            foreach (KeyValuePair<ulong, PlayerData> shop in _PlayerData)
             {
-                PrintToChat(player, "For now, only admins can alter locations.");
-                return;
-            }
-            _markList = new Collection<double[]>();
-            PrintToChat(player, "All marks have been removed.");
-
-            SaveTradeData();
-        }
-
-        private void GetThePlayersCurrentLocation(Player player, string cmd, string[] args)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "For now, only admins can check locations.");
-                return;
-            }
-            PrintToChat(player, string.Format("Current Location: x:{0} y:{1} z:{2}", player.Entity.Position.x.ToString(), player.Entity.Position.y.ToString(), player.Entity.Position.z.ToString()));
-        }
-
-
-        #endregion
-
-        #region OBJECT DEPLOYMENT
-
-
-        private void OnObjectDeploy(NetworkInstantiateEvent e)
-        {
-            Player player = Server.GetPlayerById(e.SenderId);
-            if (player == null) return;
-            InvItemBlueprint bp = InvDefinitions.Instance.Blueprints.GetBlueprintForID(e.BlueprintId);
-            //PrintToChat(player, "You have placed a " + bp.Name + ".");
-            //PrintToChat(player, e.Position.x.ToString());
-            //PrintToChat(player, e.Position.z.ToString());
-        }
-
-        #endregion
-
-        #region PLAYER SHOPS
-
-
-        private ulong GetPlayerWhoOwnsThisShop(Player player)
-        {
-            // Is there a designated trade area?
-            if (_shopLocs.Count < 1) return 0;
-            var isInArea = false;
-            foreach (var shop in _shopLocs)
-            {
-                var coords = shop.Value;
-                var posX1 = coords[0];
-                var posZ1 = coords[1];
-                var posX2 = coords[2];
-                var posZ2 = coords[3];
-
-                var playerX = player.Entity.Position.x;
-                var playerZ = player.Entity.Position.z;
-
-                if ((playerX < posX1 && playerX > posX2) && (playerZ > posZ1 && playerZ < posZ2)) isInArea = true;
-                if ((playerX < posX1 && playerX > posX2) && (playerZ < posZ1 && playerZ > posZ2)) isInArea = true;
-                if ((playerX > posX1 && playerX < posX2) && (playerZ < posZ1 && playerZ > posZ2)) isInArea = true;
-                if ((playerX > posX1 && playerX < posX2) && (playerZ > posZ1 && playerZ < posZ2)) isInArea = true;
-                if (isInArea)
-                {
-                    return shop.Key;
-                }
+                if (shop.Value.Shop == null) continue;
+                if (shop.Value.Shop.IsInShopArea(position)) return shop.Key;
             }
 
             return 0;
         }
 
-        private void AddAPlayerShopMarker(Player player, string cmd)
-        {
-            var newLocSet = new double[4];
-
-            // Check if the player has a shop yet
-            CheckIfPlayerOwnsAShop(player);
-
-            // Check if the player has a shop marker set up
-            if (!_shopLocs.ContainsKey(player.Id))
-            {
-                _shopLocs.Add(player.Id, newLocSet);
-            }
-
-            // Check if this is a marked area already
-            if (GetPlayerWhoOwnsThisShop(player) != 0)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : There is already a shop in this area.");
-                return;
-            }
-
-            var myMarks = _shopLocs[player.Id];
-
-            if (myMarks[0] != 0)
-            {
-                if (myMarks[2] != 0)
-                {
-                    PrintToChat(player, "You have already marked two locations. Please use /removeshopmarkers to start again.");
-                    return;
-                }
-                //Checkif the next block is close enough
-                if (BlocksAreTooFarApart(myMarks[0], myMarks[1], player.Entity.Position.x, player.Entity.Position.z))
-                {
-                    PrintToChat(player, "This area is too big for your shop. It can only be a maximum size of 13x13 blocks.");
-                    return;
-                }
-
-                PrintToChat(player, "Added the second and final corner position for your shop.");
-                MarkLocation(player, myMarks, 2);
-                SaveTradeData();
-                return;
-            }
-
-            PrintToChat(player, "Adding the first corner position for your shop. You will now need to add the OPPOSITE corner for your shop as well.");
-            _markList.Add(newLocSet);
-            MarkLocation(player, myMarks, 0);
-
-            SaveTradeData();
-        }
-
-        private void CheckIfPlayerOwnsAShop(Player player)
-        {
-            if (!_shopPlayer.ContainsKey(player.Id))
-            {
-                _shopPlayer.Add(player.Id, new Collection<string[]>());
-            }
-            SaveTradeData();
-        }
-		
-        private void ViewAPlayersShop(Player player, string cmd)
-		{
-			ShowTheShopListForWhereThisPlayerIsStanding(player);
-		}
-
-        private void ViewThisShop(Player player)
-        {
-            ShowTheShopListForWhereThisPlayerIsStanding(player);
-        }
-
-        private void SetThePriceOfAnItemInYourShop(Player player, string cmd, string[] input)
-		{
-			// Find this player's shop
-            if (!_shopPlayer.ContainsKey(player.Id))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You don't appear to currently own a shop.");
-                return;
-            }
-			
-            if(input.Length<2)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : Please use the format: /setprice \"Item Name\" <amount>.");
-                return;
-            }
-
-            var resource = Capitalise(input[0]);
-
-			// Check if the item exists in the default list
-            var found = false;
-			var previousItem = new string[5];
-            var defaultPrice = 0;
-			for(var i=0; i<_tradeDefaults.Count; i++)
-			{
-				if(_tradeDefaults[i][0].ToLower() == resource.ToLower())
-				{
-					found = true;
-				    defaultPrice = Int32.Parse(_tradeDefaults[i][1]);
-					break;
-				}
-			}
-			if(!found)
-			{
-				PrintToChat(player, resource + " does not appear to be a recognised item. Did you spell it correctly and use quotes around the item name?");
-				return;
-			}
-
-
-            int amount;
-            if (Int32.TryParse(input[1], out amount) == false)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You entered an invalid amount. Please use the format - /setitemprice '<item_name>' <amount>");
-                return;
-            }
-			
-			
-			CheckShopExists(player);
-			var myShop = _shopPlayer[player.Id];
-			foreach(var item in myShop)
-			{
-				if(item[0].ToLower() == resource.ToLower())
-				{
-					item[1] = (amount * PriceModifier).ToString();
-				}
-			}
-			
-			SaveTradeData();
-			PrintToChat(player,"You have updated your shop prices.");
-		}
-
-        private void ShowTheShopListForWhereThisPlayerIsStanding(Player player)
-        {
-            // Is the player in a shop area?
-            var shopOwnerName = GetPlayerWhoOwnsThisShop(player);
-            if (shopOwnerName == 0)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : There does not appear to be a shop here.");
-                return;
-            }
-			
-            // Find this player's shop
-            if (!_shopPlayer.ContainsKey(shopOwnerName))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : This shop doesn't appear to be open right now.");
-                return;
-            }
-
-            var myShop = _shopPlayer[shopOwnerName];
-
-             // Are there any items on the store?
-            if(myShop.Count < 1)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : This shop is currently closed for business and has no items available.");
-                return;
-            }
-
-			// Get the player's wallet contents
-			CheckWalletExists(player);
-			var credits = _playerWallet[player.Id];
-			
-            var buyIcon = "[008888]";
-            var sellIcon = "[008888]";
-            var itemText = "";
-            var itemsPerPage = 25;
-			var singlePage = false;
-
-			if(itemsPerPage > myShop.Count) 
-			{
-				singlePage = true;
-				itemsPerPage = myShop.Count;
-			}
-			
-            for(var i = 0; i<itemsPerPage;i++)
-            {
-				buyIcon = "[00FF00]";
-                var resource = myShop[i][0];
-				var stockAmount = Int32.Parse(myShop[i][2]);
-                var buyPrice = Int32.Parse(myShop[i][1]) / PriceModifier;
-				var buyPriceText = buyPrice.ToString();
-                resource = Capitalise(resource);
-
-                itemText = itemText + "[00FFFF]" + resource + " [FFFFFF]( [FF0000]" + stockAmount.ToString() + "[FFFFFF] );  Price: " + buyIcon + buyPriceText + "[FFFF00]g\n";
-            }
-			
-			itemText = itemText + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString() + "[FFFF00]g";
-
-            var shopName = "Local Store";
-
-            // Show the Shop
-			player.ShowConfirmPopup(shopName, itemText, "Buy", "Exit", (selection, dialogue, data) => BuyItemFromPlayerShop(player, shopOwnerName, myShop, selection, dialogue, data, itemsPerPage, itemsPerPage));
-
-        }
-
-
-        private void BuyItemFromPlayerShop(Player player, ulong shopOwnerName, Collection<string[]> myShop,
-            Options selection, Dialogue dialogue, object contextData, int itemsPerPage, int currentItemCount)
-        {
-            if (selection != Options.Yes)
-            {
-                //Leave
-                return;
-            }
-
-            //Open up the buy screen
-			player.ShowInputPopup(shopOwnerName + "'s Store", "What [00FF00]item [FFFFFF]would you like to buy at this store?", "", "Submit", "Cancel", (options, dialogue1, data) => SelectItemToBeBoughtFromPlayer(player, shopOwnerName, options, dialogue1, data));
-        }
-
-        
-		private void SelectItemToBeBoughtFromPlayer(Player player, ulong shopOwnerName, Options selection, Dialogue dialogue, object contextData)
-		{
-			if (selection == Options.Cancel)
-            {
-                //Leave
-                return;
-            }
-			var requestedResource = dialogue.ValueMessage;
-			var resourceFound = false;
-			var resourceDetails = new string[3];
-
-		    var myShop = _shopPlayer[shopOwnerName];
-			
-			// Get the resource's details
-			foreach(var item in myShop)
-			{
-				if(item[0] == Capitalise(requestedResource))
-				{
-					resourceDetails = new string[3]{ item[0],item[1],item[2] };
-					resourceFound = true;
-				}
-			}
-
-            // CHeck the maximum stack size
-		    var maxStack = 0;
-		    foreach (var tradeDefault in _tradeDefaults)
-		    {
-		        if(tradeDefault[0] == Capitalise(requestedResource))
-		        {
-		            maxStack = Int32.Parse(tradeDefault[2]);
-		        }
-		    }
-			
-			// I couldn't find the resource you wanted!
-			if(!resourceFound)
-			{
-				PrintToChat(player,"[FF0000]Grand Exchange[FFFFFF] : That item does not appear to currently be for sale at this store!");
-				return;
-			}
-			
-			// Open a popup with the resource details
-			var message = "Yes, we have that!\n[00FF00]" + Capitalise(resourceDetails[0]) + "[FFFFFF] is currently selling for [00FFFF]" + (Int32.Parse(resourceDetails[1])/PriceModifier).ToString() + "[FFFF00]g[FFFFFF] per item.\nIt can be bought in stacks of up to [00FF00]" + maxStack.ToString() + "[FFFFFF].\n How much would you like to buy?";
-			
-			// Get the player's wallet contents
-			CheckWalletExists(player);
-			var credits = _playerWallet[player.Id];
-			message = message + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-			
-			player.ShowInputPopup(shopOwnerName + "'s Store", message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectAmountToBeBoughtFromPlayerStore(player, shopOwnerName, maxStack, options, dialogue1, data, resourceDetails));
-		}
-		
-        
-		private void SelectAmountToBeBoughtFromPlayerStore(Player player, ulong shopOwnerName, int maxStack, Options selection, Dialogue dialogue, object contextData, string[] resourceDetails)
-		{
-			if (selection == Options.Cancel)
-            {
-                //Leave
-                return;
-            }
-			var amountText = dialogue.ValueMessage;
-
-			// Check if the amount is an integer
-			int amount;
-			if(Int32.TryParse(amountText,out amount) == false)
-			{
-				PrintToChat(player,"[FF0000]Grand Exchange[FFFFFF] : That does not appear to be a valid amount. Please enter a number between 1 and the maximum stack size.");
-				return;
-			}
-			
-			//Check if the amount is within the correct limits
-			if(amount < 1 || amount > Int32.Parse(resourceDetails[2]) || amount > maxStack)
-			{
-				PrintToChat(player,"[FF0000]Grand Exchange[FFFFFF] : You can only purchase an amount between 1 and the maximum stack size or amount in the store.");
-				return;
-			}
-
-            // Dict <string, Collect<string[]>>
-		    double totalValue = (int)((double)(Int32.Parse(resourceDetails[1]) * amount) / 1000);
-
-			var message = "Very good!\n[00FFFF]" + amount.ToString() + " [00FF00]" + Capitalise(resourceDetails[0]) + "[FFFFFF] will cost you a total of \n[FF0000]" + totalValue.ToString() + " [FFFF00]gold.[FFFFFF]\n Do you want to complete the purchase?";
-			
-			// Get the player's wallet contents
-			CheckWalletExists(player);
-			var credits = _playerWallet[player.Id];
-			message = message + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-			
-			//Show Popup with the final price
-			player.ShowConfirmPopup(shopOwnerName + "'s Store", message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, shopOwnerName, options, dialogue, data, resourceDetails, totalValue, amount));
-		}
-        
-        private void ViewMyShop(Player player , string cmd )
-        {
-			//Check if I have a shop
-			CheckIfPlayerOwnsAShop(player);
-			
-            // Is the player in a shop area?
-            var shopOwnerName = GetPlayerWhoOwnsThisShop(player);
-            if (shopOwnerName == 0)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You need to be in your shop to view the items there!");
-                return;
-            }
-
-            var playerName = player.Name;
-
-            // Build the shop if it doesn't exist
-            CheckShopExists(player);
-
-            //Is there anything in the shop right now?
-            if (_shopPlayer[player.Id].Count < 1)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : Your shop is currently empty.");
-                return;
-            }
-            ViewThisShop(player);
-        }
-
-		private void RemoveStockToThePlayerShop(Player player, string cmd , string[] input)
-		{
-			//Check if I have a shop
-			CheckIfPlayerOwnsAShop(player);
-
-            var playerName = player.Name;
-            // Is the player in a shop area?
-            var shopOwnerName = GetPlayerWhoOwnsThisShop(player);
-            if (shopOwnerName == 0 || shopOwnerName != player.Id)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You need to be in your shop to remove the items from there!");
-                return;
-            }
-			
-            if (input.Length < 2)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : Please use the format - /removeshopitem '<item_name>' <amount>");
-                return;
-            }
-
-            int amount;
-			if(Int32.TryParse(input[1], out amount) == false)
-			{	
-				PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You entered an invalid amount. Please use the format - /removeshopitem '<item_name>' <amount>");
-				return;
-			}
-			
-            var resource = Capitalise(input[0]);
-
-			// Check if the item exists in the default list
-            var found = false;
-			var previousItem = new string[5];
-            var defaultPrice = 0;
-			for(var i=0; i<_tradeDefaults.Count; i++)
-			{
-				if(_tradeDefaults[i][0].ToLower() == resource.ToLower())
-				{
-					found = true;
-				    defaultPrice = Int32.Parse(_tradeDefaults[i][1]);
-					break;
-				}
-			}
-			if(!found)
-			{
-				PrintToChat(player, resource + " does not appear to be a recognised item. Did you spell it correctly and use quotes around the item name?");
-				return;
-			}
-			
-			//Check if the item is in the shop
-			var stock = _shopPlayer[player.Id];
-			for(var i=0; i < stock.Count; i++)
-			{
-				if(stock[i][0].ToLower() == resource.ToLower())
-				{
-					if(Int32.Parse(stock[i][2]) < amount)
-					{
-						PrintToChat(player, "You don't appear to have that much of the resource in the shop!");
-						return;
-					}
-					//Is there space?
-					var inventory = player.GetInventory().Contents;
-					
-					if(inventory.FreeSlotCount < 5)
-					{
-						PrintToChat(player, "You will need 5 empty slots to guarantee space for shop item stacks. Sorry, this is important!");
-						return;
-					}
-					
-					// Give the item!
-					var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
-					var invGameItemStack = new InvGameItemStack(blueprintForName, amount, null);
-					ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
-					
-					//Remove from shop
-					var currentStock = Int32.Parse(stock[i][2]);
-					if(currentStock > amount) 
-					{
-						stock[i][2] = (currentStock - amount).ToString();
-					}
-					else stock.RemoveAt(i);
-					
-					PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You have withdrawn the items from the shop.");
-					SaveTradeData();
-				}
-			}
-		}
-		
-        private void AddStockToThePlayerShop(Player player , string cmd , string[] input)
-        {
-			//Check if I have a shop
-			CheckIfPlayerOwnsAShop(player);
-
-            var playerName = player.Name;
-            var playerId = player.Id;
-            // Is the player in a shop area?
-            var shopOwnerName = GetPlayerWhoOwnsThisShop(player);
-            if (shopOwnerName == 0 || shopOwnerName != playerId)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You need to be in your shop to view the items there!");
-                return;
-            }
-
-            if (input.Length < 2)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : Please use the format - /addshopitem '<item_name>' <amount>");
-                return;
-            }
-
-            int amount;
-			if(Int32.TryParse(input[1], out amount) == false)
-			{	
-				PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You entered an invalid amount. Please use the format - /addshopitem '<item_name>' <amount>");
-				return;
-			}
-
-            var resource = Capitalise(input[0]);
-
-			// Check if the item exists in the default list
-            var found = false;
-			var previousItem = new string[5];
-            var defaultPrice = 0;
-			for(var i=0; i<_tradeDefaults.Count; i++)
-			{
-				if(_tradeDefaults[i][0].ToLower() == resource.ToLower())
-				{
-					found = true;
-				    defaultPrice = Int32.Parse(_tradeDefaults[i][1]);
-					break;
-				}
-			}
-			if(!found)
-			{
-				PrintToChat(player, resource + " does not appear in the original defaults list. If you want this item added, please ask an admin to add it to the defaults list first. [FF0000]Note :[FFFFFF] It MUST be a real item that exists in the game currently.");
-				return;
-			}
-
-            // We have the item and the amount. Does the player have this in his inventory to stock?
-            if(CanRemoveResource(player, resource, amount) == false)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You don't appear to have that much resource in your inventory right now.");
-				return;
-            }
-            
-            // Add this resource to the player's shop
-            if (_shopPlayer.ContainsKey(playerId))
-            {
-                var shop = _shopPlayer[playerId];
-                var stock = new string[3];
-
-                //If the item already exists, add it to the current stock
-                var position = 0;
-                var itemFound = false;
-				
-                foreach (var item in shop)
-                {
-                    if (item[0].ToLower() == resource.ToLower())
-                    {
-                        itemFound = true;
-                        var stackLimit = 0;
-                        var stockAmount = Int32.Parse(item[2]);
-                        foreach (var defaultItem in _tradeDefaults)
-                        {
-                            if (defaultItem[0].ToLower() == item[0].ToLower())
-                            {
-                                stackLimit = Int32.Parse(defaultItem[2]);
-                            }
-                        }
-                        
-						
-                        //If the limit is full
-                        var stockMaxLimit = PlayerShopStackLimit * stackLimit;
-                        if (Int32.Parse(item[2]) >= stockMaxLimit)
-                        {
-                            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You cannot stock any more of that item right now.");
-            				return;
-                        }
-                        
-                        //If this will hit the limit
-                        if (stockAmount + amount > stockMaxLimit)
-                        {
-                            amount = stockMaxLimit - stockAmount;
-                            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : Your shop is now fully stocked with " + resource);
-                        }
-                        var finalAmount = stockAmount + amount;
-
-                        stock[0] = resource;
-                        item[1] = defaultPrice.ToString();
-                        item[2] = finalAmount.ToString();
-                    }
-                }
-                if (!itemFound)
-                {
-								
-					// If the shop has it's full limit of items
-					if(shop.Count >= PlayerShopMaxSlots)
-					{
-						PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You cannot any new items to your store.");
-            			return;
-					}
-
-                    stock[0] = resource;
-                    stock[1] = defaultPrice.ToString();
-                    stock[2] = amount.ToString();
-                    shop.Add(stock);
-                }
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You have updated your shop inventory!");
-            }
-
-            //Remove the resource from the player's inventory
-            RemoveItemsFromInventory(player, resource, amount);
-
-			//Save the data
-			SaveTradeData();
-        }
-
-        #endregion
-
-        #region GRAND EXCHANGE
-
-
-        private void SelectItemToBeBought(Player player, Options selection, Dialogue dialogue, object contextData)
-        {
-            if (selection == Options.Cancel)
-            {
-                //Leave
-                return;
-            }
-            var requestedResource = dialogue.ValueMessage;
-            var resourceFound = false;
-            var resourceDetails = new string[5];
-
-            // Get the resource's details
-            foreach (var item in _tradeList)
-            {
-                if (item[0] == Capitalise(requestedResource))
-                {
-                    resourceDetails = new string[5] { item[0], item[1], item[2], item[3], item[4] };
-                    resourceFound = true;
-                }
-            }
-
-            // I couldn't find the resource you wanted!
-            if (!resourceFound)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : That item does not appear to currently be for sale!");
-                return;
-            }
-
-            // Open a popup with the resource details
-            var message = "Of course!\n[00FF00]" + Capitalise(resourceDetails[0]) + "[FFFFFF] is currently selling for [00FFFF]" + (Int32.Parse(resourceDetails[3]) / 1000).ToString() + "[FFFF00]g[FFFFFF] per item.\nIt can be bought in stacks of up to [00FF00]" + resourceDetails[2].ToString() + "[FFFFFF].\n How much would you like to buy?";
-
-            // Get the player's wallet contents
-            CheckWalletExists(player);
-            var credits = _playerWallet[player.Id];
-            message = message + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-
-            player.ShowInputPopup("Grand Exchange", message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectAmountToBeBought(player, options, dialogue1, data, resourceDetails));
-        }
-
-        private void SelectAmountToBeBought(Player player, Options selection, Dialogue dialogue, object contextData, string[] resourceDetails)
-        {
-            if (selection == Options.Cancel)
-            {
-                //Leave
-                return;
-            }
-            var amountText = dialogue.ValueMessage;
-
-            // Check if the amount is an integer
-            int amount;
-            if (Int32.TryParse(amountText, out amount) == false)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : That does not appear to be a valid amount. Please enter a number between 1 and the maximum stack size.");
-                return;
-            }
-
-            //Check if the amount is within the correct limits
-            if (amount < 1 || amount > Int32.Parse(resourceDetails[2]))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You can only purchase an amount between 1 and the maximum stack size.");
-                return;
-            }
-
-            double totalValue = (double)GetPriceForThisItem("buy", resourceDetails[0], amount);
-
-            var message = "Very good!\n[00FFFF]" + amount.ToString() + " [00FF00]" + Capitalise(resourceDetails[0]) + "[FFFFFF] will cost you a total of \n[FF0000]" + totalValue + " [FFFF00]gold.[FFFFFF]\n Do you want to complete the purchase?";
-
-            // Get the player's wallet contents
-            CheckWalletExists(player);
-            var credits = _playerWallet[player.Id];
-            message = message + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-
-            //Show Popup with the final price
-            player.ShowConfirmPopup("Grand Exchange", message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, 0, options, dialogue, data, resourceDetails, totalValue, amount));
-        }
-
-        private void CheckIfThePlayerHasTheResourceToSell(Player player, Options selection, Dialogue dialogue, object contextData, string[] resourceDetails, int totalValue, int amount)
-        {
-            if (selection != Options.Yes)
-            {
-                //Leave
-                return;
-            }
-
-            if (!CanRemoveResource(player, resourceDetails[0], amount))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : It looks like you don't have the goods! What are you trying to pull here?");
-                return;
-            }
-
-            // Take the item!
-            RemoveItemsFromInventory(player, resourceDetails[0], amount);
-
-            // Give the payment
-            GiveGold(player, totalValue);
-
-            // Fix themarket price adjustment
-            AdjustMarketPrices("sell", resourceDetails[0], amount);
-
-            // Tell the player
-            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : " + amount.ToString() + " " + resourceDetails[0] + "has been removed from your inventory and your wallet has been credited for the sale.");
-            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : Thanks for your custom, friend! Please come again!");
-
-            //Save the data
-            SaveTradeData();
-        }
-
-        private bool CanRemoveResource(Player player, string resource, int amount)
-        {
-            // Check player's inventory
-            var inventory = player.CurrentCharacter.Entity.GetContainerOfType(CollectionTypes.Inventory);
-
-            // Check how much the player has
-            var foundAmount = 0;
-            foreach (var item in inventory.Contents.Where(item => item != null))
-            {
-                if (item.Name == resource)
-                {
-                    foundAmount = foundAmount + item.StackAmount;
-                }
-            }
-
-            if (foundAmount >= amount) return true;
-            return false;
-        }
-
-        public void RemoveItemsFromInventory(Player player, string resource, int amount)
-        {
-            var inventory = player.GetInventory().Contents;
-
-            // Check how much the player has
-            var amountRemaining = amount;
-            var removeAmount = amountRemaining;
-            foreach (InvGameItemStack item in inventory.Where(item => item != null))
-            {
-                if (item.Name == resource)
-                {
-                    removeAmount = amountRemaining;
-
-                    //Check if there is enough in the stack
-                    if (item.StackAmount < amountRemaining)
-                    {
-                        removeAmount = item.StackAmount;
-                    }
-
-                    amountRemaining = amountRemaining - removeAmount;
-
-                    inventory.SplitItem(item, removeAmount, true);
-                    if (amountRemaining <= 0) return;
-                }
-            }
-        }
-
-        private void CheckIfThePlayerCanAffordThis(Player player, ulong shopOwnerName, Options selection, Dialogue dialogue, object contextData, string[] resourceDetails, double totalValue, int amount)
-        {
-            if (selection != Options.Yes)
-            {
-                //Leave
-                return;
-            }
-
-            if (!CanRemoveGold(player, (int)totalValue))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : It looks like you don't have the gold for this transaction, I'm afraid!");
-                return;
-            }
-
-            //Check if there is space in the player's inventory
-            var inventory = player.GetInventory().Contents;
-            if (inventory.FreeSlotCount < 1)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You need a free inventory slot to purchase items, I'm afraid. Come back when you have made some space.");
-                return;
-            }
-
-            // Check the items haven't just been bought
-            if (shopOwnerName != 0)
-            {
-                var thisShop = _shopPlayer[shopOwnerName];
-                if (thisShop.Count < 1)
-                {
-                    PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : I'm terribly sorry, but someone has just bought that item!");
-                    return;
-                }
-                foreach (var shopItem in thisShop)
-                {
-                    if (shopItem[0].ToLower() == resourceDetails[0].ToLower())
-                    {
-                        if (Int32.Parse(shopItem[2]) < amount)
-                        {
-                            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : I'm terribly sorry, but someone has just bought that item!");
-                            return;
-                        }
-                    }
-                }
-            }
-
-
-            // Give the item!
-            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resourceDetails[0], true, true);
-            var invGameItemStack = new InvGameItemStack(blueprintForName, amount, null);
-            ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
-
-            // Take the payment
-            RemoveGold(player, (int)totalValue);
-
-            // Pay the shopkeeper
-            if (shopOwnerName != 0)
-            {
-                GiveGold(shopOwnerName, (int)totalValue);
-            }
-
-            if (shopOwnerName == 0)
-            {
-                // Fix themarket price adjustment
-                AdjustMarketPrices("buy", resourceDetails[0], amount);
-            }
-            else
-            {
-                // Remove the items from the shop
-                var myShop = _shopPlayer[shopOwnerName];
-
-                for (var i = 0; i < myShop.Count; i++)
-                {
-                    if (myShop[i][0].ToLower() == resourceDetails[0].ToLower())
-                    {
-                        //If there is enough in this stack
-                        if (Int32.Parse(myShop[i][2]) >= amount)
-                        {
-                            myShop[i][2] = (Int32.Parse(myShop[i][2]) - amount).ToString();
-
-                            //Remove the stock if run out
-                            if (myShop[i][2] == "0")
-                            {
-                                myShop.RemoveAt(i);
-                            }
-
-                            SaveTradeData();
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Tell the player
-            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : " + amount.ToString() + " " + resourceDetails[0] + " has been added to your inventory and your wallet has been debited the appropriate amount.");
-            PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : Congratulations on your purchase. Please come again!");
-
-            //Save the data
-            SaveTradeData();
-        }
-
-
-        private int GetPriceForThisItem(string type, string resource, int amount)
-        {
-            var position = 3;
-            if (type == "sell") position = 4;
-
-            var total = 0;
-            foreach (var item in _tradeList)
-            {
-                if (item[0].ToLower() == resource.ToLower())
-                {
-                    total = (int)(amount * (double)(Int32.Parse(item[position]) / PriceModifier));
-                }
-            }
-            return total;
-        }
-
-        private void SelectItemToBeSold(Player player, Options selection, Dialogue dialogue, object contextData)
-        {
-            if (selection == Options.Cancel)
-            {
-                //Leave
-                return;
-            }
-            var requestedResource = dialogue.ValueMessage;
-            var resourceFound = false;
-            var resourceDetails = new string[5];
-
-            // Get the resource's details
-            foreach (var item in _tradeList)
-            {
-                if (item[0] == Capitalise(requestedResource))
-                {
-                    resourceDetails = new string[5] { item[0], item[1], item[2], item[3], item[4] };
-                    resourceFound = true;
-                }
-            }
-
-            // I couldn't find the resource you wanted!
-            if (!resourceFound)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : I don't think I am currently able to take that item at this time.'");
-                return;
-            }
-
-            // Open a popup with the resource details
-            var message = "Hmmm!\nI believe that [00FF00]" + Capitalise(resourceDetails[0]) + "[FFFFFF] is currently being purchased for [00FFFF]" + (Int32.Parse(resourceDetails[4]) / 1000).ToString() + "[FFFF00]g[FFFFFF] per item.\nI'd be happy to buy this item in stacks of up to [00FF00]" + resourceDetails[2].ToString() + "[FFFFFF].\n How much did you want to sell?";
-
-            // Get the player's wallet contents
-            CheckWalletExists(player);
-            var credits = _playerWallet[player.Id];
-            message = message + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-
-            player.ShowInputPopup("Grand Exchange", message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectAmountToBeSold(player, options, dialogue1, data, resourceDetails));
-        }
-
-        private void SelectAmountToBeSold(Player player, Options selection, Dialogue dialogue, object contextData, string[] resourceDetails)
-        {
-            if (selection == Options.Cancel)
-            {
-                //Leave
-                return;
-            }
-            var amountText = dialogue.ValueMessage;
-
-            // Check if the amount is an integer
-            int amount;
-            if (Int32.TryParse(amountText, out amount) == false)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : That does not appear to be a valid amount. Please enter a number between 1 and the maximum stack size.");
-                return;
-            }
-
-            //Check if the amount is within the correct limits
-            if (amount < 1 || amount > Int32.Parse(resourceDetails[2]))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You can only sell an amount of items between 1 and the maximum stack size for that item.");
-                return;
-            }
-
-            var totalValue = GetPriceForThisItem("sell", resourceDetails[0], amount);
-
-            var message = "I suppose I can do that.\n[00FFFF]" + amount.ToString() + " [00FF00]" + Capitalise(resourceDetails[0]) + "[FFFFFF] will give you a total of \n[FF0000]" + totalValue + " [FFFF00]gold.[FFFFFF]\n Do you want to complete the sale?";
-
-            // Get the player's wallet contents
-            CheckWalletExists(player);
-            var credits = _playerWallet[player.Id];
-            message = message + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-
-            //Show Popup with the final price
-            player.ShowConfirmPopup("Grand Exchange", message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerHasTheResourceToSell(player, options, dialogue, data, resourceDetails, totalValue, amount));
-        }
-
-
-        private void ShowThePlayerTheGrandExchangeStore(Player player, string cmd)
-        {
-            // Are there any items on the store?
-            if (_tradeList.Count == 0)
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : The Grand Exchange is currently closed for business. Please try again later.");
-                return;
-            }
-            //Log("Trade: Prices have been found!");
-
-            // Get the player's wallet contents
-            CheckWalletExists(player);
-            var credits = _playerWallet[player.Id];
-
-            // Check if player exists (For Unit Testing)
-            var buyIcon = "[008888]";
-            var sellIcon = "[008888]";
-            var itemText = "";
-            var itemsPerPage = 25;
-            var singlePage = false;
-            if (itemsPerPage > _tradeList.Count)
-            {
-                singlePage = true;
-                itemsPerPage = _tradeList.Count;
-            }
-
-            for (var i = 0; i < itemsPerPage; i++)
-            {
-                buyIcon = "[008888]";
-                sellIcon = "[008888]";
-                var resource = _tradeList[i][0];
-                var originalPrice = Int32.Parse(_tradeList[i][1]) / PriceModifier;
-                var originalSellPrice = (int)((double)originalPrice * (_sellPercentage / 100));
-                var stackLimit = Int32.Parse(_tradeList[i][2]);
-                var buyPrice = Int32.Parse(_tradeList[i][3]) / PriceModifier;
-                var sellPrice = Int32.Parse(_tradeList[i][4]) / PriceModifier;
-
-                if (buyPrice >= originalPrice) buyIcon = "[00FF00]";
-                if (buyPrice > originalPrice + (originalPrice * 0.1)) buyIcon = "[888800]";
-                if (buyPrice > originalPrice + (originalPrice * 0.2)) buyIcon = "[FF0000]";
-                if (sellPrice <= originalSellPrice) sellIcon = "[00FF00]";
-                if (sellPrice < originalSellPrice - (originalSellPrice * 0.1)) sellIcon = "[888800]";
-                if (sellPrice < originalSellPrice - (originalSellPrice * 0.2)) sellIcon = "[FF0000]";
-                // if(buyPrice < originalPrice + (originalPrice * 0.3)) buyIcon = "[00FF00]";
-                // if(sellPrice > originalPrice) sellIcon = "[FF0000]";
-                // if(sellPrice < originalPrice) sellIcon = "[00FF00]";
-                var buyPriceText = buyPrice.ToString();
-                var sellPriceText = sellPrice.ToString();
-
-
-                itemText = itemText + "[888800]" + Capitalise(resource) + "[FFFFFF]; Buy: " + buyIcon + buyPriceText + "[FFFF00]g  [FFFFFF]Sell: " + sellIcon + sellPriceText + "[FFFF00]g\n";
-            }
-
-            itemText = itemText + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-
-            if (singlePage)
-            {
-                player.ShowPopup("Grand Exchange", itemText, "Exit", (selection, dialogue, data) => DoNothing(player, selection, dialogue, data));
-                return;
-            }
-
-            //Display the Popup with the price
-            player.ShowConfirmPopup("Grand Exchange", itemText, "Next Page", "Exit", (selection, dialogue, data) => ContinueWithTradeList(player, selection, dialogue, data, itemsPerPage, itemsPerPage));
-        }
-
-        private void ContinueWithTradeList(Player player, Options selection, Dialogue dialogue, object contextData, int itemsPerPage, int currentItemCount)
-        {
-            if (selection != Options.Yes)
-            {
-                //Leave
-                return;
-            }
-
-            if ((currentItemCount + itemsPerPage) > _tradeList.Count)
-            {
-                itemsPerPage = _tradeList.Count - currentItemCount;
-            }
-
-            // Get the player's wallet contents
-            CheckWalletExists(player);
-            var credits = _playerWallet[player.Id];
-
-            var buyIcon = "[008888]";
-            var sellIcon = "[008888]";
-            var itemText = "";
-
-            for (var i = currentItemCount; i < itemsPerPage + currentItemCount; i++)
-            {
-                buyIcon = "[008888]";
-                sellIcon = "[008888]";
-                var resource = _tradeList[i][0];
-                var originalPrice = Int32.Parse(_tradeList[i][1]) / PriceModifier;
-                var stackLimit = Int32.Parse(_tradeList[i][2]);
-                var buyPrice = Int32.Parse(_tradeList[i][3]) / PriceModifier;
-                var sellPrice = Int32.Parse(_tradeList[i][4]) / PriceModifier;
-
-                if (buyPrice >= originalPrice) buyIcon = "[00FF00]";
-                if (buyPrice > originalPrice + (originalPrice * 0.1)) buyIcon = "[888800]";
-                if (buyPrice > originalPrice + (originalPrice * 0.2)) buyIcon = "[FF0000]";
-                if (sellPrice <= originalPrice) sellIcon = "[00FF00]";
-                if (sellPrice < originalPrice - (originalPrice * 0.1)) sellIcon = "[888800]";
-                if (sellPrice < originalPrice - (originalPrice * 0.2)) sellIcon = "[FF0000]";
-                var buyPriceText = buyPrice.ToString();
-                var sellPriceText = sellPrice.ToString();
-
-
-                itemText = itemText + "[888800]" + Capitalise(resource) + "[FFFFFF]; Buy: " + buyIcon + buyPriceText + "[FFFF00]g  [FFFFFF]Sell: " + sellIcon + sellPriceText + "[FFFF00]g\n";
-            }
-
-            itemText = itemText + "\n\n[FF0000]Gold Available[FFFFFF] : [00FF00]" + credits.ToString();
-
-            currentItemCount = currentItemCount + itemsPerPage;
-
-            // Display the Next page
-            if (currentItemCount < _tradeList.Count)
-            {
-                player.ShowConfirmPopup("Grand Exchange", itemText, "Next Page", "Exit", (options, dialogue1, data) => ContinueWithTradeList(player, options, dialogue1, data, itemsPerPage, currentItemCount));
-            }
-            else
-            {
-                PlayerExtensions.ShowPopup(player, "Grand Exchange", itemText, "Yes", (newselection, dialogue2, data) => DoNothing(player, newselection, dialogue2, data));
-            }
-        }
-
-        private void DoNothing(Player player, Options selection, Dialogue dialogue, object contextData)
-        {
-            //Do nothing
-        }
-
-        private void ForcePriceAdjustment()
-        {
-            foreach (var item in _tradeList)
-            {
-                var originalPrice = Int32.Parse(item[1]);
-                item[4] = (originalPrice * (_sellPercentage / 100)).ToString();
-            }
-            SaveTradeData();
-        }
-
-        private void DeflatePrices()
-        {
-            int newBuyPrice = 0;
-            int newSellPrice = 0;
-            int priceBottomShelf = 0;
-            int priceTopShelf = 0;
-            string resource = "";
-
-            foreach (var item in _tradeList)
-            {
-                var buyPrice = Int32.Parse(item[3]);
-                var sellPrice = Int32.Parse(item[4]);
-                var maxStackSize = Int32.Parse(item[2]);
-                var originalPrice = Int32.Parse(item[1]);
-
-                double inflationModifier = Inflation / 100;
-                double deflationModifier = MaxDeflation / 100;
-                double stackModifier = 1;
-                newBuyPrice = (int)(buyPrice - ((originalPrice * inflationModifier) * stackModifier));
-                newSellPrice = (int)(sellPrice + ((originalPrice * inflationModifier) * stackModifier));
-
-                // Make sure it doesn't fall below expected levels
-                priceBottomShelf = (int)(originalPrice - ((originalPrice * deflationModifier) * stackModifier));
-                priceTopShelf = (int)((double)(originalPrice + ((originalPrice * deflationModifier) * stackModifier)) * (double)(_sellPercentage / 100));
-
-                if (newBuyPrice < priceBottomShelf) newBuyPrice = priceBottomShelf;
-                if (newSellPrice > priceTopShelf) newSellPrice = priceTopShelf;
-
-                //Update the current price
-                item[3] = newBuyPrice.ToString();
-                item[4] = newSellPrice.ToString();
-
-                resource = item[0];
-            }
-
-            // Save the trade data
-            SaveTradeData();
-        }
-
-        private void AdjustMarketPrices(string type, string resource, int amount)
-        {
-            var recordNumber = 0;
-            var newResource = new string[5];
-            double inflationModifier = 0;
-            double buyPrice = 0;
-            double sellPrice = 0;
-            double stackModifier = 0;
-
-            for (var i = 0; i < _tradeList.Count; i++)
-            {
-                if (_tradeList[i][0].ToLower() == resource.ToLower())
-                {
-                    var originalPrice = Int32.Parse(_tradeList[i][1]);
-                    var newBuyPrice = Int32.Parse(_tradeList[i][3]);
-                    var newSellPrice = Int32.Parse(_tradeList[i][4]);
-                    var maxStackSize = Int32.Parse(_tradeList[i][2]);
-                    recordNumber = i;
-
-                    //Update for "Buy"
-                    if (type == "buy")
-                    {
-                        //When resource is bought, increase buy price and decrease sell price for EVERY single item bought
-                        inflationModifier = Inflation / 100;
-                        sellPrice = (double)newSellPrice;
-                        buyPrice = (double)newBuyPrice;
-                        stackModifier = (double)amount / (double)maxStackSize;
-                        newBuyPrice = (int)(buyPrice + ((originalPrice * inflationModifier) * stackModifier));
-                        //newSellPrice = (int)(sellPrice + ((originalPrice * inflationModifier) * stackModifier));
-                        //if(newSellPrice > originalPrice) newSellPrice = originalPrice;
-                        //Adjust by the sellPercentage
-                        //newSellPrice = (int)(newSellPrice * (double)(sellPercentage / 100));
-                    }
-
-                    //Update for "Sell"
-                    if (type == "sell")
-                    {
-                        //When resource is sold, increase sell price and decrease buy price for EVERY single item bought
-                        inflationModifier = Inflation / 100;
-                        sellPrice = (double)newSellPrice;
-                        buyPrice = (double)newBuyPrice;
-                        stackModifier = (double)amount / (double)maxStackSize;
-                        newSellPrice = (int)(sellPrice - ((originalPrice * inflationModifier) * stackModifier));
-                    }
-
-                    // Make sure prices don't go below 1gp!
-                    if (newBuyPrice <= (1 * PriceModifier)) newBuyPrice = (1 * PriceModifier);
-                    if (newSellPrice <= (1 * PriceModifier)) newSellPrice = (1 * PriceModifier);
-
-                    newResource = new string[5] { _tradeList[i][0], _tradeList[i][1], _tradeList[i][2], newBuyPrice.ToString(), newSellPrice.ToString() };
-                }
-            }
-
-            if (newResource.Length < 1) return;
-            _tradeList.RemoveAt(recordNumber);
-            _tradeList.Insert(recordNumber, newResource);
-
-            // Save the data
-            SaveTradeData();
-        }
-		
-        private bool PlayerIsInTheRightTradeArea(Player player)
-        {
-            // Is there a designated trade area?
-            if (_markList.Count < 1) return true;
-            var isInArea = false;
-            foreach (var area in _markList)
-            {
-                var posX1 = area[0];
-                var posZ1 = area[1];
-                var posX2 = area[2];
-                var posZ2 = area[3];
-
-                var playerX = player.Entity.Position.x;
-                var playerZ = player.Entity.Position.z;
-
-                if ((playerX < posX1 && playerX > posX2) && (playerZ > posZ1 && playerZ < posZ2)) isInArea = true;
-                if ((playerX < posX1 && playerX > posX2) && (playerZ < posZ1 && playerZ > posZ2)) isInArea = true;
-                if ((playerX > posX1 && playerX < posX2) && (playerZ < posZ1 && playerZ > posZ2)) isInArea = true;
-                if ((playerX > posX1 && playerX < posX2) && (playerZ > posZ1 && playerZ < posZ2)) isInArea = true;
-            }
-
-            return isInArea;
-        }
-		
-        private void RestoreTheDefaultExchangePrices(Player player, string cmd)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            _tradeList = new Collection<string[]>();
-            foreach (var item in _tradeDefaults)
-            {
-                var sellPrice = (int)(Int32.Parse(item[1]) * (_sellPercentage / 100));
-                var newItem = new string[5] { item[0], item[1], item[2], item[1], sellPrice.ToString() };
-                _tradeList.Add(newItem);
-            }
-            PrintToChat(player, "Grand Exchange prices have been reset to default values");
-
-
-            //Save the data
-            SaveTradeData();
-        }
-
-        private void AddANewItemToTheExchange(Player player, string cmd, string[] input)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            // Check the current store
-            var resource = input.JoinToString(" ");
-            var found = false;
-            for (var i = 0; i < _tradeList.Count; i++)
-            {
-                if (_tradeList[i][0].ToLower() == resource.ToLower())
-                {
-                    found = true;
-                    break;
-                }
-            }
-            if (found)
-            {
-                PrintToChat(player, resource + "  already exists in the store!");
-                return;
-            }
-
-            found = false;
-            // Check if the item exists in the defaults
-            var previousItem = new string[5];
-            for (var i = 0; i < _tradeDefaults.Count; i++)
-            {
-                if (_tradeDefaults[i][0].ToLower() == resource.ToLower())
-                {
-                    found = true;
-                    previousItem = new string[5] { _tradeDefaults[i][0], _tradeDefaults[i][1], _tradeDefaults[i][2], _tradeDefaults[i][1], _tradeDefaults[i][1] };
-                    if (_tradeList.Count < i) i = _tradeList.Count;
-                    _tradeList.Insert(i, previousItem);
-                    PrintToChat(player, resource + " has been added to the store!");
-                    ForcePriceAdjustment();
-                    break;
-                }
-            }
-            if (!found)
-            {
-                PrintToChat(player, resource + " does not appear in the original defaults list. If you want this item added, please add it to the defaults list first. (In the plugin) Note - It MUST be a real item or the system may crash!");
-                return;
-            }
-
-            //Save the data
-            SaveTradeData();
-        }
-
-        private void BuyAnItemOnTheExchange(Player player, string cmd)
-        {
-            //Is player in the trade hub area?
-            if (!PlayerIsInTheRightTradeArea(player))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You cannot trade outside of the designated trade area!");
-                return;
-            }
-
-            //Open up the buy screen
-            player.ShowInputPopup("Grand Exchange", "What [00FF00]item [FFFFFF]would you like to buy on the [00FFFF]Grand Exchange[FFFFFF]?", "", "Submit", "Cancel", (options, dialogue1, data) => SelectItemToBeBought(player, options, dialogue1, data));
-        }
-
-        private void SellAnItemOnTheExchange(Player player, string cmd)
-        {
-            //Is player in the trade hub area?
-            if (!PlayerIsInTheRightTradeArea(player))
-            {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You cannot trade outside of the designated trade area!");
-                return;
-            }
-
-            //Open up the sell screen
-            player.ShowInputPopup("Grand Exchange", "What [00FF00]item [FFFFFF]would you like to sell on the [00FFFF]Grand Exchange[FFFFFF]?", "", "Submit", "Cancel", (options, dialogue1, data) => SelectItemToBeSold(player, options, dialogue1, data));
-        }
-
-
-        private void DisplayDefaultTradeList(Player player, string cmd, string[] input)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "This is not for you. Don't even try it, thieving scumbag!");
-                return;
-            }
-            foreach (var item in _tradeDefaults)
-            {
-                PrintToChat(player, item[0]);
-            }
-        }
-
-        private void SetThePriceOfAnItem(Player player, string cmd, string[] input)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "This is not for you. Don't even try it, thieving scumbag!");
-                return;
-            }
-
-            if (input.Length < 2)
-            {
-                PrintToChat(player, "Usage: Type /setprice \"Resource Name\" <amount>");
-                return;
-            }
-
-            var resource = input[0];
-            var priceText = input[1];
-            int price;
-            if (Int32.TryParse(priceText, out price) == false)
-            {
-                PrintToChat(player, "Bad amount value entered!");
-                return;
-            }
-
-            priceText = (price * 1000).ToString();
-
-
-            foreach (var item in _tradeList)
-            {
-                if (item[0].ToLower() == resource.ToLower())
-                {
-                    item[1] = priceText;
-                    item[3] = priceText;
-                    item[4] = priceText;
-                }
-            }
-
-            PrintToChat(player, "Changing price of " + resource + " to " + priceText);
-
-            ForcePriceAdjustment();
-
-            // Save the trade data
-            SaveTradeData();
-        }
-
-        private void RemoveAnItemFromTheExchange(Player player, string cmd, string[] input)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            var resource = input.JoinToString(" ");
-            int position = -1;
-            for (var i = 0; i < _tradeList.Count; i++)
-            {
-                if (_tradeList[i][0].ToLower() == resource.ToLower())
-                {
-                    position = i;
-                    break;
-                }
-            }
-            if (position >= 0)
-            {
-                _tradeList.RemoveAt(position);
-                PrintToChat(player, resource + "  has been removed from the store.");
-            }
-            else PrintToChat(player, "Could not find that item in the store to remove it.");
-
-
-            //Save the data
-            SaveTradeData();
-        }
-
-        private void RemoveAllExchangeItems(Player player, string cmd, string[] input)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            _tradeList = new Collection<string[]>();
-
-            PrintToChat(player, "The exchange store has been wiped! Use /addstoreitem <itemname> to start filling it again.");
-
-            //Save the data
-            SaveTradeData();
-        }
-
-        private void AddPlayerAsATradeMaster(Player player,string cmd,string[] input )
-        {
-            if (!player.HasPermission("admin"))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            var playerName = input.JoinToString(" ");
-            // Check player exists
-            var target = Server.GetPlayerByName(playerName);
-            if (target == null)
-            {
-                PrintToChat(player, "That player does not appear to be online right now.");
-                return;
-            }
-
-            //Check if player is already on the list
-            foreach (var tradeMaster in _tradeMasters)
-            {
-                if (tradeMaster.ToLower() == playerName.ToLower())
-                {
-                    PrintToChat(player, "That player is already a trade master.");
-                    return;
-                }
-            }
-
-            // Add the player to the list
-            _tradeMasters.Add(playerName.ToLower());
-            PrintToChat(player, "You have added " + playerName + " as a Trade Master.");
-
-            SaveTradeData();
-        }
-
-        private void RemovePlayerAsATradeMaster(Player player,string cmd,string[] input )
-        {
-            if (!player.HasPermission("admin"))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            var playerName = input.JoinToString(" ");
-            // Check player exists
-            
-            //Check if player is already on the list
-            var position = -1;
-            for(var i=0; i<_tradeMasters.Count;i++)
-            {
-                if (_tradeMasters[i] == playerName.ToLower())
-                {
-                    position = i;
-                    break;
-                }
-            }
-
-            if (position < 0)
-            {
-                PrintToChat(player, playerName + " does not appear to be on the list!");
-                return;
-            }
-
-            _tradeMasters.RemoveAt(position);
-            PrintToChat(player, playerName + " has had their Grand Exchange priveleges revoked!");
-            SaveTradeData();
-        }
-
-        private bool PlayerIsATradeMaster(string playerName)
-        {
-            foreach (var tradeMaster in _tradeMasters)
-            {
-                if (tradeMaster.ToLower() == playerName.ToLower()) return true;
-            }
-            return false;
-        }
-
-
-        private void SetTheNewSellPercentageAmount(Player player, string cmd, string[] input)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            int percentage;
-            if (Int32.TryParse(input[0], out percentage) == false)
-            {
-                PrintToChat(player, "You entered an invalid amount. Please enter an amount from 1-100%");
-                return;
-            }
-
-            _sellPercentage = (double)percentage;
-            //Adjust the prices
-            ForcePriceAdjustment();
-            PrintToChat(player, "The Sell percentage has been set to " + percentage.ToString());
-
-            SaveTradeData();
-        }
-
-
-        private void AdminSetAPlayersGoldAmount(Player player, string cmd, string[] input)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-            var playerName = Capitalise(input[0]);
-            var target = Server.GetPlayerByName(playerName);
-            if (target == null)
-            {
-                PrintToChat(player, "That player doesn't appear to be online at this moment.");
-                return;
-            }
-
-            int amount;
-            if (Int32.TryParse(input[1], out amount) == false)
-            {
-                PrintToChat(player, "You entered an invalid amount. Please enter in the format: /setplayergold 'Name_In_Quotes' <amount>");
-                return;
-            }
-            var targetId = Server.GetPlayerByName(playerName).Id;
-            CheckWalletExists(target);
-            _playerWallet[targetId] = amount;
-            PrintToChat(player, "You have set gold amount for " + playerName + " to " + amount.ToString());
-            SaveTradeData();
-        }
-
-        private void RemoveTheGoldFromAllPlayers(Player player, string cmd)
-        {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            _playerWallet = new Dictionary<ulong, int>();
-
-            PrintToChat(player, "All players' gold has been removed!");
-
-            SaveTradeData();
-        }
-
-
-        #endregion
-
-        #region GOLD AND CURRENCY
-
-
         private void GiveGold(Player player, int amount)
         {
-            var playerName = player.Name.ToLower();
-            var currentGold = _playerWallet[player.Id];
-            if (currentGold + amount > MaxPossibleGold)
+            if (_PlayerData[player.Id].Gold + amount > MaxPossibleGold)
             {
-                PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You cannot gain any more gold than you now have. Congratulations. You are the richest player. Goodbye.");
-                currentGold = MaxPossibleGold;
+                PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Gold Maxed", player));
+                _PlayerData[player.Id].Gold = MaxPossibleGold;
             }
-            else currentGold = currentGold + amount;
-			
-			CheckWalletExists(player);
-            _playerWallet[player.Id] = currentGold;
-			SaveTradeData();
+            else _PlayerData[player.Id].Gold += amount;
+
+            SaveTradeData();
         }
 
         private void GiveGold(ulong playerId, int amount)
         {
-            if (!_playerWallet.ContainsKey(playerId)) return;
-            var currentGold = _playerWallet[playerId];
-            if (currentGold + amount > MaxPossibleGold)
-            {
-                var player = Server.GetPlayerById(playerId);
-                if (player != null) PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : You cannot gain any more gold than you now have. Congratulations. You are the richest player. Goodbye.");
-                currentGold = MaxPossibleGold;
-            }
-            else currentGold = currentGold + amount;
+            if (_PlayerData[playerId].Gold + amount > MaxPossibleGold) _PlayerData[playerId].Gold = MaxPossibleGold;
+            else _PlayerData[playerId].Gold += amount;
 
-			CheckWalletExists(playerId);
-            _playerWallet[playerId] = currentGold;
-			SaveTradeData();
+            SaveTradeData();
         }
 
-        private bool CanRemoveGold(Player player, int amount)
-        {
-            var currentGold = _playerWallet[player.Id];
-            if (currentGold - amount < 0) return false;
-            return true;
-        }
-        
         private void RemoveGold(Player player, int amount)
         {
-            var currentGold = _playerWallet[player.Id];
-            currentGold = currentGold - amount;
+            _PlayerData[player.Id].Gold -= amount;
 
-            _playerWallet[player.Id] = currentGold;
+            if (_PlayerData[player.Id].Gold < 0) _PlayerData[player.Id].Gold = 0;
         }
-        
+
         private void RemoveGold(ulong playerId, int amount)
         {
-            var currentGold = _playerWallet[playerId];
-            currentGold = currentGold - amount;
+            _PlayerData[playerId].Gold -= amount;
 
-            _playerWallet[playerId] = currentGold;
+            if (_PlayerData[playerId].Gold < 0) _PlayerData[playerId].Gold = 0;
         }
-		
-        private void TogglePvpGoldStealing(Player player, string cmd)
+
+        public void RemoveItemsFromInventory(Player player, string resource, int amount)
         {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
+            ItemCollection inventory = player.GetInventory().Contents;
+
+            int removeAmount = 0;
+            int amountRemaining = amount;
+
+            foreach (InvGameItemStack item in inventory.Where(item => item != null))
             {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
+                if (item.Name != resource) continue;
+
+                removeAmount = amountRemaining;
+                if (item.StackAmount < removeAmount) removeAmount = item.StackAmount;
+                inventory.SplitItem(item, removeAmount);
+                amountRemaining = amountRemaining - removeAmount;
             }
-            if (_allowPvpGold)
+        }
+
+        private void DeflatePrices()
+        {
+            if (!UseDeflation) return;
+
+            foreach (KeyValuePair<string, TradeData> item in _GEData.TradeList)
             {
-                _allowPvpGold = false;
-                PrintToChat(player, "PvP gold stealing is now [FF0000]OFF");
-                return;
+                item.Value.DeflatePrice();
             }
-            _allowPvpGold = true;
-            PrintToChat(player, "PvP gold stealing is now [00FF00]ON");
+
             SaveTradeData();
         }
 
-        private void TogglePveGoldFarming(Player player, string cmd)
+        private void ForcePriceAdjustment()
         {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
+            foreach (KeyValuePair<string, TradeData> item in _GEData.TradeList)
             {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
+                item.Value.BuyPrice = item.Value.OriginalPrice;
+                item.Value.SellPrice = (int)(item.Value.OriginalPrice * (SellPercentage / 100));
             }
-            if (_allowPveGold)
-            {
-                _allowPveGold = false;
-                PrintToChat(player, "PvE gold farming is now [FF0000]OFF");
-                return;
-            }
-            _allowPveGold = true;
-            PrintToChat(player, "PvP gold farming is now [00FF00]ON");
             SaveTradeData();
         }
 
-
-        private void CheckHowMuchGoldICurrentlyHave(Player player, string cmd)
+        private Vector3 ConvertPosCube(Vector3Int positionCube)
         {
-            CheckWalletExists(player);
-			var walletAmount = _playerWallet[player.Id];
-			PrintToChat(player,"You currently have [00FF00]" + walletAmount.ToString() + "[FFFF00]g[FFFFFF].");
+            if (positionCube.x != 0)
+            {
+                return new Vector3(positionCube.x * 1.2f, positionCube.y * 1.2f, positionCube.z * 1.2f);
+            }
+            return new Vector3();
         }
 
+        #endregion
 
-        private void GiveGoldToAPlayer(Player player, string cmd, string[] input)
+        #region Hooks
+
+        private void OnPlayerConnected(Player player)
         {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "This is not for you. Don't even try it, thieving scumbag!");
-                return;
-            }
+            CheckPlayerExists(player);
 
-            if (input.Length < 2)
-            {
-                PrintToChat(player, "Enter a player name followed by the amount to give.");
-                return;
-            }
-
-            int amount;
-            if (Int32.TryParse(input[1], out amount) == false)
-            {
-                PrintToChat(player, "That was not a recognised amount!");
-                return;
-            }
-
-            var playerName = input[0];
-            var target = Server.GetPlayerByName(playerName);
-
-            if (target == null)
-            {
-                PrintToChat(player, "That player doesn't appear to be online right now!");
-                return;
-            }
-
-            PrintToChat(player, "Giving " + amount.ToString() + " gold to " + playerName);
-            PrintToChat(target, "You have received an Admin gift of " + amount.ToString() + " gold.");
-
-            CheckWalletExists(target);
-            GiveGold(target, amount);
-
-            // Save the trade data
             SaveTradeData();
         }
 
-        private void CheckTheGoldAPlayerHas(Player player, string cmd, string[] input)
+        private void OnPlayerDisconnected(Player player)
         {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
-            {
-                PrintToChat(player, "Only admins can use this command.");
-                return;
-            }
-
-            var playerName = input.JoinToString(" ");
-
-            var target = Server.GetPlayerByName(playerName);
-            if (target == null)
-            {
-                PrintToChat(player, "That player doesn't appear to be online right now!");
-                return;
-            }
-
-            CheckWalletExists(target);
-            var goldAmount = _playerWallet[target.Id];
-            PrintToChat(player, target.Name + " currently has " + goldAmount.ToString() + " gold.");
+            CheckPlayerExists(player);
         }
 
-
-        #endregion
-
-        #region SAFE TRADING
-
-        private void ToggleTheSafeTradingArea(Player player, string cmd)
+        private void OnEntityDeath(EntityDeathEvent e)
         {
-            if (!player.HasPermission("admin") && !PlayerIsATradeMaster(player.Name.ToLower()))
+            #region Null Checks
+            if (e == null) return;
+            if (e.KillingDamage == null) return;
+            if (e.KillingDamage.DamageSource == null) return;
+            if (!e.KillingDamage.DamageSource.IsPlayer) return;
+            if (e.KillingDamage.DamageSource.Owner == null) return;
+            if (e.Entity == null) return;
+            if (e.Entity == e.KillingDamage.DamageSource) return;
+            #endregion
+
+            Player killer = e.KillingDamage.DamageSource.Owner;
+            CheckPlayerExists(killer);
+
+            int goldReward = 0;
+            if (!e.Entity.IsPlayer)
             {
-                PrintToChat(player, "Only admins can use this command.");
+                Entity entity = e.Entity;
+                if (IsAnimal(entity) && PveGold)
+                {
+                    goldReward = _Random.Next(2, GoldRewardForPve);
+                    GiveGold(killer, goldReward);
+
+                    PrintToChat(killer, string.Format(GetMessage("Gold Collected", killer), goldReward));
+                }
+            }
+            else
+            {
+                if (!PvpGold) return;
+
+                if (e.Entity.Owner == null) return;
+                Player victim = e.Entity.Owner;
+                CheckPlayerExists(victim);
+
+                if (victim.Id == 0 || killer.Id == 0) return;
+                if (victim.GetGuild() == null || killer.GetGuild() == null) return;
+                if (victim.GetGuild().Name == killer.GetGuild().Name) { PrintToChat(killer, GetMessage("Chat Title", killer) + GetMessage("Gold Guild", killer)); return; }
+
+                int victimGold = _PlayerData[victim.Id].Gold;
+                goldReward = (int)(victimGold * (double)(GoldStealPercentage / 100));
+                int goldAmount = _Random.Next(0, goldReward);
+                if (goldAmount > victimGold) goldAmount = victimGold;
+
+                if (goldAmount == 0) PrintToChat(killer, string.Format(GetMessage("Gold Kill", killer), victim.Name));
+                else
+                {
+                    GiveGold(killer, goldAmount);
+                    RemoveGold(victim, goldAmount);
+
+                    PrintToChat(string.Format(GetMessage("Gold Kill Global", killer), killer.DisplayName, goldAmount, victim.DisplayName));
+                }
+            }
+
+            SaveTradeData();
+        }
+
+        private void OnEntityHealthChange(EntityDamageEvent e)
+        {
+            #region Null Checks
+            if (e == null) return;
+            if (e.Damage == null) return;
+            if (e.Damage.DamageSource == null) return;
+            if (!e.Damage.DamageSource.IsPlayer) return;
+            if (e.Damage.DamageSource.Owner == null) return;
+            if (e.Entity == null) return;
+            if (e.Entity == e.Damage.DamageSource) return;
+            #endregion
+            if (!SafeTrade) return;
+            if (_GEData.HasPosition() != 2) return;
+            if (!_GEData.IsInTradeArea(e.Entity.Position)) return;
+
+            e.Cancel();
+            e.Damage.Amount = 0f;
+            if (e.Entity.IsPlayer) PrintToChat(e.Damage.DamageSource.Owner, GetMessage("Chat Title", e.Damage.DamageSource.Owner) + GetMessage("Trade Defense", e.Damage.DamageSource.Owner));
+        }
+
+        private void OnCubeTakeDamage(CubeDamageEvent e)
+        {
+            #region Null Checks
+            if (e == null) return;
+            if (e.Position == null) return;
+            if (e.Damage == null) return;
+            if (e.Damage.DamageSource == null) return;
+            if (!e.Damage.DamageSource.IsPlayer) return;
+            #endregion
+
+            TilesetColliderCube centralPrefabAtLocal = BlockManager.DefaultCubeGrid.GetCentralPrefabAtLocal(e.Position);
+            SalvageModifier component = null;
+            if (centralPrefabAtLocal != null) component = centralPrefabAtLocal.GetComponent<SalvageModifier>();
+
+            if (!SafeTrade || _GEData.HasPosition() != 2 || !_GEData.IsInTradeArea(ConvertPosCube(e.Position)))
+            {
+                if (component != null) component.info.NotSalvageable = false;
                 return;
             }
-		    if (_tradeAreaIsSafe)
-		    {
-		        _tradeAreaIsSafe = false;
-		        PrintToChat(player, "Trading areas are now open to PvP and attacks.");
-		    }
-		    else
-		    {
-		        _tradeAreaIsSafe = true;
-                PrintToChat(player, "Trading areas are now safe.");
-		    }
-			
-			SaveTradeData();
+
+            if (component != null) component.info.NotSalvageable = true;
+            e.Cancel();
+            e.Damage.Amount = 0f;
+        }
+
+        private void SendHelpText(Player player)
+        {
+            PrintToChat(player, "[0000FF]Grand Exchange Commands[FFFFFF]");
+            PrintToChat(player, "[00ff00]/gehelp[FFFFFF] - Show the list of commands.");
+            PrintToChat(player, "[00ff00]/wallet[FFFFFF] - Show how much gold you currently have.");
+            PrintToChat(player, "[00ff00]/topgold <optional:all>[FFFFFF] - Show a list of the online players and their gold amount. Use '/topgold all' to get a list with the richest players.");
+            PrintToChat(player, "[00ff00]/shop[FFFFFF] - Show the list of items you can buy from a player created shop.");
+            PrintToChat(player, "[00ff00]/store[FFFFFF] - Show the list of items you can buy on the Grand Exchange and their price.");
+            PrintToChat(player, "[00ff00]/buy[FFFFFF] - Buy an item from the Grand Exchange,");
+            PrintToChat(player, "[00ff00]/sell[FFFFFF] - Sell and item to the Grand Exchange.");
+            PrintToChat(player, "[00ff00]/sendgold <amount> <player name>[FFFFFF] - Send an amount of gold from your account to another player.");
+            if (player.HasPermission("GrandExchange.Modify.Itemlist"))
+            {
+                PrintToChat(player, "[00ff00]/ge.additem <item name> <price>[FFFFFF] - Add an item to the Grand Exchange (must excist in the item database in the config file).");
+                PrintToChat(player, "[00ff00]/ge.removeitem <item name>[FFFFFF] - Remove an item from the Grand Exchange.");
+                PrintToChat(player, "[00ff00]/ge.removeallitems[FFFFFF] - Remove all items from the Grand Exchange.");
+                PrintToChat(player, "[00ff00]/ge.setprice <item name> <price>[FFFFFF] - Set the price of an item in the Grand Exchange.");
+                PrintToChat(player, "[00ff00]/ge.defaultitems[FFFFFF] - Show a list of all the default items and prices of the Grand Exchange.");
+                PrintToChat(player, "[00ff00]/ge.restoredefaultitems[FFFFFF] - Restores the Grand Exchange item list to the default item list.");
+                PrintToChat(player, "[00ff00]/ge.restoredefaultprices[FFFFFF] - Restores the Grand Exchange item prices to their original values.");
+                PrintToChat(player, "[00ff00]/ge.setsellpercentage <percentage>[FFFFFF] - Set the sell percentage for the items in the Grand Exchange.");
+                PrintToChat(player, "[00ff00]/ge.setinflation <percentage>[FFFFFF] - Set the inflation percentage for the items in the Grand Exchange.");
+                PrintToChat(player, "[00ff00]/ge.setmaxdeflation <percentage>[FFFFFF] - Set the max deflation percentage for the items in the Grand Exchange.");
+            }
+            if (player.HasPermission("GrandExchange.Modify.Settings"))
+            {
+                PrintToChat(player, "[00ff00]/ge.addmark[FFFFFF] - Set a mark for the Grand Exchange area.");
+                PrintToChat(player, "[00ff00]/ge.removemarks[FFFFFF] - Remove the marks for the Grand Exchange area.");
+                PrintToChat(player, "[00ff00]/ge.pvp[FFFFFF] - Toggle the pvp gold stealing.");
+                PrintToChat(player, "[00ff00]/ge.pve[FFFFFF] - Toggle the pve gold gain.");
+                PrintToChat(player, "[00ff00]/ge.safetrade[FFFFFF] - Toggle whether the trading areas are safe or not.");
+                PrintToChat(player, "[00ff00]/ge.toggle[FFFFFF] - Toggle the access of players without the 'grandexchange.show' for the /buy, /sell and /store commands.");
+                PrintToChat(player, "[00ff00]/ge.deflation[FFFFFF] - Toggle the drop of item prices over time.");
+                PrintToChat(player, "[00ff00]/ge.restoreshops[FFFFFF] - Resets the name and location of all player created shops.");
+                PrintToChat(player, "[00ff00]/loc[FFFFFF] - Show your current coordinates.");
+                PrintToChat(player, "[00ff00]/setgold <amount> <optional:player name>[FFFFFF] - Set the gold of a player. If no player name is given then your own gold amount will be set.");
+                PrintToChat(player, "[00ff00]/resetgold[FFFFFF] - Remove the gold of every player in the database.");
+                PrintToChat(player, "[00ff00]/givegold <amount> <optional:player name>[FFFFFF] - Give gold to a player. If no player name is given then you gain the amount of gold.");
+                PrintToChat(player, "[00ff00]/removegold <amount> <optional:player name>[FFFFFF] - Remove gold of a player. If no player name is given then you lose the amount of gold.");
+                PrintToChat(player, "[00ff00]/checkgold <player name>[FFFFFF] - Show the gold amount of a player.");
+            }
+
+            PrintToChat(player, "[2020FF]Player Shop Commands[FFFFFF]");
+            PrintToChat(player, "[00ff00]/myshop[FFFFFF] - Show the item list of your own shop.");
+            PrintToChat(player, "[00ff00]/addshopmark[FFFFFF] - Set a mark for your own shop. The shop may not be bigger then 13 by 13 blocks.");
+            PrintToChat(player, "[00ff00]/removeshopmarks[FFFFFF] - Remove the marks for your show.");
+            PrintToChat(player, "[00ff00]/addshopitem <item name> <amount> <optional if already excists:price>[FFFFFF] - Add the amount of an item to your shop. You must have this item and the correct amount in your inventory.");
+            PrintToChat(player, "[00ff00]/removeshopitem <item name> <optional:amount>[FFFFFF] - Remove the amount of an item from your shop. You must have enough space in your inventory.");
+            PrintToChat(player, "[00ff00]/setitemprice <item name> <price>[FFFFFF] - Change the price of an item in your shop.");
+            PrintToChat(player, "[00ff00]/setshopname <name>[ffffff] - Changes the name of your shop.");
         }
 
         #endregion
 
-        #region PLAYER CREATURE AND OBJECT DAMAGE
+        #region Utility
 
-        // Give credits when a player is killed
-		private void OnEntityDeath(EntityDeathEvent deathEvent)
-		{
-		    if (deathEvent.Entity == null) return;
-			if(deathEvent.Entity.Owner == null) return;
-			if(deathEvent.Entity.Owner.Name == "server") return;
-			
-			if(_allowPvpGold)
-			{
-				if (deathEvent.Entity.IsPlayer)
-				{
-				    if (deathEvent.KillingDamage == null)
-				    {
-				        Log("deathEvent.KillingDamage was null here!"); 
-                        return;
-				    }
-				    if (deathEvent.KillingDamage.DamageSource == null)
-				    {
-                        Log("deathEvent.KillingDamage.DamageSource was null here!"); 
-				        return;
-				    }
-                    
-                    var killer = deathEvent.KillingDamage.DamageSource.Owner;
-					var player = deathEvent.Entity.Owner;
+        private string Capitalise(string word)
+        {
+            string[] splitWord = word.Split(' ');
 
-				    if (player.Id == 0 || killer.Id == 0)
-				    {
-				        Log("Player or Killer had no id!!");
-				        return;
-				    }
+            for (int i = 0; i < splitWord.Count(); i++)
+            {
+                if (splitWord[i].StartsWith("(")) splitWord[i] = $"({splitWord[i].Substring(1, 1).ToUpper()}{splitWord[i].Substring(2).ToLower()}";
+                else splitWord[i] = splitWord[i].Substring(0, 1).ToUpper() + splitWord[i].Substring(1).ToLower();
+            }
 
-				    if (player == null)
-				    {
-                        Log("player variable was null here.");
-				        return;
-				    }
-				    if (killer == null)
-				    {
-                        Log("killer variable was null here");
-				        return;
-				    }
-
-					// Make sure player didn't kill themselves
-					if(player == killer) return;
-					
-					if (player.GetGuild() == null || killer.GetGuild() == null)
-					{
-                        Log("The player or the killer guild was null here.");
-					    return;
-					}
-
-					// Make sure the player is not in the same guild
-					if(player.GetGuild().Name == killer.GetGuild().Name)
-					{
-						PrintToChat(player, "[FF0000]Grand Exchange[FFFFFF] : There is no honour - or more importantly, gold! - in killing a member of your own guild!");
-						return;
-					}
-					
-					// Make sure it was a player that killed them
-					if(deathEvent.KillingDamage.DamageSource.IsPlayer)
-					{
-						// Get the inventory
-						//var inventory = killer.GetInventory();
-						
-						// Check victims wallet
-						CheckWalletExists(player);
-						// Check the player has a wallet
-						CheckWalletExists(killer);
-						// Give the rewards to the player
-						var victimGold = _playerWallet[player.Id];
-					    var goldReward = (int)(victimGold * (double)(GoldStealPercentage / 100));
-						var goldAmount = _random.Next(0,goldReward);
-						if(goldAmount > victimGold) goldAmount = victimGold;
-						GiveGold(killer,goldAmount);
-						RemoveGold(player,goldAmount);
-						
-						if(goldAmount == 0)
-						{
-							PrintToChat(killer, "[FF00FF]" + player.Name + "[FFFFFF] had no gold for you to steal!");
-						}
-						else
-						{
-							// Notify everyone
-							PrintToChat("[FF00FF]" + killer.Name + "[FFFFFF] has stolen [00FF00]" + goldAmount.ToString() + "[FFFF00] gold [FFFFFF] from the dead body of [00FF00]" + player.Name + "[FFFFFF]!");
-						}
-						
-					}
-				}
-			}
-			
-			
-			//Save the data
-			SaveTradeData();
+            return splitWord.JoinToString(" ");
         }
-		
-		private void OnEntityHealthChange(EntityDamageEvent damageEvent) 
-		{
-		    if (damageEvent.Entity == null)
-		    {
-                Log("damageEvent.Entity was null!");
-		        return;
-		    }
 
-			if(_allowPveGold)
-			{
-				if (!damageEvent.Entity.IsPlayer)
-				{
-					var victim = damageEvent.Entity;
-					Health h = victim.TryGet<Health>();
-                    if (h.ToString().Contains("Plague Villager")) return;
-                    if (h.ToString().Contains("Trebuchet")) return;
-                    if (h.ToString().Contains("Ballista")) return;
-
-					if (!h.IsDead) return;
-
-				    if (damageEvent.Damage == null)
-				    {
-				        Log("Damage was null here!");
-                        return;
-				    }
-				    if (damageEvent.Damage.DamageSource == null)
-				    {
-				        Log("DamageSource was null here!");
-                        return;
-				    }
-				    if (damageEvent.Damage.DamageSource.Owner == null)
-				    {
-				        Log("damageEvent.Damage.DamageSource.Owner WAS NULL HERE!");
-                        return;
-				    }
-
-					var hunter = damageEvent.Damage.DamageSource.Owner;
-					
-					// Give the rewards to the player
-					var goldAmount = _random.Next(2,GoldRewardForPve);
-					GiveGold(hunter,goldAmount);
-					
-					// Notify everyone
-					PrintToChat(hunter, "[00FF00]" + goldAmount.ToString() + "[FFFF00] gold[FFFFFF] collected.");
-					
-					SaveTradeData();
-				}
-			}
-			if (damageEvent.Entity.IsPlayer)
-			{
-				if(_tradeAreaIsSafe)
-				{
-				    if (damageEvent.Damage.DamageSource.Owner == null)
-				    {
-				        Log("damageEvent.Damage.DamageSource.Owner WAS NULL IN THE TRADE AREA SECTION!");
-                        return;
-				    }
-					if(PlayerIsInTheRightTradeArea(damageEvent.Damage.DamageSource.Owner))
-					{
-						if(damageEvent.Damage.DamageSource.IsPlayer && damageEvent.Entity != damageEvent.Damage.DamageSource)
-						{
-							damageEvent.Damage.Amount = 0f;
-							PrintToChat(damageEvent.Damage.DamageSource.Owner, "[FF0000]Grand Exchange[FFFFFF] : You cannot attack people in a designated trade area, scoundrel!");
-						}
-					}
-				}
-			}
-		}
-
-        
-        //private void OnCubeTakeDamage(CubeDamageEvent cubeDamageEvent)
-        //{
-        //    var player = cubeDamageEvent.Damage.DamageSource.Owner;
-
-        //    // If in the GE Area
-        //    if (PlayerIsInTheRightTradeArea(player))
-        //    {
-        //        // IF its a player attacking the base
-        //        if (cubeDamageEvent.Damage.Amount > 50 && cubeDamageEvent.Damage.DamageSource.Owner is Player)
-        //        {
-        //            bool trebuchet = cubeDamageEvent.Damage.Damager.name.ToString().Contains("Trebuchet");
-        //            bool ballista = cubeDamageEvent.Damage.Damager.name.ToString().Contains("Ballista");
-        //            if (trebuchet || ballista)
-        //            {
-        //                cubeDamageEvent.Damage.Amount = 0f;
-        //            }
-        //            var message = "[FF0000]Grand Exchange : [00FF00]" + player.DisplayName + "[FFFFFF]! Attacking the Grand Exchange is ill-advised! Decist immediately!";
-        //            //PrintToChat(message);
-        //            //Log(message);
-        //        }
-        //    }
-        //}
-        #endregion
-
-        #region UTILITY METHODS
-        // Capitalise the Starting letters
-		private string Capitalise(string word)
-		{
-			var finalText = "";
-			finalText = Char.ToUpper(word[0]).ToString();
-			var spaceFound = 0;
-			for(var i=1; i<word.Length;i++)
-			{
-				if(word[i] == ' ')
-				{
-					spaceFound = i + 1;
-				}
-				if(i == spaceFound)
-				{
-					finalText = finalText + Char.ToUpper(word[i]).ToString();
-				}
-				else finalText = finalText + word[i].ToString();
-			}
-			return finalText;
+        private T GetConfig<T>(string category, string setting, T defaultValue)
+        {
+            var data = Config[category] as Dictionary<string, object>;
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[category] = data;
+            }
+            object value = null;
+            if (data.TryGetValue(setting, out value)) return (T)Convert.ChangeType(value, typeof(T));
+            value = defaultValue;
+            data[setting] = value;
+            return (T)Convert.ChangeType(value, typeof(T));
         }
-        #endregion
 
-#endregion
+        private string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, (player?.Id.ToString()));
+
+        #endregion
     }
 }

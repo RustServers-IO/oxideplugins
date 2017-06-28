@@ -5,29 +5,34 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("SkipNightVote", "k1lly0u", "0.1.2", ResourceId = 2058)]
+    [Info("SkipNightVote", "k1lly0u", "0.1.3", ResourceId = 2058)]
     class SkipNightVote : CovalencePlugin
     {
         #region Fields
         private List<string> ReceivedVotes;
 
         private bool VoteOpen;
+        private bool DisplayCountEveryVote = false;
         private int TimeRemaining;
         private int RequiredVotes;
         private string TimeRemMSG;
         private Timer VotingTimer;
         private Timer TimeCheck;
+        private Timer CountTimer;
         #endregion
 
         #region Oxide Hooks
-        void Loaded() => lang.RegisterMessages(Messages, this);
-        void OnServerInitialized() {
+        void Loaded() => lang.RegisterMessages(Messages, this);        
+        void OnServerInitialized()
+        {
             LoadVariables();
             ReceivedVotes = new List<string>();
             RequiredVotes = 0;
             VoteOpen = false;
             TimeRemaining = 0;
             TimeRemMSG = GetMSG("timeRem").Replace("{secCol}", configData.Messaging.MSGColor).Replace("{mainCol}", configData.Messaging.MainColor);
+            if (configData.Messaging.DisplayCountEvery == -1)
+                DisplayCountEveryVote = true;
             CheckTime();
         }
         void Unload()
@@ -35,7 +40,9 @@ namespace Oxide.Plugins
             if (VotingTimer != null)
                 VotingTimer.Destroy();
             if (TimeCheck != null)
-                TimeCheck.Destroy();            
+                TimeCheck.Destroy();
+            if (CountTimer != null)
+                CountTimer.Destroy();         
         }
         #endregion
 
@@ -49,6 +56,8 @@ namespace Oxide.Plugins
             var msg = GetMSG("voteMSG").Replace("{secCol}", configData.Messaging.MSGColor).Replace("{mainCol}", configData.Messaging.MainColor).Replace("{reqVote}", (configData.Options.RequiredVotePercentage * 100).ToString());
             server.Broadcast(msg);
             VoteTimer();
+            if (!DisplayCountEveryVote)
+                CountTimer = timer.In(configData.Messaging.DisplayCountEvery, ShowCountTimer);
         }
         private void VoteTimer()
         {
@@ -56,33 +65,36 @@ namespace Oxide.Plugins
             VotingTimer = timer.Repeat(1, TimeRemaining, () =>
             {
                 TimeRemaining--;
-                if (TimeRemaining == 0)
+                switch (TimeRemaining)
                 {
-                    TallyVotes();
-                    return;
-                }
-                if (TimeRemaining == 180)
-                {
-                    server.Broadcast(TimeRemMSG.Replace("{time}", "3").Replace("{type}", GetMSG("Minutes")));
-                }
-                if (TimeRemaining == 120)
-                {
-                    server.Broadcast(TimeRemMSG.Replace("{time}", "2").Replace("{type}", GetMSG("Minutes")));
-                }
-                if (TimeRemaining == 60)
-                {
-                    server.Broadcast(TimeRemMSG.Replace("{time}", "1").Replace("{type}", GetMSG("Minute")));
-                }
-                if (TimeRemaining == 30)
-                {
-                    server.Broadcast(TimeRemMSG.Replace("{time}", "30").Replace("{type}", GetMSG("Seconds")));
-                }
-                if (TimeRemaining == 10)
-                {
-                    server.Broadcast(TimeRemMSG.Replace("{time}", "10").Replace("{type}", GetMSG("Seconds")));
-                }
+                    case 0:
+                        TallyVotes();
+                        return;
+                    case 180:
+                        server.Broadcast(TimeRemMSG.Replace("{time}", "3").Replace("{type}", GetMSG("Minutes")));
+                        return;
+                    case 120:
+                        server.Broadcast(TimeRemMSG.Replace("{time}", "2").Replace("{type}", GetMSG("Minutes")));
+                        return;
+                    case 60:
+                        server.Broadcast(TimeRemMSG.Replace("{time}", "1").Replace("{type}", GetMSG("Minute")));
+                        return;
+                    case 30:
+                        server.Broadcast(TimeRemMSG.Replace("{time}", "30").Replace("{type}", GetMSG("Seconds")));
+                        return;
+                    case 10:
+                        server.Broadcast(TimeRemMSG.Replace("{time}", "10").Replace("{type}", GetMSG("Seconds")));
+                        return;
+                    default:
+                        return;
+                }               
             });
-        }        
+        } 
+        private void ShowCountTimer()
+        {
+            server.Broadcast($"{configData.Messaging.MainColor}{ReceivedVotes.Count} / {RequiredVotes}</color> {configData.Messaging.MSGColor}{GetMSG("have voted to skip night")}</color>");
+            CountTimer = timer.In(configData.Messaging.DisplayCountEvery, ShowCountTimer);
+        }       
         private void CheckTime()
         {
             if (!VoteOpen)
@@ -115,13 +127,15 @@ namespace Oxide.Plugins
             VoteOpen = false;
             RequiredVotes = 0;
             VotingTimer.Destroy();
+            if (CountTimer != null)
+                CountTimer.Destroy();        
             ReceivedVotes.Clear();
             TimeRemaining = 0;
 
             if (success)
             {
-                server.Time = server.Time.Date + TimeSpan.Parse(configData.Options.TimeToSet);                
-                server.Broadcast($"{configData.Messaging.MainColor}{GetMSG("Voting was successful, skipping night.")}</color>");
+                server.Time = server.Time.Date + TimeSpan.Parse(configData.Options.TimeToSet);
+                server.Broadcast($"{configData.Messaging.MainColor}{GetMSG("Voting was successful, skipping night.")}</color>");                
             }
             else
             {
@@ -145,7 +159,8 @@ namespace Oxide.Plugins
                 {
                     ReceivedVotes.Add(player.Id);
                     player.Reply(GetMSG("You have voted to skip night", player.Id));
-                    server.Broadcast($"{configData.Messaging.MainColor}{ReceivedVotes.Count} / {RequiredVotes}</color> {configData.Messaging.MSGColor}{GetMSG("have voted to skip night", player.Id)}</color>");
+                    if (DisplayCountEveryVote)
+                        server.Broadcast($"{configData.Messaging.MainColor}{ReceivedVotes.Count} / {RequiredVotes}</color> {configData.Messaging.MSGColor}{GetMSG("have voted to skip night", player.Id)}</color>");
                     if (ReceivedVotes.Count >= RequiredVotes)
                         VoteEnd(true);
                     return;
@@ -184,6 +199,7 @@ namespace Oxide.Plugins
         private ConfigData configData;
         class Messaging
         {
+            public int DisplayCountEvery { get; set; }
             public string MainColor { get; set; }
             public string MSGColor { get; set; }
         }        
@@ -217,6 +233,7 @@ namespace Oxide.Plugins
             {                
                 Messaging = new Messaging
                 {
+                    DisplayCountEvery = 30,
                     MainColor = "<color=orange>",
                     MSGColor = "<color=#939393>"
                 },

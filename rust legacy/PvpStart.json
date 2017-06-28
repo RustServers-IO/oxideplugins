@@ -1,0 +1,16 @@
+{
+    "name": "PvpStart",
+    "description": "Plugin targeted to specific locations with Pvp kit spawn",
+    "author": "",
+    "version": "1.0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/pvpstart.2346",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

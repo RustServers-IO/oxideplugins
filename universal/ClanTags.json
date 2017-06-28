@@ -1,0 +1,25 @@
+{
+    "name": "Clan Tags",
+    "description": "Added support for Clan Tags in BetterChat",
+    "author": "",
+    "version": "0.1",
+    "configuration": true,
+    "suggest": {
+        "HWClans": "*",
+        "Clans": "*"
+    },
+    "require": {
+        "BetterChat": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/clan-tags.2450",
+    "games": [
+        "rust",
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "rust",
+        "hurtworld"
+    ]
+}

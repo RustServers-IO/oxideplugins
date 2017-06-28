@@ -1,6 +1,6 @@
 {
     "name": "NameRewards",
-    "description": "Assign players groups based on phrases found in their name.",
+    "description": "Assign players a group based on phrases found in their name.",
     "author": "Kappasaurus",
     "version": "1.0.0",
     "configuration": true,

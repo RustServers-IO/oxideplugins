@@ -2,7 +2,7 @@
     "name": "StartupCommands",
     "description": "Automatically runs configured commands on server startup",
     "author": "Wulf",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/startupcommands.774",

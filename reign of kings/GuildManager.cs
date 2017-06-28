@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("GuildManager", "D-Kay", "0.1.0")]
+    [Info("GuildManager", "D-Kay", "0.1.1")]
 
     class GuildManager : ReignOfKingsPlugin
     {
@@ -57,36 +57,34 @@ namespace Oxide.Plugins
         [ChatCommand("ListGuilds")]
         private void ListGuilds(Player player, string cmd)
         {
-            if (!player.HasPermission("GuildManager.List")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (!player.HasPermission("GuildManager.List")) { GetMessage("NoPermission", player); return; }
+
             List<Guild> guilds = GetAllGuilds();
-            foreach (Guild guild in guilds)
-            {
-                if (guild.Members().GetAllMembers().Count > 0) PrintToChat(player, guild.DisplayName);
-            }
+            foreach (Guild guild in guilds) if (guild.Members().GetAllMembers().Count > 0) PrintToChat(player, guild.DisplayName);
         }
 
         [ChatCommand("GetGuild")]
         private void GetGuild(Player player, string cmd, string[] args)
         {
-            if (!player.HasPermission("GuildManager.List")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (!player.HasPermission("GuildManager.List")) { GetMessage("NoPermission", player); return; }
+
             if (args.Length < 1) return;
-            string name = ConvertArrayToString(args);
-            ShowListByGuild(player, name);
+            ShowListByGuild(player, args.JoinToString(" "));
         }
 
         [ChatCommand("GetGuildPlayer")]
         private void GetGuildPlayer(Player player, string cmd, string[] args)
         {
-            if (!player.HasPermission("GuildManager.List")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (!player.HasPermission("GuildManager.List")) { GetMessage("NoPermission", player); return; }
+
             if (args.Length < 1) return;
-            string name = ConvertArrayToString(args);
-            ShowListByPlayer(player, name);
+            ShowListByPlayer(player, args.JoinToString(" "));
         }
 
         [ChatCommand("AddToGuild")]
         private void AddPlayerToGuild(Player player, string cmd, string[] args)
         {
-            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player); return; }
             if (args.Length < 2) return;
 
             GuildScheme guildScheme = SocialAPI.Get<GuildScheme>();
@@ -95,13 +93,13 @@ namespace Oxide.Plugins
 
             guildScheme.ChangeGuildMembership(member.PlayerId, guild.BaseID);
 
-            PrintToChat(player, string.Format(GetMessage("AddedToGuild", player.Id.ToString()), member.Name, guild.DisplayName));
+            PrintToChat(player, string.Format(GetMessage("AddedToGuild", player), member.Name, guild.DisplayName));
         }
 
         [ChatCommand("ChangeGuildName")]
         private void ChangeGuildName(Player player, string cmd, string[] args)
         {
-            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player); return; }
             if (args.Length < 2) return;
 
             GuildScheme guildScheme = SocialAPI.Get<GuildScheme>();
@@ -110,13 +108,13 @@ namespace Oxide.Plugins
 
             guildScheme.SetGuildName(guild.BaseID, args[1]);
             
-            PrintToChat(player, string.Format(GetMessage("ChangedGuildName", player.Id.ToString()), oldName, guild.DisplayName));
+            PrintToChat(player, string.Format(GetMessage("ChangedGuildName", player), oldName, guild.DisplayName));
         }
 
         [ChatCommand("RemoveFromGuild")]
         private void RemoveFromGuild(Player player, string cmd, string[] args)
         {
-            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player); return; }
             if (args.Length < 1) return;
 
             GuildScheme guildScheme = SocialAPI.Get<GuildScheme>();
@@ -124,13 +122,13 @@ namespace Oxide.Plugins
 
             guildScheme.RemoveGuildMembership(member.PlayerId);
 
-            PrintToChat(player, string.Format(GetMessage("RemovedFromGuild", player.Id.ToString()), member.Name));
+            PrintToChat(player, string.Format(GetMessage("RemovedFromGuild", player), member.Name));
         }
 
         [ChatCommand("ChangeGuildMembership")]
         private void ChangeGuildMembership(Player player, string cmd, string[] args)
         {
-            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player.Id.ToString()); return; }
+            if (!player.HasPermission("GuildManager.Modify")) { GetMessage("NoPermission", player); return; }
             if (args.Length < 1) return;
 
             GuildScheme guildScheme = SocialAPI.Get<GuildScheme>();
@@ -144,7 +142,7 @@ namespace Oxide.Plugins
 
             guildScheme.SetMembersSecurity(member.PlayerId, security);
             
-            PrintToChat(player, string.Format(GetMessage("ChangedGuildMembership", player.Id.ToString()), member.Name, args[1]));
+            PrintToChat(player, string.Format(GetMessage("ChangedGuildMembership", player), member.Name, args[1]));
         }
 
         #endregion
@@ -154,27 +152,33 @@ namespace Oxide.Plugins
         private void ShowListByGuild(Player player, string guildName)
         {
             Guild guild = GetGuildByGuild(guildName);
-            if (guild == null) { PrintToChat(player, GetMessage("NoGuild", player.Id.ToString())); return; }
+            if (guild == null) { PrintToChat(player, GetMessage("NoGuild", player)); return; }
             ListGuildInfo(guild, player);
         }
 
         private void ShowListByPlayer(Player player, string playerName)
         {
             Guild guild = GetGuildByPlayer(playerName);
-            if (guild == null) { PrintToChat(player, GetMessage("NoPlayer", player.Id.ToString())); return; }
+            if (guild == null) { PrintToChat(player, GetMessage("NoPlayer", player)); return; }
             ListGuildInfo(guild, player);
         }
 
         private void ListGuildInfo(Guild guild, Player player)
         {
+            string message = "";
+
             ReadOnlyCollection<Member> members = guild.Members().GetAllMembers();
-            PrintToChat(player, string.Format(GetMessage("GuildlistTitle", player.Id.ToString()), guild.DisplayName, members.Count));
+
+            message += string.Format(GetMessage("GuildlistTitle", player), guild.DisplayName, members.Count);
+            message += "\n";
+
             foreach (Member member in members)
             {
-                string onlineStatus = GetMessage("GuildlistIsOffline", player.Id.ToString());
-                if (member.OnlineStatus) onlineStatus = GetMessage("GuildlistIsOnline", player.Id.ToString());
-                PrintToChat(player, string.Format(GetMessage("GuildlistPlayerStatus", player.Id.ToString()), member.Name, onlineStatus));
+                message += "\n";
+                message += string.Format(GetMessage("GuildlistPlayerStatus", player), member.Name, GetMessage(member.OnlineStatus ? "GuildlistIsOnline" : "GuildlistIsOffline", player));
             }
+
+            player.ShowPopup("Guild info", message);
         }
 
         private List<Guild> GetAllGuilds()
@@ -199,13 +203,7 @@ namespace Oxide.Plugins
             foreach (Guild guild in guilds)
             {
                 ReadOnlyCollection<Member> members = guild.Members().GetAllMembers();
-                foreach (Member member in members)
-                {
-                    if (member.Name.ToLower().Contains(player.ToLower()))
-                    {
-                        return member;
-                    }
-                }
+                foreach (Member member in members) if (member.Name.ToLower().Contains(player.ToLower())) return member;
             }
             return null;
         }
@@ -218,13 +216,7 @@ namespace Oxide.Plugins
             foreach (Guild guild in guilds)
             {
                 ReadOnlyCollection<Member> members = guild.Members().GetAllMembers();
-                foreach (Member member in members)
-                {
-                    if (member.Name.ToLower().Contains(player.ToLower()))
-                    {
-                        return guild;
-                    }
-                }
+                foreach (Member member in members) if (member.Name.ToLower().Contains(player.ToLower())) return guild;
             }
             return null;
         }
@@ -234,10 +226,7 @@ namespace Oxide.Plugins
             GuildScheme guildScheme = SocialAPI.Get<GuildScheme>();
 
             List<Guild> guilds = GetAllGuilds();
-            foreach (Guild guild in guilds)
-            {
-                if (guild.DisplayName.ToLower().Contains(guildName.ToLower())) return guild;
-            }
+            foreach (Guild guild in guilds) if (guild.DisplayName.ToLower().Contains(guildName.ToLower())) return guild;
             return null;
         }
 
@@ -249,17 +238,17 @@ namespace Oxide.Plugins
         {
             if (player.HasPermission("guildmanager.list"))
             {
-                PrintToChat(player, GetMessage("HelpTextTitle", player.Id.ToString()));
-                PrintToChat(player, GetMessage("HelpTextListGuilds", player.Id.ToString()));
-                PrintToChat(player, GetMessage("HelpTextGetGuild", player.Id.ToString()));
-                PrintToChat(player, GetMessage("HelpTextGetGuildPlayer", player.Id.ToString()));
+                PrintToChat(player, GetMessage("HelpTextTitle", player));
+                PrintToChat(player, GetMessage("HelpTextListGuilds", player));
+                PrintToChat(player, GetMessage("HelpTextGetGuild", player));
+                PrintToChat(player, GetMessage("HelpTextGetGuildPlayer", player));
             }
             if (player.HasPermission("guildmanager.modify"))
             {
-                PrintToChat(player, GetMessage("HelpTextAddToGuild", player.Id.ToString()));
-                PrintToChat(player, GetMessage("HelpTextChangeGuildName", player.Id.ToString()));
-                PrintToChat(player, GetMessage("HelpTextRemoveFromGuild", player.Id.ToString()));
-                PrintToChat(player, GetMessage("HelpTextChangeGuildMembership", player.Id.ToString()));
+                PrintToChat(player, GetMessage("HelpTextAddToGuild", player));
+                PrintToChat(player, GetMessage("HelpTextChangeGuildName", player));
+                PrintToChat(player, GetMessage("HelpTextRemoveFromGuild", player));
+                PrintToChat(player, GetMessage("HelpTextChangeGuildMembership", player));
             }
         }
 
@@ -286,7 +275,7 @@ namespace Oxide.Plugins
         //    return (T)Convert.ChangeType(Config[name], typeof(T));
         //}
 
-        string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
+        string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, player == null ? null : player.Id.ToString());
 
         #endregion
     }

@@ -1,4 +1,10 @@
-﻿using System;
+﻿/*
+ * TODO:
+ * Add pagination to handle large amounts of players
+ * Figure out limit for showing in a single message
+ */
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Oxide.Core;
@@ -6,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerList", "Wulf/lukespragg", "0.3.1", ResourceId = 2126)]
+    [Info("PlayerList", "Wulf/lukespragg", "0.3.2", ResourceId = 2126)]
     [Description("Shows a list and count of all online, non-hidden players")]
 
     class PlayerList : CovalencePlugin
@@ -35,7 +41,6 @@ namespace Oxide.Plugins
         {
             LoadDefaultConfig();
             LoadDefaultMessages();
-
             permission.RegisterPermission(permAllow, this);
             permission.RegisterPermission(permHide, this);
         }
@@ -114,14 +119,14 @@ namespace Oxide.Plugins
         [Command("online")]
         void OnlineCommand(IPlayer player, string command, string[] args)
         {
-            if (player.Id != "server_console" && !permission.UserHasPermission(player.Id, permAllow))
+            if (!player.HasPermission(permAllow))
             {
                 player.Reply(Lang("NotAllowed", player.Id, command));
                 return;
             }
 
-            var adminCount = players.Connected.Count(p => p.IsAdmin && !permission.UserHasPermission(p.Id, permHide));
-            var playerCount = players.Connected.Count(p => !p.IsAdmin && !permission.UserHasPermission(p.Id, permHide));
+            var adminCount = players.Connected.Count(p => p.IsAdmin && !p.HasPermission(permHide));
+            var playerCount = players.Connected.Count(p => !p.IsAdmin && !p.HasPermission(permHide));
 
             player.Reply($"{Lang("AdminCount", player.Id, adminCount)}, {Lang("PlayerCount", player.Id, playerCount)}");
         }
@@ -129,22 +134,22 @@ namespace Oxide.Plugins
         [Command("players", "who")]
         void PlayersCommand(IPlayer player, string command, string[] args)
         {
-            if (player.Id != "server_console" && !permission.UserHasPermission(player.Id, permAllow))
+            if (!player.HasPermission(permAllow))
             {
                 player.Reply(Lang("NotAllowed", player.Id, command));
                 return;
             }
 
-            var adminCount = players.Connected.Count(p => p.IsAdmin && !permission.UserHasPermission(p.Id, permHide));
-            var playerCount = players.Connected.Count(p => !p.IsAdmin && !permission.UserHasPermission(p.Id, permHide));
+            var adminCount = players.Connected.Count(p => p.IsAdmin && !p.HasPermission(permHide));
+            var playerCount = players.Connected.Count(p => !p.IsAdmin && !p.HasPermission(permHide));
             var totalCount = adminCount + playerCount;
 
             if (totalCount == 0) player.Reply(Lang("NobodyOnline", player.Id));
             else if (totalCount == 1 && player.Id != "server_console") player.Reply(Lang("OnlyYou", player.Id));
             else
             {
-                var adminList = string.Join(", ", players.Connected.Where(p => p.IsAdmin).Select(p => covalence.FormatText($"[#{adminColor}]{p.Name.Sanitize()}[/#]")).ToArray());
-                var playerList = string.Join(", ", players.Connected.Where(p => !p.IsAdmin).Select(p => p.Name.Sanitize()).ToArray());
+                var adminList = string.Join(", ", players.Connected.Where(p => p.IsAdmin && !p.HasPermission(permHide)).Select(p => covalence.FormatText($"[#{adminColor}]{p.Name.Sanitize()}[/#]")).ToArray());
+                var playerList = string.Join(", ", players.Connected.Where(p => !p.IsAdmin && !p.HasPermission(permHide)).Select(p => p.Name.Sanitize()).ToArray());
 
                 if (adminSeparate && !string.IsNullOrEmpty(adminList)) player.Reply(Lang("AdminList", player.Id, adminCount, adminList.TrimEnd(' ').TrimEnd(',')));
                 else

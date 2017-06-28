@@ -1,124 +1,130 @@
+//#define DEBUG
 // Requires: Babel
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Newtonsoft.Json;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("BabelChat", "Wulf/lukespragg", "0.3.0", ResourceId = 1964)]
+    [Info("Babel Chat", "Wulf/lukespragg", "1.0.2", ResourceId = 1964)]
     [Description("Translates chat messages to each player's language preference or server default")]
-
-    class BabelChat : CovalencePlugin
+    public class BabelChat : CovalencePlugin
     {
-        #region Initialization
+        #region Configuration
 
-        [PluginReference] Plugin AntiAds;
-        [PluginReference] Plugin Babel;
-        [PluginReference] Plugin BetterChat;
+        private Configuration config;
 
-        bool forceDefault;
-        bool prefixColors;
-        bool showOriginal;
-
-        protected override void LoadDefaultConfig()
+        public class Configuration
         {
-            // Options
-            Config["Force Server Language (true/false)"] = forceDefault = GetConfig("Force Server Language (true/false)", false);
-            Config["Random Prefix Colors (true/false)"] = prefixColors = GetConfig("Random Prefix Colors (true/false)", true);
-            Config["Show Original Message (true/false)"] = showOriginal = GetConfig("Show Original Message (true/false)", false);
+            [JsonProperty(PropertyName = "Force default server language (true/false)")]
+            public bool ForceDefault;
 
-            // Cleanup
-            Config.Remove("ForceDefault");
-            Config.Remove("PrefixColors");
-            Config.Remove("ShowOriginal");
+            [JsonProperty(PropertyName = "Show original message (true/false)")]
+            public bool ShowOriginal;
 
+            [JsonProperty(PropertyName = "Use random name colors (true/false)")]
+            public bool UseRandomColors;
+
+            public static Configuration DefaultConfig()
+            {
+                return new Configuration
+                {
+                    ForceDefault = false,
+                    ShowOriginal = false,
+                    UseRandomColors = false
+                };
+            }
+        }
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            try
+            {
+                config = Config.ReadObject<Configuration>();
+                if (config?.ForceDefault == null) LoadDefaultConfig();
+            }
+            catch
+            {
+                LogWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+                LoadDefaultConfig();
+            }
             SaveConfig();
         }
 
-        void Init() => LoadDefaultConfig();
+        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+
+        protected override void SaveConfig() => Config.WriteObject(config);
 
         #endregion
 
         #region Chat Translation
 
-        string Translate(IPlayer player, IPlayer target, string message)
+        [PluginReference]
+        private Plugin Babel, BetterChat, UFilter;
+
+        private static System.Random random = new System.Random();
+
+        private void Translate(string message, string targetId, string senderId, Action<string> callback)
         {
-            var to = forceDefault ? lang.GetServerLanguage() : lang.GetLanguage(target.Id);
-            var from = lang.GetLanguage(player.Id) ?? "auto";
-            return (string)Babel.Call("Translate", message, to, from);
+            var to = config.ForceDefault ? lang.GetServerLanguage() : lang.GetLanguage(targetId);
+            var from = lang.GetLanguage(senderId) ?? "auto";
+#if DEBUG
+            LogWarning($"To: {to}, From: {from}");
+#endif
+            Babel.Call("Translate", message, to, from, callback);
         }
 
-        void SendMessage(IPlayer target, IPlayer player, string message)
+        private void SendMessage(IPlayer target, IPlayer sender, string message)
         {
-            var format = $"{player.Name}: {message}";
-
-            if (BetterChat) format = (string)BetterChat.Call("API_GetFormatedMessage", player.Id, message);
-            else if (prefixColors) switch (covalence.Game)
-            {
-                case "7DaysToDie":
-                    format = $"[{Color()}]{player.Name}[ffffff]: {message}";
-                    break;
-                case "ReignOfKings":
-                    format = $"[{Color()}]{player.Name}[ffffff]: {message}";
-                    break;
-                case "RustLegacy":
-                    format = $"[color {Color()}]{player.Name}[/color]: {message}";
-                    break;
-                default:
-                    format = $"<color=#{Color()}>{player.Name}</color>: {message}";
-                    break;
-            }
+            var format = $"{sender.Name}: {message}";
+            if (BetterChat != null)
+                format = (string)BetterChat.Call("API_GetFormattedMessage", sender.Id, message);
+            else if (config.UseRandomColors)
+                format = covalence.FormatText($"[#{random.Next(0x1000000):X6}]{sender.Name}[/#]: {message}");
+            else
+                format = covalence.FormatText($"[{(sender.IsAdmin ? "#af5af5" : "#55aaff")}]{sender.Name}[/#]: {message}");
 #if RUST
-            var rust = Game.Rust.RustCore.FindPlayerByIdString(target.Id);
-            rust?.SendConsoleCommand("chat.add", player.Id, format, 1.0);
+            var basePlayer = target.Object as BasePlayer;
+            basePlayer.SendConsoleCommand("chat.add", sender.Id, format, 1.0);
 #else
             target.Message(format);
 #endif
         }
 
-        #endregion
-
-        #region Game Hooks
-
-        object OnUserChat(IPlayer player, string message)
+        private object OnUserChat(IPlayer player, string message)
         {
-            var isAd = AntiAds?.Call("IsAdvertisement", message);
-            if (AntiAds && isAd != null && (bool)isAd) return null;
+            if (UFilter != null)
+            {
+                var advertisements = (string[])UFilter.Call("Advertisements");
+                if (advertisements != null && advertisements.Contains(message)) return null;
+            }
 
             foreach (var target in players.Connected)
             {
-                if (player.Id == target.Id)
+#if !DEBUG
+                if (player.Equals(target))
                 {
                     SendMessage(player, player, message);
                     continue;
                 }
-
-                var to = forceDefault ? lang.GetServerLanguage() : lang.GetLanguage(target.Id);
-                var from = lang.GetLanguage(player.Id) ?? "auto";
-#if DEBUG
-                PrintWarning($"To: {to}, From: {from}");
 #endif
                 Action<string> callback = response =>
                 {
-                    if (showOriginal) response = $"{message} \n{response}";
+                    if (config.ShowOriginal) response = $"{message}\n{response}";
                     SendMessage(target, player, response);
                 };
-                Babel.Call("Translate", message, to, from, callback);
+                Translate(message, target.Id, player.Id, callback);
             }
 
-            return !BetterChat ? (object)true : null;
+            return BetterChat == null ? (object)true : null;
         }
 
-        bool OnBetterChat() => true;
-
-        #endregion
-
-        #region Helpers
-
-        T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
-
-        static string Color() => $"{new Random().Next(0x1000000):X6}";
+        private bool OnBetterChat() => true;
 
         #endregion
     }

@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Oxide.Core;
 using Oxide.Core.Plugins;
@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerInformations", "Reneb", "1.2.8", ResourceId = 1940)]
+    [Info("PlayerInformations", "Reneb", "1.2.9", ResourceId = 1940)]
     [Description("Logs players informations.")]
     public class PlayerInformations : CovalencePlugin
     {
@@ -34,6 +34,7 @@ namespace Oxide.Plugins
         }
 
         void SendHelpText(IPlayer player) { player.Reply(HelpText(player.Id)); }
+
         string HelpText(string steamid)
         {
             string msg = string.Empty;
@@ -97,6 +98,7 @@ namespace Oxide.Plugins
         static double LogTime() { return DateTime.UtcNow.Subtract(epoch).TotalSeconds; }
 
         string TimeMinToString(string time) { return TimeMinToString(double.Parse(time)); }
+
         string TimeMinToString(double time)
         {
             TimeSpan timespan = TimeSpan.FromSeconds(time);
@@ -130,9 +132,6 @@ namespace Oxide.Plugins
         #endregion
 
         #region Configs
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Configs
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         private static bool IPuse = true;
         private static string IPpermission = "playerinformations.ips";
@@ -160,51 +159,15 @@ namespace Oxide.Plugins
         private static string TPpermission = "playerinformations.timeplayed";
         private static int TPauthlevel = 0;
 
-        
-
-        void Loaded()
-        {
-            permission.RegisterPermission(IPpermission, this);
-            permission.RegisterPermission(NAMESpermission, this);
-            permission.RegisterPermission(FCpermission, this);
-            permission.RegisterPermission(LSpermission, this);
-            permission.RegisterPermission(LPpermission, this);
-
-            lang.RegisterMessages(new Dictionary<string, string>
-            {
-                {"You don't have permission to use this command.", "You don't have permission to use this command."},
-                {"IPs aren't recorded.","IPs aren't recorded."},
-                {"/lastips STEAMID/NAME", "/lastips STEAMID/NAME"},
-                {"Couldn't find a player that matches this name.", "Couldn't find a player that matches this name."},
-                {"No logs for this player.", "No logs for this player."},
-                {"/ipowners XX.XX.XX.XX", "/ipowners XX.XX.XX.XX"},
-                {"Couldn't get the list of players", "Couldn't get the list of players"},
-                {"This command has been deactivated.", "This command has been deactivated."},
-                {"/lastseen STEAMID/NAME", "/lastseen STEAMID/NAME"},
-                { "This player is connected!",  "This player is connected!"},
-                {"/firstconnection STEAMID/NAME", "/firstconnection STEAMID/NAME"},
-                { "/lastnames STEAMID/NAME",  "/lastnames STEAMID/NAME"},
-                {"/played STEAMID/NAME", "/played STEAMID/NAME"},
-                {"/lastposition STEAMID/NAME","/lastposition STEAMID/NAME"},
-                {"{0} - {1} last known position is: {2} {3} {4}","{0} - {1} last known position is: {2} {3} {4}"},
-                {"{0} - {1} was last seen: {2}","{0} - {1} was last seen: {2}" },
-                {"{0} - {1} played: {2}","{0} - {1} played: {2}" }
-            }, this);
-        }
-
-        protected override void LoadDefaultConfig() { }
-
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-        #endregion
-
         void Init()
         {
+            permission.RegisterPermission(FCpermission, this);
+            permission.RegisterPermission(IPpermission, this);
+            permission.RegisterPermission(LPpermission, this);
+            permission.RegisterPermission(LSpermission, this);
+            permission.RegisterPermission(NAMESpermission, this);
+            permission.RegisterPermission(TPpermission, this);
+
             CheckCfg<bool>("IP Logs - activated", ref IPuse);
             CheckCfg<string>("IP Logs - Permission - oxide permission", ref IPpermission);
             CheckCfg<int>("IP Logs - Permission - authlevel - Rust ONLY", ref IPauthlevel);
@@ -234,10 +197,43 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
+        protected override void LoadDefaultConfig() { }
+
+        void CheckCfg<T>(string Key, ref T var)
+        {
+            if (Config[Key] is T)
+                var = (T)Config[Key];
+            else
+                Config[Key] = var;
+        }
+
+        void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                {"You don't have permission to use this command.", "You don't have permission to use this command."},
+                {"IPs aren't recorded.","IPs aren't recorded."},
+                {"/lastips STEAMID/NAME", "/lastips STEAMID/NAME"},
+                {"Couldn't find a player that matches this name.", "Couldn't find a player that matches this name."},
+                {"No logs for this player.", "No logs for this player."},
+                {"/ipowners XX.XX.XX.XX", "/ipowners XX.XX.XX.XX"},
+                {"Couldn't get the list of players", "Couldn't get the list of players"},
+                {"This command has been deactivated.", "This command has been deactivated."},
+                {"/lastseen STEAMID/NAME", "/lastseen STEAMID/NAME"},
+                { "This player is connected!",  "This player is connected!"},
+                {"/firstconnection STEAMID/NAME", "/firstconnection STEAMID/NAME"},
+                { "/lastnames STEAMID/NAME",  "/lastnames STEAMID/NAME"},
+                {"/played STEAMID/NAME", "/played STEAMID/NAME"},
+                {"/lastposition STEAMID/NAME","/lastposition STEAMID/NAME"},
+                {"{0} - {1} last known position is: {2} {3} {4}","{0} - {1} last known position is: {2} {3} {4}"},
+                {"{0} - {1} was last seen: {2}","{0} - {1} was last seen: {2}" },
+                {"{0} - {1} played: {2}","{0} - {1} played: {2}" }
+            }, this);
+        }
+        #endregion
+
         #region OxideHooks
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /// Oxide Hooks
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
         void OnServerInitialized()
         {
             if (PlayerDatabase == null)
@@ -251,7 +247,6 @@ namespace Oxide.Plugins
             }
         }
 
-
         void Unload()
         {
             if (TPuse)
@@ -260,8 +255,8 @@ namespace Oxide.Plugins
             }
         }
 
-        
         void OnUserConnected(IPlayer player) { OnPlayerJoined(player.Id, player.Name, NormalizeIP(player.Address)); }
+
         void OnUserDisconnected(IPlayer player) { OnPlayerLeave(player); }
 
         #endregion
@@ -329,6 +324,7 @@ namespace Oxide.Plugins
             }
             else return 0.0;
         }
+
         double TimePlayed(string steamid)
         {
             return SessionRecordTime(steamid) + LastRecordTime(steamid);
@@ -340,6 +336,7 @@ namespace Oxide.Plugins
                 recordPlayTime.Remove(steamid);
             recordPlayTime.Add(steamid, LogTime());
         }
+
         void EndRecordTime(string steamid)
         {
             if (!recordPlayTime.ContainsKey(steamid)) return;
@@ -376,6 +373,7 @@ namespace Oxide.Plugins
             if (player == null) return default(GenericPosition);
             return player.Position();
         }
+
         GenericPosition FindLastPosition(string steamid)
         {
             GenericPosition LastPos = default(GenericPosition);
@@ -419,16 +417,19 @@ namespace Oxide.Plugins
         #endregion
 
         #region Lastseen
+
         [Command("lastseen")]
         void cmdChatLastseen(IPlayer player, string command, string[] args)
         {
             string answer = CMD_chatLastseen(player.Id, args);
             player.Reply(answer);
         }
+
         void RecordLastSeen(string steamid)
         {
             PlayerDatabase.Call("SetPlayerData", steamid, "Last Seen", LogTime().ToString());
         }
+
         float LastSeen(string steamid)
         {
             if (IsConnected(steamid))
@@ -442,6 +443,7 @@ namespace Oxide.Plugins
             }
             return float.Parse((string)success);
         }
+
         string CMD_chatLastseen(string steamid, string[] args)
         {
             if (!hasPermission(steamid, LSpermission, LSauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
@@ -510,6 +512,7 @@ namespace Oxide.Plugins
             IPlist.Add(playerip);
             PlayerDatabase.Call("SetPlayerData", steamid, "IPs", IPlist);
         }
+
         string CMD_lastIps(string steamid, string[] args)
         {
             if (!hasPermission(steamid, IPpermission, IPauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
@@ -542,6 +545,7 @@ namespace Oxide.Plugins
             }
             return replystring;
         }
+
         string CMD_chatIps(string steamid, string[] args)
         {
             if (!hasPermission(steamid, IPpermission, IPauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
@@ -594,6 +598,7 @@ namespace Oxide.Plugins
             string answer = CMD_chatFirstconnection(player.Id, args);
             player.Reply(answer);
         }
+
         float FirstConnection(string steamid)
         {
             var success = PlayerDatabase.Call("GetPlayerData", steamid, "First Connection");
@@ -603,6 +608,7 @@ namespace Oxide.Plugins
             }
             return 0f;
         }
+
         void RecordFirstConnection(string steamid)
         {
             var firstConnection = FirstConnection(steamid);
@@ -612,6 +618,7 @@ namespace Oxide.Plugins
                 PlayerDatabase.Call("SetPlayerData", steamid, "First Connection", FirstConnectionTable);
             }
         }
+
         string CMD_chatFirstconnection(string steamid, string[] args)
         {
             if (!hasPermission(steamid, FCpermission, FCauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
@@ -635,10 +642,10 @@ namespace Oxide.Plugins
             return string.Format("{0} - {1} first connected: {2}", name, findplayer.ToString(), TimeMinToString(firstConnection.ToString()));
         }
 
-
         #endregion
 
         #region Names
+
         [Command("lastnames")]
         void cmdChatLastname(IPlayer player, string command, string[] args)
         {
@@ -675,6 +682,7 @@ namespace Oxide.Plugins
 
             PlayerDatabase.Call("SetPlayerData", steamid, "Names", NameList);
         }
+
         string CMD_chatLastname(string steamid, string[] args)
         {
             if (!hasPermission(steamid, NAMESpermission, NAMESauthlevel)) { return GetMsg("You don't have permission to use this command.", steamid); }
@@ -701,8 +709,6 @@ namespace Oxide.Plugins
             }
             return replyanswer;
         }
-
-
 
         #endregion
     }

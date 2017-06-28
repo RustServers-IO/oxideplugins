@@ -8,11 +8,10 @@ using CodeHatch.Common;
 using Oxide.Core.Plugins;
 using Oxide.Core;
 using CodeHatch.UserInterface.Dialogues;
-using System.Threading;
 
 namespace Oxide.Plugins
 {
-    [Info("Voting System", "D-Kay", "1.4.1", ResourceId = 1190)]
+    [Info("Voting System", "Sydney & D-Kay", "1.4.2", ResourceId = 1190)]
     class VotingSystem : ReignOfKingsPlugin
     {
         #region Variables
@@ -27,8 +26,10 @@ namespace Oxide.Plugins
         private int VoteDuration => GetConfig("VoteDuration", 30);
         private int TimeVoteCooldown => GetConfig("TimeVoteCooldown", 600);
         private int WeatherVoteCooldown => GetConfig("WeatherVoteCooldown", 180);
-        private bool UseStoreGold => GetConfig("UseStoreGold", false);
-        private int RequiredStoreGold => GetConfig("RequiredStoreGold", 1000);
+        private bool UseStoreGoldTime => GetConfig("UseStoreGoldTime", false);
+        private bool UseStoreGoldWeather => GetConfig("UseStoreGoldWeather", false);
+        private int RequiredStoreGoldTime => GetConfig("RequiredStoreGoldTime", 1000);
+        private int RequiredStoreGoldWeather => GetConfig("RequiredStoreGoldWeather", 1000);
         private bool UseLevel => GetConfig("UseLevel", false);
         private int RequiredLevel => GetConfig("RequiredLevel", 3);
         private bool UsePermissions => GetConfig("UsePermissions", false);
@@ -66,8 +67,10 @@ namespace Oxide.Plugins
             Config["TimeVoteCooldown"] = TimeVoteCooldown;
             Config["WeatherVoteCooldown"] = WeatherVoteCooldown;
 
-            Config["UseStoreGold"] = UseStoreGold;
-            Config["RequiredStoreGold"] = RequiredStoreGold;
+            Config["UseStoreGoldTime"] = UseStoreGoldTime;
+            Config["UseStoreGoldWeather"] = UseStoreGoldWeather;
+            Config["RequiredStoreGoldTime"] = RequiredStoreGoldTime;
+            Config["RequiredStoreGoldWeather"] = RequiredStoreGoldWeather;
             Config["UseLevel"] = UseLevel;
             Config["RequiredLevel"] = RequiredLevel;
             Config["UsePermissions"] = UsePermissions;
@@ -254,82 +257,60 @@ namespace Oxide.Plugins
 
         private void CheckVoteRequirements(Player player, int type)
         {
-            if (CurrentVote.Count > 0)
-            {
-                SendReply(player, GetMessage("ongoingVote", player.Id.ToString()));
-                return;
-            }
             Type = type;
+
+            if (Type < 3 && !CanCommenceVoteTime) { SendReply(player, GetMessage("timeVoteCooldown", player), (TimeVoteCooldown / 60).ToString()); return; }
+            else if (Type > 2 && !CanCommenceVoteWeather) { SendReply(player, GetMessage("weatherVoteCooldown", player), (WeatherVoteCooldown / 60).ToString()); return; }
+
+            if (CurrentVote.Count > 0) { SendReply(player, GetMessage("ongoingVote", player)); return; }
 
             if (UsePermissions)
             {
                 switch (Type)
                 {
                     case 1:
-                        if (!player.HasPermission("VotingSystem.VoteDay")) { PrintToChat(player, GetMessage("noVotePermission", player.Id.ToString())); return; }
+                        if (!player.HasPermission("VotingSystem.VoteDay")) { PrintToChat(player, GetMessage("noVotePermission", player)); return; }
                         break;
                     case 2:
-                        if (!player.HasPermission("VotingSystem.VoteNight")) { PrintToChat(player, GetMessage("noVotePermission", player.Id.ToString())); return; }
+                        if (!player.HasPermission("VotingSystem.VoteNight")) { PrintToChat(player, GetMessage("noVotePermission", player)); return; }
                         break;
                     case 3:
-                        if (!player.HasPermission("VotingSystem.VoteWClear")) { PrintToChat(player, GetMessage("noVotePermission", player.Id.ToString())); return; }
+                        if (!player.HasPermission("VotingSystem.VoteWClear")) { PrintToChat(player, GetMessage("noVotePermission", player)); return; }
                         break;
                     case 4:
-                        if (!player.HasPermission("VotingSystem.VoteWHeavy")) { PrintToChat(player, GetMessage("noVotePermission", player.Id.ToString())); return; }
+                        if (!player.HasPermission("VotingSystem.VoteWHeavy")) { PrintToChat(player, GetMessage("noVotePermission", player)); return; }
                         break;
                 }
             }
-            if (plugins.Exists("LevelSystem") && UseLevel)
+
+            if (UseLevel && plugins.Exists("LevelSystem"))
             {
-                if ((int)LevelSystem.Call("GetCurrentLevel", new object[] { player }) < RequiredLevel)
-                {
-                    PrintToChat(player, string.Format(GetMessage("notHighEnoughLevel", player.Id.ToString()), RequiredLevel.ToString()));
-                    return;
-                }
+                if ((int)LevelSystem.Call("GetCurrentLevel", new object[] { player }) < RequiredLevel) { PrintToChat(player, string.Format(GetMessage("notHighEnoughLevel", player), RequiredLevel.ToString())); return; }
             }
-            if (plugins.Exists("GrandExchange") && UseStoreGold)
+
+            int RequiredGold = 0;
+            if ((UseStoreGoldTime || UseStoreGoldWeather) && plugins.Exists("GrandExchange"))
             {
-                Dictionary<ulong, int> _playerWallet = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, int>>("SavedTradeWalletById");
-                if (_playerWallet[player.Id] < RequiredStoreGold)
-                {
-                    PrintToChat(player, string.Format(GetMessage("notEnoughGold", player.Id.ToString()), RequiredStoreGold.ToString()));
-                    return;
-                }
-                if ((bool)GrandExchange.Call("CanRemoveGold", new object[] { player, RequiredStoreGold }))
-                {
-                    player.ShowConfirmPopup("Voting", string.Format(GetMessage("startVoteForGold", player.Id.ToString()), RequiredStoreGold.ToString()), "Yes", "No", (options, dialogue1, data) => removePlayerGold(player, options));
-                }
+                if (Type < 3) RequiredGold = RequiredStoreGoldTime;
+                else if (Type > 2) RequiredGold = RequiredStoreGoldWeather;
+
+                if (!(bool)GrandExchange.Call("CanRemoveGold", new object[] { player, RequiredGold })) { PrintToChat(player, string.Format(GetMessage("notEnoughGold", player), RequiredGold.ToString())); return; }
+                player.ShowConfirmPopup("Voting", string.Format(GetMessage("startVoteForGold", player), RequiredGold.ToString()), "Yes", "No", (options, dialogue1, data) => removePlayerGold(player, options, RequiredGold));
             }
             else VoteStart(player);
         }
 
-        private void removePlayerGold(Player player, Options options)
+        private void removePlayerGold(Player player, Options options, int gold)
         {
-            if (options == Options.Yes)
-            {
-                GrandExchange.Call("RemoveGold", new object[] { player, RequiredStoreGold });
-                VoteStart(player);
-            }
+            if (options != Options.Yes) return;
+
+            GrandExchange.Call("RemoveGold", new object[] { player, gold });
+
+            VoteStart(player);
         }
 
         private void VoteStart(Player player)
         {
-            if (Type == 1 || Type == 2)
-            {
-                if (CanCommenceVoteTime == false)
-                {
-                    SendReply(player, GetMessage("timeVoteCooldown", player.Id.ToString()), (TimeVoteCooldown / 60).ToString());
-                    return;
-                }
-            }
-            else if (Type == 3 || Type == 4)
-            {
-                if (CanCommenceVoteWeather == false)
-                {
-                    SendReply(player, GetMessage("weatherVoteCooldown", player.Id.ToString()), (WeatherVoteCooldown / 60).ToString());
-                    return;
-                }
-            }
             CurrentVote.Add(new Vote(player, true));
             switch (Type)
             {
@@ -363,14 +344,14 @@ namespace Oxide.Plugins
         {
             if (CurrentVote.Count == 0)
             {
-                SendReply(player, GetMessage("noOngoingVote", player.Id.ToString()));
+                SendReply(player, GetMessage("noOngoingVote", player));
                 return;
             }
             foreach (var vote in CurrentVote)
             {
                 if (vote.Voter == player)
                 {
-                    SendReply(player, GetMessage("alreadyVoted", player.Id.ToString()));
+                    SendReply(player, GetMessage("alreadyVoted", player));
                     return;
                 }
             }
@@ -390,27 +371,24 @@ namespace Oxide.Plugins
 
         #region Hooks
 
-        /*private void OnChatCommand(Player player, string cmd, string[] args)
+        private void SendHelpText(Player player)
         {
-            if (cmd == "help" && args.Length == 0)
+            PrintToChat(player, GetMessage("helpTitle", player));
+            PrintToChat(player, GetMessage("helpDay", player));
+            PrintToChat(player, GetMessage("helpNight", player));
+            PrintToChat(player, GetMessage("helpWClear", player));
+            PrintToChat(player, GetMessage("helpWHeavy", player));
+            if (UseYNCommands)
             {
-                PrintToChat(player, GetMessage("helpTitle", player.Id.ToString()));
-                PrintToChat(player, GetMessage("helpDay", player.Id.ToString()));
-                PrintToChat(player, GetMessage("helpNight", player.Id.ToString()));
-                PrintToChat(player, GetMessage("helpWClear", player.Id.ToString()));
-                PrintToChat(player, GetMessage("helpWHeavy", player.Id.ToString()));
-                if (UseYNCommands)
-                {
-                    PrintToChat(player, GetMessage("helpYesAndY", player.Id.ToString()));
-                    PrintToChat(player, GetMessage("helpNoAndN", player.Id.ToString()));
-                }
-                else
-                {
-                    PrintToChat(player, GetMessage("helpYes", player.Id.ToString()));
-                    PrintToChat(player, GetMessage("helpNo", player.Id.ToString()));
-                }
+                PrintToChat(player, GetMessage("helpYesAndY", player));
+                PrintToChat(player, GetMessage("helpNoAndN", player));
             }
-        }*/
+            else
+            {
+                PrintToChat(player, GetMessage("helpYes", player));
+                PrintToChat(player, GetMessage("helpNo", player));
+            }
+        }
 
         #endregion
 
@@ -422,7 +400,7 @@ namespace Oxide.Plugins
             return (T)Convert.ChangeType(Config[name], typeof(T));
         }
 
-        string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
+        string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, player == null ? null : player.Id.ToString());
 
         #endregion
     }

@@ -1,0 +1,19 @@
+{
+    "name": "BlockedSystem",
+    "description": "Block colors, words, anti-flood.",
+    "author": "mcnovinho08",
+    "version": "0.2.0",
+    "configuration": true,
+    "suggest": {
+        "AdminControl": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/blockedsystem.2344",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "AdminGod",
+    "description": "Have godmode with ease and remove.",
+    "author": "Gute",
+    "version": "3.0.0",
+    "configuration": true,
+    "suggest": {
+        "AdminControl": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/admingod.1786",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}
