@@ -4,12 +4,12 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("WipeKits", "Ryan", "1.0.1")]
+    [Info("WipeKits", "Ryan", "1.0.3")]
     [Description("Puts a configurable cooldown on each kit depending on their kitname.")]
     internal class WipeKits : RustPlugin
     {
         // Credit to Visagalis for finding SaveRestore.SaveCreatedTime
-        private double SecsSinceWipe() => (DateTime.UtcNow - SaveRestore.SaveCreatedTime).TotalSeconds;
+        private double SecsSinceWipe() => (DateTime.UtcNow.ToLocalTime() - SaveRestore.SaveCreatedTime.ToLocalTime()).TotalSeconds;
 
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
@@ -103,7 +103,7 @@ namespace Oxide.Plugins
 
         private object OnPlayerCommand(ConsoleSystem.Arg args)
         {
-            if (args.cmd.FullName == "chat.say")
+            if (args.cmd.FullName.ToLower() == "chat.say")
             {
                 var player = args.Connection.player as BasePlayer;
                 if (player.IsAdmin) return null;
@@ -111,9 +111,9 @@ namespace Oxide.Plugins
                 {
                     foreach (var kitname in _Config.Kits)
                     {
-                        if (args.GetString(0) == "/kit " + kitname.Key)
+                        if (args.GetString(0).ToLower() == "/kit " + kitname.Key.ToLower())
                         {
-                            if (GetNextKitTime(kitname.Value).TotalSeconds == 0)
+                            if (GetNextKitTime(kitname.Value).TotalSeconds <= 0)
                                 return null;
                             PrintToChat(player, Lang("Cmd_CantUse", player.UserIDString, GetFormattedMsg(kitname.Value)));
                             return true;

@@ -2,13 +2,12 @@
  * TODO: Add metabolism individual configuration settings for food
  */
 
-using System;
 using Newtonsoft.Json;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Metabolism", "Wulf/lukespragg", "2.5.1", ResourceId = 680)]
+    [Info("Metabolism", "Wulf/lukespragg", "2.6.0", ResourceId = 680)]
     [Description("Modify or disable player metabolism stats and rates")]
     public class Metabolism : RustPlugin
     {
@@ -76,25 +75,28 @@ namespace Oxide.Plugins
 
         private const string permBoost = "metabolism.boost";
         private const string permNone = "metabolism.none";
+        private const string permSpawn = "metabolism.spawn";
 
         private void Init()
         {
             permission.RegisterPermission(permBoost, this);
             permission.RegisterPermission(permNone, this);
+            permission.RegisterPermission(permSpawn, this);
         }
 
         #endregion
 
         #region Modify Metabolism
 
-        private void Metabolize(BasePlayer player)
+        private void OnPlayerRespawned(BasePlayer player)
         {
-            player.health = config.HealthSpawnAmount;
-            player.metabolism.calories.value = config.CaloriesSpawnAmount;
-            player.metabolism.hydration.value = config.HydrationSpawnAmount;
+            if (permission.UserHasPermission(player.UserIDString, permSpawn))
+            {
+                player.health = config.HealthSpawnAmount;
+                player.metabolism.calories.value = config.CaloriesSpawnAmount;
+                player.metabolism.hydration.value = config.HydrationSpawnAmount;
+            }
         }
-
-        private void OnPlayerRespawned(BasePlayer player) => Metabolize(player);
 
         private void OnRunPlayerMetabolism(PlayerMetabolism m, BaseCombatEntity entity)
         {

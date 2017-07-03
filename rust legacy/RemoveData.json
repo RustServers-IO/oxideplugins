@@ -1,0 +1,16 @@
+{
+    "name": "RemoveData",
+    "description": "Remove a player data.",
+    "author": "tugamano",
+    "version": "0.02",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/removedata.2300",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomSpawnPoints", "Reneb / k1lly0u", "1.1.0", ResourceId = 1076)]
+    [Info("CustomSpawnPoints", "Reneb / k1lly0u", "1.1.1", ResourceId = 1076)]
     class CustomSpawnPoints : RustPlugin
     {
         #region Fields
@@ -29,7 +29,7 @@ namespace Oxide.Plugins
             if (!initialized && plugin?.Title == "Spawns")            
                 LoadSpawnpoints();            
         }
-        BasePlayer.SpawnPoint OnFindSpawnPoint()
+        object OnPlayerRespawn(BasePlayer player)
         {
             if (!initialized) return null;
 

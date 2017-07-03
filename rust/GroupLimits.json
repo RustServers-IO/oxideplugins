@@ -2,7 +2,7 @@
     "name": "Group Limits",
     "description": "Limits groups based on authorization.",
     "author": "Kappasaurus",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "configuration": true,
     "suggest": {
         "Discord": "*",

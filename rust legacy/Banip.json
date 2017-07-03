@@ -1,0 +1,16 @@
+{
+    "name": "BanIP",
+    "description": "Bans players by their IP address",
+    "author": "copper",
+    "version": "4.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/banip.1422",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

@@ -7,7 +7,7 @@ using ProtoBuf;
 
 namespace Oxide.Plugins
 {
-    [Info("Gyrocopter", "ColonBlow", "1.0.10", ResourceId = 2521)]
+    [Info("Gyrocopter", "ColonBlow", "1.0.11", ResourceId = 2521)]
     class Gyrocopter : RustPlugin
     {
 
@@ -26,6 +26,8 @@ namespace Oxide.Plugins
             layerMask = ~layerMask;
             permission.RegisterPermission("gyrocopter.fly", this);
             permission.RegisterPermission("gyrocopter.build", this);
+	    permission.RegisterPermission("gyrocopter.unlimited", this);
+	    permission.RegisterPermission("gyrocopter.nobombs", this);
         }
 
         bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
@@ -39,8 +41,8 @@ namespace Oxide.Plugins
         static int SprintCost = 20;
         static int RechargeRate = 3;
 
-	static bool UseCooldown = true;
-        static bool NoGodMode = true;
+	static bool UseCooldown = false;
+        static bool NoGodMode = false;
 
         static float DaBombReloadRange = 12f; //Needs to be more than the MinAltitude
         static float DaBombDamageRadius = 2f;
@@ -119,13 +121,12 @@ namespace Oxide.Plugins
         Dictionary<string, string> messages = new Dictionary<string, string>()
         {
             {"helptext1", "type /copterbuild to spawn static copter(with perms)." },
-            {"helptext2", "type /copter while looking at copter sign to activate flight mode." },
+            {"helptext2", "spin the spinner wheel to activate flight mode." },
             {"helptext3", "type /copterland to start landing sequence." },
             {"helptext4", "type /copterdropnet to drop/raise cargo netting." },
             {"helptext5", "type /copterdropbomb to drop Da Bomb." },
             {"helptext6", "type /copterreload to reload bomb (must be next to red rad oil barrel)." },
             {"notauthorized", "You don't have permission to do that !!" },
-            {"nocopterfound", "To activate copter, make sure you are looking at the copters sign" },
             {"nogodmode", "You cannot be in god mode to fly the Gyrocopter !!" },
             {"cooldown", "Gyrocopter is still under cooldown, please try again later !!" },
             {"tellabouthelp", "type /copterhelp to see a list of commands !!" },
@@ -163,7 +164,7 @@ namespace Oxide.Plugins
         [ChatCommand("copterreload")]
         void chatReloadCopter(BasePlayer player, string command, string[] args)
         {
-            if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
+            if ((!isAllowed(player, "gyrocopter.fly")) || (isAllowed(player, "gyrocopter.nobombs"))) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
             var copter = player.GetComponentInParent<PlayerCopter>();
             if (copter == null) { SendReply(player, lang.GetMessage("notflyingcopter", this, player.UserIDString)); return; }
             if (copter != null)
@@ -201,11 +202,17 @@ namespace Oxide.Plugins
         [ChatCommand("copterdropbomb")]
         void chatDropBombCopter(BasePlayer player, string command, string[] args)
         {
-            if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
+            if ((!isAllowed(player, "gyrocopter.fly")) || (isAllowed(player, "gyrocopter.nobombs"))) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
             var copter = player.GetComponent<PlayerCopter>();
             if (copter == null) { SendReply(player, lang.GetMessage("notflyingcopter", this, player.UserIDString)); return; }
             if (copter != null)
             {
+		if (isAllowed(player, "gyrocopter.unlimited"))
+		{
+                    SendReply(player, lang.GetMessage("dropbomb", this, player.UserIDString));
+                    player.gameObject.AddComponent<DaBomb>();
+		    return;
+		}
                 if ((!copter.hasdabomb1) && (!copter.hasdabomb2))
                 {
                     SendReply(player, lang.GetMessage("outofbombs", this, player.UserIDString));
@@ -289,9 +296,9 @@ namespace Oxide.Plugins
 		BaseEntity parentEntity = wheel.GetParentEntity();
 		if (parentEntity.name.Contains("sign.small.wood"))
             	{
-			var iscopter = parentEntity.GetComponent<StaticCopter>();
-			if (iscopter.incooldown && UseCooldown) { SendReply(player, lang.GetMessage("cooldown", this, player.UserIDString)); return; }
-                	BaseEntity.saveList.Remove(parentEntity);
+			var iscopter = parentEntity.GetComponent<StaticCopter>();	
+			if (iscopter !=null  && iscopter.incooldown && UseCooldown) { SendReply(player, lang.GetMessage("cooldown", this, player.UserIDString)); return; }
+                	if (parentEntity != null) BaseEntity.saveList.Remove(parentEntity);
                 	if (parentEntity != null) { parentEntity.Invoke("KillMessage", 0.1f); }
 			AddPlayerCopter(player);
             	}
@@ -411,18 +418,21 @@ namespace Oxide.Plugins
             {
                 var currentfuel = fuelcontrol.copterfuel;
                 Vector3 oldpos = player.transform.position;
-                if (currentfuel >= 1) fuelcontrol.copterfuel = currentfuel - 1;
+                if ((!instance.isAllowed(player, "gyrocopter.unlimited")) && currentfuel >= 1) fuelcontrol.copterfuel = currentfuel - 1;
                 if (currentfuel <= 0) currentfuel = 0;
-                if (NoGodMode && player.IsImmortal() && (!didtell))
+		if (!instance.isAllowed(player, "gyrocopter.unlimited"))
                 {
-                    instance.SendReply(player, instance.lang.GetMessage("nogodmode", instance, player.UserIDString));
-                    islanding = true;
-                    didtell = true;
-                }
-                if (player.serverInput.IsDown(BUTTON.SPRINT))
-                {
-                    throttleup = true;
-                    fuelcontrol.copterfuel = fuelcontrol.copterfuel - sprintcost;
+		    if (NoGodMode && player.IsImmortal() && (!didtell))
+		    {
+                    	instance.SendReply(player, instance.lang.GetMessage("nogodmode", instance, player.UserIDString));
+                    	islanding = true;
+                    	didtell = true;
+		    }
+                    if (player.serverInput.IsDown(BUTTON.SPRINT))
+                    {
+                    	throttleup = true;
+		    	if (!instance.isAllowed(player, "gyrocopter.unlimited")) fuelcontrol.copterfuel = fuelcontrol.copterfuel - sprintcost;
+                    }
                 }
                 if (copter.barcenter != null)
                 {
@@ -489,8 +499,8 @@ namespace Oxide.Plugins
                     player.ClientRPCPlayer(null, player, "ForcePositionTo", newpos);
                     player.SendNetworkUpdate();
                 }
-                if (usedabomb)
-                {
+               	if (usedabomb)
+              	{
                     if (copter.bomb1)
                     {
                         BaseEntity.saveList.Remove(copter.bomb1);
@@ -514,7 +524,7 @@ namespace Oxide.Plugins
                     usedabomb = false;
                     hasdabomb1 = false;
                     hasdabomb2 = false;
-                }
+		}
             }
 
             void OnDestroy()
@@ -683,11 +693,11 @@ namespace Oxide.Plugins
                 skid4.transform.localEulerAngles = new Vector3(0, 0, 180);
 		wheel.transform.localEulerAngles = new Vector3(90, 0, 90);
 
-                chair.transform.localPosition = new Vector3(0f, -1f, 0f);
-                floor.transform.localPosition = new Vector3(0f, -1f, 1f);
-                deck1.transform.localPosition = new Vector3(0f, -1f, -0.8f);
-                deck2.transform.localPosition = new Vector3(0f, -1f, -0.8f);
-                barrel.transform.localPosition = new Vector3(0f, -1.5f, -1f);
+                chair.transform.localPosition = new Vector3(0f, -1f, -0.2f);
+                floor.transform.localPosition = new Vector3(0f, -1f, 1.4f);
+                deck1.transform.localPosition = new Vector3(0f, -1f, -0.4f);
+                deck2.transform.localPosition = new Vector3(0f, -1f, -0.2f);
+                barrel.transform.localPosition = new Vector3(0f, -1.5f, -1.1f);
                 barcenter.transform.localPosition = new Vector3(0f, 1f, 0f);
                 rotor1.transform.localPosition = new Vector3(0f, 2f, 0.5f);
                 rotor2.transform.localPosition = new Vector3(0f, 2f, -3f);
@@ -702,7 +712,7 @@ namespace Oxide.Plugins
                 skid2.transform.localPosition = new Vector3(0.9f, -1.4f, -0.5f);
                 skid3.transform.localPosition = new Vector3(-0.9f, 1.6f, -0.5f);
                 skid4.transform.localPosition = new Vector3(0.9f, 1.6f, -0.5f);
-		wheel.transform.localPosition = new Vector3(0.4f, -0.8f, 0f);
+		wheel.transform.localPosition = new Vector3(0.6f, -0.5f, 0f);
 
                 // turns off any interaction to some signs and mailbox
                 floor.SetFlag(BaseEntity.Flags.Busy, true, true);
@@ -722,7 +732,7 @@ namespace Oxide.Plugins
                 bomb1?.Spawn();
                 bomb1.SetParent(deck2);
                 bomb1.transform.localEulerAngles = new Vector3(0, 0, 0);
-                bomb1.transform.localPosition = new Vector3(0.5f, 1f, 0.3f);
+                bomb1.transform.localPosition = new Vector3(0.5f, 1.5f, 0.3f);
             }
 
             void AddDaBomb2()
@@ -731,7 +741,7 @@ namespace Oxide.Plugins
                 bomb2?.Spawn();
                 bomb2.SetParent(deck2);
                 bomb2.transform.localEulerAngles = new Vector3(0, 0, 0);
-                bomb2.transform.localPosition = new Vector3(-0.5f, 1f, 0.3f);
+                bomb2.transform.localPosition = new Vector3(-0.5f, 1.5f, 0.3f);
             }
 
             void OnDestroy()
@@ -804,7 +814,7 @@ namespace Oxide.Plugins
                 damageamount = DaBombDamageAmount;
                 player = GetComponent<BasePlayer>();
                 copter = player.GetComponent<GyroCopter>();
-                PlayerPOS = player.transform.position + new Vector3(1, 0, 0);
+                PlayerPOS = player.transform.position + new Vector3(0f, -5f, 0f);
                 dabomb = GameManager.server.CreateEntity("assets/bundled/prefabs/radtown/oil_barrel.prefab", PlayerPOS, new Quaternion(), true);
                 dabomb.Spawn();
                 SpawnFireEffects();

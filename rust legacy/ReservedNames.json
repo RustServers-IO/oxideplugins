@@ -1,0 +1,16 @@
+{
+    "name": "ReservedNames",
+    "description": "Allows reserving of player names or words.",
+    "author": "tugamano",
+    "version": "0.0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/reservednames.2208",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

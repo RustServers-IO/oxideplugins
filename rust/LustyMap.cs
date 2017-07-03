@@ -16,7 +16,7 @@ using System.Drawing;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.1", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.2", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -42,7 +42,8 @@ namespace Oxide.Plugins
 
         private List<MapMarker> staticMarkers;
         private Dictionary<string, MapMarker> customMarkers;
-        private Dictionary<uint, ActiveEntity> temporaryMarkers;
+        private Dictionary<string, MapMarker> temporaryMarkers;
+        private Dictionary<uint, ActiveEntity> entityMarkers;
 
         private Dictionary<string, List<string>> clanData;
 
@@ -75,7 +76,7 @@ namespace Oxide.Plugins
             private int changeCount;
             private double lastChange;
             private bool isBlocked;
-
+            
             private SpamOptions spam;
 
             private bool afkDisabled;
@@ -600,7 +601,8 @@ namespace Oxide.Plugins
             mapUsers = new Dictionary<string, MapUser>();
             staticMarkers = new List<MapMarker>();
             customMarkers = new Dictionary<string, MapMarker>();
-            temporaryMarkers = new Dictionary<uint, ActiveEntity>();
+            temporaryMarkers = new Dictionary<string, MapMarker>();
+            entityMarkers = new Dictionary<uint, ActiveEntity>();
             clanData = new Dictionary<string, List<string>>();
 
             lang.RegisterMessages(Messages, this);
@@ -668,15 +670,15 @@ namespace Oxide.Plugins
             if (!activated) return;
             if (entity == null) return;
             if (entity is CargoPlane || entity is SupplyDrop || entity is BaseHelicopter || entity is HelicopterDebris || entity is VendingMachine)
-                AddTemporaryMarker(entity);
+                AddTemporaryEntityMarker(entity);
         }
         void OnEntityKill(BaseNetworkable entity)
         {
             var activeEntity = entity?.GetComponent<ActiveEntity>();
             if (activeEntity == null) return;
             if (entity?.net?.ID == null) return;
-            if (temporaryMarkers.ContainsKey(entity.net.ID))
-                temporaryMarkers.Remove(entity.net.ID);
+            if (entityMarkers.ContainsKey(entity.net.ID))
+                entityMarkers.Remove(entity.net.ID);
             UnityEngine.Object.Destroy(activeEntity);
         }
         void Unload()
@@ -848,7 +850,11 @@ namespace Oxide.Plugins
         void CreateStaticMain()
         {
             Puts("[Warning] Generating the main map");
-            var mapimage = GetImage("mapimage");
+            string mapimage = string.Empty;
+            if (ImageLibrary.HasImage("mapimage", 0))
+                mapimage = GetImage("mapimage");
+            else if (ImageLibrary.HasImage("mapimage_high", 0))
+                mapimage = GetImage("mapimage_high");
             if (string.IsNullOrEmpty(mapimage))
             {
                 Puts("[Error] Unable to load the map image from file storage. This may be caused by slow processing of the images being uploaded to your server. Wait for 5 minutes and reload the plugin. \nIf this problem persists after multiple attempts then unload the plugin and delete your ImageData.json data file or run the 'resetmap' command");
@@ -1095,7 +1101,13 @@ namespace Oxide.Plugins
                 if (string.IsNullOrEmpty(image)) continue;
                 AddIconToMap(ref mapContainer, panel, image, marker.Value.name, iconsize * 1.25f, marker.Value.x, marker.Value.z);
             }
-            foreach (var entity in temporaryMarkers)
+            foreach (var marker in temporaryMarkers)
+            {
+                var image = GetImage(marker.Key);
+                if (string.IsNullOrEmpty(image)) continue;
+                AddIconToMap(ref mapContainer, panel, image, marker.Value.name, iconsize * 1.25f, marker.Value.x, marker.Value.z);
+            }
+            foreach (var entity in entityMarkers)
             {
                 var marker = entity.Value.GetMarker();
                 if (marker == null) continue;
@@ -1204,7 +1216,13 @@ namespace Oxide.Plugins
                 if (string.IsNullOrEmpty(image)) continue;
                 AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.3f, marker.Value.x, marker.Value.z, colStart, colEnd, rowStart, rowEnd);
             }
-            foreach (var entity in temporaryMarkers)
+            foreach (var marker in temporaryMarkers)
+            {
+                var image = GetImage(marker.Key);
+                if (string.IsNullOrEmpty(image)) continue;
+                AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.3f, marker.Value.x, marker.Value.z, colStart, colEnd, rowStart, rowEnd);
+            }
+            foreach (var entity in entityMarkers)
             {
                 var marker = entity.Value.GetMarker();
                 if (marker == null) continue;
@@ -1403,7 +1421,7 @@ namespace Oxide.Plugins
                     isRustFriends = true;
             }
         }
-        private void AddTemporaryMarker(BaseEntity entity)
+        private void AddTemporaryEntityMarker(BaseEntity entity)
         {
             if (entity == null) return;
             if (entity?.net?.ID == null) return;
@@ -1437,7 +1455,7 @@ namespace Oxide.Plugins
             var actEnt = entity.gameObject.AddComponent<ActiveEntity>();
             actEnt.SetType(type);
 
-            temporaryMarkers.Add(entity.net.ID, actEnt);
+            entityMarkers.Add(entity.net.ID, actEnt);
         }
         private void LoadSettings()
         {
@@ -1589,7 +1607,7 @@ namespace Oxide.Plugins
                 var actEnt = vendor.gameObject.AddComponent<ActiveEntity>();
                 actEnt.SetType(AEType.Vending);
 
-                temporaryMarkers.Add(vendor.net.ID, actEnt);
+                entityMarkers.Add(vendor.net.ID, actEnt);
             }
         }
         static double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
@@ -1678,6 +1696,69 @@ namespace Oxide.Plugins
             if (!customMarkers.ContainsKey(name)) return false;
             customMarkers.Remove(name);
             SaveMarkers();
+            return true;
+        }
+
+        bool AddTemporaryMarker(float x, float z, string name, string icon = "special", float r = 0)
+        {
+            if (temporaryMarkers.ContainsKey(name)) return false;
+            MapMarker marker = new MapMarker
+            {
+                icon = icon,
+                name = name,
+                x = GetPosition(x),
+                z = GetPosition(z),
+                r = r
+            };
+            if (r > 0) marker.r = GetDirection(r);
+            temporaryMarkers.Add(name, marker);
+            if (!string.IsNullOrEmpty(icon) && icon != "special")
+            {
+                string url = icon;
+                if (!url.StartsWith("http") && !url.StartsWith("www") && !url.StartsWith("file://"))
+                    url = $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}.png";
+                ImageLibrary.AddImage(url, name, 0);
+            }
+            return true;
+        }
+        void UpdateTemporaryMarker(float x, float z, string name, string icon = "special", float r = 0)
+        {
+            if (!temporaryMarkers.ContainsKey(name)) return;
+            MapMarker marker = new MapMarker
+            {
+                icon = icon,
+                name = name,
+                x = GetPosition(x),
+                z = GetPosition(z),
+                r = r
+            };
+            if (r > 0) marker.r = GetDirection(r);
+            temporaryMarkers[name] = marker;
+
+            if (!string.IsNullOrEmpty(icon) && icon != "special" && !ImageLibrary.HasImage(name, 0))
+            {
+                string url = icon;
+                if (!url.StartsWith("http") && !url.StartsWith("www"))
+                    url = $"{dataDirectory}custom{Path.DirectorySeparatorChar}{icon}.png";
+                ImageLibrary.AddImage(url, name, 0);
+            }
+        }
+        bool RemoveTemporaryMarker(string name)
+        {
+            if (!temporaryMarkers.ContainsKey(name)) return false;
+            temporaryMarkers.Remove(name);
+            return true;
+        }
+        bool RemoveTemporaryMarkerStartsWith(string name)
+        {
+            var keyArray = temporaryMarkers.Keys.ToArray();
+            for (int i = 0; i < temporaryMarkers.Count; i++)
+            {
+                string key = keyArray[i];
+                if (key.StartsWith(name))
+                    temporaryMarkers.Remove(key);
+
+            }            
             return true;
         }
         #endregion
@@ -2103,7 +2184,8 @@ namespace Oxide.Plugins
             if (configData.MapOptions.MapImage.CustomMap_Use)
             {
                 Puts("[Warning] Downloading map image to file storage. Please wait!"); 
-                ImageLibrary.AddImage(dataDirectory + configData.MapOptions.MapImage.CustomMap_Filename, "mapimage", 0);
+                ImageLibrary.AddImage(dataDirectory + configData.MapOptions.MapImage.CustomMap_Filename, "mapimage_high", 0);
+                ScaleMapImage();
                 if (MapSettings.complexmap)
                 {
                     Puts("[Warning] Attempting to split and store the complex mini-map. This may take a few moments! Failure to wait for this process to finish WILL result in error!");
@@ -2185,7 +2267,6 @@ namespace Oxide.Plugins
         }
         void DownloadMap(string url)
         {
-            //Puts(url);
             Puts("[Warning] Map generation successful! Downloading map image to file storage. Please wait!");
             ImageLibrary.AddImage(url, "mapimage_high", 0);
             ScaleMapImage();

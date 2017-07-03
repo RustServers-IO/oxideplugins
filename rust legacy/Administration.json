@@ -1,0 +1,16 @@
+{
+    "name": "Administration",
+    "description": "Full administration plugin.",
+    "author": "Spicy",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/administration.2037",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

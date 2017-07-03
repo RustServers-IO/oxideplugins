@@ -2,7 +2,7 @@
     "name": "RealtimeWipeInfo",
     "description": "Updates title dynamically depending on wipe time as well as preventing wipe chat spam.",
     "author": "Ryan",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "configuration": true,
     "suggest": {
         "BetterChat": "*"

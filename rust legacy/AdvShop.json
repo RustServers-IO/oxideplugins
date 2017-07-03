@@ -1,0 +1,16 @@
+{
+    "name": "AdvShop",
+    "description": "Buy, sell, and trade items!",
+    "author": "xBDMx",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/advshop.2278",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

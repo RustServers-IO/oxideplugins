@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("ShowCrosshair", "Marat, edited by Ловец Душ", "1.0.75", ResourceId = 2057)]
+    [Info("ShowCrosshair", "Marat, edited by Ловец Душ", "1.0.76", ResourceId = 2057)]
     [Description("Shows a crosshair on the screen.")]
     class ShowCrosshair : RustPlugin
     {
@@ -33,9 +33,6 @@ namespace Oxide.Plugins
         private bool configChanged;
         private const string permShowCrosshair = "showcrosshair.allowed";
 
-        //private string GetImage(string shortname, ulong skin = 0) => (string)ImageLibrary.Call("GetImage", shortname, skin, true);
-        //private bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname, skin);
-
         private string GetImage(string name, ulong skin = 0)
         {
             string imageId = ImageLibrary.GetImage(name, skin);
@@ -46,7 +43,6 @@ namespace Oxide.Plugins
 
         private void Loaded()
         {
-            //WeaponList = GenerateWeaponsList();
             LoadConfiguration();
             LoadDefaultMessages();
             permission.RegisterPermission(permShowCrosshair, this);
@@ -61,7 +57,7 @@ namespace Oxide.Plugins
         void ValidateImages()
         {
             Puts("[Warning] Validating imagery");
-            if (!ImageLibrary.HasImage("crosshair10", 0))
+            if (!ImageLibrary.HasImage("crosshair9", 0))
             {
                 LoadImages();
             }
@@ -85,8 +81,6 @@ namespace Oxide.Plugins
             ImageLibrary.AddImage(image6, "crosshair6", 0);
             ImageLibrary.AddImage(image7, "crosshair7", 0);
             ImageLibrary.AddImage(image8, "crosshair8", 0);
-            ImageLibrary.AddImage(image9, "crosshair9", 0);
-            ImageLibrary.AddImage(image10, "crosshair10", 0);
             ImageLibrary.AddImage(background, "background", 0);
             ImageLibrary.AddImage(background2, "background2", 0);
             isILReady = true;
@@ -126,10 +120,6 @@ namespace Oxide.Plugins
         private string image6 = "http://i.imgur.com/K7yirTy.png";
         private string image7 = "http://i.imgur.com/beHkRnR.png";
         private string image8 = "http://i.imgur.com/tB088dk.png";
-        private string image9 = "http://i.imgur.com/p6a2DeB.png";
-        private string image10 = "http://i.imgur.com/g23xIQ5.png";
-        private string image11 = "";
-        private string image12 = "";
         private string background = "http://i.imgur.com/mD8K49U.png";
         private string background2 = "http://i.imgur.com/mYV1bFs.png";
 
@@ -159,8 +149,6 @@ namespace Oxide.Plugins
             image6 = GetConfig("Image", "crosshair6", image6);
             image7 = GetConfig("Image", "crosshair7", image7);
             image8 = GetConfig("Image", "crosshair8", image8);
-            image9 = GetConfig("Image", "crosshair9", image9);
-            image10 = GetConfig("Image", "crosshair10", image10);
 
             background = GetConfig("Image", "background", background);
             background2 = GetConfig("Image", "background2", background2);
@@ -183,7 +171,8 @@ namespace Oxide.Plugins
                     "MP5A4",
                     "LR-300 Assault Rifle",
                     "M92 Pistol",
-                    "Python Revolver"
+                    "Python Revolver",
+                    "Crossbow"
             };
             weaponList = GetConfig("Options", "List of weapons with disabled crosshair while aiming", weaponList);
             foreach (var item in weaponList)
@@ -193,41 +182,9 @@ namespace Oxide.Plugins
 
             if (!configChanged) return;
             PrintWarning("Configuration file updated.");
-
             SaveConfig();
         }
        
-        /*
-        public static List<string> GenerateWeaponsList()
-        {
-            var WeaponsList = new List<string>
-            {
-                //"bow.hunting",	//Hunting Bow
-                //"crossbow",		// Crossbow
-                //"spear.stone",	// Stone Spear
-                //"spear.wooden",	// Wooden Spear
-                //"pistol.eoka",	// Eoka Pistol
-                //"flamethrower",	// Огнемёт
-                "lmg.m249",
-                "pistol.revolver",
-                "pistol.semiauto",
-                "rifle.bolt",
-                "rifle.ak",
-                "rifle.lr300",
-                "rocket.launcher",
-                "shotgun.pump",
-                "shotgun.waterpipe",
-                "smg.thompson",
-                "smg.2",
-                "smg.mp5",
-                "pistol.m92",
-                "pistol.python",
-                "binoculars"
-            };
-            return WeaponsList;
-        }
-        */
-
         private T GetConfig<T>(string category, string setting, T defaultValue)
         {
             var data = Config[category] as Dictionary<string, object>;
@@ -266,8 +223,6 @@ namespace Oxide.Plugins
                 ["crosshair6"] = "You set the crosshair №6.",
                 ["crosshair7"] = "You set the crosshair №7.",
                 ["crosshair8"] = "You set the crosshair №8.",
-                ["crosshair9"] = "You set the crosshair №9.",
-                ["crosshair10"] = "You set the crosshair №10.",
                 ["close"] = "<color=#ff0000>C</color><color=#ff1a1a>l</color><color=#ff3333>o</color><color=#ff1a1a>s</color><color=#ff0000>e</color>",
                 ["select"] = "<color=#46d100>S</color><color=#52f500>e</color><color=#66ff1a>l</color><color=#52f500>e</color><color=#46d100>c</color><color=#3aad00>t</color>",
                 ["disable"] = "<color=#fbff00>D</color><color=#fbff1a>i</color><color=#fcff33>s</color><color=#fcff4d>a</color><color=#fcff33>b</color><color=#fbff1a>l</color><color=#fbff00>e</color>",
@@ -290,8 +245,6 @@ namespace Oxide.Plugins
                 ["crosshair6"] = "Вы установили прицел №6",
                 ["crosshair7"] = "Вы установили прицел №7",
                 ["crosshair8"] = "Вы установили прицел №8",
-                ["crosshair9"] = "Вы установили прицел №9",
-                ["crosshair10"] = "Вы установили прицел №10",
                 ["close"] = "<color=#ff0000>З</color><color=#ff1a1a>а</color><color=#ff3333>к</color><color=#ff4d4d>р</color><color=#ff3333>ы</color><color=#ff1a1a>т</color><color=#ff0000>ь</color>",
                 ["select"] = "<color=#3aad00>В</color><color=#46d100>ы</color><color=#52f500>б</color><color=#66ff1a>р</color><color=#52f500>а</color><color=#46d100>т</color><color=#3aad00>ь</color>",
                 ["disable"] = "<color=#e2e600>О</color><color=#fbff00>т</color><color=#fbff1a>к</color><color=#fcff33>л</color><color=#fcff4d>ю</color><color=#fcff33>ч</color><color=#fbff1a>и</color><color=#fbff00>т</color><color=#e2e600>ь</color>",
@@ -430,24 +383,6 @@ namespace Oxide.Plugins
             if (EnableSound) Effect.server.Run(SoundSelect, player.transform.position, Vector3.zero, null, false);
             if (ShowMessage) OnScreen(player, Lang("crosshair8", player.UserIDString));//Reply(player, Lang("crosshair8", player.UserIDString));
         }
-        [ConsoleCommand("command9")]
-        void cmdConsoleCommand9(ConsoleSystem.Arg arg)
-        {
-            var player = arg.Player();
-            DestroyCrosshair(player);
-            Crosshair9(player);
-            if (EnableSound) Effect.server.Run(SoundSelect, player.transform.position, Vector3.zero, null, false);
-            if (ShowMessage) OnScreen(player, Lang("crosshair9", player.UserIDString));//Reply(player, Lang("crosshair8", player.UserIDString));
-        }
-        [ConsoleCommand("command10")]
-        void cmdConsoleCommand10(ConsoleSystem.Arg arg)
-        {
-            var player = arg.Player();
-            DestroyCrosshair(player);
-            Crosshair10(player);
-            if (EnableSound) Effect.server.Run(SoundSelect, player.transform.position, Vector3.zero, null, false);
-            if (ShowMessage) OnScreen(player, Lang("crosshair10", player.UserIDString));//Reply(player, Lang("crosshair8", player.UserIDString));
-        }
         [ConsoleCommand("commandNext")]
         void cmdConsoleCommandNext(ConsoleSystem.Arg arg)
         {
@@ -456,11 +391,10 @@ namespace Oxide.Plugins
             var panel = Convert.ToInt16(arg.Args[0]);
             if (panel == 1)
                 ShowMenu(player, null);
-            else if (panel == 2)
+            else 
                 NextMenu2(player, null);
-            else if (panel == 3)
-                NextMenu3(player, null);
-            //NextMenu2(player, null);
+            //else if (panel == 3)
+            //    NextMenu3(player, null);
             if (EnableSound) Effect.server.Run(SoundToggle, player.transform.position, Vector3.zero, null, false);
         }
         [ConsoleCommand("commandBack")]
@@ -472,11 +406,10 @@ namespace Oxide.Plugins
             var panel = Convert.ToInt16(arg.Args[0]);
             if (panel == 1)
                 ShowMenu(player, null);
-            else if (panel == 2)
+            else 
                 NextMenu2(player, null);
-            else if (panel == 3)
-                NextMenu3(player, null);
-
+            //else if (panel == 3)
+            //    NextMenu3(player, null);
             if (EnableSound) Effect.server.Run(SoundToggle, player.transform.position, Vector3.zero, null, false);
         }
         [ConsoleCommand("commandDisable")]
@@ -543,8 +476,6 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, "image6");
             CuiHelper.DestroyUi(player, "image7");
             CuiHelper.DestroyUi(player, "image8");
-            CuiHelper.DestroyUi(player, "image9");
-            CuiHelper.DestroyUi(player, "image10");
         }
         private void DestroyGUImenu(BasePlayer player)
         {
@@ -567,7 +498,6 @@ namespace Oxide.Plugins
         {
             if (player.GetActiveItem() != null)
                 if (input.IsDown(BUTTON.FIRE_SECONDARY) && WeaponList.Contains(player.GetActiveItem().info.displayName.english))
-                //WeaponList.Contains(player.GetActiveItem().info.shortname))
                 {
                     opened[player.UserIDString] = false;
                     DestroyCrosshair(player);
@@ -578,18 +508,15 @@ namespace Oxide.Plugins
                     {
                         if (opened.ContainsKey(player.UserIDString) && opened[player.UserIDString] == false)
                         {
-                            //Puts($"Включаем прицел {lastCrosshair[player.UserIDString]}");
                             opened[player.UserIDString] = true;
-                            if (lastCrosshair[player.UserIDString] == "crosshair1") Crosshair1(player);//{player.SendConsoleCommand("command1");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair2") Crosshair2(player);//{player.SendConsoleCommand("command2");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair3") Crosshair3(player);//{player.SendConsoleCommand("command3");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair4") Crosshair4(player);//{player.SendConsoleCommand("command4");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair5") Crosshair5(player);//{player.SendConsoleCommand("command5");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair6") Crosshair6(player);//{player.SendConsoleCommand("command6");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair7") Crosshair7(player);//{player.SendConsoleCommand("command7");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair8") Crosshair8(player);//{player.SendConsoleCommand("command8");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair9") Crosshair9(player);//{player.SendConsoleCommand("command9");}
-                            else if (lastCrosshair[player.UserIDString] == "crosshair10") Crosshair10(player);//{player.SendConsoleCommand("command10");}
+                            if (lastCrosshair[player.UserIDString] == "crosshair1") Crosshair1(player);
+                            else if (lastCrosshair[player.UserIDString] == "crosshair2") Crosshair2(player);
+                            else if (lastCrosshair[player.UserIDString] == "crosshair3") Crosshair3(player);
+                            else if (lastCrosshair[player.UserIDString] == "crosshair4") Crosshair4(player);
+                            else if (lastCrosshair[player.UserIDString] == "crosshair5") Crosshair5(player);
+                            else if (lastCrosshair[player.UserIDString] == "crosshair6") Crosshair6(player);
+                            else if (lastCrosshair[player.UserIDString] == "crosshair7") Crosshair7(player);
+                            else if (lastCrosshair[player.UserIDString] == "crosshair8") Crosshair8(player);
                         }
                     }
                 }
@@ -773,34 +700,6 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, elements);
         }
 
-        private void Crosshair9(BasePlayer player)
-        {
-            CuiHelper.DestroyUi(player, "image9");
-            var elements = UI.CreateElementContainer("image9", "1 1 1 0.0", "0.490 0.4812", "0.509 0.517", false);
-            var image = GetImage("crosshair9", 0);
-            UI.LoadImage(ref elements, "image9", image, "0 0", "1 1");
-
-            if (lastCrosshair.ContainsKey(player.UserIDString)) lastCrosshair.Remove(player.UserIDString);
-            if (enabled.ContainsKey(player.UserIDString)) enabled.Remove(player.UserIDString);
-            lastCrosshair.Add(player.UserIDString, "crosshair9");
-            enabled.Add(player.UserIDString, true);
-            CuiHelper.AddUi(player, elements);
-        }
-
-        private void Crosshair10(BasePlayer player)
-        {
-            CuiHelper.DestroyUi(player, "image10");
-            var elements = UI.CreateElementContainer("image10", "1 1 1 0.0", "0.490 0.4812", "0.509 0.517", false);
-            var image = GetImage("crosshair10", 0);
-            UI.LoadImage(ref elements, "image10", image, "0 0", "1 1");
-
-            if (lastCrosshair.ContainsKey(player.UserIDString)) lastCrosshair.Remove(player.UserIDString);
-            if (enabled.ContainsKey(player.UserIDString)) enabled.Remove(player.UserIDString);
-            lastCrosshair.Add(player.UserIDString, "crosshair10");
-            enabled.Add(player.UserIDString, true);
-            CuiHelper.AddUi(player, elements);
-        }
-
         #endregion
 
         #region GuiMenu
@@ -819,33 +718,33 @@ namespace Oxide.Plugins
 
             ////////////////background///////////////
             //background1
-            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0 0.18", $"0.250 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0.030 0.28", $"0.240 0.9");
             //background2
-            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0.252 0.18", $"0.496 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0.262 0.28", $"0.486 0.9");
             //background3
-            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0.498 0.18", $"0.728 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0.505 0.28", $"0.730 0.9");
             //background4
-            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0.730 0.18", $"1 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("background", 0), $"0.750 0.28", $"0.97 0.9");
 
             ////////////////image////////////////
             //image1
-            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair1", 0), $"0 0.295", $"0.250 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair1", 0), $"0.100 0.530", $"0.150 0.680");
             //image2
-            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair2", 0), $"0.252 0.295", $"0.496 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair2", 0), $"0.352 0.530", $"0.396 0.680");
             //image3
-            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair3", 0), $"0.498 0.295", $"0.728 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair3", 0), $"0.585 0.530", $"0.655 0.680");
             //image4
-            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair4", 0), $"0.730 0.295", $"1 1");
+            UI.LoadImage(ref elements, "GUImenu", GetImage("crosshair4", 0), $"0.815 0.530", $"0.895 0.680");
 
             /////////////button///////////////////
             //button1
-            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.0445 0.25", $"0.206 0.85", $"command1", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.0445 0.320", $"0.206 0.85", $"command1", TextAnchor.LowerCenter, 0.6f);
             //button2
-            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.282 0.25", $"0.476 0.85", $"command2", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.282 0.320", $"0.476 0.85", $"command2", TextAnchor.LowerCenter, 0.6f);
             //button3
-            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.523 0.25", $"0.715 0.85", $"command3", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.523 0.320", $"0.715 0.85", $"command3", TextAnchor.LowerCenter, 0.6f);
             //button4
-            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.762 0.25", $"0.954 0.85", $"command4", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.762 0.320", $"0.954 0.85", $"command4", TextAnchor.LowerCenter, 0.6f);
 
             //buttonDisable
             UI.CreateButton(ref elements, "GUImenu", colorDisable, Lang("disable", player.UserIDString), 18, "0 0", "0.192 0.18", $"commandDisable", TextAnchor.MiddleCenter, 0.6f);
@@ -869,84 +768,38 @@ namespace Oxide.Plugins
 
             ////////////////background///////////////
             //background1
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0 0.18", $"0.250 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0.030 0.28", $"0.240 0.9");
             //background2
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0.252 0.18", $"0.496 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0.262 0.28", $"0.486 0.9");
             //background3
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0.498 0.18", $"0.728 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0.505 0.28", $"0.730 0.9");
             //background4
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0.730 0.18", $"1 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("background", 0), $"0.750 0.28", $"0.97 0.9");
 
             ////////////////image////////////////
             //image5
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair5", 0), $"0 0.295", $"0.250 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair5", 0), $"0.100 0.530", $"0.150 0.680");
             //image6
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair6", 0), $"0.252 0.295", $"0.496 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair6", 0), $"0.352 0.530", $"0.396 0.680");
             //image7
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair7", 0), $"0.498 0.295", $"0.728 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair7", 0), $"0.585 0.530", $"0.655 0.680");
             //image8
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair8", 0), $"0.730 0.295", $"1 1");
+            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair8", 0), $"0.825 0.530", $"0.885 0.680");
 
             /////////////button///////////////////
             //button5
-            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.0445 0.25", $"0.206 0.85", $"command5", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.0445 0.320", $"0.206 0.85", $"command5", TextAnchor.LowerCenter, 0.6f);
             //button6
-            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.282 0.25", $"0.476 0.85", $"command6", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.282 0.320", $"0.476 0.85", $"command6", TextAnchor.LowerCenter, 0.6f);
             //button7
-            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.523 0.25", $"0.715 0.85", $"command7", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.523 0.320", $"0.715 0.85", $"command7", TextAnchor.LowerCenter, 0.6f);
             //button8
-            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.762 0.25", $"0.954 0.85", $"command8", TextAnchor.LowerCenter, 0.6f);
+            UI.CreateButton(ref elements, "GUImenu2", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.762 0.320", $"0.954 0.85", $"command8", TextAnchor.LowerCenter, 0.6f);
 
             //buttonDisable
             UI.CreateButton(ref elements, "GUImenu2", colorDisable, Lang("disable", player.UserIDString), 18, "0 0", "0.192 0.18", $"commandDisable", TextAnchor.MiddleCenter, 0.6f);
             //buttonBack
-            //UI.CreateButton(ref elements, "GUImenu2", colorToggle, Lang("back", player.UserIDString), 18, "0.600 0", "0.804 0.18", $"commandBack 1", TextAnchor.MiddleCenter, 0.6f);
-            //buttonNext
             UI.CreateButton(ref elements, "GUImenu2", colorToggle, Lang("back", player.UserIDString), 18, "0.805 0", "1 0.18", $"commandBack 1", TextAnchor.MiddleCenter, 0.6f);
-            //UI.CreateButton(ref elements, "GUImenu2", colorToggle, Lang("next", player.UserIDString), 18, "0.805 0", "1 0.18", $"commandNext 3", TextAnchor.MiddleCenter, 0.6f);
-            CuiHelper.AddUi(player, elements);
-        }
-
-        private void NextMenu3(BasePlayer player, string text)
-        {
-            var elements = UI.CreateElementContainer("GUImenu3", "0 0 0 0", "0.2395 0.18", "0.761 0.4525", true);
-            UI.CreatePanel(ref elements, "GUImenu3", colorBackground, "0 0.18", "1 1", 0.6f, true);
-
-            ////////////MainBackground////////////////
-            UI.LoadImage(ref elements, "GUImenu3", GetImage("background2", 0), "0 0", "1 1");
-
-            UI.CreateButton(ref elements, "GUImenu3", colorClose, Lang("close", player.UserIDString), 18, "0.402 0", "0.596 0.18", $"CloseMenu", TextAnchor.MiddleCenter, 0.6f);
-
-            ////////////////background///////////////
-            //background1
-            UI.LoadImage(ref elements, "GUImenu3", GetImage("background", 0), $"0 0.18", $"0.250 1");
-            //background2
-            UI.LoadImage(ref elements, "GUImenu3", GetImage("background", 0), $"0.252 0.18", $"0.496 1");
-            //background3
-            UI.LoadImage(ref elements, "GUImenu3", GetImage("background", 0), $"0.498 0.18", $"0.728 1");
-            //background4
-            UI.LoadImage(ref elements, "GUImenu3", GetImage("background", 0), $"0.730 0.18", $"1 1");
-
-            ////////////////image////////////////
-            //image9
-            UI.LoadImage(ref elements, "GUImenu3", GetImage("crosshair9", 0), $"0 0.295", $"0.250 1");
-            //image10
-            UI.LoadImage(ref elements, "GUImenu2", GetImage("crosshair10", 0), $"0.252 0.295", $"0.496 1");
-
-            /////////////button///////////////////
-            //button5
-            UI.CreateButton(ref elements, "GUImenu3", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.0445 0.25", $"0.206 0.85", $"command9", TextAnchor.LowerCenter, 0.6f);
-            //button6
-            UI.CreateButton(ref elements, "GUImenu3", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.282 0.25", $"0.476 0.85", $"command10", TextAnchor.LowerCenter, 0.6f);
-            //button7
-            UI.CreateButton(ref elements, "GUImenu3", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.523 0.25", $"0.715 0.85", $"command11", TextAnchor.LowerCenter, 0.6f);
-            //button8
-            UI.CreateButton(ref elements, "GUImenu3", "0 0 0 0", Lang("select", player.UserIDString), 20, $"0.762 0.25", $"0.954 0.85", $"command12", TextAnchor.LowerCenter, 0.6f);
-
-            //buttonDisable
-            UI.CreateButton(ref elements, "GUImenu3", colorDisable, Lang("disable", player.UserIDString), 18, "0 0", "0.192 0.18", $"commandDisable", TextAnchor.MiddleCenter, 0.6f);
-            //buttonBack
-            UI.CreateButton(ref elements, "GUImenu3", colorToggle, Lang("back", player.UserIDString), 18, "0.805 0", "1 0.18", $"commandBack 1", TextAnchor.MiddleCenter, 0.6f);
             CuiHelper.AddUi(player, elements);
         }
 
@@ -1078,9 +931,7 @@ namespace Oxide.Plugins
         #region Helpers
 
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
-
         void Reply(BasePlayer player, string message, string args = null) => PrintToChat(player, $"{message}", args);
-
         bool IsAllowed(string id, string perm) => permission.UserHasPermission(id, perm);
 
         #endregion

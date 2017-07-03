@@ -1,0 +1,19 @@
+{
+    "name": "Ranks",
+    "description": "Plugin Ranks was inspired by point blank game XD.",
+    "author": "tugamano",
+    "version": "0.1.6",
+    "configuration": true,
+    "require": {
+        "Death": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ranks.2228",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

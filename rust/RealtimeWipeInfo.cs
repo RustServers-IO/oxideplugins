@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("RealtimeWipeInfo", "Ryan", "1.0.6", ResourceId = 2473)]
+    [Info("RealtimeWipeInfo", "Ryan", "1.0.7", ResourceId = 2473)]
     [Description("Updates title dynamically depending on wipe time as well as preventing wipe chat spam.")]
     internal class RealtimeWipeInfo : RustPlugin
     {
@@ -20,7 +20,7 @@ namespace Oxide.Plugins
         private Dictionary<string, Timer> Timers = new Dictionary<string, Timer>();
 
         // Credit to Visagalis for finding SaveRestore.SaveCreatedTime
-        private double SecsSinceWipe() => (DateTime.UtcNow - SaveRestore.SaveCreatedTime.ToLocalTime()).TotalSeconds;
+        private double SecsSinceWipe() => (DateTime.UtcNow.ToLocalTime() - SaveRestore.SaveCreatedTime.ToLocalTime()).TotalSeconds;
 
         #endregion Other
 

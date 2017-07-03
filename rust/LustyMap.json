@@ -2,7 +2,7 @@
     "name": "LustyMap",
     "description": "In-game map and minimap GUI",
     "author": "k1lly0u",
-    "version": "2.1.1",
+    "version": "2.1.2",
     "configuration": true,
     "suggest": {
         "Clans": "*",

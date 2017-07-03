@@ -1,0 +1,16 @@
+{
+    "name": "Telekinesis",
+    "description": "Control objects with your mind!",
+    "author": "redBDGR",
+    "version": "2.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/telekinesis.823",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "MoneySystem",
+    "description": "MoneySystem contains bank shops commerce.",
+    "author": "tugamano",
+    "version": "1.0.1",
+    "configuration": true,
+    "suggest": {
+        "Location": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/moneysystem.2306",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

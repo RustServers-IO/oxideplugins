@@ -1,0 +1,19 @@
+{
+    "name": "Transmation",
+    "description": "Transform  admin god mode with a chosen kit.",
+    "author": "tugamano",
+    "version": "0.0.1",
+    "configuration": true,
+    "require": {
+        "Kits": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/transformation.2284",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

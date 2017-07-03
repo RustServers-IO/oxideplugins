@@ -2,7 +2,7 @@
     "name": "C4Logger",
     "description": "Saves informations about the use of C4.",
     "author": "Austinv900",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/c4logger.1795",

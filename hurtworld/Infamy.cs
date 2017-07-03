@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Infamy", "Wulf/lukespragg", "0.1.0", ResourceId = 2488)]
+    [Info("Infamy", "Wulf/lukespragg", "0.1.1", ResourceId = 2488)]
     [Description("Allows players with permission to add, remove, reset, or set infamy")]
     public class Infamy : CovalencePlugin
     {
@@ -86,7 +86,6 @@ namespace Oxide.Plugins
             var message = "";
             foreach (var target in targets)
             {
-                PrintWarning("Inside foreach");
                 var session = target.Object as PlayerSession;
                 var stats = session?.WorldPlayerEntity.GetComponent<EntityStats>();
                 var infamy = stats.GetFluidEffect(EEntityFluidEffectType.Infamy).GetValue();

@@ -8,7 +8,7 @@ namespace Oxide.Plugins
     // TODO LIST
     // Nothing, yet.
 
-    [Info("Group Limits", "Kappasaurrus", "2.0.0")]
+    [Info("Group Limits", "Kappasaurrus", "2.0.1")]
 
     class GroupLimits : RustPlugin
     {
@@ -127,7 +127,7 @@ namespace Oxide.Plugins
                 ["discordMessage"] = "{player} ({steamID}) tried to authorize on a {type} at coordinates ({coordinates}) but broke the group limit.",
                 ["slackMessage"] = ">{player} ({steamID}) tried to authorize on a {type} at coordinates ({coordinates}) but broke the group limit.",
                 ["staffMessage"] = "{player} ({steamID}) tried to authorize on a {type} at coordinates ({coordinates}) but broke the group limit.",
-                ["staffLog"] = "[{time}] {player} ({steamID}) tried to authorize at coordinates ({coordinates}) but broke the group limit.",
+                ["logMessage"] = "[{time}] {player} ({steamID}) tried to authorize at coordinates ({coordinates}) but broke the group limit.",
                 ["playerMessage"] = "Error, you're exceeding the {limit} player group limit."
             }, this);
         }

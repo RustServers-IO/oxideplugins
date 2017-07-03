@@ -1,0 +1,16 @@
+{
+    "name": "SleeperLog",
+    "description": "A plugin that records where the player slept for a possible admin teleport",
+    "author": "P0LENT4",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/sleeperlog.2286",
+    "games": [
+        "rust legacy"
+    ],
+    "keywords": [
+        "oxide",
+        "rust legacy"
+    ]
+}

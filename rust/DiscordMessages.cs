@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordMessages", "Slut", "1.3.1", ResourceId = 2486)]
+    [Info("DiscordMessages", "Slut", "1.3.2", ResourceId = 2486)]
     internal class DiscordMessages : CovalencePlugin
     {
 #region Classes
@@ -205,7 +205,7 @@ namespace Oxide.Plugins
                 ["Disabled"] = "This feature is currently disabled.",
                 ["Failed"] = "Your report failed to send, contact the server owner.",
                 ["ToSelf"] = "You cannot perform this action on yourself.",
-                ["BanPrefix"] = "Banned: ",
+                ["BanPrefix"] = "Banned: {1}",
                 ["Embed_ReportPlayer"] = "Reporter",
                 ["Embed_ReportTarget"] = "Reported",
                 ["Embed_ReportReason"] = "Reason",
@@ -410,24 +410,21 @@ namespace Oxide.Plugins
 
         #region Mutes
 
-        private string FormatTime(TimeSpan time)
-        {
-            return
-                $"{(time.Days == 0 ? string.Empty : $"{time.Days} day(s)")}{(time.Days != 0 && time.Hours != 0 ? $", " : string.Empty)}{(time.Hours == 0 ? string.Empty : $"{time.Hours} hour(s)")}{(time.Hours != 0 && time.Minutes != 0 ? $", " : string.Empty)}{(time.Minutes == 0 ? string.Empty : $"{time.Minutes} minute(s)")}{(time.Minutes != 0 && time.Seconds != 0 ? $", " : string.Empty)}{(time.Seconds == 0 ? string.Empty : $"{time.Seconds} second(s)")}";
-        }
+        string FormatTime(TimeSpan time) => $"{(time.Days == 0 ? string.Empty : $"{time.Days} day(s)")}{(time.Days != 0 && time.Hours != 0 ? $", " : string.Empty)}{(time.Hours == 0 ? string.Empty : $"{time.Hours} hour(s)")}{(time.Hours != 0 && time.Minutes != 0 ? $", " : string.Empty)}{(time.Minutes == 0 ? string.Empty : $"{time.Minutes} minute(s)")}{(time.Minutes != 0 && time.Seconds != 0 ? $", " : string.Empty)}{(time.Seconds == 0 ? string.Empty : $"{time.Seconds} second(s)")}";
 
-        private void OnBetterChatTimeMuted(IPlayer target, IPlayer player, DateTime expireDate, Action<bool> callback) => SendMute(target, player, expireDate, callback);
+        private void OnBetterChatTimeMuted(IPlayer target, IPlayer player, TimeSpan expireDate, Action<bool> callback) => SendMute(target, player, expireDate, true, callback);
 
-        private void OnBetterChatMuted(IPlayer target, IPlayer player, Action<bool> callback) => SendMute(target, player, DateTime.MinValue, callback);
+        private void OnBetterChatMuted(IPlayer target, IPlayer player, Action<bool> callback) => SendMute(target, player, TimeSpan.Zero, false, callback);
 
-        private void SendMute(IPlayer target, IPlayer player, DateTime expireDate, Action<bool> callback)
+        private void SendMute(IPlayer target, IPlayer player, TimeSpan expireDate, bool timed, Action<bool> callback)
         {
             if (!MuteEnabled)
                 return;
+            Puts(timed + " called");
             List<Fields> fields = new List<Fields>();
             fields.Add(new Fields(GetLang("Embed_MuteTarget"), $"[{target.Name}](https://steamcommunity.com/profiles/{target.Id})", true));
             fields.Add(new Fields(GetLang("Embed_MutePlayer"), player.Name, true));
-            fields.Add(new Fields(GetLang("Embed_MuteTime"), expireDate != DateTime.MinValue ? FormatTime(expireDate - DateTime.UtcNow) : "Permanent", true));
+            fields.Add(new Fields(GetLang("Embed_MuteTime"), timed ? FormatTime(expireDate) : "Permanent", true));
             FancyMessage message = new FancyMessage(null, false, new List<Embeds> { new Embeds(GetLang("Embed_MuteTitle"), MuteColor, fields) });
             SendPOST(MuteURL, message.toJSON(message), callback);
         }
@@ -478,7 +475,7 @@ namespace Oxide.Plugins
                 ServerUsers.Save();
                 if (Announce) server.Broadcast(string.Format(GetLang("BanMessage", null), target.Name, reason));
                 if (target.IsConnected)
-                    target.Kick(GetLang("BanPrefix", null) + reason);
+                    target.Kick(string.Format(GetLang("BanPrefix", null), reason));
                 SendBanMessage(target.Name, target.Id, reason, player.Name);
             }
         }

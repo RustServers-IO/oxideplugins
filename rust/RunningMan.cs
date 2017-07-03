@@ -9,7 +9,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37", "1.1.6")]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.1.8")]
     [Description("Running Man")]
     class RunningMan : RustPlugin
     {
@@ -153,18 +153,13 @@ namespace Oxide.Plugins
                 eventstart = null;
                 Runlog("timer eventstart stopped");
             }
-            if (BasePlayer.activePlayerList.Count >= (int) Config["Default", "Count"])
+            if (BasePlayer.activePlayerList != null && BasePlayer.activePlayerList.Count >= (int) Config["Default", "Count"])
             {
-                var t = BasePlayer.activePlayerList.GetEnumerator();
-                var i = 0;
-                var arrayPlayers = new List<BasePlayer>();
-                while (t.MoveNext())
-                {
-                    i += 1;
-                    arrayPlayers[i] = t.Current;
-                }
-                var randI = rnd.Next(1, BasePlayer.activePlayerList.Count);
-                runningman = arrayPlayers[randI];
+                var t = BasePlayer.activePlayerList;
+                if (t == null)
+                    return;
+                var randI = rnd.Next(1, t.Count);
+                runningman = t[randI];
                 Runlog("Running man: " + runningman.displayName);
                 BroadcastChat((string) Config["Default", "ChatName"], "Running man: " + runningman.displayName);
                 BroadcastChat((string) Config["Default", "ChatName"], "Kill him and get the reward!");
@@ -337,10 +332,10 @@ namespace Oxide.Plugins
         {
             if (hitinfo.Initiator == null)
             {
-                Puts("fff");return;
+                return;
             }
             var attacker = hitinfo.Initiator.ToPlayer();
-            if (attacker != victim)
+            if (attacker != victim && attacker != null)
             {
                 if (victim == runningman)
                 {
@@ -554,6 +549,11 @@ namespace Oxide.Plugins
                     Runlog("timer eventstart stopped");
                 }
                 List<BasePlayer> onlineplayers = BasePlayer.activePlayerList;
+                if (onlineplayers == null)
+                {
+                    SendReply(player, "You can't run event while there is nobody online.");
+                    return;
+                }
                 var randI = rnd.Next(0, onlineplayers.Count);
                 runningman = onlineplayers[randI];
                 Runlog("Running man: " + runningman.displayName);

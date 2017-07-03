@@ -2,7 +2,7 @@
     "name": "Metabolism",
     "description": "Modify or disable player metabolism stats and rates",
     "author": "Wulf",
-    "version": "2.5.1",
+    "version": "2.6.0",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/metabolism.680",

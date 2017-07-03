@@ -1,0 +1,16 @@
+{
+    "name": "NoBackpacks",
+    "description": "Removes Backpacks",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/nobackpacks.2546",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

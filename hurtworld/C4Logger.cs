@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("C4Logger", "Lizzaran", "1.2.0", ResourceId = 1795)]
+    [Info("C4Logger", "austinv900", "1.2.1", ResourceId = 1795)]
     [Description("C4Logger saves informations about the use of C4.")]
     public class C4Logger : HurtworldPlugin
     {
@@ -131,35 +131,26 @@ namespace Oxide.Plugins
                 return dcap;
             }
 
-            public List<PlayerIdentity> GetCellOwners(Vector3 position)
+            public IEnumerable<PlayerIdentity> GetCellOwners(Vector3 position)
             {
-                var cell = ConstructionManager.GetOwnershipCell(position);
-                if (cell >= 0)
-                {
-                    OwnershipStakeServer stake;
-                    if (ConstructionManager.Instance.OwnershipCells.TryGetValue(cell, out stake))
-                    {
-                        if (stake?.AuthorizedPlayers != null)
-                        {
-                            return stake.AuthorizedPlayers.ToList();
-                        }
-                    }
-                }
-                return new List<PlayerIdentity>();
+                var cell = ConstructionManager.Instance.GetOwnerStake(position);
+
+                if (cell == null || cell.AuthorizedPlayers == null) yield break;
+
+                foreach (var auth in cell.AuthorizedPlayers) yield return auth;
             }
 
-            public List<OwnershipStakeServer> GetStakesFromPlayer(PlayerSession session)
+            public IEnumerable<OwnershipStakeServer> GetStakesFromPlayer(PlayerSession session)
             {
                 var stakes = Resources.FindObjectsOfTypeAll<OwnershipStakeServer>();
-                if (stakes != null)
+                if (stakes == null) yield break;
+
+                foreach(var stake in stakes)
                 {
-                    return
-                        stakes.Where(
-                            s =>
-                                !s.IsDestroying && s.gameObject != null && s.gameObject.activeSelf &&
-                                s.AuthorizedPlayers.Contains(session.Identity)).ToList();
+                    if (stake.IsDestroying && stake.gameObject == null && !stake.gameObject.activeSelf && !stake.AuthorizedPlayers.Contains(session.Identity)) yield break;
+
+                    yield return stake;
                 }
-                return new List<OwnershipStakeServer>();
             }
 
             public Vector3 GetRaycastPosition(Vector3? position, Vector3? rotation)
