@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,8 +16,8 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.0.0", ResourceId = 1394)]
-    [Description("Prevent commands while raid/combat is occuring")]
+    [Info("NoEscape", "rustservers.io", "1.0.1", ResourceId = 1394)]
+    [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
         #region Setup & Configuration
@@ -437,7 +437,7 @@ namespace Oxide.Plugins
             public DateTime lastNotification = DateTime.MinValue;
             internal Timer timer;
 
-            protected abstract float Duration { get; }
+            internal abstract float Duration { get; }
 
             public bool Active
             {
@@ -491,7 +491,7 @@ namespace Oxide.Plugins
 
         public class CombatBlock : BlockBehavior
         {
-            protected override float Duration
+            internal override float Duration
             {
                 get
                 {
@@ -502,7 +502,7 @@ namespace Oxide.Plugins
 
         public class RaidBlock : BlockBehavior
         {
-            protected override float Duration
+            internal override float Duration
             {
                 get
                 {
@@ -1237,7 +1237,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        object CanUseVending(BuildingBlock block, BasePlayer player, BuildingGrade.Enum grade)
+        object CanUseVending(VendingMachine machine, BasePlayer player)
         {
             var result = CanDo("vend", player);
             if (result is string)
@@ -1314,7 +1314,7 @@ namespace Oxide.Plugins
             if (blocker.lastNotification != DateTime.MinValue)
             {
                 TimeSpan diff = DateTime.Now - blocker.lastNotification;
-                if (diff.TotalSeconds >= (raidDuration/2))
+                if (diff.TotalSeconds >= (blocker.Duration/2))
                     send = true;
             }
             else
@@ -1322,7 +1322,7 @@ namespace Oxide.Plugins
 
             if (send)
             {
-                SendReply(target, GetPrefix(target.UserIDString) + GetMsg(langMessage, target.UserIDString).Replace("{time}", GetCooldownTime(raidDuration, target.UserIDString)));
+                SendReply(target, GetPrefix(target.UserIDString) + GetMsg(langMessage, target.UserIDString).Replace("{time}", GetCooldownTime(blocker.Duration, target.UserIDString)));
                 blocker.lastNotification = DateTime.Now;
 
                 blocker.Notify(delegate()
