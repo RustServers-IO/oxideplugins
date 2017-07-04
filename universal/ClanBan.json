@@ -5,7 +5,6 @@
     "version": "1.1.0",
     "configuration": true,
     "suggest": {
-        "DiscordMessages": "*",
         "EnhancedBanSystem": "*",
         "Clans": "*"
     },
