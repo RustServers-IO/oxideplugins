@@ -7,7 +7,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("LootChests", "Noviets", "1.1.0")]
+    [Info("LootChests", "Noviets", "1.2.0")]
     [Description("Spawns Storage Chests with loot around the map")]
 
     class LootChests : HurtworldPlugin
@@ -62,6 +62,7 @@ namespace Oxide.Plugins
 			if(Config["ShowSpawnMessage"] == null) Config.Set("ShowSpawnMessage", true);
 			if(Config["DestroyOnEmpty"] == null) Config.Set("DestroyOnEmpty", true);
 			if(Config["ShowDespawnMessage"] == null) Config.Set("ShowDespawnMessage", true);
+			if(Config["UseWeaponsCrateMod"] == null) Config.Set("UseWeaponsCrateMod", false);
             SaveConfig();
         }
 		[ChatCommand("lootchests")]
@@ -174,6 +175,8 @@ namespace Oxide.Plugins
 				string chest = "StorageChestDynamicConstructed";
 				if((bool)Config["DestroyOnEmpty"])
 					chest = "LootCache";
+				if ((bool)Config ["UseWeaponsCrateMod"])
+					chest = "WeaponsCrate";
 				timer.Repeat(Convert.ToSingle(Config["SecondsForSpawn"]), 0, () =>
 				{
 					nextspawn = DateTime.Now.AddSeconds(Convert.ToSingle(Config["SecondsForSpawn"]));
@@ -183,6 +186,7 @@ namespace Oxide.Plugins
 					float min = Convert.ToSingle(Config["MinimumRange"]);
 					float max = Convert.ToSingle(Config["MaximumRange"]);
 					int count = Convert.ToInt32(Config["ChestSpawnCount"]);
+					int iPC = Convert.ToInt32(Config["ItemsPerChest"]);
 					foreach(string Loc in LocList)
 					{
 						int i=0;
@@ -201,15 +205,22 @@ namespace Oxide.Plugins
 								if(!hitInfo.collider.gameObject.name.Contains("UV") && !hitInfo.collider.gameObject.name.Contains("Cliff") && !hitInfo.collider.gameObject.name.Contains("Zone") && !hitInfo.collider.gameObject.name.Contains("Cube") && !hitInfo.collider.gameObject.name.Contains("Build"))
 								{
 									GameObject Obj = Singleton<HNetworkManager>.Instance.NetInstantiate(chest, hitInfo.point, Quaternion.identity, GameManager.GetSceneTime());
-									Inventory inv = Obj.GetComponent<Inventory>() as Inventory;
-									if(chest == "LootCache")
-										inv.Capacity = Convert.ToInt32(Config["ItemsPerChest"]);
-									uLink.NetworkView nwv = uLink.NetworkView.Get(Obj);
-									if((bool)Config["DestroyOnEmpty"])
-										inv.DestroyOnEmpty = true;
-									GiveItems(inv);
-									Destroy(nwv);
-									i++;
+									if(Obj != null)
+									{
+										Inventory inv = Obj.GetComponent<Inventory>() as Inventory;
+										if(inv.Capacity < iPC)
+											inv.ChangeCapacity(iPC);
+										uLink.NetworkView nwv = uLink.NetworkView.Get(Obj);
+										inv.DestroyOnEmpty = ((bool)Config["DestroyOnEmpty"]);
+										GiveItems(inv);
+										Destroy(nwv);
+										i++;
+									}
+									else
+									{
+										Puts("Error: Spawned chest is null, make sure you have WeaponsCrate Mod installed if you are using it");
+										return;
+									}
 								}
 								else
 									fail++;
@@ -246,7 +257,8 @@ namespace Oxide.Plugins
 		{
 			timer.Once(Convert.ToSingle(Config["SecondsTillDestroy"]), () =>
 			{
-				Singleton<HNetworkManager>.Instance.NetDestroy(nwv);
+				if(nwv != null)
+					Singleton<HNetworkManager>.Instance.NetDestroy(nwv);
 			});
 		}
 	}
