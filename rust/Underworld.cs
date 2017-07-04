@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underworld", "nivex", "0.1.3", ResourceId = 25895)]
+    [Info("Underworld", "nivex", "0.1.4", ResourceId = 25895)]
     [Description("Teleports admins/developer under the world when they disconnect.")]
     public class Underworld : RustPlugin
 	{
@@ -24,7 +24,7 @@ namespace Oxide.Plugins
         public class UserInfo
         {
             public string Home { get; set; } = Vector3.zero.ToString();
-            public bool WakeOnLand { get; set; } = false;
+            public bool WakeOnLand { get; set; } = true;
             public bool SaveInventory { get; set; } = true;
             public bool AutoNoClip { get; set; } = true;
             public List<UnderworldItem> Items { get; set; } = new List<UnderworldItem>();
@@ -34,27 +34,27 @@ namespace Oxide.Plugins
 
         public class UnderworldItem
         {
-            public string container { get; private set; } = null;
-            public string shortname { get; private set; } = null;
-            public int itemid { get; private set; } = 0;
-            public ulong skinID { get; private set; } = 0;
-            public int amount { get; private set; } = 0;
-            public float condition { get; private set; } = 0;
-            public float maxCondition { get; private set; } = 0;
-            public int position { get; private set; } = -1;
-            public float fuel { get; private set; } = 0;
-            public int keyCode { get; private set; } = 0;
-            public int ammo { get; private set; } = 0;
-            public string ammoTypeShortname { get; private set; } = null;
-            public string fogImages { get; private set; } = null;
-            public string paintImages { get; private set; } = null;
-            public List<UnderworldMod> contents { get; private set; } = null;
+            public string container { get; set; } = "main";
+            public string shortname { get; set; } = null;
+            public int itemid { get; set; } = 0;
+            public ulong skinID { get; set; } = 0;
+            public int amount { get; set; } = 0;
+            public float condition { get; set; } = 0;
+            public float maxCondition { get; set; } = 0;
+            public int position { get; set; } = -1;
+            public float fuel { get; set; } = 0;
+            public int keyCode { get; set; } = 0;
+            public int ammo { get; set; } = 0;
+            public string ammoTypeShortname { get; set; } = null;
+            public string fogImages { get; set; } = null;
+            public string paintImages { get; set; } = null;
+            public List<UnderworldMod> contents { get; set; } = null;
 
             public UnderworldItem() { }
 
             public UnderworldItem(string container, Item item)
             {
-                if (item == null || string.IsNullOrEmpty(container))
+                if (item == null)
                     return;
 
                 this.container = container;
@@ -70,7 +70,7 @@ namespace Oxide.Plugins
                 this.ammo = item?.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine?.contents ?? 0;
                 this.ammoTypeShortname = item.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine?.ammoType?.shortname ?? null;
 
-                var mapEntity = item.GetHeldEntity()?.GetComponent<MapEntity>();
+                var mapEntity = item.GetHeldEntity() as MapEntity;
 
                 if (mapEntity != null)
                 {
@@ -86,7 +86,7 @@ namespace Oxide.Plugins
                     {
                         this.contents.Add(new UnderworldMod
                         {
-                            shortname = ItemManager.FindItemDefinition(mod.info.shortname)?.shortname ?? null,
+                            shortname = mod.info.shortname,
                             amount = mod.amount,
                             condition = mod.condition,
                             maxCondition = mod.maxCondition,
@@ -107,12 +107,17 @@ namespace Oxide.Plugins
             public UnderworldMod() { }
         }
 
+        void Init()
+        {
+            Unsubscribe(nameof(OnPlayerDisconnected));
+            Unsubscribe(nameof(OnPlayerInit));
+            Unsubscribe(nameof(OnPlayerSleepEnded));
+        }
+
         void Loaded()
         {
-            LoadVariables();
-
             dataFile = Interface.Oxide.DataFileSystem.GetFile(Title);
-            
+
             try
             {
                 storedData = dataFile.ReadObject<StoredData>();
@@ -121,9 +126,23 @@ namespace Oxide.Plugins
 
             if (storedData == null)
                 storedData = new StoredData();
+
+            LoadVariables();
         }
         
-		void OnPlayerDisconnected(BasePlayer player, string reason)
+        void OnServerInitialized()
+        {
+            Subscribe(nameof(OnPlayerDisconnected));
+            Subscribe(nameof(OnPlayerInit));
+            Subscribe(nameof(OnPlayerSleepEnded));
+        }
+
+        void Unload()
+        {
+            SaveData();
+        }
+
+        void OnPlayerDisconnected(BasePlayer player, string reason)
 		{
             if (player.IsAdmin || player.IsDeveloper)
             {
@@ -181,11 +200,14 @@ namespace Oxide.Plugins
 
                 if (allowSaveInventory && user.SaveInventory && user.Items.Count > 0)
                 {
-                    player.inventory.Strip();
-
-                    foreach (var uwi in user.Items.ToList())
+                    if (user.Items.Any(item => item.amount > 0))
                     {
-                        RestoreItem(player, uwi);
+                        player.inventory.Strip();
+
+                        foreach (var uwi in user.Items.ToList())
+                        {
+                            RestoreItem(player, uwi);
+                        }
                     }
 
                     user.Items.Clear();
@@ -210,17 +232,9 @@ namespace Oxide.Plugins
                         {
                             if (!allowSaveInventory)
                                 return;
-
-                            if (!user.SaveInventory)
-                            {
-                                user.SaveInventory = true;
-                                player.ChatMessage(msg("SavingInventory", player.UserIDString));
-                            }
-                            else
-                            {
-                                user.SaveInventory = false;
-                                player.ChatMessage(msg("NotSavingInventory", player.UserIDString));
-                            }
+                            
+                            user.SaveInventory = !user.SaveInventory;
+                            player.ChatMessage(msg(user.SaveInventory ? "SavingInventory" : "NotSavingInventory", player.UserIDString));
                             SaveData();
                         }
                         return;
@@ -232,14 +246,14 @@ namespace Oxide.Plugins
                             {
                                 if (args[1].All(char.IsDigit) && args[2].All(char.IsDigit) && args[3].All(char.IsDigit))
                                 {
-                                    var pos = new Vector3(float.Parse(args[1]), 0f, float.Parse(args[3]));
+                                    var customPos = new Vector3(float.Parse(args[1]), 0f, float.Parse(args[3]));
 
-                                    if (Vector3.Distance(pos, Vector3.zero) <= TerrainMeta.Size.x / 1.5f)
+                                    if (Vector3.Distance(customPos, Vector3.zero) <= TerrainMeta.Size.x / 1.5f)
                                     {
-                                        pos.y = float.Parse(args[2]);
+                                        customPos.y = float.Parse(args[2]);
 
-                                        if (pos.y > -100f && pos.y < 4400f)
-                                            position = pos;
+                                        if (customPos.y > -100f && customPos.y < 4400f)
+                                            position = customPos;
                                         else
                                             player.ChatMessage(msg("OutOfBounds", player.UserIDString));
                                     }
@@ -272,31 +286,15 @@ namespace Oxide.Plugins
                         return;
                     case "wakeup":
                         {
-                            if (!user.WakeOnLand)
-                            {
-                                user.WakeOnLand = true;
-                                player.ChatMessage(msg("PlayerWakeUp", player.UserIDString));
-                            }
-                            else
-                            {
-                                user.WakeOnLand = false;
-                                player.ChatMessage(msg("PlayerWakeUpReset", player.UserIDString));
-                            }
+                            user.WakeOnLand = !user.WakeOnLand;
+                            player.ChatMessage(msg(user.WakeOnLand ? "PlayerWakeUp" : "PlayerWakeUpReset", player.UserIDString));
                             SaveData();
                         }
                         return;
                     case "noclip":
                         {
-                            if (!user.AutoNoClip)
-                            {
-                                user.AutoNoClip = true;
-                                player.ChatMessage(msg("PlayerNoClipEnabled", player.UserIDString));                                
-                            }
-                            else
-                            {
-                                user.AutoNoClip = false;
-                                player.ChatMessage(msg("PlayerNoClipDisabled", player.UserIDString));
-                            }
+                            user.AutoNoClip = !user.AutoNoClip;
+                            player.ChatMessage(msg(user.AutoNoClip ? "PlayerNoClipEnabled" : "PlayerNoClipDisabled", player.UserIDString));
                             SaveData();
                         }
                         return;
@@ -378,10 +376,10 @@ namespace Oxide.Plugins
                 return;
             }
 
-            player.inventory.Strip();
             user.Items.Clear();
             user.Items.AddRange(items);
             SaveData();
+            player.inventory.Strip();
         }
 
         private void RestoreItem(BasePlayer player, UnderworldItem uwi)
@@ -413,10 +411,14 @@ namespace Oxide.Plugins
 
                 if (weapon != null)
                 {
-                    weapon.primaryMagazine.contents = uwi.ammo;
-
                     if (!string.IsNullOrEmpty(uwi.ammoTypeShortname))
+                    {
                         weapon.primaryMagazine.ammoType = ItemManager.FindItemDefinition(uwi.ammoTypeShortname);
+                    }
+
+                    weapon.primaryMagazine.contents = 0; // unload the old ammo
+                    weapon.SendNetworkUpdateImmediate(false); // update
+                    weapon.primaryMagazine.contents = weapon.primaryMagazine.capacity; // load new ammo
                 }
             }
 
@@ -519,7 +521,7 @@ namespace Oxide.Plugins
             maxHHT = Convert.ToBoolean(GetConfig("Settings", "Set Health, Hunger and Thirst to Max", false));
             defaultPos = GetConfig("Settings", "Default Teleport To Position On Disconnect", "(0, 0, 0)").ToString().ToVector3();            
             allowSaveInventory = Convert.ToBoolean(GetConfig("Settings", "Allow Save And Strip Admin Inventory On Disconnect", true));
-            Blacklist = (GetConfig("Settings", "Blacklist", DefaultBlacklist) as List<object>).Where(o => o != null && o.ToString().Length > 0).Select(o => o.ToString()).ToList();
+            Blacklist = (GetConfig("Settings", "Blacklist", DefaultBlacklist) as List<object>).Where(o => o != null && o.ToString().Length > 0).Cast<string>().ToList();
         }
 
         protected override void LoadDefaultConfig()
