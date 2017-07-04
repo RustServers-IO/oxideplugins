@@ -2,7 +2,7 @@
     "name": "Blueprints Revived",
     "description": "Adds blueprints back to Rust",
     "author": "Jake Rich",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "configuration": true,
     "require": {
         "ImageLibrary": "*"

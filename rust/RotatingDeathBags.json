@@ -1,0 +1,16 @@
+{
+    "name": "RotatingDeathBags",
+    "description": "Make dropped item containers float and rotate",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/rotatingdeathbags.2549",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

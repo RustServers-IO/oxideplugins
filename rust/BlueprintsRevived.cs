@@ -10,7 +10,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("BlueprintsRevived", "Jake_Rich", "1.2.2", ResourceId = 2433)]
+    [Info("BlueprintsRevived", "Jake_Rich", "1.2.3", ResourceId = 2433)]
     [Description("The original Blueprint System with balance changes!")]
 
     public class BlueprintsRevived : RustPlugin
@@ -2199,7 +2199,7 @@ namespace Oxide.Plugins
             {
                 panel = new CuiImageComponent
                 {
-                    Color = color
+                    Color = color,
                 };
 
                 Element.Components.Insert(0, panel);
@@ -3596,10 +3596,13 @@ namespace Oxide.Plugins
             {
                 return;
             }
-            container.inventory.Clear();
             if (container.PrefabName == "assets/prefabs/npc/patrol helicopter/heli_crate.prefab") //Ignore heli crates
             {
                 return;
+            }
+            else
+            {
+                container.inventory.Clear();
             }
 
             string name = "";
@@ -3753,7 +3756,6 @@ namespace Oxide.Plugins
 
                 ItemManager.DoRemoves();
 
-                Puts($"Player inventory items {player.inventory.containerMain.itemList.Count()}");
                 player.inventory.containerMain.capacity = 24;
             }
 

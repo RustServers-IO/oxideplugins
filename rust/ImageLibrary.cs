@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.2", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.3", ResourceId = 2193)]
     class ImageLibrary : RustPlugin
     {
         #region Fields
@@ -47,6 +47,8 @@ namespace Oxide.Plugins
             foreach (var item in ItemManager.itemList)
                 workshopNameToShortname.Add(item.displayName.english.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", ""), item.shortname);            
             CheckForRefresh();
+            foreach (var player in BasePlayer.activePlayerList)
+                OnPlayerInit(player);
         }
         void OnPlayerInit(BasePlayer player) => GetPlayerAvatar(player?.UserIDString);  
         void Unload()
@@ -144,13 +146,13 @@ namespace Oxide.Plugins
                     foreach (var tag in item.Tags)
                     {
                         var adjTag = tag.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", "");
-                        if (workshopNameToShortname.ContainsKey(adjTag))
+                            if (workshopNameToShortname.ContainsKey(adjTag))
                         {
                             string identifier = $"{workshopNameToShortname[adjTag]}_{item.Id}";
 
-                            if (!imageUrls.URLs.ContainsKey(identifier))                               
+                            if (!imageUrls.URLs.ContainsKey(identifier))
                                 imageUrls.URLs.Add(identifier, item.PreviewImageUrl);
-                            
+
                             if (configData.GetSkinData)
                             {
                                 skinInformation.skinData[identifier] = new Dictionary<string, object>
@@ -252,8 +254,10 @@ namespace Oxide.Plugins
             {"pipeshotgun", "shotgun.waterpipe" },
             {"woodstorage", "box.wooden" },
             {"ak47", "rifle.ak" },
+            {"bearrug", "rug.bear" },
             {"boltrifle", "rifle.bolt" },
             {"bandana", "mask.bandana" },
+            {"hideshirt", "attire.hide.vest" },
             {"snowjacket", "jacket.snow" },
             {"buckethat", "bucket.helmet" },
             {"semiautopistol", "pistol.semiauto" },
@@ -881,7 +885,7 @@ namespace Oxide.Plugins
                     if (il == null) yield break;
                     if (info.bytes == null && www.error != null)
                     {
-                        print(string.Format("Image loading fail! Error: {0}", www.error));
+                        print(string.Format("Image loading fail! Error: {0} - Image Name: {1} - Image URL: {2}", www.error, info.name, info.url));
                     }
                     else
                     {
