@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Stack Size Controller", "Canopy Sheep", "1.9.5", ResourceId = 2320)]
+    [Info("Stack Size Controller", "Canopy Sheep", "1.9.6", ResourceId = 2320)]
     [Description("Allows you to set the max stack size of every item.")]
     public class StackSizeController : RustPlugin
     {
@@ -62,14 +62,14 @@ namespace Oxide.Plugins
         object CanMoveItem(Item item, PlayerInventory inventory, uint container, int slot, uint amount)
         {
             if (item.amount < UInt16.MaxValue) { return null; }
-
+			
+			ItemContainer itemContainer = inventory.FindContainer(container);
+            if (itemContainer == null) { return null; }
+			
             bool aboveMaxStack = false;
             int configAmount = (int)Config[item.info.displayName.english];
 
             if (item.amount > configAmount) { aboveMaxStack = true; }
-
-            ItemContainer itemContainer = inventory.FindContainer(container);
-            if (itemContainer == null) { return true; }
 
             if (amount + item.amount / UInt16.MaxValue == item.amount % UInt16.MaxValue)
             {
