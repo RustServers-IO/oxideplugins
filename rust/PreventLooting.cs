@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.1.7", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.2.0", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -25,6 +25,7 @@ namespace Oxide.Plugins
 		bool CanLootPlayer;
 		bool CanLootCorpse;
 		bool CanLootEntity;
+		bool CanLootBackpack;
 		bool UseZoneManager;
 		bool UseExcludeEntities;
 		bool UseCupboard;
@@ -78,6 +79,7 @@ namespace Oxide.Plugins
 			Config["CanLootPlayer"] = CanLootPlayer = GetConfig("CanLootPlayer", false);
 			Config["CanLootCorpse"] = CanLootCorpse = GetConfig("CanLootCorpse", false);
 			Config["CanLootEntity"] = CanLootEntity = GetConfig("CanLootEntity", false);
+			Config["CanLootBackpack"] = CanLootBackpack = GetConfig("CanLootBackpack", false);
 			Config["UseZoneManager"] = UseZoneManager = GetConfig("UseZoneManager", false);			
 			Config["ZoneID"] = ZoneID = GetConfig("ZoneID", new List<object>{"12345678"});
 			Config["UseExcludeEntities"] = UseExcludeEntities = GetConfig("UseExcludeEntities", true);
@@ -147,6 +149,10 @@ namespace Oxide.Plugins
 		void OnLootEntity(BasePlayer player, BaseEntity entity)
 		{
 			if(entity is SupplyDrop) return;
+			if(entity is DroppedItemContainer)
+			{
+				if(!CanLootBackpack) entity.OwnerID = (entity as DroppedItemContainer).playerSteamID;	
+			}	
 			if(player.IsAdmin && AdminCanLoot) return;
 			if(permission.UserHasPermission(player.userID.ToString(), AdmPerm)) return;
 			var st = entity.GetComponent<StorageContainer>();
@@ -190,7 +196,7 @@ namespace Oxide.Plugins
 			if(UseCupboard && (!(entity is BasePlayer) && !(entity is LootableCorpse)))
 			{	
 				if(CheckAuthCupboard(entity, player)) return;	
-			}	
+			}
 			if(entity.OwnerID != player.userID && (entity.OwnerID != 0 || entity is BasePlayer || entity is LootableCorpse) && !IsVendingOpen(player, entity) && !IsDropBoxOpen(player, entity))
 				{
 					StopLooting(player, entity);
