@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,7 +16,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.0.1", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.0.3", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -34,7 +34,8 @@ namespace Oxide.Plugins
             "build",
             "repair",
             "upgrade",
-            "vend"
+            "vend",
+            "kit"
         };
 
         // COMBAT SETTINGS
@@ -618,7 +619,7 @@ namespace Oxide.Plugins
             else
             {
                 ulong ownerID = sourceEntity.OwnerID;
-                if (ownerID > 0)
+                if (ownerID.IsSteamId())
                     source = BasePlayer.FindByID(ownerID);
                 else 
                     return;
@@ -629,7 +630,7 @@ namespace Oxide.Plugins
 
             List<string> sourceMembers = null;
 
-            if (targetEntity.OwnerID > 0 || (blockUnowned && targetEntity.OwnerID == 0))
+            if (targetEntity.OwnerID.IsSteamId() || (blockUnowned && !targetEntity.OwnerID.IsSteamId()))
             {
                 if (clanCheck || friendCheck)
                     sourceMembers = getFriends(source.UserIDString);
@@ -1237,6 +1238,11 @@ namespace Oxide.Plugins
             return null;
         }
 
+        object canRedeemKit(BasePlayer player)
+        {
+            return CanDo("kit", player);
+        }
+
         object CanUseVending(VendingMachine machine, BasePlayer player)
         {
             var result = CanDo("vend", player);
@@ -1275,6 +1281,11 @@ namespace Oxide.Plugins
         object canRemove(BasePlayer player)
         {
             return CanDo("remove", player);
+        }
+
+        object canShop(BasePlayer player)
+        {
+            return CanDo("shop", player);
         }
 
         object CanShop(BasePlayer player)
@@ -1391,6 +1402,8 @@ namespace Oxide.Plugins
 
         bool TryGetBlocker<T>(BasePlayer player, out T blocker) where T : BlockBehavior
         {
+            blocker = null;
+            if (player.gameObject == null) return false;
             if ((blocker = player.gameObject.GetComponent<T>()) != null)
                 return true;
 

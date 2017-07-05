@@ -7,7 +7,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("LootChests", "Noviets", "1.2.0")]
+    [Info("LootChests", "Noviets", "1.2.4")]
     [Description("Spawns Storage Chests with loot around the map")]
 
     class LootChests : HurtworldPlugin
@@ -43,7 +43,8 @@ namespace Oxide.Plugins
 				{"Save","<color=#ffa500>LootChests</color>: Item List has been saved"},
 				{"Spawned","<color=#ffa500>LootChests</color>: Loot Chests have Spawned"},
 				{"Despawned","<color=#ffa500>LootChests</color>: Loot Chests have Despawned"},
-				{"NextSpawn","<color=#ffa500>LootChests</color>: Next Spawn will occur in: {Time}"}
+				{"NextSpawn","<color=#ffa500>LootChests</color>: Next Spawn will occur in: {Time}"},
+				{"ChestSpawnError","<color=#ffa500>LootChests</color>: Error: Unable to spawn the chest as it did not exist. If you have WeaponsCrateMod set to true, check that it is installed."},
             };
 			
 			lang.RegisterMessages(messages, this);
@@ -51,10 +52,9 @@ namespace Oxide.Plugins
 		string Msg(string msg, string SteamId = null) => lang.GetMessage(msg, this, SteamId);
 		protected override void LoadDefaultConfig()
         {
-			var Locs = new List<object>() { "-3000, 450, -3000"};
+			var Locs = new List<object>() { "-1975, 200, -1000"};
 			if(Config["StartPoints"] == null) Config.Set("StartPoints", Locs);
-			if(Config["MininumRange"] == null) Config.Set("MininumRange", 0f);
-			if(Config["MaximumRange"] == null) Config.Set("MaximumRange", 3000f);
+			if(Config["SpawnRadius"] == null) Config.Set("SpawnRadius", 3000f);
 			if(Config["ChestSpawnCount"] == null) Config.Set("ChestSpawnCount", 20);
 			if(Config["SecondsForSpawn"] == null) Config.Set("SecondsForSpawn", 7200);
 			if(Config["SecondsTillDestroy"] == null) Config.Set("SecondsTillDestroy", 1800);
@@ -183,8 +183,7 @@ namespace Oxide.Plugins
 					if((bool)Config["ShowSpawnMessage"])
 						hurt.BroadcastChat(Msg("Spawned"));
 					var LocList = Config.Get<List<string>>("StartPoints");
-					float min = Convert.ToSingle(Config["MinimumRange"]);
-					float max = Convert.ToSingle(Config["MaximumRange"]);
+					float radius = Convert.ToSingle(Config["SpawnRadius"]);
 					int count = Convert.ToInt32(Config["ChestSpawnCount"]);
 					int iPC = Convert.ToInt32(Config["ItemsPerChest"]);
 					foreach(string Loc in LocList)
@@ -196,13 +195,13 @@ namespace Oxide.Plugins
 						while(i < count)
 						{
 							if(fail > count*3){ Puts(Msg("SpawnFail"));return;}
-							Vector3 randposition = new Vector3((position.x + UnityEngine.Random.Range(min, max)), position.y+10, (position.z + UnityEngine.Random.Range(min, max)));
+							Vector3 randposition = new Vector3((position.x + UnityEngine.Random.Range(-radius, radius)), position.y+500f, (position.z + UnityEngine.Random.Range(-radius, radius)));
 							RaycastHit hitInfo;
 							if (Physics.Raycast(randposition, Vector3.down, out hitInfo))
 							{
 								Quaternion rotation = Quaternion.Euler(0.0f, (float)UnityEngine.Random.Range(0f, 360f), 0.0f);
-								rotation = Quaternion.FromToRotation(Vector3.down, hitInfo.normal) * rotation;			
-								if(!hitInfo.collider.gameObject.name.Contains("UV") && !hitInfo.collider.gameObject.name.Contains("Cliff") && !hitInfo.collider.gameObject.name.Contains("Zone") && !hitInfo.collider.gameObject.name.Contains("Cube") && !hitInfo.collider.gameObject.name.Contains("Build"))
+								rotation = Quaternion.FromToRotation(Vector3.down, hitInfo.normal) * rotation;		
+								if(!hitInfo.collider.gameObject.name.Contains("UV") && !hitInfo.collider.gameObject.name.Contains("Cliff") && !hitInfo.collider.gameObject.name.Contains("Zone") && !hitInfo.collider.gameObject.name.Contains("Cube") && !hitInfo.collider.gameObject.name.Contains("Build") && !hitInfo.collider.gameObject.name.Contains("Road") && !hitInfo.collider.gameObject.name.Contains("MeshColliderGroup"))
 								{
 									GameObject Obj = Singleton<HNetworkManager>.Instance.NetInstantiate(chest, hitInfo.point, Quaternion.identity, GameManager.GetSceneTime());
 									if(Obj != null)
@@ -218,7 +217,7 @@ namespace Oxide.Plugins
 									}
 									else
 									{
-										Puts("Error: Spawned chest is null, make sure you have WeaponsCrate Mod installed if you are using it");
+										hurt.BroadcastChat(Msg("ChestSpawnError"));
 										return;
 									}
 								}

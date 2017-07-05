@@ -1,12 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Stack Size Controller", "Waizujin", 1.9, ResourceId = 1185)]
+    [Info("Stack Size Controller", "Canopy Sheep", "1.9.5", ResourceId = 2320)]
     [Description("Allows you to set the max stack size of every item.")]
     public class StackSizeController : RustPlugin
     {
@@ -34,7 +33,16 @@ namespace Oxide.Plugins
 
 			foreach (var item in itemList)
 			{
-				if (item.condition.enabled && item.condition.max > 0) { continue; }
+				if (item.condition.enabled && item.condition.max > 0)
+                {
+                    if (Config[item.displayName.english] != null && (int)Config[item.displayName.english] != 1)
+                    {
+                        PrintWarning("WARNING: Item '" + item.displayName.english + "' will not stack more than 1 in game because it has durabililty (FACEPUNCH OVERRIDE). Changing stack size to 1..");
+                        Config[item.displayName.english] = 1;
+                        dirty = true;
+                    }
+                    continue;
+                }
 
 				if (Config[item.displayName.english] == null)
 				{
@@ -51,6 +59,83 @@ namespace Oxide.Plugins
 			SaveConfig();
 		}
 
+        object CanMoveItem(Item item, PlayerInventory inventory, uint container, int slot, uint amount)
+        {
+            if (item.amount < UInt16.MaxValue) { return null; }
+
+            bool aboveMaxStack = false;
+            int configAmount = (int)Config[item.info.displayName.english];
+
+            if (item.amount > configAmount) { aboveMaxStack = true; }
+
+            ItemContainer itemContainer = inventory.FindContainer(container);
+            if (itemContainer == null) { return true; }
+
+            if (amount + item.amount / UInt16.MaxValue == item.amount % UInt16.MaxValue)
+            {
+                if (aboveMaxStack)
+                {
+                    Item item2 = item.SplitItem(configAmount);
+                    if (!item2.MoveToContainer(itemContainer, slot, true))
+                    {
+                        item.amount += item2.amount;
+                        item2.Remove(0f);
+                    }
+                    ItemManager.DoRemoves();
+                    inventory.ServerUpdate(0f);
+                    return true;
+                }
+
+                item.MoveToContainer(itemContainer, slot, true);
+                return true;
+            }
+            else if (amount + (item.amount / 2) / UInt16.MaxValue == (item.amount / 2) % UInt16.MaxValue + item.amount % 2)
+            {
+                if (aboveMaxStack)
+                {
+					Item split;
+					if (configAmount > item.amount / 2) { split = item.SplitItem(Convert.ToInt32(item.amount) / 2); }
+                    else { split = item.SplitItem(configAmount); }
+
+                    if (!split.MoveToContainer(itemContainer, slot, true))
+                    {
+                        item.amount += split.amount;
+                        split.Remove(0f);
+                    }
+                    ItemManager.DoRemoves();
+                    inventory.ServerUpdate(0f);
+                    return true;
+                }
+
+                Item item2 = item.SplitItem(item.amount / 2);
+				if (!((item.amount + item2.amount) % 2 == 0)) { item2.amount++; item.amount--; }
+				
+                if (!item2.MoveToContainer(itemContainer, slot, true))
+                {
+                    item.amount += item2.amount;
+                    item2.Remove(0f);
+                }
+                ItemManager.DoRemoves();
+                inventory.ServerUpdate(0f);
+                return true;
+            }
+            else if (item.amount > UInt16.MaxValue && amount != item.amount / 2)
+            {
+                Item item2;
+                if (aboveMaxStack) { item2 = item.SplitItem(configAmount); }
+                else { item2 = item.SplitItem(65000); }
+                if (!item2.MoveToContainer(itemContainer, slot, true))
+                {
+                    item.amount += item2.amount;
+                    item2.Remove(0f);
+                }
+                ItemManager.DoRemoves();
+                inventory.ServerUpdate(0f);
+                return true;
+            }
+            return null;
+        }
+
         [ChatCommand("stack")]
         private void StackCommand(BasePlayer player, string command, string[] args)
         {
@@ -65,23 +150,28 @@ namespace Oxide.Plugins
 
 			if (args.Length <= 1)
 			{
-                SendReply(player, "Syntax Error: Requires 2 arguments. Syntax Example: /stack ammo_rocket_hv 64 (Use shortname)");
+                SendReply(player, "Syntax Error: Requires 2 arguments. Syntax Example: /stack ammo.rocket.hv 64 (Use shortname)");
 
 				return;
 			}
 
             if (int.TryParse(args[1], out stackAmount) == false)
             {
-                SendReply(player, "Syntax Error: Stack Amount is not a number. Syntax Example: /stack ammo_rocket_hv 64 (Use shortname)");
+                SendReply(player, "Syntax Error: Stack Amount is not a number. Syntax Example: /stack ammo.rocket.hv 64 (Use shortname)");
 
                 return;
             }
 
             List<ItemDefinition> items = ItemManager.itemList.FindAll(x => x.shortname.Equals(args[0]));
 
-            if (items[0].shortname == args[0])
+            if (items.Count == 0)
             {
-                if (items[0].condition.enabled && items[0].condition.max > 0) { return; }
+                SendReply(player, "Syntax Error: That is an incorrect item name. Please use a valid shortname.");
+                return;
+            }
+            else
+            {
+                if (items[0].condition.enabled && items[0].condition.max > 0) { SendReply(player, "Error: This item cannot be stacked higher than 1."); return; }
 
                 Config[items[0].displayName.english] = Convert.ToInt32(stackAmount);
                 items[0].stackable = Convert.ToInt32(stackAmount);
@@ -89,10 +179,6 @@ namespace Oxide.Plugins
                 SaveConfig();
 
                 SendReply(player, "Updated Stack Size for " + items[0].displayName.english + " (" + items[0].shortname + ") to " + stackAmount + ".");
-            }
-            else
-            {
-                SendReply(player, "That is an incorrect item name. Please use a valid shortname.");
             }
         }
 
@@ -112,11 +198,21 @@ namespace Oxide.Plugins
 
 				return;
 			}
+			
+            int stackAmount = 0;
+
+            if (int.TryParse(args[0], out stackAmount) == false)
+            {
+                SendReply(player, "Syntax Error: Stack Amount is not a number. Syntax Example: /stackall 65000");
+
+                return;
+            }
 
             var itemList = ItemManager.itemList;
 
 			foreach (var item in itemList)
 			{
+                if (item.condition.enabled && item.condition.max > 0) { continue; }
                 if (item.displayName.english.ToString() == "Salt Water" ||
                 item.displayName.english.ToString() == "Water") { continue; }
 
@@ -134,45 +230,54 @@ namespace Oxide.Plugins
         {
             int stackAmount = 0;
 
-            if(arg.isAdmin != true) { return; }
+            if(arg.IsAdmin != true) { return; }
+
+            if (arg.Args == null)
+            {
+                Puts("Syntax Error: Requires 2 arguments. Syntax Example: stack ammo.rocket.hv 64 (Use shortname)");
+
+                return;
+            }
 
             if (arg.Args.Length <= 1)
             {
-                Puts("Syntax Error: Requires 2 arguments. Syntax Example: stack ammo_rocket_hv 64 (Use shortname)");
+                Puts("Syntax Error: Requires 2 arguments. Syntax Example: stack ammo.rocket.hv 64 (Use shortname)");
 
                 return;
             }
 
             if (int.TryParse(arg.Args[1], out stackAmount) == false)
             {
-                Puts("Syntax Error: Stack Amount is not a number. Syntax Example: stack ammo_rocket_hv 64 (Use shortname)");
+                Puts("Syntax Error: Stack Amount is not a number. Syntax Example: stack ammo.rocket.hv 64 (Use shortname)");
 
                 return;
             }
 
             List<ItemDefinition> items = ItemManager.itemList.FindAll(x => x.shortname.Equals(arg.Args[0]));
 
-            if (items[0].shortname == arg.Args[0])
+            if (items.Count == 0)
             {
-                if (items[0].condition.enabled && items[0].condition.max > 0) { return; }
-
+                Puts("Syntax Error: That is an incorrect item name. Please use a valid shortname.");
+                return;
+            }
+            else
+            {
+                if (items[0].condition.enabled && items[0].condition.max > 0) { Puts("Error: This item cannot be stacked higher than 1."); return; }
+              
                 Config[items[0].displayName.english] = Convert.ToInt32(stackAmount);
+              
                 items[0].stackable = Convert.ToInt32(stackAmount);
 
                 SaveConfig();
 
                 Puts("Updated Stack Size for " + items[0].displayName.english + " (" + items[0].shortname + ") to " + stackAmount + ".");
             }
-            else
-            {
-                Puts("That is an incorrect item name. Please use a valid shortname.");
-            }
         }
 
         [ConsoleCommand("stackall")]
         private void StackAllConsoleCommand(ConsoleSystem.Arg arg)
         {
-            if(arg.isAdmin != true) { return; }
+            if(arg.IsAdmin != true) { return; }
 
             if (arg.Args.Length == 0)
 			{
@@ -181,10 +286,19 @@ namespace Oxide.Plugins
 				return;
 			}
 
+			int stacksize;
+          
+            if (!(int.TryParse(arg.Args[0].ToString(), out stacksize)))
+            {
+                Puts("Syntax Error: That's not a number");
+                return;
+            }
+			
             var itemList = ItemManager.itemList;
 
 			foreach (var item in itemList)
 			{
+                if (item.condition.enabled && item.condition.max > 0) { continue; }
                 if (item.displayName.english.ToString() == "Salt Water" ||
                 item.displayName.english.ToString() == "Water") { continue; }
 

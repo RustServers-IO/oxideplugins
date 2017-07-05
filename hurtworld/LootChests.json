@@ -2,7 +2,7 @@
     "name": "LootChests",
     "description": "Spawns storage chests with set loot across the map",
     "author": "Noviets",
-    "version": "1.2.0",
+    "version": "1.2.4",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/lootchests.1672",
