@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Kits", "Reneb", "3.2.7", ResourceId = 668)]
+    [Info("Kits", "Reneb", "3.2.8", ResourceId = 668)]
     class Kits : RustPlugin
     {
         readonly int playerLayer = LayerMask.GetMask("Player (Server)");
@@ -323,6 +323,7 @@ namespace Oxide.Plugins
                 return;
             }
             OnScreen(player, GetMsg("KitRedeemed",player.userID));
+            Interface.CallHook("OnKitRedeemed", player, kitname);
             proccessKitGiven(player, kitname);
         }
         void proccessKitGiven(BasePlayer player, string kitname)

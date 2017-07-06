@@ -1,8 +1,8 @@
 {
     "name": "Kits",
     "description": "Kits",
-    "author": "Absolut",
-    "version": "3.2.7",
+    "author": "Kappasaurus",
+    "version": "3.2.8",
     "configuration": true,
     "suggest": {
         "CopyPaste": "*",
