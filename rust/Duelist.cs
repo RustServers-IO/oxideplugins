@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "0.1.17", ResourceId = 2520)]
+    [Info("Duelist", "nivex", "0.1.18", ResourceId = 2520)]
     [Description("1v1 & TDM dueling event.")]
     class Duelist : RustPlugin
     {
@@ -107,7 +107,7 @@ namespace Oxide.Plugins
             public string BoneName { get; set; } = "";
             public string Distance { get; set; } = "";
             public string Weapon { get; set; } = "";
-            
+
             public AttackerInfo() { }
         }
 
@@ -1514,7 +1514,7 @@ namespace Oxide.Plugins
                         tdmAttackers[victim.UserIDString].AttackerName = attacker.displayName;
                         tdmAttackers[victim.UserIDString].Distance = Math.Round(Vector3.Distance(attacker.transform.position, victim.transform.position), 2).ToString();
                         tdmAttackers[victim.UserIDString].BoneName = FormatBone(hitInfo.boneName).TrimEnd();
-                        tdmAttackers[victim.UserIDString].Weapon = attacker.GetActiveItem()?.info?.displayName?.english ?? hitInfo?.WeaponPrefab?.ShortPrefabName ?? "??";                        
+                        tdmAttackers[victim.UserIDString].Weapon = attacker.GetActiveItem()?.info?.displayName?.english ?? hitInfo?.WeaponPrefab?.ShortPrefabName ?? "??";
                     }
 
                     if (damagePercentageScale > 0f)
@@ -1725,7 +1725,7 @@ namespace Oxide.Plugins
         {
             return init && DuelTerritory(player.transform.position, differential) ? (object)false : null;
         }
-        
+
         object CanBank(BasePlayer player)
         {
             return init && DuelTerritory(player.transform.position) ? msg("CannotBank", player.UserIDString) : null;
@@ -1788,7 +1788,7 @@ namespace Oxide.Plugins
         }
 
         #region SpawnPoints
-            void SendSpawnHelp(BasePlayer player)
+        void SendSpawnHelp(BasePlayer player)
         {
             player.ChatMessage(msg("SpawnCount", player.UserIDString, duelsData.Spawns.Count));
             player.ChatMessage(msg("SpawnAdd", player.UserIDString, szDuelChatCommand));
@@ -2118,8 +2118,15 @@ namespace Oxide.Plugins
 
                                 player.ChatMessage(msg("MatchCancelled", player.UserIDString, player.displayName));
                                 target?.ChatMessage(msg("MatchCancelled", target.UserIDString, player.displayName));
-                                tdmRequests.ToList().RemoveAll(kvp => kvp.Key == request.Key || kvp.Value == request.Key);
-                                tdmRequests.ToList().RemoveAll(kvp => kvp.Key == player.UserIDString || kvp.Value == player.UserIDString);
+
+                                foreach (var entry in tdmRequests.ToList())
+                                {
+                                    if (entry.Key == request.Key || entry.Value == request.Key)
+                                        tdmRequests.Remove(entry.Key);
+                                    else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
+                                        tdmRequests.Remove(entry.Key);
+                                }
+
                                 return;
                             }
 
@@ -2129,8 +2136,15 @@ namespace Oxide.Plugins
                                 var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == targetId);
                                 player.ChatMessage(msg("MatchCancelled", player.UserIDString, player.displayName));
                                 target?.ChatMessage(msg("MatchCancelled", player.UserIDString, player.displayName));
-                                tdmRequests.ToList().RemoveAll(kvp => kvp.Key == player.UserIDString || kvp.Value == player.UserIDString);
-                                tdmRequests.ToList().RemoveAll(kvp => kvp.Key == targetId || kvp.Value == targetId);
+                                
+                                foreach (var entry in tdmRequests.ToList())
+                                {
+                                    if (entry.Key == targetId || entry.Value == targetId)
+                                        tdmRequests.Remove(entry.Key);
+                                    else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
+                                        tdmRequests.Remove(entry.Key);
+                                }
+
                                 return;
                             }
 
@@ -3209,7 +3223,14 @@ namespace Oxide.Plugins
 
                         duelsData.Allowed.Remove(player.UserIDString);
                         player.ChatMessage(msg("PlayerRequestsOff", player.UserIDString));
-                        duelsData.Requests.ToList().RemoveAll(kvp => kvp.Key == player.UserIDString || kvp.Value == player.UserIDString);
+
+                        foreach (var entry in duelsData.Requests.ToList())
+                        {
+                            if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
+                            {
+                                duelsData.Requests.Remove(entry.Key);
+                            }
+                        }
                         return;
                     }
                 case "block":
@@ -3250,7 +3271,15 @@ namespace Oxide.Plugins
                         {
                             duelsData.Allowed.Remove(player.UserIDString);
                             player.ChatMessage(msg("PlayerRequestsOff", player.UserIDString));
-                            duelsData.Requests.ToList().RemoveAll(kvp => kvp.Key == player.UserIDString || kvp.Value == player.UserIDString);
+
+                            foreach (var entry in duelsData.Requests.ToList())
+                            {
+                                if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
+                                {
+                                    duelsData.Requests.Remove(entry.Key);
+                                }
+                            }
+
                             return;
                         }
 
@@ -3512,8 +3541,15 @@ namespace Oxide.Plugins
 
                             target?.ChatMessage(msg("DuelCancelledWith", target.UserIDString, player.displayName));
                             player.ChatMessage(msg("DuelCancelComplete", player.UserIDString));
-                            duelsData.Requests.ToList().RemoveAll(kvp => kvp.Key == request.Key || kvp.Value == request.Key);
-                            duelsData.Requests.ToList().RemoveAll(kvp => kvp.Key == player.UserIDString || kvp.Value == player.UserIDString);
+                            
+                            foreach (var entry in duelsData.Requests.ToList())
+                            {
+                                if (entry.Key == request.Key || entry.Value == request.Key)
+                                    duelsData.Requests.Remove(entry.Key);
+                                else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
+                                    duelsData.Requests.Remove(entry.Key);
+                            }
+                            
                             return;
                         }
 
@@ -3523,8 +3559,15 @@ namespace Oxide.Plugins
                             var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == targetId);
                             target?.ChatMessage(msg("DuelCancelledWith", target.UserIDString, player.displayName));
                             player.ChatMessage(msg("DuelCancelComplete", player.UserIDString));
-                            duelsData.Requests.ToList().RemoveAll(kvp => kvp.Key == player.UserIDString || kvp.Value == player.UserIDString);
-                            duelsData.Requests.ToList().RemoveAll(kvp => kvp.Key == targetId || kvp.Value == targetId);
+
+                            foreach (var entry in duelsData.Requests.ToList())
+                            {
+                                if (entry.Key == targetId || entry.Value == targetId)
+                                    duelsData.Requests.Remove(entry.Key);
+                                else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
+                                    duelsData.Requests.Remove(entry.Key);
+                            }
+
                             return;
                         }
 
@@ -5642,16 +5685,24 @@ namespace Oxide.Plugins
         }
 
         bool kitsVerified = false;
-
+        
         void VerifyKits()
         {
             if (kitsVerified || Kits == null)
                 return;
+            
+            foreach (string kit in lpDuelingKits.ToList())
+                if (!IsKit(kit))
+                    lpDuelingKits.Remove(kit);
 
-            lpDuelingKits.ToList().RemoveAll(kit => !IsKit(kit));
-            hpDuelingKits.ToList().RemoveAll(kit => !IsKit(kit));
+            foreach (string kit in hpDuelingKits.ToList())
+                if (!IsKit(kit))
+                    hpDuelingKits.Remove(kit);
+
             kitsVerified = true;
         }
+
+
 
         List<string> VerifiedKits
         {
@@ -5959,7 +6010,7 @@ namespace Oxide.Plugins
             blacklistCommands = (GetConfig("Settings", "Blacklisted Chat Commands", BlacklistedCommands) as List<object>).Where(o => o != null && o.ToString().Length > 0).Select(o => o.ToString().ToLower()).ToList();
             useWhitelistCommands = Convert.ToBoolean(GetConfig("Settings", "Whitelist Commands", false));
             whitelistCommands = (GetConfig("Settings", "Whitelisted Chat Commands", WhitelistedCommands) as List<object>).Where(o => o != null && o.ToString().Length > 0).Select(o => o.ToString().ToLower()).ToList();
-            
+
             if (!string.IsNullOrEmpty(szDuelChatCommand))
             {
                 cmd.AddChatCommand(szDuelChatCommand, this, cmdDuel);
