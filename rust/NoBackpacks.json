@@ -1,7 +1,7 @@
 {
     "name": "NoBackpacks",
     "description": "Removes Backpacks",
-    "author": "",
+    "author": "hoppel",
     "version": "1.0.3",
     "configuration": true,
     "language": "cs",

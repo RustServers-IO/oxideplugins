@@ -1,0 +1,16 @@
+{
+    "name": "ToolsGatherManager",
+    "description": "Modifies the gather rate from certain tools",
+    "author": "hoppel",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/toolsgathermanager.2553",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
