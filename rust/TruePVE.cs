@@ -1,6 +1,7 @@
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Oxide.Core;
 using Oxide.Core.Plugins;
 using Rust;
 using System;
@@ -11,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.7.20", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.7.21", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
@@ -486,7 +487,7 @@ namespace Oxide.Plugins
 		}
 
 		// handle damage - if another mod must override TruePVE damages or take priority,
-		// comment out this method and reference HandleDamage from the other mod(s)
+		// set handleDamage to false and reference HandleDamage from the other mod(s)
 		void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
 		{
 			if(!data.config[Option.handleDamage])
@@ -497,15 +498,19 @@ namespace Oxide.Plugins
 		// handle damage
 		void HandleDamage(BaseCombatEntity entity, HitInfo hitinfo)
 		{
-			if(!AllowDamage(entity, hitinfo))
+			if (!AllowDamage(entity, hitinfo))
 				CancelDamage(hitinfo);
 		}
 		
 		// determines if an entity is "allowed" to take damage
 		bool AllowDamage(BaseCombatEntity entity, HitInfo hitinfo)
 		{
+			object extCanTakeDamage = Interface.CallHook("CanEntityTakeDamage", new object[] { entity, hitinfo });
+			if (extCanTakeDamage != null)
+				return (bool) extCanTakeDamage;
+
 			// if default global is not enabled, return true (allow all damage)
-			if(currentRuleSet == null || currentRuleSet.IsEmpty() || !currentRuleSet.enabled)
+			if (currentRuleSet == null || currentRuleSet.IsEmpty() || !currentRuleSet.enabled)
 				return true;
 			
 			if (entity == null || hitinfo == null) return true;
@@ -705,7 +710,7 @@ namespace Oxide.Plugins
 		}
 		
 		// handle looting - if another mod must override TruePVE looting behavior,
-		// comment out this method and reference AllowLoot from the other mod(s)
+		// set handleLooting to false and reference AllowLoot from the other mod(s)
 		object CanLootPlayer(BasePlayer target, BasePlayer player)
 		{
 			if(!data.config[Option.handleLooting]) // let other mods handle looting and hook to HandleLoot if necessary
@@ -747,7 +752,12 @@ namespace Oxide.Plugins
 		// determine whether to allow looting sleepers and other players' corpses
 		bool AllowLoot(BasePlayer player, BaseEntity target)
 		{
-			if(IsAdmin(player))
+			// external looting check
+			object extCanBeLooted = Interface.CallHook("CanEntityBeLooted", new object[] { player, target });
+			if (extCanBeLooted != null)
+				return (bool) extCanBeLooted;
+
+			if (IsAdmin(player))
 				return true;
 
 			// allow anyone to access vending machines, drop boxes, mailboxes, and shop fronts
