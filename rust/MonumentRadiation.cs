@@ -1,51 +1,45 @@
 ﻿// Reference: Rust.Global
-using System;
 using System.Collections.Generic;
 using UnityEngine;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System.Reflection;
-using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("MonumentRadiation", "k1lly0u", "0.2.31", ResourceId = 1562)]
+    [Info("MonumentRadiation", "k1lly0u", "0.2.4", ResourceId = 1562)]
     class MonumentRadiation : RustPlugin
     {
-        private bool RadsOn;
-        private int OffTimer;
-        private int OnTimer;
+        static MonumentRadiation ins;
+        private bool radsOn;
+        private int offTimer;
+        private int onTimer;
 
-        private static readonly int playerLayer = LayerMask.GetMask("Player (Server)");
-        private static readonly Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic))?.GetValue(null);
-
-        private List<RZ> RadiationZones = new List<RZ>();
+        private List<RZ> radiationZones = new List<RZ>();
         private ConfigData configData;
 
         #region Oxide Hooks       
         void Loaded()
         {
-            lang.RegisterMessages(messages, this);            
+            lang.RegisterMessages(Messages, this);            
             LoadVariables();
         }        
         void OnServerInitialized()
         {
+            ins = this;
             if (!ConVar.Server.radiation)
             {
-                RadsOn = false;
+                radsOn = false;
                 ConVar.Server.radiation = true;
             }
-            else RadsOn = true;
+            else radsOn = true;
             DestroyAllComponents();
             FindMonuments();           
         }
         void Unload()
         {
-            for (int i = 0; i < RadiationZones.Count; i++)            
-                UnityEngine.Object.Destroy(RadiationZones[i]);            
-            RadiationZones.Clear();
+            for (int i = 0; i < radiationZones.Count; i++)            
+                UnityEngine.Object.Destroy(radiationZones[i]);            
+            radiationZones.Clear();
             DestroyAllComponents(); 
-            if (!RadsOn) ConVar.Server.radiation = false;
+            if (!radsOn) ConVar.Server.radiation = false;
         }
         #endregion
       
@@ -152,6 +146,15 @@ namespace Oxide.Plugins
                             CreateZone(configData.Zones.Radtown, pos);
                         continue;
                     }
+                    if (gobject.name.Contains("launch_site_1"))
+                    {
+                        if (configData.Zones.RocketFactory.Activate)
+                        {
+                            CreateZone(configData.Zones.RocketFactory, pos + -(gobject.transform.right * 80));
+                            CreateZone(configData.Zones.RocketFactory, pos + gobject.transform.right * 150);
+                        }
+                        continue;
+                    }
                 }                
             }
             ConfirmCreation();
@@ -170,22 +173,22 @@ namespace Oxide.Plugins
         }
         private void ConfirmCreation()
         {
-            if (RadiationZones.Count > 0)
+            if (radiationZones.Count > 0)
             {
                 if (configData.Options.Use_Timers) StartRadTimers();
-                Puts("Created " + RadiationZones.Count + " monument radiation zones");
+                Puts("Created " + radiationZones.Count + " monument radiation zones");
                 if (!ConVar.Server.radiation)
                 {
-                    RadsOn = false;
+                    radsOn = false;
                     ConVar.Server.radiation = true;
                 }
             }
         }
         private void CreateZone(MonumentSettings zone, Vector3 pos)
-        {
+        {           
             var newZone = new GameObject().AddComponent<RZ>();
             newZone.Activate($"{zone.Name}_{GetRandom()}", pos, zone.Radius, zone.Radiation);
-            RadiationZones.Add(newZone);
+            radiationZones.Add(newZone);
         }                       
         private void StartRadTimers()
         {
@@ -196,26 +199,26 @@ namespace Oxide.Plugins
                 ontime = GetRandom(configData.Timers.Random_OnMin, configData.Timers.Random_OnMax);
                 offtime = GetRandom(configData.Timers.Random_OffMin, configData.Timers.Random_OffMax);
             }
-            OnTimer = ontime * 60;
-            timer.Repeat(1, OnTimer, () =>
+            onTimer = ontime * 60;
+            timer.Repeat(1, onTimer, () =>
             {
-                OnTimer--;
-                if (OnTimer == 0)
+                onTimer--;
+                if (onTimer == 0)
                 {                    
-                    foreach (var zone in RadiationZones)
+                    foreach (var zone in radiationZones)
                         zone.Deactivate();
                     if (configData.Options.Using_InfoPanel) timer.Once(5, ()=> ConVar.Server.radiation = false);
 
                     if (configData.Options.Broadcast_Timers)                    
                         MessageAllPlayers(lang.GetMessage("RadsOffMsg", this), offtime);
                     
-                    OffTimer = offtime * 60;
-                    timer.Repeat(1, OffTimer, () =>
+                    offTimer = offtime * 60;
+                    timer.Repeat(1, offTimer, () =>
                     {
-                        OffTimer--;
-                        if (OffTimer == 0)
+                        offTimer--;
+                        if (offTimer == 0)
                         {
-                            foreach (var zone in RadiationZones)
+                            foreach (var zone in radiationZones)
                                 zone.Reactivate();
                             if (configData.Options.Using_InfoPanel) ConVar.Server.radiation = true;
                             if (configData.Options.Broadcast_Timers)                            
@@ -277,9 +280,9 @@ namespace Oxide.Plugins
         {
             if (!isAuth(arg)) return;
             Puts(lang.GetMessage("monList", this));
-            if (RadiationZones.Count == 0) Puts("none");
-            foreach (var zone in RadiationZones)
-                Puts(zone.name + " ------ " + zone.Position);
+            if (radiationZones.Count == 0) Puts("none");
+            foreach (var zone in radiationZones)
+                Puts(zone.name + " ------ " + zone.position);
         }
 
         [ChatCommand("mr_list")]
@@ -287,126 +290,99 @@ namespace Oxide.Plugins
         {
             if (!isAdmin(player)) return;
             Puts(lang.GetMessage("title", this) + lang.GetMessage("monList", this));
-            if (RadiationZones.Count == 0) Puts("none");
-            foreach (var zone in RadiationZones)
-                Puts(zone.name + "====" + zone.Position);
+            if (radiationZones.Count == 0) Puts("none");
+            foreach (var zone in radiationZones)
+                Puts(zone.name + "====" + zone.position);
             SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("checkConsole", this, player.UserIDString));
         }
 
         [ChatCommand("mr")]
         void chatCheckTimers(BasePlayer player, string command, string[] args)
         {
-            if (OnTimer != 0)
+            if (onTimer != 0)
             {
-                float timeOn = OnTimer / 60;
+                float timeOn = onTimer / 60;
                 string min = "minutes";
-                if (timeOn < 1) { timeOn = OnTimer; min = "seconds"; }
+                if (timeOn < 1) { timeOn = onTimer; min = "seconds"; }
                 SendReply(player, string.Format(lang.GetMessage("RadsDownMsg", this), timeOn.ToString(), min));
             }
-            else if (OffTimer != 0)
+            else if (offTimer != 0)
             {
-                int timeOff = OffTimer / 60;
+                int timeOff = offTimer / 60;
                 string min = "minutes";
-                if (timeOff < 1) { timeOff = OffTimer; min = "seconds"; }
+                if (timeOff < 1) { timeOff = offTimer; min = "seconds"; }
                 SendReply(player, string.Format(lang.GetMessage("RadsUpMsg", this), timeOff.ToString(), min));
             }
+        }
+        [ChatCommand("mr_show")]
+        void chatShowZones(BasePlayer player, string command, string[] args)
+        {
+            if (!isAdmin(player)) return;
+            foreach(var zone in radiationZones)            
+                player.SendConsoleCommand("ddraw.sphere", 20f, Color.blue, zone.transform.position, zone.radius);            
         }
         #endregion
 
         #region Classes        
         public class RZ : MonoBehaviour
         {
-            public Vector3 Position;
-            public float ZoneRadius;
-            public float RadiationAmount;
-
-            private List<BasePlayer> InZone;
+            private TriggerRadiation rads;
+            public Vector3 position;
+            public float radius;
+            private float amount;
 
             private void Awake()
             {
                 gameObject.layer = (int)Rust.Layer.Reserved1;
-                gameObject.name = "RadZone";
-
-                var rigidbody = gameObject.AddComponent<Rigidbody>();
-                rigidbody.useGravity = false;
-                rigidbody.isKinematic = true;
-                InZone = new List<BasePlayer>();
+                enabled = false;
             }
-            public void Activate(string type, Vector3 pos, float radius, float amount)
+            private void OnDestroy() => Destroy(gameObject);            
+            private void OnTriggerEnter(Collider obj)
             {
-                Position = pos;
-                ZoneRadius = radius;
-                RadiationAmount = amount;
+                if (obj?.gameObject?.layer != (int)Rust.Layer.Player_Server) return;
+                var player = obj?.GetComponentInParent<BasePlayer>();
+                if (player != null)
+                {
+                    ins.EnterRadiation(player);
+                }
+            }
+            private void OnTriggerExit(Collider obj)
+            {
+                if (obj?.gameObject?.layer != (int)Rust.Layer.Player_Server) return;
+                var player = obj?.GetComponentInParent<BasePlayer>();
+                if (player != null)
+                {
+                    ins.LeaveRadiation(player);
+                }
+            }
+            public void Activate(string type, Vector3 position, float radius, float amount)
+            {
+                this.position = position;
+                this.radius = radius;
+                this.amount = amount;
 
                 gameObject.name = type;
-                transform.position = Position;
+                transform.position = position;
                 transform.rotation = new Quaternion();
                 UpdateCollider();
-                gameObject.SetActive(true);
-                enabled = true;
 
-                var Rads = gameObject.GetComponent<TriggerRadiation>();
-                Rads = Rads ?? gameObject.AddComponent<TriggerRadiation>();
-                Rads.RadiationAmountOverride = RadiationAmount;
-                Rads.radiationSize = ZoneRadius;
-                Rads.interestLayers = playerLayer;
-                Rads.enabled = true;
-
-                if (IsInvoking("UpdateTrigger")) CancelInvoke("UpdateTrigger");
-                InvokeRepeating("UpdateTrigger", 3f, 3f);
+                rads = gameObject.AddComponent<TriggerRadiation>();
+                rads.RadiationAmountOverride = amount;
+                rads.radiationSize = radius;
+                rads.interestLayers = LayerMask.GetMask("Player (Server)");
+                rads.enabled = true;
             }
-            public void Deactivate()
-            {
-                var Rads = gameObject.GetComponent<TriggerRadiation>();
-                Rads.enabled = false;
-                gameObject.SetActive(false);
-                if (IsInvoking("UpdateTrigger")) CancelInvoke("UpdateTrigger");                
-            }
-            public void Reactivate()
-            {
-                var Rads = gameObject.GetComponent<TriggerRadiation>();
-                Rads.enabled = true;
-                gameObject.SetActive(true);
-                if (IsInvoking("UpdateTrigger")) CancelInvoke("UpdateTrigger");
-                InvokeRepeating("UpdateTrigger", 3f, 3f);
-            }
-            private void OnDestroy()
-            {
-                CancelInvoke("UpdateTrigger");
-                Destroy(gameObject);
-            }
+            public void Deactivate() => rads.enabled = false;
+            public void Reactivate() => rads.enabled = true;
             private void UpdateCollider()
             {
                 var sphereCollider = gameObject.GetComponent<SphereCollider>();
+                if (sphereCollider == null)
                 {
-                    if (sphereCollider == null)
-                    {
-                        sphereCollider = gameObject.AddComponent<SphereCollider>();
-                        sphereCollider.isTrigger = true;
-                    }
-                    sphereCollider.radius = ZoneRadius;
+                    sphereCollider = gameObject.AddComponent<SphereCollider>();
+                    sphereCollider.isTrigger = true;
                 }
-            }
-            private void UpdateTrigger()
-            {
-                var OutZone = InZone;
-                InZone = new List<BasePlayer>();
-                int entities = Physics.OverlapSphereNonAlloc(Position, ZoneRadius, colBuffer, playerLayer);
-                for (var i = 0; i < entities; i++)
-                {
-                    var player = colBuffer[i].GetComponentInParent<BasePlayer>();
-                    if (player != null)
-                    {
-                        InZone.Add(player);
-                        if (!OutZone.Contains(player))
-                            Interface.Oxide.CallHook("EnterRadiation", player);
-                    }                    
-                }
-                foreach (var player in OutZone)
-                {
-                    if (!InZone.Contains(player))
-                        Interface.Oxide.CallHook("LeaveRadiation", player);
-                }
+                sphereCollider.radius = radius;
             }
         }       
        
@@ -422,32 +398,7 @@ namespace Oxide.Plugins
             {"water", new HapisIslandMonuments {Position = new Vector3(-1065.191f, 125.3655f, 439.2279f), Radius = 100 } },
             {"tunnels", new HapisIslandMonuments {Position = new Vector3(-854.7694f, 72.34925f, -241.692f), Radius = 100 } },
             {"satellite", new HapisIslandMonuments {Position = new Vector3(205.2501f, 247.8247f, 252.5204f), Radius = 80 } }
-        };
-        private class UnityVector3Converter : JsonConverter
-        {
-            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-            {
-                var vector = (Vector3)value;
-                writer.WriteValue($"{vector.x} {vector.y} {vector.z}");
-            }
-
-            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-            {
-                if (reader.TokenType == JsonToken.String)
-                {
-                    var values = reader.Value.ToString().Trim().Split(' ');
-                    return new Vector3(Convert.ToSingle(values[0]), Convert.ToSingle(values[1]), Convert.ToSingle(values[2]));
-                }
-                var o = JObject.Load(reader);
-                return new Vector3(Convert.ToSingle(o["x"]), Convert.ToSingle(o["y"]), Convert.ToSingle(o["z"]));
-            }
-
-            public override bool CanConvert(Type objectType)
-            {
-                return objectType == typeof(Vector3);
-            }
-        }
-
+        };        
         #endregion
 
         #region Config
@@ -480,6 +431,7 @@ namespace Oxide.Plugins
             public MonumentSettings LargeHarbor { get; set; }
             public MonumentSettings Powerplant { get; set; }
             public MonumentSettings Radtown { get; set; }
+            public MonumentSettings RocketFactory { get; set; }
             public MonumentSettings Satellite { get; set; }
             public MonumentSettings SmallHarbor { get; set; }
             public MonumentSettings Trainyard { get; set; }
@@ -582,6 +534,13 @@ namespace Oxide.Plugins
                        Radiation = 10,
                        Radius = 85
                    },
+                   RocketFactory = new MonumentSettings
+                   {
+                       Activate = true,
+                       Name = "Rocket Factory",
+                       Radiation = 10,
+                       Radius = 140
+                   },
                    Satellite = new MonumentSettings
                    {
                        Activate = false,
@@ -635,12 +594,8 @@ namespace Oxide.Plugins
        
         #endregion
 
-        #region messages
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Messages //////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        Dictionary<string, string> messages = new Dictionary<string, string>()
+        #region Localization      
+        Dictionary<string, string> Messages = new Dictionary<string, string>()
         {
             {"nullList", "Error getting a list of monuments" },
             {"noPerms", "You have insufficient permission" },
@@ -655,7 +610,7 @@ namespace Oxide.Plugins
             {"RadsUpMsg", "<color=#B6B6B6>Monument radiation levels will be back up in </color><color=#00FF00>{0} {1}</color><color=#B6B6B6>!</color>"},
             {"RadsDownMsg", "<color=#B6B6B6>Monument radiation levels will be down in </color><color=#00FF00>{0} {1}</color><color=#B6B6B6>!</color>"}
 
-    };
+        };
         #endregion
 
 

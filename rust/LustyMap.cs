@@ -16,7 +16,7 @@ using System.Drawing;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.2", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.3", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -1487,7 +1487,7 @@ namespace Oxide.Plugins
             { 
                 var monuments = UnityEngine.Object.FindObjectsOfType<MonumentInfo>();
                 foreach (var monument in monuments)
-                {
+                {                    
                     MapMarker mon = new MapMarker
                     {
                         x = GetPosition(monument.transform.position.x),
@@ -1591,6 +1591,13 @@ namespace Oxide.Plugins
                     {
                         mon.name = msg("radtown");
                         mon.icon = "radtown";
+                        staticMarkers.Add(mon);
+                        continue;
+                    }
+                    if (monument.name.Contains("launch_site_1"))
+                    {
+                        mon.name = msg("rocketfactory");
+                        mon.icon = "rocket";
                         staticMarkers.Add(mon);
                         continue;
                     }
@@ -2387,8 +2394,8 @@ namespace Oxide.Plugins
             {
                 var destRect = new Rectangle(0, 0, pixels, pixels);
                 var destImage = new Bitmap(pixels, pixels);
-
-                destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+                
+                destImage.SetResolution(image?.HorizontalResolution ?? pixels, image?.VerticalResolution ?? pixels);
 
                 using (var graphics = System.Drawing.Graphics.FromImage(destImage))
                 {
@@ -2401,7 +2408,7 @@ namespace Oxide.Plugins
                     using (var wrapMode = new System.Drawing.Imaging.ImageAttributes())
                     {
                         wrapMode.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
-                        graphics.DrawImage(image, destRect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, wrapMode);
+                        graphics.DrawImage(image, destRect, 0, 0, image?.Width ?? pixels, image?.Height ?? pixels, GraphicsUnit.Pixel, wrapMode);
                     }
                 }
                 System.Drawing.ImageConverter converter = new System.Drawing.ImageConverter();
@@ -2441,6 +2448,7 @@ namespace Oxide.Plugins
             {"airfield", "airfield" },
             {"militarytunnel", "militarytunnel" },
             {"powerplant", "powerplant" },
+            {"rocketfactory", "rocketfactory" },
             {"cave", "cave" },
             {"spamWarning", "Please do not spam the map. If you continue to do so your map will be temporarily disabled" },
             {"spamDisable", "Your map has been disabled for {0} seconds" },
