@@ -7,16 +7,12 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.2.3", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.3.0", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
         [PluginReference]
-        Plugin Friends;
-        [PluginReference]
-        Plugin Clans;
-        [PluginReference]
-        Plugin BetterChat;
+        Plugin Friends, Clans, BetterChat;
 
         bool BC = true;
         const string PermAdmin = "autochat.admin";
@@ -26,55 +22,42 @@ namespace Oxide.Plugins
         #region Config
         bool Enabled = true;
         bool PlayerActive = false;
+        Dictionary<string, List<string>> CustomChat = new Dictionary<string, List<string>>() { { "Test", new List<string> { "command1", "command2" } } };
 
-        string configVersion = "0.1.0";
+        const string configVersion = "0.1.1";
 
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a configuration file.");
             Config.Clear();
-
-            SetConfig("Enabled", Enabled);
-            SetConfig("PlayerActive", PlayerActive);
-            SetConfig("Version", configVersion);
-
-            SaveConfig();
         }
 
         void LoadConfigData()
         {
             var version = (string)Config["Version"];
 
-            Enabled = ReadConfig("Enabled", Enabled);
-            PlayerActive = ReadConfig("PlayerActive", PlayerActive);
+            Enabled = SetConfig("Enabled", Enabled);
+            PlayerActive = SetConfig("PlayerActive", PlayerActive);
+            CustomChat = SetConfig("CustomChat", CustomChat);
 
             if(version != configVersion)
             {
                 PrintWarning("Configuration is outdate. Update in progress...");
-                Config.Clear();
 
-                SetConfig("Enabled", Enabled);
-                SetConfig("PlayerActive", PlayerActive);
-                SetConfig("Version", configVersion);
-
-                SaveConfig();
+                SetConfig("Version", configVersion, true);
             }
         }
 
-        void SetConfig(string name, object data, bool edit=false)
+        T SetConfig<T>(string name, T data, bool edit=false)
         {
             if (Config[name] == null || edit)
-                Config[name] = data;
-        }
-
-        T ReadConfig<T>(string name, T data)
-        {
-            if (Config[name] != null)
             {
-                return (T)Convert.ChangeType(Config[name], typeof(T));
+                Config[name] = data;
+                SaveConfig();
+                return data;
             }
 
-            return data;
+            return (T)Convert.ChangeType(Config[name], typeof(T));
         }
         #endregion
 
@@ -110,25 +93,19 @@ namespace Oxide.Plugins
         #endregion
 
         #region Hooks
-        void OnServerInitialized()
-        {
-            CheckPlugins();
-        }
+        void OnServerInitialized() { CheckPlugins(); }
 
         void Loaded()
         {
             LoadData();
             LoadConfigData();
-            LoadDefaultMessages();
+            DefaultMessages();
 
             permission.RegisterPermission(PermAdmin, this);
             permission.RegisterPermission(PermUse, this);
         }
 
-        void Unload()
-        {
-            chatInfo.Clear();
-        }
+        void Unload() { chatInfo.Clear(); }
 
         void OnPlayerDisconnected(BasePlayer player, string reason)
         {
@@ -163,7 +140,6 @@ namespace Oxide.Plugins
                                 MessageChat(player, Lang("Help", player.UserIDString) + Lang("HelpAdmin", player.UserIDString));
                             else
                                 MessageChat(player, Lang("Help", player.UserIDString));
-
                             break;
                         }
                     case "active":
@@ -230,7 +206,6 @@ namespace Oxide.Plugins
                                 MessageChat(player, Lang("Disabled", player.UserIDString));
                             }
                             SetConfig("Enabled", Enabled, true);
-                            SaveConfig();
                             break;
                         }
                     case "auto":
@@ -262,7 +237,6 @@ namespace Oxide.Plugins
                             else
                                 MessageChat(player, Lang("AutoOFF", player.UserIDString));
                             SetConfig("PlayerActive", PlayerActive, true);
-                            SaveConfig();
                             break;
                         }
                 }
@@ -287,6 +261,69 @@ namespace Oxide.Plugins
                 message = $"{message} {args[i]}";
 
             rust.RunClientCommand(player, "chat.say", message);
+        }
+
+        [ConsoleCommand("ac")]
+        private void consAutoChat(ConsoleSystem.Arg arg)
+        {
+            if ((arg.Connection != null && arg.Connection.authLevel < 2) || arg.Args.Length == 0 || arg.Args == null) return;
+
+            switch(arg.Args[0])
+            {
+                case "enable":
+                    {
+                        if (arg.Args.Length > 1)
+                        {
+                            if (!bool.TryParse(arg.Args[1], out Enabled))
+                            {
+                                Puts(Lang("ErrorBool"));
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            if (Enabled)
+                                Enabled = false;
+                            else
+                                Enabled = true;
+                        }
+
+                        if (Enabled)
+                            Puts(Lang("Enabled"));
+                        else
+                        {
+                            chatInfo.Clear();
+                            Puts(Lang("Disabled"));
+                        }
+                        SetConfig("Enabled", Enabled, true);
+                        break;
+                    }
+                case "auto":
+                    {
+                        if (arg.Args.Length > 1)
+                        {
+                            if (!bool.TryParse(arg.Args[1], out PlayerActive))
+                            {
+                                Puts(Lang("ErrorBool"));
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            if (PlayerActive)
+                                PlayerActive = false;
+                            else
+                                PlayerActive = true;
+                        }
+
+                        if (PlayerActive)
+                            Puts(Lang("AutoON"));
+                        else
+                            Puts(Lang("AutoOFF"));
+                        SetConfig("PlayerActive", PlayerActive, true);
+                        break;
+                    }
+            }
         }
         #endregion
 
@@ -395,6 +432,10 @@ namespace Oxide.Plugins
                 ChatType.Add("r");
             }
 
+            foreach (var p in CustomChat)
+                if (plugins.Exists(p.Key))
+                    foreach (var c in p.Value) ChatType.Add(c);
+
             if (ChatType.Count == 0)
             {
                 Enabled = false;
@@ -412,7 +453,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Messages & Utilities
-        void LoadDefaultMessages()
+        void DefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>            {
                 ["Enabled"] = "AutoChat was enabled.",
