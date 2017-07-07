@@ -14,7 +14,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneManager", "Reneb / Nogrod", "2.4.22", ResourceId = 739)]
+    [Info("ZoneManager", "Reneb / Nogrod", "2.4.25", ResourceId = 739)]
     public class ZoneManager : RustPlugin
     {
         #region Fields
@@ -602,7 +602,9 @@ namespace Oxide.Plugins
             NoNPCSpawns = 1UL << 38,
             NoVending = 1UL << 39,
             NoStash = 1UL << 40,
-            NoCraft = 1UL << 41
+            NoCraft = 1UL << 41,
+            NoHeliTargeting = 1UL << 42,
+            NoTurretTargeting = 1UL << 43
         }
 
         private bool HasZoneFlag(Zone zone, ZoneFlags flag)
@@ -1035,6 +1037,41 @@ namespace Oxide.Plugins
             }
             return null;
         }
+        object CanBeTargeted(BaseCombatEntity entity, MonoBehaviour behaviour)
+        {
+            var player = entity.ToPlayer();
+            if (player != null)
+            {
+                if (behaviour is AutoTurret || behaviour is FlameTurret || behaviour is GunTrap)
+                {
+                    if (HasPlayerFlag(player, ZoneFlags.NoTurretTargeting) && !CanBypass(player, ZoneFlags.NoTurretTargeting))
+                        return false;
+                }
+
+                else if (behaviour is HelicopterTurret)
+                {
+                    if (HasPlayerFlag(player, ZoneFlags.NoHeliTargeting) && !CanBypass(player, ZoneFlags.NoHeliTargeting))
+                    {
+                        var turret = behaviour as HelicopterTurret;
+                        turret.ClearTarget();
+                        turret._heliAI.SetTargetDestination(turret._heliAI.GetRandomPatrolDestination());
+                        return false;
+                    }                  
+                }
+            }
+            return null;
+        }
+        object OnHelicopterTarget(HelicopterTurret turret, BaseCombatEntity entity)
+        {
+            var player = entity.ToPlayer();
+            if (player != null)
+            {
+                if (HasPlayerFlag(player, ZoneFlags.NoHeliTargeting) && !CanBypass(player, ZoneFlags.NoHeliTargeting))
+                    return false;
+            }
+            return null;
+        }
+
         #endregion
 
         #region External Plugin Hooks        
