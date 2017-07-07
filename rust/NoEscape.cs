@@ -16,7 +16,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.0.3", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.0.4", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -209,12 +209,9 @@ namespace Oxide.Plugins
 
         void Unload()
         {
-            if(useZoneManager) {
+            if(useZoneManager) 
                 foreach (var zone in zones)
-                {
-                    ZoneManager.CallHook("EraseZone", zone.Value.zoneid);
-                }
-            }
+                    EraseZone(zone.Value.zoneid);
 
             var objects = GameObject.FindObjectsOfType(typeof(RaidBlock));
             if (objects != null)
@@ -394,6 +391,31 @@ namespace Oxide.Plugins
                     PrintWarning("ZoneManager not found! All zone options disabled. Cannot use zone options without this plugin. http://oxidemod.org/plugins/zones-manager.739/");
                 }
             }
+
+            CleanHooks();
+        }
+
+        void CleanHooks()
+        {
+            if (!blockOnDestroy && !raidUnblockOnDeath && !combatUnblockOnDeath)
+            {
+                Unsubscribe("OnEntityDeath");
+            }
+
+            if (!raidUnblockOnWakeup && !combatUnblockOnWakeup)
+            {
+                Unsubscribe("OnPlayerSleepEnded");
+            }
+
+            if (!combatOnTakeDamage && !combatOnHitPlayer)
+            {
+                Unsubscribe("OnPlayerAttack");
+            }
+
+            if (!blockOnDamage)
+            {
+                Unsubscribe("OnEntityTakeDamage");
+            }
         }
 
         #endregion
@@ -437,6 +459,7 @@ namespace Oxide.Plugins
             public DateTime lastBlock = DateTime.MinValue;
             public DateTime lastNotification = DateTime.MinValue;
             internal Timer timer;
+            internal Action notifyCallback;
 
             internal abstract float Duration { get; }
 
@@ -471,6 +494,9 @@ namespace Oxide.Plugins
 
             public void Stop()
             {
+                if (notifyCallback is Action)
+                    notifyCallback.Invoke();
+
                 if (timer is Timer && !timer.Destroyed)
                     timer.Destroy();
 
@@ -479,6 +505,7 @@ namespace Oxide.Plugins
 
             public void Notify(Action callback)
             {
+                notifyCallback = callback;
                 if (timer is Timer && !timer.Destroyed)
                 {
                     timer.Reset();
@@ -551,38 +578,42 @@ namespace Oxide.Plugins
 
             if (entity.ToPlayer() == null) return;
             var player = entity.ToPlayer();
-            if (raidBlock && raidUnblockOnDeath && IsRaidBlocked(player))
+            RaidBlock raidBlocker;
+            if (raidBlock && raidUnblockOnDeath && TryGetBlocker<RaidBlock>(player, out raidBlocker))
             {
                 timer.In(0.3f, delegate()
                 {
-                    StopBlocking(player);
+                    raidBlocker.Stop();
                 });
             }
 
-            if (combatBlock && combatUnblockOnDeath && IsCombatBlocked(player))
+            CombatBlock combatBlocker;
+            if (combatBlock && combatUnblockOnDeath && TryGetBlocker<CombatBlock>(player, out combatBlocker))
             {
                 timer.In(0.3f, delegate()
                 {
-                    StopBlocking(player);
+                    combatBlocker.Stop();
                 });
             }
         }
 
         void OnPlayerSleepEnded(BasePlayer player)
         {
-            if (raidBlock && raidUnblockOnWakeup && IsRaidBlocked(player))
+            RaidBlock raidBlocker;
+            if (raidBlock && raidUnblockOnWakeup && TryGetBlocker<RaidBlock>(player, out raidBlocker))
             {
                 timer.In(0.3f, delegate()
                 {
-                    StopBlocking(player);
+                    raidBlocker.Stop();
                 });
             }
 
-            if (combatBlock && combatUnblockOnWakeup && IsCombatBlocked(player))
+            CombatBlock combatBlocker;
+            if (combatBlock && combatUnblockOnWakeup && TryGetBlocker<CombatBlock>(player, out combatBlocker))
             {
                 timer.In(0.3f, delegate()
                 {
-                    StopBlocking(player);
+                    combatBlocker.Stop();
                 });
             }
         }
@@ -847,6 +878,7 @@ namespace Oxide.Plugins
 
         void StartRaidBlocking(BasePlayer target, Vector3 position, bool createZone = true)
         {
+            if (target.gameObject == null) return;
             var raidBlocker = target.gameObject.GetComponent<RaidBlock>();
             if(raidBlocker == null) {
                 raidBlocker = target.gameObject.AddComponent<RaidBlock>();
@@ -863,6 +895,7 @@ namespace Oxide.Plugins
 
         void StartCombatBlocking(BasePlayer target)
         {
+            if (target.gameObject == null) return;
             var combatBlocker = target.gameObject.GetComponent<CombatBlock>();
             if (combatBlocker == null)
             {
@@ -885,6 +918,7 @@ namespace Oxide.Plugins
 
         public void StopBlocking<T>(BasePlayer target) where T : BlockBehavior
         {
+            if (target.gameObject == null) return;
             var block = target.gameObject.GetComponent<T>();
             if (block is BlockBehavior)
                 block.Stop();
@@ -1338,6 +1372,7 @@ namespace Oxide.Plugins
 
                 blocker.Notify(delegate()
                 {
+                    blocker.notifyCallback = null;
                     if (target.IsConnected)
                         SendReply(target, GetPrefix(target.UserIDString) + GetMsg(completeMessage, target.UserIDString));
                 });
