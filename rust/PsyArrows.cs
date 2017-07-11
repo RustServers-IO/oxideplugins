@@ -4,17 +4,20 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PsyArrows", "Ryan", "2.0.2", ResourceId = 1413)]
+    [Info("PsyArrows", "Ryan", "2.0.3", ResourceId = 1413)]
     [Description("Allows players with permission to use various different custom arrow types")]
     class PsyArrows : RustPlugin
     {
         #region Declaration
 
-        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id),
-            args);
+        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
         private ArrowType arrowType;
+
         private readonly Dictionary<ulong, ArrowType> ActiveArrows = new Dictionary<ulong, ArrowType>();
+
         System.Random rnd = new System.Random();
+
         private enum ArrowType
         {
             Wind,
@@ -31,7 +34,8 @@ namespace Oxide.Plugins
         #region Config
 
         private ConfigFile configFile;
-        class ConfigFile
+
+        private class ConfigFile
         {
             public Dictionary<ArrowType, Arrow> Arrows;
             public RocketSettings RocketSettings;
@@ -54,7 +58,7 @@ namespace Oxide.Plugins
             }
         }
 
-        class RocketSettings
+        private class RocketSettings
         {
             public float DetonationTime;
             public float ProjectileSpeed;
@@ -68,7 +72,7 @@ namespace Oxide.Plugins
             }
         }
 
-        class Price
+        private class Price
         {
             public bool Enabled;
             public string ItemShortname;
@@ -82,10 +86,11 @@ namespace Oxide.Plugins
             }
         }
 
-        class Arrow
+        private class Arrow
         {
             public Price ArrowPrice;
             public string Permission;
+
             public Arrow()
             {
                 ArrowPrice = new Price();
@@ -173,27 +178,22 @@ namespace Oxide.Plugins
             PrintToChat(player, Lang("Resources_Spent", player.UserIDString, item.amount, item.info.displayName.english));
         }
 
-        private BaseEntity CreateRocket(Vector3 startPoint, Vector3 direction, bool isFireRocket)
+        private void CreateRocket(Vector3 startPoint, Vector3 direction, bool isFireRocket)
         {
             ItemDefinition projectileItem;
 
-            if (isFireRocket)
-                projectileItem = ItemManager.FindItemDefinition("ammo.rocket.fire");
-            else
-                projectileItem = ItemManager.FindItemDefinition("ammo.rocket.basic");
+            projectileItem = isFireRocket ? ItemManager.FindItemDefinition("ammo.rocket.fire") : ItemManager.FindItemDefinition("ammo.rocket.basic");
 
-            ItemModProjectile component = projectileItem.GetComponent<ItemModProjectile>();
-            BaseEntity entity = GameManager.server.CreateEntity(component.projectileObject.resourcePath, startPoint);
-            TimedExplosive timedExplosive = entity.GetComponent<TimedExplosive>();
-            ServerProjectile serverProjectile = entity.GetComponent<ServerProjectile>();
+            var component = projectileItem.GetComponent<ItemModProjectile>();
+            var entity = GameManager.server.CreateEntity(component.projectileObject.resourcePath, startPoint);
+            var timedExplosive = entity.GetComponent<TimedExplosive>();
+            var serverProjectile = entity.GetComponent<ServerProjectile>();
 
             serverProjectile.gravityModifier = configFile.RocketSettings.GravityModifier;
             serverProjectile.speed = configFile.RocketSettings.ProjectileSpeed;
             timedExplosive.timerAmountMin = configFile.RocketSettings.DetonationTime;
 
             entity.Spawn();
-
-            return null;
         }
 
         private bool CanActivateArrow(BasePlayer player, ArrowType type)
@@ -222,7 +222,9 @@ namespace Oxide.Plugins
 
         void OnPlayerAttack(BasePlayer attacker, HitInfo hitInfo)
         {
-            if (hitInfo == null || attacker == null) return;
+            if (hitInfo?.WeaponPrefab == null || hitInfo.WeaponPrefab == null || attacker == null)
+                return;
+
             if (hitInfo.WeaponPrefab.ToString().Contains("hunting") || hitInfo.Weapon.name.Contains("bow") && attacker.IsAdmin)
             {
                 var hitPlayer = hitInfo.HitEntity.ToPlayer();
@@ -235,7 +237,6 @@ namespace Oxide.Plugins
                         switch (arrowType)
                         {
                             case ArrowType.Wind:
-
                                 if (!CanUseArrow(attacker, arrowType, out foundItem))
                                     return;
                                 else

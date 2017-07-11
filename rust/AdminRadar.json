@@ -1,8 +1,8 @@
 {
     "name": "Admin Radar",
     "description": "Allows admins to have a radar to help detect cheaters",
-    "author": "Austinv900",
-    "version": "3.0.0",
+    "author": "nivex",
+    "version": "4.0.2",
     "configuration": true,
     "suggest": {
         "AdminPanel": "*"

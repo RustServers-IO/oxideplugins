@@ -2,7 +2,6 @@
 // Requires: Babel
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using Oxide.Core.Libraries.Covalence;
@@ -10,7 +9,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Babel Chat", "Wulf/lukespragg", "1.0.2", ResourceId = 1964)]
+    [Info("Babel Chat", "Wulf/lukespragg", "1.1.1", ResourceId = 1964)]
     [Description("Translates chat messages to each player's language preference or server default")]
     public class BabelChat : CovalencePlugin
     {
@@ -23,6 +22,9 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Force default server language (true/false)")]
             public bool ForceDefault;
 
+            [JsonProperty(PropertyName = "Log chat messages (true/false)")]
+            public bool LogChatMessages;
+
             [JsonProperty(PropertyName = "Show original message (true/false)")]
             public bool ShowOriginal;
 
@@ -34,6 +36,7 @@ namespace Oxide.Plugins
                 return new Configuration
                 {
                     ForceDefault = false,
+                    LogChatMessages = true,
                     ShowOriginal = false,
                     UseRandomColors = false
                 };
@@ -91,8 +94,19 @@ namespace Oxide.Plugins
 #if RUST
             var basePlayer = target.Object as BasePlayer;
             basePlayer.SendConsoleCommand("chat.add", sender.Id, format, 1.0);
+            if (config.LogChatMessages)
+            {
+                ConVar.Server.Log("Log.Chat.txt", $"{basePlayer.ToString()}: {message}\n");
+                LogToFile("log", message, this);
+                Log($"{sender.Name}: {message}");
+            }
 #else
             target.Message(format);
+            if (config.LogChatMessages)
+            {
+                LogToFile("log", message, this);
+                Log($"{sender.Name}: {message}");
+            }
 #endif
         }
 

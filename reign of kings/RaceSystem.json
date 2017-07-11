@@ -2,7 +2,7 @@
     "name": "Race System",
     "description": "Add races to your server",
     "author": "D-Kay",
-    "version": "0.1.3",
+    "version": "0.1.5",
     "configuration": true,
     "suggest": {
         "HelpText": "*",

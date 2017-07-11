@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.5.9", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.6.0", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
     class ZLevelsRemastered : RustPlugin
@@ -25,6 +25,7 @@ namespace Oxide.Plugins
 		bool Changed = false;
 		bool initialized;
 		bool bonusOn = false;
+		static ZLevelsRemastered zLevels = null;
 		
 		Dictionary<string, ItemDefinition> CraftItems;
 		CraftData _craftData;
@@ -229,7 +230,12 @@ namespace Oxide.Plugins
             if ((_craftData = Interface.GetMod().DataFileSystem.ReadObject<CraftData>("ZLevelsCraftDetails")) == null)
                 _craftData = new CraftData();
             playerPrefs = Interface.GetMod().DataFileSystem.ReadObject<PlayerData>(this.Title);
-         }
+		}
+		
+		void Loaded()
+		{
+			zLevels = this;
+		}
 
 		void OnServerSave()
 		{
@@ -242,6 +248,11 @@ namespace Oxide.Plugins
 			Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerPrefs);
 			foreach (var player in BasePlayer.activePlayerList)
 				BlendOutUI(player);
+				
+			var objs = UnityEngine.Object.FindObjectsOfType<FinishBonusClass>().ToList();
+			if (objs.Count > 0)
+				foreach (var obj in objs)
+					GameObject.Destroy(obj);
         }
 
 		void OnNewSave(string strFilename)
@@ -457,11 +468,36 @@ namespace Oxide.Plugins
         {
             if (!initialized || entity == null || !(entity is BasePlayer) || item == null || dispenser == null) return;
 			var player = entity as BasePlayer;
+			if (dispenser.gameObject.GetComponent<FinishBonusClass>())
+				dispenser.gameObject.GetComponent<FinishBonusClass>().OnHit(player);
+			else
+				dispenser.gameObject.AddComponent<FinishBonusClass>().finishBonus = dispenser.finishBonus;
 			if (!hasRights(player.UserIDString)) return;
             if (IsSkillEnabled(Skills.WOODCUTTING) &&(int)dispenser.gatherType == 0) levelHandler(player, item, Skills.WOODCUTTING);
             if (IsSkillEnabled(Skills.MINING) && (int)dispenser.gatherType == 1) levelHandler(player, item, Skills.MINING);
             if (IsSkillEnabled(Skills.SKINNING) && (int)dispenser.gatherType == 2) levelHandler(player, item, Skills.SKINNING);
         }
+
+		sealed class FinishBonusClass : MonoBehaviour
+		{
+			public List<ItemAmount> finishBonus;
+			BasePlayer hitPlayer;
+			
+			public void OnHit(BasePlayer player)
+			{
+				hitPlayer = player;
+			}
+			
+			public void FinishBonusAssigned()
+			{
+				foreach (var current in finishBonus)
+				{
+					var item = ItemManager.Create(current.itemDef, Mathf.CeilToInt(current.amount), 0uL);
+					zLevels.levelHandler(hitPlayer, item, Skills.MINING);
+					current.amount = (float)item.amount;
+				}
+			}
+		}
 
         void OnCollectiblePickup(Item item, BasePlayer player)
         {

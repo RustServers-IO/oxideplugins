@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BlockBugPrevent", "sami37", "1.1.0", ResourceId = 2166)]
+    [Info("BlockBugPrevent", "sami37", "1.1.1", ResourceId = 2166)]
     [Description("Prevent foundation block build on another foundation.")]
     public class BlockBugPrevent : RustPlugin
     {
@@ -43,9 +43,15 @@ namespace Oxide.Plugins
             if (!block.PrefabName.Contains("foundation"))
                 return;
             Vector3 sourcepos = block.transform.position;
-            var entities = RaycastAll<BaseEntity>(new Ray(sourcepos + new Vector3(0f, 1.5f, 0f), Vector3.up));
+            var entities = RaycastAll<BuildingBlock>(new Ray(sourcepos + new Vector3(0f, 0f, 0f), Vector3.up));
             if (entities.ToString() != "False")
-                destroy = true;
+            {
+                BuildingBlock entitBlock = (BuildingBlock) entities;
+                if (entitBlock.name.Contains("foundation") && !entitBlock.name.Contains("steps"))
+                {
+                    destroy = true;
+                }
+            }
             if (destroy)
             {
                 block.Kill();

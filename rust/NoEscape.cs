@@ -16,7 +16,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.0.4", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.0.5", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -35,7 +35,8 @@ namespace Oxide.Plugins
             "repair",
             "upgrade",
             "vend",
-            "kit"
+            "kit",
+            "assignbed"
         };
 
         // COMBAT SETTINGS
@@ -1043,10 +1044,14 @@ namespace Oxide.Plugins
         {
             object friends_obj = null;
             DateTime lastFriendCheckPlayer;
+            var players = new List<string>();
+
             if (lastFriendCheck.TryGetValue(player, out lastFriendCheckPlayer))
             {
-                if ((DateTime.Now - lastFriendCheckPlayer).TotalMinutes <= cacheTimer)
-                    return friendCache[player];
+                if ((DateTime.Now - lastFriendCheckPlayer).TotalMinutes <= cacheTimer && friendCache.TryGetValue(player, out players)) 
+                {
+                    return players;
+                }
                 else
                 {
                     friends_obj = Friends?.CallHook("IsFriendOfS", player);
@@ -1056,16 +1061,8 @@ namespace Oxide.Plugins
             else
             {
                 friends_obj = Friends?.CallHook("IsFriendOfS", player);
-                if (lastFriendCheck.ContainsKey(player))
-                    lastFriendCheck.Remove(player);
-
-                if (friendCache.ContainsKey(player))
-                    friendCache.Remove(player);
-                
                 lastFriendCheck.Add(player, DateTime.Now);
             }
-
-            var players = new List<string>();
 
             if (friends_obj == null)
                 return players;
@@ -1293,6 +1290,18 @@ namespace Oxide.Plugins
         {
             var player = plan.GetOwnerPlayer();
             var result = CanDo("build", player);
+            if (result is string)
+            {
+                SendReply(player, result.ToString());
+                return true;
+            }
+
+            return null;
+        }
+
+        object CanAssignBed(SleepingBag bag, BasePlayer player, ulong targetPlayerId)
+        {
+            var result = CanDo("assignbed", player);
             if (result is string)
             {
                 SendReply(player, result.ToString());

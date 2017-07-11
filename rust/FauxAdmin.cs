@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("FauxAdmin", "Colon Blow", "1.0.10", ResourceId = 1933)]
+    [Info("FauxAdmin", "Colon Blow", "1.0.11", ResourceId = 1933)]
     class FauxAdmin : RustPlugin
     {
         public bool DisableFlyHackProtection => Config.Get<bool>("DisableFlyHackProtection");
@@ -12,6 +12,8 @@ namespace Oxide.Plugins
         public bool DisableFauxAdminRotate => Config.Get<bool>("DisableFauxAdminRotate");
         public bool DisableFauxAdminUpgrade => Config.Get<bool>("DisableFauxAdminUpgrade");
         public bool DisableNoclipOnNoBuild => Config.Get<bool>("DisableNoclipOnNoBuild");
+        public bool EntKillOwnOnly => Config.Get<bool>("EntKillOwnOnly");
+        public bool UseFauxAdminBanBlocker => Config.Get<bool>("UseFauxAdminBanBlocker");
 
         Dictionary<ulong, RestrictedData> _restricted = new Dictionary<ulong, RestrictedData>();
 
@@ -28,6 +30,8 @@ namespace Oxide.Plugins
             Config["DisableFauxAdminRotate"] = true;
             Config["DisableFauxAdminUpgrade"] = true;
             Config["DisableNoclipOnNoBuild"] = true;
+            Config["EntKillOwnOnly"] = true;
+            Config["UseFauxAdminBanBlocker"] = true;
             SaveConfig();
         }
 
@@ -39,6 +43,59 @@ namespace Oxide.Plugins
             permission.RegisterPermission("fauxadmin.allowed", this);
             permission.RegisterPermission("fauxadmin.bypass", this);
             permission.RegisterPermission("fauxadmin.blocked", this);
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////  Entitity Kill for Fauxadmins
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        BaseEntity baseEntity;
+        RaycastHit RayHit;
+        static int layermask = LayerMask.GetMask("Construction", "Deployed", "Default");
+
+        [ConsoleCommand("entkill")]
+        void cmdConsoleEntKill(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Player();
+            if (!isAllowed(player, "fauxadmin.allowed"))
+            {
+                SendReply(player, lang.GetMessage("notallowed", this));
+                return;
+            }
+            EntKillProcess(player);
+        }
+
+        void EntKillProcess(BasePlayer player)
+        {
+            bool flag1 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, 10f, layermask);
+            baseEntity = flag1 ? RayHit.GetEntity() : null;
+            if (baseEntity == null) return;
+            if (baseEntity is BasePlayer) return;
+            if (EntKillOwnOnly && player.userID != baseEntity.OwnerID) return;
+            baseEntity.Kill(BaseNetworkable.DestroyMode.Gib);
+
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        [ConsoleCommand("entwho")]
+        void cmdConsoleEntWho(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Player();
+            if (!isAllowed(player, "fauxadmin.allowed"))
+            {
+                SendReply(player, lang.GetMessage("notallowed", this));
+                return;
+            }
+            EntWhoProcess(player);
+        }
+
+        void EntWhoProcess(BasePlayer player)
+        {
+            bool flag2 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, 10f, layermask);
+            baseEntity = flag2 ? RayHit.GetEntity() : null;
+            if (baseEntity == null) return;
+            SendReply(player, "Owner ID: " + baseEntity.OwnerID.ToString());
         }
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,6 +167,26 @@ namespace Oxide.Plugins
             rust.RunClientCommand(player, "noclip");
             timer.Once(1, () => _restricted.Remove(player.userID));
             return;
+        }
+
+        object OnServerCommand(ConsoleSystem.Arg arg)
+        {
+            if (arg == null || arg.cmd == null) return null;
+            string command = arg.cmd.Name;
+            if (command.Equals("ban") || command.Equals("banid"))
+            {
+                if (UseFauxAdminBanBlocker)
+                {
+                    BasePlayer player = arg.GetPlayer(0);
+                    if ((player) && isAllowed(player, "fauxadmin.allowed"))
+                    {
+
+                        PrintWarning($"FauxAdmin Ban Blocker worked !!");
+                        return false;
+                    }
+                }
+            }
+            return null;
         }
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("SkipNightVote", "k1lly0u", "0.1.3", ResourceId = 2058)]
+    [Info("SkipNightVote", "k1lly0u", "0.1.4", ResourceId = 2058)]
     class SkipNightVote : CovalencePlugin
     {
         #region Fields
@@ -89,7 +89,7 @@ namespace Oxide.Plugins
                         return;
                 }               
             });
-        } 
+        }        
         private void ShowCountTimer()
         {
             server.Broadcast($"{configData.Messaging.MainColor}{ReceivedVotes.Count} / {RequiredVotes}</color> {configData.Messaging.MSGColor}{GetMSG("have voted to skip night")}</color>");
@@ -135,6 +135,7 @@ namespace Oxide.Plugins
             if (success)
             {
                 server.Time = server.Time.Date + TimeSpan.Parse(configData.Options.TimeToSet);
+                server.Time.Date.AddDays(1);
                 server.Broadcast($"{configData.Messaging.MainColor}{GetMSG("Voting was successful, skipping night.")}</color>");                
             }
             else

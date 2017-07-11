@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("SkipNightUI", "k1lly0u", "0.1.1", ResourceId = 2506)]
+    [Info("SkipNightUI", "k1lly0u", "0.1.2", ResourceId = 2506)]
     class SkipNightUI : RustPlugin
     {
         #region Fields
@@ -310,8 +310,9 @@ namespace Oxide.Plugins
             timeRemaining = 0;
 
             if (success)
-            {
+            {            
                 TOD_Sky.Instance.Cycle.Hour = configData.Options.Set;
+                TOD_Sky.Instance.Cycle.Day = TOD_Sky.Instance.Cycle.Day + 1;
                 Print("votingSuccessful");
             }
             else Print("votingUnsuccessful");

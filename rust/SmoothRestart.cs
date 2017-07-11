@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
+//using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Linq;
 using System.Text;
@@ -10,12 +10,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.0.8", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.1.0", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
 		JsonSerializerSettings jsonsettings;
-		DateTime restartTime = DateTime.MinValue;
 		Dictionary<BasePlayer, Timer> timers = new Dictionary<BasePlayer, Timer>();
 		Dictionary<string, string> userAgent;
 		Timer _blogTimer = null;
@@ -163,6 +162,12 @@ namespace Oxide.Plugins
 			Changed = false;
 		}
 
+		protected override void LoadDefaultConfig()
+		{
+			Config.Clear();
+			LoadVariables();
+		}
+		
 		void LoadDefaultMessages()
 		{
 			lang.RegisterMessages(new Dictionary<string, string>
@@ -171,18 +176,11 @@ namespace Oxide.Plugins
 									{"RestartInitPatch", "<color=red>Server Patch</color> <color=orange>restart in <color=red>{0}</color> minutes!</color>"},
 									{"RestartInitSec", "<color=orange>Server will restart in <color=red>{0}</color> seconds!</color>"},
 									{"RestartCancel", "<color=green>Server restart stopped!</color>"},
-
 									{"ManualInit", "<color=silver>Manual countdown will start at next full minute</color>"},
 									{"ManualCancel", "<color=silver>Manual Timer was canceled</color>"},
 									{"DevblogDetected", "<color=orange>New DevBlog <color=green>{0}</color> detected !!!</color>"},
 									{"OxideBuildDetected", "<color=orange>New OxideBuild <color=green>{0}</color> detected !!!</color>"},
 									},this);
-		}
-
-		protected override void LoadDefaultConfig()
-		{
-			Config.Clear();
-			LoadVariables();
 		}
 
 		void Init()
@@ -210,7 +208,7 @@ namespace Oxide.Plugins
 			if (!permission.PermissionExists("smoothrestart.canrestart"))
 				permission.RegisterPermission("smoothrestart.canrestart", this);
 				CheckDevBlog(6);
-				CheckOxideCommits(336);
+				CheckOxideCommits();
 			if (enableAutoChecks)
 				_blogTimer = timer.Every(checkIntervalMinutes*60, () => CheckDevBlog(6));
 		}
@@ -251,7 +249,6 @@ namespace Oxide.Plugins
 				if (countDownMinutes.Contains(currentCountDown))
 					DoSmoothRestart(currentCountDown);
 				currentCountDown--;
-				//switchers over to seconds if timer reached 0
 				if (currentCountDown == 0)
 				{
 					secondsActive = true;
@@ -278,14 +275,13 @@ namespace Oxide.Plugins
 			catch { timer.Once(60f, () => CheckDevBlog(6)); }
 		}
 
-		void CheckOxideCommits(int hoursBack)
+		void CheckOxideCommits()
 		{
-			var sinceDate = DateTime.Now.AddHours(-hoursBack).ToString("yyyy-MM-ddTHH:mm:ssZ");
-			var url = $"https://api.github.com/repos/OxideMod/Snapshots/commits?since={sinceDate}";
+			var url = $"https://api.github.com/repos/oxidemod/oxide/releases/latest";
 			Dictionary<string, string> userAgent  = new Dictionary<string, string>();
 			userAgent.Add("User-Agent", "OxideMod");
-			try { webrequest.EnqueueGet(url, (code, response) => APIResponse(code, response, "oxide", hoursBack), this, userAgent); }
-			catch { timer.Once(60f, () => CheckOxideCommits(336));}
+			try { webrequest.EnqueueGet(url, (code, response) => APIResponse(code, response, "oxide", 0), this, userAgent); }
+			catch { timer.Once(60f, CheckOxideCommits);}
 		}
 
 		void APIResponse(int code, string response, string apiType, int numberCheck)
@@ -331,7 +327,7 @@ namespace Oxide.Plugins
 								return;
 							_blogTimer.Destroy();
 							_blogTimer = null;
-							_oxideTimer = timer.Every(60f, () => CheckOxideCommits(336));
+							_oxideTimer = timer.Every(60f, CheckOxideCommits);
 						}
 						break;
 					}
@@ -339,22 +335,12 @@ namespace Oxide.Plugins
 			}
 			else if (!(response == null || code != 200) && apiType == "oxide")
 			{
-				var jsonresponse2 = JsonConvert.DeserializeObject<List<object>>(response, jsonsettings);
-				if (!(jsonresponse2 is List<object>) || jsonresponse2.Count == 0) return;
-				string message = "";
-				foreach (Dictionary <string,object> entry in jsonresponse2)
-				{
-					if (((entry["commit"] as Dictionary <string,object>)["author"] as Dictionary <string,object>)["name"].ToString() != "Travis")
-						continue;
-					if ((entry["commit"] as Dictionary <string,object>)["message"].ToString().Contains("Oxide build"))
-					{
-						message = (entry["commit"] as Dictionary <string,object>)["message"].ToString().Replace("Oxide build ", "");
-						break;
-					}
-				}
+				var jsonresponse2 = JsonConvert.DeserializeObject<Dictionary<string, object>>(response, jsonsettings);
+				if (!(jsonresponse2 is Dictionary<string, object>) || jsonresponse2.Count == 0 || !jsonresponse2.ContainsKey("name")) return;
+				string message = (string)jsonresponse2["name"];
 				if (message == "")
-					message = $"Oxide build {Oxide.Core.OxideMod.Version.Patch} from";
-				var buildNum = Convert.ToInt32(message.Substring(0, message.LastIndexOf(" from") + 1));
+					message = Oxide.Core.OxideMod.Version.ToString();
+				var buildNum = Convert.ToInt32(message.Substring(4));
 				if (currentOxideBuild == 0 || initCheckOxideBuild)
 				{
 					if ( buildNum != currentOxideBuild)

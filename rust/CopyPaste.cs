@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.2.7", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.2.8", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
@@ -84,11 +84,6 @@ namespace Oxide.Plugins
 
 			return TryCopy(sourcePoint, sourceEntity.transform.rotation.ToEulerAngles(), filename, ViewAngles.ToEulerAngles().y, args);
 		}
-		
-		object TryPasteFromVector3(Vector3 startPos, Vector3 direction, string filename, string[] args)
-		{
-			return TryPaste(startPos, filename, null, direction.y, args);
-		}
 
 		object TryPasteFromSteamID(ulong userID, string filename, string[] args)
 		{
@@ -107,6 +102,11 @@ namespace Oxide.Plugins
 			return TryPaste(sourcePoint, filename, player, ViewAngles.ToEulerAngles().y, args);
 		}
 
+		object TryPasteFromVector3(Vector3 startPos, float rotationCorrection, string filename, string[] args)
+		{
+			return TryPaste(startPos, filename, null, rotationCorrection, args);
+		}
+		
 		//Other methods
 
 		private object CheckCollision(List<Dictionary<string,object>> entities, Vector3 startPos, float radius)
@@ -156,10 +156,10 @@ namespace Oxide.Plugins
 			return true;
 		}
 		
-		private object Copy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, CopyMechanics copyMechanics, float range, bool saveBuildings, bool saveDeployables, bool saveInventories)
+		private object Copy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, CopyMechanics copyMechanics, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree)
 		{
 			var rawData = new List<object>();
-			var copy = CopyProcess(sourcePos, sourceRot, RotationCorrection, range, saveBuildings, saveDeployables, saveInventories, copyMechanics);
+			var copy = CopyProcess(sourcePos, sourceRot, RotationCorrection, range, saveBuildings, saveDeployables, saveInventories, saveTree, copyMechanics);
 
 			if(copy is string) 
 				return copy;
@@ -191,21 +191,25 @@ namespace Oxide.Plugins
 			return true;
 		}
 
-		private object CopyProcess(Vector3 sourcePos, Vector3 sourceRot, float RotationCorrection, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, CopyMechanics copyMechanics)
+		private object CopyProcess(Vector3 sourcePos, Vector3 sourceRot, float RotationCorrection, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree, CopyMechanics copyMechanics)
 		{
 			var rawData = new List<object>();
 			var houseList = new List<BaseEntity>();
 			var checkFrom = new List<Vector3> { sourcePos };
 			uint buildingid = 0;
-			int current = 0;
-
+			int currentLayer = copyLayer;
+			int current = 0;	
+			
+			if(saveTree)
+				currentLayer |= LayerMask.GetMask("Tree");
+			
 			while(true)
 			{
 				if(current >= checkFrom.Count) 
 					break;
 
 				List<BaseEntity> list = Pool.GetList<BaseEntity>();
-				Vis.Entities<BaseEntity>(checkFrom[current], range, list, copyLayer);
+				Vis.Entities<BaseEntity>(checkFrom[current], range, list, currentLayer);
 
 				for(int i = 0; i < list.Count; i++)
 				{
@@ -646,7 +650,7 @@ namespace Oxide.Plugins
 
 		private object TryCopy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, string[] args)
 		{
-			bool saveInventories = true, saveDeployables = true, saveBuilding = true;
+			bool saveInventories = true, saveDeployables = true, saveBuilding = true, saveTree = false;
 			CopyMechanics copyMechanics = CopyMechanics.Proximity;
 			float radius = 3f;
 			
@@ -701,12 +705,18 @@ namespace Oxide.Plugins
 							return Lang("SYNTAX_RADIUS", null);
 						
 						break;
+					case "t":
+					case "tree":
+						if(!bool.TryParse(args[valueIndex], out saveTree))
+							return Lang("SYNTAX_TREE", null);
+						
+						break;						
 					default:
 						return Lang("SYNTAX_COPY", null);
 				}
 			}
 
-			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveBuilding, saveDeployables, saveInventories);
+			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveBuilding, saveDeployables, saveInventories, saveTree);
 		}
 		
 		private void TryCopySlots(BaseEntity ent, IDictionary<string, object> housedata)
@@ -1092,7 +1102,11 @@ namespace Oxide.Plugins
 			{"SYNTAX_AUTH", new Dictionary<string, string>() {
 				{"en", "Option auth must be true/false"},
 				{"ru", "Опция auth принимает значения true/false"},
-			}},				
+			}},	
+			{"SYNTAX_TREE", new Dictionary<string, string>() {
+				{"en", "Option tree must be true/false"},
+				{"ru", "Опция tree принимает значения true/false"},
+			}},							
 			{"SYNTAX_INVENTORIES", new Dictionary<string, string>() {
 				{"en", "Option inventories must be true/false"},
 				{"ru", "Опция inventories принимает значения true/false"},

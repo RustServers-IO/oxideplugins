@@ -2,7 +2,7 @@
     "name": "SkipNight UI",
     "description": "A UI skip night plugin with completely customisable interfaces",
     "author": "k1lly0u",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "configuration": true,
     "suggest": {
         "ImageLibrary": "*"

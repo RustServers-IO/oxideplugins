@@ -16,7 +16,7 @@ using System.Drawing;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.3", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.31", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -1597,7 +1597,7 @@ namespace Oxide.Plugins
                     if (monument.name.Contains("launch_site_1"))
                     {
                         mon.name = msg("rocketfactory");
-                        mon.icon = "rocket";
+                        mon.icon = "rocketfactory";
                         staticMarkers.Add(mon);
                         continue;
                     }
@@ -2172,6 +2172,7 @@ namespace Oxide.Plugins
             newLoadOrder.Add("cave", $"{path}cave.png");
             newLoadOrder.Add("warehouse", $"{path}warehouse.png");
             newLoadOrder.Add("dish", $"{path}dish.png");
+            newLoadOrder.Add("rocketfactory", $"{path}rocket.png");
             newLoadOrder.Add("spheretank", $"{path}spheretank.png");
             newLoadOrder.Add("harbor", $"{path}harbor.png");
             newLoadOrder.Add("special", $"{path}special.png");

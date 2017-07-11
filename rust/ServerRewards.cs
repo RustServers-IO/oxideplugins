@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.4.54", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.4.55", ResourceId = 1751)]
     class ServerRewards : RustPlugin
     {
         #region Fields
@@ -211,6 +211,14 @@ namespace Oxide.Plugins
                 AddUI(player, type, subType, pageNumber, npcId);
             }
             public bool IsOpen(BasePlayer player) => playerUi.ContainsKey(player.userID);
+
+            public bool NPCHasUI(string npcId) => npcElements.ContainsKey(npcId);
+
+            public void RemoveNPCUI(string npcId)
+            {
+                if (NPCHasUI(npcId))
+                    npcElements.Remove(npcId);
+            }
 
             public void RenameComponents(CuiElementContainer container)
             {
@@ -1790,18 +1798,18 @@ namespace Oxide.Plugins
                 ModifyNPC(player, npc);
                 return;
             }
-            if (!string.IsNullOrEmpty(IsRegisteredNPC(npcID)) && !uiManager.IsOpen(player))
+            if (IsRegisteredNPC(npcID) && uiManager.NPCHasUI(npcID) && !uiManager.IsOpen(player))
                 OpenStore(player, npcID);
         }
         #endregion
         #endregion
 
         #region NPC Registration       
-        private string IsRegisteredNPC(string ID)
+        private bool IsRegisteredNPC(string ID)
         {
             if (npcData.npcInfo.ContainsKey(ID))
-                return msg("npcExist");
-            return string.Empty;
+                return true;
+            return false;
         }
         [ChatCommand("srnpc")]
         void cmdSRNPC(BasePlayer player, string command, string[] args)
@@ -1841,24 +1849,26 @@ namespace Oxide.Plugins
             {
                 case UserNPC.Add:
                     {
-                        if (!string.IsNullOrEmpty(isRegistered))
+                        if (isRegistered)
                         {
-                            SendMSG(player, isRegistered);
+                            SendMSG(player, msg("npcExist", player.UserIDString));
                             return;
                         }
                         int key = npcData.npcInfo.Count + 1;
                         npcData.npcInfo.Add(NPC.UserIDString, new NPCData.NPCInfo { name = $"{msg("Reward Dealer")} {key}", x = NPC.transform.position.x, z = NPC.transform.position.z });
                         AddMapMarker(NPC.transform.position.x, NPC.transform.position.z, $"{msg("Reward Dealer")} {key}");
+                        CreateNewElement(NPC.UserIDString, npcData.npcInfo[NPC.UserIDString]);
                         SendMSG(player, msg("npcNew"));
                         SaveNPC();
                     }
                     return;
                 case UserNPC.Remove:
                     {
-                        if (!string.IsNullOrEmpty(isRegistered))
+                        if (isRegistered)
                         {
                             RemoveMapMarker(npcData.npcInfo[NPC.UserIDString].name);
                             npcData.npcInfo.Remove(NPC.UserIDString);
+                            uiManager.RemoveNPCUI(NPC.UserIDString);
 
                             for (int i = 0; i < npcData.npcInfo.Count; i++)
                             {
@@ -1881,7 +1891,7 @@ namespace Oxide.Plugins
                     return;
                 case UserNPC.Edit:
                     {
-                        if (!string.IsNullOrEmpty(isRegistered))
+                        if (isRegistered)
                         {
                             if (!npcCreator.ContainsKey(player.userID))
                                 npcCreator.Add(player.userID, new KeyValuePair<string, NPCData.NPCInfo>(NPC.UserIDString, new NPCData.NPCInfo()));
