@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("ResetCodeLocks", "Absolut", "1.0.1", ResourceId = 2348)]
+    [Info("ResetCodeLocks", "Absolut", "1.0.2", ResourceId = 2348)]
 
     class ResetCodeLocks : RustPlugin
     {
@@ -86,7 +86,7 @@ namespace Oxide.Plugins
         {
             bool HasLocks = false;
             int num = 0;
-            foreach (var entry in UnityEngine.Object.FindObjectsOfType<BaseEntity>().Where(k => k.GetSlot(BaseEntity.Slot.Lock) != null && k.OwnerID == player.userID))
+            foreach (var entry in UnityEngine.Object.FindObjectsOfType<BaseEntity>().Where(k => k.GetSlot(BaseEntity.Slot.Lock) != null && (k.OwnerID == player.userID || (player.IsAdmin && k.OwnerID == 0))))
             {
                 BaseEntity lockSlot = entry.GetSlot(BaseEntity.Slot.Lock);
                 CodeLock codelock = lockSlot?.GetComponent<CodeLock>();

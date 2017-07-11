@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underworld", "nivex", "0.1.4", ResourceId = 25895)]
+    [Info("Underworld", "nivex", "0.1.5", ResourceId = 25895)]
     [Description("Teleports admins/developer under the world when they disconnect.")]
     public class Underworld : RustPlugin
 	{
@@ -202,8 +202,6 @@ namespace Oxide.Plugins
                 {
                     if (user.Items.Any(item => item.amount > 0))
                     {
-                        player.inventory.Strip();
-
                         foreach (var uwi in user.Items.ToList())
                         {
                             RestoreItem(player, uwi);
@@ -356,19 +354,31 @@ namespace Oxide.Plugins
 
             var items = new List<UnderworldItem>();
 
-            foreach (Item item in player.inventory.containerWear.itemList.Where(item => !Blacklisted(item)))
+            foreach (Item item in player.inventory.containerWear.itemList.Where(item => !Blacklisted(item)).ToList())
             {
+                if (item.info.shortname == "map")
+                    continue;
+
                 items.Add(new UnderworldItem("wear", item));
+                item.Remove(0.01f);
             }
 
-            foreach (Item item in player.inventory.containerMain.itemList.Where(item => !Blacklisted(item)))
+            foreach (Item item in player.inventory.containerMain.itemList.Where(item => !Blacklisted(item)).ToList())
             {
+                if (item.info.shortname == "map")
+                    continue;
+
                 items.Add(new UnderworldItem("main", item));
+                item.Remove(0.01f);
             }
 
-            foreach (Item item in player.inventory.containerBelt.itemList.Where(item => !Blacklisted(item)))
+            foreach (Item item in player.inventory.containerBelt.itemList.Where(item => !Blacklisted(item)).ToList())
             {
+                if (item.info.shortname == "map")
+                    continue;
+
                 items.Add(new UnderworldItem("belt", item));
+                item.Remove(0.01f);
             }
 
             if (items.Count == 0)
@@ -376,10 +386,10 @@ namespace Oxide.Plugins
                 return;
             }
 
+            ItemManager.DoRemoves();
             user.Items.Clear();
             user.Items.AddRange(items);
             SaveData();
-            player.inventory.Strip();
         }
 
         private void RestoreItem(BasePlayer player, UnderworldItem uwi)
@@ -450,12 +460,13 @@ namespace Oxide.Plugins
 
             if (!string.IsNullOrEmpty(uwi.fogImages) && !string.IsNullOrEmpty(uwi.paintImages))
             {
-                var map = item.GetHeldEntity() as MapEntity;
+                var mapEntity = item.GetHeldEntity() as MapEntity;
 
-                if (map != null)
+                if (mapEntity != null)
                 {
-                    map.fogImages = JsonConvert.DeserializeObject<uint[]>(uwi.fogImages);
-                    map.paintImages = JsonConvert.DeserializeObject<uint[]>(uwi.paintImages);
+                    mapEntity.SetOwnerPlayer(player);
+                    mapEntity.fogImages = JsonConvert.DeserializeObject<uint[]>(uwi.fogImages);
+                    mapEntity.paintImages = JsonConvert.DeserializeObject<uint[]>(uwi.paintImages);
                 }
             }
 

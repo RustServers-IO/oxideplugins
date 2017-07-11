@@ -2,7 +2,7 @@
     "name": "ToolsGatherManager",
     "description": "Modifies the gather rate from certain tools",
     "author": "hoppel",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/toolsgathermanager.2553",

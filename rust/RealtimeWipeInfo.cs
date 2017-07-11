@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("RealtimeWipeInfo", "Ryan", "1.0.7", ResourceId = 2473)]
+    [Info("RealtimeWipeInfo", "Ryan", "1.0.8", ResourceId = 2473)]
     [Description("Updates title dynamically depending on wipe time as well as preventing wipe chat spam.")]
     internal class RealtimeWipeInfo : RustPlugin
     {
@@ -225,7 +225,7 @@ namespace Oxide.Plugins
                 ["Title_RecentFormat"] = "JUST NOW!",
                 // Description
                 ["Description_Lastwipe"] = "The last wipe was on {0}",
-                ["Description_NextWipe"] = "The next wipe will be on {0} ({1} day wipe schedule)",
+                ["Description_Nextwipe"] = "The next wipe will be on {0} ({1} day wipe schedule)",
                 ["Description_SeedSize"] = "The map size is: {0} and the seed is {1}",
                 // Phrase reply
                 ["Phrase_TimeReply"] = "The last wipe was {0} ago",
@@ -313,7 +313,7 @@ namespace Oxide.Plugins
 
             if (!ConVar.Admin.ServerInfo().Restarting)
             {
-                PrintWarning("Resetting servers hostname/description to original hostname.");
+                PrintWarning("Resetting servers hostname/description to originals.");
                 ConVar.Server.hostname = storedData.Hostname;
                 ConVar.Server.description = storedData.Description;
             }

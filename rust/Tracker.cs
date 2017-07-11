@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Oxide.Plugins
 {
 
-    [Info("Tracker", "Maurice", "1.0.1", ResourceId = 1278)]
+    [Info("Tracker", "Maurice", "1.0.2", ResourceId = 1278)]
     [Description("Check the amount of an Item on the Map and where it is stored in")]
     class Tracker : RustPlugin
     {
@@ -42,10 +42,12 @@ namespace Oxide.Plugins
                 ["NO_PERMISSION"] = "You don't have permission to use this command.",
                 ["NO_SUCH_ITEM"] = "Looks like there is no such item named '{0}'.",
                 ["PLAYER_NOT_FOUND"] = "No player found with that name! Check if you've written it correctly!",
+                ["PLAYER_FOUND_ITEM"] = "{0} ({1}) has {2} of {3}",
                 ["SAVED_TO"] = "Saved Item List to {0}",
                 ["STEAMID_NOT_FOUND"] = "No player found with that SteamID! Check if you've written it correctly!",
                 ["USAGE"] = "Usage:",
                 ["USAGE_COMMAND_LOGITEM"] = " logitem item",
+                ["USAGE_COMMAND_LOGPLAYERITEM"] = " logplayeritem item",
                 ["USAGE_COMMAND_TRACKCOUNT"] = " trackitemcount item -- Shows the amount of certain items in game.",
                 ["USAGE_COMMAND_TRACKITEM"] = " trackitem item optional:place optional:minamount",
                 ["USAGE_COMMAND_TRACKITEM_ADDITIONALS"] = " Places: chests / players / all (Default: all)",
@@ -63,6 +65,12 @@ namespace Oxide.Plugins
         {
             public String container_name;
             public String location;
+            public Int64 count;
+        }
+
+        public class PlayerItem
+        {
+            public ulong steamid;
             public Int64 count;
         }
 
@@ -189,6 +197,58 @@ namespace Oxide.Plugins
             }
         }
 
+        [ConsoleCommand("logplayeritem")]
+        void cmdLogPlayerItem(ConsoleSystem.Arg arg)
+        {
+
+            if (!CheckAccess(arg))
+                return;
+
+            if(!arg.HasArgs())
+            {
+                SendReply(arg, lang.GetMessage("USAGE", this));
+                SendReply(arg, lang.GetMessage("USAGE_COMMAND_LOGPLAYERITEM", this));
+                return;
+            }
+
+            var item = arg.Args.Length > 0 ? arg.Args[0].ToLower() : "";
+
+            if(!itemExist(item))
+            {
+                SendReply(arg, string.Format(lang.GetMessage("NO_SUCH_ITEM", this), item));
+                return;
+            }
+
+            List<PlayerItem> items_list = new List<PlayerItem>();
+
+            items_list.AddRange(findChestItem(item, 0, arg));
+            items_list.AddRange(findPlayerItem(item, 0));
+
+            DateTime dt = DateTime.Now;
+
+            string savefile = $"oxide/logs/tracker-player_{dt.Year}-{dt.Month}-{dt.Day}_{dt.Hour}-{dt.Minute}-{dt.Second}.txt";
+
+            SendReply(arg, string.Format(lang.GetMessage("SAVED_TO", this), savefile));
+
+            ConVar.Server.Log(savefile, $"Logged Item: {item}");
+
+
+            var newList = items_list.OrderByDescending(x => x.count)
+                  .ThenBy(x => x.steamid)
+                  .ToList();
+
+            for (int i = 0; i < newList.Count; i++)
+            {
+
+                PlayerItem t;
+                t = newList[i];
+                if (t != null)
+                {
+                    ConVar.Server.Log(savefile, string.Format(lang.GetMessage("PLAYER_FOUND_ITEM", this), FindPlayerByID(t.steamid), t.steamid, t.count, item));
+                }
+            }
+        }
+
         [ConsoleCommand("logitem")]
         void cmdLogItem(ConsoleSystem.Arg arg)
         {
@@ -224,7 +284,7 @@ namespace Oxide.Plugins
             SendReply(arg, string.Format(lang.GetMessage("SAVED_TO", this), savefile));
 
             ConVar.Server.Log(savefile, $"Logged Item: {item}");
-                        
+
             for (int i = 0; i < items_list.Count; i++)
             {
                 
@@ -243,6 +303,56 @@ namespace Oxide.Plugins
         #region Methods
 
         #region ItemFilters
+
+        /// <summary>
+        /// Returns a list of all players that have the item
+        /// </summary>
+        /// <param name="item">Item to be searched for</param>
+        /// <param name="min_amount">Minimum amount searched for</param>
+        /// <returns></returns>
+        List<PlayerItem> findPlayerItem(String item, int min_amount)
+        {
+            var players = UnityEngine.Object.FindObjectsOfType<BasePlayer>();
+            var items_found = new List<PlayerItem>();
+
+            if (players.Length == 0)
+            {
+                return items_found;
+            }
+            List<Item> items = new List<Item>();
+            PlayerItem t;
+
+            foreach (BasePlayer player in players)
+            {
+                if (player != null)
+                {
+                    items.Clear();
+                    items.AddRange(player.inventory.containerMain.itemList);
+                    items.AddRange(player.inventory.containerBelt.itemList);
+                    items.AddRange(player.inventory.containerWear.itemList);
+                    t = new PlayerItem();
+
+                    if (items.ToArray().Length > 0)
+                    {
+                        foreach (Item i in items)
+                        {
+                            if (i != null && i.info.displayName.english.ToLower().Equals(item.ToLower()))
+                            {
+                                t.steamid = player.userID;
+                                t.count += i.amount;
+                            }
+                        }
+                    }
+
+                    if (t != null && t.count > 0 && t.count >= min_amount)
+                    {
+                        items_found.Add(t);
+                    }
+                }
+            }
+
+            return items_found;
+        }
 
         /// <summary>
         /// Returns a list of all players that have the item
@@ -281,6 +391,53 @@ namespace Oxide.Plugins
 
                                 t.container_name = player.displayName + " (" + player.userID.ToString() + ") " + "" + (player.IsSleeping() ? "(Sleeping)" : "(Online)");
                                 t.location = (int)player.transform.position.x + " " + (int)player.transform.position.y + " " + (int)player.transform.position.z;
+                                t.count += i.amount;
+                            }
+                        }
+                    }
+
+                    if (t != null && t.count > 0 && t.count >= min_amount)
+                    {
+                        items_found.Add(t);
+                    }
+                }
+            }
+
+            return items_found;
+        }
+
+        /// <summary>
+        /// Returns a list of Chests that have the item
+        /// </summary>
+        /// <param name="item">Item that is searched for</param>
+        /// <param name="min_amount">Minimum amount searched for</param>
+        /// <returns></returns>
+        List<PlayerItem> findChestItem(String item, int min_amount, ConsoleSystem.Arg arg)
+        {
+            var containers = UnityEngine.Object.FindObjectsOfType<StorageContainer>();
+            var items_found = new List<PlayerItem>();
+
+            if (containers.Length == 0)
+            {
+                SendReply(arg, lang.GetMessage("NO_CONTAINERS", this));
+                return items_found;
+            }
+
+            PlayerItem t;
+
+            foreach (StorageContainer container in containers)
+            {
+                if (container != null && container.inventory != null)
+                {
+                    t = new PlayerItem();
+
+                    if (container.inventory.itemList.ToArray().Length > 0)
+                    {
+                        foreach (Item i in container.inventory.itemList)
+                        {
+                            if (i != null && i.info.displayName.english.ToLower().Equals(item.ToLower()))
+                            {
+                                t.steamid = container.OwnerID;
                                 t.count += i.amount;
                             }
                         }
@@ -396,7 +553,25 @@ namespace Oxide.Plugins
             return value;
         }
 
-
+        /// <summary>
+        /// Finds player by SteamID
+        /// </summary>
+        /// <param name="steamid">SteamID of the player to be searched</param>
+        /// <returns></returns>
+        object FindPlayerByID(ulong steamid)
+        {
+            BasePlayer targetplayer = BasePlayer.FindByID(steamid);
+            if (targetplayer != null)
+            {
+                return targetplayer;
+            }
+            targetplayer = BasePlayer.FindSleeping(steamid);
+            if (targetplayer != null)
+            {
+                return targetplayer;
+            }
+            return null;
+        }
 
         protected override void LoadDefaultConfig()
         {

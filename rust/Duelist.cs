@@ -13,20 +13,20 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "0.1.18", ResourceId = 2520)]
+    [Info("Duelist", "nivex", "0.1.19", ResourceId = 2520)]
     [Description("1v1 & TDM dueling event.")]
     class Duelist : RustPlugin
     {
         [PluginReference]
-        Plugin Kits, ZoneManager, Economics, ServerRewards;
+        Plugin Kits, ZoneManager, Economics, ServerRewards, LustyMap;
 
-        bool testMode = false;
         readonly static string hewwPrefab = "assets/prefabs/building/wall.external.high.wood/wall.external.high.wood.prefab";
         readonly static string heswPrefab = "assets/prefabs/building/wall.external.high.stone/wall.external.high.stone.prefab";
         static Duelist ins;
         bool init = false; // are we initialized properly? if not disable certain functionality
         bool resetDuelists = false; // if wipe is detected then assign awards and wipe VictoriesSeed / LossesSeed
 
+        static List<string> lustyMarkers = new List<string>();
         static Dictionary<string, AttackerInfo> tdmAttackers = new Dictionary<string, AttackerInfo>();
         static Dictionary<string, string> tdmKits = new Dictionary<string, string>();
         static HashSet<GoodVersusEvilMatch> tdmMatches = new HashSet<GoodVersusEvilMatch>();
@@ -533,8 +533,11 @@ namespace Oxide.Plugins
                 {
                     AwardTeam(team);
 
-                    foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null && !duelsData.Chat.Contains(p.UserIDString)))
+                    foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null))
                     {
+                        if (duelsData.Chat.Contains(target.UserIDString) && !_goodKIA.Contains(target.userID) && !_evilKIA.Contains(target.userID))
+                            continue;
+
                         target.ChatMessage(ins.msg("MatchDefeat", target.UserIDString, team == Team.Evil ? _evilHostName : _goodHostName, team == Team.Evil ? _goodHostName : _evilHostName, _teamSize));
                     }
 
@@ -551,26 +554,27 @@ namespace Oxide.Plugins
                     _zone.IsLocked = false;
 
                 _queueTimer?.Destroy();
-                _good.RemoveWhere(entry => entry == null);
-                _evil.RemoveWhere(entry => entry == null);
 
-                if (_ended || _started)
+                foreach (var player in _good.Where(entry => entry != null))
                 {
-                    foreach (var player in _good)
-                    {
-                        if (player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))
-                            player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, false);
+                    if (player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))
+                        player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, false);
 
+                    if (_ended || _started)
+                    {
                         player.inventory.Strip();
                         ins.Metabolize(player, false);
                         ins.SendHome(player);
                     }
+                }
 
-                    foreach (var player in _evil)
+                foreach (var player in _evil.Where(entry => entry != null))
+                {
+                    if (player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))
+                        player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, false);
+
+                    if (_ended || _started)
                     {
-                        if (player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))
-                            player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, false);
-
                         player.inventory.Strip();
                         ins.Metabolize(player, false);
                         ins.SendHome(player);
@@ -846,8 +850,15 @@ namespace Oxide.Plugins
 
             public void RemovePlayer(string playerId)
             {
-                _players.RemoveWhere(player => player.UserIDString == playerId);
-                _waiting.RemoveWhere(player => player.UserIDString == playerId);
+                foreach(var player in _players.ToList())
+                {
+                    if (player == null || player.UserIDString == playerId)
+                    {
+                        _players.Remove(player);
+                        _waiting.Remove(player);
+                        break;
+                    }
+                }
             }
 
             public bool HasPlayer(string playerId)
@@ -945,11 +956,16 @@ namespace Oxide.Plugins
             init = true;
             SetupZones();
 
-            if (duelsData.Zones.Count > 0 && customArenasNoBuilding)
-                Subscribe(nameof(CanBuild));
+            if (duelsData.Zones.Count > 0)
+            {
+                if (customArenasNoBuilding)
+                    Subscribe(nameof(CanBuild));
+
+                Subscribe(nameof(OnEntityTakeDamage));
+            }
 
             if (duelingZones.Count > 0 && autoEnable)
-                duelsData.DuelsEnabled = true;
+                duelsData.DuelsEnabled = true;            
         }
 
         void OnServerSave() => timer.Once(5f, () => SaveData());
@@ -1057,6 +1073,9 @@ namespace Oxide.Plugins
         {
             if (!init)
                 return;
+
+            if (lustyMarkers.Contains(player.UserIDString))
+                lustyMarkers.Remove(player.UserIDString);
 
             if (IsDueling(player))
             {
@@ -1203,8 +1222,11 @@ namespace Oxide.Plugins
 
                         if (tdmServerDeaths)
                         {
-                            foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null && !duelsData.Chat.Contains(p.UserIDString)))
+                            foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null))
                             {
+                                if (duelsData.Chat.Contains(target.UserIDString) && target != player)
+                                    continue;
+
                                 target.ChatMessage(msg("MatchPlayerDefeated", target.UserIDString, player.displayName, info.AttackerName, info.Weapon, info.BoneName, info.Distance));
                             }
                         }
@@ -1272,9 +1294,9 @@ namespace Oxide.Plugins
 
             if (Interface.CallHook("OnDuelDeathMessage", attacker, victim) == null) // hook to block message, also a private hook to add currency for starting deathmatch events based on duels won
             {
-                foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null && !duelsData.Chat.Contains(p.UserIDString))) // customize each message using language api
+                foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null)) // customize each message using language api
                 {
-                    if (!broadcastDefeat && target.UserIDString != victim.UserIDString && target.UserIDString != attackerId)
+                    if ((duelsData.Chat.Contains(target.UserIDString) || !broadcastDefeat) && target != victim && target != attacker)
                         continue;
 
                     string betWon = bet != null ? msg("BetWon", target.UserIDString, bet.trigger, bet.amount) : "";
@@ -1389,7 +1411,7 @@ namespace Oxide.Plugins
                     return null;
                 }
             }
-
+            
             if (ArenaTerritory(entity.transform.position, differential))
             {
                 if (entity.name.Contains("wall.external.high"))
@@ -1761,6 +1783,11 @@ namespace Oxide.Plugins
             return init && DuelTerritory(player.transform.position, differential) ? (object)false : null;
         }
 
+        object CanEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo) // TruePVE!!!! <3 @ignignokt84
+        {
+            return init && entity != null && entity is BasePlayer && DuelTerritory(entity.transform.position) ? (object)true : null;
+        }
+
         object OnServerCommand(ConsoleSystem.Arg arg)
         {
             var player = arg.Player();
@@ -1919,7 +1946,7 @@ namespace Oxide.Plugins
             return $"{x} {y} {z}";
         }
         #endregion
-
+        
         void cmdTDM(BasePlayer player, string command, string[] args)
         {
             if (player.IsAdmin && args.Length == 1 && args[0] == "showall" && tdmMatches.Count > 0)
@@ -1959,12 +1986,6 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (duelsData.Requests.ContainsKey(player.UserIDString) || duelsData.Requests.ContainsValue(player.UserIDString))
-            {
-                player.ChatMessage(msg("PendingRequest", player.UserIDString, szDuelChatCommand));
-                return;
-            }
-
             if (args.Length == 0)
             {
                 if (deathmatch == null)
@@ -2001,6 +2022,8 @@ namespace Oxide.Plugins
 
                 return;
             }
+
+            RemoveRequests(player);
 
             switch (args[0].ToLower())
             {
@@ -2113,38 +2136,21 @@ namespace Oxide.Plugins
                         {
                             if (tdmRequests.ContainsValue(player.UserIDString))
                             {
-                                var request = tdmRequests.First(kvp => kvp.Value == player.UserIDString);
-                                var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == request.Key);
+                                var entry = tdmRequests.First(kvp => kvp.Value == player.UserIDString);
+                                var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == entry.Key);
 
                                 player.ChatMessage(msg("MatchCancelled", player.UserIDString, player.displayName));
                                 target?.ChatMessage(msg("MatchCancelled", target.UserIDString, player.displayName));
-
-                                foreach (var entry in tdmRequests.ToList())
-                                {
-                                    if (entry.Key == request.Key || entry.Value == request.Key)
-                                        tdmRequests.Remove(entry.Key);
-                                    else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
-                                        tdmRequests.Remove(entry.Key);
-                                }
-
+                                tdmRequests.Remove(entry.Key);
                                 return;
                             }
 
                             if (tdmRequests.ContainsKey(player.UserIDString))
                             {
-                                string targetId = tdmRequests[player.UserIDString];
-                                var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == targetId);
+                                var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == tdmRequests[player.UserIDString]);
                                 player.ChatMessage(msg("MatchCancelled", player.UserIDString, player.displayName));
                                 target?.ChatMessage(msg("MatchCancelled", player.UserIDString, player.displayName));
-                                
-                                foreach (var entry in tdmRequests.ToList())
-                                {
-                                    if (entry.Key == targetId || entry.Value == targetId)
-                                        tdmRequests.Remove(entry.Key);
-                                    else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
-                                        tdmRequests.Remove(entry.Key);
-                                }
-
+                                tdmRequests.Remove(player.UserIDString);
                                 return;
                             }
 
@@ -2309,14 +2315,14 @@ namespace Oxide.Plugins
                                 player.ChatMessage(msg("PlayerNotFound", player.UserIDString, args[0]));
                                 return;
                             }
-
-                            if (deathmatch != null || tdmRequests.ContainsKey(player.UserIDString))
+                            
+                            if (deathmatch != null)
                             {
                                 player.ChatMessage(msg("MatchCannotChallengeAgain", player.UserIDString));
                                 return;
                             }
 
-                            if (InMatch(target))
+                            if (InMatch(target) || tdmRequests.ContainsValue(target.UserIDString))
                             {
                                 player.ChatMessage(msg("MatchCannotChallenge", player.UserIDString, target.displayName));
                                 return;
@@ -2374,6 +2380,11 @@ namespace Oxide.Plugins
 
         void RequestDeathmatch(BasePlayer player, BasePlayer target)
         {
+            if (tdmRequests.ContainsKey(player.UserIDString))
+            {
+                tdmRequests.Remove(player.UserIDString);
+            }
+
             target.ChatMessage(msg("MatchRequested", target.UserIDString, player.displayName, szMatchChatCommand));
             player.ChatMessage(msg("MatchRequestSent", player.UserIDString, target.displayName));
 
@@ -2464,12 +2475,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            if (duelsData.Requests.ContainsKey(player.UserIDString) || duelsData.Requests.ContainsValue(player.UserIDString))
-            {
-                RemoveFromQueue(player.UserIDString);
-                player.ChatMessage(msg("PendingRequest", player.UserIDString, szDuelChatCommand));
-                return;
-            }
+            RemoveRequests(player);
 
             if (!IsNewman(player))
             {
@@ -3536,38 +3542,20 @@ namespace Oxide.Plugins
 
                         if (duelsData.Requests.ContainsValue(player.UserIDString))
                         {
-                            var request = duelsData.Requests.First(kvp => kvp.Value == player.UserIDString);
-                            var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == request.Key);
-
+                            var entry = duelsData.Requests.First(kvp => kvp.Value == player.UserIDString);
+                            var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == entry.Key);
+                            duelsData.Requests.Remove(entry.Key);
                             target?.ChatMessage(msg("DuelCancelledWith", target.UserIDString, player.displayName));
                             player.ChatMessage(msg("DuelCancelComplete", player.UserIDString));
-                            
-                            foreach (var entry in duelsData.Requests.ToList())
-                            {
-                                if (entry.Key == request.Key || entry.Value == request.Key)
-                                    duelsData.Requests.Remove(entry.Key);
-                                else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
-                                    duelsData.Requests.Remove(entry.Key);
-                            }
-                            
                             return;
                         }
 
                         if (duelsData.Requests.ContainsKey(player.UserIDString))
                         {
-                            string targetId = duelsData.Requests[player.UserIDString];
-                            var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == targetId);
+                            var target = BasePlayer.activePlayerList.Find(x => x.UserIDString == duelsData.Requests[player.UserIDString]);
                             target?.ChatMessage(msg("DuelCancelledWith", target.UserIDString, player.displayName));
                             player.ChatMessage(msg("DuelCancelComplete", player.UserIDString));
-
-                            foreach (var entry in duelsData.Requests.ToList())
-                            {
-                                if (entry.Key == targetId || entry.Value == targetId)
-                                    duelsData.Requests.Remove(entry.Key);
-                                else if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
-                                    duelsData.Requests.Remove(entry.Key);
-                            }
-
+                            duelsData.Requests.Remove(player.UserIDString);
                             return;
                         }
 
@@ -4016,6 +4004,8 @@ namespace Oxide.Plugins
                 Puts(msg("GeneratedWalls", null, spawned, stacks, FormatPosition(center), (DateTime.Now - tick).TotalSeconds));
             else
                 player.ChatMessage(msg("GeneratedWalls", player.UserIDString, spawned, stacks, FormatPosition(center), (DateTime.Now - tick).TotalSeconds));
+
+            Subscribe(nameof(OnEntityTakeDamage));
         }
 
         static void EjectPlayers(DuelingZone zone)
@@ -4111,6 +4101,12 @@ namespace Oxide.Plugins
         {
             if (player != null && duelsData.Homes.ContainsKey(player.UserIDString))
             {
+                if (player.IsDead() && !player.IsConnected && !respawnDead)
+                {
+                    duelsData.Homes.Remove(player.UserIDString);
+                    return;
+                }
+
                 if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
                 {
                     timer.Once(2f, () => SendHome(player));
@@ -4129,15 +4125,31 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    if (testMode)
-                        player.inventory.GiveItem(ItemManager.CreateByItemID(-1192532973, 1));
-                    else
-                        player.inventory.GiveDefaultItems();
-
                     Teleport(player, homePos);
                 }
 
+                GiveRespawnLoot(player);
                 duelsData.Homes.Remove(player.UserIDString);
+            }
+        }
+
+        void GiveRespawnLoot(BasePlayer player)
+        {
+            player.inventory.Strip();
+
+            if (respawnLoot.Count > 0)
+            {
+                foreach (var entry in respawnLoot)
+                {
+                    Item item = ItemManager.CreateByName(entry.shortname, entry.amount, entry.skin);
+
+                    if (item == null)
+                        continue;
+
+                    var container = entry.container == "wear" ? player.inventory.containerWear : entry.container == "belt" ? player.inventory.containerBelt : player.inventory.containerMain;
+
+                    item.MoveToContainer(container, entry.slot);
+                }
             }
         }
 
@@ -4335,6 +4347,17 @@ namespace Oxide.Plugins
                 player.SendFullSnapshot();
             }
             else player.SendNetworkUpdateImmediate(false);
+
+            if (!lustyMarkers.Contains(player.UserIDString))
+            {
+                lustyMarkers.Add(player.UserIDString);
+                LustyMap?.Call("DisableMaps", player);
+            }
+            else
+            {
+                lustyMarkers.Remove(player.UserIDString);
+                LustyMap?.Call("EnableMaps", player);
+            }
 
             return true;
         }
@@ -4557,8 +4580,11 @@ namespace Oxide.Plugins
                 duelsData.ZoneIds.Clear();
                 duelsData.Bets.Clear();
                 duelsData.ClaimBets.Clear();
-                duelsData.VictoriesSeed.Clear();
-                duelsData.LossesSeed.Clear();
+                if (resetSeed)
+                {
+                    duelsData.VictoriesSeed.Clear();
+                    duelsData.LossesSeed.Clear();
+                }
                 duelsData.Spawns.Clear();
                 duelsData.Zones.Clear();
                 ResetTemporaryData();
@@ -4618,11 +4644,24 @@ namespace Oxide.Plugins
                 return true;
 
             int count = player.inventory.AllItems().Count();
-
-            count -= player.inventory.GetAmount(testMode ? 997973965 : 3506021); // rock
-            count -= player.inventory.GetAmount(testMode ? -1192532973 : 110547964); // torch
+            
+            foreach (var entry in respawnLoot)
+            {
+                count -= GetAmount(player, entry.shortname);
+            }
 
             return count == 0;
+        }
+
+        int GetAmount(BasePlayer player, string shortname)
+        {
+            var list = player.inventory.AllItems().Where(x => x.info.shortname == shortname.ToLower());
+            int num = 0;
+            foreach (Item current in list)
+            {
+                num += current.amount;
+            }
+            return num;
         }
 
         static bool RemoveFromQueue(string targetId)
@@ -5279,6 +5318,20 @@ namespace Oxide.Plugins
 
             return skinsCache[def.shortname];
         }
+        
+        void RemoveRequests(BasePlayer player)
+        {
+            if (duelsData.Requests.ContainsKey(player.UserIDString) || duelsData.Requests.ContainsValue(player.UserIDString))
+            {
+                foreach (var entry in duelsData.Requests.ToList())
+                {
+                    if (entry.Key == player.UserIDString || entry.Value == player.UserIDString)
+                    {
+                        duelsData.Requests.Remove(entry.Key);
+                    }
+                }
+            }
+        }
 
         #region Config
         private bool Changed;
@@ -5357,6 +5410,21 @@ namespace Oxide.Plugins
         bool useBlacklistCommands;
         bool bypassNewmans;
         bool saveRestoreEnabled;
+        List<DuelKitItem> respawnLoot = new List<DuelKitItem>();
+        bool respawnDead;
+        bool resetSeed;
+
+        List<object> RespawnLoot
+        {
+            get
+            {
+                return new List<object>
+                {
+                    new DuelKitItem() { shortname = "rock", amount = 1, skin = 0, container = "belt", slot = -1 },
+                    new DuelKitItem() { shortname = "torch", amount = 1, skin = 0, container = "belt", slot = -1 },
+                };
+            }
+        }
 
         List<object> BlacklistedCommands
         {
@@ -5486,7 +5554,6 @@ namespace Oxide.Plugins
                 ["TryQueueAgain"] = "Please try to queue again.",
                 ["InQueueSuccess"] = "You are now in queue for a duel. You will teleport instantly when a match is available.",
                 ["MustBeNaked"] = "<color=red>You must be naked before you can duel.</color>",
-                ["PendingRequest"] = "You have a duel request pending already. You must accept this request, wait for it to time out, or use <color=orange>/{0} cancel</color>",
                 ["AlreadyInADuel"] = "You cannot queue for a duel while already in a duel!",
                 ["MustAllowDuels"] = "You must allow duels first! Type: <color=orange>/{0} allow</color>",
                 ["DuelsDisabled"] = "Duels are disabled.",
@@ -5762,6 +5829,8 @@ namespace Oxide.Plugins
             playerHealth = Convert.ToSingle(GetConfig("Settings", "Player Health After Duel [0 = disabled]", 100f));
             autoEnable = Convert.ToBoolean(GetConfig("Settings", "Auto Enable Dueling If Zone(s) Exist", false));
             bypassNewmans = Convert.ToBoolean(GetConfig("Settings", "Bypass Naked Check And Strip Items Anyway", false));
+            respawnDead = Convert.ToBoolean(GetConfig("Settings", "Respawn Dead Players On Disconnect", true));
+            resetSeed = Convert.ToBoolean(GetConfig("Settings", "Reset Temporary Ladder Each Wipe", true));
 
             allowBetForfeit = Convert.ToBoolean(GetConfig("Betting", "Allow Bets To Be Forfeit", true));
             allowBetRefund = Convert.ToBoolean(GetConfig("Betting", "Allow Bets To Be Refunded", false));
@@ -5858,120 +5927,12 @@ namespace Oxide.Plugins
 
             var defaultKits = GetConfig("Custom Kits", "Kits", DefaultKits) as Dictionary<string, object>;
 
-            if (defaultKits != null && defaultKits.Count > 0)
-            {
-                foreach (var kit in defaultKits)
-                {
-                    if (customKits.ContainsKey(kit.Key))
-                        customKits.Remove(kit.Key);
+            SetupCustomKits(defaultKits, ref customKits);
 
-                    customKits.Add(kit.Key, new List<DuelKitItem>());
+            var defaultRespawn = GetConfig("Respawn", "Items", RespawnLoot) as List<object>;
 
-                    if (kit.Value is List<object>) // list of DuelKitItem
-                    {
-                        var objects = kit.Value as List<object>;
-
-                        if (objects != null && objects.Count > 0)
-                        {
-                            foreach (var entry in objects)
-                            {
-                                if (entry is Dictionary<string, object>)
-                                {
-                                    var items = entry as Dictionary<string, object>; // DuelKitItem
-                                    string container = null;
-                                    string shortname = null;
-                                    string ammo = null;
-                                    int amount = int.MinValue;
-                                    ulong skin = ulong.MaxValue;
-                                    int slot = int.MinValue;
-                                    var mods = new List<string>();
-
-                                    if (items != null && items.Count > 0)
-                                    {
-                                        foreach (var item in items) // DuelKitItem
-                                        {
-                                            var kvp = (KeyValuePair<string, object>)item;
-
-                                            switch (kvp.Key.ToString())
-                                            {
-                                                case "container":
-                                                    {
-                                                        if (kvp.Value != null && kvp.Value.ToString().Length > 0)
-                                                            container = kvp.Value.ToString();
-                                                    }
-                                                    break;
-                                                case "shortname":
-                                                    {
-                                                        if (kvp.Value != null && kvp.Value.ToString().Length > 0)
-                                                            shortname = kvp.Value.ToString();
-                                                    }
-                                                    break;
-                                                case "amount":
-                                                    {
-                                                        int num;
-                                                        if (int.TryParse(kvp.Value.ToString(), out num))
-                                                            amount = num;
-                                                    }
-                                                    break;
-                                                case "skin":
-                                                    {
-                                                        ulong num;
-                                                        if (ulong.TryParse(kvp.Value.ToString(), out num))
-                                                            skin = num;
-                                                    }
-                                                    break;
-                                                case "slot":
-                                                    {
-                                                        int num;
-                                                        if (int.TryParse(kvp.Value.ToString(), out num))
-                                                            slot = num;
-                                                    }
-                                                    break;
-                                                case "ammo":
-                                                    {
-                                                        if (kvp.Value != null && kvp.Value.ToString().Length > 0)
-                                                            ammo = kvp.Value.ToString();
-                                                    }
-                                                    break;
-                                                default:
-                                                    {
-                                                        if (kvp.Value is List<object>)
-                                                        {
-                                                            var _mods = kvp.Value as List<object>;
-
-                                                            foreach (var mod in _mods)
-                                                            {
-                                                                if (mod != null && mod.ToString().Length > 0)
-                                                                {
-                                                                    if (!mods.Contains(mod.ToString()))
-                                                                        mods.Add(mod.ToString());
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    break;
-                                            }
-
-                                        }
-                                    }
-
-                                    if (shortname == null || container == null || amount == int.MinValue || skin == ulong.MaxValue || slot == int.MinValue)
-                                    {
-                                        continue; // missing a key. invalid item
-                                    }
-
-                                    customKits[kit.Key].Add(new DuelKitItem() { amount = amount, container = container, shortname = shortname, skin = skin, slot = slot, ammo = ammo, mods = mods.Count > 0 ? mods : null });
-                                }
-                            }
-                        }
-                    }
-                }
-
-                foreach (var kit in customKits.ToList())
-                    if (kit.Value.Count == 0)
-                        customKits.Remove(kit.Key);
-            }
-
+            SetupRespawnItems(defaultRespawn, ref respawnLoot);
+            
             var bets = GetConfig("Betting", "Bets", DefaultBets) as List<object>;
 
             if (bets != null && bets.Count > 0)
@@ -6061,6 +6022,221 @@ namespace Oxide.Plugins
                 SaveConfig();
                 Changed = false;
             }
+        }
+
+        void SetupRespawnItems(List<object> list, ref List<DuelKitItem> source)
+        {
+            if (list == null || list.Count == 0 || !(list is List<object>))
+            {
+                return;
+            }
+
+            foreach (var entry in list)
+            {
+                var items = entry as Dictionary<string, object>; // DuelKitItem
+                string container = null;
+                string shortname = null;
+                string ammo = null;
+                int amount = int.MinValue;
+                ulong skin = ulong.MaxValue;
+                int slot = int.MinValue;
+                var mods = new List<string>();
+
+                if (items != null && items.Count > 0)
+                {
+                    foreach (var item in items) // DuelKitItem
+                    {
+                        var kvp = (KeyValuePair<string, object>)item;
+
+                        switch (kvp.Key.ToString())
+                        {
+                            case "container":
+                                {
+                                    if (kvp.Value != null && kvp.Value.ToString().Length > 0)
+                                        container = kvp.Value.ToString();
+                                }
+                                break;
+                            case "shortname":
+                                {
+                                    if (kvp.Value != null && kvp.Value.ToString().Length > 0)
+                                        shortname = kvp.Value.ToString();
+                                }
+                                break;
+                            case "amount":
+                                {
+                                    int num;
+                                    if (int.TryParse(kvp.Value.ToString(), out num))
+                                        amount = num;
+                                }
+                                break;
+                            case "skin":
+                                {
+                                    ulong num;
+                                    if (ulong.TryParse(kvp.Value.ToString(), out num))
+                                        skin = num;
+                                }
+                                break;
+                            case "slot":
+                                {
+                                    int num;
+                                    if (int.TryParse(kvp.Value.ToString(), out num))
+                                        slot = num;
+                                }
+                                break;
+                            case "ammo":
+                                {
+                                    if (kvp.Value != null && kvp.Value.ToString().Length > 0)
+                                        ammo = kvp.Value.ToString();
+                                }
+                                break;
+                            default:
+                                {
+                                    if (kvp.Value is List<object>)
+                                    {
+                                        var _mods = kvp.Value as List<object>;
+
+                                        foreach (var mod in _mods)
+                                        {
+                                            if (mod != null && mod.ToString().Length > 0)
+                                            {
+                                                if (!mods.Contains(mod.ToString()))
+                                                    mods.Add(mod.ToString());
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                        }
+
+                    }
+                }
+
+                if (shortname == null || container == null || amount == int.MinValue || skin == ulong.MaxValue || slot == int.MinValue)
+                {
+                    continue; // missing a key. invalid item
+                }
+
+                source.Add(new DuelKitItem() { amount = amount, container = container, shortname = shortname, skin = skin, slot = slot, ammo = ammo, mods = mods.Count > 0 ? mods : null });
+            }
+        }
+
+        void SetupCustomKits(Dictionary<string, object> dict, ref Dictionary<string, List<DuelKitItem>> source)
+        {
+            if (dict == null && dict.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var kit in dict)
+            {
+                if (source.ContainsKey(kit.Key))
+                    source.Remove(kit.Key);
+
+                source.Add(kit.Key, new List<DuelKitItem>());
+
+                if (kit.Value is List<object>) // list of DuelKitItem
+                {
+                    var objects = kit.Value as List<object>;
+
+                    if (objects != null && objects.Count > 0)
+                    {
+                        foreach (var entry in objects)
+                        {
+                            if (entry is Dictionary<string, object>)
+                            {
+                                var items = entry as Dictionary<string, object>; // DuelKitItem
+                                string container = null;
+                                string shortname = null;
+                                string ammo = null;
+                                int amount = int.MinValue;
+                                ulong skin = ulong.MaxValue;
+                                int slot = int.MinValue;
+                                var mods = new List<string>();
+
+                                if (items != null && items.Count > 0)
+                                {
+                                    foreach (var item in items) // DuelKitItem
+                                    {
+                                        var kvp = (KeyValuePair<string, object>)item;
+
+                                        switch (kvp.Key.ToString())
+                                        {
+                                            case "container":
+                                                {
+                                                    if (kvp.Value != null && kvp.Value.ToString().Length > 0)
+                                                        container = kvp.Value.ToString();
+                                                }
+                                                break;
+                                            case "shortname":
+                                                {
+                                                    if (kvp.Value != null && kvp.Value.ToString().Length > 0)
+                                                        shortname = kvp.Value.ToString();
+                                                }
+                                                break;
+                                            case "amount":
+                                                {
+                                                    int num;
+                                                    if (int.TryParse(kvp.Value.ToString(), out num))
+                                                        amount = num;
+                                                }
+                                                break;
+                                            case "skin":
+                                                {
+                                                    ulong num;
+                                                    if (ulong.TryParse(kvp.Value.ToString(), out num))
+                                                        skin = num;
+                                                }
+                                                break;
+                                            case "slot":
+                                                {
+                                                    int num;
+                                                    if (int.TryParse(kvp.Value.ToString(), out num))
+                                                        slot = num;
+                                                }
+                                                break;
+                                            case "ammo":
+                                                {
+                                                    if (kvp.Value != null && kvp.Value.ToString().Length > 0)
+                                                        ammo = kvp.Value.ToString();
+                                                }
+                                                break;
+                                            default:
+                                                {
+                                                    if (kvp.Value is List<object>)
+                                                    {
+                                                        var _mods = kvp.Value as List<object>;
+
+                                                        foreach (var mod in _mods)
+                                                        {
+                                                            if (mod != null && mod.ToString().Length > 0)
+                                                            {
+                                                                if (!mods.Contains(mod.ToString()))
+                                                                    mods.Add(mod.ToString());
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                break;
+                                        }
+
+                                    }
+                                }
+
+                                if (shortname == null || container == null || amount == int.MinValue || skin == ulong.MaxValue || slot == int.MinValue)
+                                {
+                                    continue; // missing a key. invalid item
+                                }
+
+                                source[kit.Key].Add(new DuelKitItem() { amount = amount, container = container, shortname = shortname, skin = skin, slot = slot, ammo = ammo, mods = mods.Count > 0 ? mods : null });
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach (var kit in source.ToList())
+                if (kit.Value.Count == 0)
+                    source.Remove(kit.Key);
         }
 
         protected override void LoadDefaultConfig()
