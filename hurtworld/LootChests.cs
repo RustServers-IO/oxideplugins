@@ -7,7 +7,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("LootChests", "Noviets", "1.2.4")]
+    [Info("LootChests", "Noviets", "1.2.5")]
     [Description("Spawns Storage Chests with loot around the map")]
 
     class LootChests : HurtworldPlugin
@@ -15,9 +15,10 @@ namespace Oxide.Plugins
 		Dictionary<int, int> ItemList = new Dictionary<int, int>();
 		DateTime nextspawn = new DateTime();
 		Dictionary<uLink.NetworkView, Vector3> ChestList = new Dictionary<uLink.NetworkView, Vector3>();
+		GlobalItemManager GIM = Singleton<GlobalItemManager>.Instance;
 		void Loaded()
 		{
-			permission.RegisterPermission("LootChests.admin", this);
+			permission.RegisterPermission("lootchests.admin", this);
 			ItemList = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<int, int>>("LootChests/ItemList");
 			LoadDefaultConfig();
 			LoadDefaultMessages();
@@ -52,7 +53,7 @@ namespace Oxide.Plugins
 		string Msg(string msg, string SteamId = null) => lang.GetMessage(msg, this, SteamId);
 		protected override void LoadDefaultConfig()
         {
-			var Locs = new List<object>() { "-1975, 200, -1000"};
+			var Locs = new List<object>() { "-2800, 200, -1000"};
 			if(Config["StartPoints"] == null) Config.Set("StartPoints", Locs);
 			if(Config["SpawnRadius"] == null) Config.Set("SpawnRadius", 3000f);
 			if(Config["ChestSpawnCount"] == null) Config.Set("ChestSpawnCount", 20);
@@ -188,6 +189,7 @@ namespace Oxide.Plugins
 					int iPC = Convert.ToInt32(Config["ItemsPerChest"]);
 					foreach(string Loc in LocList)
 					{
+						Puts("Locs: "+LocList.Count());
 						int i=0;
 						int fail = 0;
 						string[] XYZ = Loc.ToString().Split(',');
@@ -195,7 +197,8 @@ namespace Oxide.Plugins
 						while(i < count)
 						{
 							if(fail > count*3){ Puts(Msg("SpawnFail"));return;}
-							Vector3 randposition = new Vector3((position.x + UnityEngine.Random.Range(-radius, radius)), position.y+500f, (position.z + UnityEngine.Random.Range(-radius, radius)));
+							Vector3 randposition = new Vector3((position.x + UnityEngine.Random.Range(-radius, radius)), (position.y+450f), (position.z + UnityEngine.Random.Range(-radius, radius)));
+							Puts(randposition.ToString());
 							RaycastHit hitInfo;
 							if (Physics.Raycast(randposition, Vector3.down, out hitInfo))
 							{
@@ -220,6 +223,7 @@ namespace Oxide.Plugins
 										hurt.BroadcastChat(Msg("ChestSpawnError"));
 										return;
 									}
+									i++;
 								}
 								else
 									fail++;
@@ -242,14 +246,17 @@ namespace Oxide.Plugins
 		}
 		void GiveItems(Inventory inv)
 		{
-			int num = 0;
-			int count = Convert.ToInt32(Config["ItemsPerChest"]);
-			while(num < count)
+			if(ItemList.Count > 0)
 			{
-				int rand = UnityEngine.Random.Range(0, ItemList.Count);
-				var item = Singleton<GlobalItemManager>.Instance.GetItem((int)ItemList.ElementAt(rand).Key);
-				Singleton<GlobalItemManager>.Instance.GiveItem(item, ItemList.ElementAt(rand).Value, inv);
-				num++;
+				int num = 0;
+				int count = Convert.ToInt32(Config["ItemsPerChest"]);
+				while(num < count)
+				{
+					int	rand = UnityEngine.Random.Range(0, ItemList.Count-1);
+					var item = GIM.GetItem((int)ItemList.ElementAt(rand).Key);
+					GIM.GiveItem(item, ItemList.ElementAt(rand).Value, inv);
+					num++;
+				}
 			}
 		}
 		void Destroy(uLink.NetworkView nwv)
