@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoPurge", "Fujikura/Norn", "1.5.5", ResourceId = 1566)]
+    [Info("AutoPurge", "Fujikura/Norn", "1.6.0", ResourceId = 1566)]
     [Description("Remove entities if the owner becomes inactive.")]
     public class AutoPurge : RustPlugin
     {
@@ -19,7 +19,7 @@ namespace Oxide.Plugins
 		Plugin Friends;
 		
 		private bool Changed = false;
-		StoredData playerConnections = new StoredData();
+		StoredData plyConn = new StoredData();
 		static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 		static readonly double MaxUnixSeconds = (DateTime.MaxValue - UnixEpoch).TotalSeconds;
 		private List<ulong> groupModerator = new List<ulong>();
@@ -143,7 +143,7 @@ namespace Oxide.Plugins
 
 		void SaveData()
         {
-            Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerConnections);
+            Interface.Oxide.DataFileSystem.WriteObject(this.Title, plyConn);
         }
 
 		#endregion StoredData
@@ -154,18 +154,21 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
             PlayerInfo p = null;
-            if (!playerConnections.PlayerInfo.TryGetValue(player.userID, out p))
+            if (!plyConn.PlayerInfo.TryGetValue(player.userID, out p))
             {
                 var info = new PlayerInfo(); 
 				info.DisplayName = player.displayName;
                 info.LastTime = UnixTimeStampUTC();
-				info.LastDateTime = DateTime.Now.ToString();
-				playerConnections.PlayerInfo.Add(player.userID, info);
+				if (player.IsSleeping())
+					info.LastDateTime = "n/a";
+				else
+					info.LastDateTime = DateTime.Now.ToString();					
+				plyConn.PlayerInfo.Add(player.userID, info);
                 return;
             }
             else
             {
-                p.LastTime = UnixTimeStampUTC();
+				p.LastTime = UnixTimeStampUTC();
 				p.LastDateTime = DateTime.Now.ToString();
 				p.DisplayName = player.displayName;
             }
@@ -193,14 +196,14 @@ namespace Oxide.Plugins
 
 		private bool DataExistsFromID(ulong steamid)
         {
-            if (playerConnections.PlayerInfo.ContainsKey(steamid)) { return true; }
+            if (plyConn.PlayerInfo.ContainsKey(steamid)) { return true; }
             return false;
         }
         
 		private bool DataExists(BasePlayer player)
         {
             if (player == null || !player.IsConnected) return false;
-            if (playerConnections.PlayerInfo.ContainsKey(player.userID)) { return true; }
+            if (plyConn.PlayerInfo.ContainsKey(player.userID)) { return true; }
             return false;
         }
 
@@ -210,16 +213,16 @@ namespace Oxide.Plugins
 			if (clan == null) return false;
 			foreach( var member in clan["members"])
 				if (DataExistsFromID(Convert.ToUInt64(member)))
-					if (UnixTimeStampUTC() - playerConnections.PlayerInfo[Convert.ToUInt64(member)].LastTime < inactiveAfter)
+					if (UnixTimeStampUTC() - plyConn.PlayerInfo[Convert.ToUInt64(member)].LastTime < inactiveAfter)
 						return true;
 			return false;
 		}
 
 		private bool CheckActiveFriends(ulong id)
 		{
-			foreach( var pair in playerConnections.PlayerInfo)
+			foreach( var pair in plyConn.PlayerInfo)
 				if((bool)Friends?.CallHook("AreFriends", pair.Key, id))
-					if (UnixTimeStampUTC() - playerConnections.PlayerInfo[pair.Key].LastTime < inactiveAfter)
+					if (UnixTimeStampUTC() - plyConn.PlayerInfo[pair.Key].LastTime < inactiveAfter)
 						return true;
 			return false;
 		}
@@ -260,17 +263,24 @@ namespace Oxide.Plugins
 		private void OnServerInitialized()
         {
 			if (!permission.PermissionExists(excludePermission)) permission.RegisterPermission(excludePermission, this);
-			playerConnections = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(this.Title);
+			plyConn = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(this.Title);
+			if (plyConn.PlayerInfo == null || plyConn.PlayerInfo.Count == 0)
+				plyConn = new StoredData();
+			
 			foreach (BasePlayer player in BasePlayer.activePlayerList)
 				UpdatePlayer(player);
+			foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
+				if (!plyConn.PlayerInfo.ContainsKey(player.userID))
+					UpdatePlayer(player);			
+			
 			StoredData cleanedConnections = new StoredData();			
-			foreach( var pair in playerConnections.PlayerInfo)
+			foreach( var pair in plyConn.PlayerInfo)
 			{
 				if(UnixTimeStampUTC()-pair.Value.LastTime < removeRecordAfterDays * 86400)
 					cleanedConnections.PlayerInfo.Add(pair.Key, pair.Value);
 				//cleanedConnections.PlayerInfo[pair.Key].LastDateTime = UnixTimeStampToDateTime(pair.Value.LastTime).ToString();
 			}
-			playerConnections = cleanedConnections;
+			plyConn = cleanedConnections;
 			SaveData();
 			cleanedConnections = null;
 			if (excludeGroupOwner)
@@ -339,12 +349,8 @@ namespace Oxide.Plugins
 			if(arg.Args.Length >= 1) ulong.TryParse(arg.Args[0],out owner);
 			if (owner == 0) return;
 			
-			int count = 0;
-            foreach(var entity in BaseNetworkable.serverEntities.Where(p => (p as BaseEntity).OwnerID == owner).ToList())
-			{
-				entity.Kill();
-				count++;
-			}
+			int count = BaseNetworkable.serverEntities.Where(p => (p as BaseEntity).OwnerID == owner).ToList().Count();
+			ConVar.Entity.DeleteBy(owner);
 			SendReply(arg, $"Removed: {count} entities from ID: {owner}");
 			if (logPurgeToFile && count > 0)
 				LogToFile("AutoPurge", $"Manually removed: {count} entities from ID: {owner}", this);
@@ -390,67 +396,53 @@ namespace Oxide.Plugins
 				UpdatePlayer(onliner);
 			}
 			
-			var entities = BaseNetworkable.serverEntities.Where(p => (p as BaseEntity).OwnerID != 0).ToList();
-			Puts("Included entity count on this run: "+entities.Count);
-			foreach (var entity in entities)
-            {
-				if (entity == null) continue;
-				ulong owner = 0;
-				try { owner = (entity as BaseEntity).OwnerID; }
-				catch { continue; }
-				if (DataExistsFromID(owner) && !ONLINE_PLAYERS.Contains(owner) && !EXCLUDE_BY_CLAN.Contains(owner) && !EXCLUDE_BY_FRIEND.Contains(owner) && !EXCLUDE_BY_PERM.Contains(owner) && !groupOwner.Contains(owner) && !groupModerator.Contains(owner))
+			
+			var entityCount = BaseNetworkable.serverEntities.Where(p => (p as BaseEntity).OwnerID > 0uL).ToList().Count();
+			Puts("Included entity count on this run: "+entityCount);
+			foreach( var pair in plyConn.PlayerInfo.ToList())
+			{
+				if (DataExistsFromID(pair.Key) && !ONLINE_PLAYERS.Contains(pair.Key) && !EXCLUDE_BY_CLAN.Contains(pair.Key) && !EXCLUDE_BY_FRIEND.Contains(pair.Key) && !EXCLUDE_BY_PERM.Contains(pair.Key) && !groupOwner.Contains(pair.Key) && !groupModerator.Contains(pair.Key))
                 {
-                    if (UnixTimeStampUTC() - playerConnections.PlayerInfo[owner].LastTime >= inactiveAfter)
+					if (UnixTimeStampUTC() - plyConn.PlayerInfo[pair.Key].LastTime >= inactiveAfter)
 					{ 
-						if (UNIQUE_HITS.Contains(owner))
-						{
-							if (!testMode)
-								entity.Kill();
-							count++;
-							continue;
-						}
 							
-						// PermCheck begin
-						if (permission.UserHasPermission(owner.ToString(), excludePermission))
+						if (permission.UserHasPermission(pair.Key.ToString(), excludePermission))
 						{
-							EXCLUDE_BY_PERM.Add(owner);
+							EXCLUDE_BY_PERM.Add(pair.Key);
 							continue;
 						}
-						// PermCheck end
-						// Clancheck begin
 						if(clansEnabled)
-							if (Clans.Call("GetClanOf", owner) != null && !CLANCHECK_NEGATIVE.Contains(owner))
-								if (CheckActiveClanMember((string)Clans.Call("GetClanOf", owner)))
+							if (Clans.Call("GetClanOf", pair.Key) != null && !CLANCHECK_NEGATIVE.Contains(pair.Key))
+								if (CheckActiveClanMember((string)Clans.Call("GetClanOf", pair.Key)))
 								{
-									EXCLUDE_BY_CLAN.Add(owner);
+									EXCLUDE_BY_CLAN.Add(pair.Key);
 									continue;
 								}
 								else
-									CLANCHECK_NEGATIVE.Add(owner);
-						// Clancheck end
-						// FriendCheck begin
+									CLANCHECK_NEGATIVE.Add(pair.Key);
+								
 						if(friendsEnabled)
-							if (!FRIENDCHECK_NEGATIVE.Contains(owner))
-								if(CheckActiveFriends(owner))
+							if (!FRIENDCHECK_NEGATIVE.Contains(pair.Key))
+								if(CheckActiveFriends(pair.Key))
 								{
-									EXCLUDE_BY_FRIEND.Add(owner);
+									EXCLUDE_BY_FRIEND.Add(pair.Key);
 									continue;
 								}
 								else
-									FRIENDCHECK_NEGATIVE.Add(owner);
-						// FriendCheck end
+									FRIENDCHECK_NEGATIVE.Add(pair.Key);
+						
+						count += BaseNetworkable.serverEntities.Where(p => (p as BaseEntity).OwnerID == pair.Key).ToList().Count();
 						if (!testMode)
 						{
-							entity.Kill();
+							ConVar.Entity.DeleteBy(pair.Key);
 						}
-						count++;
-						if (!UNIQUE_HITS.Contains(owner))
-						{
-							UNIQUE_HITS.Add(owner);
-						}
+
+						if (!UNIQUE_HITS.Contains(pair.Key))
+							UNIQUE_HITS.Add(pair.Key);
 					}
                 }
             }
+			
 			if (showMessages && !freshStart)
 			{
 				if (showMessagesAdminOnly)
@@ -471,8 +463,8 @@ namespace Oxide.Plugins
 				}
 				foreach (var id in UNIQUE_HITS)
 				{
-					playerIds += playerConnections.PlayerInfo[id].DisplayName+"("+id.ToString()+") ";
-					if (removeRecordAfterPurge && !testMode) playerConnections.PlayerInfo.Remove(id);
+					playerIds += plyConn.PlayerInfo[id].DisplayName+"("+id.ToString()+") ";
+					if (removeRecordAfterPurge && !testMode) plyConn.PlayerInfo.Remove(id);
 					if (killSleepers && !testMode)
 					{
 						foreach (BasePlayer sleeper in BasePlayer.sleepingPlayerList.ToList())
@@ -482,7 +474,7 @@ namespace Oxide.Plugins
 						}
 					}
 				}
-				Puts(ifTest+ "Removed: " + count.ToString() + " entities from: " + UNIQUE_HITS.Count.ToString() + " inactive players");
+				Puts(ifTest+ "Removing: " + count.ToString() + " entities from: " + UNIQUE_HITS.Count.ToString() + " inactive players");
 				Puts(ifTest+ "Affected IDs: " + playerIds);
 				if (logPurgeToFile)
 				{

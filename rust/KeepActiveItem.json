@@ -1,0 +1,16 @@
+{
+    "name": "KeepActiveItem",
+    "description": "Keep your held item in your corpses hotbar when you die",
+    "author": "redBDGR",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/keepactiveitem.2559",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

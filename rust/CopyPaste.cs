@@ -1,6 +1,7 @@
 ﻿using Facepunch;
 using Oxide.Core;
 using ProtoBuf;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,11 +10,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.2.8", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.3.1", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
-	{
+	{	
+		StorageConfigs configs;
+		
 		private int copyLayer 		= LayerMask.GetMask("Construction", "Construction Trigger", "Trigger", "Deployed");
 		private int groundLayer 	= LayerMask.GetMask("Terrain", "Default");
 		private int rayCopy 		= LayerMask.GetMask("Construction", "Deployed", "Tree", "Resource", "Prevent Building");
@@ -38,7 +41,14 @@ namespace Oxide.Plugins
 		private DataFileSystem dataSystem = Interface.Oxide.DataFileSystem;
 
 		private enum CopyMechanics { Building, Proximity }
+		
+		private class StorageConfigs
+		{
+			public Dictionary<string, string> cfg = new Dictionary<string, string>();
 			
+			public StorageConfigs() {}
+		}
+		
 		//Hooks
 
 		private void Init()
@@ -66,6 +76,12 @@ namespace Oxide.Plugins
 			} 
 		}
 
+		private void Loaded() 
+        {
+            try   { configs = Interface.Oxide.DataFileSystem.ReadObject<StorageConfigs>(this.Name); }
+            catch { configs = new StorageConfigs();}		
+		}
+		
 		//API
 		
 		object TryCopyFromSteamID(ulong userID, string filename, string[] args)
@@ -102,9 +118,9 @@ namespace Oxide.Plugins
 			return TryPaste(sourcePoint, filename, player, ViewAngles.ToEulerAngles().y, args);
 		}
 
-		object TryPasteFromVector3(Vector3 startPos, float rotationCorrection, string filename, string[] args)
+		object TryPasteFromVector3(Vector3 pos, float rotationCorrection, string filename, string[] args)
 		{
-			return TryPaste(startPos, filename, null, rotationCorrection, args);
+			return TryPaste(pos, filename, null, rotationCorrection, args);
 		}
 		
 		//Other methods
@@ -132,8 +148,7 @@ namespace Oxide.Plugins
 			if(success is string)
 				return (string)success;
 
-			lastPastes.Remove(userIDString);
-			lastPastes.Add(userIDString, (List<BaseEntity>)success);
+			lastPastes[userIDString] = (List<BaseEntity>)success;
 
 			return true;
 		}
@@ -156,10 +171,10 @@ namespace Oxide.Plugins
 			return true;
 		}
 		
-		private object Copy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, CopyMechanics copyMechanics, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree)
+		private object Copy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, CopyMechanics copyMechanics, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree, bool saveShare)
 		{
 			var rawData = new List<object>();
-			var copy = CopyProcess(sourcePos, sourceRot, RotationCorrection, range, saveBuildings, saveDeployables, saveInventories, saveTree, copyMechanics);
+			var copy = CopyProcess(sourcePos, sourceRot, RotationCorrection, range, saveBuildings, saveDeployables, saveInventories, saveTree, saveShare, copyMechanics);
 
 			if(copy is string) 
 				return copy;
@@ -191,7 +206,7 @@ namespace Oxide.Plugins
 			return true;
 		}
 
-		private object CopyProcess(Vector3 sourcePos, Vector3 sourceRot, float RotationCorrection, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree, CopyMechanics copyMechanics)
+		private object CopyProcess(Vector3 sourcePos, Vector3 sourceRot, float RotationCorrection, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree, bool saveShare, CopyMechanics copyMechanics)
 		{
 			var rawData = new List<object>();
 			var houseList = new List<BaseEntity>();
@@ -241,7 +256,7 @@ namespace Oxide.Plugins
 						if(!saveDeployables && (entity.GetComponentInParent<BuildingBlock>() == null && entity.GetComponent<BaseCombatEntity>() != null)) 
 							continue;
 						
-						rawData.Add(EntityData(entity, sourcePos, sourceRot, entity.transform.position, entity.transform.rotation.ToEulerAngles(), RotationCorrection, saveInventories));
+						rawData.Add(EntityData(entity, sourcePos, sourceRot, entity.transform.position, entity.transform.rotation.ToEulerAngles(), RotationCorrection, saveInventories, saveShare));
 					}
 				}
 				
@@ -251,7 +266,7 @@ namespace Oxide.Plugins
 			return rawData;
 		}
 
-		private Dictionary<string, object> EntityData(BaseEntity entity, Vector3 sourcePos, Vector3 sourceRot, Vector3 entPos, Vector3 entRot, float diffRot, bool saveInventories)
+		private Dictionary<string, object> EntityData(BaseEntity entity, Vector3 sourcePos, Vector3 sourceRot, Vector3 entPos, Vector3 entRot, float diffRot, bool saveInventories, bool saveShare)
 		{
 			var normalizedPos = NormalizePosition(sourcePos, entPos, diffRot);
 			var normalizedRot = entRot.y - diffRot;
@@ -276,7 +291,7 @@ namespace Oxide.Plugins
 				}
 			};
 
-			TryCopySlots(entity, data);			
+			TryCopySlots(entity, data, saveShare);			
 			
 			var buildingblock = entity.GetComponentInParent<BuildingBlock>();
 
@@ -648,11 +663,36 @@ namespace Oxide.Plugins
 			return preloaddata;
 		}
 
+		private void SaveData() 
+		{
+			Interface.Oxide.DataFileSystem.WriteObject(this.Name, configs);
+		}
+		
+		private string[] ParamsBuilder(string[] args)
+		{
+			int configIndex = Array.IndexOf(args, "cfg");
+			
+			if(configIndex > -1)
+			{
+				int valueIndex = configIndex + 1;
+
+				if(valueIndex < args.Length)
+				{
+					if(configs.cfg.ContainsKey(args[valueIndex]))
+						return configs.cfg[args[valueIndex]].Split(null);
+				}
+			}
+			
+			return args;
+		}
+		
 		private object TryCopy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, string[] args)
 		{
-			bool saveInventories = true, saveDeployables = true, saveBuilding = true, saveTree = false;
+			bool saveBuilding = true, saveDeployables = true, saveInventories = true, saveShare = false, saveTree = false;
 			CopyMechanics copyMechanics = CopyMechanics.Proximity;
 			float radius = 3f;
+			
+			args = ParamsBuilder(args);
 			
 			for(int i = 0; ; i = i + 2)
 			{	
@@ -664,24 +704,30 @@ namespace Oxide.Plugins
 				if(valueIndex >= args.Length)
 					return Lang("SYNTAX_COPY", null);
 				
-				switch(args[i].ToLower())
+				string param = args[i].ToLower();
+				
+				switch(param)
 				{
 					case "b":
 					case "buildings":
 						if(!bool.TryParse(args[valueIndex], out saveBuilding))
-							return Lang("SYNTAX_BUILDINGS", null);
+							return Lang("SYNTAX_BOOL", null, param);
+						
+						break;
+					case "cfg":
+						//No action;
 						
 						break;
 					case "d":
 					case "deployables":
 						if(!bool.TryParse(args[valueIndex], out saveDeployables))
-							return Lang("SYNTAX_DEPLOYABLES", null);
+							return Lang("SYNTAX_BOOL", null, param);
 						
 						break;
 					case "i":
 					case "inventories":
 						if(!bool.TryParse(args[valueIndex], out saveInventories))
-							return Lang("SYNTAX_INVENTORIES", null);
+							return Lang("SYNTAX_BOOL", null, param);
 						
 						break;
 					case "m":
@@ -705,10 +751,16 @@ namespace Oxide.Plugins
 							return Lang("SYNTAX_RADIUS", null);
 						
 						break;
+					case "s":
+					case "share":
+						if(!bool.TryParse(args[valueIndex], out saveShare))
+							return Lang("SYNTAX_BOOL", null, param);
+						
+						break;	
 					case "t":
 					case "tree":
 						if(!bool.TryParse(args[valueIndex], out saveTree))
-							return Lang("SYNTAX_TREE", null);
+							return Lang("SYNTAX_BOOL", null, param);
 						
 						break;						
 					default:
@@ -716,10 +768,10 @@ namespace Oxide.Plugins
 				}
 			}
 
-			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveBuilding, saveDeployables, saveInventories, saveTree);
+			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveBuilding, saveDeployables, saveInventories, saveTree, saveShare);
 		}
 		
-		private void TryCopySlots(BaseEntity ent, IDictionary<string, object> housedata)
+		private void TryCopySlots(BaseEntity ent, IDictionary<string, object> housedata, bool saveShare)
 		{
 			foreach(BaseEntity.Slot slot in checkSlots)
 			{
@@ -738,12 +790,17 @@ namespace Oxide.Plugins
 
 				if(slotEntity.GetComponent<CodeLock>())
 				{
-					codedata.Add("code", slotEntity.GetComponent<CodeLock>().code.ToString());
-				} else if(slotEntity.GetComponent<KeyLock>()) {
-					var @lock = slotEntity.GetComponent<KeyLock>();
-					var code = @lock.keyCode;
+					CodeLock codeLock = slotEntity.GetComponent<CodeLock>();
 					
-					if(@lock.firstKeyCreated) 
+					codedata.Add("code", codeLock.code.ToString());		
+					
+					if(saveShare)
+						codedata.Add("whitelistPlayers", codeLock.whitelistPlayers);
+				} else if(slotEntity.GetComponent<KeyLock>()) {
+					KeyLock keyLock = slotEntity.GetComponent<KeyLock>();
+					var code = keyLock.keyCode;
+					
+					if(keyLock.firstKeyCreated) 
 						code |= 0x80;
 					
 					codedata.Add("code", code.ToString());
@@ -772,6 +829,8 @@ namespace Oxide.Plugins
 			float heightAdj = 0f, blockCollision = 0f;
 			bool  auth = false, inventories = true, deployables = true;
 
+			args = ParamsBuilder(args);
+			
 			for(int i = 0; ; i = i + 2)
 			{
 				if(i >= args.Length) 
@@ -782,12 +841,14 @@ namespace Oxide.Plugins
 				if(valueIndex >= args.Length)
 					return Lang("SYNTAX_PASTE_OR_PASTEBACK", userID);
 				
-				switch(args[i].ToLower())
+				string param = args[i].ToLower();
+				
+				switch(param)
 				{
 					case "a":
 					case "auth":
 						if(!bool.TryParse(args[valueIndex], out auth))
-							return Lang("SYNTAX_AUTH", userID);
+							return Lang("SYNTAX_BOOL", userID, param);
 						
 						break;
 					case "b":
@@ -799,7 +860,7 @@ namespace Oxide.Plugins
 					case "d":
 					case "deployables":
 						if(!bool.TryParse(args[valueIndex], out deployables))
-							return Lang("SYNTAX_DEPLOYABLES", userID);
+							return Lang("SYNTAX_BOOL", userID, param);
 
 						break;
 					case "height":
@@ -812,7 +873,7 @@ namespace Oxide.Plugins
 					case "i":
 					case "inventories":
 						if(!bool.TryParse(args[valueIndex], out inventories))
-							return Lang("SYNTAX_INVENTORIES", userID);
+							return Lang("SYNTAX_BOOL", userID, param);
 						
 						break;
 					default:
@@ -878,23 +939,31 @@ namespace Oxide.Plugins
 				{
 					if(slotEntity.GetComponent<CodeLock>())
 					{
-						var code = (string)slotData["code"];
+						string code = (string)slotData["code"];
 						
 						if(!string.IsNullOrEmpty(code))
 						{
-							var @lock = slotEntity.GetComponent<CodeLock>();
-							@lock.code = code;
-							@lock.SetFlag(BaseEntity.Flags.Locked, true);
-						}
+							CodeLock codeLock = slotEntity.GetComponent<CodeLock>();
+							codeLock.code = code;
+							codeLock.SetFlag(BaseEntity.Flags.Locked, true);
+						
+							if(slotData.ContainsKey("whitelistPlayers"))
+							{
+								foreach(var userID in slotData["whitelistPlayers"] as List<object>)
+								{
+									codeLock.whitelistPlayers.Add(Convert.ToUInt64(userID));
+								}								
+							}
+						}			
 					} else if(slotEntity.GetComponent<KeyLock>()) {
-						var code = Convert.ToInt32(slotData["code"]);
-						var @lock = slotEntity.GetComponent<KeyLock>();
+						int code = Convert.ToInt32(slotData["code"]);
+						KeyLock keyLock = slotEntity.GetComponent<KeyLock>();
 						
 						if((code & 0x80) != 0)
 						{
-							@lock.keyCode = (code & 0x7F);
-							@lock.firstKeyCreated = true;
-							@lock.SetFlag(BaseEntity.Flags.Locked, true);
+							keyLock.keyCode = (code & 0x7F);
+							keyLock.firstKeyCreated = true;
+							keyLock.SetFlag(BaseEntity.Flags.Locked, true);
 						}
 					}
 				}
@@ -922,7 +991,7 @@ namespace Oxide.Plugins
 		}
 
 		//Сhat commands
-
+		
 		[ChatCommand("copy")]
 		private void cmdChatCopy(BasePlayer player, string command, string[] args)
 		{
@@ -950,6 +1019,61 @@ namespace Oxide.Plugins
 			SendReply(player, Lang("COPY_SUCCESS", player.UserIDString, savename));
 		}
 
+		[ChatCommand("copypaste")]
+		private void cmdChatCopyPaste(BasePlayer player, string command, string[] args)
+		{
+			if(!HasAccess(player, copyPermission)) 
+			{ 
+				SendReply(player, Lang("NO_ACCESS", player.UserIDString)); 
+				return; 
+			}
+
+			if(args.Length < 2) 
+			{ 
+				SendReply(player, Lang("SYNTAX_COPYPASTE", player.UserIDString)); 
+				return; 
+			}
+			
+			string commandType = args[0], configName = args[1];
+			
+			switch(commandType)
+			{
+				case "add":
+					if(args.Length < 3) 
+					{
+						SendReply(player, Lang("SYNTAX_COPYPASTE", player.UserIDString));
+						return;
+					}
+					
+					configs.cfg[configName] = args[2];
+					SaveData();
+					
+					SendReply(player, Lang("COPYPASTE_ADDED", player.UserIDString, configName)); 
+					
+					break;
+				case "remove":
+					configs.cfg.Remove(configName);
+					SaveData();
+					
+					SendReply(player, Lang("COPYPASTE_REMOVED", player.UserIDString, configName)); 
+					
+					break;
+				case "show":
+					if(!configs.cfg.ContainsKey(configName))
+					{
+						SendReply(player, Lang("COPYPASTE_KEY_NOT_EXISTS", player.UserIDString)); 
+						return;				
+					}
+					
+					SendReply(player, Lang("COPYPASTE_SHOW", player.UserIDString, configName, configs.cfg[configName]));
+					
+					break;
+				default:
+					SendReply(player, Lang("SYNTAX_COPYPASTE", player.UserIDString)); 
+					return;
+			}			
+		}
+		
 		[ChatCommand("paste")]
 		private void cmdChatPaste(BasePlayer player, string command, string[] args)
 		{
@@ -1060,12 +1184,12 @@ namespace Oxide.Plugins
 				{"ru", "У вас нет прав доступа к данной команде"},
 			}},			
 			{"SYNTAX_PASTEBACK", new Dictionary<string, string>() {
-				{"en", "Syntax: /pasteback TARGETFILENAME options values\nheight XX - Adjust the height"},
-				{"ru", "Синтаксис: /pasteback НАЗВАНИЕОБЪЕКТА опция значение\nheight XX - Высота от земли"},
+				{"en", "Syntax: /pasteback <Target Filename> <options values>\nheight XX - Adjust the height"},
+				{"ru", "Синтаксис: /pasteback <Название Объекта> <опция значение>\nheight XX - Высота от земли"},
 			}},		
 			{"SYNTAX_PASTE_OR_PASTEBACK", new Dictionary<string, string>() {
-				{"en", "Syntax: /paste or /pasteback TARGETFILENAME options values\nheight XX - Adjust the height\nautoheight true/false - sets best height, carefull of the steep\nblockcollision XX - blocks the entire paste if something the new building collides with something\ndeployables true/false - false to remove deployables\ninventories true/false - false to ignore inventories"},
-				{"ru", "Синтаксис: /paste or /pasteback НАЗВАНИЕОБЪЕКТА опция значение\nheight XX - Высота от земли\nautoheight true/false - автоматически подобрать высоту от земли\nblockcollision XX - блокировать вставку, если что-то этому мешает\ndeployables true/false - false для удаления предметов\ninventories true/false - false для игнорирования копирования инвентаря"},
+				{"en", "Syntax: /paste or /pasteback <Target Filename> <options values>\nheight XX - Adjust the height\nautoheight true/false - sets best height, carefull of the steep\nblockcollision XX - blocks the entire paste if something the new building collides with something\ndeployables true/false - false to remove deployables\ninventories true/false - false to ignore inventories"},
+				{"ru", "Синтаксис: /paste or /pasteback <Название Объекта> <опция значение>\nheight XX - Высота от земли\nautoheight true/false - автоматически подобрать высоту от земли\nblockcollision XX - блокировать вставку, если что-то этому мешает\ndeployables true/false - false для удаления предметов\ninventories true/false - false для игнорирования копирования инвентаря"},
 			}},		
 			{"PASTEBACK_SUCCESS", new Dictionary<string, string>() {
 				{"en", "You've successfully placed back the structure"},
@@ -1076,9 +1200,29 @@ namespace Oxide.Plugins
 				{"ru", "Постройка успешно вставлена"},
 			}},		
 			{"SYNTAX_COPY", new Dictionary<string, string>() {
-				{"en", "Syntax: /copy TARGETFILENAME options values\n radius XX (default 3)\n mechanics proximity/building (default building)\nbuilding true/false (saves structures or not)\ndeployables true/false (saves deployables or not)\ninventories true/false (saves inventories or not)"},
-				{"ru", "Синтаксис: /copy НАЗВАНИЕОБЪЕКТА опция значение\n radius XX (default 3)\n mechanics proximity/building (по умолчанию building)\nbuilding true/false (сохранять постройку или нет)\ndeployables true/false (сохранять предметы или нет)\ninventories true/false (сохранять инвентарь или нет)"},
-			}},		
+				{"en", "Syntax: /copy <Target Filename> <options values>\n radius XX (default 3)\n mechanics proximity/building (default building)\nbuilding true/false (saves structures or not)\ndeployables true/false (saves deployables or not)\ninventories true/false (saves inventories or not)"},
+				{"ru", "Синтаксис: /copy <Название Объекта> <опция значение>\n radius XX (default 3)\n mechanics proximity/building (по умолчанию building)\nbuilding true/false (сохранять постройку или нет)\ndeployables true/false (сохранять предметы или нет)\ninventories true/false (сохранять инвентарь или нет)"},
+			}},	
+			{"SYNTAX_COPYPASTE", new Dictionary<string, string>() {
+				{"en", "Syntax: /copypaste add <Config Name> <Parameters In Quoted (required)>\n/copypaste remove <Config Name>\n/copypaste show <Config Name>"},
+				{"ru", "Синтаксис: /copypaste add <Название Конфига> <Параметры В Кавычках (обязательно)>\n/copypaste remove <Название Конфига>\n/copypaste show <Название Конфига>"},
+			}},
+			{"COPYPASTE_ADDED", new Dictionary<string, string>() {
+				{"en", "Config <color=orange>{0}</color> successfully added"},
+				{"ru", "Конфиг <color=orange>{0}</color> успешно добавлен"},
+			}},					
+			{"COPYPASTE_REMOVED", new Dictionary<string, string>() {
+				{"en", "Config <color=orange>{0}</color> successfully removed"},
+				{"ru", "Конфиг <color=orange>{0}</color> успешно удален"},
+			}},	
+			{"COPYPASTE_SHOW", new Dictionary<string, string>() {
+				{"en", "Example of working config <color=orange>{0}</color>:\n{1}"},
+				{"ru", "Пример работы конфига <color=orange>{0}</color>:\n{1}"},
+			}},	
+			{"COPYPASTE_KEY_NOT_EXISTS", new Dictionary<string, string>() {
+				{"en", "Config not exists. Enter the command <color=orange>/copypaste</color> to get more information."},
+				{"ru", "Конфиг не существует. Введите команду <color=orange>/copypaste</color> чтобы получить больше информации."},
+			}},
 			{"NO_ENTITY_RAY", new Dictionary<string, string>() {
 				{"en", "Couldn't ray something valid in front of you"},
 				{"ru", "Не удалось найти какой-либо объект перед вами"},
@@ -1099,26 +1243,14 @@ namespace Oxide.Plugins
 				{"en", "Couldn't find the player"},
 				{"ru", "Не удалось найти игрока"},
 			}},
-			{"SYNTAX_AUTH", new Dictionary<string, string>() {
-				{"en", "Option auth must be true/false"},
-				{"ru", "Опция auth принимает значения true/false"},
-			}},	
-			{"SYNTAX_TREE", new Dictionary<string, string>() {
-				{"en", "Option tree must be true/false"},
-				{"ru", "Опция tree принимает значения true/false"},
-			}},							
-			{"SYNTAX_INVENTORIES", new Dictionary<string, string>() {
-				{"en", "Option inventories must be true/false"},
-				{"ru", "Опция inventories принимает значения true/false"},
-			}},			
+			{"SYNTAX_BOOL", new Dictionary<string, string>() {
+				{"en", "Option {0} must be true/false"},
+				{"ru", "Опция {0} принимает значения true/false"},
+			}},				
 			{"SYNTAX_HEIGHT", new Dictionary<string, string>() {
 				{"en", "Option height must be a number"},
 				{"ru", "Опция height принимает только числовые значения"},
-			}},			
-			{"SYNTAX_DEPLOYABLES", new Dictionary<string, string>() {
-				{"en", "Option deployables must be true/false"},
-				{"ru", "Опция deployables принимает значения true/false"},
-			}},			
+			}},		
 			{"SYNTAX_BLOCKCOLLISION", new Dictionary<string, string>() {
 				{"en", "Option blockcollision must be a number, 0 will deactivate the option"},
 				{"ru", "Опция blockcollision принимает только числовые значения, 0 позволяет отключить проверку"},
@@ -1126,11 +1258,7 @@ namespace Oxide.Plugins
 			{"SYNTAX_RADIUS", new Dictionary<string, string>() {
 				{"en", "Option radius must be a number"},
 				{"ru", "Опция radius принимает только числовые значения"},
-			}},			
-			{"SYNTAX_BUILDINGS", new Dictionary<string, string>() {
-				{"en", "Option buildings must be true/false"},
-				{"ru", "Опция buildings принимает значения true/false"},
-			}},		
+			}},	
 			{"BLOCKING_PASTE", new Dictionary<string, string>() {
 				{"en", "Something is blocking the paste"},
 				{"ru", "Что-то препятствует вставке"},

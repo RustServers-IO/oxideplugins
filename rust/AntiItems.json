@@ -2,7 +2,7 @@
     "name": "AntiItems",
     "description": "Remove the need for certain items in crafting and repairing",
     "author": "redBDGR",
-    "version": "1.0.7",
+    "version": "1.0.9",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/antiitems.2405",

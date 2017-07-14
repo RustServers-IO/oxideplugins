@@ -3,14 +3,13 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiItems", "redBDGR", "1.0.7", ResourceId = 2405)]
+    [Info("AntiItems", "redBDGR", "1.0.9", ResourceId = 2405)]
     [Description("Remove the need for certain items in crafting and repairing")]
 
     class AntiItems : RustPlugin
     {
         private bool Changed = false;
         private string permissionName = "antiitems.use";
-        private bool alwaysHaveMap = false;
         private bool useActiveRefreshing = true;
         private float refreshTime = 120f;
 
@@ -48,7 +47,7 @@ namespace Oxide.Plugins
                     if (permission.UserHasPermission(player.UserIDString, permissionName))
                         RefreshItems(player);
             });
-        }
+        }   
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
@@ -65,22 +64,15 @@ namespace Oxide.Plugins
 
         void RefreshItems(BasePlayer player)
         {
-            for (int i = 0; i < player.inventory.containerMain.itemList.Count; i++)
-            {
-                Item item = player.inventory.containerMain.itemList[i];
-                if (item == null) return;
-                if (componentList.ContainsKey(item.info.shortname))
-                    if (item.amount < Convert.ToInt32(componentList[item.info.shortname]))
-                        item.amount = Convert.ToInt32(componentList[item.info.shortname]);
-            }
+            for (int i = 0; i < componentList.Count; i++)
+                if (player.inventory.containerMain.GetSlot(24 + i) != null)
+                    player.inventory.containerMain.GetSlot(24 + i).RemoveFromContainer();
+            DoItems(player);
         }
 
         void DoItems(BasePlayer player)
         {
             if (!permission.UserHasPermission(player.UserIDString, permissionName)) return;
-            if (alwaysHaveMap)
-                DoMap(player.inventory.containerBelt);
-            int index = 0;
             player.inventory.containerMain.capacity = 24 + componentList.Count;
             List<string> y = new List<string>();
             foreach (var key in componentList)
@@ -89,7 +81,6 @@ namespace Oxide.Plugins
             {
                 Item item = ItemManager.CreateByName(y[i], Convert.ToInt32(componentList[y[i]]));
                 item.MoveToContainer(player.inventory.containerMain, 24 + i, true);
-                index++;
             }
         }
 
@@ -112,13 +103,6 @@ namespace Oxide.Plugins
             }
         }
 
-        void DoMap(ItemContainer container)
-        {
-            container.capacity++;
-            Item item = ItemManager.CreateByItemID(107868, 1);
-            item.MoveToContainer(container, 6);
-        }
-
         protected override void LoadDefaultConfig()
         {
             Config.Clear();
@@ -128,7 +112,6 @@ namespace Oxide.Plugins
         void LoadVariables()
         {
             componentList = (Dictionary<string, object>)GetConfig("Settings", "Components", doComponentList());
-            alwaysHaveMap = Convert.ToBoolean(GetConfig("Settings", "Always Have Map", false));
             useActiveRefreshing = Convert.ToBoolean(GetConfig("Settings", "Use Active Item Refreshing", true));
             refreshTime = Convert.ToSingle(GetConfig("Settings", "Refresh Time", 120f));
 

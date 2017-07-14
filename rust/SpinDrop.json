@@ -1,0 +1,16 @@
+{
+    "name": "Spin Drop",
+    "description": "Spin around dropped weapons and tools above the ground",
+    "author": "",
+    "version": "0.1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/spin-drop.2554",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

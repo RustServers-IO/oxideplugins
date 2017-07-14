@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Dangerous Treasures", "nivex", "0.1.21", ResourceId = 2479)]
+    [Info("Dangerous Treasures", "nivex", "0.1.22", ResourceId = 2479)]
     [Description("Event with treasure chests.")]
     public class DangerousTreasures : RustPlugin
     {
@@ -51,6 +51,7 @@ namespace Oxide.Plugins
         static Dictionary<uint, string> lustyMarkers = new Dictionary<uint, string>();
         Dictionary<string, List<ulong>> skinsCache = new Dictionary<string, List<ulong>>();
         static Dictionary<uint, TreasureChest> treasureChests = new Dictionary<uint, TreasureChest>();
+        static Dictionary<uint, string> treasureLooters = new Dictionary<uint, string>();
 
         class TreasureItem
         {
@@ -209,6 +210,7 @@ namespace Oxide.Plugins
             float sphereMulti = 2f;
             float claimTime;
             float lastStayTick;
+            Vector3 lastFirePos;
 
             Dictionary<ulong, long> fireticks = new Dictionary<ulong, long>();
             List<FireBall> fireballs = new List<FireBall>();
@@ -267,7 +269,7 @@ namespace Oxide.Plugins
                 }
                 else
                     lerped = true;
-                
+
                 if (useRocketOpener)
                 {
                     var positions = GetRandomPositions(containerPos, eventRadius * posMulti, numRockets, 0f);
@@ -483,7 +485,19 @@ namespace Oxide.Plugins
                 gs.SetTarget(container);
             }
 
-            void SpawnFire() => SpawnFire(firePositions.GetRandom());
+            void SpawnFire()
+            {
+                var firePos = firePositions.GetRandom();
+                int retries = firePositions.Count;
+
+                while (Vector3.Distance(firePos, lastFirePos) < eventRadius * 0.35f && --retries > 0)
+                {
+                    firePos = firePositions.GetRandom();
+                }
+
+                SpawnFire(firePos);
+                lastFirePos = firePos;
+            }
 
             void SpawnFire(Vector3 firePos)
             {
@@ -744,7 +758,9 @@ namespace Oxide.Plugins
 
             if (wipeChestsSeed && eventPlayers.Count > 0)
             {
-                if (AssignTreasureHunters())
+                var ladder = eventPlayers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.StolenChestsSeed).ToList<KeyValuePair<string, int>>();
+                
+                if (AssignTreasureHunters(ladder))
                 {
                     foreach (var kvp in eventPlayers.ToList())
                         eventPlayers[kvp.Key].StolenChestsSeed = 0;
@@ -839,8 +855,10 @@ namespace Oxide.Plugins
                         continue;
 
                     Puts(msg(szDestroyed, null, container.transform.position));
-                    container.inventory.Clear();
-                    container.Kill();
+                    container.inventory?.Clear();
+
+                    if (!container.IsDestroyed)
+                        container.Kill();
                 }
             }
 
@@ -917,6 +935,17 @@ namespace Oxide.Plugins
             return treasureChests.ContainsKey(container.entityOwner.net.ID) ? (object)ItemContainer.CanAcceptResult.CannotAccept : null;
         }
 
+        void OnLootEntity(BasePlayer player, BaseEntity entity)
+        {
+            if (!init || player == null || entity?.net == null || !(entity is StorageContainer) || !treasureChests.ContainsKey(entity.net.ID))
+                return;
+
+            if (treasureLooters.ContainsKey(entity.net.ID))
+                treasureLooters.Remove(entity.net.ID);
+
+            treasureLooters.Add(entity.net.ID, player.UserIDString);
+        }
+
         void OnItemRemovedFromContainer(ItemContainer container, Item item)
         {
             if (container?.entityOwner == null || !(container.entityOwner is StorageContainer))
@@ -926,12 +955,23 @@ namespace Oxide.Plugins
             {
                 var box = container?.entityOwner as StorageContainer;
 
-                if (box == null || !treasureChests.ContainsKey(box.net.ID))
+                if (box?.net == null || !treasureChests.ContainsKey(box.net.ID))
                     return;
+
+                var looter = item.GetOwnerPlayer();
+
+                if (looter != null)
+                {
+                    if (treasureLooters.ContainsKey(box.net.ID))
+                        treasureLooters.Remove(box.net.ID);
+
+                    treasureLooters.Add(box.net.ID, looter.UserIDString);
+                }
 
                 if (box.inventory.itemList.Count == 0)
                 {
-                    var looter = item.GetOwnerPlayer();
+                    if (looter == null && treasureLooters.ContainsKey(box.net.ID))
+                        looter = BasePlayer.activePlayerList.Find(x => x.UserIDString == treasureLooters[box.net.ID]);
 
                     if (looter != null)
                     {
@@ -987,7 +1027,7 @@ namespace Oxide.Plugins
 
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
-            if (!init || entity == null)
+            if (!init || entity?.net == null)
                 return;
 
             bool newman = newmanProtections.Contains(entity.net.ID);
@@ -1035,6 +1075,7 @@ namespace Oxide.Plugins
 
                     Subscribe(nameof(OnEntityTakeDamage));
                     Subscribe(nameof(OnItemRemovedFromContainer));
+                    Subscribe(nameof(OnLootEntity));
                     Subscribe(nameof(CanAcceptItem));
                     Subscribe(nameof(CanBuild));
                 }
@@ -1044,6 +1085,7 @@ namespace Oxide.Plugins
                 Unsubscribe(nameof(OnEntitySpawned));
                 Unsubscribe(nameof(OnEntityTakeDamage));
                 Unsubscribe(nameof(OnItemRemovedFromContainer));
+                Unsubscribe(nameof(OnLootEntity));
                 Unsubscribe(nameof(CanAcceptItem));
                 Unsubscribe(nameof(CanBuild));
             }
@@ -1212,41 +1254,6 @@ namespace Oxide.Plugins
         }
 
         static long TimeStamp() => (DateTime.Now.Ticks - DateTime.Parse("01/01/1970 00:00:00").Ticks) / 10000000;
-        List<object> DefaultTimesInSeconds() => new List<object> { "120", "60", "30", "15" };
-
-        List<object> DefaultTreasure()
-        {
-            return new List<object>
-            {
-                new TreasureItem { shortname = "ammo.pistol", amount = 40, skin = 0 },
-                new TreasureItem { shortname = "ammo.pistol.fire", amount = 40, skin = 0 },
-                new TreasureItem { shortname = "ammo.pistol.hv", amount = 40, skin = 0 },
-                new TreasureItem { shortname = "ammo.rifle", amount = 60, skin = 0 },
-                new TreasureItem { shortname = "ammo.rifle.explosive", amount = 60, skin = 0 },
-                new TreasureItem { shortname = "ammo.rifle.hv", amount = 60, skin = 0 },
-                new TreasureItem { shortname = "ammo.rifle.incendiary", amount = 60, skin = 0 },
-                new TreasureItem { shortname = "ammo.shotgun", amount = 24, skin = 0 },
-                new TreasureItem { shortname = "ammo.shotgun.slug", amount = 40, skin = 0 },
-                new TreasureItem { shortname = "survey.charge", amount = 20, skin = 0 },
-                new TreasureItem { shortname = "metal.refined", amount = 150, skin = 0 },
-                new TreasureItem { shortname = "bucket.helmet", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "cctv.camera", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "coffeecan.helmet", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "explosive.timed", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "metal.facemask", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "metal.plate.torso", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "mining.quarry", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "pistol.m92", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "rifle.ak", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "rifle.bolt", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "rifle.lr300", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "smg.2", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "smg.mp5", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "smg.thomspon", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "supply.signal", amount = 1, skin = 0 },
-                new TreasureItem { shortname = "targeting.computer", amount = 1, skin = 0 },
-            };
-        }
 
         List<ulong> GetItemSkins(ItemDefinition def)
         {
@@ -1401,7 +1408,7 @@ namespace Oxide.Plugins
 
             foreach (var target in BasePlayer.activePlayerList)
             {
-                var distance = Math.Round(Vector3.Distance(target.transform.position, container.transform.position), 2);
+                double distance = Math.Round(Vector3.Distance(target.transform.position, container.transform.position), 2);
 
                 if (showOpened)
                 {
@@ -1514,11 +1521,8 @@ namespace Oxide.Plugins
             return string.Join(", ", format.ToArray());
         }
 
-        bool AssignTreasureHunters()
+        bool AssignTreasureHunters(List<KeyValuePair<string, int>> ladder)
         {
-            if (string.IsNullOrEmpty(ladderPerm) || string.IsNullOrEmpty(ladderGroup) || !recordStats || eventPlayers.Count == 0)
-                return true;
-
             foreach (var target in covalence.Players.All.Where(p => p != null))
             {
                 if (permission.UserHasPermission(target.Id, ladderPerm))
@@ -1528,7 +1532,8 @@ namespace Oxide.Plugins
                     permission.RemoveUserGroup(target.Id, ladderGroup);
             }
 
-            var ladder = eventPlayers.ToDictionary(k => k.Key, v => v.Value.StolenChestsSeed).ToList<KeyValuePair<string, int>>();
+            if (!recordStats)
+                return true;
 
             foreach (var entry in ladder.ToList())
                 if (entry.Value < 1)
@@ -1627,6 +1632,55 @@ namespace Oxide.Plugins
             }
         }
 
+        void AddItem(BasePlayer player, string[] args)
+        {
+            if (args.Length >= 2)
+            {
+                string shortname = args[0];
+                var itemDef = ItemManager.FindItemDefinition(shortname);
+
+                if (itemDef == null)
+                {
+                    player.ChatMessage(msg("InvalidItem", player.UserIDString, shortname, szDistanceChatCommand));
+                    return;
+                }
+
+                int amount;
+                if (int.TryParse(args[1], out amount))
+                {
+                    if (itemDef.stackable == 1 || (itemDef.condition.enabled && itemDef.condition.max > 0f) || amount < 1)
+                        amount = 1;
+
+                    float skin = 0uL;
+
+                    if (args.Length == 3)
+                    {
+                        float num;
+                        if (float.TryParse(args[2], out num))
+                            skin = num;
+                        else
+                            player.ChatMessage(msg("InvalidValue", player.UserIDString, args[2]));
+                    }
+
+                    chestLoot.RemoveAll(entry => entry.shortname.ToString() == shortname);
+                    chestLoot.Add(new TreasureItem() { amount = amount, shortname = shortname, skin = skin });
+
+                    var newLoot = new List<object>();
+                    newLoot.AddRange(chestLoot.Cast<object>());
+
+                    Config["Treasure", "Loot"] = newLoot;
+                    Config.Save();
+                    player.ChatMessage(msg("AddedItem", player.UserIDString, shortname, amount, skin));
+                }
+                else
+                    player.ChatMessage(msg("InvalidValue", player.UserIDString, args[2]));
+
+                return;
+            }
+
+            player.ChatMessage(msg("InvalidItem", player.UserIDString, args.Length >= 1 ? args[0] : "?", szDistanceChatCommand));
+        }
+
         void cmdTreasureHunter(BasePlayer player, string command, string[] args)
         {
             if (drawGrants.Contains(player.userID))
@@ -1667,7 +1721,7 @@ namespace Oxide.Plugins
             if (recordStats)
                 player.ChatMessage(msg(szEventWins, player.UserIDString, eventPlayers.ContainsKey(player.UserIDString) ? eventPlayers[player.UserIDString].StolenChestsSeed : 0, szDistanceChatCommand));
 
-            if (args.Length == 1 && player.IsAdmin)
+            if (args.Length >= 1 && player.IsAdmin)
             {
                 if (args[0] == "resettime")
                 {
@@ -1696,6 +1750,12 @@ namespace Oxide.Plugins
 
                     if (dest != Vector3.zero)
                         player.Teleport(dest);
+                }
+
+                if (args[0].ToLower() == "additem")
+                {
+                    AddItem(player, args.Skip(1).ToArray());
+                    return;
                 }
             }
 
@@ -1925,6 +1985,51 @@ namespace Oxide.Plugins
         double serverRewardsPoints;
         decimal percentLoss;
 
+        List<object> DefaultTimesInSeconds
+        {
+            get
+            {
+                return new List<object> { "120", "60", "30", "15" };
+            }
+        }
+
+        List<object> DefaultTreasure
+        {
+            get
+            {
+                return new List<object>
+                {
+                    new TreasureItem { shortname = "ammo.pistol", amount = 40, skin = 0 },
+                    new TreasureItem { shortname = "ammo.pistol.fire", amount = 40, skin = 0 },
+                    new TreasureItem { shortname = "ammo.pistol.hv", amount = 40, skin = 0 },
+                    new TreasureItem { shortname = "ammo.rifle", amount = 60, skin = 0 },
+                    new TreasureItem { shortname = "ammo.rifle.explosive", amount = 60, skin = 0 },
+                    new TreasureItem { shortname = "ammo.rifle.hv", amount = 60, skin = 0 },
+                    new TreasureItem { shortname = "ammo.rifle.incendiary", amount = 60, skin = 0 },
+                    new TreasureItem { shortname = "ammo.shotgun", amount = 24, skin = 0 },
+                    new TreasureItem { shortname = "ammo.shotgun.slug", amount = 40, skin = 0 },
+                    new TreasureItem { shortname = "survey.charge", amount = 20, skin = 0 },
+                    new TreasureItem { shortname = "metal.refined", amount = 150, skin = 0 },
+                    new TreasureItem { shortname = "bucket.helmet", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "cctv.camera", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "coffeecan.helmet", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "explosive.timed", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "metal.facemask", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "metal.plate.torso", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "mining.quarry", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "pistol.m92", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "rifle.ak", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "rifle.bolt", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "rifle.lr300", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "smg.2", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "smg.mp5", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "smg.thomspon", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "supply.signal", amount = 1, skin = 0 },
+                    new TreasureItem { shortname = "targeting.computer", amount = 1, skin = 0 },
+                };
+            }
+        }
+
         Dictionary<string, Dictionary<string, string>> GetMessages()
         {
             return new Dictionary<string, Dictionary<string, string>>
@@ -2104,6 +2209,14 @@ namespace Oxide.Plugins
                 {
                     {"en", "You have received <color=yellow>{0} RP</color> for stealing the treasure!"},
                 }},
+                {"InvalidItem", new Dictionary<string, string>()
+                {
+                    {"en", "Invalid item shortname: {0}. Use /{1} additem <shortname> <amount> [skin]"},
+                }},
+                {"AddedItem", new Dictionary<string, string>()
+                {
+                    {"en", "Added item: {0} amount: {1}, skin: {2}"},
+                }},
             };
         }
 
@@ -2191,7 +2304,7 @@ namespace Oxide.Plugins
 
             if (chestLoot.Count == 0)
             {
-                var treasures = GetConfig("Treasure", "Loot", DefaultTreasure()) as List<object>;
+                var treasures = GetConfig("Treasure", "Loot", DefaultTreasure) as List<object>;
 
                 if (treasures != null && treasures.Count > 0)
                     SetTreasure(treasures, false);
@@ -2215,7 +2328,7 @@ namespace Oxide.Plugins
             maxEvents = Convert.ToInt32(GetConfig("Events", szMaxManualEvents, 1));
             treasureAmount = Convert.ToInt32(GetConfig("Events", "Amount Of Items To Spawn", 6));
             useSpheres = Convert.ToBoolean(GetConfig("Events", "Use Spheres", true));
-            amountOfSpheres = Convert.ToInt32(GetConfig("Events", "Amount Of Spheres", 1));
+            amountOfSpheres = Convert.ToInt32(GetConfig("Events", "Amount Of Spheres", 5));
             playerLimit = Convert.ToInt32(GetConfig("Events", "Player Limit For Event", 0));
             eventRadius = Convert.ToSingle(GetConfig("Events", "Fire Aura Radius (Advanced Users Only)", 25f));
 
@@ -2269,35 +2382,27 @@ namespace Oxide.Plugins
                 missileDetectionDistance = 100f;
 
             recordStats = Convert.ToBoolean(GetConfig("Ranked Ladder", "Enabled", true));
+            ladderPerm = Convert.ToString(GetConfig("Ranked Ladder", "Permission Name", "dangeroustreasures.th"));
+            ladderGroup = Convert.ToString(GetConfig("Ranked Ladder", "Group Name", "treasurehunter"));
+            permsToGive = Convert.ToInt32(GetConfig("Ranked Ladder", "Award Top X Players On Wipe", 3));
 
-            if (recordStats)
-            {
-                ladderPerm = Convert.ToString(GetConfig("Ranked Ladder", "Permission Name", "dangeroustreasures.th"));
-                ladderGroup = Convert.ToString(GetConfig("Ranked Ladder", "Group Name", "treasurehunter"));
-                permsToGive = Convert.ToInt32(GetConfig("Ranked Ladder", "Award Top X Players On Wipe", 3));
-            }
+            if (string.IsNullOrEmpty(ladderPerm))
+                ladderPerm = "dangeroustreasures.th";
+
+            if (string.IsNullOrEmpty(ladderGroup))
+                ladderGroup = "treasurehunter";
 
             useLustyMap = Convert.ToBoolean(GetConfig("Lusty Map", "Enabled", true));
 
             if (useLustyMap)
             {
-                lustyMapIconFile = Convert.ToString(GetConfig("Lusty Map", "Icon File", "special"));
+                lustyMapIconFile = Convert.ToString(GetConfig("Lusty Map", "Icon File", "http://i.imgur.com/XoEMTJj.png"));
                 lustyMapIconName = Convert.ToString(GetConfig("Lusty Map", "Icon Name", "dtchest"));
                 lustyMapRotation = Convert.ToSingle(GetConfig("Lusty Map", "Icon Rotation", 0f));
 
                 if (lustyMapIconFile == "special")
                 {
-                    lustyMapIconFile = string.Format("file:///{0}/LustyMap/icons/special.png", Interface.Oxide.DataDirectory.Replace("\\", "/"));
-
-                    if (LustyMap != null)
-                    {
-                        if (new Version($"{LustyMap.Version.Major}.{LustyMap.Version.Minor}.{LustyMap.Version.Patch}") < new Version("2.1.0"))
-                        {
-                            lustyMapIconFile = "http://i.imgur.com/XoEMTJj.png";
-                            Config.Set("Lusty Map", "Icon File", lustyMapIconFile);
-                            Changed = true;
-                        }
-                    }
+                    lustyMapIconFile = "http://i.imgur.com/XoEMTJj.png";
                 }
 
                 if (string.IsNullOrEmpty(lustyMapIconFile) || string.IsNullOrEmpty(lustyMapIconName))
@@ -2317,7 +2422,7 @@ namespace Oxide.Plugins
             }
 
             useCountdown = Convert.ToBoolean(GetConfig("Countdown", "Use Countdown Before Event Starts", false));
-            var times = GetConfig("Countdown", "Time In Seconds", DefaultTimesInSeconds()) as List<object>;
+            var times = GetConfig("Countdown", "Time In Seconds", DefaultTimesInSeconds) as List<object>;
 
             if (useCountdown)
             {
@@ -2357,7 +2462,7 @@ namespace Oxide.Plugins
                 Changed = false;
             }
         }
-        
+
         int GetPercentIncreasedAmount(int amount)
         {
             if (usingDayOfWeekLoot && !pctIncreasesDayLoot)
@@ -2367,8 +2472,7 @@ namespace Oxide.Plugins
 
                 return amount;
             }
-
-
+            
             decimal percentIncrease = pctIncreases.ContainsKey(DateTime.Now.DayOfWeek) ? pctIncreases[DateTime.Now.DayOfWeek] : 0m;
 
             if (percentIncrease > 1m)
@@ -2384,7 +2488,7 @@ namespace Oxide.Plugins
 
             return amount;
         }
-
+        
         void SetTreasure(List<object> treasures, bool dayOfWeekLoot)
         {
             if (treasures != null && treasures.Count > 0)
