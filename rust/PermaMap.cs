@@ -2,7 +2,7 @@
 
 namespace Oxide.Plugins
 {
-    [Info("PermaMap", "redBDGR", "1.0.4", ResourceId = 2557)]
+    [Info("PermaMap", "redBDGR", "1.0.5", ResourceId = 2557)]
     [Description("Make sure that players always have access to a map")]
 
     class PermaMap : RustPlugin
@@ -45,6 +45,8 @@ namespace Oxide.Plugins
                 BasePlayer player = itemCrafter.containers[0].GetOwnerPlayer();
                 if (player == null)
                     return false;
+                if (!permission.UserHasPermission(player.UserIDString, permissionName))
+                    return null;
                 player.ChatMessage(msg("Unable to craft", player.UserIDString));
                 return false;
             }
