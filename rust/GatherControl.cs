@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Plugins;
+using UnityEngine;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherControl", "CaseMan", "1.2.1", ResourceId = 2477)]
+    [Info("GatherControl", "CaseMan", "1.3.0", ResourceId = 2477)]
     [Description("Control gather rates by day and night with permissions")]
 
     class GatherControl : RustPlugin
@@ -14,6 +16,7 @@ namespace Oxide.Plugins
 	    [PluginReference]
         Plugin GUIAnnouncements;
 		
+		static GatherControl GC = null;
 		bool IsDay;	
 		bool UseZeroIndexForDefaultGroup;
 		bool UseMessageBroadcast;
@@ -84,6 +87,17 @@ namespace Oxide.Plugins
 		{
 			if(Temp.ContainsKey(player.userID)) Temp.Remove(player.userID);
 		}
+		void Loaded()
+		{
+			GC = this;
+		}
+		void Unload()
+        {
+			var objs = UnityEngine.Object.FindObjectsOfType<FinishBonusClass>().ToList();
+			if (objs.Count > 0)
+				foreach (var obj in objs)
+					GameObject.Destroy(obj);
+        }
 		#endregion
 		#region Configuration
         protected override void LoadDefaultConfig()
@@ -180,8 +194,42 @@ namespace Oxide.Plugins
             BasePlayer player = entity.ToPlayer();
 			if(player == null) return;
 			int gr = CheckPlayerPerms(player);
+			if (dispenser.gameObject.GetComponent<FinishBonusClass>())
+				dispenser.gameObject.GetComponent<FinishBonusClass>().OnHit(player);
+			else
+				dispenser.gameObject.AddComponent<FinishBonusClass>().finishBonus = dispenser.finishBonus;
 			if(gr >= 0) GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResource, permData.PermissionsGroups[gr].NightRateMultResource);			
-        }
+        }		
+		sealed class FinishBonusClass : MonoBehaviour
+		{
+			public List<ItemAmount> finishBonus;
+			BasePlayer hitPlayer;
+						
+			public void OnHit(BasePlayer player)
+			{
+				hitPlayer = player;
+			}
+			
+			public void FinishBonusAssigned()
+			{							
+				foreach (var current in finishBonus)
+				{
+					var item = ItemManager.Create(current.itemDef, Mathf.CeilToInt(current.amount), 0uL);
+					GC.BonusMult(hitPlayer, item);
+					current.amount = (float)item.amount;
+				}
+			}
+		}
+		void BonusMult(BasePlayer player, Item item)
+		{
+			int gr0 = CheckPlayerPerms(player);	
+			if(gr0 >= 0)
+			{
+				if(IsDay) item.amount = (int)(item.amount * permData.PermissionsGroups[gr0].DayRateMultResource); 
+				else item.amount = (int)(item.amount * permData.PermissionsGroups[gr0].NightRateMultResource); 
+			}		
+		}
+		
 		void OnCollectiblePickup(Item item, BasePlayer player)
 		{
 			if(player == null) return;
@@ -332,6 +380,10 @@ namespace Oxide.Plugins
 			}
 			return message;	
 		}	
+		void Log(string filename, string text)
+        {
+            LogToFile(filename, $"[{DateTime.Now}] {text}", this);
+        }
 		#endregion
     }
 }
