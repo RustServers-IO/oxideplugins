@@ -1,6 +1,6 @@
 {
-    "name": "LightsOut",
-    "description": "Turns all Lights out at night then allows user to turn them back on again.",
+    "name": "NightLightsOff",
+    "description": "Turns all lights out at night then allows user to turn them back on again.",
     "author": "",
     "version": "1.0.0",
     "configuration": false,
