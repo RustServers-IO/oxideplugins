@@ -10,7 +10,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminRadar", "nivex", "4.0.2", ResourceId = 978)]
+    [Info("AdminRadar", "nivex", "4.0.3", ResourceId = 978)]
     [Description("ESP tool for Admins and Developers.")]
     public class AdminRadar: RustPlugin
     {
@@ -119,6 +119,11 @@ namespace Oxide.Plugins
             }
         }
 
+        readonly string anchorMinTopLeft = "0 0.850";
+        readonly string anchorMaxTopLeft = "0.148 1";
+        readonly string anchorMinBottomRight = "0.667 0.020";
+        readonly string anchorMaxBottomRight = "0.810 0.148";
+
         #region json 
         // TODO: Remove hardcoded json
         static string uiJson = @"[{
@@ -131,8 +136,8 @@ namespace Oxide.Plugins
               },
               {
                 ""type"": ""RectTransform"",
-                ""anchormin"": ""0.667 0.020"",
-                ""anchormax"": ""0.810 0.148""
+                ""anchormin"": ""{anchorMin}"", 
+                ""anchormax"": ""{anchorMax}""
               }
             ]
           },
@@ -144,7 +149,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui all"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1"",
+                ""color"": ""0.29 0.49 0.69 0.5"",
               },
               {
                 ""type"": ""RectTransform"",
@@ -179,7 +184,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui bags"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -214,7 +219,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui box"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -249,7 +254,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui col"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -284,7 +289,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui dead"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -319,7 +324,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui loot"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -354,7 +359,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui npc"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -389,7 +394,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui ore"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -424,7 +429,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui sleepers"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -459,7 +464,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui stash"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -494,7 +499,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui tc"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -529,7 +534,7 @@ namespace Oxide.Plugins
                 ""type"": ""UnityEngine.UI.Button"",
                 ""command"": ""espgui turrets"",
                 ""close"": """",
-                ""color"": ""0.31 0.31 0.31 1""
+                ""color"": ""0.29 0.49 0.69 0.5""
               },
               {
                 ""type"": ""RectTransform"",
@@ -693,6 +698,7 @@ namespace Oxide.Plugins
 
         class StoredData
         {
+            public List<string> Visions = new List<string>();
             public List<string> OnlineBoxes = new List<string>();
             public Dictionary<string, List<string>> Filters = new Dictionary<string, List<string>>();
             public List<string> Hidden = new List<string>();
@@ -819,6 +825,7 @@ namespace Oxide.Plugins
                         {
                             string displayName = target.displayName ?? target.UserIDString; // had this bug recently. squashing it now.
 
+                            if (storedData.Visions.Contains(player.UserIDString)) DrawVision(player, target, invokeTime);
                             if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, target.transform.position.y + 10), target.transform.position, 1);
                             if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", displayName, Math.Floor(target.health), currDistance));
                             if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, 1f, 0f), target.GetHeight(target.modelState.ducked));
@@ -1103,6 +1110,18 @@ namespace Oxide.Plugins
             }
         }
 
+        static readonly int visionMask = LayerMask.GetMask("Terrain", "World", "Default", "Construction", "Water", "Deployed", "Player (Server)");
+
+        static void DrawVision(BasePlayer player, BasePlayer target, float invokeTime)
+        {
+            RaycastHit hit;
+
+            if (!Physics.Raycast(target.eyes.HeadRay(), out hit, Mathf.Infinity, visionMask))
+                return;
+
+            player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.red, target.eyes.position + new Vector3(0f, 0.115f, 0f), hit.point, 0.15f);
+        }
+
         static string _(string s)
         {
             foreach (string str in tags)
@@ -1337,20 +1356,37 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (args.Length == 1 && args[0] == "online")
+            if (args.Length == 1)
             {
-                if (storedData.OnlineBoxes.Contains(player.UserIDString))
+                if (args[0] == "online")
                 {
-                    storedData.OnlineBoxes.Remove(player.UserIDString);
-                    player.ChatMessage(msg("BoxesAll", player.UserIDString));
-                }
-                else
-                {
-                    storedData.OnlineBoxes.Add(player.UserIDString);
-                    player.ChatMessage(msg("BoxesOnlineOnly", player.UserIDString));
+                    if (storedData.OnlineBoxes.Contains(player.UserIDString))
+                    {
+                        storedData.OnlineBoxes.Remove(player.UserIDString);
+                        player.ChatMessage(msg("BoxesAll", player.UserIDString));
+                    }
+                    else
+                    {
+                        storedData.OnlineBoxes.Add(player.UserIDString);
+                        player.ChatMessage(msg("BoxesOnlineOnly", player.UserIDString));
+                    }
+                    return;
                 }
 
-                return;
+                if (args[0] == "vision")
+                {
+                    if (storedData.Visions.Contains(player.UserIDString))
+                    {
+                        storedData.Visions.Remove(player.UserIDString);
+                        player.ChatMessage(msg("VisionOff", player.UserIDString));
+                    }
+                    else
+                    {
+                        storedData.Visions.Add(player.UserIDString);
+                        player.ChatMessage(msg("VisionOn", player.UserIDString));
+                    }
+                    return;
+                }
             }
 
             if (!filters.ContainsKey(player.UserIDString))
@@ -1492,7 +1528,7 @@ namespace Oxide.Plugins
             float invokeTime, maxDistance, outTime, outDistance;
 
             if (args.Length > 0 && float.TryParse(args[0], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out outTime))
-                invokeTime = outTime < 0.5f ? 0.5f : outTime;
+                invokeTime = outTime < 0.1f ? 0.1f : outTime;
             else
                 invokeTime = defaultInvokeTime;
 
@@ -1525,6 +1561,8 @@ namespace Oxide.Plugins
             {
                 string espUI = uiJson;
 
+                espUI = espUI.Replace("{anchorMin}", alignTopLeft ? anchorMinTopLeft : anchorMinBottomRight);
+                espUI = espUI.Replace("{anchorMax}", alignTopLeft ? anchorMaxTopLeft : anchorMaxBottomRight);
                 espUI = espUI.Replace("{colorAll}", esp.showAll ? "255 0 0 1" : "1 1 1 1");
                 espUI = espUI.Replace("{colorBags}", esp.showBags ? "255 0 0 1" : "1 1 1 1");
                 espUI = espUI.Replace("{colorBox}", esp.showBox ? "255 0 0 1" : "1 1 1 1");
@@ -1595,6 +1633,7 @@ namespace Oxide.Plugins
         static string szChatCommand { get; set; }
         static List<object> authorized { get; set; }
         static List<string> itemExceptions { get; set; } = new List<string>();
+        bool alignTopLeft { get; set; }
 
         List<object> ItemExceptions
         {
@@ -1628,6 +1667,8 @@ namespace Oxide.Plugins
                 ["Help4"] = "<color=orange>/{0} {1}</color> - Draw on your screen the movement of nearby players. Must be enabled.",
                 ["Help5"] = "e.g: <color=orange>/{0} 1 1000 box loot stash</color>",
                 ["Help6"] = "e.g: <color=orange>/{0} 0.5 400 all</color>",
+                ["VisionOn"] = "You will now see where players are looking.",
+                ["VisionOff"] = "You will no longer see where players are looking.",
             }, this);
 
             authorized = GetConfig("Settings", "Restrict Access To Steam64 IDs", new List<object>()) as List<object>;
@@ -1647,6 +1688,7 @@ namespace Oxide.Plugins
             latencyMs = Convert.ToInt32(GetConfig("Settings", "Latency Cap In Milliseconds (0 = no cap)", 1000.0));
             objectsLimit = Convert.ToInt32(GetConfig("Settings", "Objects Drawn Limit (0 = unlimited)", 250));
             itemExceptions = (GetConfig("Settings", "Dropped Item Exceptions", ItemExceptions) as List<object>).Cast<string>().ToList();
+            alignTopLeft = Convert.ToBoolean(GetConfig("Settings", "Align GUI Top Left", false));
 
             showLootContents = Convert.ToBoolean(GetConfig("Options", "Show Barrel And Crate Contents", false));
             showAirdropContents = Convert.ToBoolean(GetConfig("Options", "Show Airdrop Contents", false));
