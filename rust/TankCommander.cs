@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Reflection;
+using System.Linq;
 using Rust;
 using Newtonsoft.Json;
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("TankCommander", "k1lly0u", "0.1.2", ResourceId = 2560)]
+    [Info("TankCommander", "k1lly0u", "0.1.22", ResourceId = 2560)]
     class TankCommander : RustPlugin
     {
         #region Fields
@@ -156,6 +157,48 @@ namespace Oxide.Plugins
             player.inventory.loot.SendImmediate();
             player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "generic", null, null, null, null);
             player.SendNetworkUpdate();
+        }
+        private void StartSpectating(BasePlayer player, Controller controller, bool isOperator)
+        {
+            spectateFilter.SetValue(player, $"@123nofilter123");
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Spectating, true);
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.ThirdPersonViewmode, true);
+            player.gameObject.SetLayerRecursive(10);
+            player.CancelInvoke("InventoryUpdate");
+            player.SendNetworkUpdateImmediate();
+
+            timer.In(1.5f, () =>
+            {
+                player.transform.position = controller.transform.position;
+                player.SetParent(controller.entity, 0);
+                player.Command("client.camoffset", new object[] { new Vector3(0, 3.5f, 0) });
+
+                SendReply(player, string.Format(msg("leave_help", player.UserIDString), configData.Buttons.Enter));
+
+                if (isOperator)
+                {
+                    controller.enabled = true;
+                    SendReply(player, string.Format(msg("boost_help", player.UserIDString), configData.Buttons.Boost));
+                }
+                else controller.SetPassengerActive(player);
+
+                if (configData.Inventory.Enabled)
+                    SendReply(player, string.Format(msg("inv_help", player.UserIDString), configData.Buttons.Inventory));
+            });
+        }
+        private void EndSpectating(BasePlayer player, Controller commander, bool isOperator)
+        {
+            spectateFilter.SetValue(player, string.Empty);
+            player.SetParent(null);
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Spectating, false);
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.ThirdPersonViewmode, false);
+            player.gameObject.SetLayerRecursive(17);
+            player.InvokeRepeating("InventoryUpdate", 1f, 0.1f * UnityEngine.Random.Range(0.99f, 1.01f));
+            player.Command("client.camoffset", new object[] { new Vector3(0, 1.2f, 0) });
+            player.transform.position = commander.transform.position + Vector3.up + (commander.transform.right * 3);
+
+            if (isOperator)
+                commanders.Remove(player.userID);
         }
         #endregion
 
@@ -478,7 +521,7 @@ namespace Oxide.Plugins
 
             public bool IsAtMaxCapacity() => passengers.Count >= ins.configData.Passengers.Max;
 
-            private void ToggleLights(bool toggle = false) => entity.SetFlag(BaseEntity.Flags.Reserved5, toggle, false);
+            private void ToggleLights() => entity.SetFlag(BaseEntity.Flags.Reserved5, !entity.HasFlag(BaseEntity.Flags.Reserved5), false);
 
             public void ManageDamage(HitInfo info)
             {
@@ -491,7 +534,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Command
+        #region Commands
         [ChatCommand("spawntank")]
         void cmdTank(BasePlayer player, string command, string[] args)
         {
@@ -509,47 +552,26 @@ namespace Oxide.Plugins
             Controller commander = entity.gameObject.AddComponent<Controller>();
         }
        
-        private void StartSpectating(BasePlayer player, Controller controller, bool isOperator)
+        [ConsoleCommand("spawntank")]
+        void ccmdSpawnTank(ConsoleSystem.Arg arg)
         {
-            spectateFilter.SetValue(player, $"@123nofilter123");
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.Spectating, true);
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.ThirdPersonViewmode, true);
-            player.gameObject.SetLayerRecursive(10);
-            player.CancelInvoke("InventoryUpdate");
-            player.SendNetworkUpdateImmediate();
+            if (arg.Connection != null)
+                return;
 
-            timer.In(1.5f, () =>
+            BasePlayer player = covalence.Players.Connected.FirstOrDefault(x => x.Id == arg.GetString(0))?.Object as BasePlayer;
+            if (player != null)
             {
-                player.transform.position = controller.transform.position;
-                player.SetParent(controller.entity, 0);
-                player.Command("client.camoffset", new object[] { new Vector3(0, 3.5f, 0) });
+                Vector3 position = player.transform.position + (player.transform.forward * 3) + Vector3.up;
 
-                SendReply(player, string.Format(msg("leave_help", player.UserIDString), configData.Buttons.Enter));
+                RaycastHit hit;
+                if (Physics.SphereCast(player.eyes.position, 0.5f, Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward, out hit, 20f))
+                    position = hit.point;
 
-                if (isOperator)
-                {
-                    controller.enabled = true;
-                    SendReply(player, string.Format(msg("boost_help", player.UserIDString), configData.Buttons.Boost));                    
-                }
-                else controller.SetPassengerActive(player);                
+                BaseEntity entity = GameManager.server.CreateEntity(tankPrefab, position);
+                entity.Spawn();
 
-                if (configData.Inventory.Enabled)
-                    SendReply(player, string.Format(msg("inv_help", player.UserIDString), configData.Buttons.Inventory));
-            });  
-        }
-        private void EndSpectating(BasePlayer player, Controller commander, bool isOperator)
-        {
-            spectateFilter.SetValue(player, string.Empty);
-            player.SetParent(null);
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.Spectating, false);
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.ThirdPersonViewmode, false);
-            player.gameObject.SetLayerRecursive(17);
-            player.InvokeRepeating("InventoryUpdate", 1f, 0.1f * UnityEngine.Random.Range(0.99f, 1.01f));
-            player.Command("client.camoffset", new object[] { new Vector3(0, 1.2f, 0) });
-            player.transform.position = commander.transform.position + Vector3.up + (commander.transform.right * 3);
-
-            if (isOperator)
-                commanders.Remove(player.userID);
+                Controller commander = entity.gameObject.AddComponent<Controller>();
+            }
         }
         #endregion
 

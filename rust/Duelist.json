@@ -2,7 +2,7 @@
     "name": "Duelist",
     "description": "1v1 and TDM dueling event.",
     "author": "nivex",
-    "version": "0.1.20",
+    "version": "0.1.21",
     "configuration": true,
     "suggest": {
         "Kits": "*",

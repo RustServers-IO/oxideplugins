@@ -8,12 +8,13 @@ using Network;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
+using Oxide.Game.Rust.Cui;
 using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "0.1.20", ResourceId = 2520)]
+    [Info("Duelist", "nivex", "0.1.21", ResourceId = 2520)]
     [Description("1v1 & TDM dueling event.")]
     class Duelist : RustPlugin
     {
@@ -747,6 +748,7 @@ namespace Oxide.Plugins
 
             public float Distance(Vector3 position)
             {
+                position.y = _zonePos.y;
                 return Vector3.Distance(_zonePos, position);
             }
 
@@ -963,7 +965,7 @@ namespace Oxide.Plugins
 
             init = true;
             SetupZones();
-            
+
             if (duelingZones.Count > 0 && autoEnable)
                 duelsData.DuelsEnabled = true;
 
@@ -1363,9 +1365,9 @@ namespace Oxide.Plugins
         {
             timer.Once(1f, () =>
             {
-                if (entity != null && !entity.IsDestroyed)
+                if (entity != null && !entity.IsDestroyed && entity.health < entity.MaxHealth())
                 {
-                    entity.health = entity._maxHealth;
+                    entity.health = entity.MaxHealth();
                     entity.SendNetworkUpdate();
                 }
             });
@@ -1845,7 +1847,7 @@ namespace Oxide.Plugins
             if (useHit)
             {
                 RaycastHit hit;
-                if (!Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity, groundMask))
+                if (!Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity, wallMask))
                 {
                     player.ChatMessage(msg("FailedRaycast", player.UserIDString));
                     return;
@@ -2592,6 +2594,35 @@ namespace Oxide.Plugins
             {
                 switch (arg.Args[0].ToLower())
                 {
+                    case "removeall":
+                        {
+                            if (duelingZones.Count > 0 || duelsData.ZoneIds.Count > 0)
+                            {
+                                foreach (var zone in duelingZones.ToList())
+                                {
+                                    if (spAutoRemove && duelsData.Spawns.Count > 0)
+                                    {
+                                        foreach (var spawn in zone.Spawns.ToList())
+                                        {
+                                            if (duelsData.Spawns.Contains(spawn.ToString()))
+                                            {
+                                                duelsData.Spawns.Remove(spawn.ToString());
+                                            }
+                                        }
+                                    }
+
+                                    EjectPlayers(zone);
+                                    arg.ReplyWith(msg("RemovedZoneAt", id, zone.Position));
+                                    RemoveDuelZone(zone);
+                                }
+
+                                duelsData.ZoneIds.Clear();
+                                SaveData();
+                            }
+                            else
+                                arg.ReplyWith(msg("NoZoneExists", id));
+                        }
+                        break;
                     case "1":
                     case "enable":
                     case "on":
@@ -2670,9 +2701,9 @@ namespace Oxide.Plugins
                 }
             }
             else
-                arg.ReplyWith(string.Format("{0} on|off|new", szDuelChatCommand));
+                arg.ReplyWith(string.Format("{0} on|off|new|removeall", szDuelChatCommand));
         }
-
+        
         void cmdDuel(BasePlayer player, string command, string[] args)
         {
             if (!init)
@@ -2914,6 +2945,8 @@ namespace Oxide.Plugins
 
                                 foreach (var spawn in zone.Spawns)
                                     player.SendConsoleCommand("ddraw.text", 30f, Color.yellow, spawn, ++i);
+
+                                UpdateStability();
                             }
                             else
                                 player.ChatMessage(msg("FailedRaycast", player.UserIDString));
@@ -3872,7 +3905,7 @@ namespace Oxide.Plugins
             }
 
             if (duelingZones.Count > 0)
-                Puts(msg("ZonesSetup", null, duelingZones.Count));            
+                Puts(msg("ZonesSetup", null, duelingZones.Count));
         }
 
         Vector3 SetupDuelZone() // starts the process of creating a new or existing zone and then setting up it's own spawn points around the circumference of the zone
@@ -4307,7 +4340,7 @@ namespace Oxide.Plugins
                 Unsubscribe(nameof(OnPlayerHealthChange));
                 Unsubscribe(nameof(OnEntityDeath));
                 Unsubscribe(nameof(OnServerCommand));
-                
+
                 return;
             }
 
@@ -4339,7 +4372,7 @@ namespace Oxide.Plugins
 
             foreach (var zone in duelingZones) // 0.1.16: compatibility for walls being higher than the zone itself
             {
-                if (Mathf.Abs(zone.Position.y - position.y) > zoneRadius)
+                if (position.y - zone.Position.y > zoneRadius)
                 {
                     var zonePos = new Vector3(zone.Position.x, 0f, zone.Position.z);
                     var currentPos = new Vector3(position.x, 0f, position.z);
@@ -4361,7 +4394,7 @@ namespace Oxide.Plugins
             {
                 var zoneVector = zone.Key.ToVector3();
 
-                if (Mathf.Abs(zoneVector.y - position.y) > zoneRadius)
+                if (position.y - zoneVector.y > zoneRadius)
                 {
                     var zonePos = new Vector3(zoneVector.x, 0f, zoneVector.z);
                     var currentPos = new Vector3(position.x, 0f, position.z);
@@ -4384,7 +4417,7 @@ namespace Oxide.Plugins
         GoodVersusEvilMatch GetMatch(BasePlayer player) => tdmMatches.FirstOrDefault(team => team.GetTeam(player) != Team.None);
         bool InMatch(BasePlayer target) => tdmMatches.Any(team => team.GetTeam(target) != Team.None);
 
-        static bool IsOnConstruction(Vector3 position) // check if an entity (a player) is on a structure or deployable, and adjust their position elsewhere if so
+        static bool IsOnConstruction(Vector3 position)
         {
             position.y += 1f;
             RaycastHit hit;
@@ -4820,7 +4853,7 @@ namespace Oxide.Plugins
         bool SelectZone(BasePlayer player, BasePlayer target)
         {
             var zones = duelingZones.Where(zone => !zone.IsFull && !zone.IsLocked && zone.Spawns.Count >= requiredMinSpawns && zone.Spawns.Count <= requiredMaxSpawns).ToList();
-            
+
             do
             {
                 var zone = zones.GetRandom();
@@ -5413,7 +5446,7 @@ namespace Oxide.Plugins
                 }
             }
         }
-
+                
         #region Config
         private bool Changed;
         string szMatchChatCommand;
@@ -5941,7 +5974,7 @@ namespace Oxide.Plugins
             maxCustomWallRadius = Convert.ToSingle(GetConfig("Zone", "Maximum Custom Wall Radius", 300f));
             zoneUseWoodenWalls = Convert.ToBoolean(GetConfig("Zone", "Use Wooden Walls", false));
             useLeastAmount = Convert.ToBoolean(GetConfig("Zone", "Create Least Amount Of Walls", false));
-            
+
             foreach (var itemDef in ItemManager.GetItemDefinitions().ToList())
             {
                 var mod = itemDef.GetComponent<ItemModDeployable>();

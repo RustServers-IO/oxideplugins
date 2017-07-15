@@ -1,11 +1,11 @@
 {
     "name": "LightsOut",
-    "description": "Allows you to turn off all ovens\/lights.",
-    "author": "DylanSMR",
-    "version": "1.0.1",
+    "description": "Turns all Lights out at night then allows user to turn them back on again.",
+    "author": "",
+    "version": "1.0.0",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/lightsout.2384",
+    "url": "http:\/\/oxidemod.org\/plugins\/lightsout.2561",
     "games": [
         "rust"
     ],
