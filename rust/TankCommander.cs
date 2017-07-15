@@ -4,20 +4,24 @@ using UnityEngine;
 using System.Reflection;
 using Rust;
 using Newtonsoft.Json;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("TankCommander", "k1lly0u", "0.1.1", ResourceId = 2560)]
+    [Info("TankCommander", "k1lly0u", "0.1.2", ResourceId = 2560)]
     class TankCommander : RustPlugin
     {
         #region Fields
+        [PluginReference] Plugin Friends, Clans;
         static TankCommander ins;
 
         private FieldInfo spectateFilter = typeof(BasePlayer).GetField("spectateFilter", (BindingFlags.Instance | BindingFlags.NonPublic));
         private static FieldInfo meshLookupField = typeof(MeshColliderBatch).GetField("meshLookup", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private List<Controller> controllers = new List<Controller>();
-        private Dictionary<ulong, Controller> commanders = new Dictionary<ulong, Controller>();
+        private List<ulong> passengers = new List<ulong>();
+
+        private Dictionary<ulong, Controller> commanders = new Dictionary<ulong, Controller>();        
         private Dictionary<CommandType, BUTTON> controlButtons;
 
         private bool initialized;
@@ -50,8 +54,20 @@ namespace Oxide.Plugins
         }
         void OnPlayerInput(BasePlayer player, InputState input)
         {            
-            if (!initialized || player == null || commanders.ContainsKey(player.userID) || !HasPermission(player, "tankcommander.use")) return;
+            if (!initialized || player == null || commanders.ContainsKey(player.userID) || passengers.Contains(player.userID) || !HasPermission(player, "tankcommander.use")) return;
 
+            if (configData.Inventory.Enabled && input.WasJustPressed(controlButtons[CommandType.Inventory]))
+            {
+                RaycastHit hit;
+                if (Physics.SphereCast(player.eyes.position, 0.5f, Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward, out hit, 3f))
+                {
+                    Controller controller = hit.GetEntity()?.GetComponent<Controller>();
+                    if (controller != null && !controller.HasCommander())
+                        OpenTankInventory(player, controller);                       
+                }
+                return;
+            }
+            
             if (input.WasJustPressed(controlButtons[CommandType.EnterExit]))
             {
                 RaycastHit hit;
@@ -60,8 +76,39 @@ namespace Oxide.Plugins
                     Controller controller = hit.GetEntity()?.GetComponent<Controller>();
                     if (controller != null)
                     {
-                        commanders.Add(player.userID, controller);
-                        controller.EnterTank(player);
+                        if (!controller.HasCommander())
+                        {
+                            commanders.Add(player.userID, controller);
+                            controller.EnterTank(player);
+                        }
+                        else
+                        {                            
+                            if (configData.Passengers.Enabled)
+                            {
+                                BasePlayer commander = controller.GetCommander();
+
+                                if (!configData.Passengers.UseFriends && !configData.Passengers.UseClans)
+                                {
+                                    controller.PassengerEnter(player);
+                                    return;
+                                }
+
+                                if (configData.Passengers.UseFriends && AreFriends(commander.userID, player.userID))
+                                {
+                                    controller.PassengerEnter(player);
+                                    return;
+                                }
+
+                                if (configData.Passengers.UseClans && IsClanmate(commander.userID, player.userID))
+                                {
+                                    controller.PassengerEnter(player);
+                                    return;
+                                }
+
+                                SendReply(player, msg("not_friend", player.UserIDString));
+                            }
+                            else SendReply(player, msg("in_use", player.UserIDString));
+                        }
                     }
                 }
             }
@@ -95,13 +142,25 @@ namespace Oxide.Plugins
             controlButtons = new Dictionary<CommandType, BUTTON>
             {
                 [CommandType.EnterExit] = ParseType<BUTTON>(configData.Buttons.Enter),
-                [CommandType.Lights] = ParseType<BUTTON>(configData.Buttons.Lights)
+                [CommandType.Lights] = ParseType<BUTTON>(configData.Buttons.Lights),
+                [CommandType.Inventory] = ParseType<BUTTON>(configData.Buttons.Inventory),
+                [CommandType.Boost] = ParseType<BUTTON>(configData.Buttons.Boost)
             };            
+        }
+        void OpenTankInventory(BasePlayer player, Controller controller)
+        {
+            player.inventory.loot.Clear();
+            player.inventory.loot.entitySource = controller.entity;
+            player.inventory.loot.itemSource = null;
+            player.inventory.loot.AddContainer(controller.inventory);
+            player.inventory.loot.SendImmediate();
+            player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "generic", null, null, null, null);
+            player.SendNetworkUpdate();
         }
         #endregion
 
         #region Component
-        enum CommandType { EnterExit, Lights }
+        enum CommandType { EnterExit, Lights, Inventory, Boost }
 
         class Controller : MonoBehaviour
         {
@@ -111,7 +170,9 @@ namespace Oxide.Plugins
             private Rigidbody rigidBody;
 
             private WheelCollider[] leftWheels;
-            private WheelCollider[] rightWheels;                        
+            private WheelCollider[] rightWheels;
+
+            public ItemContainer inventory;
             
             private float accelTimeTaken;
             private float accelTimeToTake = 3f;
@@ -121,6 +182,8 @@ namespace Oxide.Plugins
             private float turnTorque = 1000f;
 
             private Dictionary<CommandType, BUTTON> controlButtons;
+            private List<ulong> enteringPassengers = new List<ulong>();
+            private List<BasePlayer> passengers = new List<BasePlayer>();
 
             private void Awake()
             {
@@ -140,22 +203,38 @@ namespace Oxide.Plugins
                 rightWheels = entity.rightWheels;
 
                 controlButtons = ins.controlButtons;
+
+                if (ins.configData.Inventory.Enabled)
+                {
+                    inventory = new ItemContainer();
+                    inventory.ServerInitialize(null, ins.configData.Inventory.Size);
+                    if ((int)inventory.uid == 0)
+                        inventory.GiveUID();
+                }
             }
             
             private void OnDestroy()
-            {
+            {                                    
                 if (player != null)
                     ExitTank();
                 entity.Kill();
             }
 
             private void FixedUpdate()
-            {          
+            {
+                for (int i = 0; i < passengers.Count; i++)              
+                {
+                    var passenger = passengers[i];
+                    if (passenger.serverInput.WasJustPressed(controlButtons[CommandType.EnterExit]))
+                        PassengerExit(passenger);
+                }
+
                 if (player.serverInput.WasJustPressed(controlButtons[CommandType.EnterExit]))
                 {
                     ExitTank();
                     return;
                 }
+
                 if (player.serverInput.WasJustPressed(controlButtons[CommandType.Lights]))
                     ToggleLights();
 
@@ -174,7 +253,9 @@ namespace Oxide.Plugins
                 if (player.serverInput.IsDown(BUTTON.LEFT))
                     steer -= 1f;
 
-                SetThrottleSpeed(accelerate, steer);                
+                bool boost = player.serverInput.IsDown(controlButtons[CommandType.Boost]);
+
+                SetThrottleSpeed(accelerate, steer, boost);                
             }
 
             private void OnTriggerEnter(Collider col)
@@ -183,10 +264,10 @@ namespace Oxide.Plugins
 
                 if (ins.configData.Crushables.Players)
                 {                    
-                    var player = col.gameObject.GetComponentInParent<BasePlayer>();
-                    if (player != null && player != this.player)
+                    var triggerPlayer = col.gameObject.GetComponentInParent<BasePlayer>();
+                    if (triggerPlayer != null && triggerPlayer != player && !passengers.Contains(triggerPlayer) && !enteringPassengers.Contains(triggerPlayer.userID))
                     {                        
-                        player.Die(new HitInfo(this.player, player, DamageType.Blunt, 200f));
+                        player.Die(new HitInfo(player, triggerPlayer, DamageType.Blunt, 200f));
                         return;
                     }                    
                 }
@@ -256,7 +337,7 @@ namespace Oxide.Plugins
                 }
             }            
 
-            private void SetThrottleSpeed(float acceleration, float steering)
+            private void SetThrottleSpeed(float acceleration, float steering, bool boost)
             {                
                 if (acceleration == 0 && steering == 0)
                 {
@@ -318,6 +399,14 @@ namespace Oxide.Plugins
                             leftTrack *= 0.5f;
                         }
                     }
+
+                    if (boost)
+                    {
+                        if (torque > 0)
+                            torque += ins.configData.Movement.BoostTorque;
+                        if (torque < 0)
+                            torque -= ins.configData.Movement.BoostTorque;
+                    }
                    
                     ApplyMotorTorque(Mathf.Clamp(leftTrack * throttle, -1f, 1f) * torque, false);
                     ApplyMotorTorque(Mathf.Clamp(rightTrack * throttle, -1f, 1f) * torque, true);                   
@@ -341,25 +430,53 @@ namespace Oxide.Plugins
             {                
                 WheelCollider[] wheelColliderArray = (!rightSide ? leftWheels : rightWheels);
 
+                // Slightly increase torque to the left side tracks in attempt to fix the pull to the left
+                float equalizer = !rightSide ? 1.2f : 1f;
                 for (int i = 0; i < wheelColliderArray.Length; i++)
-                    wheelColliderArray[i].motorTorque = torque;
+                    wheelColliderArray[i].motorTorque = torque * equalizer;
             }
 
             public void EnterTank(BasePlayer player)
             {
-                print("enter tank");
                 this.player = player;
-                ins.StartSpectating(player, this);
-                Invoke("EnableComponent", 3f);                               
+                ins.StartSpectating(player, this, true);                                               
             }
             public void ExitTank()
             {
                 ApplyBrakes(1f);
                 enabled = false;
-                ins.EndSpectating(player, this);
+
+                for (int i = 0; i < passengers.Count; i++)               
+                    PassengerExit(passengers[i]);                
+
+                ins.EndSpectating(player, this, true);
                 player = null;
             }
-            private void EnableComponent() => enabled = true;
+            public void PassengerEnter(BasePlayer passenger)
+            {
+                ins.passengers.Add(passenger.userID);
+                enteringPassengers.Add(passenger.userID);
+                ins.StartSpectating(passenger, this, false);
+                ins.SendReply(player, ins.msg("passenger_enter", player.UserIDString));
+            }
+            private void PassengerExit(BasePlayer passenger)
+            {
+                ins.passengers.Remove(passenger.userID);
+                passengers.Remove(passenger);
+                ins.EndSpectating(passenger, this, false);                
+            }
+            public void SetPassengerActive(BasePlayer passenger)
+            {
+                passengers.Add(passenger);
+                if (enteringPassengers.Contains(passenger.userID))
+                    enteringPassengers.Remove(passenger.userID);
+            }
+
+            public bool HasCommander() => player != null;
+
+            public BasePlayer GetCommander() => player;
+
+            public bool IsAtMaxCapacity() => passengers.Count >= ins.configData.Passengers.Max;
 
             private void ToggleLights(bool toggle = false) => entity.SetFlag(BaseEntity.Flags.Reserved5, toggle, false);
 
@@ -392,7 +509,7 @@ namespace Oxide.Plugins
             Controller commander = entity.gameObject.AddComponent<Controller>();
         }
        
-        private void StartSpectating(BasePlayer player, Controller controller)
+        private void StartSpectating(BasePlayer player, Controller controller, bool isOperator)
         {
             spectateFilter.SetValue(player, $"@123nofilter123");
             player.SetPlayerFlag(BasePlayer.PlayerFlags.Spectating, true);
@@ -401,15 +518,26 @@ namespace Oxide.Plugins
             player.CancelInvoke("InventoryUpdate");
             player.SendNetworkUpdateImmediate();
 
-            NextTick(() =>
+            timer.In(1.5f, () =>
             {
                 player.transform.position = controller.transform.position;
                 player.SetParent(controller.entity, 0);
                 player.Command("client.camoffset", new object[] { new Vector3(0, 3.5f, 0) });
+
                 SendReply(player, string.Format(msg("leave_help", player.UserIDString), configData.Buttons.Enter));
+
+                if (isOperator)
+                {
+                    controller.enabled = true;
+                    SendReply(player, string.Format(msg("boost_help", player.UserIDString), configData.Buttons.Boost));                    
+                }
+                else controller.SetPassengerActive(player);                
+
+                if (configData.Inventory.Enabled)
+                    SendReply(player, string.Format(msg("inv_help", player.UserIDString), configData.Buttons.Inventory));
             });  
         }
-        private void EndSpectating(BasePlayer player, Controller commander)
+        private void EndSpectating(BasePlayer player, Controller commander, bool isOperator)
         {
             spectateFilter.SetValue(player, string.Empty);
             player.SetParent(null);
@@ -419,7 +547,33 @@ namespace Oxide.Plugins
             player.InvokeRepeating("InventoryUpdate", 1f, 0.1f * UnityEngine.Random.Range(0.99f, 1.01f));
             player.Command("client.camoffset", new object[] { new Vector3(0, 1.2f, 0) });
             player.transform.position = commander.transform.position + Vector3.up + (commander.transform.right * 3);
-            commanders.Remove(player.userID);
+
+            if (isOperator)
+                commanders.Remove(player.userID);
+        }
+        #endregion
+
+        #region Friends
+        private bool AreFriends(ulong playerId, ulong friendId)
+        {
+            if (Friends && configData.Passengers.UseFriends)
+                return (bool)Friends?.Call("AreFriendsS", playerId.ToString(), friendId.ToString());
+            return true;
+        }
+        private bool IsClanmate(ulong playerId, ulong friendId)
+        {
+            if (Clans && configData.Passengers.UseClans)
+            {
+                object playerTag = Clans?.Call("GetClanOf", playerId);
+                object friendTag = Clans?.Call("GetClanOf", friendId);
+                if (playerTag is string && friendTag is string)
+                {
+                    if (!string.IsNullOrEmpty((string)playerTag) && !string.IsNullOrEmpty((string)friendTag) && (playerTag == friendTag))
+                        return true;
+                }
+                return false;
+            }
+            return true;
         }
         #endregion
 
@@ -433,7 +587,10 @@ namespace Oxide.Plugins
             public ButtonConfiguration Buttons { get; set; }
             [JsonProperty(PropertyName = "Crushable Types")]
             public CrushableTypes Crushables { get; set; }
-
+            [JsonProperty(PropertyName = "Passenger Options")]
+            public PassengerOptions Passengers { get; set; }
+            [JsonProperty(PropertyName = "Inventory Options")]
+            public InventoryOptions Inventory { get; set; }
 
             public class CrushableTypes
             {
@@ -454,6 +611,10 @@ namespace Oxide.Plugins
                 public string Enter { get; set; }
                 [JsonProperty(PropertyName = "Toggle light")]
                 public string Lights { get; set; }
+                [JsonProperty(PropertyName = "Open inventory")]
+                public string Inventory { get; set; }
+                [JsonProperty(PropertyName = "Speed boost")]
+                public string Boost { get; set; }
             }
             public class MovementSettings
             {
@@ -465,6 +626,26 @@ namespace Oxide.Plugins
                 public float BrakeTorque { get; set; }
                 [JsonProperty(PropertyName = "Time to reach maximum acceleration (seconds)")]
                 public float Acceleration { get; set; }
+                [JsonProperty(PropertyName = "Boost torque (nm)")]
+                public float BoostTorque { get; set; }
+            }
+            public class PassengerOptions
+            {
+                [JsonProperty(PropertyName = "Allow passengers")]
+                public bool Enabled { get; set; }
+                [JsonProperty(PropertyName = "Maximum passengers per tank")]
+                public int Max { get; set; }
+                [JsonProperty(PropertyName = "Require passenger to be a friend (FriendsAPI)")]
+                public bool UseFriends { get; set; }
+                [JsonProperty(PropertyName = "Require passenger to be a clan mate (Clans)")]
+                public bool UseClans { get; set; }
+            }
+            public class InventoryOptions
+            {
+                [JsonProperty(PropertyName = "Enable inventory system")]
+                public bool Enabled { get; set; }
+                [JsonProperty(PropertyName = "Inventory size (max 36)")]
+                public int Size { get; set; }
             }
         }
         private void LoadVariables()
@@ -479,7 +660,9 @@ namespace Oxide.Plugins
                 Buttons = new ConfigData.ButtonConfiguration
                 {
                     Enter = "USE",
-                    Lights = "RELOAD"
+                    Lights = "RELOAD",
+                    Inventory = "RELOAD",
+                    Boost = "SPRINT"
                 },
                 Crushables = new ConfigData.CrushableTypes
                 {
@@ -494,7 +677,20 @@ namespace Oxide.Plugins
                     Acceleration = 3f,
                     BrakeTorque = 50f,
                     ForwardTorque = 2000f,
-                    TurnTorque = 1000f
+                    TurnTorque = 1000f,
+                    BoostTorque = 600f
+                },
+                Passengers = new ConfigData.PassengerOptions
+                {
+                    Enabled = true,
+                    Max = 4,
+                    UseClans = true,
+                    UseFriends = true
+                },
+                Inventory = new ConfigData.InventoryOptions
+                {
+                    Enabled = true,
+                    Size = 36
                 }
             };
             SaveConfig(config);
@@ -508,7 +704,12 @@ namespace Oxide.Plugins
 
         Dictionary<string, string> Messages = new Dictionary<string, string>
         {
-            ["leave_help"] = "You can exit the tank by pressing the \"{0}\" key"
+            ["leave_help"] = "You can exit the tank by pressing the \"{0}\" key",
+            ["in_use"] = "This tank is already in use",
+            ["not_friend"] = "You must be a friend or clanmate with the operator",
+            ["passenger_enter"] = "You have entered the tank as a passenger",
+            ["boost_help"] = "Hold \"{0}\" to use boost",
+            ["inv_help"] = "You can access this vehicles inventory from the outside by pressing the \"{0}\" key when there is no operator."
         };
         #endregion
     }
