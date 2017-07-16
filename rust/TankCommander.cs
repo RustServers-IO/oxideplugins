@@ -9,7 +9,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("TankCommander", "k1lly0u", "0.1.22", ResourceId = 2560)]
+    [Info("TankCommander", "k1lly0u", "0.1.24", ResourceId = 2560)]
     class TankCommander : RustPlugin
     {
         #region Fields
@@ -71,6 +71,12 @@ namespace Oxide.Plugins
             
             if (input.WasJustPressed(controlButtons[CommandType.EnterExit]))
             {
+                if (player.IsFlying)
+                {
+                    SendReply(player, msg("is_flying", player.UserIDString));
+                    return;
+                }
+
                 RaycastHit hit;
                 if (Physics.SphereCast(player.eyes.position, 0.5f, Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward, out hit, 3f))
                 {                    
@@ -309,8 +315,8 @@ namespace Oxide.Plugins
                 {                    
                     var triggerPlayer = col.gameObject.GetComponentInParent<BasePlayer>();
                     if (triggerPlayer != null && triggerPlayer != player && !passengers.Contains(triggerPlayer) && !enteringPassengers.Contains(triggerPlayer.userID))
-                    {                        
-                        player.Die(new HitInfo(player, triggerPlayer, DamageType.Blunt, 200f));
+                    {
+                        triggerPlayer.Die(new HitInfo(player, triggerPlayer, DamageType.Blunt, 200f));
                         return;
                     }                    
                 }
@@ -555,22 +561,47 @@ namespace Oxide.Plugins
         [ConsoleCommand("spawntank")]
         void ccmdSpawnTank(ConsoleSystem.Arg arg)
         {
-            if (arg.Connection != null)
+            if (arg.Connection != null || arg.Args == null)
                 return;
 
-            BasePlayer player = covalence.Players.Connected.FirstOrDefault(x => x.Id == arg.GetString(0))?.Object as BasePlayer;
-            if (player != null)
+            if (arg.Args.Length == 1)
             {
-                Vector3 position = player.transform.position + (player.transform.forward * 3) + Vector3.up;
+                BasePlayer player = covalence.Players.Connected.FirstOrDefault(x => x.Id == arg.GetString(0))?.Object as BasePlayer;
+                if (player != null)
+                {
+                    Vector3 position = player.transform.position + (player.transform.forward * 3) + Vector3.up;
 
-                RaycastHit hit;
-                if (Physics.SphereCast(player.eyes.position, 0.5f, Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward, out hit, 20f))
-                    position = hit.point;
+                    RaycastHit hit;
+                    if (Physics.SphereCast(player.eyes.position, 0.5f, Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward, out hit, 20f))
+                        position = hit.point;
 
-                BaseEntity entity = GameManager.server.CreateEntity(tankPrefab, position);
-                entity.Spawn();
+                    BaseEntity entity = GameManager.server.CreateEntity(tankPrefab, position);
+                    entity.Spawn();
 
-                Controller commander = entity.gameObject.AddComponent<Controller>();
+                    Controller commander = entity.gameObject.AddComponent<Controller>();
+                }
+                return;
+            }
+            if (arg.Args.Length == 3)
+            {
+                float x;
+                float y;
+                float z;
+
+                if (float.TryParse(arg.GetString(0), out x))
+                {
+                    if (float.TryParse(arg.GetString(1), out y))
+                    {
+                        if (float.TryParse(arg.GetString(2), out z))
+                        {
+                            BaseEntity entity = GameManager.server.CreateEntity(tankPrefab, new Vector3(x, y, z));
+                            entity.Spawn();
+                            Controller commander = entity.gameObject.AddComponent<Controller>();
+                            return;
+                        }
+                    }
+                }
+                PrintError($"Invalid arguments supplied to spawn a tank at position : (x = {arg.GetString(0)}, y = {arg.GetString(1)}, z = {arg.GetString(2)})");
             }
         }
         #endregion
@@ -726,12 +757,13 @@ namespace Oxide.Plugins
 
         Dictionary<string, string> Messages = new Dictionary<string, string>
         {
-            ["leave_help"] = "You can exit the tank by pressing the \"{0}\" key",
-            ["in_use"] = "This tank is already in use",
-            ["not_friend"] = "You must be a friend or clanmate with the operator",
-            ["passenger_enter"] = "You have entered the tank as a passenger",
-            ["boost_help"] = "Hold \"{0}\" to use boost",
-            ["inv_help"] = "You can access this vehicles inventory from the outside by pressing the \"{0}\" key when there is no operator."
+            ["leave_help"] = "<color=#D3D3D3>You can exit the tank by pressing </color><color=#ce422b>{0}</color>",
+            ["is_flying"] = "<color=#D3D3D3>You can not enter the tank when you are flying</color>",
+            ["in_use"] = "<color=#D3D3D3>This tank is already in use</color>",
+            ["not_friend"] = "<color=#D3D3D3>You must be a friend or clanmate with the operator</color>",
+            ["passenger_enter"] = "<color=#D3D3D3>You have entered the tank as a passenger</color>",
+            ["boost_help"] = "<color=#D3D3D3>Hold </color><color=#ce422b>{0}</color><color=#D3D3D3> to use boost</color>",
+            ["inv_help"] = "<color=#D3D3D3>You can access this vehicles inventory from the outside by pressing the </color><color=#ce422b>{0}</color><color=#D3D3D3> key when there is no operator.</color>"
         };
         #endregion
     }
