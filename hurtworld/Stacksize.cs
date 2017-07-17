@@ -6,7 +6,7 @@ using Assets.Scripts.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("Stacksize", "Noviets", "1.1.3")]
+	[Info("Stacksize", "Noviets", "1.2.1", ResourceId = 1666)]
 	[Description("Stacksize")]
 
 	class Stacksize : HurtworldPlugin
@@ -32,6 +32,7 @@ namespace Oxide.Plugins
 			GIM.GetItem(128).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(128) as IItem, (int)Config["Spears"], null);
 			GIM.GetItem(144).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(144) as IItem, (int)Config["C4"], null);
 			GIM.GetItem(155).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(155) as IItem, (int)Config["Dynamite"], null);
+			GIM.GetItem(162).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(162) as IItem, (int)Config["CarPanels"], null);
 			GIM.GetItem(166).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(166) as IItem, (int)Config["Wheels"], null);
 			GIM.GetItem(167).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(167) as IItem, (int)Config["Wheels"], null);
 			GIM.GetItem(171).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(171) as IItem, (int)Config["CarParts"], null);
@@ -46,6 +47,12 @@ namespace Oxide.Plugins
 			GIM.GetItem(182).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(182) as IItem, (int)Config["Designs"], null);
 			GIM.GetItem(183).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(183) as IItem, (int)Config["Designs"], null);
 			GIM.GetItem(184).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(184) as IItem, (int)Config["Wheels"], null);
+			GIM.GetItem(185).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(185) as IItem, (int)Config["GoatPanels"], null);
+			GIM.GetItem(186).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(186) as IItem, (int)Config["GoatPanels"], null);
+			GIM.GetItem(187).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(187) as IItem, (int)Config["GoatPanels"], null);
+			GIM.GetItem(188).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(188) as IItem, (int)Config["GoatPanels"], null);
+			GIM.GetItem(189).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(189) as IItem, (int)Config["GoatPanels"], null);
+			GIM.GetItem(190).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(190) as IItem, (int)Config["GoatPanels"], null);
 			GIM.GetItem(192).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(192) as IItem, (int)Config["Wheels"], null);
 			GIM.GetItem(193).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(193) as IItem, (int)Config["CarPanels"], null);
 			GIM.GetItem(194).GetType().BaseType.GetProperty("MaxStackSize").SetValue(GIM.GetItem(194) as IItem, (int)Config["CarPanels"], null);
@@ -158,6 +165,7 @@ namespace Oxide.Plugins
 			if(Config["PoisonTrap"] == null) Config.Set("PoisonTrap", 1);
 			if(Config["CarParts"] == null) Config.Set("CarParts", 1);
 			if(Config["CarPanels"] == null) Config.Set("CarPanels", 1);
+			if(Config["GoatPanels"] == null) Config.Set("GoatPanels", 1);
 			if(Config["Wheels"] == null) Config.Set("Wheels", 1);
 			if(Config["Designs"] == null) Config.Set("Designs", 1);
 			if(Config["Drills"] == null) Config.Set("Drills", 1);

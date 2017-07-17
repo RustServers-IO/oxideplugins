@@ -7,14 +7,14 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("LootChests", "Noviets", "1.2.5")]
+    [Info("LootChests", "Noviets", "1.3.1", ResourceId = 1672)]
     [Description("Spawns Storage Chests with loot around the map")]
 
     class LootChests : HurtworldPlugin
     {
 		Dictionary<int, int> ItemList = new Dictionary<int, int>();
 		DateTime nextspawn = new DateTime();
-		Dictionary<uLink.NetworkView, Vector3> ChestList = new Dictionary<uLink.NetworkView, Vector3>();
+		List<uLink.NetworkView> ChestList = new List<uLink.NetworkView>();
 		GlobalItemManager GIM = Singleton<GlobalItemManager>.Instance;
 		void Loaded()
 		{
@@ -26,7 +26,6 @@ namespace Oxide.Plugins
 		void SaveItemList()
 		{
 			Interface.GetMod().DataFileSystem.WriteObject("LootChests/ItemList", ItemList);
-			Interface.GetMod().DataFileSystem.WriteObject("LootChests/ChestList", ChestList);
 		}
 		void LoadDefaultMessages()
         {
@@ -189,7 +188,6 @@ namespace Oxide.Plugins
 					int iPC = Convert.ToInt32(Config["ItemsPerChest"]);
 					foreach(string Loc in LocList)
 					{
-						Puts("Locs: "+LocList.Count());
 						int i=0;
 						int fail = 0;
 						string[] XYZ = Loc.ToString().Split(',');
@@ -198,7 +196,6 @@ namespace Oxide.Plugins
 						{
 							if(fail > count*3){ Puts(Msg("SpawnFail"));return;}
 							Vector3 randposition = new Vector3((position.x + UnityEngine.Random.Range(-radius, radius)), (position.y+450f), (position.z + UnityEngine.Random.Range(-radius, radius)));
-							Puts(randposition.ToString());
 							RaycastHit hitInfo;
 							if (Physics.Raycast(randposition, Vector3.down, out hitInfo))
 							{
@@ -213,6 +210,7 @@ namespace Oxide.Plugins
 										if(inv.Capacity < iPC)
 											inv.ChangeCapacity(iPC);
 										uLink.NetworkView nwv = uLink.NetworkView.Get(Obj);
+										ChestList.Add(nwv);
 										inv.DestroyOnEmpty = ((bool)Config["DestroyOnEmpty"]);
 										GiveItems(inv);
 										Destroy(nwv);
@@ -259,12 +257,24 @@ namespace Oxide.Plugins
 				}
 			}
 		}
+		void Unload()
+		{
+			Puts("Cleaning up spawned objects...");
+			foreach(uLink.NetworkView nwv in ChestList)
+			{
+				Singleton<HNetworkManager>.Instance.NetDestroy(nwv);
+			}
+			Puts("Done");
+		}
 		void Destroy(uLink.NetworkView nwv)
 		{
 			timer.Once(Convert.ToSingle(Config["SecondsTillDestroy"]), () =>
 			{
 				if(nwv != null)
+				{
+					ChestList.Remove(nwv);
 					Singleton<HNetworkManager>.Instance.NetDestroy(nwv);
+				}
 			});
 		}
 	}
