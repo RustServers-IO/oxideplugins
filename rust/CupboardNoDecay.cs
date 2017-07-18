@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("CupboardNoDecay", "Dubz", "1.0.3", ResourceId = 2341)]
+    [Info("CupboardNoDecay", "Dubz", "1.0.4", ResourceId = 2341)]
     [Description("Decay items without build priv")]
     public class CupboardNoDecay : RustPlugin
     {
@@ -28,15 +28,15 @@ namespace Oxide.Plugins
 			if (CupboardPrivlidge(entity.transform.position))
 			{
 				multiplier = 0.0f;
-				var block = entity as BuildingBlock;
-				if (block != null){
-					switch (block.grade)
-					{
-						case BuildingGrade.Enum.Twigs:
-							multiplier = 1.0f;
-							break;
-					};
-				}
+				//var block = entity as BuildingBlock;
+				//if (block != null){
+				//	switch (block.grade)
+				//	{
+				//		case BuildingGrade.Enum.Twigs:
+				//			multiplier = 1.0f;
+				//			break;
+				//	};
+				//}
 			}
 			
 			hitInfo.damageTypes.Scale(Rust.DamageType.Decay, multiplier);
@@ -67,7 +67,10 @@ namespace Oxide.Plugins
 								}
 							}
 						}
+						return false;
 					}
+					
+					return true;
                 }
             }
 		    return false;
