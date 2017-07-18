@@ -4,14 +4,18 @@ using System.Linq;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Configuration;
+using Oxide.Core.Plugins;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underworld", "nivex", "0.1.5", ResourceId = 25895)]
+    [Info("Underworld", "nivex", "0.1.6", ResourceId = 25895)]
     [Description("Teleports admins/developer under the world when they disconnect.")]
     public class Underworld : RustPlugin
 	{
+        [PluginReference]
+        Plugin Vanish;
+
         StoredData storedData = new StoredData();
         DynamicConfigFile dataFile;
 
@@ -182,6 +186,11 @@ namespace Oxide.Plugins
 
                 if (user.AutoNoClip)
                     player.SendConsoleCommand("noclip");
+
+                if (autoVanish)
+                {
+                    Vanish?.Call("Disappear", player);
+                }
             }
         }
 
@@ -210,6 +219,17 @@ namespace Oxide.Plugins
 
                     user.Items.Clear();
                     SaveData();
+                }
+
+                if (autoVanish)
+                {
+                    timer.Once(2f, () =>
+                    {
+                        if (!player)
+                            return;
+
+                        Vanish?.Call("VanishGui", player);
+                    });
                 }
             }
 		}
@@ -490,6 +510,7 @@ namespace Oxide.Plugins
         Vector3 defaultPos;
         bool allowSaveInventory;
         bool maxHHT;
+        bool autoVanish;
         List<string> Blacklist = new List<string>();
 
         List<object> DefaultBlacklist
@@ -533,6 +554,7 @@ namespace Oxide.Plugins
             defaultPos = GetConfig("Settings", "Default Teleport To Position On Disconnect", "(0, 0, 0)").ToString().ToVector3();            
             allowSaveInventory = Convert.ToBoolean(GetConfig("Settings", "Allow Save And Strip Admin Inventory On Disconnect", true));
             Blacklist = (GetConfig("Settings", "Blacklist", DefaultBlacklist) as List<object>).Where(o => o != null && o.ToString().Length > 0).Cast<string>().ToList();
+            autoVanish = Convert.ToBoolean(GetConfig("Settings", "Auto Vanish On Connect", true));
         }
 
         protected override void LoadDefaultConfig()

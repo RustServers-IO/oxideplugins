@@ -2,8 +2,11 @@
     "name": "Underworld",
     "description": "Teleports admins\/developer under the world when they disconnect.",
     "author": "nivex",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "configuration": true,
+    "suggest": {
+        "Vanish": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/underworld.2518",
     "games": [
