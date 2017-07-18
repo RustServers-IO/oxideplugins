@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Spawns", "Reneb / k1lly0u", "2.0.34", ResourceId = 720)]
+    [Info("Spawns", "Reneb / k1lly0u", "2.0.35", ResourceId = 720)]
     class Spawns : RustPlugin
     {
         #region Fields
@@ -257,7 +257,10 @@ namespace Oxide.Plugins
                             int i = 1;
                             foreach (var point in SpawnCreation[player.userID])
                             {
-                                ShowSpawnPoint(player, point, i.ToString());
+                                float time = 10f;
+                                if (args.Length > 1)
+                                    float.TryParse(args[1], out time);
+                                ShowSpawnPoint(player, point, i.ToString(), time);
                                 i++;
                             }
                             return;
@@ -273,8 +276,8 @@ namespace Oxide.Plugins
         }
         void ShowSpawnPoint(BasePlayer player, Vector3 point, string name, float time = 10f)
         {
-            player.SendConsoleCommand("ddraw.text", 10f, Color.green, point + new Vector3(0, 1.5f, 0), $"<size=40>{name}</size>");
-            player.SendConsoleCommand("ddraw.box", 10f, Color.green, point, 1f);
+            player.SendConsoleCommand("ddraw.text", time, Color.green, point + new Vector3(0, 1.5f, 0), $"<size=40>{name}</size>");
+            player.SendConsoleCommand("ddraw.box", time, Color.green, point, 1f);
         }
         void SendHelp(BasePlayer player)
         {
@@ -412,7 +415,7 @@ namespace Oxide.Plugins
             {"remSyn", "/spawns remove <number> - Remove a spawn point" },
             {"saveSyn", "/spawns save <filename> - Saves your spawn file" },
             {"closeSyn", "/spawns close - Cancel spawn file creation" },
-            {"showSyn", "/spawns show - Display a box at each spawnpoint" },
+            {"showSyn", "/spawns show <opt:time> - Display a box at each spawnpoint" },
             {"noAccess", "You are not allowed to use this command" },
             {"saved", "{0} spawnpoints saved into {1}" },
             {"spawnfileExists", "A spawn file with that name already exists" },
