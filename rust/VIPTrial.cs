@@ -1,10 +1,10 @@
-﻿using Oxide.Core;
-using Oxide.Core.Libraries.Covalence;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
 namespace Oxide.Plugins
 {
-    [Info("VIP Trial", "Maik8", "1.1", ResourceId = 0)]
+    [Info("VIP Trial", "Maik8", "1.2", ResourceId = 2563)]
     [Description("Plugin that lets Users try VIP functions.")]
     public class VIPTrial : CovalencePlugin
     {
@@ -29,31 +29,31 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        player.Reply("Your VIP trial is still running!");
+                        Reply(player, "VIPStillRunning");
                     }
                 }
                 else if (checkPlayerForGroup(player))
                 {
-                    player.Reply("Your VIP trial is still running!");
+                    Reply(player, "VIPStillRunning");
                 }
                 else
                 {
-                    player.Reply("You have already used your VIP trial.");
+                    Reply(player, "VIPAlreadyUsed");
                 }
             }
             else
             {
-                player.Reply("You are not allowed to use this command!");
+                Reply(player, "NoPermission");
             }
         }
         #endregion
 
         #region Methods
         #region ServerHooks
-        void Loaded()
+        void Init()
         {
             permission.RegisterPermission("viptrial.allowed", this);
-            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("VIPTrial");
+            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Name);
             LoadDefaultConfig();
             checkGroup();
         }
@@ -65,26 +65,22 @@ namespace Oxide.Plugins
                 if (checkExpired(player))
                 {
                     permission.RemoveUserGroup(player.Id, groupName);
-                    player.Reply("Your VIP trial is expired.");
+                    Reply(player, "VIPExpired");
                 }
                 else
                 {
-                    player.Reply("Your VIP trial ends in {0} days.", getDaysLeft(player));
+                    Reply(player, "VIPEndsIn", getDaysLeft(player));
                 }
             }
         }
         #endregion
         void checkGroup()
         {
+            if (!permission.GroupExists(groupName))
+            {
                 permission.CreateGroup(groupName, string.Empty, 0);
-                if (permission.GroupExists(groupName))
-                {
-                    checkPerm(permlist, groupName);
-                }
-                else
-                {
-                    PrintWarning("Group is not there!");
-                } 
+            }               
+                checkPerm(permlist, groupName);
         }
         void checkPerm(List<object> perm, string group)
         {
@@ -132,8 +128,8 @@ namespace Oxide.Plugins
         {
             permission.AddUserGroup(player.Id, groupName);
             storedData.VIPDataHash.Add( new VIPDataSaveFile( player, DateTime.Now.AddDays( days) ) );
-            Interface.Oxide.DataFileSystem.WriteObject("viptrial", storedData);
-            player.Reply("Your VIP trial started, lasting till: {0}", DateTime.Now.Date.AddDays( days).ToShortDateString() );
+            Interface.Oxide.DataFileSystem.WriteObject(this.Name, storedData);
+            Reply(player, "VIPStarted", DateTime.Now.Date.AddDays( days).ToShortDateString() );
         }
 
         private bool checkPlayerForGroup(IPlayer player) => permission.UserHasGroup(player.Id, groupName);
@@ -170,6 +166,9 @@ namespace Oxide.Plugins
                 return false;
             }
         }
+
+        private void Reply(IPlayer player, string langKey, params object[] args) => player.Reply(lang.GetMessage(langKey, this, player.Id), args);
+
         #endregion
 
         #region Config
@@ -183,12 +182,24 @@ namespace Oxide.Plugins
             });
 
             SaveConfig();
-
-            Config.Remove("groupName");
-            Config.Remove("days");
-            Config.Remove("permlist");
         }
         T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
+
+
+        protected override void LoadDefaultMessages()
+        {
+            // English
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                { "VIPStillRunning", "Your VIP trial is still running!" },
+                { "VIPAlreadyUsed", "You have already used your VIP trial." },
+                { "NoPermission", "You are not allowed to use this command!" },
+                { "VIPExpired", "Your VIP trial is expired." },
+                { "VIPEndsIn", "Your VIP trial ends in {0} days." },
+                { "VIPStarted", "Your VIP trial started, lasting till: {0}" }
+            }, this);
+        }
+
         #endregion
 
         #region Classes

@@ -2,7 +2,7 @@
     "name": "VIP Trial",
     "description": "Allows you to set up a VIP trial group with a limited use-time",
     "author": "",
-    "version": "1.1",
+    "version": "1.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/vip-trial.2563",
