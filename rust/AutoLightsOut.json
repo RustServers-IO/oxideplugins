@@ -1,0 +1,16 @@
+{
+    "name": "AutoLightsOff",
+    "description": "Turns all lights out at night then allows user to turn them back on again.",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/autolightsoff.2561",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
