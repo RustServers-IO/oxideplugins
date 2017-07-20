@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Kits", "Reneb", "3.2.8", ResourceId = 668)]
+    [Info("Kits", "Reneb", "3.2.9", ResourceId = 668)]
     class Kits : RustPlugin
     {
         readonly int playerLayer = LayerMask.GetMask("Player (Server)");
@@ -102,7 +102,7 @@ namespace Oxide.Plugins
             }
             if (!config.ContainsKey("CopyPaste - Parameters"))
             {
-                config["CopyPaste - Parameters"] = new List<string> { "autoheight", "true", "blockcollision", "true", "deployables", "true", "inventories", "true" };
+                config["CopyPaste - Parameters"] = new List<string> { "deployables", "true", "inventories", "true" };
                 Config.WriteObject(config);
             }
             if (!config.ContainsKey("Custom AutoKits"))
@@ -342,35 +342,36 @@ namespace Oxide.Plugins
             if (PlayerGUI.ContainsKey(player.userID) && PlayerGUI[player.userID].open)
                 RefreshKitPanel(player, PlayerGUI[player.userID].guiid, PlayerGUI[player.userID].page);
         }
-        object GiveKit(BasePlayer player, string kitname)
+
+        private object GiveKit(BasePlayer player, string kitname)
         {
             if (string.IsNullOrEmpty(kitname)) return GetMsg("Emptykitname", player.userID);
             kitname = kitname.ToLower();
             Kit kit;
             if (!storedData.Kits.TryGetValue(kitname, out kit)) return GetMsg("NoKitFound",player.userID);
 
-            foreach (KitItem kitem in kit.items)
+            foreach (var kitem in kit.items)
             {
-                if (kitem.weapon)
-                    GiveItem(player.inventory,BuildWeapon(kitem.itemid, kitem.skinid, kitem.mods), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
-                else GiveItem(player.inventory,BuildItem(kitem.itemid, kitem.amount,  kitem.skinid), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
+                GiveItem(player.inventory,
+                    kitem.weapon
+                        ? BuildWeapon(kitem.itemid, kitem.skinid, kitem.mods)
+                        : BuildItem(kitem.itemid, kitem.amount, kitem.skinid),
+                    kitem.container == "belt"
+                        ? player.inventory.containerBelt
+                        : kitem.container == "wear"
+                            ? player.inventory.containerWear
+                            : player.inventory.containerMain);
+            }
+            if (!string.IsNullOrEmpty(kit.building))
+            {
+                var success = CopyPaste?.CallHook("TryPasteFromSteamID", player.userID, kit.building, CopyPasteParameters.ToArray());
+                return success;
+            }
 
-            }
-            if (kit.building != null && kit.building != string.Empty)
-            {
-                var success = CopyPaste?.CallHook("TryPasteFromPlayer", player, kit.building, CopyPasteParameters.ToArray());
-                if (success is string)
-                {
-                    return success;
-                }
-                if (!(success is List<BaseEntity>))
-                {
-                    return GetMsg("PastingError",player.userID);
-                }
-            }
             if (KitLogging) LogToFile("received", $"{player.displayName}<{player.UserIDString}> - Received Kit: {kitname}", this);
             return true;
         }
+
         bool GiveItem(PlayerInventory inv, Item item, ItemContainer container = null)
         {
             if (item == null) { return false; }

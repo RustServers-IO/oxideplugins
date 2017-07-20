@@ -1,0 +1,16 @@
+{
+    "name": "",
+    "description": "",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/economic-system.2104",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}
