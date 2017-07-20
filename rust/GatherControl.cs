@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherControl", "CaseMan", "1.3.0", ResourceId = 2477)]
+    [Info("GatherControl", "CaseMan", "1.4.0", ResourceId = 2477)]
     [Description("Control gather rates by day and night with permissions")]
 
     class GatherControl : RustPlugin
@@ -37,17 +37,42 @@ namespace Oxide.Plugins
         {
 			public float DayRateMultQuarry;
 			public float DayRateMultPickup;
-            public float DayRateMultResource;  
+            public float DayRateMultResource;
+			public float DayRateMultResourceBonus;
+			public float DayRateMultResourceHQM;
 			public float DayRateMultCropGather;
 			public float NightRateMultQuarry;
 			public float NightRateMultPickup;            
             public float NightRateMultResource;
+			public float NightRateMultResourceBonus;
+			public float NightRateMultResourceHQM;
 			public float NightRateMultCropGather;
 			public string PermGroup;
 			public PermGroups(){}
         }
 		
-		PermData permData;			
+		PermData permData;
+		
+		sealed class FinishBonusClass : MonoBehaviour
+		{
+			public List<ItemAmount> finishBonus;
+			BasePlayer hitPlayer;
+						
+			public void OnHit(BasePlayer player)
+			{
+				hitPlayer = player;
+			}
+			
+			public void FinishBonusAssigned()
+			{							
+				foreach (var current in finishBonus)
+				{
+					var item = ItemManager.Create(current.itemDef, Mathf.CeilToInt(current.amount), 0uL);
+					GC.BonusMult(hitPlayer, item);
+					current.amount = (float)item.amount;
+				}
+			}
+		}		
 		#endregion
 		#region Initialization
 		void Init()
@@ -69,10 +94,14 @@ namespace Oxide.Plugins
                 def.DayRateMultQuarry = 2;
                 def.DayRateMultPickup = 2;
                 def.DayRateMultResource = 2;
+				def.DayRateMultResourceBonus = 2;
+				def.DayRateMultResourceHQM = 2;
 				def.DayRateMultCropGather = 2;
                 def.NightRateMultQuarry = 3;
                 def.NightRateMultPickup = 3;
                 def.NightRateMultResource = 3;
+				def.NightRateMultResourceBonus = 3;
+				def.NightRateMultResourceHQM = 3;
 				def.NightRateMultCropGather =3;
 				def.PermGroup = "gathercontrol.default";
 				permData.PermissionsGroups.Add(0, def);
@@ -123,15 +152,14 @@ namespace Oxide.Plugins
 				["NoGatherRate"] = "You do not have gather multipliers!",
 				["GatherRateInfoPlayer"] = "Player {0} have gather multipliers:",
 				["NoGatherRatePlayer"] = "Player {0} do not have gather multipliers!",
-				["DayRateResource"] = "Day resource gather multiplier",
-				["DayRatePickup"] = "Day pickup multiplier",
-				["DayRateQuarry"] = "Day multiplier of quarrying",
-				["DayRateCropGather"] = "Day multiplier for your crop gather",
-				["NightRateResource"] = "Night resource gather multiplier",
-				["NightRatePickup"] = "Night pickup multiplier",
-				["NightRateQuarry"] = "Night multiplier of quarrying",
-				["NightRateCropGather"] = "Night multiplier for your crop gather",
+				["RateResource"] = "Resource gather multiplier (day/night)",
+				["RateResourceBonus"] = "Resource gather multiplier for bonus from ore (day/night)",
+				["RateResourceHQM"] = "Resource gather multiplier for HQM from ore (day/night)",
+				["RatePickup"] = "Pickup multiplier (day/night)",
+				["RateQuarry"] = "Multiplier of quarrying (day/night)",
+				["RateCropGather"] = "Multiplier for your crop gather (day/night)",
 				["InvalidSyntax"] = "Invalid syntax! Use: showrate <name/ID>",
+				["NoPlayer"] = "Player not found!",
             }, this);
 			lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -141,15 +169,14 @@ namespace Oxide.Plugins
 				["NoGatherRate"] = "У вас нет множителей добычи!",
 				["GatherRateInfoPlayer"] = "У игрока {0} есть следующие множители:",
 				["NoGatherRatePlayer"] = "У игрока {0} нет множителей добычи!",
-				["DayRateResource"] = "Дневной множитель добычи ресурсов",
-				["DayRatePickup"] = "Дневной множитель поднятия предметов",
-				["DayRateQuarry"] = "Дневной множитель добычи карьеров",
-				["DayRateCropGather"] = "Дневной множитель сбора своего урожая",
-				["NightRateResource"] = "Ночной множитель добычи ресурсов",
-				["NightRatePickup"] = "Ночной множитель поднятия предметов",
-				["NightRateQuarry"] = "Ночной множитель добычи карьеров",
-				["NightRateCropGather"] = "Ночной множитель сбора своего урожая",
+				["RateResource"] = "Множитель добычи ресурсов (день/ночь)",
+				["RateResourceBonus"] = "Множитель добычи бонуса из руды (день/ночь)",
+				["RateResourceHQM"] = "Множитель добычи МВК из руды (день/ночь)",
+				["RatePickup"] = "Множитель поднятия предметов (день/ночь)",
+				["RateQuarry"] = "Множитель добычи карьеров (день/ночь)",
+				["RateCropGather"] = "Множитель сбора своего урожая (день/ночь)",
 				["InvalidSyntax"] = "Неправильный синтаксис. Используйте: showrate <имя/ID>",
+				["NoPlayer"] = "Игрок не найден!",
             }, this, "ru");
         }
         #endregion
@@ -200,36 +227,27 @@ namespace Oxide.Plugins
 				dispenser.gameObject.AddComponent<FinishBonusClass>().finishBonus = dispenser.finishBonus;
 			if(gr >= 0) GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResource, permData.PermissionsGroups[gr].NightRateMultResource);			
         }		
-		sealed class FinishBonusClass : MonoBehaviour
-		{
-			public List<ItemAmount> finishBonus;
-			BasePlayer hitPlayer;
-						
-			public void OnHit(BasePlayer player)
-			{
-				hitPlayer = player;
-			}
-			
-			public void FinishBonusAssigned()
-			{							
-				foreach (var current in finishBonus)
-				{
-					var item = ItemManager.Create(current.itemDef, Mathf.CeilToInt(current.amount), 0uL);
-					GC.BonusMult(hitPlayer, item);
-					current.amount = (float)item.amount;
-				}
-			}
-		}
 		void BonusMult(BasePlayer player, Item item)
 		{
-			int gr0 = CheckPlayerPerms(player);	
+			int gr0 = CheckPlayerPerms(player);
+			float bonrateday = 1;
+			float bonratenight = 1;
 			if(gr0 >= 0)
 			{
-				if(IsDay) item.amount = (int)(item.amount * permData.PermissionsGroups[gr0].DayRateMultResource); 
-				else item.amount = (int)(item.amount * permData.PermissionsGroups[gr0].NightRateMultResource); 
+				if(item.info.shortname=="hq.metal.ore")
+				{
+					bonrateday=permData.PermissionsGroups[gr0].DayRateMultResourceHQM;
+					bonratenight=permData.PermissionsGroups[gr0].NightRateMultResourceHQM;
+				}
+				else
+				{
+					bonrateday=permData.PermissionsGroups[gr0].DayRateMultResourceBonus;
+					bonratenight=permData.PermissionsGroups[gr0].NightRateMultResourceBonus;
+				}	
+				if(IsDay) item.amount = (int)(item.amount * bonrateday); 
+				else item.amount = (int)(item.amount * bonratenight); 
 			}		
-		}
-		
+		}		
 		void OnCollectiblePickup(Item item, BasePlayer player)
 		{
 			if(player == null) return;
@@ -339,7 +357,11 @@ namespace Oxide.Plugins
                 return;
             }
 			BasePlayer player = BasePlayer.Find(arg.Args[0]) ?? BasePlayer.FindSleeping(arg.Args[0]);
-			if(player == null) return;
+			if(player == null)
+			{
+				Puts(string.Format(lang.GetMessage("NoPlayer", this)));
+				return;
+			}	
 			int gr = CheckPlayerPerm(player, -1);
 			if(gr >= 0)	Puts(string.Format(lang.GetMessage("GatherRateInfoPlayer", this, player.UserIDString), player.displayName) + GatherInfo(player, gr));
 			else Puts(string.Format(lang.GetMessage("NoGatherRatePlayer", this), player.displayName));                  				          			
@@ -359,20 +381,22 @@ namespace Oxide.Plugins
 		{
 			string message = "";
 			{
-				message= string.Format("\n\r{0}: {8}\n\r{1}: {9}\n\r{2}: {10}\n\r{3}: {11}\n\r{4}: {12}\n\r{5}: {13}\n\r{6}: {14}\n\r{7}: {15}\n\r", 
-					lang.GetMessage("DayRateResource", this, player.UserIDString),
-					lang.GetMessage("DayRatePickup", this, player.UserIDString),
-					lang.GetMessage("DayRateQuarry", this, player.UserIDString),
-					lang.GetMessage("DayRateCropGather", this, player.UserIDString),
-					lang.GetMessage("NightRateResource", this, player.UserIDString),
-					lang.GetMessage("NightRatePickup", this, player.UserIDString),
-					lang.GetMessage("NightRateQuarry", this, player.UserIDString),
-					lang.GetMessage("NightRateCropGather", this, player.UserIDString),
+				message= string.Format("\n\r{0}: {6}/{12}\n\r{1}: {7}/{13}\n\r{2}: {8}/{14}\n\r{3}: {9}/{15}\n\r{4}: {10}/{16}\n\r{5}: {11}/{17}\n\r", 
+					lang.GetMessage("RateResource", this, player.UserIDString),
+					lang.GetMessage("RateResourceBonus", this, player.UserIDString),
+					lang.GetMessage("RateResourceHQM", this, player.UserIDString),
+					lang.GetMessage("RatePickup", this, player.UserIDString),
+					lang.GetMessage("RateQuarry", this, player.UserIDString),
+					lang.GetMessage("RateCropGather", this, player.UserIDString),	
 					permData.PermissionsGroups[gr].DayRateMultResource,
+					permData.PermissionsGroups[gr].DayRateMultResourceBonus,
+					permData.PermissionsGroups[gr].DayRateMultResourceHQM,
 					permData.PermissionsGroups[gr].DayRateMultPickup,
 					permData.PermissionsGroups[gr].DayRateMultQuarry,
-					permData.PermissionsGroups[gr].DayRateMultCropGather,
+					permData.PermissionsGroups[gr].DayRateMultCropGather,				
 					permData.PermissionsGroups[gr].NightRateMultResource,
+					permData.PermissionsGroups[gr].NightRateMultResourceBonus,
+					permData.PermissionsGroups[gr].NightRateMultResourceHQM,
 					permData.PermissionsGroups[gr].NightRateMultPickup,
 					permData.PermissionsGroups[gr].NightRateMultQuarry,
 					permData.PermissionsGroups[gr].NightRateMultCropGather
