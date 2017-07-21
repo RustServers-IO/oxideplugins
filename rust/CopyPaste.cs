@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.3.2", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.3.3", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
@@ -42,76 +42,76 @@ namespace Oxide.Plugins
 		
 		//Config
 		
-        private ConfigData config;
-		
-        class ConfigData
-        {
-            [JsonProperty(PropertyName = "Copy Options")]
-            public CopyOptions Copy { get; set; }
-			
-            [JsonProperty(PropertyName = "Paste Options")]
-            public PasteOptions Paste { get; set; }
-			
-            public class CopyOptions
-            {
-                [JsonProperty(PropertyName = "Buildings (true/false)")]
-                public bool Buildings { get; set; }
+		private ConfigData config;
 
-                [JsonProperty(PropertyName = "Deployables (true/false)")]
-                public bool Deployables { get; set; }
+		private class ConfigData
+		{
+			[JsonProperty(PropertyName = "Copy Options")]
+			public CopyOptions Copy { get; set; }
 
-                [JsonProperty(PropertyName = "Inventories (true/false)")]
-                public bool Inventories { get; set; }
+			[JsonProperty(PropertyName = "Paste Options")]
+			public PasteOptions Paste { get; set; }
 
-                [JsonProperty(PropertyName = "Share (true/false)")]
-                public bool Share { get; set; }
-				
-                [JsonProperty(PropertyName = "Tree (true/false)")]
-                public bool Tree { get; set; }				
-            }
-			
-            public class PasteOptions
-            {
-                [JsonProperty(PropertyName = "Auth (true/false)")]
-                public bool Auth { get; set; }
-				
-                [JsonProperty(PropertyName = "Deployables (true/false)")]
-                public bool Deployables { get; set; }
-				
-                [JsonProperty(PropertyName = "Inventories (true/false)")]
-                public bool Inventories { get; set; }
-            }			
-        }
-		
-        private void LoadVariables()
-        {
-            config = Config.ReadObject<ConfigData>();
-			
-            SaveConfig();
-        }
-		
-        protected override void LoadDefaultConfig()
-        {
-            var configData = new ConfigData
-            {
-                Copy = new ConfigData.CopyOptions
-                {
-                    Buildings = true,
-                    Deployables = true,
-                    Inventories = true,
-                    Share = false,
+			public class CopyOptions
+			{
+				[JsonProperty(PropertyName = "Buildings (true/false)")]
+				public bool Buildings { get; set; }
+
+				[JsonProperty(PropertyName = "Deployables (true/false)")]
+				public bool Deployables { get; set; }
+
+				[JsonProperty(PropertyName = "Inventories (true/false)")]
+				public bool Inventories { get; set; }
+
+				[JsonProperty(PropertyName = "Share (true/false)")]
+				public bool Share { get; set; }
+
+				[JsonProperty(PropertyName = "Tree (true/false)")]
+				public bool Tree { get; set; }				
+			}
+
+			public class PasteOptions
+			{
+				[JsonProperty(PropertyName = "Auth (true/false)")]
+				public bool Auth { get; set; }
+
+				[JsonProperty(PropertyName = "Deployables (true/false)")]
+				public bool Deployables { get; set; }
+
+				[JsonProperty(PropertyName = "Inventories (true/false)")]
+				public bool Inventories { get; set; }
+			}			
+		}
+
+		private void LoadVariables()
+		{
+			config = Config.ReadObject<ConfigData>();
+
+			SaveConfig();
+		}
+
+		protected override void LoadDefaultConfig()
+		{
+			var configData = new ConfigData
+			{
+				Copy = new ConfigData.CopyOptions
+				{
+					Buildings = true,
+					Deployables = true,
+					Inventories = true,
+					Share = false,
 					Tree = false
-                },
-                Paste = new ConfigData.PasteOptions
-                {
-                    Auth = false,
-                    Deployables = true,
-                    Inventories = true
-                }
-            };
-			
-            Config.WriteObject(configData, true);
-        }
+				},
+				Paste = new ConfigData.PasteOptions
+				{
+					Auth = false,
+					Deployables = true,
+					Inventories = true
+				}
+			};
+
+			Config.WriteObject(configData, true);
+		}
 		
 		//Hooks
 
@@ -554,8 +554,11 @@ namespace Oxide.Plugins
 					entity.transform.rotation = rot;
 					
 					if(player != null)
+					{
 						entity.SendMessage("SetDeployedBy", player, SendMessageOptions.DontRequireReceiver);
-
+						entity.OwnerID = player.userID;
+					}
+					
 					var buildingblock = entity.GetComponentInParent<BuildingBlock>();
 					
 					if(buildingblock != null)
@@ -1174,8 +1177,8 @@ namespace Oxide.Plugins
 				{"ru", "Постройка успешно вставлена"},
 			}},		
 			{"SYNTAX_COPY", new Dictionary<string, string>() {
-				{"en", "Syntax: /copy <Target Filename> <options values>\n radius XX (default 3)\n mechanics proximity/building (default building)\nbuilding true/false (saves structures or not)\ndeployables true/false (saves deployables or not)\ninventories true/false (saves inventories or not)"},
-				{"ru", "Синтаксис: /copy <Название Объекта> <опция значение>\n radius XX (default 3)\n mechanics proximity/building (по умолчанию building)\nbuilding true/false (сохранять постройку или нет)\ndeployables true/false (сохранять предметы или нет)\ninventories true/false (сохранять инвентарь или нет)"},
+				{"en", "Syntax: /copy <Target Filename> <options values>\n radius XX (default 3)\n method proximity/building (default proximity)\nbuilding true/false (saves structures or not)\ndeployables true/false (saves deployables or not)\ninventories true/false (saves inventories or not)"},
+				{"ru", "Синтаксис: /copy <Название Объекта> <опция значение>\n radius XX (default 3)\n method proximity/building (по умолчанию proximity)\nbuilding true/false (сохранять постройку или нет)\ndeployables true/false (сохранять предметы или нет)\ninventories true/false (сохранять инвентарь или нет)"},
 			}},		
 			{"NO_ENTITY_RAY", new Dictionary<string, string>() {
 				{"en", "Couldn't ray something valid in front of you"},

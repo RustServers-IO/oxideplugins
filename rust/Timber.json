@@ -1,0 +1,16 @@
+{
+    "name": "Timber",
+    "description": "Makes trees and cacti fall before being destroyed.",
+    "author": "",
+    "version": "0.1.6",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/timber.2565",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

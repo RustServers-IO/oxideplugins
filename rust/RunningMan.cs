@@ -9,11 +9,13 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.1.8")]
-    [Description("Running Man")]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.3.0")]
+    [Description("Running Man is a short plugin where you have to kill the runner.")]
     class RunningMan : RustPlugin
     {
+        private Timer stillRunnerTimer;
         private Command command = Interface.Oxide.GetLibrary<Command>();
+        private Dictionary<string, int> SavedReward = new Dictionary<string, int>();
         private BasePlayer runningman;
         private Timer eventstart;
         private Timer eventpause;
@@ -66,6 +68,7 @@ namespace Oxide.Plugins
                 eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
             }
+            LoadSavedData();
         }
 
         protected override void LoadDefaultConfig()
@@ -76,47 +79,37 @@ namespace Oxide.Plugins
             SetConfig("Default", "Count", 2);
             SetConfig("Default", "StarteventTime", 30);
             SetConfig("Default", "PauseeventTime", 30);
+            SetConfig("Default", "DisconnectPendingTimer", 30);
             SetConfig("Config", "Reward", "Random", "true");
             SetConfig("Config", "Reward", "RewardFixing", "wood");
             SetConfig("Config", "Reward", "RewardFixingAmount", 10000);
-            SetConfig("Config", "Reward", "Reward1", "wood");
-            SetConfig("Config", "Reward", "Reward1Amount", 50000);
-            SetConfig("Config", "Reward", "Reward2", "stones");
-            SetConfig("Config", "Reward", "Reward2Amount", 50000);
-            SetConfig("Config", "Reward", "Reward3", "metal.ore");
-            SetConfig("Config", "Reward", "Reward3Amount", 15000);
-            SetConfig("Config", "Reward", "Reward4", "sulfur.ore");
-            SetConfig("Config", "Reward", "Reward4Amount", 15000);
-            SetConfig("Config", "Reward", "Reward5", "smg.2");
-            SetConfig("Config", "Reward", "Reward5Amount", 1);
-            SetConfig("Config", "Reward", "Reward5_2", "ammo.pistol.hv");
-            SetConfig("Config", "Reward", "Reward5_2Amount", 150);
-            SetConfig("Config", "Reward", "RewardMoney", 50000);
-            SetConfig("Config", "Reward", "Reward6", "wood");
-            SetConfig("Config", "Reward", "Reward6Amount", 50000);
-            SetConfig("Config", "Reward", "Reward7", "rocket.launcher");
-            SetConfig("Config", "Reward", "Reward7Amount", 1);
-            SetConfig("Config", "Reward", "Reward7_2", "ammo.rocket.hv");
-            SetConfig("Config", "Reward", "Reward7_2Amount", 3);
-            SetConfig("Config", "Reward", "Reward8", "rifle.bolt");
-            SetConfig("Config", "Reward", "Reward8Amount", 1);
-            SetConfig("Config", "Reward", "Reward8_2", "ammo.rifle.hv");
-            SetConfig("Config", "Reward", "Reward8_2Amount", 50);
-            SetConfig("Config", "Reward", "Reward9", "rifle.ak");
-            SetConfig("Config", "Reward", "Reward9Amount", 1);
-            SetConfig("Config", "Reward", "Reward9_2", "ammo.rifle.hv");
-            SetConfig("Config", "Reward", "Reward9_2Amount", 120);
-            SetConfig("Config", "Reward", "Reward10", "shotgun.pump");
-            SetConfig("Config", "Reward", "Reward10Amount", 1);
-            SetConfig("Config", "Reward", "Reward10_2", "ammo.shotgun");
-            SetConfig("Config", "Reward", "Reward10_2Amount", 50);
-            SetConfig("Config", "Reward", "Reward11", "supply.signal");
-            SetConfig("Config", "Reward", "Reward11Amount", 3);
-            SetConfig("Config", "Reward", "Reward12", "explosive.timed");
-            SetConfig("Config", "Reward", "Reward12Amount", 1);
             SetConfig("Config", "Reward", "KarmaSystem", "PointToRemove", 0);
             SetConfig("Config", "Reward", "KarmaSystem", "PointToAdd", 1);
             SaveConfig();
+        }
+
+        void LoadSavedData()
+        {
+            try
+            {
+                SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, int>>(nameof(RunningMan));
+            }
+            catch (Exception)
+            {
+                SavedReward = new Dictionary<string, int>
+                {
+                    {"Karma", 1},
+                    {"wood", 10000},
+                    {"stones", 10000},
+                    {"metal.ore", 15000},
+                    {"sulfur.ore", 15000},
+                    {"smg.2", 1},
+                    {"ammo.pistol.hv", 150},
+                    {"rocket.launcher", 1},
+                    {"money", 10000}
+                };
+                PrintWarning("Failed to load data file, generating a new one...");
+            }
         }
 
         void Unload()
@@ -130,8 +123,8 @@ namespace Oxide.Plugins
 
         void Reload()
         {
-            eventpause.Destroy();
-            eventstart.Destroy();
+            eventpause?.Destroy();
+            eventstart?.Destroy();
             runningman = null;
             eventpause = null;
             eventstart = null;
@@ -143,14 +136,12 @@ namespace Oxide.Plugins
             {
                 eventpause.Destroy();
                 runningman = null;
-                eventpause = null;
                 Runlog("timer eventpause stopped");
             }
             if (eventstart != null)
             {
                 eventstart.Destroy();
                 runningman = null;
-                eventstart = null;
                 Runlog("timer eventstart stopped");
             }
             if (BasePlayer.activePlayerList != null && BasePlayer.activePlayerList.Count >= (int) Config["Default", "Count"])
@@ -170,6 +161,7 @@ namespace Oxide.Plugins
             else
             {
                 BroadcastChat((string) Config["Default", "ChatName"], "There aren't enough players to start the event");
+                eventpause?.Destroy();
                 eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
             }
@@ -184,121 +176,64 @@ namespace Oxide.Plugins
             var inv = runningman.inventory;
             if ((string) Config["Config", "Reward", "Random"] == "true")
             {
-                Runlog("random");
-                var rand = rnd.Next(1, 13);
-                switch (rand)
+                if (SavedReward == null)
                 {
-                    case 1:
-                        Runlog((string) Config["Config", "Reward", "Reward1"]);
-                        inv.GiveItem(
-                            ItemManager.CreateByName((string) Config["Config", "Reward", "Reward1"],
-                                (int) Config["Config", "Reward", "Reward1Amount"]), inv.containerMain);
-                        break;
-                    case 2:
-                        Runlog((string) Config["Config", "Reward", "Reward2"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward2"],
-                            (int) Config["Config", "Reward", "Reward1Amount"]), inv.containerMain);
-                        break;
-                    case 3:
-                        Runlog((string) Config["Config", "Reward", "Reward3"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward3"],
-                            (int) Config["Config", "Reward", "Reward3Amount"]), inv.containerMain);
-                        break;
-                    case 4:
-                        Runlog((string) Config["Config", "Reward", "Reward4"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward4"],
-                            (int) Config["Config", "Reward", "Reward4Amount"]), inv.containerMain);
-                        break;
-                    case 5:
-                        Runlog((string) Config["Config", "Reward", "Reward5"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward5"],
-                            (int) Config["Config", "Reward", "Reward5Amount"]), inv.containerMain);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward5_2"],
-                            (int) Config["Config", "Reward", "Reward5_2Amount"]), inv.containerMain);
-                        break;
-                    case 6:
-                        if (Economics.IsLoaded)
-                        {
-                            Runlog("money");
-                            Economics?.CallHook("Deposit", runningman.userID,
-                                (double) Config["Config", "Reward", "RewardMoney"]);
-                            Runlog(runningman.displayName);
-                        }
-                        else
-                        {
-                            Runlog("Economics not found!");
-                            inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward6"],
-                                (int) Config["Config", "Reward", "Reward6Amount"]), inv.containerMain);
-                            Runlog((string) Config["Config", "Reward", "Reward6"]);
-                            inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward6"],
-                                (int) Config["Config", "Reward", "Reward6Amount"]), inv.containerMain);
-                        }
-                        break;
-                    case 7:
-                        Runlog((string) Config["Config", "Reward", "Reward7"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward7"],
-                            (int) Config["Config", "Reward", "Reward7Amount"]), inv.containerMain);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward7_2"],
-                            (int) Config["Config", "Reward", "Reward7_2Amount"]), inv.containerMain);
-                        break;
-                    case 8:
-                        Runlog((string) Config["Config", "Reward", "Reward8"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward8"],
-                            (int) Config["Config", "Reward", "Reward8Amount"]), inv.containerMain);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward8_2"],
-                            (int) Config["Config", "Reward", "Reward8_2Amount"]), inv.containerMain);
-                        break;
-                    case 9:
-                        Runlog((string) Config["Config", "Reward", "Reward9"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward9"],
-                            (int) Config["Config", "Reward", "Reward9Amount"]), inv.containerMain);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward9_2"],
-                            (int) Config["Config", "Reward", "Reward9_2Amount"]), inv.containerMain);
-                        break;
-                    case 10:
-                        Runlog((string) Config["Config", "Reward", "Reward10"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward10"],
-                            (int) Config["Config", "Reward", "Reward10Amount"]), inv.containerMain);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward10_2"],
-                            (int) Config["Config", "Reward", "Reward10_2Amount"]), inv.containerMain);
-                        break;
-                    case 11:
-                        Runlog((string) Config["Config", "Reward", "Reward11"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward11"],
-                            (int) Config["Config", "Reward", "Reward11Amount"]), inv.containerMain);
-                        break;
-                    case 12:
-                        Runlog((string) Config["Config", "Reward", "Reward12"]);
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward12"],
-                            (int) Config["Config", "Reward", "Reward12Amount"]), inv.containerMain);
-                        break;
-                    case 13:
-                        if (KarmaSystem.IsLoaded)
+                    PrintWarning("Reward list is empty, please add items");
+                    inv?.GiveItem(ItemManager.CreateByName((string) Config["Reward", "RewardFixing"],
+                        (int) Config["Reward", "RewardFixingAmount"]), inv.containerMain);
+                    return;
+                }
+                Runlog("random");
+                var rand = SavedReward.ElementAt(rnd.Next(0, SavedReward.Count));
+                switch (rand.Key)
+                {
+                    case "karma":
+                        if (KarmaSystem != null && KarmaSystem.IsLoaded)
                         {
                             IPlayer player = covalence.Players.FindPlayerById(runningman.UserIDString);
-                            Runlog("karma");
-                            KarmaSystem.Call("AddKarma", player, (double) GetConfig<double>(1, "Config", "Reward", "KarmaSystem", "PointToAdd"));
-                            Runlog(runningman.displayName);
+                            KarmaSystem.Call("AddKarma", player, GetConfig<double>(1, "Config", "Reward", "KarmaSystem", "PointToAdd"));
                         }
                         else
                         {
-                            Runlog("KarmaSystem not found!");
-                            inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
-                            (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                            inv?.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
                         }
+                        break;
+                    case "money":
+                        if (Economics != null && Economics.IsLoaded)
+                        {
+                            Economics?.CallHook("Deposit", runningman.userID,
+                                rand.Value);
+                        }
+                        else
+                        {
+                            inv?.GiveItem(
+                                ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                        }
+                        break;
+                    default:
+                        Runlog(rand.Key);
+                        Item item = ItemManager.CreateByName(rand.Key,
+                            rand.Value);
+                        if(item != null)
+                            inv?.GiveItem(item, inv.containerMain);
+                        else
+                            PrintError($"Failed to create item...{rand.Key}");
                         break;
                 }
             }
             else
             {
                 Runlog("reward");
-                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                inv?.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                     (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
             }
             eventstart.Destroy();
             eventstart = null;
             runningman = null;
             Runlog("timer eventstart stopped");
+            eventpause?.Destroy();
             eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
             time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         }
@@ -315,161 +250,108 @@ namespace Oxide.Plugins
 
         void OnPlayerDisconnected(BasePlayer player)
         {
-            if (player == runningman)
+            if (runningman != null)
+                if (player == runningman)
+                {
+                    stillRunnerTimer = timer.Once(60*(int) Config["Default", "DisconnectPendingTimer"], DestroyLeaveEvent);
+                }
+        }
+
+        void OnPlayerInit(BasePlayer player)
+        {
+            if (runningman != null)
             {
-                Runlog("Player " + runningman.displayName + " got scared and ran away!");
-                BroadcastChat("Player " + runningman.displayName + " got scared and ran away!");
-                eventstart.Destroy();
-                runningman = null;
-                eventstart = null;
-                Runlog("timer eventstart stopped");
-                eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
-                time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+                if (runningman == player)
+                {
+                    SendReply(player,
+                        (string) Config["Default", "ChatName"] + ": " + runningman.displayName +
+                        " your are still the runner.");
+                    BroadcastChat("Running man: ", runningman.displayName + " is back online.");
+                    BroadcastChat("Kill him and get the reward!");
+                    stillRunnerTimer?.Destroy();
+                }
+                else
+                {
+                    SendHelpText(player);
+                }
             }
         }
 
         void PlayerKilled(BasePlayer victim, HitInfo hitinfo)
         {
-            if (hitinfo.Initiator == null)
+            var attacker = hitinfo?.Initiator?.ToPlayer();
+            if (attacker == null) return;
+            if (victim == null) return;
+            if (attacker == victim) return;
+            if (runningman == null) return;
+            if(victim != runningman) return;
+            Runlog("Running man - " + attacker.displayName + " kill " + runningman.displayName +
+                   " and received as a reward!");
+            BroadcastChat("Player - " + attacker.displayName +
+                          " kill " + runningman.displayName +
+                          " and received as a reward!");
+            var inv = attacker.inventory;
+            if ((string) Config["Config", "Reward", "Random"] == "true")
             {
-                return;
-            }
-            var attacker = hitinfo.Initiator.ToPlayer();
-            if (attacker != victim && attacker != null)
-            {
-                if (victim == runningman)
+                if (SavedReward == null)
                 {
-                    Runlog("Running man - " + attacker.displayName + " kill " + runningman.displayName +
-                           " and received as a reward!");
-                    BroadcastChat("Player - " + attacker.displayName +
-                                  " kill " + runningman.displayName +
-                                  " and received as a reward!");
-                    var inv = attacker.inventory;
-                    if ((string) Config["Config", "Reward", "Random"] == "true")
-                    {
-                        Runlog("random");
-                        var rand = rnd.Next(1, 13);
-                        Runlog(rand.ToString());
-                        switch (rand)
+                    PrintWarning("Reward list is empty, please add items, using FixingReward option...");
+                    inv?.GiveItem(ItemManager.CreateByName((string) Config["Reward", "RewardFixing"],
+                        (int) Config["Reward", "RewardFixingAmount"]), inv.containerMain);
+                    return;
+                }
+                var rand = SavedReward.ElementAt(rnd.Next(0, SavedReward.Count));
+                switch (rand.Key)
+                {
+                    case "karma":
+                        if (KarmaSystem != null && KarmaSystem.IsLoaded)
                         {
-                            case 1:
-                                Runlog((string) Config["Config", "Reward", "Reward1"]);
-                                inv.GiveItem(
-                                    ItemManager.CreateByName((string) Config["Config", "Reward", "Reward1"],
-                                        (int) Config["Config", "Reward", "Reward1Amount"]), inv.containerMain);
-                                break;
-                            case 2:
-                                Runlog((string) Config["Config", "Reward", "Reward2"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward2"],
-                                    (int) Config["Config", "Reward", "Reward1Amount"]), inv.containerMain);
-                                break;
-                            case 3:
-                                Runlog((string) Config["Config", "Reward", "Reward3"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward3"],
-                                    (int) Config["Config", "Reward", "Reward3Amount"]), inv.containerMain);
-                                break;
-                            case 4:
-                                Runlog((string) Config["Config", "Reward", "Reward4"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward4"],
-                                    (int) Config["Config", "Reward", "Reward4Amount"]), inv.containerMain);
-                                break;
-                            case 5:
-                                Runlog((string) Config["Config", "Reward", "Reward5"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward5"],
-                                    (int) Config["Config", "Reward", "Reward5Amount"]), inv.containerMain);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward5_2"],
-                                    (int) Config["Config", "Reward", "Reward5_2Amount"]), inv.containerMain);
-                                break;
-                            case 6:
-                                if (Economics.IsLoaded)
-                                {
-                                    Runlog("money");
-                                    Economics?.CallHook("Deposit", runningman.userID,
-                                        (double) Config["Config", "Reward", "RewardMoney"]);
-                                    Runlog(runningman.displayName);
-                                }
-                                else
-                                {
-                                    Runlog("Economics not found!");
-                                    inv.GiveItem(
-                                        ItemManager.CreateByName((string) Config["Config", "Reward", "Reward6"],
-                                            (int) Config["Config", "Reward", "Reward6Amount"]), inv.containerMain);
-                                    Runlog((string) Config["Config", "Reward", "Reward6"]);
-                                    inv.GiveItem(
-                                        ItemManager.CreateByName((string) Config["Config", "Reward", "Reward6"],
-                                            (int) Config["Config", "Reward", "Reward6Amount"]), inv.containerMain);
-                                }
-                                break;
-                            case 7:
-                                Runlog((string) Config["Config", "Reward", "Reward7"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward7"],
-                                    (int) Config["Config", "Reward", "Reward7Amount"]), inv.containerMain);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward7_2"],
-                                    (int) Config["Config", "Reward", "Reward7_2Amount"]), inv.containerMain);
-                                break;
-                            case 8:
-                                Runlog((string) Config["Config", "Reward", "Reward8"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward8"],
-                                    (int) Config["Config", "Reward", "Reward8Amount"]), inv.containerMain);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward8_2"],
-                                    (int) Config["Config", "Reward", "Reward8_2Amount"]), inv.containerMain);
-                                break;
-                            case 9:
-                                Runlog((string) Config["Config", "Reward", "Reward9"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward9"],
-                                    (int) Config["Config", "Reward", "Reward9Amount"]), inv.containerMain);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward9_2"],
-                                    (int) Config["Config", "Reward", "Reward9_2Amount"]), inv.containerMain);
-                                break;
-                            case 10:
-                                Runlog((string) Config["Config", "Reward", "Reward10"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward10"],
-                                    (int) Config["Config", "Reward", "Reward10Amount"]), inv.containerMain);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward10_2"],
-                                    (int) Config["Config", "Reward", "Reward10_2Amount"]), inv.containerMain);
-                                break;
-                            case 11:
-                                Runlog((string) Config["Config", "Reward", "Reward11"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward11"],
-                                    (int) Config["Config", "Reward", "Reward11Amount"]), inv.containerMain);
-                                break;
-                            case 12:
-                                Runlog((string) Config["Config", "Reward", "Reward12"]);
-                                inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "Reward12"],
-                                    (int) Config["Config", "Reward", "Reward12Amount"]), inv.containerMain);
-                                break;
-                            case 13:
-                                if (KarmaSystem.IsLoaded)
-                                {
-                                    IPlayer player = covalence.Players.FindPlayerById(attacker.UserIDString);
-                                    Runlog("karma");
-                                    KarmaSystem.Call("AddKarma", player, (double) GetConfig<double>(1, "Config", "Reward", "KarmaSystem", "PointToAdd"));
-                                    Runlog(runningman.displayName);
-                                }
-                                else
-                                {
-                                    Runlog("KarmaSystem not found!");
-                                    inv.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
-                                    (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
-                                }
-                                break;
+                            IPlayer player = covalence.Players.FindPlayerById(attacker.UserIDString);
+                            KarmaSystem.Call("AddKarma", player, GetConfig<double>(1, "Config", "Reward", "KarmaSystem", "PointToAdd"));
                         }
-                    }
-                    else
-                    {
-                        Puts(Config["Reward", "RewardFixing"].ToString());
-                        inv.GiveItem(ItemManager.CreateByName((string) Config["Reward", "RewardFixing"],
-                            (int) Config["Reward", "RewardFixingAmount"]), inv.containerMain);
-                    }
-                    eventstart.Destroy();
-                    eventstart = null;
-                    runningman = null;
-                    Runlog("timer eventstart stopped");
-                    eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
-                    time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
-
+                        else
+                        {
+                            inv?.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                        }
+                        break;
+                    case "money":
+                        if (Economics != null && Economics.IsLoaded)
+                        {
+                            Economics?.CallHook("Deposit", runningman.userID,
+                                rand.Value);
+                        }
+                        else
+                        {
+                            inv?.GiveItem(
+                                ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                        }
+                        break;
+                    default:
+                        Runlog(rand.Key);
+                        Item item = ItemManager.CreateByName(rand.Key,
+                            rand.Value);
+                        if(item != null)
+                            inv?.GiveItem(item, inv.containerMain);
+                        else
+                            PrintError($"Failed to create item...{rand.Key}");
+                        break;
                 }
             }
+            else
+            {
+                Puts(Config["Reward", "RewardFixing"].ToString());
+                inv?.GiveItem(ItemManager.CreateByName((string) Config["Reward", "RewardFixing"],
+                    (int) Config["Reward", "RewardFixingAmount"]), inv.containerMain);
+            }
+            eventstart?.Destroy();
+            eventstart = null;
+            runningman = null;
+            Runlog("timer eventstart stopped");
+            eventpause?.Destroy();
+            eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
+            time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         }
 
         void OnEntityDeath(BaseEntity entity, HitInfo hitinfo)
@@ -594,12 +476,17 @@ namespace Oxide.Plugins
 
         void cmdEventOf(ConsoleSystem.Arg arg)
         {
+            DestroyEvent();
+        }
+
+        void DestroyEvent()
+        {
             if (eventpause != null)
             {
                 eventpause.Destroy();
                 eventpause = null;
                 runningman = null;
-                Runlog("timer eventpaus;e stopped");
+                Runlog("timer eventpause stopped");
 
             }
             if (eventstart != null)
@@ -612,6 +499,29 @@ namespace Oxide.Plugins
             Runlog("Running Man has stopped");
         }
 
+        void DestroyLeaveEvent()
+        {
+            Runlog("Player " + runningman.displayName + " got scared and ran away!");
+            BroadcastChat("Player " + runningman.displayName + " got scared and ran away!");
+            if (eventpause != null)
+            {
+                eventpause.Destroy();
+                eventpause = null;
+                runningman = null;
+                Runlog("timer eventpause stopped");
+
+            }
+            if (eventstart != null)
+            {
+                eventstart.Destroy();
+                eventstart = null;
+                runningman = null;
+                Runlog("timer eventstart stopped");
+            }
+            Runlog("Running Man has stopped");
+            eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
+            time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+        }
         void cmdEventOff(BasePlayer player, string cmd, string[] args)
         {
             if (player.net.connection.authLevel >= (int) Config["Default", "authLevel"])
