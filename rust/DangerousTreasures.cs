@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Dangerous Treasures", "nivex", "0.1.22", ResourceId = 2479)]
+    [Info("Dangerous Treasures", "nivex", "0.1.23", ResourceId = 2479)]
     [Description("Event with treasure chests.")]
     public class DangerousTreasures : RustPlugin
     {
@@ -707,7 +707,7 @@ namespace Oxide.Plugins
         {
             if (init)
                 return;
-
+            
             ins = this;
             dataFile = Interface.Oxide.DataFileSystem.GetFile(Title.Replace(" ", ""));
 
@@ -759,7 +759,7 @@ namespace Oxide.Plugins
             if (wipeChestsSeed && eventPlayers.Count > 0)
             {
                 var ladder = eventPlayers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.StolenChestsSeed).ToList<KeyValuePair<string, int>>();
-                
+
                 if (AssignTreasureHunters(ladder))
                 {
                     foreach (var kvp in eventPlayers.ToList())
@@ -1571,13 +1571,10 @@ namespace Oxide.Plugins
 
         void AddMarker(Vector3 pos, uint uid)
         {
-            if (!lustyMarkers.ContainsKey(uid))
-            {
-                string name = string.Format("{0}_{1}", lustyMapIconName, storedData.TotalEvents).ToLower();
+            string name = string.Format("{0}_{1}", lustyMapIconName, storedData.TotalEvents).ToLower();
 
-                LustyMap?.Call("AddMarker", pos.x, pos.z, name, lustyMapIconFile, lustyMapRotation);
-                lustyMarkers[uid] = name;
-            }
+            LustyMap?.Call("AddTemporaryMarker", pos.x, pos.z, name, lustyMapIconFile, lustyMapRotation);
+            lustyMarkers[uid] = name;
         }
 
         void RemoveMarker(uint uid)
@@ -1585,8 +1582,28 @@ namespace Oxide.Plugins
             if (!lustyMarkers.ContainsKey(uid))
                 return;
 
-            LustyMap?.Call("RemoveMarker", lustyMarkers[uid]);
+            LustyMap?.Call("RemoveTemporaryMarker", lustyMarkers[uid]);
             lustyMarkers.Remove(uid);
+        }
+
+        void RemoveAllMarkers()
+        {
+            int removed = 0;
+
+            for (int i = 0; i < storedData.TotalEvents + 1; i++)
+            {
+                string name = string.Format("{0}_{1}", lustyMapIconName, i).ToLower();
+
+                if ((bool)(LustyMap?.Call("RemoveMarker", name) ?? false))
+                {
+                    removed++;
+                }
+            }
+
+            if (removed > 0)
+                Puts("Removed {0} existing markers", removed);
+            else
+                Puts("No markers found");
         }
 
         void DrawText(BasePlayer player, Vector3 drawPos, string text)
@@ -1723,6 +1740,11 @@ namespace Oxide.Plugins
 
             if (args.Length >= 1 && player.IsAdmin)
             {
+                if (args[0] == "markers")
+                {
+                    RemoveAllMarkers();
+                    return;
+                }
                 if (args[0] == "resettime")
                 {
                     storedData.SecondsUntilEvent = double.MinValue;
@@ -2472,7 +2494,7 @@ namespace Oxide.Plugins
 
                 return amount;
             }
-            
+
             decimal percentIncrease = pctIncreases.ContainsKey(DateTime.Now.DayOfWeek) ? pctIncreases[DateTime.Now.DayOfWeek] : 0m;
 
             if (percentIncrease > 1m)
@@ -2488,7 +2510,7 @@ namespace Oxide.Plugins
 
             return amount;
         }
-        
+
         void SetTreasure(List<object> treasures, bool dayOfWeekLoot)
         {
             if (treasures != null && treasures.Count > 0)

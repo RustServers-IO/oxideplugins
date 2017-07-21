@@ -2,8 +2,8 @@
     "name": "Copy Paste",
     "description": "Copy and paste your buildings to save them or move them",
     "author": "",
-    "version": "3.3.1",
-    "configuration": false,
+    "version": "3.3.2",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/copy-paste.716",
     "games": [

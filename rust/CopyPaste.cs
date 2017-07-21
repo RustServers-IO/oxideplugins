@@ -1,7 +1,7 @@
 ﻿using Facepunch;
 using Oxide.Core;
-using ProtoBuf;
 using Newtonsoft.Json;
+using ProtoBuf;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,13 +10,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.3.1", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.3.2", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
-	{	
-		StorageConfigs configs;
-		
+	{
 		private int copyLayer 		= LayerMask.GetMask("Construction", "Construction Trigger", "Trigger", "Deployed");
 		private int groundLayer 	= LayerMask.GetMask("Terrain", "Default");
 		private int rayCopy 		= LayerMask.GetMask("Construction", "Deployed", "Tree", "Resource", "Prevent Building");
@@ -42,12 +40,78 @@ namespace Oxide.Plugins
 
 		private enum CopyMechanics { Building, Proximity }
 		
-		private class StorageConfigs
-		{
-			public Dictionary<string, string> cfg = new Dictionary<string, string>();
+		//Config
+		
+        private ConfigData config;
+		
+        class ConfigData
+        {
+            [JsonProperty(PropertyName = "Copy Options")]
+            public CopyOptions Copy { get; set; }
 			
-			public StorageConfigs() {}
-		}
+            [JsonProperty(PropertyName = "Paste Options")]
+            public PasteOptions Paste { get; set; }
+			
+            public class CopyOptions
+            {
+                [JsonProperty(PropertyName = "Buildings (true/false)")]
+                public bool Buildings { get; set; }
+
+                [JsonProperty(PropertyName = "Deployables (true/false)")]
+                public bool Deployables { get; set; }
+
+                [JsonProperty(PropertyName = "Inventories (true/false)")]
+                public bool Inventories { get; set; }
+
+                [JsonProperty(PropertyName = "Share (true/false)")]
+                public bool Share { get; set; }
+				
+                [JsonProperty(PropertyName = "Tree (true/false)")]
+                public bool Tree { get; set; }				
+            }
+			
+            public class PasteOptions
+            {
+                [JsonProperty(PropertyName = "Auth (true/false)")]
+                public bool Auth { get; set; }
+				
+                [JsonProperty(PropertyName = "Deployables (true/false)")]
+                public bool Deployables { get; set; }
+				
+                [JsonProperty(PropertyName = "Inventories (true/false)")]
+                public bool Inventories { get; set; }
+            }			
+        }
+		
+        private void LoadVariables()
+        {
+            config = Config.ReadObject<ConfigData>();
+			
+            SaveConfig();
+        }
+		
+        protected override void LoadDefaultConfig()
+        {
+            var configData = new ConfigData
+            {
+                Copy = new ConfigData.CopyOptions
+                {
+                    Buildings = true,
+                    Deployables = true,
+                    Inventories = true,
+                    Share = false,
+					Tree = false
+                },
+                Paste = new ConfigData.PasteOptions
+                {
+                    Auth = false,
+                    Deployables = true,
+                    Inventories = true
+                }
+            };
+			
+            Config.WriteObject(configData, true);
+        }
 		
 		//Hooks
 
@@ -76,11 +140,7 @@ namespace Oxide.Plugins
 			} 
 		}
 
-		private void Loaded() 
-        {
-            try   { configs = Interface.Oxide.DataFileSystem.ReadObject<StorageConfigs>(this.Name); }
-            catch { configs = new StorageConfigs();}		
-		}
+		private void OnServerInitialized() => LoadVariables();
 		
 		//API
 		
@@ -663,36 +723,11 @@ namespace Oxide.Plugins
 			return preloaddata;
 		}
 
-		private void SaveData() 
-		{
-			Interface.Oxide.DataFileSystem.WriteObject(this.Name, configs);
-		}
-		
-		private string[] ParamsBuilder(string[] args)
-		{
-			int configIndex = Array.IndexOf(args, "cfg");
-			
-			if(configIndex > -1)
-			{
-				int valueIndex = configIndex + 1;
-
-				if(valueIndex < args.Length)
-				{
-					if(configs.cfg.ContainsKey(args[valueIndex]))
-						return configs.cfg[args[valueIndex]].Split(null);
-				}
-			}
-			
-			return args;
-		}
-		
 		private object TryCopy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, string[] args)
 		{
-			bool saveBuilding = true, saveDeployables = true, saveInventories = true, saveShare = false, saveTree = false;
+			bool saveBuildings = config.Copy.Buildings, saveDeployables = config.Copy.Deployables, saveInventories = config.Copy.Inventories, saveShare = config.Copy.Share, saveTree = config.Copy.Tree;
 			CopyMechanics copyMechanics = CopyMechanics.Proximity;
 			float radius = 3f;
-			
-			args = ParamsBuilder(args);
 			
 			for(int i = 0; ; i = i + 2)
 			{	
@@ -710,12 +745,8 @@ namespace Oxide.Plugins
 				{
 					case "b":
 					case "buildings":
-						if(!bool.TryParse(args[valueIndex], out saveBuilding))
+						if(!bool.TryParse(args[valueIndex], out saveBuildings))
 							return Lang("SYNTAX_BOOL", null, param);
-						
-						break;
-					case "cfg":
-						//No action;
 						
 						break;
 					case "d":
@@ -768,7 +799,7 @@ namespace Oxide.Plugins
 				}
 			}
 
-			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveBuilding, saveDeployables, saveInventories, saveTree, saveShare);
+			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveBuildings, saveDeployables, saveInventories, saveTree, saveShare);
 		}
 		
 		private void TryCopySlots(BaseEntity ent, IDictionary<string, object> housedata, bool saveShare)
@@ -827,10 +858,8 @@ namespace Oxide.Plugins
 				return Lang("FILE_BROKEN", userID);
 
 			float heightAdj = 0f, blockCollision = 0f;
-			bool  auth = false, inventories = true, deployables = true;
+			bool  auth = config.Paste.Auth, inventories = config.Paste.Inventories, deployables = config.Paste.Deployables;
 
-			args = ParamsBuilder(args);
-			
 			for(int i = 0; ; i = i + 2)
 			{
 				if(i >= args.Length) 
@@ -991,7 +1020,7 @@ namespace Oxide.Plugins
 		}
 
 		//Сhat commands
-		
+
 		[ChatCommand("copy")]
 		private void cmdChatCopy(BasePlayer player, string command, string[] args)
 		{
@@ -1019,61 +1048,6 @@ namespace Oxide.Plugins
 			SendReply(player, Lang("COPY_SUCCESS", player.UserIDString, savename));
 		}
 
-		[ChatCommand("copypaste")]
-		private void cmdChatCopyPaste(BasePlayer player, string command, string[] args)
-		{
-			if(!HasAccess(player, copyPermission)) 
-			{ 
-				SendReply(player, Lang("NO_ACCESS", player.UserIDString)); 
-				return; 
-			}
-
-			if(args.Length < 2) 
-			{ 
-				SendReply(player, Lang("SYNTAX_COPYPASTE", player.UserIDString)); 
-				return; 
-			}
-			
-			string commandType = args[0], configName = args[1];
-			
-			switch(commandType)
-			{
-				case "add":
-					if(args.Length < 3) 
-					{
-						SendReply(player, Lang("SYNTAX_COPYPASTE", player.UserIDString));
-						return;
-					}
-					
-					configs.cfg[configName] = args[2];
-					SaveData();
-					
-					SendReply(player, Lang("COPYPASTE_ADDED", player.UserIDString, configName)); 
-					
-					break;
-				case "remove":
-					configs.cfg.Remove(configName);
-					SaveData();
-					
-					SendReply(player, Lang("COPYPASTE_REMOVED", player.UserIDString, configName)); 
-					
-					break;
-				case "show":
-					if(!configs.cfg.ContainsKey(configName))
-					{
-						SendReply(player, Lang("COPYPASTE_KEY_NOT_EXISTS", player.UserIDString)); 
-						return;				
-					}
-					
-					SendReply(player, Lang("COPYPASTE_SHOW", player.UserIDString, configName, configs.cfg[configName]));
-					
-					break;
-				default:
-					SendReply(player, Lang("SYNTAX_COPYPASTE", player.UserIDString)); 
-					return;
-			}			
-		}
-		
 		[ChatCommand("paste")]
 		private void cmdChatPaste(BasePlayer player, string command, string[] args)
 		{
@@ -1202,27 +1176,7 @@ namespace Oxide.Plugins
 			{"SYNTAX_COPY", new Dictionary<string, string>() {
 				{"en", "Syntax: /copy <Target Filename> <options values>\n radius XX (default 3)\n mechanics proximity/building (default building)\nbuilding true/false (saves structures or not)\ndeployables true/false (saves deployables or not)\ninventories true/false (saves inventories or not)"},
 				{"ru", "Синтаксис: /copy <Название Объекта> <опция значение>\n radius XX (default 3)\n mechanics proximity/building (по умолчанию building)\nbuilding true/false (сохранять постройку или нет)\ndeployables true/false (сохранять предметы или нет)\ninventories true/false (сохранять инвентарь или нет)"},
-			}},	
-			{"SYNTAX_COPYPASTE", new Dictionary<string, string>() {
-				{"en", "Syntax: /copypaste add <Config Name> <Parameters In Quoted (required)>\n/copypaste remove <Config Name>\n/copypaste show <Config Name>"},
-				{"ru", "Синтаксис: /copypaste add <Название Конфига> <Параметры В Кавычках (обязательно)>\n/copypaste remove <Название Конфига>\n/copypaste show <Название Конфига>"},
-			}},
-			{"COPYPASTE_ADDED", new Dictionary<string, string>() {
-				{"en", "Config <color=orange>{0}</color> successfully added"},
-				{"ru", "Конфиг <color=orange>{0}</color> успешно добавлен"},
-			}},					
-			{"COPYPASTE_REMOVED", new Dictionary<string, string>() {
-				{"en", "Config <color=orange>{0}</color> successfully removed"},
-				{"ru", "Конфиг <color=orange>{0}</color> успешно удален"},
-			}},	
-			{"COPYPASTE_SHOW", new Dictionary<string, string>() {
-				{"en", "Example of working config <color=orange>{0}</color>:\n{1}"},
-				{"ru", "Пример работы конфига <color=orange>{0}</color>:\n{1}"},
-			}},	
-			{"COPYPASTE_KEY_NOT_EXISTS", new Dictionary<string, string>() {
-				{"en", "Config not exists. Enter the command <color=orange>/copypaste</color> to get more information."},
-				{"ru", "Конфиг не существует. Введите команду <color=orange>/copypaste</color> чтобы получить больше информации."},
-			}},
+			}},		
 			{"NO_ENTITY_RAY", new Dictionary<string, string>() {
 				{"en", "Couldn't ray something valid in front of you"},
 				{"ru", "Не удалось найти какой-либо объект перед вами"},
