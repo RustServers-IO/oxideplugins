@@ -2,7 +2,7 @@
     "name": "Infamy",
     "description": "Allows players with permission to add, remove, reset, or set infamy",
     "author": "Wulf",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/infamy.2488",

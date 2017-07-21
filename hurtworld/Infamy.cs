@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Infamy", "Wulf/lukespragg", "0.1.1", ResourceId = 2488)]
+    [Info("Infamy", "Wulf/lukespragg", "0.1.2", ResourceId = 2488)]
     [Description("Allows players with permission to add, remove, reset, or set infamy")]
     public class Infamy : CovalencePlugin
     {
@@ -84,19 +84,19 @@ namespace Oxide.Plugins
             }
 
             var message = "";
-            foreach (var target in targets)
+            foreach (var target in targets.Where(t => t.IsConnected))
             {
                 var session = target.Object as PlayerSession;
                 var stats = session?.WorldPlayerEntity.GetComponent<EntityStats>();
-                var infamy = stats.GetFluidEffect(EEntityFluidEffectType.Infamy).GetValue();
-                var maxInfamy = stats.GetFluidEffect(EEntityFluidEffectType.Infamy).GetMaxValue();
+                var infamy = stats?.GetFluidEffect(EEntityFluidEffectType.Infamy).GetValue();
+                var maxInfamy = stats?.GetFluidEffect(EEntityFluidEffectType.Infamy).GetMaxValue();
 
                 switch (subCommand)
                 {
                     case "+":
                     case "add":
                         {
-                            stats.GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(amount);
+                            stats?.GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(amount);
                             message = args[1].ToLower() == "all"
                                              ? Lang("InfamyAddedAll", player.Id, amount)
                                              : Lang("InfamyAdded", player.Id, amount, target.Name);
@@ -106,7 +106,7 @@ namespace Oxide.Plugins
                     case "-":
                     case "remove":
                         {
-                            stats.GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(amount);
+                            stats?.GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(amount);
                             message = args[1].ToLower() == "all"
                                              ? Lang("InfamyRemovedAll", player.Id, amount)
                                              : Lang("InfamyRemoved", player.Id, amount, target.Name);
@@ -116,7 +116,7 @@ namespace Oxide.Plugins
                     case "r":
                     case "reset":
                         {
-                            stats.GetFluidEffect(EEntityFluidEffectType.Infamy).Reset(true);
+                            stats?.GetFluidEffect(EEntityFluidEffectType.Infamy).Reset(true);
                             message = args[1].ToLower() == "all"
                                              ? Lang("InfamyResetAll", player.Id)
                                              : Lang("InfamyReset", player.Id, target.Name);
@@ -126,7 +126,7 @@ namespace Oxide.Plugins
                     case "s":
                     case "set":
                         {
-                            stats.GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(amount);
+                            stats?.GetFluidEffect(EEntityFluidEffectType.Infamy).SetValue(amount);
                             message = args[1].ToLower() == "all"
                                              ? Lang("InfamySetAll", player.Id, amount)
                                              : Lang("InfamySet", player.Id, amount, target.Name);
