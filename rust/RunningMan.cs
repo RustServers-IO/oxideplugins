@@ -9,7 +9,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.3.0")]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.4.0")]
     [Description("Running Man is a short plugin where you have to kill the runner.")]
     class RunningMan : RustPlugin
     {
@@ -21,7 +21,7 @@ namespace Oxide.Plugins
         private Timer eventpause;
         private double time1;
         private double time2;
-        Random rnd = new Random();
+        private Random rnd = new Random();
 
         [PluginReference]
         Plugin Economics;
@@ -71,6 +71,29 @@ namespace Oxide.Plugins
             LoadSavedData();
         }
 
+        void Init()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                 {"StartEventRunner", "<color=#C4FF00>{0}</color>: Running man {1}\nKill him and get the reward!\nCommand: /run - to know the distance to the target."}, 
+                 {"NotEnoughPlayers", "<color=#C4FF00>{0}</color>: There aren't enough players to start the event."},
+                 {"RunnerSaved", "<color=#C4FF00>{0}</color>: {1} ran away from the chase and received a reward!"},
+                 {"StillRunner", "<color=#C4FF00>{0}</color>: {1} your are still the runner."},
+                 {"RunnerBackOnline", "<color=#C4FF00>{0}</color>: {1} is back online.\nKill him and get the reward!"},
+                 {"RunnerKilled", "<color=#C4FF00>{0}</color>: Player - {1} kill {2} and received a reward!"},
+                 {"RunnerDistance", "<color=#C4FF00>{0}</color>: Player - {1},\n is at a distance of {2}\nKill him and get the reward!"},
+                 {"UntilEndOfEvent", "<color=#C4FF00>{0}</color>: Until the end of event left: {1} minutes"},
+                 {"NotRunningEvent", "<color=#C4FF00>{0}</color>: At the moment the event is not running"},
+                 {"UntilStartOfEvent", "<color=#C4FF00>{0}</color>: Before the start of the event remained: {1} minutes"},
+                 {"RunCommandHelp", "Use \"/run\" to find out information about the running man"},
+                 {"AdminCommandHelp", "Use \"/eventon\" for start event Running Man\nUse \"/eventoff\" for start event Running Man"},
+                 {"NobodyOnline", "<color=#C4FF00>{0}</color>: You can't run event while there is nobody online"},
+                 {"NoPerm", "<color=#C4FF00>{0}</color>: You have no rights to do this!"},
+                 {"RunnerLeaved", "<color=#C4FF00>{0}</color>: {1} got scared and ran away!"},
+                 {"EventStopped", "<color=#C4FF00>{0}</color>: Event has stopped!"},
+            }, this);
+        }
+
         protected override void LoadDefaultConfig()
         {
             SetConfig("Default", "ChatName", "EVENT");
@@ -110,6 +133,19 @@ namespace Oxide.Plugins
                 };
                 PrintWarning("Failed to load data file, generating a new one...");
             }
+            SaveLoadedData();
+        }
+
+        void SaveLoadedData()
+        {
+            try
+            {
+                Interface.Oxide.DataFileSystem.WriteObject("KarmaSystem", SavedReward);
+            }
+            catch (Exception)
+            {
+                PrintWarning("Failed to save data file.");
+            }
         }
 
         void Unload()
@@ -136,13 +172,11 @@ namespace Oxide.Plugins
             {
                 eventpause.Destroy();
                 runningman = null;
-                Runlog("timer eventpause stopped");
             }
             if (eventstart != null)
             {
                 eventstart.Destroy();
                 runningman = null;
-                Runlog("timer eventstart stopped");
             }
             if (BasePlayer.activePlayerList != null && BasePlayer.activePlayerList.Count >= (int) Config["Default", "Count"])
             {
@@ -152,15 +186,13 @@ namespace Oxide.Plugins
                 var randI = rnd.Next(1, t.Count);
                 runningman = t[randI];
                 Runlog("Running man: " + runningman.displayName);
-                BroadcastChat((string) Config["Default", "ChatName"], "Running man: " + runningman.displayName);
-                BroadcastChat((string) Config["Default", "ChatName"], "Kill him and get the reward!");
-                BroadcastChat((string) Config["Default", "ChatName"], "Command: /run - to know the distance to the target");
+                BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
                 eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
             }
             else
             {
-                BroadcastChat((string) Config["Default", "ChatName"], "There aren't enough players to start the event");
+                BroadcastChat(string.Format(lang.GetMessage("NotEnoughPlayers", this), (string) Config["Default", "ChatName"]));
                 eventpause?.Destroy();
                 eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
@@ -171,8 +203,7 @@ namespace Oxide.Plugins
         {
             Runlog("Running man - " + runningman.displayName + " ran away from the chase and received as a reward!");
 
-            BroadcastChat("Running man - " + runningman.displayName +
-                          " ran away from the chase and received as a reward!");
+            BroadcastChat(string.Format(lang.GetMessage("RunnerSaved", this), (string) Config["Default", "ChatName"], runningman.displayName));
             var inv = runningman.inventory;
             if ((string) Config["Config", "Reward", "Random"] == "true")
             {
@@ -213,7 +244,6 @@ namespace Oxide.Plugins
                         }
                         break;
                     default:
-                        Runlog(rand.Key);
                         Item item = ItemManager.CreateByName(rand.Key,
                             rand.Value);
                         if(item != null)
@@ -225,7 +255,6 @@ namespace Oxide.Plugins
             }
             else
             {
-                Runlog("reward");
                 inv?.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                     (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
             }
@@ -238,8 +267,7 @@ namespace Oxide.Plugins
             time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         }
 
-        void BroadcastChat(string prefix, string msg = null) => rust.BroadcastChat(msg == null ? prefix : "<color=#C4FF00>" +
-        prefix + "</color>: " + msg) ;
+        void BroadcastChat(string msg = null) => rust.BroadcastChat(msg ?? " ") ;
 
         private void Runlog(string text)
         {
@@ -264,10 +292,8 @@ namespace Oxide.Plugins
                 if (runningman == player)
                 {
                     SendReply(player,
-                        (string) Config["Default", "ChatName"] + ": " + runningman.displayName +
-                        " your are still the runner.");
-                    BroadcastChat("Running man: ", runningman.displayName + " is back online.");
-                    BroadcastChat("Kill him and get the reward!");
+                        string.Format(lang.GetMessage("StillRunner", this, player.UserIDString), (string) Config["Default", "ChatName"], runningman.displayName));
+                    BroadcastChat(string.Format(lang.GetMessage("RunnerBackOnline", this), (string) Config["Default", "ChatName"], runningman.displayName));
                     stillRunnerTimer?.Destroy();
                 }
                 else
@@ -285,11 +311,8 @@ namespace Oxide.Plugins
             if (attacker == victim) return;
             if (runningman == null) return;
             if(victim != runningman) return;
-            Runlog("Running man - " + attacker.displayName + " kill " + runningman.displayName +
-                   " and received as a reward!");
-            BroadcastChat("Player - " + attacker.displayName +
-                          " kill " + runningman.displayName +
-                          " and received as a reward!");
+            Runlog(string.Format(lang.GetMessage("RunnerKilled", this), (string) Config["Default", "ChatName"], attacker.displayName, runningman.displayName));
+            BroadcastChat(string.Format(lang.GetMessage("RunnerKilled", this), (string) Config["Default", "ChatName"], attacker.displayName, runningman.displayName));
             var inv = attacker.inventory;
             if ((string) Config["Config", "Reward", "Random"] == "true")
             {
@@ -371,14 +394,12 @@ namespace Oxide.Plugins
                 var xk = player.transform.position.x;
                 var zk = player.transform.position.z;
                 var dist = Math.Floor(Math.Sqrt(Math.Pow(xr - xk, 2) + Math.Pow(zr - zk, 2)));
-                SendReply(player, (string) Config["Default", "ChatName"] + ": " + runningman.displayName + ",");
-                SendReply(player, (string) Config["Default", "ChatName"] + ": is at a distance of " + dist + "м");
-                SendReply(player, (string) Config["Default", "ChatName"] + ": Kill him and get the reward!");
+                SendReply(player, string.Format(lang.GetMessage("RunnerDistance", this, player.UserIDString), (string) Config["Default", "ChatName"], runningman.displayName, dist));
                 time2 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
                 var time3 = time2 - time1;
                 time3 = eventstart.Delay - time3;
                 time3 = Math.Floor(time3/60);
-                SendReply(player, (string) Config["Default", "ChatName"] + ": Until the end of event left: " + time3 + " minutes");
+                SendReply(player, string.Format(lang.GetMessage("UntilEndOfEvent", this, player.UserIDString), (string) Config["Default", "ChatName"], time3));
             }
             else
             {
@@ -389,26 +410,24 @@ namespace Oxide.Plugins
                 {
                     time3 = eventpause.Delay - time3;
                     time3 = Math.Floor(time3/60);
-                    SendReply(player, (string) Config["Default", "ChatName"] + ": At the moment the event is not running");
+                    SendReply(player, string.Format(lang.GetMessage("NotRunningEvent", this, player.UserIDString), (string)Config["Default", "ChatName"]));
                     SendReply(player,
-                        (string) Config["Default", "ChatName"] + ": Before the start of the event remained: " + time3 +
-                        " minutes");
+                        string.Format(lang.GetMessage("UntilStartOfEvent", this, player.UserIDString), (string)Config["Default", "ChatName"], time3));
                 }
                 else
                 {
-                    SendReply(player, (string) Config["Default", "ChatName"] + ": At the moment the event is not running");
+                    SendReply(player, lang.GetMessage("NotRunningEvent", this, player.UserIDString));
                 }
             }
         }
 
         void SendHelpText(BasePlayer player)
         {
-            player.ChatMessage("Use \"/run\" to find out information about the running man");
+            player.ChatMessage(lang.GetMessage("RunCommandHelp", this, player.UserIDString));
             var authlevel = player.net.connection.authLevel;
             if (authlevel >= (int) Config["Default", "authLevel"]) 
             {
-                player.ChatMessage("Use \"/eventon\" for start event Running Man");
-                player.ChatMessage("Use \"/eventoff\" for stop event Running Man");
+                player.ChatMessage(lang.GetMessage("AdminCommandHelp", this, player.UserIDString));
             }
         }
 
@@ -433,20 +452,18 @@ namespace Oxide.Plugins
                 List<BasePlayer> onlineplayers = BasePlayer.activePlayerList;
                 if (onlineplayers == null)
                 {
-                    SendReply(player, "You can't run event while there is nobody online.");
+                    SendReply(player, string.Format(lang.GetMessage("NobodyOnline", this, player.UserIDString), Config["Default", "ChatName"]));
                     return;
                 }
                 var randI = rnd.Next(0, onlineplayers.Count);
                 runningman = onlineplayers[randI];
                 Runlog("Running man: " + runningman.displayName);
-                BroadcastChat("Running man: ", runningman.displayName);
-                BroadcastChat("Kill him and get the reward!");
-                BroadcastChat("Command: /run - to know the distance to the target\"");
+                BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
                 eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
             }
             else
-                SendReply(player, Config["Default", "ChatName"] + ": You have no rights to do this!");
+                SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), (string) Config["Default", "ChatName"]));
         }
 
         void ccmdEvent(ConsoleSystem.Arg arg)
@@ -467,9 +484,7 @@ namespace Oxide.Plugins
             var randI = rnd.Next(0, onlineplayers.Count);
             runningman = onlineplayers[randI];
             Runlog("Running man: " + runningman.displayName);
-            BroadcastChat("Running man: ", runningman.displayName);
-            BroadcastChat("Kill him and get the reward!\"");
-            BroadcastChat("Command: /run - to know the distance to the target\"");
+            BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
             eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
             time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         }
@@ -502,7 +517,7 @@ namespace Oxide.Plugins
         void DestroyLeaveEvent()
         {
             Runlog("Player " + runningman.displayName + " got scared and ran away!");
-            BroadcastChat("Player " + runningman.displayName + " got scared and ran away!");
+            BroadcastChat(string.Format(lang.GetMessage("RunnerLeaved", this), (string) Config["Default", "ChatName"], runningman.displayName));
             if (eventpause != null)
             {
                 eventpause.Destroy();
@@ -522,6 +537,7 @@ namespace Oxide.Plugins
             eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
             time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         }
+
         void cmdEventOff(BasePlayer player, string cmd, string[] args)
         {
             if (player.net.connection.authLevel >= (int) Config["Default", "authLevel"])
@@ -541,10 +557,10 @@ namespace Oxide.Plugins
                     Runlog("timer eventstart stopped");
                 }
                 Runlog("Running Man has stopped");
-                rust.SendChatMessage(player, Config["Default", "ChatName"] + ": Event has stopped!");
+                SendReply(player, string.Format(lang.GetMessage("EventStopped", this, player.UserIDString), Config["Default", "ChatName"]));
             }
             else
-                rust.SendChatMessage(player, Config["Default", "ChatName"] + ": You have no rights to do this!");
+                SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), Config["Default", "ChatName"]));
         }
     }
 }
