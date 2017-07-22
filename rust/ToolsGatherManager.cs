@@ -3,22 +3,16 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("ToolsGatherManager", "hoppel", "1.0.3", ResourceId = 2553)]
+    [Info("ToolsGatherManager", "hoppel", "1.0.4", ResourceId = 2553)]
     [Description("adjust the gather rate from certrain tools")]
     class ToolsGatherManager : RustPlugin
     {
-        const string permname = "toolsgathermanager.allow";
-
-        void Init()
-        {   
-            permission.RegisterPermission(permname, this);
-        }
 
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             var player = entity as BasePlayer;
-            if (!player || !permission.UserHasPermission(player.UserIDString, permname))
-                return;
+            if (!player || !HasPerm(player))
+            return;
             {
                 if (entity.ToPlayer()?.GetActiveItem() != null)
                 {
@@ -41,16 +35,54 @@ namespace Oxide.Plugins
 
         }
         #region config
+        const string permname = "toolsgathermanager.allow";
+
+        void RegisterToolPermissions()
+        {
+            foreach (var def in ItemManager.GetItemDefinitions())
+            {
+                if (def.category == ItemCategory.Tool)
+                {
+                    permission.RegisterPermission(this.Name.ToLower() + "." + def.shortname, this);
+                }
+            }
+        }
+
+        bool HasPerm(BasePlayer player)
+        {
+            if (config.usetoolpermissions)
+                return HasToolPermission(player);
+
+            return permission.UserHasPermission(player.UserIDString, permname);
+        }
+
+        bool HasToolPermission(BasePlayer player)
+        {
+            if (player.GetActiveItem()?.info == null)
+                return false;
+
+            return permission.UserHasPermission(player.UserIDString, this.Name.ToLower() + "." + player.GetActiveItem().info.shortname);
+        }
+
+        void Init()
+        {
+            permission.RegisterPermission(permname, this);
+            RegisterToolPermissions();
+
+        }
+
         static Configuration config;
 
         public class Configuration
         {
-            [JsonProperty(PropertyName = "Tools")]
-            public Dictionary<string, float> tools;
+            [JsonProperty(PropertyName = "Permissions for every Tool")]
+            public bool usetoolpermissions = false;
             [JsonProperty(PropertyName = "Night Gatherrate")]
             public float nightrate = 1;
             [JsonProperty(PropertyName = "Day Gatherrate")]
             public float dayrate = 1;
+            [JsonProperty(PropertyName = "Tools")]
+            public Dictionary<string, float> tools;
 
             public static Configuration DefaultConfig()
             {
