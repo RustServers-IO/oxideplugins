@@ -1,0 +1,16 @@
+{
+    "name": "ItemSplitter",
+    "description": "ItemSplitter allow you to easily split your items from your main inventory.",
+    "author": "sami37",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/itemsplitter.2566",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
