@@ -1,0 +1,16 @@
+{
+    "name": "CodeCracker",
+    "description": "Allows players to crack code locks on boxes, etc.",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/codecracker.2568",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

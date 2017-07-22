@@ -9,7 +9,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.4.0")]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.4.2")]
     [Description("Running Man is a short plugin where you have to kill the runner.")]
     class RunningMan : RustPlugin
     {
@@ -90,7 +90,7 @@ namespace Oxide.Plugins
                  {"NobodyOnline", "<color=#C4FF00>{0}</color>: You can't run event while there is nobody online"},
                  {"NoPerm", "<color=#C4FF00>{0}</color>: You have no rights to do this!"},
                  {"RunnerLeaved", "<color=#C4FF00>{0}</color>: {1} got scared and ran away!"},
-                 {"EventStopped", "<color=#C4FF00>{0}</color>: Event has stopped!"},
+                 {"EventStopped", "<color=#C4FF00>{0}</color>: Event has stopped!"}
             }, this);
         }
 
@@ -113,11 +113,8 @@ namespace Oxide.Plugins
 
         void LoadSavedData()
         {
-            try
-            {
-                SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, int>>(nameof(RunningMan));
-            }
-            catch (Exception)
+            SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, int>>(nameof(RunningMan));
+            if (SavedReward.Count == 0)
             {
                 SavedReward = new Dictionary<string, int>
                 {
@@ -140,7 +137,7 @@ namespace Oxide.Plugins
         {
             try
             {
-                Interface.Oxide.DataFileSystem.WriteObject("KarmaSystem", SavedReward);
+                Interface.Oxide.DataFileSystem.WriteObject(nameof(RunningMan), SavedReward);
             }
             catch (Exception)
             {
