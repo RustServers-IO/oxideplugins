@@ -1,8 +1,9 @@
 ﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PermaMap", "redBDGR", "1.0.5", ResourceId = 2557)]
+    [Info("PermaMap", "redBDGR", "1.0.6", ResourceId = 2557)]
     [Description("Make sure that players always have access to a map")]
 
     class PermaMap : RustPlugin
@@ -23,8 +24,16 @@ namespace Oxide.Plugins
 
         void OnPlayerInit(BasePlayer player)
         {
-            if (player.inventory.containerBelt.GetSlot(6) == null)
-                timer.Once(5f, () => DoMap(player));
+            timer.Once(5f, () =>
+            {
+                if (player.IsSleeping())
+                {
+                    OnPlayerInit(player);
+                    return;
+                }
+                if (player.inventory.containerBelt.GetSlot(6) == null)
+                    DoMap(player);
+            });
         }
 
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
@@ -34,7 +43,6 @@ namespace Oxide.Plugins
             Item x = player.inventory.containerBelt.GetSlot(6);
             if (x == null)
                 return;
-            x.LockUnlock(false, player);
             x.RemoveFromContainer();
         }
 
@@ -60,7 +68,6 @@ namespace Oxide.Plugins
             player.inventory.containerBelt.capacity = 7;
             Item item = ItemManager.CreateByItemID(107868, 1);
             item.MoveToContainer(player.inventory.containerBelt, 6);
-            item.LockUnlock(true, player);
         }
 
         string msg(string key, string id = null) => lang.GetMessage(key, this, id);
