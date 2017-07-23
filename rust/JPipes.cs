@@ -11,7 +11,7 @@ using System.Collections;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes","TheGreatJ","0.4.0",ResourceId = 2402)]
+    [Info("JPipes","TheGreatJ","0.4.1",ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -1235,12 +1235,9 @@ namespace Oxide.Plugins {
             return false;
         }
 
-        private static bool checkcontwhitelist(BaseEntity e) {
-            if (e is VendingMachine || e is BaseFuelLightSource || e is Locker || e is LiquidContainer || e is ShopFront || e is RepairBench)
-                return false;
-            return true;
-        }
-
+        private static bool checkcontwhitelist(BaseEntity e) =>
+            !(e is BaseFuelLightSource || e is Locker || e is LiquidContainer || e is ShopFront || e is RepairBench);
+        
         private bool checkcontprivlage(BaseEntity e,BasePlayer p) => e.GetComponent<StorageContainer>().CanOpenLootPanel(p) && checkbuildingprivlage(p); 
 
         private bool checkbuildingprivlage(BasePlayer p) {
