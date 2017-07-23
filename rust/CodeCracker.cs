@@ -5,19 +5,17 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("CodeCracker", "Hougan", "1.0.0")]
+    [Info("CodeCracker", "Hougan", "1.1.0")]
     [Description("With this plugin you can hack different code-locks")]
     class CodeCracker : RustPlugin
     {
-
-        // TODO: Add more GUI variant.
         #region Variable
         private static string BoxName = "assets/prefabs/deployable/large wood storage/box.wooden.large.prefab";
         private static string sBoxName = "assets/prefabs/deployable/woodenbox/box_wooden.item.prefab";
         private static string CupName = "assets/prefabs/deployable/tool cupboard/cupboard.tool.deployed.prefab";
-        private static string EffectName = "assets/bundled/prefabs/fx/ore_break.prefab";
-        private Dictionary<ulong, Robber> playerTimers = new Dictionary<ulong, Robber>();
-        class Robber
+        private static string EffectName = "assets/bundled/prefabs/fx/ore_break.prefab"; // Set other to change unlock effect
+        private Dictionary<ulong, Cracker> playerTimers = new Dictionary<ulong, Cracker>();
+        class Cracker
         {
             public bool isUnlocking = false;
             public double amountGUI = 0;
@@ -27,54 +25,46 @@ namespace Oxide.Plugins
         }
         private int unlockTime;
         private int unlockChance;
-        private int moveAmount;
+        private int unlockItem;
         private bool unlockEffects;
-        private bool cupAllowed;
+        private int moveAmount;
         private bool damageRestrict;
-        private string aMin = "";
-        private string aMax = "";
-        private string robberyUse = "codecracker.use";
-        private string robberyChance = "codecracker.chance";
+        private bool cupAllowed;
+        private string aMin = "0.3445 0.115"; // Set different to change GUI position
+        private string aMax = "0.6395 0.13"; // Set different to change GUI position
+        private string crackeryUse = "codecracker.use";
+        private string crackerChance = "codecracker.chance";
         #endregion
 
         #region Core
         [ChatCommand("crack")]
         void RobBox(BasePlayer player)
         {
-            if (!permission.UserHasPermission(player.UserIDString, robberyUse)) { SendReply(player, msg("Permission", player.UserIDString)); return; }
+            if (!permission.UserHasPermission(player.UserIDString, crackeryUse)) { SendReply(player, msg("Permission", player.UserIDString)); return; }
             RaycastHit hitinfo;
             if (Physics.Raycast(player.eyes.position, Quaternion.Euler(player.GetNetworkRotation()) * Vector3.forward,
                 out hitinfo, 5f, LayerMask.GetMask(new string[] {"Deployed"})))
             {
-                if ((hitinfo.GetEntity().PrefabName == sBoxName || hitinfo.GetEntity().PrefabName == BoxName ||
-                     (hitinfo.GetEntity().PrefabName == CupName && cupAllowed)) &&
-                    hitinfo.GetEntity().HasSlot(BaseEntity.Slot.Lock))
+                if ((hitinfo.GetEntity().PrefabName == sBoxName || hitinfo.GetEntity().PrefabName == BoxName || (hitinfo.GetEntity().PrefabName == CupName && cupAllowed)) && hitinfo.GetEntity().HasSlot(BaseEntity.Slot.Lock))
                 {
                     BaseLock baseLock = hitinfo.GetEntity().children[0].GetComponent<BaseLock>();
                     if (!baseLock.GetComponent<CodeLock>().whitelistPlayers.Contains(player.userID))
                     {
-                        if (!playerTimers.ContainsKey(player.userID)) { playerTimers.Add(player.userID, new Robber()); }
+                        if (!playerTimers.ContainsKey(player.userID)) { playerTimers.Add(player.userID, new Cracker()); }
                         if (!playerTimers[player.userID].isUnlocking)
                         {
+                            if (unlockItem != 0)
+                            {
+                                if (player.inventory.containerMain.FindItemsByItemID(unlockItem).Count != 0) { player.inventory.containerMain.Take(null, unlockItem, 1); }
+                                else { SendReply(player, msg("Item", player.UserIDString), ItemManager.CreateByItemID(unlockItem).info.displayName.english); return; }
+                            }
                             SendReply(player, msg("Start", player.UserIDString));
                             var dPos = player.transform.position;
                             Vector3 cPos;
                             playerTimers[player.userID].isUnlocking = true;
                             playerTimers[player.userID].AtAll = timer.Once(unlockTime, () =>
                             {
-                                if (Oxide.Core.Random.Range(0, 100) < unlockChance ||
-                                    permission.UserHasPermission(player.UserIDString, robberyChance))
-                                {
-                                    StopUnlocking(player);
-                                    impactLock(baseLock, player, true);
-                                    SendReply(player, msg("Success", player.UserIDString));
-                                }
-                                else
-                                {
-                                    StopUnlocking(player);
-                                    impactLock(baseLock, player, false);
-                                    SendReply(player, msg("Failed", player.UserIDString));
-                                }
+                                FinishCrack(player, baseLock);
                             });
                             playerTimers[player.userID].GUI = timer.Every(1, () =>
                             {
@@ -83,20 +73,21 @@ namespace Oxide.Plugins
                                 if (Vector3.Distance(dPos, cPos) > moveAmount)
                                 {
                                     StopUnlocking(player);
-                                    SendReply(player, msg("Moved", player.UserIDString));
+                                    SendReply(player, msg("Moved", player.UserIDString)); 
+                                    Effect.server.Run("assets/prefabs/deployable/research table/effects/research-fail.prefab",
+                                        player, 0u, Vector3.zero, Vector3.forward, null, false);
                                     return;
                                 }
                                 CuiHelper.DestroyUi(player, "UnlockGUI");
                                 UnlockGUI(player, playerTimers[player.userID].amountGUI);
                             });
-                            playerTimers[player.userID].Effects = timer.Every(5, () =>
+                            playerTimers[player.userID].Effects = timer.Every(11, () =>
                             {
-                                if (unlockEffects)
-                                {
-                                    Effect.server.Run(EffectName, baseLock.GetComponent<CodeLock>(), 0u, Vector3.zero,
-                                        Vector3.forward, null, false);
-                                }
+                                Effect.server.Run("assets/prefabs/deployable/research table/effects/research-start.prefab",
+                                    player, 0u, Vector3.zero, Vector3.forward, null, false);
+                                if (unlockEffects) Effect.server.Run(EffectName, baseLock.GetComponent<CodeLock>(), 0u, Vector3.zero, Vector3.forward, null, false);
                             });
+                            playerTimers[player.userID].Effects.Callback();
                         }
                         else { SendReply(player, msg("Locking", player.UserIDString)); }
                     }
@@ -112,9 +103,10 @@ namespace Oxide.Plugins
         #region Initialize
         protected override void LoadDefaultConfig()
         {
-            unlockTime = Convert.ToInt32(GetVariable("Unlocking", "Time to unlock", 30));
+            unlockTime = Convert.ToInt32(GetVariable("Unlocking", "Time to unlock", 10));
             unlockChance = Convert.ToInt32(GetVariable("Unlocking", "Chance to unlock", 50));
             unlockEffects = Convert.ToBoolean(GetVariable("Unlocking", "Enable effects", true));
+            unlockItem = Convert.ToInt32(GetVariable("Unlocking", "ItemID that player need (0 - for disable)", 1200628767));
             cupAllowed = Convert.ToBoolean(GetVariable("Objects", "Allow cupboard crack", true));
             moveAmount = Convert.ToInt32(GetVariable("Checks", "Number of hops for cancellation crack", 2));
             damageRestrict = Convert.ToBoolean(GetVariable("Checks", "Damage cancel cracking", true));
@@ -123,8 +115,8 @@ namespace Oxide.Plugins
         void Init()
         {
             LoadDefaultConfig();
-            permission.RegisterPermission(robberyUse, this);
-            permission.RegisterPermission(robberyChance, this);
+            permission.RegisterPermission(crackeryUse, this);
+            permission.RegisterPermission(crackerChance, this);
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 //chat
@@ -138,7 +130,8 @@ namespace Oxide.Plugins
                 ["Object"] = "<color=#DC143C>FAILED:</color> It is not box, or cupboard! (Or it have not code-lock)",
                 ["Look"] = "<color=#DC143C>ERROR:</color> You can't crack this object!",
                 ["Locking"] = "<color=#DC143C>ERROR:</color> You already cracking something!",
-                ["WhiteList"] = "<color=#DC143C>ERROR:</color> You already have code of this lock!",
+                ["WhiteList"] = "<color=#DC143C>ERROR:</color> You already authed on this lock!",
+                ["Item"] = "<color=#DC143C>ERROR:</color> You have not {0}!",
                 ["Debug"] = "<color=#00cc00>SUCCES:</color> Unwhitelisted!"
             }, this);
         }
@@ -150,26 +143,44 @@ namespace Oxide.Plugins
             playerTimers[player.userID].Effects.Destroy();
             playerTimers[player.userID].GUI.Destroy();
             playerTimers[player.userID].AtAll.Destroy();
-            
             playerTimers.Remove(player.userID);
             CuiHelper.DestroyUi(player, "UnlockGUI");
         }
-        void impactLock(BaseLock baseLock, BasePlayer player, bool Yes)
+        void impactLock(BaseLock baseLock, BasePlayer player, bool Result)
         {
             var locker = baseLock.GetComponent<CodeLock>();
-            if (Yes)
+            if (Result)
             {
                 locker.whitelistPlayers.Add(player.userID);
                 locker.SetFlag(CodeLock.Flags.Locked, false);
                 Effect.server.Run(locker.effectUnlocked.resourcePath, baseLock.GetComponent<CodeLock>(), 0u, Vector3.zero, Vector3.forward, null, false);
+                Effect.server.Run("assets/prefabs/deployable/research table/effects/research-success.prefab",
+                    player, 0u, Vector3.zero, Vector3.forward, null, false);
             }
             else
             {
                 Effect.server.Run(locker.effectShock.resourcePath, baseLock.GetComponent<CodeLock>(), 0u, Vector3.zero, Vector3.forward, null, false);
+                Effect.server.Run("assets/prefabs/deployable/research table/effects/research-fail.prefab",
+                    player, 0u, Vector3.zero, Vector3.forward, null, false);
+            }
+        }
+
+        void FinishCrack(BasePlayer player, BaseLock baseLock)
+        {
+            StopUnlocking(player);
+            if (Oxide.Core.Random.Range(0, 100) < unlockChance || permission.UserHasPermission(player.UserIDString, crackerChance))
+            {
+                impactLock(baseLock, player, true);
+                SendReply(player, msg("Success", player.UserIDString));
+            }
+            else
+            {
+                impactLock(baseLock, player, false);
+                SendReply(player, msg("Failed", player.UserIDString));
             }
         }
         string msg(string key, string id = null) => lang.GetMessage(key, this, id);
-
+        
         object GetVariable(string menu, string datavalue, object defaultValue)
         {
             var data = Config[menu] as Dictionary<string, object>;
@@ -216,7 +227,7 @@ namespace Oxide.Plugins
             var Choose = MoveElements.Add(new CuiPanel
             {
                 Image = { Color = $"0.1 0.1 0.1 0" },
-                RectTransform = { AnchorMin = "0.3445 0.115", AnchorMax = "0.6395 0.13" },
+                RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
                 CursorEnabled = false,
             }, "HUD", "UnlockGUI");
             // Cancel Button
@@ -239,14 +250,15 @@ namespace Oxide.Plugins
         #endregion
 
         #region Debug
-        [ChatCommand("robbery.test")]
+        [ChatCommand("cc.test")] // TODO: Fix name
         void robbertest(BasePlayer player)
         {
             if (!player.IsAdmin)
             {
                 SendReply(player, msg("Permission", player.UserIDString));
+                return;
             }
-            playerTimers.Add(player.userID, new Robber());
+            playerTimers.Add(player.userID, new Cracker());
             RaycastHit hitinfo;
             Physics.Raycast(player.eyes.position, Quaternion.Euler(player.GetNetworkRotation()) * Vector3.forward, out hitinfo, 5f);
             CodeLock loc = hitinfo.GetEntity().children[0].GetEntity().GetComponent<CodeLock>();
