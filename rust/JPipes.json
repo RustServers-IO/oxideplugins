@@ -5,7 +5,8 @@
     "version": "0.4.1",
     "configuration": true,
     "suggest": {
-        "FurnaceSplitter": "*"
+        "FurnaceSplitter": "*",
+        "HammerTime": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/jpipes.2402",
