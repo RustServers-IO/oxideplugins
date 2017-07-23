@@ -9,6 +9,8 @@ namespace Oxide.Plugins
     [Description("With this plugin you can hack different code-locks")]
     class CodeCracker : RustPlugin
     {
+
+        // TODO: Add more GUI variant.
         #region Variable
         private static string BoxName = "assets/prefabs/deployable/large wood storage/box.wooden.large.prefab";
         private static string sBoxName = "assets/prefabs/deployable/woodenbox/box_wooden.item.prefab";
@@ -25,10 +27,14 @@ namespace Oxide.Plugins
         }
         private int unlockTime;
         private int unlockChance;
+        private int moveAmount;
         private bool unlockEffects;
         private bool cupAllowed;
-        private string robberyUse = "robbery.use";
-        private string robberyChance = "robbery.chance";
+        private bool damageRestrict;
+        private string aMin = "";
+        private string aMax = "";
+        private string robberyUse = "codecracker.use";
+        private string robberyChance = "codecracker.chance";
         #endregion
 
         #region Core
@@ -37,17 +43,17 @@ namespace Oxide.Plugins
         {
             if (!permission.UserHasPermission(player.UserIDString, robberyUse)) { SendReply(player, msg("Permission", player.UserIDString)); return; }
             RaycastHit hitinfo;
-            if (Physics.Raycast(player.eyes.position, Quaternion.Euler(player.GetNetworkRotation()) * Vector3.forward, out hitinfo, 5f,LayerMask.GetMask(new string[] { "Deployed" })))
+            if (Physics.Raycast(player.eyes.position, Quaternion.Euler(player.GetNetworkRotation()) * Vector3.forward,
+                out hitinfo, 5f, LayerMask.GetMask(new string[] {"Deployed"})))
             {
-                if ((hitinfo.GetEntity().PrefabName == sBoxName || hitinfo.GetEntity().PrefabName == BoxName || (hitinfo.GetEntity().PrefabName == CupName && cupAllowed)) && hitinfo.GetEntity().HasSlot(BaseEntity.Slot.Lock))
+                if ((hitinfo.GetEntity().PrefabName == sBoxName || hitinfo.GetEntity().PrefabName == BoxName ||
+                     (hitinfo.GetEntity().PrefabName == CupName && cupAllowed)) &&
+                    hitinfo.GetEntity().HasSlot(BaseEntity.Slot.Lock))
                 {
                     BaseLock baseLock = hitinfo.GetEntity().children[0].GetComponent<BaseLock>();
                     if (!baseLock.GetComponent<CodeLock>().whitelistPlayers.Contains(player.userID))
                     {
-                        if (!playerTimers.ContainsKey(player.userID))
-                        {
-                            playerTimers.Add(player.userID, new Robber());
-                        }
+                        if (!playerTimers.ContainsKey(player.userID)) { playerTimers.Add(player.userID, new Robber()); }
                         if (!playerTimers[player.userID].isUnlocking)
                         {
                             SendReply(player, msg("Start", player.UserIDString));
@@ -74,7 +80,7 @@ namespace Oxide.Plugins
                             {
                                 playerTimers[player.userID].amountGUI += (double) 1 / unlockTime;
                                 cPos = player.transform.position;
-                                if (Vector3.Distance(dPos, cPos) > 2)
+                                if (Vector3.Distance(dPos, cPos) > moveAmount)
                                 {
                                     StopUnlocking(player);
                                     SendReply(player, msg("Moved", player.UserIDString));
@@ -87,13 +93,18 @@ namespace Oxide.Plugins
                             {
                                 if (unlockEffects)
                                 {
-                                    Effect.server.Run(EffectName, baseLock.GetComponent<CodeLock>(), 0u, Vector3.zero, Vector3.forward, null, false);
+                                    Effect.server.Run(EffectName, baseLock.GetComponent<CodeLock>(), 0u, Vector3.zero,
+                                        Vector3.forward, null, false);
                                 }
                             });
                         }
+                        else { SendReply(player, msg("Locking", player.UserIDString)); }
                     }
+                    else { SendReply(player, msg("WhiteList", player.UserIDString)); }
                 }
+                else { SendReply(player, msg("Object", player.UserIDString)); }
             }
+            else { SendReply(player, msg("Look", player.UserIDString)); }
         }
 
         #endregion
@@ -101,10 +112,12 @@ namespace Oxide.Plugins
         #region Initialize
         protected override void LoadDefaultConfig()
         {
-            unlockTime = Convert.ToInt32(GetVariable("Main", "Time to unlock", 30));
-            unlockChance = Convert.ToInt32(GetVariable("Main", "Chance to unlock", 50));
-            unlockEffects = Convert.ToBoolean(GetVariable("Main", "Enable effects", true));
-            cupAllowed = Convert.ToBoolean(GetVariable("Main", "Allow cupboard hack", true));
+            unlockTime = Convert.ToInt32(GetVariable("Unlocking", "Time to unlock", 30));
+            unlockChance = Convert.ToInt32(GetVariable("Unlocking", "Chance to unlock", 50));
+            unlockEffects = Convert.ToBoolean(GetVariable("Unlocking", "Enable effects", true));
+            cupAllowed = Convert.ToBoolean(GetVariable("Objects", "Allow cupboard crack", true));
+            moveAmount = Convert.ToInt32(GetVariable("Checks", "Number of hops for cancellation crack", 2));
+            damageRestrict = Convert.ToBoolean(GetVariable("Checks", "Damage cancel cracking", true));
             SaveConfig();
         }
         void Init()
@@ -122,7 +135,11 @@ namespace Oxide.Plugins
                 ["Damage"] = "You got <color=#DC143C>damage</color>, hacking <color=#DC143C>aborted</color>!",
                 ["Success"] = "<color=#00cc00>SUCCESS:</color> Code unlocked!",
                 ["Failed"] = "<color=#DC143C>FAILED:</color> Code still locked!",
-                ["Debug"] = "<color=#DC143C>SUCCES:</color> Unwhitelisted!"
+                ["Object"] = "<color=#DC143C>FAILED:</color> It is not box, or cupboard! (Or it have not code-lock)",
+                ["Look"] = "<color=#DC143C>ERROR:</color> You can't crack this object!",
+                ["Locking"] = "<color=#DC143C>ERROR:</color> You already cracking something!",
+                ["WhiteList"] = "<color=#DC143C>ERROR:</color> You already have code of this lock!",
+                ["Debug"] = "<color=#00cc00>SUCCES:</color> Unwhitelisted!"
             }, this);
         }
         #endregion
@@ -175,6 +192,7 @@ namespace Oxide.Plugins
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
             if (entity.net.connection == null) return;
+            if (!damageRestrict) return;
             var player = BasePlayer.FindByID(entity.GetComponent<BaseEntity>().net.connection.userid);
             if (playerTimers.ContainsKey(player.userID))
             {
