@@ -10,7 +10,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-	[Info("Timber", "Mattparks", "0.1.7", ResourceId = 2565)]
+	[Info("Timber", "Mattparks", "0.1.8", ResourceId = 2565)]
 	[Description("Makes trees and cacti fall before being destroyed.")]
 	class Timber : RustPlugin 
 	{
@@ -19,36 +19,38 @@ namespace Oxide.Plugins
 
 		private readonly static string soundWoundedPrefab = "assets/bundled/prefabs/fx/player/beartrap_scream.prefab";
 		private readonly static string soundFallNormalPrefab = "assets/bundled/prefabs/fx/player/groundfall.prefab";
-		private readonly static string soundFallLargePrefab = "assets/bundled/prefabs/fx/player/groundfall.prefab";
+		private readonly static string soundFallLargePrefab = "assets/prefabs/building/door.hinged/effects/gate-external-wood-close-end.prefab";
 		private readonly static string soundGroundPrefab = "assets/bundled/prefabs/fx/player/groundfall.prefab";
 		private readonly static string soundDespawnPrefab = "assets/bundled/prefabs/fx/player/groundfall.prefab";
 		private readonly static string despawnPrefab = "assets/prefabs/misc/junkpile/effects/despawn.prefab";
 		private readonly static string stumpPrefab = "assets/bundled/prefabs/autospawn/collectable/stone/wood-collectable.prefab";
 
-		private float harvestStanding => Config.Get<float>("HarvestStanding"); // 
-		private float harvestFallen => Config.Get<float>("HarvestFallen"); // 
-		private float despawnLength => Config.Get<float>("DespawnLength"); // How long the fallen tree will sit on the ground before despawning.
-		private float screamPercent => Config.Get<float>("ScreamPercent"); // The percent of trees that will scream when chopped down.
-		private bool includeCacti => Config.Get<bool>("IncludeCacti"); // If cacti will be included in the timber plugin.
-		private bool logToPlayer => Config.Get<bool>("LogToPlayer"); // If enabled the message "Timber!" will be displayed to the player when they chop down there first tree.
+        #region Configuration
 
+		private float harvestStanding; // The rate of gather in fallen trees.
+		private float harvestFallen; // The rate of gather in standing trees.
+		private float despawnLength; // How long the fallen tree will sit on the ground before despawning.
+		private float screamPercent; // The percent of trees that will scream when chopped down.
+		private bool includeCacti; // If cacti will be included in the timber plugin.
+		private bool logToPlayer; // If enabled a message will be displayed to a player after they chop down there first tree.
+		
 		private void LoadDefaultConfig()
 		{
-			PrintWarning("Creating default configuration.");
-			Config.Clear();
-			Config["HarvestStanding"] = 0.5f; 
-			Config["HarvestFallen"] = 2.805f; 
-			Config["DespawnLength"] = 30.0f; 
-			Config["ScreamPercent"] = 0.06f; 
-			Config["IncludeCacti"] = true; 
-			Config["LogToPlayer"] = true;
+			Config["HarvestStanding"] = harvestStanding = GetConfig("HarvestStanding", 0.5f);
+			Config["HarvestFallen"] = harvestFallen = GetConfig("HarvestFallen", 2.805f);
+			Config["DespawnLength"] = despawnLength = GetConfig("DespawnLength", 30.0f);
+			Config["ScreamPercent"] = screamPercent = GetConfig("ScreamPercent", 0.06f);
+			Config["IncludeCacti"] = includeCacti = GetConfig("IncludeCacti", true);
+			Config["LogToPlayer"] = logToPlayer = GetConfig("LogToPlayer", true);
 			SaveConfig();
 		}
 
-		private void Init()
-		{
-			permission.RegisterPermission(PERMISSION_FIRST, this);
+        #endregion
 
+        #region Messages/Localization
+
+		private void LoadDefaultMessages() 
+		{
 			// English messages.
 			lang.RegisterMessages(new Dictionary<string, string>
 			{
@@ -84,12 +86,33 @@ namespace Oxide.Plugins
 				["TIMBER_FIRST"] = "<color=red>¡Madera!</color> Árbol que cae no está en el moho de la vainilla, leyó más del comando <color=green>/timber</color>",
 			}, this, "es");
 		}
+		
+        #endregion
+
+        #region Initialization
+
+		private void Init()
+		{
+			LoadDefaultConfig();
+			LoadDefaultMessages();
+			
+			// Registers permissions.
+			permission.RegisterPermission(PERMISSION_FIRST, this);
+		}
+
+		#endregion
+
+        #region Chat/Console Commands
 
 		[ChatCommand("timber")]
 		private void TimberCmd(BasePlayer player, string command, string[] args)
 		{
-			player.ChatMessage(lang.GetMessage("TIMBER_ABOUT", this, player.UserIDString));
+			MessagePlayer(Lang("TIMBER_ABOUT", player), player);
 		}
+		
+        #endregion
+
+		#region OnDispenserGather
 
 		private void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
 		{
@@ -113,6 +136,10 @@ namespace Oxide.Plugins
 				item.amount = (int) (item.amount * harvestStanding);
 			}
 		}
+		
+        #endregion
+		
+		#region OnEntityKill
 
 		private void OnEntityKill(BaseNetworkable entity)
 		{
@@ -139,7 +166,7 @@ namespace Oxide.Plugins
 							{
 								if (!permission.UserHasPermission(player.UserIDString, PERMISSION_FIRST))
 								{
-									player.ChatMessage(lang.GetMessage("TIMBER_FIRST", this, player.UserIDString));
+									MessagePlayer(Lang("TIMBER_FIRST", player), player);
 									permission.GrantUserPermission(player.UserIDString, PERMISSION_FIRST, this);
 								}
 							}
@@ -170,6 +197,36 @@ namespace Oxide.Plugins
 				newFalling.Spawn();
 			}
 		}
+
+        #endregion
+		
+        #region Helpers
+
+		private T GetConfig<T>(string name, T original)
+		{
+			// Returns the reading of present.
+			if (Config[name] != null)
+			{
+				return (T)Convert.ChangeType(Config[name], typeof(T));
+			}
+
+			// Otherwise return the original.
+			return original;
+		}
+		
+		private string Lang(string key, BasePlayer player)
+		{
+			return lang.GetMessage(key, this, player.UserIDString);
+		}
+
+		private void MessagePlayer(string message, BasePlayer player)
+		{
+			player.ChatMessage(message);
+		}
+
+        #endregion
+		
+		#region Behaviours
 
 		public class FallControl : MonoBehaviour
 		{
@@ -316,5 +373,7 @@ namespace Oxide.Plugins
 				}
 			}
 		}
+		
+        #endregion
 	}
 }

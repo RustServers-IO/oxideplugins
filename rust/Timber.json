@@ -2,7 +2,7 @@
     "name": "Timber",
     "description": "Makes trees and cacti fall before being destroyed.",
     "author": "",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/timber.2565",
