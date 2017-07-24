@@ -1,0 +1,16 @@
+{
+    "name": "Healing Arrows",
+    "description": "Impale people with flying syringes!",
+    "author": "Kappasaurus",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/healing-arrows.2572",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
