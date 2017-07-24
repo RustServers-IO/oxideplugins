@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.6.0", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.6.1", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
     class ZLevelsRemastered : RustPlugin
@@ -51,6 +51,7 @@ namespace Oxide.Plugins
 		string permissionName;
 		string pluginPrefix;
 		bool playerCuiDefaultEnabled;
+		bool exludeWeaponsOnGather;
 		Dictionary<string, object> defaultMultipliers;
         Dictionary<string, object> resourceMultipliers;
         Dictionary<string, object> levelCaps;
@@ -107,6 +108,7 @@ namespace Oxide.Plugins
 			pluginPrefix = Convert.ToString(GetConfig("Generic", "pluginPrefix", "<color=orange>ZLevels</color>:"));
 			enableLevelupBroadcast = Convert.ToBoolean(GetConfig("Generic", "enableLevelupBroadcast", false));
 			playerCuiDefaultEnabled = Convert.ToBoolean(GetConfig("Generic", "playerCuiDefaultEnabled", true));
+			exludeWeaponsOnGather =  Convert.ToBoolean(GetConfig("Generic", "exludeWeaponsOnGather", false));
 
 			defaultMultipliers = (Dictionary<string, object>)GetConfig("Settings", "DefaultResourceMultiplier", new Dictionary<string, object>{
                 {Skills.WOODCUTTING, 1},
@@ -468,6 +470,8 @@ namespace Oxide.Plugins
         {
             if (!initialized || entity == null || !(entity is BasePlayer) || item == null || dispenser == null) return;
 			var player = entity as BasePlayer;
+			if (exludeWeaponsOnGather && player.GetActiveItem()?.info?.category == ItemCategory.Weapon)
+				return;
 			if (dispenser.gameObject.GetComponent<FinishBonusClass>())
 				dispenser.gameObject.GetComponent<FinishBonusClass>().OnHit(player);
 			else

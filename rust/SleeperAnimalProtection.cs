@@ -6,7 +6,7 @@ using Facepunch;
 
 namespace Oxide.Plugins
 {
-    [Info("SleeperAnimalProtection", "Fujikura", "0.2.2", ResourceId = 1959)]
+    [Info("SleeperAnimalProtection", "Fujikura", "1.0.0", ResourceId = 1959)]
 	[Description("Protects sleeping players from being killed by animals")]
     class SleeperAnimalProtection : RustPlugin
     {
@@ -76,11 +76,17 @@ namespace Oxide.Plugins
 	
 		object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-			if (entity as BasePlayer != null && (entity as BasePlayer).IsSleeping() && info.Initiator is BaseNpc) 
+			if (!entity || !(entity is BasePlayer))
+				return null;
+			if ((entity as BasePlayer).IsSleeping() && info.Initiator is BaseNpc) 
 			{
-				if(usePermission && !permission.UserHasPermission((entity as BasePlayer).userID.ToString(), permissionName)) return null;
-				if(checkForFoundation && GetFoundation(entity.transform.position).Count == 0) return null;
-				info.Initiator.Kill();
+				if(usePermission && !permission.UserHasPermission((entity as BasePlayer).userID.ToString(), permissionName))
+					return null;
+				if(checkForFoundation && GetFoundation(entity.transform.position).Count == 0)
+					return null;
+				var npc = info.Initiator as BaseNpc;
+				npc.AiContext.Memory.AddDanger(entity.transform.position, 2f);
+				npc.CurrentBehaviour = BaseNpc.Behaviour.Flee;
 				return true;
 			}
             return null;

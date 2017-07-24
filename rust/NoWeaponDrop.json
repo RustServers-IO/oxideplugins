@@ -1,6 +1,6 @@
 {
     "name": "No Weapon Drop",
-    "description": "Prevents dropping of active weapon on wounded or headshot\/instant-kill",
+    "description": "Prevents dropping of active weapon when players start to die",
     "author": "Fujikura",
     "version": "1.0.0",
     "configuration": true,
