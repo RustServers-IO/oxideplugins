@@ -2,7 +2,7 @@
     "name": "No Weapon Drop",
     "description": "Prevents dropping of active weapon on wounded or headshot\/instant-kill",
     "author": "Fujikura",
-    "version": "0.2.3",
+    "version": "1.0.0",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/no-weapon-drop.1960",
