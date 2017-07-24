@@ -439,3 +439,68 @@ namespace Oxide.Plugins
         string FormatTime(TimeSpan time) => $"{(time.Days == 0 ? string.Empty : $"{time.Days} day(s)")}{(time.Days != 0 && time.Hours != 0 ? $", " : string.Empty)}{(time.Hours == 0 ? string.Empty : $"{time.Hours} hour(s)")}{(time.Hours != 0 && time.Minutes != 0 ? $", " : string.Empty)}{(time.Minutes == 0 ? string.Empty : $"{time.Minutes} minute(s)")}{(time.Minutes != 0 && time.Seconds != 0 ? $", " : string.Empty)}{(time.Seconds == 0 ? string.Empty : $"{time.Seconds} second(s)")}";
 
         private bool TryParseTimeSpan(string source, out TimeSpan timeSpan)
+        {
+            int seconds = 0, minutes = 0, hours = 0, days = 0;
+
+            Match s = new Regex(@"(\d+?)s", RegexOptions.IgnoreCase).Match(source);
+            Match m = new Regex(@"(\d+?)m", RegexOptions.IgnoreCase).Match(source);
+            Match h = new Regex(@"(\d+?)h", RegexOptions.IgnoreCase).Match(source);
+            Match d = new Regex(@"(\d+?)d", RegexOptions.IgnoreCase).Match(source);
+
+            if (s.Success)
+                seconds = Convert.ToInt32(s.Groups[1].ToString());
+
+            if (m.Success)
+                minutes = Convert.ToInt32(m.Groups[1].ToString());
+
+            if (h.Success)
+                hours = Convert.ToInt32(h.Groups[1].ToString());
+
+            if (d.Success)
+                days = Convert.ToInt32(d.Groups[1].ToString());
+
+            source = source.Replace(seconds + "s", string.Empty);
+            source = source.Replace(minutes + "m", string.Empty);
+            source = source.Replace(hours + "h", string.Empty);
+            source = source.Replace(days + "d", string.Empty);
+
+            if (!string.IsNullOrEmpty(source) || (!s.Success && !m.Success && !h.Success && !d.Success))
+            {
+                timeSpan = default(TimeSpan);
+                return false;
+            }
+
+            timeSpan = new TimeSpan(days, hours, minutes, seconds);
+
+            return true;
+        }
+
+        #endregion
+
+        #region Data & Config Helper
+
+        private void GetConfig<T>(ref T variable, params string[] path)
+        {
+            if (path.Length == 0)
+                return;
+
+            if (Config.Get(path) == null)
+            {
+                Config.Set(path.Concat(new object[] { variable }).ToArray());
+                PrintWarning($"Added field to config: {string.Join("/", path)}");
+            }
+
+            variable = (T)Convert.ChangeType(Config.Get(path), typeof(T));
+        }
+
+        private string DataFileName => Title.Replace(" ", "");
+
+        private void LoadData<T>(ref T data, string filename = null) => data = Core.Interface.Oxide.DataFileSystem.ReadObject<T>(filename ?? DataFileName);
+
+        private void SaveData<T>(T data, string filename = null) => Core.Interface.Oxide.DataFileSystem.WriteObject(filename ?? DataFileName, data);
+
+        #endregion
+
+        #endregion
+    }
+}
