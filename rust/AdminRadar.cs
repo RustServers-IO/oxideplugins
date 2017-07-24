@@ -10,7 +10,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminRadar", "nivex", "4.0.3", ResourceId = 978)]
+    [Info("AdminRadar", "nivex", "4.0.4", ResourceId = 978)]
     [Description("ESP tool for Admins and Developers.")]
     public class AdminRadar: RustPlugin
     {
@@ -702,6 +702,7 @@ namespace Oxide.Plugins
             public List<string> OnlineBoxes = new List<string>();
             public Dictionary<string, List<string>> Filters = new Dictionary<string, List<string>>();
             public List<string> Hidden = new List<string>();
+            public List<string> Extended = new List<string>();
             public StoredData() { }
         }
 
@@ -824,10 +825,29 @@ namespace Oxide.Plugins
                         if (currDistance < playerDistance)
                         {
                             string displayName = target.displayName ?? target.UserIDString; // had this bug recently. squashing it now.
+                            string extText = string.Empty;
+
+                            if (storedData.Extended.Contains(player.UserIDString))
+                            {
+                                extText = target.GetActiveItem()?.info.displayName.translated ?? string.Empty;
+
+                                if (!string.IsNullOrEmpty(extText))
+                                {
+                                    var itemList = target?.GetHeldEntity()?.GetComponent<BaseProjectile>()?.GetItem()?.contents?.itemList;
+
+                                    if (itemList?.Count > 0)
+                                    {
+                                        string contents = string.Join("|", itemList.Select(item => item.info.displayName.translated.Replace("Weapon ", "").Replace("Simple Handmade ", "").Replace("Muzzle ", "").Replace("4x Zoom Scope", "4x")).ToArray());
+
+                                        if (!string.IsNullOrEmpty(contents))
+                                            extText = string.Format("{0} ({1})", extText, contents);
+                                    }
+                                }
+                            }
 
                             if (storedData.Visions.Contains(player.UserIDString)) DrawVision(player, target, invokeTime);
                             if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, target.transform.position.y + 10), target.transform.position, 1);
-                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", displayName, Math.Floor(target.health), currDistance));
+                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color> {3}", displayName, Math.Floor(target.health), currDistance, extText));
                             if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, 1f, 0f), target.GetHeight(target.modelState.ducked));
                         }
                         else player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, 1f, 0f), 5f);
@@ -883,12 +903,36 @@ namespace Oxide.Plugins
                             if (currDistance > maxDistance)
                                 continue;
 
-                            bool sb = (showBox || showAll) && box.Value.Name.Contains("box") || box.Value.Name.Equals("heli_crate") || box.Value.Name.Equals("supply_drop");
-                            bool sl = (showLoot || showAll) && box.Value.Name.Contains("loot") || box.Value.Name.Contains("crate_");
-                            bool ss = (showStash || showAll) && box.Value.Name.Contains("stash");
-                            var color = sb ? Color.magenta : sl ? Color.yellow : Color.white;
+                            bool isBox = box.Value.Name.Contains("box") || box.Value.Name.Equals("heli_crate") || box.Value.Name.Equals("supply_drop");
+                            bool isLoot = box.Value.Name.Contains("loot") || box.Value.Name.Contains("crate_");
+                            
+                            if (isBox)
+                            {
+                                if (!showBox && !showAll)
+                                {
+                                    continue;
+                                }
+                            }
 
-                            if ((sb && currDistance < boxDistance) || (sl && currDistance < lootDistance) || (ss && currDistance < stashDistance))
+                            if (isLoot)
+                            {
+                                if (!showLoot && !showAll)
+                                {
+                                    continue;
+                                }
+                            }
+
+                            if (box.Value.Name.Contains("stash"))
+                            {
+                                if (!showStash && !showAll)
+                                {
+                                    continue;
+                                }
+                            }
+
+                            var color = isBox ? Color.magenta : isLoot ? Color.yellow : Color.white;
+                            
+                            if (currDistance < boxDistance || currDistance < lootDistance || currDistance < stashDistance)
                             {
                                 string contents = string.Empty;
                                 uint uid;
@@ -896,7 +940,7 @@ namespace Oxide.Plugins
                                 if (box.Value.Info != null && uint.TryParse(box.Value.Info.ToString(), out uid))
                                 {
                                     var container = BaseEntity.serverEntities.Find(uid) as StorageContainer;
-
+                                    
                                     if (storedData.OnlineBoxes.Contains(player.UserIDString) && container.name.Contains("box"))
                                     {
                                         var owner = BasePlayer.activePlayerList.Find(x => x.userID == container.OwnerID);
@@ -911,7 +955,7 @@ namespace Oxide.Plugins
                                     {
                                         if (container.inventory.itemList.Count > 0)
                                         {
-                                            if ((sl && showLootContents) || (container.ShortPrefabName.Equals("supply_drop") && showAirdropContents) || (container.ShortPrefabName.Contains("stash") && showStashContents))
+                                            if ((isLoot && showLootContents) || (container.ShortPrefabName.Equals("supply_drop") && showAirdropContents) || (container.ShortPrefabName.Contains("stash") && showStashContents))
                                                 contents = string.Format("({0}) ", string.Join(", ", container.inventory.itemList.Select(item => string.Format("{0} ({1})", item.info.displayName.translated.ToLower(), item.amount)).ToArray()));
                                             else
                                                 contents = string.Format("({0}) ", container.inventory.itemList.Count());
@@ -1110,13 +1154,11 @@ namespace Oxide.Plugins
             }
         }
 
-        static readonly int visionMask = LayerMask.GetMask("Terrain", "World", "Default", "Construction", "Water", "Deployed", "Player (Server)");
-
         static void DrawVision(BasePlayer player, BasePlayer target, float invokeTime)
         {
             RaycastHit hit;
 
-            if (!Physics.Raycast(target.eyes.HeadRay(), out hit, Mathf.Infinity, visionMask))
+            if (!Physics.Raycast(target.eyes.HeadRay(), out hit, Mathf.Infinity))
                 return;
 
             player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.red, target.eyes.position + new Vector3(0f, 0.115f, 0f), hit.point, 0.15f);
@@ -1358,34 +1400,40 @@ namespace Oxide.Plugins
 
             if (args.Length == 1)
             {
-                if (args[0] == "online")
+                switch (args[0].ToLower())
                 {
-                    if (storedData.OnlineBoxes.Contains(player.UserIDString))
-                    {
-                        storedData.OnlineBoxes.Remove(player.UserIDString);
-                        player.ChatMessage(msg("BoxesAll", player.UserIDString));
-                    }
-                    else
-                    {
-                        storedData.OnlineBoxes.Add(player.UserIDString);
-                        player.ChatMessage(msg("BoxesOnlineOnly", player.UserIDString));
-                    }
-                    return;
-                }
+                    case "online":
+                        {
+                            if (storedData.OnlineBoxes.Contains(player.UserIDString))
+                                storedData.OnlineBoxes.Remove(player.UserIDString);
+                            else
+                                storedData.OnlineBoxes.Add(player.UserIDString);
 
-                if (args[0] == "vision")
-                {
-                    if (storedData.Visions.Contains(player.UserIDString))
-                    {
-                        storedData.Visions.Remove(player.UserIDString);
-                        player.ChatMessage(msg("VisionOff", player.UserIDString));
-                    }
-                    else
-                    {
-                        storedData.Visions.Add(player.UserIDString);
-                        player.ChatMessage(msg("VisionOn", player.UserIDString));
-                    }
-                    return;
+                            player.ChatMessage(msg(storedData.OnlineBoxes.Contains(player.UserIDString) ? "BoxesOnlineOnly" : "BoxesAll", player.UserIDString));
+                        }
+                        return;
+                    case "vision":
+                        {
+                            if (storedData.Visions.Contains(player.UserIDString))
+                                storedData.Visions.Remove(player.UserIDString);
+                            else
+                                storedData.Visions.Add(player.UserIDString);
+
+                            player.ChatMessage(msg(storedData.Visions.Contains(player.UserIDString) ? "VisionOn" : "VisionOff", player.UserIDString));
+                        }
+                        return;
+                    case "ext":
+                    case "extend":
+                    case "extended":
+                        {
+                            if (storedData.Extended.Contains(player.UserIDString))
+                                storedData.Extended.Remove(player.UserIDString);
+                            else
+                                storedData.Extended.Add(player.UserIDString);
+
+                            player.ChatMessage(msg(storedData.Extended.Contains(player.UserIDString) ? "ExtendedPlayersOn" : "ExtendedPlayersOff", player.UserIDString));
+                        }
+                        return;
                 }
             }
 
@@ -1483,6 +1531,8 @@ namespace Oxide.Plugins
                     player.ChatMessage(msg("Help2", player.UserIDString, szChatCommand, "online"));
                     player.ChatMessage(msg("Help3", player.UserIDString, szChatCommand, "ui"));
                     player.ChatMessage(msg("Help4", player.UserIDString, szChatCommand, "tracker"));
+                    player.ChatMessage(msg("Help7", player.UserIDString, szChatCommand, "vision"));
+                    player.ChatMessage(msg("Help8", player.UserIDString, szChatCommand, "ext"));
                     player.ChatMessage(msg("Help5", player.UserIDString, szChatCommand));
                     player.ChatMessage(msg("Help6", player.UserIDString, szChatCommand));
                     player.ChatMessage(msg("PreviousFilter", player.UserIDString, command));
@@ -1669,6 +1719,10 @@ namespace Oxide.Plugins
                 ["Help6"] = "e.g: <color=orange>/{0} 0.5 400 all</color>",
                 ["VisionOn"] = "You will now see where players are looking.",
                 ["VisionOff"] = "You will no longer see where players are looking.",
+                ["Help7"] = "<color=orange>/{0} {1}</color> - Toggles showing where players are looking.",
+                ["Help8"] = "<color=orange>/{0} {1}</color> - Toggles extended information for players.",
+                ["ExtendedPlayersOn"] = "Extended information for players is now on.",
+                ["ExtendedPlayersOff"] = "Extended information for players is now off.",
             }, this);
 
             authorized = GetConfig("Settings", "Restrict Access To Steam64 IDs", new List<object>()) as List<object>;
