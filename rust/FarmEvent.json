@@ -1,0 +1,16 @@
+{
+    "name": "FarmEvent",
+    "description": "Custom farm-event system with parametr, log, gui, etc.",
+    "author": "HOUGAN_Y",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/farmevent.2573",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
