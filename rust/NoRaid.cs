@@ -3,7 +3,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("NoRaid", "Ryan", "1.0.0")]
+    [Info("NoRaid", "Ryan", "1.0.1", ResourceId = 2530)]
     [Description("Prevents players destroying buildings of those they're not associated with")]
 
     class NoRaid : RustPlugin
