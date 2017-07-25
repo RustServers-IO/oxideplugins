@@ -1,0 +1,16 @@
+{
+    "name": "CupboardRange",
+    "description": "Prohibits construction in the range of the cupboard",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/cupboardrange.2574",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
