@@ -15,12 +15,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "0.1.25", ResourceId = 2520)]
+    [Info("Duelist", "nivex", "0.1.26", ResourceId = 2520)]
     [Description("1v1 & TDM dueling event.")]
     class Duelist : RustPlugin
     {
         [PluginReference]
-        Plugin Kits, ZoneManager, Economics, ServerRewards, LustyMap, Backpacks;
+        Plugin Kits, ZoneManager, Economics, ServerRewards, LustyMap, Backpacks, PermaMap;
 
         readonly static string hewwPrefab = "assets/prefabs/building/wall.external.high.wood/wall.external.high.wood.prefab";
         readonly static string heswPrefab = "assets/prefabs/building/wall.external.high.stone/wall.external.high.stone.prefab";
@@ -182,6 +182,9 @@ namespace Oxide.Plugins
                 _notify?.Destroy();
                 rematches.Remove(this);
                 ins.UpdateMatchUI();
+
+                if (match != null)
+                    tdmMatches.Remove(match);
             }
 
             public void MessageAll(string key, params object[] args)
@@ -226,7 +229,12 @@ namespace Oxide.Plugins
 
                 if (rematches.Contains(this))
                 {
-                    match?.Reuse();
+                    if (match != null)
+                    {
+                        match.Reuse();
+                        tdmMatches.Remove(match);
+                    }
+
                     rematches.Remove(this);
                     MessageAll("RematchTimedOut");
                 }
@@ -4845,6 +4853,11 @@ namespace Oxide.Plugins
 
         void GiveRespawnLoot(BasePlayer player)
         {
+            if (PermaMap != null && permission.UserHasPermission(player.UserIDString, "permamap.use") && player.inventory.containerBelt.GetSlot(6) == null)
+            {
+                PermaMap?.Call("DoMap", player);
+            }
+
             if (respawnLoot.Count > 0)
             {
                 player.inventory.Strip();
