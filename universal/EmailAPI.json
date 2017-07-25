@@ -1,0 +1,16 @@
+{
+    "name": "",
+    "description": "",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "lua",
+    "url": "http:\/\/oxidemod.org\/plugins\/email-api.1171",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}
