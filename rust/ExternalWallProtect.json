@@ -1,0 +1,16 @@
+{
+    "name": "ExternalWallProtect",
+    "description": "Prevent ladders from being able to be placed on external walls",
+    "author": "redBDGR",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/externalwallprotect.2576",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -2,8 +2,11 @@
     "name": "NukeWeapons",
     "description": "Create nuclear ammo for a bunch of different ammo types, full GUI crafting menu and ammo gauge",
     "author": "k1lly0u",
-    "version": "0.1.62",
+    "version": "0.1.65",
     "configuration": true,
+    "require": {
+        "ImageLibrary": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/nukeweapons.2044",
     "games": [

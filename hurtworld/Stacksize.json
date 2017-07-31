@@ -2,7 +2,7 @@
     "name": "Stacksize",
     "description": "Simple stacksize config",
     "author": "Noviets",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/stacksize.1666",

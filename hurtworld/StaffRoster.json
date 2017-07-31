@@ -2,7 +2,7 @@
     "name": "StaffRoster",
     "description": "Shows the staff roster and availability",
     "author": "Noviets",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/staffroster.2048",

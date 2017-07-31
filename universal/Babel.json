@@ -2,9 +2,9 @@
     "name": "Babel",
     "description": "Plugin API for translating messages using free or paid translation services",
     "author": "Wulf",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "configuration": true,
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/babel.1963",
     "games": [
         "universal"

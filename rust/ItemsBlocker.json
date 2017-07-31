@@ -2,7 +2,7 @@
     "name": "Items Blocker",
     "description": "Prevents some items from being used for a limited period of time. With UI.",
     "author": "Vlad-00003",
-    "version": "2.1.3",
+    "version": "2.2.0",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/items-blocker.2407",

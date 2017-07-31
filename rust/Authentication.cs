@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Authentication", "José Paulo (FaD)", 1.1)]
+    [Info("Authentication", "José Paulo (FaD)", "2.1.0", ResourceId = 1269)]
     [Description("Players must enter a password after they wake up or else they'll be kicked.")]
     public class Authentication : RustPlugin
     {
@@ -37,12 +37,12 @@ namespace Oxide.Plugins
 		/*Message Functions*/
 		private void write(string message)
 		{
-			PrintToChat("<color=lightblue>[AUTH]</color> " + message);
+			PrintToChat(/*"<color=lightblue>[AUTH]</color> " + */ message);
 		}
 		
 		private void write(BasePlayer player, string message)
 		{
-			PrintToChat(player, "<color=lightblue>[AUTH]</color> " + message);
+			PrintToChat(player,/*"<color=lightblue>[AUTH]</color> " + */ message);
 		}
 		
 		/*Auth Functions*/
@@ -54,9 +54,9 @@ namespace Oxide.Plugins
 		private void requestAuth(Request request)
 		{
 			//Find and replace "{TIMEOUT}" to the timeout set in the config file
-			string message = Convert.ToString(Config["PASSWORD_REQUEST"]).Replace("{TIMEOUT}",Convert.ToString(Config["TIMEOUT"]));
+			string message = Lang("PASSWORD_REQUEST", request.m_steamID).Replace("{TIMEOUT}",Convert.ToString(Config["TIMEOUT"]));
 			
-			request.m_countdown = timer.Once(Convert.ToInt32(Config["TIMEOUT"]), () => request.m_basePlayer.Kick(Convert.ToString(Config["AUTHENTICATION_TIMED_OUT"])));
+			request.m_countdown = timer.Once(Convert.ToInt32(Config["TIMEOUT"]), () => request.m_basePlayer.Kick(Convert.ToString(Lang("AUTHENTICATION_TIMED_OUT", request.m_steamID))));
 			
 			write(request.m_basePlayer, message);
 		}
@@ -75,14 +75,14 @@ namespace Oxide.Plugins
 				switch(args.Length)
 				{
 					case 0:
-						write(player, Convert.ToString(Config["SYNTAX_ERROR"]));
+						write(player, "Correct syntax: /auth [password/command] (arguments)");
 						break;
 					case 1:
 						if(args[0] == Convert.ToString(Config["PASSWORD"]))
 						{
 							request.m_countdown.Destroy();
 							request.m_authenticated = true;
-							write(player, Convert.ToString(Config["AUTHENTICATION_SUCCESSFUL"]));
+							write(player, Lang("AUTHENTICATION_SUCCESSFUL", request.m_steamID));
 						}
 						else
 						{
@@ -94,7 +94,7 @@ namespace Oxide.Plugins
 							{
 								if(request.m_retries == max_retries)
 								{
-									request.m_basePlayer.Kick(Convert.ToString(Config["AUTHENTICATION_TIMED_OUT"]));
+									request.m_basePlayer.Kick(Lang("AUTHENTICATION_TIMED_OUT", request.m_steamID));
 								}
 								else
 								{
@@ -114,7 +114,7 @@ namespace Oxide.Plugins
 				switch(args.Length)
 				{
 					case 0:
-						write(player, Convert.ToString(Config["SYNTAX_ERROR"]));
+						write(player, "Correct syntax: /auth [password/command] (arguments)");
 						break;
 					case 1:
 						if(args[0] == "password")// /auth password
@@ -138,14 +138,14 @@ namespace Oxide.Plugins
 						else if(args[0] == "help")// /auth help
 						{
 							write(player, 
-							"Available commands:\n"
-							+ "Syntax: /auth command [required] (optional)'\n"
-							+ "<color=silver>/auth [password]</color> - Authenticates players;\n"
-							+ "<color=silver>/auth password</color> - Shows password;\n"
-							+ "<color=silver>/auth password [new password]</color> - Sets a new password;\n"
-							+ "<color=silver>/auth timeout</color> - Shows timeout;\n"
-							+ "<color=silver>/auth timeout [new timeout]</color> - Sets a new timeout;\n"
-							+ "<color=silver>/auth toggle (on/off)</color> - Toggles Authentication on/off;");
+							"Authentication commands:\n"
+							+ "syntax: /auth command [required] (optional)\n"
+							+ "<color=lightblue>/auth [password]</color> - authenticates players\n"
+							+ "<color=lightblue>/auth password (new password)</color> - shows or sets password\n"
+							+ "<color=lightblue>/auth timeout (new timeout)</color> - shows or sets timeout\n"
+							+ "<color=lightblue>/auth retries (new retries)</color> - shows or sets retries\n"
+							+ "<color=lightblue>/auth toggle (on/off)</color> - toggles Authentication on/off\n"
+							+ "<color=lightblue>/auth status</color> - shows Authentication status");
 						}
 						else if(args[0] == "retries")// /auth retries
 						{
@@ -286,13 +286,13 @@ namespace Oxide.Plugins
 					}
 					else if(args[0] == "help")// /auth help
 					{
-						Puts("Available commands:\n"
-						+ "Syntax: auth command [required] (optional)'\n"
-						+ "auth password- Shows password;\n"
-						+ "auth password [new password] - Sets a new password;\n"
-						+ "auth timeout - Shows timeout;\n"
-						+ "auth timeout [new timeout] - Sets a new timeout;\n"
-						+ "auth toggle (on/off) - Toggles Authentication on/off;");
+						Puts("Authentication commands:\n"
+						+ "syntax: auth command [required] (optional)\n"
+						+ "auth password (new password) - shows or sets password\n"
+						+ "auth timeout (new timeout) - shows or sets timeout\n"
+						+ "auth retries (new timeout) - shows or sets retries\n"
+						+ "auth toggle (on/off) - toggles Authentication on/off\n"
+						+ "auth status - shows Authentication status");
 					}
 					else if(args[0] == "retries")// /auth retries
 					{
@@ -404,7 +404,6 @@ namespace Oxide.Plugins
 		void Init()
 		{
 			permission.RegisterPermission("authentication.edit", this);
-			LoadDefaultConfig();
 		}
 		
 		//Refreshes the request list when the plugin is reloaded
@@ -423,10 +422,10 @@ namespace Oxide.Plugins
 		
 		void OnPlayerSleepEnded(BasePlayer player)
 		{
-			Request request = new Request(player.UserIDString, player);
-			
-			if(!requests.Exists(element => element.m_steamID == request.m_steamID))
+			if(!requests.Exists(element => element.m_steamID == player.UserIDString))
 			{
+				Request request = new Request(player.UserIDString, player);
+				
 				//Authenticate everyone if the plugin is disabled
 				request.m_authenticated = !isEnabled();
 				requests.Add(request);
@@ -449,7 +448,7 @@ namespace Oxide.Plugins
 			string original = arg.GetString(0, "text");
 			string replaced = original.Replace(Convert.ToString(Config["PASSWORD"]), hidden);
 			
-			BasePlayer player = arg.connection.player as BasePlayer;
+			BasePlayer player = arg.Connection.player as BasePlayer;
 			
 			Request request = requests.Find(element => element.m_steamID == player.UserIDString);
 			
@@ -474,16 +473,25 @@ namespace Oxide.Plugins
 			Config["ENABLED"] = Config["ENABLED"] ?? true;
 			Config["TIMEOUT"] = Config["TIMEOUT"] ?? 30;
 			Config["PASSWORD"] = Config["PASSWORD"] ?? "changeme";
-			Config["PASSWORD_REQUEST"] = Config["PASSWORD_REQUEST"] ?? "Type /auth [password] in the following {TIMEOUT} seconds to authenticate or you'll be kicked.";
 			Config["RETRIES"] = Config["RETRIES"] ?? 0;
 			Config["PREVENT_CHAT"] = Config["PREVENT_CHAT"] ?? true;
 			Config["PREVENT_CHAT_PASSWORD"] = Config["PREVENT_CHAT_PASSWORD"] ?? false;
-			Config["SYNTAX_ERROR"] = Config["SYNTAX_ERROR"] ?? "Correct syntax: /auth [password/command] (arguments)";
-			Config["AUTHENTICATION_TIMED_OUT"] = Config["AUTHENTICATION_TIMED_OUT"] ?? "You took too long to authenticate or exceeded the maximum amout of retries.";
-			Config["AUTHENTICATION_SUCCESSFUL"] = Config["AUTHENTICATION_SUCCESSFUL"] ?? "Authentication successful.";
 				
 			SaveConfig();	
 		}
+		
+		private new void LoadDefaultMessages()
+        {
+            // English
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                ["PASSWORD_REQUEST"] = "Type /auth [password] in the following {TIMEOUT} seconds to authenticate or you'll be kicked.",
+                ["AUTHENTICATION_TIMED_OUT"] = "You took too long to authenticate or exceeded the maximum amount of retries.",
+                ["AUTHENTICATION_SUCCESSFUL"] = "Authentication successful."
+            }, this);
+		}
+		
+		private string Lang(string key, string id = null) => lang.GetMessage(key, this, id);
 		
     }
 }

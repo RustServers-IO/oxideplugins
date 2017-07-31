@@ -2,8 +2,11 @@
     "name": "Building Blocker",
     "description": "Fully prevents building in the building blocked zone. Fixes the \"Devblog 158 of 4th may\"",
     "author": "Vlad-00003",
-    "version": "2.1.6",
+    "version": "2.2.2",
     "configuration": true,
+    "suggest": {
+        "NoEscape": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/building-blocker.2456",
     "games": [

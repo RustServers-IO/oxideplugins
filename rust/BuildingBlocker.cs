@@ -4,10 +4,11 @@ using Facepunch;
 using UnityEngine;
 using System.Reflection;
 using System.Linq;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildingBlocker", "Vlad-00003", "2.1.6", ResourceId = 2456)]
+    [Info("BuildingBlocker", "Vlad-00003", "2.2.2", ResourceId = 2456)]
     [Description("Blocks building in the building privilage zone. Deactivates raids update.")]
     //Author info:
     //E-mail: Vlad-00003@mail.ru
@@ -16,13 +17,15 @@ namespace Oxide.Plugins
     class BuildingBlocker : RustPlugin
     {		
         #region Config setup
-        private string BypassPrivilage = "buildingblocker.bypass";
+        private string BypassPrivilege = "buildingblocker.bypass";
         private string Prefix = "[BuildingBlocker]";
         private string PrefixColor = "#FF3047";
         private bool LadderBuilding = false;
         #endregion
 
         #region Vars
+        [PluginReference]
+        Plugin NoEscape;
         private static float CupRadius = 1.8f;
         private readonly int triggerLayer = LayerMask.GetMask("Trigger");
         Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic))?.GetValue(null);
@@ -53,7 +56,7 @@ namespace Oxide.Plugins
         }
         private void LoadConfigValues()
         {
-            GetConfig(BypassPrivilageCfg, ref BypassPrivilage);
+            GetConfig(BypassPrivilageCfg, ref BypassPrivilege);
             GetConfig(PrefixCfg, ref Prefix);
             GetConfig(PrefixColorCfg, ref PrefixColor);
             GetConfig(LadderBuildingCfg, ref LadderBuilding);
@@ -63,7 +66,7 @@ namespace Oxide.Plugins
         {
             LoadConfigValues();
             LoadMessages();
-            permission.RegisterPermission(BypassPrivilage, this);
+            permission.RegisterPermission(BypassPrivilege, this);
 
         }
         #endregion
@@ -73,6 +76,11 @@ namespace Oxide.Plugins
         {
             BasePlayer player = plan.GetOwnerPlayer();
             if (!player) return null;
+            var result = NoEscape?.Call("CanDo", "build", player);
+            if(result is string)
+            {
+                return null;
+            }
             object Block = BuildingBlocked(plan, prefab);
             if (Block != null && (bool)Block)
             {
@@ -81,13 +89,11 @@ namespace Oxide.Plugins
             }
             return null;
         }
-
-        //private bool CanBuildHere(BasePlayer player, Vector3 targetLocation)
         public object BuildingBlocked(Planner plan, Construction prefab)
         {
             BasePlayer player = plan.GetOwnerPlayer();
             if (!player) return null;
-            if (permission.UserHasPermission(player.UserIDString, BypassPrivilage)) return null;
+            if (permission.UserHasPermission(player.UserIDString, BypassPrivilege)) return null;
             if (LadderBuilding && prefab.fullName.Contains("ladder.wooden")) return null;
 
             var pos = player.ServerPosition;
@@ -118,19 +124,24 @@ namespace Oxide.Plugins
             //Pool.FreeList(ref entities);
             //return true;
             int entities = Physics.OverlapSphereNonAlloc(targetLocation, CupRadius, colBuffer, triggerLayer);
+            BuildingPrivlidge FoundCup = null;
             for (var i = 0; i < entities; i++)
             {
                 var cup = colBuffer[i].GetComponentInParent<BuildingPrivlidge>();
-                if (cup == null) continue;
+                //if (cup == null) continue;
+                if (cup != null && cup.Dominates(FoundCup))
+                    FoundCup = cup;
                 //if (!cup.IsAuthed(player))
                 //{
                 //    return true;
                 //}
-                if (!cup.authorizedPlayers.Any((ProtoBuf.PlayerNameID x) => x.userid == player.userID))
-                {
-                    return true;
-                }
+                //if (!cup.authorizedPlayers.Any((ProtoBuf.PlayerNameID x) => x.userid == player.userID))
+                //{
+                //    return true;
+                //}
             }
+            if (FoundCup != null && !FoundCup.authorizedPlayers.Any((ProtoBuf.PlayerNameID x) => x.userid == player.userID))
+                return true;
             return null;
         }
         #endregion

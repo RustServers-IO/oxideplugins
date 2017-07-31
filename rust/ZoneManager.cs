@@ -14,7 +14,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneManager", "Reneb / Nogrod", "2.4.25", ResourceId = 739)]
+    [Info("ZoneManager", "Reneb / Nogrod", "2.4.3", ResourceId = 739)]
     public class ZoneManager : RustPlugin
     {
         #region Fields
@@ -26,7 +26,7 @@ namespace Oxide.Plugins
         private ZoneFlags disabledFlags = ZoneFlags.None;
         private DynamicConfigFile ZoneManagerData;
         private StoredData storedData;
-        private Zone[] zoneObjects = new Zone[0];
+        private Hash<string, Zone> zoneObjects = new Hash<string, Zone>();
 
         private readonly Dictionary<string, ZoneDefinition> ZoneDefinitions = new Dictionary<string, ZoneDefinition>();
         private readonly Dictionary<ulong, string> LastZone = new Dictionary<ulong, string>();
@@ -49,6 +49,7 @@ namespace Oxide.Plugins
         private float AutolightOnTime;
         private float AutolightOffTime;
         private string prefix;
+        private string prefixColor;
 
         private object GetConfig(string menu, string datavalue, object defaultValue)
         {
@@ -91,7 +92,8 @@ namespace Oxide.Plugins
             AutolightOnTime = Convert.ToSingle(GetConfig("AutoLights", "Lights On Time", "18.0"));
             AutolightOffTime = Convert.ToSingle(GetConfig("AutoLights", "Lights Off Time", "8.0"));
             usePopups = Convert.ToBoolean(GetConfig("Notifications", "Use Popup Notifications", true));
-            prefix = Convert.ToString(GetConfig("Chat", "Prefix", "<color=#FA58AC>ZoneManager:</color> "));
+            prefix = Convert.ToString(GetConfig("Chat", "Prefix", "ZoneManager: "));
+            prefixColor = Convert.ToString(GetConfig("Chat", "Prefix Color (hex)", "#d85540"));
 
             if (!Changed) return;
             SaveConfig();
@@ -166,6 +168,35 @@ namespace Oxide.Plugins
                 rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
             }
 
+            private void OnDestroy()
+            {
+                CancelInvoke();
+                instance.OnZoneDestroy(this);
+                instance = null;
+                Destroy(gameObject);
+            }
+
+            public void SetInfo(ZoneDefinition info)
+            {
+                Info = info;
+                if (Info == null) return;
+                gameObject.name = $"Zone Manager({Info.Id})";
+                transform.position = Info.Location;
+                transform.rotation = Quaternion.Euler(Info.Rotation);
+                UpdateCollider();
+
+                gameObject.SetActive(Info.Enabled);
+                enabled = Info.Enabled;
+
+                RegisterPermission();
+                InitializeAutoLights();
+                InitializeRadiation();
+                InitializeComfort();
+
+                if (IsInvoking("CheckEntites")) CancelInvoke("CheckEntites");
+                InvokeRepeating("CheckEntites", 10f, 10f);
+            }
+
             private void UpdateCollider()
             {
                 var sphereCollider = gameObject.GetComponent<SphereCollider>();
@@ -190,19 +221,14 @@ namespace Oxide.Plugins
                     }
                     sphereCollider.radius = Info.Radius;
                 }
-            }
-
-            public void SetInfo(ZoneDefinition info)
+            }           
+            private void RegisterPermission()
             {
-                Info = info;
-                if (Info == null) return;
-                gameObject.name = $"Zone Manager({Info.Id})";
-                transform.position = Info.Location;
-                transform.rotation = Quaternion.Euler(Info.Rotation);
-                UpdateCollider();
-                gameObject.SetActive(Info.Enabled);
-                enabled = Info.Enabled;
-
+                if (!string.IsNullOrEmpty(Info.Permission) && !instance.permission.PermissionExists(Info.Permission))
+                    instance.permission.RegisterPermission(Info.Permission, instance);
+            }
+            private void InitializeAutoLights()
+            {
                 if (instance.HasZoneFlag(this, ZoneFlags.AlwaysLights))
                 {
                     if (IsInvoking("CheckAlwaysLights")) CancelInvoke("CheckAlwaysLights");
@@ -219,7 +245,10 @@ namespace Oxide.Plugins
                     if (IsInvoking("CheckLights")) CancelInvoke("CheckLights");
                     InvokeRepeating("CheckLights", 5f, 30f);
                 }
-                var radiation = gameObject.GetComponent<TriggerRadiation>();
+            }
+            private void InitializeRadiation()
+            {
+                var radiation = gameObject.GetComponent<TriggerRadiation>();                                
                 if (Info.Radiation > 0)
                 {
                     radiation = radiation ?? gameObject.AddComponent<TriggerRadiation>();
@@ -235,6 +264,9 @@ namespace Oxide.Plugins
                     radiation.interestLayers = playersMask;
                     radiation.enabled = false;
                 }
+            }
+            private void InitializeComfort()
+            {
                 var comfort = gameObject.GetComponent<TriggerComfort>();
                 if (Info.Comfort > 0)
                 {
@@ -251,10 +283,7 @@ namespace Oxide.Plugins
                     comfort.interestLayers = playersMask;
                     comfort.enabled = false;
                 }
-                if (IsInvoking("CheckEntites")) CancelInvoke("CheckEntites");
-                InvokeRepeating("CheckEntites", 10f, 10f);
             }
-
             private void CheckEntites()
             {
                 if (instance == null) return;
@@ -280,15 +309,6 @@ namespace Oxide.Plugins
                     if (!players.Contains(player))
                         instance.OnPlayerExitZone(this, player);
                 }
-            }
-
-            private void OnDestroy()
-            {
-                CancelInvoke("CheckLights");
-                CancelInvoke("CheckAlwaysLights");
-                instance.OnZoneDestroy(this);
-                instance = null;
-                Destroy(gameObject);
             }
 
             private void CheckLights()
@@ -361,6 +381,7 @@ namespace Oxide.Plugins
                     lightsOn = true;
                 }
             }
+
             private void CheckAlwaysLights()
             {
                 if (instance == null) return;
@@ -499,7 +520,6 @@ namespace Oxide.Plugins
         #region Zone Definition
         public class ZoneDefinition
         {
-
             public string Name;
             public float Radius;
             public float Radiation;
@@ -508,15 +528,15 @@ namespace Oxide.Plugins
             public Vector3 Size;
             public Vector3 Rotation;
             public string Id;
-            public string EnterMessage;
+            public string EnterMessage;            
             public string LeaveMessage;
+            public string Permission;
             public string EjectSpawns;
             public bool Enabled = true;
             public ZoneFlags Flags;
 
             public ZoneDefinition()
             {
-
             }
 
             public ZoneDefinition(Vector3 position)
@@ -647,8 +667,13 @@ namespace Oxide.Plugins
        
         private void Unload()
         {
-            foreach (var zone in zoneObjects)
-                UnityEngine.Object.Destroy(zone);
+            for (int i = zoneObjects.Count - 1; i >= 0; i--)
+            {
+                var zone = zoneObjects.ElementAt(i);
+                UnityEngine.Object.Destroy(zone.Value);
+                zoneObjects.Remove(zone.Key);
+            }
+           
             var collectibleEntities = Resources.FindObjectsOfTypeAll<CollectibleEntity>();
             for (var i = 0; i < collectibleEntities.Length; i++)
             {
@@ -910,21 +935,8 @@ namespace Oxide.Plugins
             else if (entity is BuildingBlock && zoneObjects != null)
             {
                 var block = (BuildingBlock)entity;
-                foreach (var zone in zoneObjects)
-                {
-                    if (HasZoneFlag(zone, ZoneFlags.NoStability) && !CanBypass((entity as BuildingBlock).OwnerID, ZoneFlags.NoStability))
-                    {
-                        if (zone.Info.Size != Vector3.zero)
-                        {
-                            if (!new Bounds(zone.Info.Location, Quaternion.Euler(zone.Info.Rotation) * zone.Info.Size).Contains(block.transform.position))
-                                continue;
-                        }
-                        else if (Vector3.Distance(block.transform.position, zone.Info.Location) > zone.Info.Radius)
-                            continue;
-                        block.grounded = true;
-                        break;
-                    }
-                }
+                if (EntityHasFlag(entity as BuildingBlock, "NoStability") && !CanBypass((entity as BuildingBlock).OwnerID, ZoneFlags.NoStability))                
+                    block.grounded = true;                
             } 
             else if (entity is LootContainer || entity is JunkPile || entity is BaseNpc)            
                 timer.In(2, ()=> CheckSpawnedEntity(entity));            
@@ -1124,7 +1136,7 @@ namespace Oxide.Plugins
                         editvalue = zone.Comfort = Convert.ToSingle(args[i + 1]);
                         break;
                     case "radiation":
-                        editvalue = zone.Radiation = Convert.ToSingle(args[i + 1]);
+                        editvalue = zone.Radiation = Convert.ToSingle(args[i + 1]);                        
                         break;
                     case "radius":
                         editvalue = zone.Radius = Convert.ToSingle(args[i + 1]);
@@ -1170,6 +1182,12 @@ namespace Oxide.Plugins
                         break;
                     case "leave_message":
                         editvalue = zone.LeaveMessage = args[i + 1];
+                        break;
+                    case "permission":
+                        string permission = args[i + 1];
+                        if (!permission.StartsWith("zonemanager."))
+                            permission = $"zonemanager.{permission}";
+                        editvalue = zone.Permission = permission;
                         break;
                     case "ejectspawns":
                         editvalue = zone.EjectSpawns = args[i + 1];
@@ -1256,6 +1274,7 @@ namespace Oxide.Plugins
                 { "Location", zone.Info.Location.ToString() },
                 { "enter_message", zone.Info.EnterMessage },
                 { "leave_message", zone.Info.LeaveMessage },
+                { "permission", zone.Info.Permission },
                 { "ejectspawns", zone.Info.EjectSpawns }
             };
 
@@ -1316,7 +1335,7 @@ namespace Oxide.Plugins
         private object GetZoneSize(string zoneID) => GetZoneByID(zoneID)?.Info.Size;
         private object GetZoneName(string zoneID) => GetZoneByID(zoneID)?.Info.Name;
         private object CheckZoneID(string zoneID) => GetZoneByID(zoneID)?.Info.Id;
-        private object GetZoneIDs() => zoneObjects.ToList().ConvertAll(z => z.Info.Id).ToArray();
+        private object GetZoneIDs() => zoneObjects.Keys.ToArray();
         private Vector3 GetZoneLocation(string zoneId) => GetZoneByID(zoneId)?.Info.Location ?? Vector3.zero;
         private void AddToWhitelist(Zone zone, BasePlayer player) { zone.WhiteList.Add(player.userID); }
         private void RemoveFromWhitelist(Zone zone, BasePlayer player) { zone.WhiteList.Remove(player.userID); }
@@ -1418,7 +1437,7 @@ namespace Oxide.Plugins
 
         private Zone GetZoneByID(string zoneId)
         {
-            return zoneObjects.FirstOrDefault(gameObj => gameObj.Info.Id == zoneId);
+            return zoneObjects.ContainsKey(zoneId) ? zoneObjects[zoneId] : null;
         }
 
         private void NewZone(ZoneDefinition zonedef)
@@ -1427,14 +1446,19 @@ namespace Oxide.Plugins
             var newZone = new GameObject().AddComponent<Zone>();
             newZone.instance = this;
             newZone.SetInfo(zonedef);
-            zoneObjects = Resources.FindObjectsOfTypeAll<Zone>();
+
+            if (!zoneObjects.ContainsKey(zonedef.Id))
+                zoneObjects.Add(zonedef.Id, newZone);
+            else zoneObjects[zonedef.Id] = newZone;
         }
 
         private void RefreshZone(string zoneId)
         {
             var zone = GetZoneByID(zoneId);
-            if (zone != null)
+
+            if (zone != null)            
                 UnityEngine.Object.Destroy(zone);
+            
             ZoneDefinition zoneDef;
             if (ZoneDefinitions.TryGetValue(zoneId, out zoneDef))
                 NewZone(zoneDef);
@@ -1498,8 +1522,8 @@ namespace Oxide.Plugins
             if (explosive == null) return;
             foreach (var zone in zoneObjects)
             {
-                if (!HasZoneFlag(zone, ZoneFlags.UnDestr)) continue;
-                if (Vector3.Distance(explosive.GetEstimatedWorldPosition(), zone.transform.position) > zone.Info.Radius) continue;
+                if (!HasZoneFlag(zone.Value, ZoneFlags.UnDestr)) continue;
+                if (Vector3.Distance(explosive.GetEstimatedWorldPosition(), zone.Value.transform.position) > zone.Value.Info.Radius) continue;
                 explosive.KillMessage();
                 break;
             }
@@ -1639,6 +1663,14 @@ namespace Oxide.Plugins
                 playerZones[player] = zones = new HashSet<Zone>();
             if (!zones.Add(zone)) return;
             UpdateFlags(player);
+
+            if ((!string.IsNullOrEmpty(zone.Info.Permission) && !permission.UserHasPermission(player.UserIDString, zone.Info.Permission)) || (HasZoneFlag(zone, ZoneFlags.Eject) && !CanBypass(player, ZoneFlags.Eject) && !isAdmin(player)))
+            {
+                EjectPlayer(zone, player);
+                SendMessage(player, msg("eject", player.UserIDString));
+                return;
+            }
+
             if (!string.IsNullOrEmpty(zone.Info.EnterMessage))
             {
                 if (PopupNotifications != null && usePopups)
@@ -1646,11 +1678,7 @@ namespace Oxide.Plugins
                 else
                     SendMessage(player, zone.Info.EnterMessage, player.displayName);
             }
-            if (HasZoneFlag(zone, ZoneFlags.Eject) && !CanBypass(player, ZoneFlags.Eject) && !isAdmin(player))
-            {
-                EjectPlayer(zone, player);
-                SendMessage(player, msg("eject", player.UserIDString));
-            }
+            
             Interface.Oxide.CallHook("OnEnterZone", zone.Info.Id, player);
             if (HasPlayerFlag(player, ZoneFlags.Kill))
             {
@@ -2016,7 +2044,7 @@ namespace Oxide.Plugins
             HashSet<Zone> zones;
             if (!playerZones.TryGetValue(targetPlayer, out zones) || zones.Count == 0) { SendMessage(player, "empty"); return; }
             foreach (var zone in zones)
-                SendMessage(player, $"{zone.Info.Id} => {zone.Info.Name} - {zone.Info.Location}");
+                SendMessage(player, $"{zone.Info.Id}: {zone.Info.Name} - {zone.Info.Location}");
             UpdateFlags(targetPlayer);
         }
         [ChatCommand("zone_list")]
@@ -2026,7 +2054,7 @@ namespace Oxide.Plugins
             SendMessage(player, "========== Zone list ==========");
             if (ZoneDefinitions.Count == 0) { SendMessage(player, "empty"); return; }
             foreach (var pair in ZoneDefinitions)
-                SendMessage(player, $"{pair.Key} => {pair.Value.Name} - {pair.Value.Location}");
+                SendMessage(player, $"{pair.Key}: {pair.Value.Name} - {pair.Value.Location}");
         }
         [ChatCommand("zone")]
         private void cmdChatZone(BasePlayer player, string command, string[] args)
@@ -2038,20 +2066,21 @@ namespace Oxide.Plugins
             var zoneDefinition = ZoneDefinitions[zoneId];
             if (args.Length < 1)
             {
-                SendMessage(player, "/zone option value/reset");
-                SendMessage(player, $"name => {zoneDefinition.Name}");
-                SendMessage(player, $"enabled => {zoneDefinition.Enabled}");
-                SendMessage(player, $"ID => {zoneDefinition.Id}");
-                SendMessage(player, $"comfort => {zoneDefinition.Comfort}");
-                SendMessage(player, $"radiation => {zoneDefinition.Radiation}");
-                SendMessage(player, $"radius => {zoneDefinition.Radius}");
-                SendMessage(player, $"Location => {zoneDefinition.Location}");
-                SendMessage(player, $"Size => {zoneDefinition.Size}");
-                SendMessage(player, $"Rotation => {zoneDefinition.Rotation}");
-                SendMessage(player, $"enter_message => {zoneDefinition.EnterMessage}");
-                SendMessage(player, $"leave_message => {zoneDefinition.LeaveMessage}");
-                SendMessage(player, $"ejectspawns => {zoneDefinition.EjectSpawns}");
-                SendMessage(player, $"flags => {zoneDefinition.Flags}");               
+                SendMessage(player, "/zone <option/flag> <value>");
+                SendReply(player, $"<color={prefixColor}>Zone Name:</color> {zoneDefinition.Name}");
+                SendReply(player, $"<color={prefixColor}>Zone Enabled:</color> {zoneDefinition.Enabled}");
+                SendReply(player, $"<color={prefixColor}>Zone ID:</color> {zoneDefinition.Id}");
+                SendReply(player, $"<color={prefixColor}>Comfort:</color> {zoneDefinition.Comfort}");
+                SendReply(player, $"<color={prefixColor}>Radiation:</color> {zoneDefinition.Radiation}");
+                SendReply(player, $"<color={prefixColor}>Radius:</color> {zoneDefinition.Radius}");
+                SendReply(player, $"<color={prefixColor}>Location:</color> {zoneDefinition.Location}");
+                SendReply(player, $"<color={prefixColor}>Size:</color> {zoneDefinition.Size}");
+                SendReply(player, $"<color={prefixColor}>Rotation:</color> {zoneDefinition.Rotation}");
+                SendReply(player, $"<color={prefixColor}>Enter Message:</color> {zoneDefinition.EnterMessage}");
+                SendReply(player, $"<color={prefixColor}>Leave Message:</color> {zoneDefinition.LeaveMessage}");
+                SendReply(player, $"<color={prefixColor}>Permission:</color> {zoneDefinition.Permission}");
+                SendReply(player, $"<color={prefixColor}>Eject Spawnfile:</color> {zoneDefinition.EjectSpawns}");
+                SendReply(player, $"<color={prefixColor}>Flags:</color> {zoneDefinition.Flags}");               
                 ShowZone(player, zoneId);
                 return;
             }
@@ -2069,7 +2098,7 @@ namespace Oxide.Plugins
             if (!HasPermission(player, permZone)) { SendMessage(player, "You don't have access to this command"); return; }
             var zoneId = arg.GetString(0);
             ZoneDefinition zoneDefinition;
-            if (!arg.HasArgs(3) || !ZoneDefinitions.TryGetValue(zoneId, out zoneDefinition)) { SendMessage(player, "Zone Id not found or Too few arguments: zone <zoneid> <arg> <value>"); return; }
+            if (!arg.HasArgs(3) || !ZoneDefinitions.TryGetValue(zoneId, out zoneDefinition)) { SendMessage(player, "Zone ID not found or too few arguments supplied: zone <zoneid> <arg> <value>"); return; }
 
             var args = new string[arg.Args.Length - 1];
             Array.Copy(arg.Args, 1, args, 0, args.Length);
@@ -2081,7 +2110,7 @@ namespace Oxide.Plugins
             if (player != null)
             {
                 if (args.Length > 0) message = string.Format(message, args);
-                SendReply(player, $"{prefix}{message}");
+                SendReply(player, $"<color={prefixColor}>{prefix}</color>{message}");
             }
             else
                 Puts(message);

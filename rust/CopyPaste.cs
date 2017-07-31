@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.3.3", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.3.5", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
@@ -436,6 +436,31 @@ namespace Oxide.Plugins
 					((Dictionary<string, object>)data["sign"]).Add("texture", Convert.ToBase64String(imageByte));
 			}
 
+			if(saveShare)
+			{
+				var sleepingBag = entity.GetComponentInParent<SleepingBag>();
+			
+				if(sleepingBag != null)
+				{
+					data.Add("sleepingbag", new Dictionary<string, object>
+					{
+						{"niceName", sleepingBag.niceName },
+						{"deployerUserID", sleepingBag.deployerUserID },
+						{"isPublic", sleepingBag.IsPublic() },
+					});				
+				}
+				
+				var cupboard = entity.GetComponentInParent<BuildingPrivlidge>();
+			
+				if(cupboard != null)
+				{
+					data.Add("cupboard", new Dictionary<string, object>
+					{
+						{"authorizedPlayers", cupboard.authorizedPlayers.Select(y => y.userid).ToList() }
+					});				
+				}
+			}
+			
 			return data;
 		}
 
@@ -667,22 +692,44 @@ namespace Oxide.Plugins
 						
 						sign.SendNetworkUpdate();
 					}
-					
-					if(data.ContainsKey("auth") && player != null)
+
+					var sleepingBag = entity.GetComponentInParent<SleepingBag>();
+				
+					if(sleepingBag != null && data.ContainsKey("sleepingbag"))
 					{
-						if(entity is BuildingPrivlidge)
+						var bagData = data["sleepingbag"] as Dictionary<string, object>;
+						
+						sleepingBag.niceName = bagData["niceName"].ToString();
+						sleepingBag.deployerUserID = ulong.Parse(bagData["deployerUserID"].ToString());
+						sleepingBag.SetPublic(Convert.ToBoolean(bagData["isPublic"]));				
+					}
+			
+					var cupboard = entity.GetComponentInParent<BuildingPrivlidge>();
+				
+					if(cupboard != null)
+					{
+						List<ulong> authorizedPlayers = new List<ulong>();
+						
+						if(data.ContainsKey("cupboard"))
 						{
-							var toolcupboard = entity as BuildingPrivlidge;
-							
-							toolcupboard.authorizedPlayers.Add(new PlayerNameID()
-							{
-								userid = player.userID,
-								username = player.displayName
-							});
-							
-							//toolcupboard.UpdateAllPlayers();
-							toolcupboard.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+							var cupboardData = data["cupboard"] as Dictionary<string, object>;
+							authorizedPlayers = (cupboardData["authorizedPlayers"] as List<object>).Select(y => Convert.ToUInt64(y)).ToList();
 						}
+						
+						if(data.ContainsKey("auth") && player != null && !authorizedPlayers.Contains(player.userID))
+							authorizedPlayers.Add(player.userID);
+						
+						foreach(var userID in authorizedPlayers)
+						{
+							cupboard.authorizedPlayers.Add(new PlayerNameID()
+							{
+								userid = Convert.ToUInt64(userID),
+								username = "Player"
+							});							
+						}	
+						
+						//cupboard.UpdateAllPlayers();
+						cupboard.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
 					}
 
 					pastedEntities.Add(entity);

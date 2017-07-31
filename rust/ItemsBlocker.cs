@@ -3,25 +3,25 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("ItemsBlocker", "Vlad-00003", "2.1.3", ResourceId = 2407)]
+    [Info("ItemsBlocker", "Vlad-00003", "2.2.0", ResourceId = 2407)]
     [Description("Prevents some items from being used for a limited period of time.")]
 
     class ItemsBlocker : RustPlugin
     {
-
-        #region Config setup
-        //private Dictionary<BasePlayer, string> Panels = new Dictionary<BasePlayer, string>();
+        #region Vars
         private string PanelName = "BlockerUI";
+        #endregion
+        #region Config setup
 
         private List<string> BlockedItems = new List<string>();
         private List<string> BlockedClothes = new List<string>();
         private DateTime BlockEnd;
         private int HoursOfBlock = 30;
         private bool UseChat = false;
-        private bool Wipe = false;
         private string Prefix = "[Items Blocker]";
         private string PrefixColor = "#f44253";
         private string BypassPermission = "itemsblocker.bypass";
@@ -38,30 +38,30 @@ namespace Oxide.Plugins
         private void LoadConfigValues()
         {
             List<object> blockedItems = new List<object>()
-                {
-                    "Satchel Charge",
-                    "Timed Explosive Charge",
-                    "Eoka Pistol",
-                    "Custom SMG",
-                    "Assault Rifle",
-                    "Bolt Action Rifle",
-                    "Waterpipe Shotgun",
-                    "Revolver",
-                    "Thompson",
-                    "Semi-Automatic Rifle",
-                    "Semi-Automatic Pistol",
-                    "Pump Shotgun",
-                    "M249",
-                    "Rocket Launcher",
-                    "Flame Thrower",
-                    "Double Barrel Shotgun",
-                    "Beancan Grenade",
-                    "F1 Grenade",
-                    "MP5A4",
-                    "LR-300 Assault Rifle",
-                    "M92 Pistol",
-                    "Python Revolver"
-                };
+            {
+                "Satchel Charge",
+                "Timed Explosive Charge",
+                "Eoka Pistol",
+                "Custom SMG",
+                "Assault Rifle",
+                "Bolt Action Rifle",
+                "Waterpipe Shotgun",
+                "Revolver",
+                "Thompson",
+                "Semi-Automatic Rifle",
+                "Semi-Automatic Pistol",
+                "Pump Shotgun",
+                "M249",
+                "Rocket Launcher",
+                "Flame Thrower",
+                "Double Barrel Shotgun",
+                "Beancan Grenade",
+                "F1 Grenade",
+                "MP5A4",
+                "LR-300 Assault Rifle",
+                "M92 Pistol",
+                "Python Revolver"
+            };
             List<object> blockedClothes = new List<object>
             {
                 "Metal Facemask",
@@ -76,39 +76,32 @@ namespace Oxide.Plugins
                 "Coffee Can Helmet"
 
             };
-            //DateTime BlockEnd;
-
-            //if(!DateTime.TryParseExact(Config["Block end time"].ToString(), "dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out BlockEnd))
-            //{
-            //    BlockEnd = DateTime.Now.AddHours(30);
-            //    PrintWarning($"Unable to parse block end date format, block end set to {BlockEnd.ToString("dd.MM.yyyy HH:mm:ss")}");
-            //}
-
 
             BlockEnd = DateTime.Now.AddHours(HoursOfBlock);
             string BlockEndStr = BlockEnd.ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-            GetConfig("Block end time", ref BlockEndStr);
-            GetConfig("Hour of block after wipe", ref HoursOfBlock);
-            GetConfig("Wipe?(If set to true all timers would be automaticly set to current time + Hours of block", ref Wipe);
-            GetConfig("Chat prefix", ref Prefix);
-            GetConfig("Chat prefix color", ref PrefixColor);
-            GetConfig("Use chat insted of GUI", ref UseChat);
-            GetConfig("List of blocked items", ref blockedItems);
-            GetConfig("List of blocked clothes", ref blockedClothes);
-            GetConfig("Bypass permission", ref BypassPermission);
+            if (GetConfig("Block end time", ref BlockEndStr))
+                PrintWarning("Option \"Block end time\" was added to the config");
+            if(GetConfig("Hour of block after wipe", ref HoursOfBlock))
+                PrintWarning("Option \"Hour of block after wipe\" was added to the config");
+            if(GetConfig("Chat prefix", ref Prefix))
+                PrintWarning("Option \"Chat prefix\" was added to the config");
+            if(GetConfig("Chat prefix color", ref PrefixColor))
+                PrintWarning("Option \"Chat prefix color\" was added to the config");
+            if(GetConfig("Use chat insted of GUI", ref UseChat))
+                PrintWarning("Option \"Use chat insted of GUI\" was added to the config");
+            if(GetConfig("List of blocked items", ref blockedItems))
+                PrintWarning("Option \"List of blocked items\" was added to the config");
+            if(GetConfig("List of blocked clothes", ref blockedClothes))
+                PrintWarning("Option \"List of blocked clothes\" was added to the config");
+            if(GetConfig("Bypass permission", ref BypassPermission))
+                PrintWarning("Option \"Bypass permission\" was added to the config");
             if (!DateTime.TryParseExact(BlockEndStr, "dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out BlockEnd))
             {
                 BlockEnd = DateTime.Now.AddHours(HoursOfBlock);
                 PrintWarning($"Unable to parse block end date format, block end set to {BlockEnd.ToString("dd.MM.yyyy HH:mm:ss")}");
             }
-            foreach (var item in blockedItems)
-            {
-                BlockedItems.Add(item.ToString());
-            }
-            foreach(var item in blockedClothes)
-            {
-                BlockedClothes.Add(item.ToString());
-            }
+            BlockedItems = blockedItems.Select(i => i.ToString()).ToList();
+            BlockedClothes = blockedClothes.Select(i => i.ToString()).ToList();
 
             SaveConfig();
         }
@@ -134,20 +127,20 @@ namespace Oxide.Plugins
         {
             LoadConfigValues();
             LoadMessages();
-            if (Wipe)
-            {
-                BlockEnd = DateTime.Now.AddHours(HoursOfBlock);
-                string BlockEndStr = BlockEnd.ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-                Config["Block end time"] = BlockEndStr;
-                Config["Wipe?(If set to true all timers would be automaticly set to current time + Hours of block"] = false;
-                SaveConfig();
-            }
             permission.RegisterPermission(BypassPermission, this);
         }
 
         #endregion
 
-        #region Equip controll
+        #region Oxide hooks
+        void OnNewSave(string filename)
+        {
+            BlockEnd = DateTime.Now.AddHours(HoursOfBlock);
+            string BlockEndStr = BlockEnd.ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+            Config["Block end time"] = BlockEndStr;
+            SaveConfig();
+            PrintWarning($"Wipe detected. Block end set to {BlockEndStr}");
+        }
         object CanEquipItem(PlayerInventory inventory, Item item)
         {
             if (InBlock())
@@ -158,9 +151,9 @@ namespace Oxide.Plugins
                 if(BlockedItems.Contains(item.info.displayName.english) || BlockedItems.Contains(item.info.shortname))
                 {
                     var timeleft = TimeLeft();
-                    string reply = GetMsg("ItemBlocked", player.UserIDString) + "\n";
-                    reply += string.Format(GetMsg("BlockTimeLeft", player.UserIDString), timeleft.Days, timeleft.Hours, timeleft.Minutes, timeleft.Seconds);
-                    reply += "\n" + GetMsg("Weapon line 2", player.UserIDString);
+                    string reply = GetMsg("ItemBlocked", player) + "\n";
+                    reply += string.Format(GetMsg("BlockTimeLeft", player), timeleft.Days, timeleft.Hours, timeleft.Minutes, timeleft.Seconds);
+                    reply += "\n" + GetMsg("Weapon line 2", player);
 
                     if (UseChat)
                     {
@@ -168,11 +161,6 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        //if (Panels.ContainsKey(player))
-                        //{
-                        //    CuiHelper.DestroyUi(player, Panels[player]);
-                        //    Panels.Remove(player);
-                        //}
                         BlockerUi(player, reply);
                     }
                     return false;
@@ -190,20 +178,15 @@ namespace Oxide.Plugins
                 if (BlockedClothes.Contains(item.info.displayName.english) || BlockedClothes.Contains(item.info.shortname))
                 {
                     var timeleft = TimeLeft();
-                    string reply = GetMsg("ItemBlocked", player.UserIDString) + "\n";
-                    reply += string.Format(GetMsg("BlockTimeLeft", player.UserIDString), timeleft.Days, timeleft.Hours, timeleft.Minutes, timeleft.Seconds);
-                    reply += "\n" + GetMsg("Cloth line 2", player.UserIDString);
+                    string reply = GetMsg("ItemBlocked", player) + "\n";
+                    reply += string.Format(GetMsg("BlockTimeLeft", player), timeleft.Days, timeleft.Hours, timeleft.Minutes, timeleft.Seconds);
+                    reply += "\n" + GetMsg("Cloth line 2", player);
                     if (UseChat)
                     {
                         SendToChat(player, reply);
                     }
                     else
                     {
-                        //if (Panels.ContainsKey(player))
-                        //{
-                        //    CuiHelper.DestroyUi(player, Panels[player]);
-                        //    Panels.Remove(player);
-                        //}
                         BlockerUi(player, reply);
                     }                    
                     return false;
@@ -273,10 +256,6 @@ namespace Oxide.Plugins
                 }
             }, PanelName);
             CuiHelper.AddUi(player, elements);
-            //timer.Once(7f, () =>
-            //{
-            //    CuiHelper.DestroyUi(player, PanelName);
-            //});
         }
 
         #endregion
@@ -290,6 +269,7 @@ namespace Oxide.Plugins
             }
             return false;
         }
+        string GetMsg(string key, BasePlayer player = null) => GetMsg(key, player.UserIDString);
         string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID == null ? null : userID.ToString());
         TimeSpan TimeLeft() => BlockEnd.Subtract(DateTime.Now);
         private void SendToChat(BasePlayer Player, string Message)
@@ -300,13 +280,15 @@ namespace Oxide.Plugins
         {
             PrintToChat("<color=" + PrefixColor + ">" + Prefix + "</color> " + Message);
         }
-        private void GetConfig<T>(string Key, ref T var)
+        private bool GetConfig<T>(string Key, ref T var)
         {
             if (Config[Key] != null)
             {
                 var = (T)Convert.ChangeType(Config[Key], typeof(T));
+                return false;
             }
             Config[Key] = var;
+            return true;
         }
         #endregion
     }

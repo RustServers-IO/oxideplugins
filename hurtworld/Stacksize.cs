@@ -1,17 +1,18 @@
 // Reference: UnityEngine.UI
 using Oxide.Core;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Assets.Scripts.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("Stacksize", "Noviets", "1.2.1", ResourceId = 1666)]
+	[Info("Stacksize", "Noviets", "1.2.2", ResourceId = 1666)]
 	[Description("Stacksize")]
 
 	class Stacksize : HurtworldPlugin
 	{
-		void OnServerInitialized() => Loaded();
+		//void OnServerInitialized() => Loaded();
 		void Loaded()
 		{
 			LoadDefaultConfig();
@@ -182,5 +183,38 @@ namespace Oxide.Plugins
 			if(Config["KangaPanels"] == null) Config.Set("KangaPanels", 1);
             SaveConfig();
         }
+		
+		[ChatCommand("stackitems")]
+		void stackCommand(PlayerSession session)
+		{
+			Dictionary<int, int> items = new Dictionary<int, int>();
+			Inventory inv = session.WorldPlayerEntity.gameObject.GetComponent<PlayerInventory>();
+			GlobalItemManager GIM = Singleton<GlobalItemManager>.Instance;
+			if(inv.Items.Length > 0)
+			{
+				for(int i = 0; i < inv.Capacity; i++)
+				{
+					if(i < 8 || i > 15)
+					{
+						ItemInstance item = inv.GetSlot(i);
+						if(item != null)
+						{
+							if(items.ContainsKey(item.Item.ItemId))
+								items[item.Item.ItemId] += item.StackSize;
+							else
+								items.Add(item.Item.ItemId, item.StackSize);
+							
+							item.StackSize = 0;
+							inv.Invalidate();
+						}
+					}
+				}
+				foreach(var item in items)
+				{
+					GIM.GiveItem(session.Player, GIM.GetItem(item.Key), item.Value);
+					inv.Invalidate();
+				}
+			}
+		}
 	}
 }

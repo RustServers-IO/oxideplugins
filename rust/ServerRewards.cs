@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.4.55", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.4.6", ResourceId = 1751)]
     class ServerRewards : RustPlugin
     {
         #region Fields
@@ -457,7 +457,7 @@ namespace Oxide.Plugins
                         for (int i = 0; i < maxPages; i++)
                         {
                             int min = i * 36;
-                            int max = items.Count < 36 ? items.Count - 1 : min + 36 > items.Count ? (items.Count - min - 1) : 36;
+                            int max = items.Count < 36 ? items.Count : min + 36 > items.Count ? (items.Count - min) : 36;
                             var range = items.OrderBy(x => x.Value.displayName).ToList().GetRange(min, max);
                             CuiElementContainer container = CreateItemsElement(range, category, hasItems, i, i < maxPages - 1, i > 0, npcId);
                             uiManager.RenameComponents(container);
@@ -672,7 +672,7 @@ namespace Oxide.Plugins
         {
             var element = UI.CreateElementContainer(UIPopup, uiColors["dark"], "0.33 0.45", "0.67 0.6");
             UI.CreatePanel(ref element, UIPopup, uiColors["light"], "0.01 0.04", "0.99 0.96");
-            UI.CreateLabel(ref element, UIPopup, $"{color1}{msg}</color>", 22, "0 0", "1 1");
+            UI.CreateLabel(ref element, UIPopup, $"{color1}{msg}</color>", 20, "0 0", "1 1");
 
             if (popupMessages.ContainsKey(player.userID))
             {
@@ -726,7 +726,7 @@ namespace Oxide.Plugins
             var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
             UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeSales")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
             UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
-            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("selectSell")}</color>", 22, "0 0.9", "1 1");
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("selectItemSell")}</color>", 20, "0 0.9", "1 1");
 
             int i = 0;
             foreach (var item in player.inventory.containerMain.itemList)
@@ -738,12 +738,11 @@ namespace Oxide.Plugins
                         saleData.items[item.info.shortname].Add(item.skin, new SaleData.SaleItem { displayName = item?.info?.steamItem?.displayName?.translated ?? $"{item.info.displayName.translated} {item.skin}" });
                         SaveSales();
                     }
-                    if (saleData.items[item.info.shortname][item.skin].enabled)
-                    {
-                        var name = saleData.items[item.info.shortname][item.skin].displayName;
-                        CreateInventoryEntry(ref container, UIMain, item.info.shortname, item.skin, name, item.amount, i);
-                        i++;
-                    }
+
+                    var name = saleData.items[item.info.shortname][item.skin].displayName;
+                    CreateInventoryEntry(ref container, UIMain, item.info.shortname, item.skin, name, item.amount, i);
+                    i++;
+
                 }
             }
             return container;
@@ -754,7 +753,9 @@ namespace Oxide.Plugins
 
             UI.CreateLabel(ref container, panelName, $"{msg("Name")}:  {color1}{name}</color>", 14, $"{pos[0]} {pos[1]}", $"{pos[0] + 0.22f} {pos[3]}", TextAnchor.MiddleLeft);
             UI.CreateLabel(ref container, panelName, $"{msg("Amount")}:  {color1}{amount}</color>", 14, $"{pos[0] + 0.22f} {pos[1]}", $"{pos[0] + 0.32f} {pos[3]}", TextAnchor.MiddleLeft);
-            UI.CreateButton(ref container, panelName, uiColors["buttonbg"], msg("Sell"), 14, $"{pos[0] + 0.35f} {pos[1]}", $"{pos[2]} {pos[3]}", $"SRUI_SellItem {shortname} {skinId} {amount}");
+            if (saleData.items[shortname][skinId].enabled)
+                UI.CreateButton(ref container, panelName, uiColors["buttonbg"], msg("Sell"), 14, $"{pos[0] + 0.35f} {pos[1]}", $"{pos[2]} {pos[3]}", $"SRUI_SellItem {shortname} {skinId} {amount}");
+            else UI.CreateButton(ref container, panelName, uiColors["buttonbg"], msg("CantSell"), 14, $"{pos[0] + 0.35f} {pos[1]}", $"{pos[2]} {pos[3]}", "");
         }
         private void SellItem(BasePlayer player, string shortname, ulong skinId, int amount)
         {
@@ -763,7 +764,7 @@ namespace Oxide.Plugins
             var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
             UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeSales")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
             UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
-            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("selectToSell")}</color>", 22, "0 0.9", "1 1");
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("selectToSell")}</color>", 20, "0 0.9", "1 1");
             int salePrice = (int)Math.Floor(saleItem.price * amount);
 
             UI.CreateLabel(ref container, UIMain, string.Format(msg("sellItemF"), color1, name), 18, "0.1 0.8", "0.3 0.84", TextAnchor.MiddleLeft);
@@ -797,7 +798,7 @@ namespace Oxide.Plugins
             var container = UI.CreateElementContainer(UIMain, uiColors["dark"], "0 0", "1 0.93");
             UI.CreateLabel(ref container, UIMain, $"<color={configData.Colors.Background_Dark.Color}>{msg("storeTransfer")}</color>", 200, "0 0", "1 1", TextAnchor.MiddleCenter);
             UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.99", true);
-            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("transfer1", player.UserIDString)}</color>", 22, "0 0.9", "1 1");
+            UI.CreateLabel(ref container, UIMain, $"{color1}{msg("transfer1", player.UserIDString)}</color>", 20, "0 0.9", "1 1");
 
             var playerCount = BasePlayer.activePlayerList.Count;
             if (playerCount > 96)
@@ -2055,20 +2056,20 @@ namespace Oxide.Plugins
                 items++;
             }
             if (npcCreator[player.userID].Value.useCustom)
-                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("useCustom"), 18, "0.21 0.05", "0.34 0.1", $"SRUI_NPCOption {page} custom", TextAnchor.MiddleCenter, 0f);
-            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("useCustom"), 18, "0.21 0.05", "0.34 0.1", $"SRUI_NPCOption {page} custom", TextAnchor.MiddleCenter, 0f);
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("useCustom"), 16, "0.21 0.05", "0.34 0.1", $"SRUI_NPCOption {page} custom", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("useCustom"), 16, "0.21 0.05", "0.34 0.1", $"SRUI_NPCOption {page} custom", TextAnchor.MiddleCenter, 0f);
 
             if (npcCreator[player.userID].Value.canExchange)
-                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowExchange"), 18, "0.36 0.05", "0.49 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
-            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowExchange"), 18, "0.36 0.05", "0.49 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowExchange"), 16, "0.36 0.05", "0.49 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowExchange"), 16, "0.36 0.05", "0.49 0.1", $"SRUI_NPCOption {page} exchange", TextAnchor.MiddleCenter, 0f);
 
             if (npcCreator[player.userID].Value.canSell)
-                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowSales"), 18, "0.51 0.05", "0.64 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
-            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowSales"), 18, "0.51 0.05", "0.64 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowSales"), 16, "0.51 0.05", "0.64 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowSales"), 16, "0.51 0.05", "0.64 0.1", $"SRUI_NPCOption {page} sales", TextAnchor.MiddleCenter, 0f);
 
             if (npcCreator[player.userID].Value.canTransfer)
-                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowTransfer"), 18, "0.66 0.05", "0.79 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
-            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowTransfer"), 18, "0.66 0.05", "0.79 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
+                UI.CreateButton(ref container, UISelect, uiColors["buttoncom"], msg("allowTransfer"), 16, "0.66 0.05", "0.79 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
+            else UI.CreateButton(ref container, UISelect, uiColors["buttonbg"], msg("allowTransfer"), 16, "0.66 0.05", "0.79 0.1", $"SRUI_NPCOption {page} transfer", TextAnchor.MiddleCenter, 0f);
 
             CuiHelper.DestroyUi(player, UISelect);
             CuiHelper.AddUi(player, container);
@@ -3620,10 +3621,11 @@ namespace Oxide.Plugins
             {"cldesc", "Select items, kits and commands to add to this NPC's custom store list" },
             {"clcanc", "You have cancelled custom loot creation"},
             {"sellItems", "Sell Items" },
-            {"selectSell", "Select an item to sell" },
+            {"selectItemSell", "Select an item to sell. You can only sell items that are in your main inventory container" },
             {"Name", "Name" },
             {"Amount", "Amount" },
             {"Sell","Sell" },
+            {"CantSell","Not Sell-able" },
             {"selectToSell", "Select an amount of the item you wish to sell" },
             {"sellItemF","Item: {0}{1}</color>" },
             {"sellPriceF","Price per unit: {0}{1} {2}</color>" },

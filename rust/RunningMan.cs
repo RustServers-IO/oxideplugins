@@ -9,13 +9,13 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.4.2")]
-    [Description("Running Man is a short plugin where you have to kill the runner.")]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.4.5")]
+    [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
         private Timer stillRunnerTimer;
         private Command command = Interface.Oxide.GetLibrary<Command>();
-        private Dictionary<string, int> SavedReward = new Dictionary<string, int>();
+        private Dictionary<string, RewardData> SavedReward = new Dictionary<string, RewardData>();
         private BasePlayer runningman;
         private Timer eventstart;
         private Timer eventpause;
@@ -48,6 +48,7 @@ namespace Oxide.Plugins
 
             return (T)Convert.ChangeType(Config.Get(stringArgs.ToArray()), typeof(T));
         }
+        bool hasAccess(BasePlayer player, string permissionName) { if (player.net.connection.authLevel > 1) return true; return permission.UserHasPermission(player.userID.ToString(), permissionName); }
 
         string ListToString<T>(List<T> list, int first = 0, string seperator = ", ") => string.Join(seperator, (from val in list select val.ToString()).Skip(first).ToArray());
 
@@ -63,7 +64,7 @@ namespace Oxide.Plugins
             {
                 Puts("Economics not found!");
             }
-            if ((string) Config["Default", "On"] == "true")
+            if ((string) Config["Default", "AutoStart"] == "true")
             {
                 eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
@@ -87,18 +88,27 @@ namespace Oxide.Plugins
                  {"UntilStartOfEvent", "<color=#C4FF00>{0}</color>: Before the start of the event remained: {1} minutes"},
                  {"RunCommandHelp", "Use \"/run\" to find out information about the running man"},
                  {"AdminCommandHelp", "Use \"/eventon\" for start event Running Man\nUse \"/eventoff\" for start event Running Man"},
+                 {"AdminAddCommandHelp", "Use \"/running add <Package Name> <ItemName or money or karma> <MinAmount> <MaxAmount>\" to add item."},
+                 {"AdminRemoveCommandHelp", "Use \"/running remove <PackageName> <ItemName or karma or money>\" to remove item."},
                  {"NobodyOnline", "<color=#C4FF00>{0}</color>: You can't run event while there is nobody online"},
                  {"NoPerm", "<color=#C4FF00>{0}</color>: You have no rights to do this!"},
                  {"RunnerLeaved", "<color=#C4FF00>{0}</color>: {1} got scared and ran away!"},
-                 {"EventStopped", "<color=#C4FF00>{0}</color>: Event has stopped!"}
+                 {"EventStopped", "<color=#C4FF00>{0}</color>: Event has stopped!"},
+                 {"PackageDontExist", "<color=#C4FF00>{0}</color>: This package don't exist."},
+                 {"MissingItemFromPackage", "<color=#C4FF00>{0}</color>: Item not found in package."},
+                 {"ItemRemoved", "<color=#C4FF00>{0}</color>: Successfully removed item {1}."},
+                 {"ItemAdded", "<color=#C4FF00>{0}</color>: Successfully added item {1} to package {2}."},
+                 {"PackageAdded", "<color=#C4FF00>{0}</color>: Successfully added package {1} and inserted item to it."},
+                 {"ItemExist", "<color=#C4FF00>{0}</color>: Item already exist in package."},
             }, this);
+            permission.RegisterPermission("runningman.admin", this);
         }
 
         protected override void LoadDefaultConfig()
         {
             SetConfig("Default", "ChatName", "EVENT");
             SetConfig("Default", "authLevel", 1);
-            SetConfig("Default", "On", "true");
+            SetConfig("Default", "AutoStart", "true");
             SetConfig("Default", "Count", 2);
             SetConfig("Default", "StarteventTime", 30);
             SetConfig("Default", "PauseeventTime", 30);
@@ -108,25 +118,60 @@ namespace Oxide.Plugins
             SetConfig("Config", "Reward", "RewardFixingAmount", 10000);
             SetConfig("Config", "Reward", "KarmaSystem", "PointToRemove", 0);
             SetConfig("Config", "Reward", "KarmaSystem", "PointToAdd", 1);
+            SetConfig("Default", "Excluded auth level", 1);
             SaveConfig();
         }
 
+        class RewardData
+        {
+            public Dictionary<string, ValueAmount> RewardItems; 
+        }
+
+        private class ValueAmount
+        {
+            public int MinValue;
+            public int MaxValue;
+        }
         void LoadSavedData()
         {
-            SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, int>>(nameof(RunningMan));
+            SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, RewardData>>(nameof(RunningMan));
             if (SavedReward.Count == 0)
             {
-                SavedReward = new Dictionary<string, int>
+                SavedReward = new Dictionary<string, RewardData>
                 {
-                    {"Karma", 1},
-                    {"wood", 10000},
-                    {"stones", 10000},
-                    {"metal.ore", 15000},
-                    {"sulfur.ore", 15000},
-                    {"smg.2", 1},
-                    {"ammo.pistol.hv", 150},
-                    {"rocket.launcher", 1},
-                    {"money", 10000}
+                    {"Karma", new RewardData
+                        {
+                            RewardItems = new Dictionary<string, ValueAmount>
+                            {
+                                {"Karma", new ValueAmount
+                                    {
+                                        MinValue = 0,
+                                        MaxValue = 1
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {"build", new RewardData
+                        {
+                            RewardItems = new Dictionary<string, ValueAmount>
+                            {
+                                {"wood", new ValueAmount
+                                    {
+                                        MinValue = 1000,
+                                        MaxValue = 10000
+                                    }
+                                },
+                                {
+                                    "stones", new ValueAmount
+                                    {
+                                        MinValue = 1000,
+                                        MaxValue = 10000
+                                    }
+                                }
+                            }
+                        }
+                    }
                 };
                 PrintWarning("Failed to load data file, generating a new one...");
             }
@@ -177,11 +222,10 @@ namespace Oxide.Plugins
             }
             if (BasePlayer.activePlayerList != null && BasePlayer.activePlayerList.Count >= (int) Config["Default", "Count"])
             {
-                var t = BasePlayer.activePlayerList;
-                if (t == null)
-                    return;
-                var randI = rnd.Next(1, t.Count);
-                runningman = t[randI];
+                var t = BasePlayer.activePlayerList.Where(x => x.net.connection.authLevel < (int) Config["Default", "Excluded auth level"]);
+                var basePlayers = t as BasePlayer[] ?? t.ToArray();
+                var randI = rnd.Next(0, basePlayers.Length);
+                runningman = basePlayers[randI];
                 Runlog("Running man: " + runningman.displayName);
                 BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
                 eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
@@ -213,41 +257,46 @@ namespace Oxide.Plugins
                 }
                 Runlog("random");
                 var rand = SavedReward.ElementAt(rnd.Next(0, SavedReward.Count));
-                switch (rand.Key)
+                foreach (var data in rand.Value.RewardItems)
                 {
-                    case "karma":
-                        if (KarmaSystem != null && KarmaSystem.IsLoaded)
-                        {
-                            IPlayer player = covalence.Players.FindPlayerById(runningman.UserIDString);
-                            KarmaSystem.Call("AddKarma", player, GetConfig<double>(1, "Config", "Reward", "KarmaSystem", "PointToAdd"));
-                        }
-                        else
-                        {
-                            inv?.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
-                                (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
-                        }
-                        break;
-                    case "money":
-                        if (Economics != null && Economics.IsLoaded)
-                        {
-                            Economics?.CallHook("Deposit", runningman.userID,
-                                rand.Value);
-                        }
-                        else
-                        {
-                            inv?.GiveItem(
-                                ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
-                                    (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
-                        }
-                        break;
-                    default:
-                        Item item = ItemManager.CreateByName(rand.Key,
-                            rand.Value);
-                        if(item != null)
-                            inv?.GiveItem(item, inv.containerMain);
-                        else
-                            PrintError($"Failed to create item...{rand.Key}");
-                        break;
+                    int randomReward = rnd.Next(data.Value.MinValue, data.Value.MaxValue);
+                    switch (data.Key)
+                    {
+                        case "karma":
+                            if (KarmaSystem != null && KarmaSystem.IsLoaded)
+                            {
+                                IPlayer player = covalence.Players.FindPlayerById(runningman.UserIDString);
+                                KarmaSystem.Call("AddKarma", player, (double) randomReward);
+                            }
+                            else
+                            {
+                                inv?.GiveItem(
+                                    ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                        (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                            }
+                            break;
+                        case "money":
+                            if (Economics != null && Economics.IsLoaded)
+                            {
+                                Economics?.CallHook("Deposit", runningman.userID,
+                                    randomReward);
+                            }
+                            else
+                            {
+                                inv?.GiveItem(
+                                    ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                        (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                            }
+                            break;
+                        default:
+                            Item item = ItemManager.CreateByName(data.Key,
+                                randomReward);
+                            if (item != null)
+                                inv?.GiveItem(item, inv.containerMain);
+                            else
+                                PrintError($"Failed to create item...{rand.Key}");
+                            break;
+                    }
                 }
             }
             else
@@ -321,42 +370,46 @@ namespace Oxide.Plugins
                     return;
                 }
                 var rand = SavedReward.ElementAt(rnd.Next(0, SavedReward.Count));
-                switch (rand.Key)
+                foreach (var data in rand.Value.RewardItems)
                 {
-                    case "karma":
-                        if (KarmaSystem != null && KarmaSystem.IsLoaded)
-                        {
-                            IPlayer player = covalence.Players.FindPlayerById(attacker.UserIDString);
-                            KarmaSystem.Call("AddKarma", player, GetConfig<double>(1, "Config", "Reward", "KarmaSystem", "PointToAdd"));
-                        }
-                        else
-                        {
-                            inv?.GiveItem(ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
-                                (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
-                        }
-                        break;
-                    case "money":
-                        if (Economics != null && Economics.IsLoaded)
-                        {
-                            Economics?.CallHook("Deposit", runningman.userID,
-                                rand.Value);
-                        }
-                        else
-                        {
-                            inv?.GiveItem(
-                                ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
-                                    (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
-                        }
-                        break;
-                    default:
-                        Runlog(rand.Key);
-                        Item item = ItemManager.CreateByName(rand.Key,
-                            rand.Value);
-                        if(item != null)
-                            inv?.GiveItem(item, inv.containerMain);
-                        else
-                            PrintError($"Failed to create item...{rand.Key}");
-                        break;
+                    int randomReward = rnd.Next(data.Value.MinValue, data.Value.MaxValue);
+                    switch (data.Key)
+                    {
+                        case "karma":
+                            if (KarmaSystem != null && KarmaSystem.IsLoaded)
+                            {
+                                IPlayer player = covalence.Players.FindPlayerById(attacker.UserIDString);
+                                KarmaSystem.Call("AddKarma", player, (double) randomReward);
+                            }
+                            else
+                            {
+                                inv?.GiveItem(
+                                    ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                        (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                            }
+                            break;
+                        case "money":
+                            if (Economics != null && Economics.IsLoaded)
+                            {
+                                Economics?.CallHook("Deposit", runningman.userID,
+                                    randomReward);
+                            }
+                            else
+                            {
+                                inv?.GiveItem(
+                                    ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                        (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                            }
+                            break;
+                        default:
+                            Item item = ItemManager.CreateByName(data.Key,
+                                randomReward);
+                            if (item != null)
+                                inv?.GiveItem(item, inv.containerMain);
+                            else
+                                PrintError($"Failed to create item...{rand.Key}");
+                            break;
+                    }
                 }
             }
             else
@@ -413,7 +466,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    SendReply(player, lang.GetMessage("NotRunningEvent", this, player.UserIDString));
+                    SendReply(player, string.Format(lang.GetMessage("NotRunningEvent", this, player.UserIDString), (string)Config["Default", "ChatName"]));
                 }
             }
         }
@@ -425,6 +478,8 @@ namespace Oxide.Plugins
             if (authlevel >= (int) Config["Default", "authLevel"]) 
             {
                 player.ChatMessage(lang.GetMessage("AdminCommandHelp", this, player.UserIDString));
+                player.ChatMessage(lang.GetMessage("AdminAddCommandHelp", this, player.UserIDString));
+                player.ChatMessage(lang.GetMessage("AdminRemoveCommandHelp", this, player.UserIDString));
             }
         }
 
@@ -558,6 +613,100 @@ namespace Oxide.Plugins
             }
             else
                 SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), Config["Default", "ChatName"]));
+        }
+
+        [ChatCommand("running")]
+        void cmdChat(BasePlayer player, string cmd, string[] args)
+        {
+            if (!hasAccess(player, "runningman.admin"))
+            {
+                SendReply(player, lang.GetMessage("NoPerm", this, player.UserIDString));
+                return;
+            }
+            if (args == null)
+            {
+                SendHelpText(player);
+                return;
+            }
+            string action;
+            string package;
+            string item;
+            if (args.Length < 4)
+            {
+                action = args[0].ToLower();
+                package = args[1].ToLower();
+                item = args[2].ToLower();
+                if (action == "remove")
+                {
+                    switch (args.Length)
+                    {
+                        case 2:
+                            if (SavedReward.ContainsKey(package))
+                                SavedReward.Remove(package);
+                            else
+                                SendReply(player, string.Format(lang.GetMessage("PackageDontExist", this, player.UserIDString), (string)Config["Default", "ChatName"]));
+                            break;
+                        case 3:
+                            if (SavedReward.ContainsKey(package))
+                                if (SavedReward[package].RewardItems.ContainsKey(item))
+                                {
+                                    SavedReward[package].RewardItems.Remove(item);
+                                    SendReply(player, string.Format(lang.GetMessage("ItemRemoved", this, player.UserIDString), (string)Config["Default", "ChatName"], item));
+                                }
+                                else
+                                    SendReply(player,
+                                        string.Format(lang.GetMessage("MissingItemFromPackage", this, player.UserIDString), (string)Config["Default", "ChatName"]));
+                            else
+                                SendReply(player, string.Format(lang.GetMessage("PackageDontExist", this, player.UserIDString), (string)Config["Default", "ChatName"]));
+                            break;
+                    }
+                }
+            }
+            if (args.Length == 5)
+            {
+                action = args[0].ToLower();
+                package = args[1].ToLower();
+                item = args[2].ToLower();
+                int minamount = int.Parse(args[3]);
+                int maxamount = int.Parse(args[4]);
+
+                if (action == "add")
+                {
+                    if (SavedReward.ContainsKey(package))
+                    {
+                        if (SavedReward[package].RewardItems.ContainsKey(item))
+                        {
+                            SendReply(player,
+                                string.Format(lang.GetMessage("ItemExist", this, player.UserIDString),
+                                    (string) Config["Default", "ChatName"]));
+                            return;
+                        }
+                        SavedReward[package].RewardItems.Add(item, new ValueAmount
+                        {
+                            MinValue = minamount,
+                            MaxValue = maxamount
+                        });
+                        SendReply(player, string.Format(lang.GetMessage("ItemAdded", this, player.UserIDString), (string)Config["Default", "ChatName"], item, package));
+                        SaveLoadedData();
+                    }
+                    else
+                    {
+                        SavedReward.Add(package, new RewardData
+                        {
+                            RewardItems = new Dictionary<string, ValueAmount>
+                            {
+                                {   item, new ValueAmount
+                                    {
+                                        MinValue = minamount,
+                                        MaxValue = maxamount
+                                    }
+                                }
+                            }
+                        });
+                        SendReply(player, string.Format(lang.GetMessage("PackageAdded", this, player.UserIDString), (string)Config["Default", "ChatName"], package));
+                    }
+                }
+            }
         }
     }
 }

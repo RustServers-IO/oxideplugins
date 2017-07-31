@@ -1,0 +1,20 @@
+{
+    "name": "Security Lights",
+    "description": "Search light targeting system",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": true,
+    "suggest": {
+        "Clans": "*",
+        "Vanish": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/security-lights.2577",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

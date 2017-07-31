@@ -6,32 +6,25 @@ using Oxide.Game.Rust.Cui;
 using Oxide.Core.Plugins;
 using UnityEngine;
 using System.Linq;
-using System.Reflection;
-using System.Collections;
 using System.IO;
 using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NukeWeapons", "k1lly0u", "0.1.62", ResourceId = 2044)]
+    [Info("NukeWeapons", "k1lly0u", "0.1.65", ResourceId = 2044)]
     class NukeWeapons : RustPlugin
     {
         #region Fields
-        [PluginReference] Plugin LustyMap;
+        [PluginReference] Plugin LustyMap, ImageLibrary;
 
         NukeData nukeData;
         ItemNames itemNames;
         private DynamicConfigFile data;        
         private DynamicConfigFile Item_Names;
+                       
+        private string dataDirectory = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "NukeWeapons" + Path.DirectorySeparatorChar + "Icons" + Path.DirectorySeparatorChar;
 
-        static GameObject webObject;
-        static UnityWeb uWeb;
-        static MethodInfo getFileData = typeof(FileStorage).GetMethod("StorageGet", (BindingFlags.Instance | BindingFlags.NonPublic));
-
-        private static readonly int playerLayer = LayerMask.GetMask("Player (Server)");
-        private static readonly Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic))?.GetValue(null);
-
-        private List<ZoneList> RadiationZones = new List<ZoneList>();
+        private List<ZoneList> radiationZones = new List<ZoneList>();
 
         private Dictionary<ulong, NukeType> activeUsers = new Dictionary<ulong, NukeType>();
         private Dictionary<ulong, Dictionary<NukeType, int>> cachedAmmo = new Dictionary<ulong, Dictionary<NukeType, int>>();
@@ -39,8 +32,8 @@ namespace Oxide.Plugins
 
         private List<Timer> nwTimers = new List<Timer>();
 
-        private Dictionary<string, ItemDefinition> ItemDefs;
-        private Dictionary<string, string> DisplayNames = new Dictionary<string, string>();
+        private Dictionary<string, ItemDefinition> itemDefs;
+        private Dictionary<string, string> displayNames = new Dictionary<string, string>();
 
         #endregion
 
@@ -50,37 +43,35 @@ namespace Oxide.Plugins
             data = Interface.Oxide.DataFileSystem.GetFile("NukeWeapons/nukeweapon_data");
             Item_Names = Interface.Oxide.DataFileSystem.GetFile("NukeWeapons/itemnames");
             Interface.Oxide.DataFileSystem.SaveDatafile("NukeWeapons/Icons/foldercreator");
-            lang.RegisterMessages(Messages, this);
-            webObject = new GameObject("WebObject");
-            uWeb = webObject.AddComponent<UnityWeb>();
+            lang.RegisterMessages(Messages, this);           
             InitializePlugin();
         }
         void OnServerInitialized()
         {
             LoadVariables();
             LoadData();
-            ItemDefs = ItemManager.itemList.ToDictionary(i => i.shortname);
-            if (itemNames.DisplayNames == null || itemNames.DisplayNames.Count < 1)
+            itemDefs = ItemManager.itemList.ToDictionary(i => i.shortname);
+            if (itemNames.displayNames == null || itemNames.displayNames.Count < 1)
             {
-                foreach (var item in ItemDefs)
+                foreach (var item in itemDefs)
                 {
-                    if (!DisplayNames.ContainsKey(item.Key))
-                        DisplayNames.Add(item.Key, item.Value.displayName.translated);
+                    if (!displayNames.ContainsKey(item.Key))
+                        displayNames.Add(item.Key, item.Value.displayName.translated);
                 }
-                SaveDisplayNames();
+                SavedisplayNames();
             }
-            else DisplayNames = itemNames.DisplayNames;
+            else displayNames = itemNames.displayNames;
             
             FindAllMines();
         }
         void Unload()
         {
-            for (int i = 0; i < RadiationZones.Count; i++)
+            for (int i = 0; i < radiationZones.Count; i++)
             {
-                RadiationZones[i].time.Destroy();
-                UnityEngine.Object.Destroy(RadiationZones[i].zone);
+                radiationZones[i].time.Destroy();
+                UnityEngine.Object.Destroy(radiationZones[i].zone);
             }
-            RadiationZones.Clear();
+            radiationZones.Clear();
             foreach(var player in BasePlayer.activePlayerList)
             {
                 CuiHelper.DestroyUi(player, UIMain);
@@ -118,9 +109,9 @@ namespace Oxide.Plugins
         {
             if (activeUsers.ContainsKey(player.userID) && activeUsers[player.userID] == NukeType.Rocket)
             {
-                if (hasUnlimited(player) || HasAmmo(player.userID, NukeType.Rocket))
+                if (HasUnlimitedAmmo(player) || HasAmmo(player.userID, NukeType.Rocket))
                 {
-                    if (!hasUnlimited(player))
+                    if (!HasUnlimitedAmmo(player))
                     {
                         string itemname = "ammo.rocket.basic";
                         switch (entity.ShortPrefabName)
@@ -134,7 +125,7 @@ namespace Oxide.Plugins
                             default:
                                 break;
                         }
-                        player.inventory.containerMain.AddItem(ItemDefs[itemname], 1);
+                        player.inventory.containerMain.AddItem(itemDefs[itemname], 1);
                         cachedAmmo[player.userID][NukeType.Rocket]--;
                     }
                     entity.gameObject.AddComponent<Nuke>().InitializeComponent(this, NukeType.Rocket, configData.Rockets.RadiationProperties);
@@ -157,11 +148,11 @@ namespace Oxide.Plugins
                     var player = BasePlayer.FindByID(mine.OwnerID);
                     if (player != null)
                     {
-                        if (hasUnlimited(player) || HasAmmo(player.userID, NukeType.Mine))
+                        if (HasUnlimitedAmmo(player) || HasAmmo(player.userID, NukeType.Mine))
                         {
-                            if (!hasUnlimited(player))
+                            if (!HasUnlimitedAmmo(player))
                             {
-                                player.inventory.containerMain.AddItem(ItemDefs["trap.landmine"], 1);
+                                player.inventory.containerMain.AddItem(itemDefs["trap.landmine"], 1);
                                 cachedAmmo[player.userID][NukeType.Mine]--;
                             }
                             mine.gameObject.AddComponent<Nuke>().InitializeComponent(this, NukeType.Mine, configData.Mines.RadiationProperties);
@@ -200,11 +191,11 @@ namespace Oxide.Plugins
                         if (hitPos != null)
                         {
                             var radVar = configData.Bullets.RadiationProperties;
-                            if (hasUnlimited(attacker) || HasAmmo(attacker.userID, NukeType.Bullet))
+                            if (HasUnlimitedAmmo(attacker) || HasAmmo(attacker.userID, NukeType.Bullet))
                             {
-                                if (!hasUnlimited(attacker))
+                                if (!HasUnlimitedAmmo(attacker))
                                 {
-                                    attacker.inventory.containerMain.AddItem(ItemDefs[ammo], 1);
+                                    attacker.inventory.containerMain.AddItem(itemDefs[ammo], 1);
                                     cachedAmmo[attacker.userID][NukeType.Bullet]--;
                                 }
                                 InitializeZone(hitPos, radVar.Intensity, radVar.Duration, radVar.Radius, false);
@@ -226,11 +217,11 @@ namespace Oxide.Plugins
             {
                 if (activeUsers.ContainsKey(player.userID) && activeUsers[player.userID] == NukeType.Explosive)
                 {
-                    if (hasUnlimited(player) || HasAmmo(player.userID, NukeType.Explosive))
+                    if (HasUnlimitedAmmo(player) || HasAmmo(player.userID, NukeType.Explosive))
                     {
-                        if (!hasUnlimited(player))
+                        if (!HasUnlimitedAmmo(player))
                         {
-                            player.inventory.containerMain.AddItem(ItemDefs["explosive.timed"], 1);
+                            player.inventory.containerMain.AddItem(itemDefs["explosive.timed"], 1);
                             cachedAmmo[player.userID][NukeType.Explosive]--;
                         }
                         entity.gameObject.AddComponent<Nuke>().InitializeComponent(this, NukeType.Explosive, configData.Explosives.RadiationProperties);                        
@@ -247,11 +238,11 @@ namespace Oxide.Plugins
             {
                 if (activeUsers.ContainsKey(player.userID) && activeUsers[player.userID] == NukeType.Grenade)
                 {
-                    if (hasUnlimited(player) || HasAmmo(player.userID, NukeType.Grenade))
+                    if (HasUnlimitedAmmo(player) || HasAmmo(player.userID, NukeType.Grenade))
                     {
-                        if (!hasUnlimited(player))
+                        if (!HasUnlimitedAmmo(player))
                         {
-                            player.inventory.containerMain.AddItem(ItemDefs["grenade.f1"], 1);
+                            player.inventory.containerMain.AddItem(itemDefs["grenade.f1"], 1);
                             cachedAmmo[player.userID][NukeType.Grenade]--;
                         }
                         entity.gameObject.AddComponent<Nuke>().InitializeComponent(this, NukeType.Explosive, configData.Grenades.RadiationProperties);                        
@@ -268,10 +259,10 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
-        private bool HasEnoughRes(BasePlayer player, int itemid, int amount) => player.inventory.GetAmount(itemid) >= amount;
+        private bool HasEnoughResources(BasePlayer player, int itemid, int amount) => player.inventory.GetAmount(itemid) >= amount;
         private void TakeResources(BasePlayer player, int itemid, int amount) => player.inventory.Take(null, itemid, amount);
-        static double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
-        private bool IsType(BasePlayer player, NukeType type) => activeUsers.ContainsKey(player.userID) && activeUsers[player.userID] == type;
+        static double CurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
+        private bool IsSelectedType(BasePlayer player, NukeType type) => activeUsers.ContainsKey(player.userID) && activeUsers[player.userID] == type;
         #endregion
 
         #region Functions
@@ -296,24 +287,24 @@ namespace Oxide.Plugins
                 }                
             }            
         }
-        private bool CanCraft(BasePlayer player, NukeType type)
+        private bool CanCraftWeapon(BasePlayer player, NukeType type)
         {
             var ingredients = GetCraftingComponents(type);
             foreach (var item in ingredients)
             {
-                if (HasEnoughRes(player, ItemDefs[item.Key].itemid, item.Value))
+                if (HasEnoughResources(player, itemDefs[item.Key].itemid, item.Value))
                     continue;
                 else return false;
             }
             return true;
         }
-        private bool AlreadyCrafting(BasePlayer player, NukeType type)
+        private bool IsCrafting(BasePlayer player, NukeType type)
         {
             if (craftingTimers.ContainsKey(player.userID))
             {
                 if (craftingTimers[player.userID].ContainsKey(type))
                 {
-                    if (craftingTimers[player.userID][type] > GrabCurrentTime())
+                    if (craftingTimers[player.userID][type] > CurrentTime())
                         return true;
                 }
             }
@@ -322,7 +313,7 @@ namespace Oxide.Plugins
         private string CraftTimeClock(BasePlayer player, NukeType type)
         {
             if (player == null) return null;
-            TimeSpan dateDifference = TimeSpan.FromSeconds(craftingTimers[player.userID][type] - GrabCurrentTime());            
+            TimeSpan dateDifference = TimeSpan.FromSeconds(craftingTimers[player.userID][type] - CurrentTime());            
             var mins = dateDifference.Minutes;
             var secs = dateDifference.Seconds;
             return string.Format("{0:00}:{1:00}", mins, secs);
@@ -332,10 +323,10 @@ namespace Oxide.Plugins
             var config = GetConfigFromType(type);
             var ingredients = GetCraftingComponents(type);
             foreach (var ing in ingredients)            
-                TakeResources(player, ItemDefs[ing.Key].itemid, ing.Value);
+                TakeResources(player, itemDefs[ing.Key].itemid, ing.Value);
 
             bool finished = FinishedCrafting(player);
-            craftingTimers[player.userID][type] = GrabCurrentTime() + config.CraftTime;            
+            craftingTimers[player.userID][type] = CurrentTime() + config.CraftTime;            
             CraftingElement(player, type);
             if (finished)
                 CreateCraftTimer(player);
@@ -502,11 +493,11 @@ namespace Oxide.Plugins
             NWUI.CreateLabel(ref Selector, UIMain, "", $"{configData.Options.MSG_MainColor}{Title}</color>", 30, "0.05 0", "0.2 1");
 
             int number = 0;
-            if (configData.Bullets.Enabled && canBullet(player)) { CreateMenuButton(ref Selector, UIMain, MSG("Bullets", player.UserIDString), "NWUI_ChangeElement bullets", number); number++; }
-            if (configData.Explosives.Enabled && canExplosive(player)) { CreateMenuButton(ref Selector, UIMain, MSG("Explosives", player.UserIDString), "NWUI_ChangeElement explosives", number); number++; }
-            if (configData.Grenades.Enabled && canGrenade(player)) { CreateMenuButton(ref Selector, UIMain, MSG("Grenades", player.UserIDString), "NWUI_ChangeElement grenades", number); number++; }
-            if (configData.Mines.Enabled && canMine(player)) { CreateMenuButton(ref Selector, UIMain, MSG("Mines", player.UserIDString), "NWUI_ChangeElement mines", number); number++; }
-            if (configData.Rockets.Enabled && canRocket(player)) { CreateMenuButton(ref Selector, UIMain, MSG("Rockets", player.UserIDString), "NWUI_ChangeElement rockets", number); number++; }
+            if (configData.Bullets.Enabled && HasPermission(player, NukeType.Bullet)) { CreateMenuButton(ref Selector, UIMain, MSG("Bullets", player.UserIDString), "NWUI_ChangeElement bullets", number); number++; }
+            if (configData.Explosives.Enabled && HasPermission(player, NukeType.Explosive)) { CreateMenuButton(ref Selector, UIMain, MSG("Explosives", player.UserIDString), "NWUI_ChangeElement explosives", number); number++; }
+            if (configData.Grenades.Enabled && HasPermission(player, NukeType.Grenade)) { CreateMenuButton(ref Selector, UIMain, MSG("Grenades", player.UserIDString), "NWUI_ChangeElement grenades", number); number++; }
+            if (configData.Mines.Enabled && HasPermission(player, NukeType.Mine)) { CreateMenuButton(ref Selector, UIMain, MSG("Mines", player.UserIDString), "NWUI_ChangeElement mines", number); number++; }
+            if (configData.Rockets.Enabled && HasPermission(player, NukeType.Rocket)) { CreateMenuButton(ref Selector, UIMain, MSG("Rockets", player.UserIDString), "NWUI_ChangeElement rockets", number); number++; }
             CreateMenuButton(ref Selector, UIMain, MSG("Close", player.UserIDString), "NWUI_DestroyAll", number);
             CuiHelper.AddUi(player, Selector);
         }
@@ -514,8 +505,7 @@ namespace Oxide.Plugins
         {            
             var Main = NWUI.CreateElementContainer(UIPanel, UIColors["dark"], "0 0", "1 0.92");
             NWUI.CreatePanel(ref Main, UIPanel, UIColors["light"], "0.01 0.02", "0.99 0.98", true);
-            if (nukeData.ImageIDs.ContainsKey("Background"))
-            NWUI.LoadImage(ref Main, UIPanel, nukeData.ImageIDs["Background"].ToString(), "0.01 0.02", "0.99 0.98");         
+            NWUI.LoadImage(ref Main, UIPanel, GetImage("Background"), "0.01 0.02", "0.99 0.98");         
 
             NWUI.CreateLabel(ref Main, UIPanel, "", $"{configData.Options.MSG_MainColor}{MSG("Required Ingredients", player.UserIDString)}</color>", 20, "0.1 0.85", "0.55 0.95");
             NWUI.CreateLabel(ref Main, UIPanel, "", MSG("Item Name", player.UserIDString), 16, "0.1 0.75", "0.3 0.85", TextAnchor.MiddleLeft);
@@ -527,39 +517,39 @@ namespace Oxide.Plugins
             int i = 0;
             foreach(var item in ingredients)
             {
-                var itemInfo = ItemDefs[item.Key];
+                var itemInfo = itemDefs[item.Key];
                 var plyrAmount = player.inventory.GetAmount(itemInfo.itemid);                
-                CreateIngredientEntry(ref Main, UIPanel, DisplayNames[itemInfo.shortname], item.Value, plyrAmount, i);
+                CreateIngredientEntry(ref Main, UIPanel, displayNames[itemInfo.shortname], item.Value, plyrAmount, i);
                 i++;
             }
             var config = GetConfigFromType(type);
             string command = null;            
             string text = $"{MSG("Craft", player.UserIDString)} {config.CraftAmount}x";
-            if (CanCraft(player, type)) command = $"NWUI_Craft {type.ToString()}";
+            if (CanCraftWeapon(player, type)) command = $"NWUI_Craft {type.ToString()}";
             if (cachedAmmo[player.userID][type] >= config.MaxAllowed)
             {
                 text = MSG("Limit Reached", player.UserIDString);
                 command = null;
             }
-            if (AlreadyCrafting(player, type))
+            if (IsCrafting(player, type))
             {
                 text = MSG("Crafting...", player.UserIDString);
                 command = null;                
             }
-            if (hasUnlimited(player))
+            if (HasUnlimitedAmmo(player))
             {
                 text = MSG("Unlimited", player.UserIDString);
                 command = null;
             }
 
             NWUI.CreateLabel(ref Main, UIPanel, "", $"{configData.Options.MSG_MainColor}{MSG("Inventory Amount", player.UserIDString)}</color>", 20, "0.6 0.85", "0.9 0.95");
-            if (hasUnlimited(player))
+            if (HasUnlimitedAmmo(player))
                 NWUI.CreateLabel(ref Main, UIPanel, "", $"~ / {config.MaxAllowed}", 16, "0.6 0.75", "0.9 0.85");
             else NWUI.CreateLabel(ref Main, UIPanel, "", $"{cachedAmmo[player.userID][type]} / {config.MaxAllowed}", 16, "0.6 0.75", "0.9 0.85");
             NWUI.CreateButton(ref Main, UIPanel, UIColors["buttonbg"], text, 16, $"0.6 0.65", $"0.74 0.72", command);
-            if (cachedAmmo[player.userID][type] > 0 || hasUnlimited(player))
+            if (cachedAmmo[player.userID][type] > 0 || HasUnlimitedAmmo(player))
             {
-                if (IsType(player, type))
+                if (IsSelectedType(player, type))
                     NWUI.CreateButton(ref Main, UIPanel, UIColors["buttonbg"], MSG("Disarm", player.UserIDString), 16, $"0.76 0.65", $"0.9 0.72", $"NWUI_DeactivateMenu {type.ToString()}");
                 else NWUI.CreateButton(ref Main, UIPanel, UIColors["buttonbg"], MSG("Arm", player.UserIDString), 16, $"0.76 0.65", $"0.9 0.72", $"NWUI_Activate {type.ToString()}");
             }
@@ -576,7 +566,7 @@ namespace Oxide.Plugins
             {
                 if (craft.Value == -1)
                     continue;                
-                else if (craft.Value <= GrabCurrentTime())                
+                else if (craft.Value <= CurrentTime())                
                     FinishedTypes.Add(craft.Key); 
                 else                
                     CraftingMessage += $"{craft.Key.ToString()}: {configData.Options.MSG_MainColor}{CraftTimeClock(player, craft.Key)}</color>     ";                              
@@ -627,37 +617,37 @@ namespace Oxide.Plugins
             {
                 DestroyIconUI(player);
                 int i = 0;
-                if (canBullet(player))
+                if (HasPermission(player, NukeType.Bullet))
                 {
-                    if (cachedAmmo[player.userID][NukeType.Bullet] > 0 || hasUnlimited(player))
+                    if (cachedAmmo[player.userID][NukeType.Bullet] > 0 || HasUnlimitedAmmo(player))
                     {
                         AmmoIcon(player, NukeType.Bullet, i); i++;
                     }
                 }
-                if (canExplosive(player))
+                if (HasPermission(player, NukeType.Explosive))
                 {
-                    if (cachedAmmo[player.userID][NukeType.Explosive] > 0 || hasUnlimited(player))
+                    if (cachedAmmo[player.userID][NukeType.Explosive] > 0 || HasUnlimitedAmmo(player))
                     {
                         AmmoIcon(player, NukeType.Explosive, i); i++;
                     }
                 }
-                if (canGrenade(player))
+                if (HasPermission(player, NukeType.Grenade))
                 {
-                    if (cachedAmmo[player.userID][NukeType.Grenade] > 0 || hasUnlimited(player))
+                    if (cachedAmmo[player.userID][NukeType.Grenade] > 0 || HasUnlimitedAmmo(player))
                     {
                         AmmoIcon(player, NukeType.Grenade, i); i++;
                     }
                 }
-                if (canMine(player))
+                if (HasPermission(player, NukeType.Mine))
                 {
-                    if (cachedAmmo[player.userID][NukeType.Mine] > 0 || hasUnlimited(player))
+                    if (cachedAmmo[player.userID][NukeType.Mine] > 0 || HasUnlimitedAmmo(player))
                     {
                         AmmoIcon(player, NukeType.Mine, i); i++;
                     }
                 }
-                if (canRocket(player))
+                if (HasPermission(player, NukeType.Rocket))
                 {
-                    if (cachedAmmo[player.userID][NukeType.Rocket] > 0 || hasUnlimited(player))
+                    if (cachedAmmo[player.userID][NukeType.Rocket] > 0 || HasUnlimitedAmmo(player))
                     {
                         AmmoIcon(player, NukeType.Rocket, i); i++;
                     }
@@ -677,18 +667,18 @@ namespace Oxide.Plugins
             
             var Main = NWUI.CreateElementContainer(panelName, "0 0 0 0", $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", false, "Hud");
 
-            var image = nukeData.ImageIDs[$"{type.ToString()}"].ToString();
-            if (IsType(player, type))
-                image = nukeData.ImageIDs[$"{type.ToString()}Active"].ToString();
+            var image = GetImage(type.ToString());
+            if (IsSelectedType(player, type))
+                image = GetImage($"{type.ToString()}Active");
             NWUI.LoadImage(ref Main, panelName, image, "0 0", "1 1");
 
             string amount;
-            if (hasUnlimited(player))
+            if (HasUnlimitedAmmo(player))
                 amount = "~";
             else amount = cachedAmmo[player.userID][type].ToString();
             NWUI.CreateTextOverlay(ref Main, panelName, "", $"{amount}", 30, "2 2", "0 0 0 1", "0 0", "1 1", TextAnchor.LowerCenter);
 
-            if (IsType(player, type))
+            if (IsSelectedType(player, type))
                 NWUI.CreateButton(ref Main, panelName, "0 0 0 0", "", 20, "0 0", "1 1", "NWUI_DeactivateButton");
             else NWUI.CreateButton(ref Main, panelName, "0 0 0 0", "", 20, "0 0", "1 1", $"NWUI_Activate {type.ToString()}");
             
@@ -799,9 +789,9 @@ namespace Oxide.Plugins
         {
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
-                return;           
-            
-            if (canRocket(player) || canBullet(player) || canMine(player) || canGrenade(player) || canExplosive(player) || canAll(player))
+                return;
+
+            if (HasPermission(player, NukeType.Bullet) || HasPermission(player, NukeType.Explosive) || HasPermission(player, NukeType.Grenade) || HasPermission(player, NukeType.Mine) || HasPermission(player, NukeType.Rocket))
             {
                 CloseMap(player);
                 CheckPlayerEntry(player);
@@ -930,7 +920,7 @@ namespace Oxide.Plugins
                     return null;
             }
         }
-        private NWType GetConfigFromType(NukeType type)
+        private ConfigData.NWType GetConfigFromType(NukeType type)
         {
             switch (type)
             {
@@ -987,23 +977,23 @@ namespace Oxide.Plugins
             var listEntry = new ZoneList { zone = newZone };
             listEntry.time = timer.Once(duration, () => DestroyZone(listEntry));
 
-            RadiationZones.Add(listEntry);
+            radiationZones.Add(listEntry);
         }
         private void DestroyZone(ZoneList zone)
         {
-            if (RadiationZones.Contains(zone))
+            if (radiationZones.Contains(zone))
             {
-                var index = RadiationZones.FindIndex(a => a.zone == zone.zone);
-                RadiationZones[index].time.Destroy();
-                UnityEngine.Object.Destroy(RadiationZones[index].zone);
-                RadiationZones.Remove(zone);
+                var index = radiationZones.FindIndex(a => a.zone == zone.zone);
+                radiationZones[index].time.Destroy();
+                UnityEngine.Object.Destroy(radiationZones[index].zone);
+                radiationZones.Remove(zone);
             }            
         }
         class Nuke : MonoBehaviour
         {
             public NukeWeapons instance;
             public NukeType type;
-            public RadiationStats stats;
+            public ConfigData.NWType.RadiationStats stats;
 
             private void OnDestroy()
             {
@@ -1027,7 +1017,7 @@ namespace Oxide.Plugins
                 }
                 instance.InitializeZone(transform.position, 30, 10, 20, useExplosion);
             }
-            public void InitializeComponent(NukeWeapons ins, NukeType typ, RadiationStats sta)
+            public void InitializeComponent(NukeWeapons ins, NukeType typ, ConfigData.NWType.RadiationStats sta)
             {
                 instance = ins;
                 type = typ;
@@ -1045,9 +1035,7 @@ namespace Oxide.Plugins
             private Vector3 Position;
             private float ZoneRadius;
             private float RadiationAmount;
-
-            private List<BasePlayer> InZone;
-
+            
             private void Awake()
             {
                 gameObject.layer = (int)Layer.Reserved1;
@@ -1075,15 +1063,11 @@ namespace Oxide.Plugins
                 Rads = Rads ?? gameObject.AddComponent<TriggerRadiation>();
                 Rads.RadiationAmountOverride = RadiationAmount;
                 Rads.radiationSize = ZoneRadius;
-                Rads.interestLayers = playerLayer;
-                Rads.enabled = true;
-
-                if (IsInvoking("UpdateTrigger")) CancelInvoke("UpdateTrigger");
-                InvokeRepeating("UpdateTrigger", 5f, 5f);
+                Rads.interestLayers = LayerMask.GetMask("Player (Server)");
+                Rads.enabled = true;                               
             }
             private void OnDestroy()
             {
-                CancelInvoke("UpdateTrigger");
                 Destroy(gameObject);
             }
             private void UpdateCollider()
@@ -1097,18 +1081,7 @@ namespace Oxide.Plugins
                     }
                     sphereCollider.radius = ZoneRadius;
                 }
-            }
-            private void UpdateTrigger()
-            {
-                InZone = new List<BasePlayer>();
-                int entities = Physics.OverlapSphereNonAlloc(Position, ZoneRadius, colBuffer, playerLayer);
-                for (var i = 0; i < entities; i++)
-                {
-                    var player = colBuffer[i].GetComponentInParent<BasePlayer>();
-                    if (player != null)
-                        InZone.Add(player);
-                }
-            }
+            }            
         }
 
         #endregion
@@ -1117,7 +1090,7 @@ namespace Oxide.Plugins
         [ChatCommand("nw")]
         private void cmdNukes(BasePlayer player, string command, string[] args)
         {
-            if (canRocket(player) || canBullet(player) || canMine(player) || canGrenade(player) || canExplosive(player) || canAll(player))
+            if (HasPermission(player, NukeType.Bullet) || HasPermission(player, NukeType.Explosive) || HasPermission(player, NukeType.Grenade) || HasPermission(player, NukeType.Mine) || HasPermission(player, NukeType.Rocket))
             {
                 CheckPlayerEntry(player);
                 OpenCraftingMenu(player);
@@ -1126,39 +1099,37 @@ namespace Oxide.Plugins
         #endregion
 
         #region Permissions
-        private bool canRocket(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.rocket") || canAll(player);
-        private bool canBullet(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.bullet") || canAll(player);
-        private bool canMine(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.mine") || canAll(player);
-        private bool canExplosive(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.explosive") || canAll(player);
-        private bool canGrenade(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.grenade") || canAll(player);
-        private bool canAll(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.all") || player.IsAdmin;
-        private bool hasUnlimited(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.unlimited");
+        private bool HasPermission(BasePlayer player, NukeType type)
+        {
+            string perm = string.Empty;
+            switch (type)
+            {
+                case NukeType.Mine:
+                    perm = "nukeweapons.mine";
+                    break;
+                case NukeType.Rocket:
+                    perm = "nukeweapons.rocket";
+                    break;
+                case NukeType.Bullet:
+                    perm = "nukeweapons.bullet";
+                    break;
+                case NukeType.Explosive:
+                    perm = "nukeweapons.explosive";
+                    break;
+                case NukeType.Grenade:
+                    perm = "nukeweapons.grenade";
+                    break;
+                default:
+                    break;
+            }
+            return permission.UserHasPermission(player.UserIDString, perm) || permission.UserHasPermission(player.UserIDString, "nukeweapons.all") || player.IsAdmin;
+        }       
+        private bool HasUnlimitedAmmo(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "nukeweapons.unlimited");
         #endregion
 
         #region Config        
         private ConfigData configData;
-        
-        class NWType
-        {
-            public bool Enabled { get; set; }
-            public int MaxAllowed { get; set; }
-            public int CraftTime { get; set; }
-            public int CraftAmount { get; set; }
-            public Dictionary<string, int> CraftingCosts { get; set; }
-            public RadiationStats RadiationProperties { get; set; }
-        }
-        class RadiationStats
-        {
-            public float Intensity { get; set; }
-            public float Duration { get; set; }
-            public float Radius { get; set; }
-        }
-        
-        class Options
-        {
-            public string MSG_MainColor { get; set; }
-            public string MSG_SecondaryColor { get; set; }
-        }
+                
         class ConfigData
         {            
             public NWType Mines { get; set; }
@@ -1166,8 +1137,31 @@ namespace Oxide.Plugins
             public NWType Bullets { get; set; }
             public NWType Grenades { get; set; }
             public NWType Explosives { get; set; }
-            public Options Options { get; set; }
+            public Option Options { get; set; }
             public Dictionary<string, string> URL_IconList { get; set; }
+
+            public class NWType
+            {
+                public bool Enabled { get; set; }
+                public int MaxAllowed { get; set; }
+                public int CraftTime { get; set; }
+                public int CraftAmount { get; set; }
+                public Dictionary<string, int> CraftingCosts { get; set; }
+                public RadiationStats RadiationProperties { get; set; }
+
+                public class RadiationStats
+                {
+                    public float Intensity { get; set; }
+                    public float Duration { get; set; }
+                    public float Radius { get; set; }
+                }
+            }
+
+            public class Option
+            {
+                public string MSG_MainColor { get; set; }
+                public string MSG_SecondaryColor { get; set; }
+            }
         }        
         private void LoadVariables()
         {
@@ -1178,7 +1172,7 @@ namespace Oxide.Plugins
         {
             var config = new ConfigData
             {
-                Bullets = new NWType
+                Bullets = new ConfigData.NWType
                 {
                     CraftAmount = 5,
                     CraftTime = 30,
@@ -1190,14 +1184,14 @@ namespace Oxide.Plugins
                     },
                     Enabled = true,
                     MaxAllowed = 100,
-                    RadiationProperties = new RadiationStats
+                    RadiationProperties = new ConfigData.NWType.RadiationStats
                     {
                         Intensity = 15,
                         Duration = 3,
                         Radius = 5
                     }
                 },
-                Explosives = new NWType
+                Explosives = new ConfigData.NWType
                 {
                     CraftAmount = 1,
                     CraftTime = 90,
@@ -1209,14 +1203,14 @@ namespace Oxide.Plugins
                     },
                     Enabled = true,
                     MaxAllowed = 3,
-                    RadiationProperties = new RadiationStats
+                    RadiationProperties = new ConfigData.NWType.RadiationStats
                     {
                         Intensity = 60,
                         Duration = 30,
                         Radius = 25
                     }
                 },
-                Grenades = new NWType
+                Grenades = new ConfigData.NWType
                 {
                     CraftAmount = 1,
                     CraftTime = 45,
@@ -1228,14 +1222,14 @@ namespace Oxide.Plugins
                     },
                     Enabled = true,
                     MaxAllowed = 3,
-                    RadiationProperties = new RadiationStats
+                    RadiationProperties = new ConfigData.NWType.RadiationStats
                     {
                         Intensity = 35,
                         Duration = 15,
                         Radius = 15
                     }
                 },
-                Mines = new NWType
+                Mines = new ConfigData.NWType
                 {
                     CraftAmount = 1,
                     CraftTime = 60,
@@ -1247,14 +1241,14 @@ namespace Oxide.Plugins
                     },
                     Enabled = true,
                     MaxAllowed = 5,
-                    RadiationProperties = new RadiationStats
+                    RadiationProperties = new ConfigData.NWType.RadiationStats
                     {
                         Intensity = 70,
                         Duration = 25,
                         Radius = 20
                     }
                 },
-                Rockets = new NWType
+                Rockets = new ConfigData.NWType
                 {
                     CraftAmount = 1,
                     CraftTime = 60,
@@ -1266,14 +1260,14 @@ namespace Oxide.Plugins
                     },
                     Enabled = true,
                     MaxAllowed = 3,
-                    RadiationProperties = new RadiationStats
+                    RadiationProperties = new ConfigData.NWType.RadiationStats
                     {
                         Intensity = 45,
                         Duration = 15,
                         Radius = 10
                     }
                 },
-                Options = new Options
+                Options = new ConfigData.Option
                 {
                     MSG_MainColor = "<color=#00CC00>",
                     MSG_SecondaryColor = "<color=#939393>"                    
@@ -1305,9 +1299,9 @@ namespace Oxide.Plugins
             nukeData.ammo = cachedAmmo;
             data.WriteObject(nukeData);
         }
-        void SaveDisplayNames()
+        void SavedisplayNames()
         {
-            itemNames.DisplayNames = DisplayNames;
+            itemNames.displayNames = displayNames;
             Item_Names.WriteObject(itemNames);
         }
         void LoadData()
@@ -1335,11 +1329,10 @@ namespace Oxide.Plugins
         {
             public Dictionary<ulong, Dictionary<NukeType, int>> ammo = new Dictionary<ulong, Dictionary<NukeType, int>>();
             public List<uint> Mines = new List<uint>();
-            public Dictionary<string, uint> ImageIDs = new Dictionary<string, uint>();
         }
         class ItemNames
         {
-            public Dictionary<string, string> DisplayNames = new Dictionary<string, string>();
+            public Dictionary<string, string> displayNames = new Dictionary<string, string>();
         }
         class PlayerAmmo
         {
@@ -1359,91 +1352,20 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Unity WWW
-        class QueueItem
-        {
-            public string url;
-            public string imagename;
-
-            public QueueItem(string ur, string na)
-            {
-                url = ur;
-                imagename = na;               
-            }
-        }
-        class UnityWeb : MonoBehaviour
-        {
-            NukeWeapons filehandler;
-            const int MaxActiveLoads = 3;
-            private Queue<QueueItem> QueueList = new Queue<QueueItem>();
-            static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
-
-            private void Awake()
-            {
-                filehandler = (NukeWeapons)Interface.Oxide.RootPluginManager.GetPlugin(nameof(NukeWeapons));
-            }
-            private void OnDestroy()
-            {
-                QueueList.Clear();
-                filehandler = null;
-            }
-            public void Add(string url, string imagename)
-            {
-                QueueList.Enqueue(new QueueItem(url, imagename));
-                if (activeLoads < MaxActiveLoads) Next();
-            }
-
-            void Next()
-            {
-                if (QueueList.Count <= 0) return;
-                activeLoads++;
-                StartCoroutine(WaitForRequest(QueueList.Dequeue()));
-            }
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
-            IEnumerator WaitForRequest(QueueItem info)
-            {
-                using (var www = new WWW(info.url))
-                {
-                    yield return www;
-                    if (filehandler == null) yield break;
-                    if (www.error != null)
-                    {
-                        print(string.Format("Image loading fail! Error: {0}", www.error));
-                    }
-                    else
-                    {
-                        if (!filehandler.nukeData.ImageIDs.ContainsKey(info.imagename))
-                            filehandler.nukeData.ImageIDs.Add(info.imagename, 0);            
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
-                        ClearStream();
-                        filehandler.nukeData.ImageIDs[info.imagename] = textureID;
-                    }
-                    activeLoads--;
-                    if (QueueList.Count > 0) Next();
-                    else filehandler.SaveData();
-                }
-            }
-        }
+        #region Image Storage      
         [ConsoleCommand("nukeicons")]
         private void cmdNukeIcons(ConsoleSystem.Arg arg)
         {
             if (arg.Connection == null)
             {
-                string dir = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + "NukeWeapons" + Path.DirectorySeparatorChar + "Icons" + Path.DirectorySeparatorChar;
+                PrintWarning("Storing icons to file storage...");     
                 foreach (var image in configData.URL_IconList)
-                    uWeb.Add(dir + image.Value, image.Key);
+                    AddImage(image.Key, image.Value);
             }
         }
-        
-        
+
+        public void AddImage(string imageName, string fileName) => ImageLibrary.Call("AddImage", fileName.StartsWith("www") || fileName.StartsWith("http") ? fileName : dataDirectory + fileName, imageName);
+        private string GetImage(string name) => (string)ImageLibrary.Call("GetImage", name);
         #endregion
 
         #region Messaging

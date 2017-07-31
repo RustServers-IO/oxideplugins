@@ -1,0 +1,19 @@
+{
+    "name": "BotSpawn",
+    "description": "Spawns new AI bots around monuments",
+    "author": "=BBUK= Steenamaroo",
+    "version": "1.0.1",
+    "configuration": true,
+    "require": {
+        "Kits": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/botspawn.2580",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
