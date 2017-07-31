@@ -14,7 +14,7 @@ using static UnityEngine.Vector3;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.0.1", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.0.2", ResourceId = 2580)]
 
     [Description("Spawn Bots with kits.")]
     
@@ -34,6 +34,8 @@ namespace Oxide.Plugins
         Vector3 TrainYard = new Vector3(0,0,0);
         Vector3 WaterTreatment = new Vector3(0,0,0);
         Vector3 LaunchSite = new Vector3(0,0,0);
+        
+        int no_of_AI = 0;
         
         class StoredData
         {
@@ -161,7 +163,7 @@ namespace Oxide.Plugins
                 }
             }
             SpawnSci(zone, pos);
-            Update(Scientist, zone);
+            Update(Scientist, zone); 
 
             
             foreach (Item item in Scientist.inventory.containerBelt.itemList) 
@@ -189,41 +191,36 @@ namespace Oxide.Plugins
         void SpawnSci(MonumentSettings zone, Vector3 pos)
         {
             BasePlayer Scientist = null;
+                if (no_of_AI > configData.Options.Upper_Bot_Limit)return; 
+                    var BotCount = 0;
+                    foreach (var pair in storedData.bots)
+                    {
+                        if (pair.Value == zone.Name)
+                        BotCount++;
+                    }
+                    if (BotCount == zone.Bots)
+                    {  
+                        return;   
+                    }
+                    System.Random rnd = new System.Random(); 
+                    int X = rnd.Next((-zone.Radius/2), (zone.Radius/2));
+                    int Z = rnd.Next((-zone.Radius/2), (zone.Radius/2)); 
+                    var CentrePos = new Vector3((pos.x + X),30,(pos.z + Z));    
+                    var rot = new Quaternion (0,0,0,0);
+                    Vector3 newPos = CalculateGroundPos(CentrePos);
+                    var entity = GameManager.server.CreateEntity("assets/prefabs/npc/scientist/scientist.prefab", newPos, rot, true);            
+                    entity.Spawn();
+                    no_of_AI++;
+                    Scientist = entity as NPCPlayer; 
+                    Scientist.inventory.Strip(); 
+                    Kits?.Call($"GiveKit", Scientist, zone.Kit);
+                    Scientist.health = zone.BotHealth;
+                    Update(Scientist, zone);
+                    timer.Once(0.1f, () => SpawnSci(zone, pos)); //delay to allow for random number to change
+                    return;
 
-                var BotCount = 0;
-                foreach (var pair in storedData.bots)
-                {
-                    if (pair.Value == zone.Name)
-                    BotCount++;
-                }
-                if (BotCount == zone.Bots)
-                {  
-                    return; 
-                }
-                System.Random rnd = new System.Random(); 
-                int X = rnd.Next((-zone.Radius/2), (zone.Radius/2));
-                int Z = rnd.Next((-zone.Radius/2), (zone.Radius/2)); 
-                var CentrePos = new Vector3((pos.x + X),30,(pos.z + Z));  
-                var rot = new Quaternion (0,0,0,0);
-                var entity = GameManager.server.CreateEntity("assets/prefabs/npc/scientist/scientist.prefab", CentrePos, rot, true);            
-                entity.Spawn();
-                Scientist = entity as NPCPlayer; 
-                Scientist.inventory.Strip();
-                Kits?.Call($"GiveKit", Scientist, zone.Kit);
-                Scientist.health = zone.BotHealth;
-                Update(Scientist, zone);
-                Vector3 newPos = CalculateGroundPos(CentrePos);
-                //Vector3 test = CentrePos + new Vector3(10,0,10); 
-                //Vector3 nextPos = Lerp(CentrePos, test, 10f); 
-                //entity.transform.position = nextPos;
-                entity.transform.position = newPos;
-                timer.Once(0.1f, () => SpawnSci(zone, pos)); //delay to allow for random number to change
-
-                //Scientist.isInAir = true;
-                //Scientist.modelState.onground = false;
-                return;
         }
-
+        
         static Vector3 CalculateGroundPos(Vector3 sourcePos) // credit Wulf & Nogrod
         {
             RaycastHit hitInfo;
@@ -235,13 +232,14 @@ namespace Oxide.Plugins
             sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
             return sourcePos;
         }
- 
-       private void FindMonuments() // credit K1lly0u
+  
+       private void FindMonuments() // credit K1lly0u 
         {
+            
             var allobjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
             foreach (var gobject in allobjects)
             {
-                if (gobject.name.Contains("autospawn/monument"))
+                if (gobject.name.Contains("autospawn/monument")) 
                 {
                     var pos = gobject.transform.position;
 
@@ -249,9 +247,12 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Powerplant.Activate)
                         {
-                            if (CheckKit(configData.Zones.Powerplant.Kit) == null)return;
+                            if (CheckKit(configData.Zones.Powerplant.Kit) == null)continue;
+                            else
+                            {
                             SpawnSci(configData.Zones.Powerplant, pos);
                             PowerPlant = pos;
+                            }  
                         }
                             
                         continue;
@@ -261,9 +262,12 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Airfield.Activate)
                         {
-                            if (CheckKit(configData.Zones.Airfield.Kit) == null)return;
+                            if (CheckKit(configData.Zones.Airfield.Kit) == null)continue;
+                            else
+                            {
                             SpawnSci(configData.Zones.Airfield, pos);
                             Airfield = pos;
+                            }
                         }
                         continue; 
                     }
@@ -272,9 +276,12 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Trainyard.Activate)
                         {
-                            if (CheckKit(configData.Zones.Trainyard.Kit) == null)return;
+                            if (CheckKit(configData.Zones.Trainyard.Kit) == null)continue;
+                            else
+                            {
                             SpawnSci(configData.Zones.Trainyard, pos);
                             TrainYard = pos;
+                            }
                         }
                         continue;
                     }
@@ -283,32 +290,41 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.WaterTreatment.Activate)
                         {
-                            if (CheckKit(configData.Zones.WaterTreatment.Kit) == null)return;
+                            if (CheckKit(configData.Zones.WaterTreatment.Kit) == null)continue;
+                            else
+                            {
                             SpawnSci(configData.Zones.WaterTreatment, pos);
                             WaterTreatment = pos;
+                            }
                         }
                         continue;
                     }
 
-                    if (gobject.name.Contains("satellite_dish"))
+                    if (gobject.name.Contains("satellite_dish")) 
                     {
 
                         if (configData.Zones.Satellite.Activate)
                         {
-                            if (CheckKit(configData.Zones.Satellite.Kit) == null)return;   
+                            if (CheckKit(configData.Zones.Satellite.Kit) == null)continue;
+                            else
+                            {
                             SpawnSci(configData.Zones.Satellite, pos);
                             Satellite = pos;
+                            }
                         }
                         continue;
-                    }
+                    } 
 
                     if (gobject.name.Contains("sphere_tank"))
                     {
                         if (configData.Zones.Dome.Activate)
                         {
-                            if (CheckKit(configData.Zones.Dome.Kit) == null)return;
+                            if (CheckKit(configData.Zones.Dome.Kit) == null)continue;
+                            else 
+                            {
                             SpawnSci(configData.Zones.Dome, pos);
                             Dome = pos;
+                            }
                         }
                         continue;
                     }
@@ -317,9 +333,12 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Radtown.Activate)
                         {
-                            if (CheckKit(configData.Zones.Radtown.Kit) == null)return;
+                            if (CheckKit(configData.Zones.Radtown.Kit) == null)continue;
+                            else
+                            {
                             SpawnSci(configData.Zones.Radtown, pos);
                             Radtown = pos;
+                            }
                         }
                         continue;
                     }
@@ -328,9 +347,12 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.LaunchSite.Activate)
                         {
-                            if (CheckKit(configData.Zones.LaunchSite.Kit) == null)return;
+                            if (CheckKit(configData.Zones.LaunchSite.Kit) == null)continue;
+                            else
+                            {
                             SpawnSci(configData.Zones.LaunchSite, pos);
                             LaunchSite = pos;
+                            }
                         } 
                         continue;  
                     }
@@ -351,6 +373,7 @@ namespace Oxide.Plugins
         class Options
         {
             public bool Bots_Drop_Weapons { get; set; }
+            public int Upper_Bot_Limit { get; set; }
         }
         class Zones
         {
@@ -380,18 +403,19 @@ namespace Oxide.Plugins
         }
         protected override void LoadDefaultConfig()
         {
-            Puts("Creating a new config file");
+            Puts("Creating a new config file"); 
             var config = new ConfigData
             {
                Options = new Options
                {
-                   Bots_Drop_Weapons = true,
+                    Bots_Drop_Weapons = true,
+                    Upper_Bot_Limit = 70,
                },
                Zones = new Zones
                {
                    Airfield = new MonumentSettings
-                   {
-                       Activate = true,
+                   { 
+                       Activate = false,
                        Name = "Airfield",
                        Bots = 10,
                        BotHealth = 100,
@@ -400,7 +424,7 @@ namespace Oxide.Plugins
                    },
                    Dome = new MonumentSettings
                    {
-                       Activate = true,
+                       Activate = false,
                        Name = "Dome",
                        Bots = 10,
                        BotHealth = 100,
@@ -409,7 +433,7 @@ namespace Oxide.Plugins
                    },
                    Powerplant = new MonumentSettings
                    {
-                       Activate = true, 
+                       Activate = false, 
                        Name = "Powerplant",
                        Bots = 10,
                        BotHealth = 100,
@@ -418,7 +442,7 @@ namespace Oxide.Plugins
                    },
                    Radtown = new MonumentSettings
                    {
-                       Activate = true,
+                       Activate = false,
                        Name = "Radtown",
                        Bots = 10,
                        BotHealth = 100,
@@ -427,7 +451,7 @@ namespace Oxide.Plugins
                    },
                    Satellite = new MonumentSettings
                    {
-                       Activate = true,
+                       Activate = false,
                        Name = "Satellite",
                        Bots = 10,
                        BotHealth = 100,
@@ -436,7 +460,7 @@ namespace Oxide.Plugins
                    },
                    Trainyard = new MonumentSettings
                    {
-                       Activate = true,
+                       Activate = false,
                        Name = "Trainyard",
                        Bots = 10,
                        BotHealth = 100,
@@ -446,7 +470,7 @@ namespace Oxide.Plugins
 
                    WaterTreatment = new MonumentSettings
                    {
-                       Activate = true,
+                       Activate = false,
                        Name = "WaterTreatment",
                        Bots = 10,
                        BotHealth = 100,
@@ -456,7 +480,7 @@ namespace Oxide.Plugins
                    
                    LaunchSite = new MonumentSettings
                    {
-                       Activate = true,
+                       Activate = false,
                        Name = "LaunchSite",
                        Bots = 10,
                        BotHealth = 100,

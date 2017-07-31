@@ -2,7 +2,7 @@
     "name": "FarmEvent",
     "description": "Custom farm-event system with parametr, log, gui, etc.",
     "author": "HOUGAN_Y",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/farmevent.2573",

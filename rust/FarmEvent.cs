@@ -7,7 +7,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("FarmEvent", "Hougan", "1.1.0")]
+    [Info("FarmEvent", "Hougan", "1.1.1")]
     [Description("In-game event, farming resources with GUI, Log, TOP, e.t.c.")]
     class FarmEvent : RustPlugin
     {
@@ -213,6 +213,7 @@ namespace Oxide.Plugins
             {
                 timer.Every(autoModeInterval * 60, () =>
                 {
+                    if (currentEvent.Name != "Default") { return; }
                     RandomEvent newE = randomEvent[Oxide.Core.Random.Range(0, randomEvent.Count - 1)];
                     currentEvent.Name = newE.Name;
                     currentEvent.Item = newE.Item;
