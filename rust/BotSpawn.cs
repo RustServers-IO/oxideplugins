@@ -13,7 +13,7 @@ using static UnityEngine.Vector3;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.0.3", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.0.4", ResourceId = 2580)]
 
     [Description("Spawn Bots with kits.")]
     
@@ -32,13 +32,13 @@ namespace Oxide.Plugins
         Vector3 Satellite = new Vector3(0,0,0);
         Vector3 TrainYard = new Vector3(0,0,0);
         Vector3 WaterTreatment = new Vector3(0,0,0);
-        Vector3 LaunchSite = new Vector3(0,0,0);
+        Vector3 LaunchSite = new Vector3(0,0,0); 
         
         int no_of_AI = 0;
         
         class StoredData
         {
-            public Dictionary<BasePlayer, string> bots = new Dictionary<BasePlayer, string>();
+            public Dictionary<ulong, string> bots = new Dictionary<ulong, string>();
             public StoredData()
             {
             }
@@ -47,12 +47,14 @@ namespace Oxide.Plugins
  
         void Init()
         {
+            //foreach(var bot in GameObject.FindObjectsOfType<NPCPlayer>()) 
+            //{
+            //bot.Kill();
+            //}
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("BotSpawn");
-            LoadConfigVariables();
-            foreach(var bot in storedData.bots) 
-            bot.Key.Kill();
-            storedData.bots.Clear();
+            storedData?.bots.Clear();
             Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData); 
+            LoadConfigVariables();
         }
         void OnServerInitialized()
         {
@@ -61,10 +63,14 @@ namespace Oxide.Plugins
         
         void Unload()
         {
-            foreach(var bot in storedData.bots)
-            { 
-            bot.Key.Kill();
+            foreach(var bot in GameObject.FindObjectsOfType<NPCPlayer>())
+            {
+            if (storedData.bots.ContainsKey(bot.userID))
+                {
+                bot.Kill();
+                }
             }
+
             storedData.bots.Clear(); 
             Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData); 
         }
@@ -83,15 +89,15 @@ namespace Oxide.Plugins
         
         void Update(BasePlayer player, MonumentSettings zone)
         {
-            if (storedData.bots.ContainsKey(player)) 
+            if (storedData.bots.ContainsKey(player.userID)) 
             {
-                storedData.bots.Remove(player);
+                storedData.bots.Remove(player.userID);
                 Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData); 
             }
             else
             {
                 if (zone !=null)
-                storedData.bots.Add(player, zone.Name);
+                storedData.bots.Add(player.userID, zone.Name);
                 Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData);
             }
         }
@@ -117,8 +123,9 @@ namespace Oxide.Plugins
             Vector3 pos = new Vector3(0,0,0);     
             foreach (var bot in storedData.bots)
             {
-            if (bot.Key == entity)
+            if (bot.Key == Scientist.userID)
                 {
+                    no_of_AI--;
                     if (bot.Value == "Airfield")
                     {
                         pos = Airfield;
@@ -161,8 +168,8 @@ namespace Oxide.Plugins
                     }
                 }
             }
-            SpawnSci(zone, pos);
             Update(Scientist, zone); 
+            SpawnSci(zone, pos);
 
             
             foreach (Item item in Scientist.inventory.containerBelt.itemList) 
@@ -175,22 +182,13 @@ namespace Oxide.Plugins
                 return;
             }
         }
-        void ListSci() 
-        {
-            foreach (var bot in storedData.bots)
-            {
-            Puts($"On List {bot}");
-            }
-            foreach(var bot in GameObject.FindObjectsOfType<NPCPlayer>())
-            {
-            Puts($"In Game {bot}"); 
-            }
-        }
         
         void SpawnSci(MonumentSettings zone, Vector3 pos)
         {
             BasePlayer Scientist = null;
-                if (no_of_AI > configData.Options.Upper_Bot_Limit)return; 
+                if (no_of_AI > configData.Options.Upper_Bot_Limit)return;
+                else
+                {
                     var BotCount = 0;
                     foreach (var pair in storedData.bots)
                     {
@@ -220,6 +218,7 @@ namespace Oxide.Plugins
                     Update(Scientist, zone);
                     timer.Once(0.1f, () => SpawnSci(zone, pos)); //delay to allow for random number to change
                     return;
+                }
 
         } 
         
@@ -249,22 +248,14 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Powerplant.Activate)
                         {
-                            if (configData.Zones.Powerplant.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.Powerplant.Kit) == null)continue;
+                            if (configData.Zones.Powerplant.Kit != "default" && (CheckKit(configData.Zones.Powerplant.Kit) == null))
+                                continue;
                                 else
                                 {
                                 SpawnSci(configData.Zones.Powerplant, pos);
                                 PowerPlant = pos;
                                 }
-                            }
-                            else
-                            {
-                            SpawnSci(configData.Zones.Powerplant, pos);
-                            PowerPlant = pos;
-                            }
-                        }
-                            
+                        } 
                         continue;
                     }
  
@@ -272,19 +263,12 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Airfield.Activate)
                         {
-                            if (configData.Zones.Airfield.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.Airfield.Kit) == null)continue;
-                                else
-                                {
-                                SpawnSci(configData.Zones.Airfield, pos);
-                                Airfield = pos;
-                                }
-                            }
+                            if (configData.Zones.Airfield.Kit != "default" && (CheckKit(configData.Zones.Airfield.Kit) == null))
+                            continue;
                             else
                             {
                             SpawnSci(configData.Zones.Airfield, pos);
-                            Airfield = pos;
+                            Airfield = pos; 
                             }
                         }
                         continue; 
@@ -294,20 +278,13 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Trainyard.Activate)
                         {
-                            if (configData.Zones.Trainyard.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.Trainyard.Kit) == null)continue;
+                            if (configData.Zones.Trainyard.Kit != "default" && (CheckKit(configData.Zones.Trainyard.Kit) == null))
+                                continue;
                                 else
                                 {
                                 SpawnSci(configData.Zones.Trainyard, pos);
                                 TrainYard = pos;
                                 }
-                            }
-                            else
-                            {
-                            SpawnSci(configData.Zones.Trainyard, pos);
-                            TrainYard = pos;
-                            }
                         }
                         continue; 
                     }
@@ -316,20 +293,13 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.WaterTreatment.Activate)
                         {
-                            if (configData.Zones.WaterTreatment.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.WaterTreatment.Kit) == null)continue;
+                            if (configData.Zones.WaterTreatment.Kit != "default" && (CheckKit(configData.Zones.WaterTreatment.Kit) == null))
+                                continue;
                                 else
                                 {
                                 SpawnSci(configData.Zones.WaterTreatment, pos);
                                 WaterTreatment = pos;
                                 }
-                            }
-                            else
-                            {
-                            SpawnSci(configData.Zones.WaterTreatment, pos);
-                            WaterTreatment = pos;
-                            }
                         }
                         continue;
                     }
@@ -339,20 +309,13 @@ namespace Oxide.Plugins
 
                         if (configData.Zones.Satellite.Activate)
                         {
-                            if (configData.Zones.Satellite.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.Satellite.Kit) == null)continue;
+                            if (configData.Zones.Satellite.Kit != "default" && (CheckKit(configData.Zones.Satellite.Kit) == null))
+                                continue;
                                 else
                                 {
                                 SpawnSci(configData.Zones.Satellite, pos);
                                 Satellite = pos;
                                 }
-                            }
-                            else
-                            {
-                            SpawnSci(configData.Zones.Satellite, pos);
-                            Satellite = pos;
-                            }
                         }
                         continue;
                     } 
@@ -361,20 +324,13 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Dome.Activate)
                         {
-                            if (configData.Zones.Dome.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.Dome.Kit) == null)continue;
+                            if (configData.Zones.Dome.Kit != "default" && (CheckKit(configData.Zones.Dome.Kit) == null))
+                                continue;
                                 else
                                 {
                                 SpawnSci(configData.Zones.Dome, pos);
                                 Dome = pos;
                                 }
-                            }
-                            else
-                            {
-                            SpawnSci(configData.Zones.Dome, pos);
-                            Dome = pos;
-                            }
                         }
                         continue;
                     }
@@ -383,20 +339,13 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.Radtown.Activate)
                         {
-                            if (configData.Zones.Radtown.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.Radtown.Kit) == null)continue;
+                            if (configData.Zones.Radtown.Kit != "default" && (CheckKit(configData.Zones.Radtown.Kit) == null))
+                                continue;
                                 else
                                 {
                                 SpawnSci(configData.Zones.Radtown, pos);
                                 Radtown = pos;
                                 }
-                            }
-                            else
-                            {
-                            SpawnSci(configData.Zones.Radtown, pos);
-                            Radtown = pos;
-                            }
                         }
                         continue;
                     }
@@ -405,20 +354,13 @@ namespace Oxide.Plugins
                     {
                         if (configData.Zones.LaunchSite.Activate)
                         {
-                            if (configData.Zones.LaunchSite.Kit != "default")
-                            {
-                                if (CheckKit(configData.Zones.LaunchSite.Kit) == null)continue;
+                            if (configData.Zones.LaunchSite.Kit != "default" && (CheckKit(configData.Zones.LaunchSite.Kit) == null))
+                                continue;
                                 else
                                 {
                                 SpawnSci(configData.Zones.LaunchSite, pos);
                                 LaunchSite = pos;
                                 }
-                            }
-                            else
-                            {
-                            SpawnSci(configData.Zones.LaunchSite, pos);
-                            LaunchSite = pos;
-                            }
                         } 
                         continue;  
                     }

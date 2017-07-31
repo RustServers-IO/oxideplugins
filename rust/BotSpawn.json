@@ -2,7 +2,7 @@
     "name": "BotSpawn",
     "description": "Spawns new AI bots around monuments",
     "author": "=BBUK= Steenamaroo",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "configuration": true,
     "suggest": {
         "Kits": "*"
