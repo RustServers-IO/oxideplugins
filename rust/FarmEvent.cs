@@ -3,16 +3,18 @@ using System;
 using UnityEngine;
 using Oxide.Game.Rust.Cui;
 using System.Linq;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("FarmEvent", "Hougan", "1.0.1")]
+    [Info("FarmEvent", "Hougan", "1.1.0")]
     [Description("In-game event, farming resources with GUI, Log, TOP, e.t.c.")]
     class FarmEvent : RustPlugin
     {
         #region Variable
         private Dictionary<ulong, int> playerFarm = new Dictionary<ulong, int>();
         private Dictionary<string, DateTime> playerComplete = new Dictionary<string, DateTime>();
+        List<RandomEvent> randomEvent = new List<RandomEvent>();
         private string adminPermission = "farmevent.start";
         private Event currentEvent = new Event();
 
@@ -25,9 +27,19 @@ namespace Oxide.Plugins
             public int Goal;
             public int Places;
         }
+        class RandomEvent
+        {
+            public string Name = "AUTO";
+            public string Item;
+            public int Time;
+            public int Goal;
+            public int Places;
+        }
 
         private int broadcastInterval;
-        
+        private bool autoMode;
+        private int autoModeInterval;
+
 
         #endregion
 
@@ -54,6 +66,19 @@ namespace Oxide.Plugins
             LogToFile("FarmEvent", "--------------------------------", this, false);
             LogToFile("FarmEvent",
                 $"[Name: {currentEvent.Name}] Event started at: {DateTime.Now} | Farm: {currentEvent.Item}\nGoal: {currentEvent.Goal} | Time: {args[4]} | Started by: {player.net.connection.userid}\n\n", this, false);
+        }
+        [ChatCommand("fe.add")]
+        void eventAdd(BasePlayer player, string command, string[] args)
+        {
+            if (!permission.UserHasPermission(player.UserIDString, adminPermission)) { SendReply(player, msg("Permission", player.UserIDString)); return; }
+            if (args.Length != 4) { SendReply(player, msg("Syntax", player.UserIDString)); return; }
+            RandomEvent newE = new RandomEvent();
+            newE.Item = args[0];
+            newE.Goal = Int32.Parse(args[1]);
+            newE.Places = Int32.Parse(args[2]);
+            newE.Time = Int32.Parse(args[3]);
+            randomEvent.Add(newE);
+            Server.Broadcast(String.Format(msg("Added")));
         }
         [ChatCommand("fe.stop")]
         void eventStop(BasePlayer player, string command, string[] args)
@@ -147,8 +172,15 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig()
         {
             broadcastInterval = Convert.ToInt32(GetVariable("Main", "Auto-broadcast interval", 30));
+            autoMode = Convert.ToBoolean(GetVariable("Main", "Auto-mode", false));
+            autoModeInterval = Convert.ToInt32(GetVariable("Main", "Auto-mode interval (min)", 1));
             SaveConfig();
         }
+        void Unload()
+        {
+            Interface.Oxide.DataFileSystem.WriteObject("FarmEvent_Random", randomEvent);
+        }
+
         void Init()
         {
             LoadDefaultConfig();
@@ -157,6 +189,7 @@ namespace Oxide.Plugins
             {
                 //chat
                 ["WinnerHeader"] = "Current event <color=#DC143C>results</color>:\n",
+                ["Added"] = "You successful added new event!",
                 ["Finnish"] = "Event <color=#DC143C>ENDED</color>, results:\n",
                 ["WinnerPlace"] = "\n[<color=#DC143C>{0}</color>] <color=#b8b8b8>{1}</color> finished at <color=#DC143C>{2}</color>!",
                 ["EncouragingPlace"] = "\n[<color=#b8b8b8>{0}</color>] <color=#b8b8b8>{1}</color> farmed <color=#DC143C>{2}</color>!",
@@ -169,11 +202,36 @@ namespace Oxide.Plugins
                 //
                 ["Permission"] = "You have no permission!",
                 ["Syntax"] = "Use: /fe.start EventNAME ResourceNAME ResourcesAMOUNT WinPlacesAMOUNT TIMEINSEC!",
+                ["SyntaxA"] = "Use: /fe.add ResourceNAME ResourcesAMOUNT WinPlacesAMOUNT TIMEINSEC!",
                 ["SyntaxS"] = "Use: /fe.stop!",
                 ["Started"] = "Already started, stop!",
                 ["Stopped"] = "Already stopped, start!",
                 ["DO_NOT_CHANGE"] = "{0}"
             }, this);
+            randomEvent = Interface.Oxide.DataFileSystem.ReadObject<List<RandomEvent>>("FarmEvent_Random");
+            if (autoMode)
+            {
+                timer.Every(autoModeInterval * 60, () =>
+                {
+                    RandomEvent newE = randomEvent[Oxide.Core.Random.Range(0, randomEvent.Count - 1)];
+                    currentEvent.Name = newE.Name;
+                    currentEvent.Item = newE.Item;
+                    currentEvent.Goal = newE.Goal;
+                    currentEvent.Places = newE.Places;
+                    currentEvent.Time = timer.Once(newE.Time, () => { stopEvent(); });
+                    currentEvent.Broad = timer.Every(broadcastInterval, () => { Server.Broadcast(String.Format(msg("DO_NOT_CHANGE"), eventStat())); });
+                    foreach (var check in BasePlayer.activePlayerList)
+                    {
+                        if (!playerFarm.ContainsKey(check.userID))
+                            playerFarm.Add(check.userID, 0);
+                        updateGUI(check);
+                    }
+                    Server.Broadcast(String.Format(msg("Start"), currentEvent.Goal, ItemManager.FindItemDefinition(currentEvent.Item).displayName.english));
+                    LogToFile("FarmEvent", "--------------------------------", this, false);
+                    LogToFile("FarmEvent",
+                        $"[Name: {currentEvent.Name}] Event started at: {DateTime.Now} | Farm: {currentEvent.Item}\nGoal: {currentEvent.Goal} | Time: {newE.Time} | Started by: AUTO\n\n", this, false);
+                });
+            }
         }
 
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
