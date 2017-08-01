@@ -8,12 +8,11 @@ using Oxide.Core.Plugins;
 using Rust;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
-using static UnityEngine.Vector3;
 
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.0.4", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.0.5", ResourceId = 2580)]
 
     [Description("Spawn Bots with kits.")]
     
@@ -47,10 +46,6 @@ namespace Oxide.Plugins
  
         void Init()
         {
-            //foreach(var bot in GameObject.FindObjectsOfType<NPCPlayer>()) 
-            //{
-            //bot.Kill();
-            //}
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("BotSpawn");
             storedData?.bots.Clear();
             Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData); 
@@ -169,7 +164,7 @@ namespace Oxide.Plugins
                 }
             }
             Update(Scientist, zone); 
-            SpawnSci(zone, pos);
+            timer.Once(configData.Options.Respawn_Timer, () => SpawnSci(zone, pos, true));
 
             
             foreach (Item item in Scientist.inventory.containerBelt.itemList) 
@@ -183,7 +178,7 @@ namespace Oxide.Plugins
             }
         }
         
-        void SpawnSci(MonumentSettings zone, Vector3 pos)
+        void SpawnSci(MonumentSettings zone, Vector3 pos, bool single)
         {
             BasePlayer Scientist = null;
                 if (no_of_AI > configData.Options.Upper_Bot_Limit)return;
@@ -216,7 +211,8 @@ namespace Oxide.Plugins
                     }
                     Scientist.health = zone.BotHealth;
                     Update(Scientist, zone);
-                    timer.Once(0.1f, () => SpawnSci(zone, pos)); //delay to allow for random number to change
+                    if (single) return;
+                    timer.Once(0.1f, () => SpawnSci(zone, pos, false)); //delay to allow for random number to change
                     return;
                 }
 
@@ -252,7 +248,7 @@ namespace Oxide.Plugins
                                 continue;
                                 else
                                 {
-                                SpawnSci(configData.Zones.Powerplant, pos);
+                                SpawnSci(configData.Zones.Powerplant, pos, false);
                                 PowerPlant = pos;
                                 }
                         } 
@@ -267,7 +263,7 @@ namespace Oxide.Plugins
                             continue;
                             else
                             {
-                            SpawnSci(configData.Zones.Airfield, pos);
+                            SpawnSci(configData.Zones.Airfield, pos, false);
                             Airfield = pos; 
                             }
                         }
@@ -282,7 +278,7 @@ namespace Oxide.Plugins
                                 continue;
                                 else
                                 {
-                                SpawnSci(configData.Zones.Trainyard, pos);
+                                SpawnSci(configData.Zones.Trainyard, pos, false);
                                 TrainYard = pos;
                                 }
                         }
@@ -297,7 +293,7 @@ namespace Oxide.Plugins
                                 continue;
                                 else
                                 {
-                                SpawnSci(configData.Zones.WaterTreatment, pos);
+                                SpawnSci(configData.Zones.WaterTreatment, pos, false);
                                 WaterTreatment = pos;
                                 }
                         }
@@ -313,7 +309,7 @@ namespace Oxide.Plugins
                                 continue;
                                 else
                                 {
-                                SpawnSci(configData.Zones.Satellite, pos);
+                                SpawnSci(configData.Zones.Satellite, pos, false);
                                 Satellite = pos;
                                 }
                         }
@@ -328,7 +324,7 @@ namespace Oxide.Plugins
                                 continue;
                                 else
                                 {
-                                SpawnSci(configData.Zones.Dome, pos);
+                                SpawnSci(configData.Zones.Dome, pos, false);
                                 Dome = pos;
                                 }
                         }
@@ -343,7 +339,7 @@ namespace Oxide.Plugins
                                 continue;
                                 else
                                 {
-                                SpawnSci(configData.Zones.Radtown, pos);
+                                SpawnSci(configData.Zones.Radtown, pos, false);
                                 Radtown = pos;
                                 }
                         }
@@ -358,7 +354,7 @@ namespace Oxide.Plugins
                                 continue;
                                 else
                                 {
-                                SpawnSci(configData.Zones.LaunchSite, pos);
+                                SpawnSci(configData.Zones.LaunchSite, pos, false);
                                 LaunchSite = pos;
                                 }
                         } 
@@ -377,11 +373,13 @@ namespace Oxide.Plugins
             public int BotHealth;
             public int Radius;
             public string Kit;
+            
         }
         class Options
         {
             public bool Bots_Drop_Weapons { get; set; }
             public int Upper_Bot_Limit { get; set; }
+            public int Respawn_Timer { get; set; }
         }
         class Zones
         {
@@ -418,6 +416,7 @@ namespace Oxide.Plugins
                {
                     Bots_Drop_Weapons = true,
                     Upper_Bot_Limit = 80,
+                    Respawn_Timer = 60,
                },
                Zones = new Zones
                {
