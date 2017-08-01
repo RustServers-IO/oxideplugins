@@ -12,7 +12,7 @@ using Newtonsoft.Json.Linq;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.0.5", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.0.6", ResourceId = 2580)]
 
     [Description("Spawn Bots with kits.")]
     
@@ -210,6 +210,7 @@ namespace Oxide.Plugins
                         Kits?.Call($"GiveKit", Scientist, zone.Kit);
                     }
                     Scientist.health = zone.BotHealth;
+                    Scientist.displayName = zone.BotName; 
                     Update(Scientist, zone);
                     if (single) return;
                     timer.Once(0.1f, () => SpawnSci(zone, pos, false)); //delay to allow for random number to change
@@ -373,6 +374,7 @@ namespace Oxide.Plugins
             public int BotHealth;
             public int Radius;
             public string Kit;
+            public string BotName;
             
         }
         class Options
@@ -427,7 +429,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default"
+                       Kit = "default",
+                       BotName = "Airfield Bot"
                    },
                    Dome = new MonumentSettings
                    {
@@ -436,7 +439,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default"
+                       Kit = "default",
+                       BotName = "Dome Bot"
                    },
                    Powerplant = new MonumentSettings
                    {
@@ -445,7 +449,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default"
+                       Kit = "default",
+                       BotName = "Powerplant Bot"
                    },
                    Radtown = new MonumentSettings
                    {
@@ -454,7 +459,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default"
+                       Kit = "default",
+                       BotName = "Radtown Bot"
                    },
                    Satellite = new MonumentSettings
                    {
@@ -463,7 +469,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default"
+                       Kit = "default",
+                       BotName = "Satellite Bot"
                    },
                    Trainyard = new MonumentSettings
                    {
@@ -472,7 +479,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default"
+                       Kit = "default",
+                       BotName = "Trainyard Bot"
                    },
 
                    WaterTreatment = new MonumentSettings
@@ -482,7 +490,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default" 
+                       Kit = "default",
+                       BotName = "WaterTreatment Bot"
                    },
                    
                    LaunchSite = new MonumentSettings
@@ -492,7 +501,8 @@ namespace Oxide.Plugins
                        Bots = 10,
                        BotHealth = 100,
                        Radius = 200,
-                       Kit = "default"
+                       Kit = "default",
+                       BotName = "LaunchSite Bot"
                    }
                }
         };
