@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("InstantCraft", "Vlad-00003", "1.1.2", ResourceId = 2409)]
+    [Info("InstantCraft", "Vlad-00003", "1.2.1", ResourceId = 2409)]
     [Description("Instant craft items(includes normalspeed list and blacklist)")]
 
     class InstantCraft : RustPlugin
@@ -18,6 +18,7 @@ namespace Oxide.Plugins
         private List<string> BlockedItems = new List<string>();
         private List<string> NormalSpeed = new List<string>();
         private bool SplitStacks = true;
+        private bool RandomizeSkins = false;
 
         #endregion
 
@@ -29,14 +30,41 @@ namespace Oxide.Plugins
         }
         void LoadConfigValues()
         {
+            bool changed = false;
             List<object> blockedItems = new List<object>();
             List<object> normalSpeed = new List<object>() { "Hammer", "Rock" };
-            GetConfig("Prefix", ref Prefix);
-            GetConfig("Prefix Color", ref PrefixColor);
-            GetConfig("Split Stacks", ref SplitStacks);
-            GetConfig("Blocked item list", ref blockedItems);
-            GetConfig("Normal Speed", ref normalSpeed);
-            SaveConfig();
+            if (GetConfig("Prefix", ref Prefix))
+            {
+                PrintWarning("Oprion \"Prefix\" was added to the config");
+                changed = true;
+            }
+            if (GetConfig("Prefix Color", ref PrefixColor))
+            {
+                PrintWarning("Oprion \"Prefix Color\" was added to the config");
+                changed = true;
+            }
+            if (GetConfig("Split Stacks", ref SplitStacks))
+            {
+                PrintWarning("Oprion \"Split Stacks\" was added to the config");
+                changed = true;
+            }
+            if (GetConfig("Blocked item list", ref blockedItems))
+            {
+                PrintWarning("Oprion \"Blocked item list\" was added to the config");
+                changed = true;
+            }
+            if (GetConfig("Normal Speed", ref normalSpeed))
+            {
+                PrintWarning("Oprion \"Normal Speed\" was added to the config");
+                changed = true;
+            }
+            if (GetConfig("Randomize item skins if skin is zero", ref RandomizeSkins))
+            {
+                PrintWarning("Oprion \"Randomize item skins if skin is zero\" was added to the config");
+                changed = true;
+            }
+            if(changed)
+                SaveConfig();
             BlockedItems = blockedItems.Select(i => (string)i).ToList();
             NormalSpeed = normalSpeed.Select(i => (string)i).ToList();
         }
@@ -108,6 +136,10 @@ namespace Oxide.Plugins
             if (NormalSpeed.Contains(task.blueprint.targetItem.displayName.english) || NormalSpeed.Contains(task.blueprint.targetItem.shortname))
             {
                 SendToChat(player, GetMsg("NormalSpeed", player.UserIDString));
+                if(task.skinID == 0 && RandomizeSkins)
+                {
+                    task.skinID = GetSkinsInt(task.blueprint.targetItem).GetRandom();
+                }
                 return null;
             }
 
@@ -121,12 +153,12 @@ namespace Oxide.Plugins
                 {
                     string reply = string.Format(GetMsg("NotEnoughtSlots", player.userID), cancraft, amount);
                     SendToChat(player, reply);
-                    GiveItem(player, task.blueprint.targetItem.itemid, cancraft * task.blueprint.amountToCreate, (ulong)task.skinID);
+                    GiveItem(player, task.blueprint.targetItem, cancraft * task.blueprint.amountToCreate, (ulong)task.skinID);
                     RefundIngredients(task.blueprint, player, refund);
                     task.cancelled = true;
                     return null;
                 }
-                GiveItem(player, task.blueprint.targetItem.itemid, amount * task.blueprint.amountToCreate, (ulong)task.skinID);
+                GiveItem(player, task.blueprint.targetItem, amount * task.blueprint.amountToCreate, (ulong)task.skinID);
                 task.cancelled = true;
                 return null;
             }
@@ -144,7 +176,7 @@ namespace Oxide.Plugins
                     for(int i = 0; i < iter; i++)
                     {
                         //player.GiveItem(ItemManager.CreateByItemID(task.blueprint.targetItem.itemid, stacks.ElementAt(i), (ulong)task.skinID));
-                        GiveItem(player, task.blueprint.targetItem.itemid, stacks.ElementAt(i), (ulong)task.skinID);
+                        GiveItem(player, task.blueprint.targetItem, stacks.ElementAt(i), (ulong)task.skinID);
                         created += stacks.ElementAt(i);
                     }
                     RefundIngredients(task.blueprint, player, refund);
@@ -158,21 +190,28 @@ namespace Oxide.Plugins
                     foreach(var stack_amount in stacks)
                     {
                         //player.GiveItem(ItemManager.CreateByItemID(task.blueprint.targetItem.itemid, stack_amount, (ulong)task.skinID));
-                        GiveItem(player, task.blueprint.targetItem.itemid, stack_amount, (ulong)task.skinID);
+                        GiveItem(player, task.blueprint.targetItem, stack_amount, (ulong)task.skinID);
                     }
                     task.cancelled = true;
                     return null;
                 }
             }
             //player.GiveItem(ItemManager.CreateByItemID(task.blueprint.targetItem.itemid, finalamount, (ulong)task.skinID));
-            GiveItem(player, task.blueprint.targetItem.itemid, finalamount, (ulong)task.skinID);
+            GiveItem(player, task.blueprint.targetItem, finalamount, (ulong)task.skinID);
             task.cancelled = true;
             return null;
         }
         #endregion
 
-        #region Skin Fix Attempt
-        Dictionary<ulong, ulong> SchemaSkins = new Dictionary<ulong, ulong>();
+        #region Skins
+        private class Skin
+        {
+            public string itemshortname;
+            public uint itemdefid;
+            public ulong workshopdownload;
+        }
+        //Dictionary<ulong, ulong> SchemaSkins = new Dictionary<ulong, ulong>();
+        private List<Skin> SchemaSkins = new List<Skin>();
         private void GetWorkshopIDs(int code, string response)
         {
             if (response != null && code == 200)
@@ -184,7 +223,13 @@ namespace Oxide.Plugins
                 {
                     if (string.IsNullOrEmpty(item.itemshortname)) continue;
                     if (item.workshopdownload == null) { WsSID = 0; } else { WsSID = Convert.ToUInt64(item.workshopdownload); }
-                    SchemaSkins.Add(item.itemdefid, WsSID);
+                    //SchemaSkins.Add(item.itemdefid, WsSID);
+                    SchemaSkins.Add(new Skin()
+                    {
+                        itemshortname = item.itemshortname,
+                        itemdefid = item.itemdefid,
+                        workshopdownload = WsSID
+                    });
                 }
                 Puts($"Pulled {SchemaSkins.Count} skins.");
             }
@@ -193,14 +238,53 @@ namespace Oxide.Plugins
                 PrintWarning($"Failed to pull skins... Error {code}");
             }
         }
-        private void GiveItem(BasePlayer player, int itemid, int amount, ulong skinid)
+        private void GiveItem(BasePlayer player, ItemDefinition def, int amount, ulong skinid)
         {
             Item i;
             if (!player.IsConnected) return;
-            if (skinid != 0 && SchemaSkins.ContainsKey(skinid) && SchemaSkins[skinid] != 0) { i = ItemManager.CreateByItemID(itemid, amount, SchemaSkins[skinid]); }
-            else { i = ItemManager.CreateByItemID(itemid, amount, skinid); }
+            var skin = SchemaSkins.FirstOrDefault(x => x.itemdefid == skinid);
+            if(skinid != 0 && skin != null && skin.workshopdownload != 0)
+            {
+                i = ItemManager.Create(def, amount, skin.workshopdownload);
+            }
+            else
+            {
+                if (skinid == 0 && RandomizeSkins)
+                {
+                    skinid = GetSkins(def).GetRandom();
+                }
+                i = ItemManager.Create(def, amount, skinid);
+            }
+            //if (skinid != 0 && SchemaSkins.ContainsKey(skinid) && SchemaSkins[skinid] != 0) { i = ItemManager.Create(def, amount, SchemaSkins[skinid]); }
+            //else { i = ItemManager.Create(def, amount, skinid); }
             if (i != null)
                 player.GiveItem(i, BaseEntity.GiveItemReason.Crafted);
+        }
+        List<ulong> GetSkins(ItemDefinition def)
+        {
+            List<ulong> skins = new List<ulong>();
+            var SchemaSkin = SchemaSkins.Where(s => s.itemshortname == def.shortname).Select(x => x.workshopdownload);
+            if(SchemaSkin != null)
+                skins.AddRange(SchemaSkin);
+            if (def.skins != null)
+                skins.AddRange(def.skins.Select(skin => Convert.ToUInt64(skin.id)));
+            if (def.skins2 != null)
+                skins.AddRange(def.skins2.Select(skin => Convert.ToUInt64(skin.Id)));
+            return skins;
+
+        }
+        List<int> GetSkinsInt(ItemDefinition def)
+        {
+            List<int> skins = new List<int>();
+            var SchemaSkin = SchemaSkins.Where(s => s.itemshortname == def.shortname).Select(x => Convert.ToInt32(x.itemdefid));
+            if (SchemaSkin != null)
+                skins.AddRange(SchemaSkin);
+            if (def.skins != null)
+                skins.AddRange(def.skins.Select(skin => skin.id));
+            if (def.skins2 != null)
+                skins.AddRange(def.skins2.Select(skin => skin.Id));
+            return skins;
+
         }
         #endregion
 
@@ -238,13 +322,15 @@ namespace Oxide.Plugins
 
         //Get the msg form lang API
         string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID == null ? null : userID.ToString());
-        private void GetConfig<T>(string Key, ref T var)
+        private bool GetConfig<T>(string Key, ref T var)
         {
             if (Config[Key] != null)
             {
                 var = (T)Convert.ChangeType(Config[Key], typeof(T));
+                return false;
             }
             Config[Key] = var;
+            return true;
         }
         int FreeSlots(BasePlayer player) => 30 - player.inventory.containerMain.itemList.Count - player.inventory.containerBelt.itemList.Count;
         #endregion

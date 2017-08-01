@@ -18,7 +18,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "0.1.27", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
+    [Info("Duelist", "nivex", "0.1.28", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
     internal class Duelist : RustPlugin
     {
         public enum Team
@@ -97,6 +97,7 @@ namespace Oxide.Plugins
 
             public Dictionary<string, List<string>> BlockedUsers = new Dictionary<string, List<string>>(); // users and the list of players they blocked from requesting duels with
             public List<string> Chat = new List<string>(); // user ids of those who opted out of seeing duel death messages
+            public List<string> ChatEx = new List<string>(); // user ids of those who opted to see duel death messages when the config blocks them for all players
             public Dictionary<string, List<BetInfo>> ClaimBets = new Dictionary<string, List<BetInfo>>(); // active bets users need to claim after winning a bet
             public Dictionary<string, string> CustomKits = new Dictionary<string, string>(); // userid and custom kit
             public bool DuelsEnabled; // enable/disable dueling for all players (not admins)
@@ -260,14 +261,47 @@ namespace Oxide.Plugins
 
                 if (rematches.Contains(this))
                 {
+                    MessageAll("RematchTimedOut");
+
                     if (match != null)
                     {
+                        if (sendHomeSpectatorWhenRematchTimesOut)
+                        {
+                            foreach (var player in Good)
+                            {
+                                if (IsSpectator(player))
+                                {
+                                    EndSpectate(player);
+                                    ins.SendHome(player);
+                                }
+                            }
+
+                            foreach (var player in Evil)
+                            {
+                                if (IsSpectator(player))
+                                {
+                                    EndSpectate(player);
+                                    ins.SendHome(player);
+                                }
+                            }
+                        }
+
                         match.Reuse();
                         tdmMatches.Remove(match);
                     }
+                    else if (sendHomeSpectatorWhenRematchTimesOut)
+                    {
+                        foreach (var player in Duelists)
+                        {
+                            if (IsSpectator(player))
+                            {
+                                EndSpectate(player);
+                                ins.SendHome(player);
+                            }
+                        }
+                    }
 
                     rematches.Remove(this);
-                    MessageAll("RematchTimedOut");
                 }
             }
 
@@ -381,7 +415,7 @@ namespace Oxide.Plugins
                     return string.Format("{0} / {1} {2}v{2}", _goodHostName, _evilHostName, _teamSize);
                 }
             }
-
+            
             public bool IsPublic
             {
                 get
@@ -1121,7 +1155,7 @@ namespace Oxide.Plugins
                 {
                     duelsData.Kits[player.UserIDString] = _kit;
 
-                    if (!DuelTerritory(player.transform.position))
+                    if (!DuelTerritory(player.transform.position) || !duelsData.Homes.ContainsKey(player.UserIDString))
                     {
                         var ppos = player.transform.position;
                         if (IsOnConstruction(ppos)) ppos.y += 1; // prevent player from becoming stuck or dying when teleported home
@@ -1450,11 +1484,11 @@ namespace Oxide.Plugins
             foreach (var match in tdmMatches.ToList())
                 match.End();
 
+            SendSpectatorsHome();
             tdmMatches.Clear();
             duelingZones.Clear();
             ResetTemporaryData();
             DestroyAllUI();
-            SendSpectatorsHome();
         }
 
         private void OnPluginLoaded(Plugin plugin)
@@ -1496,13 +1530,10 @@ namespace Oxide.Plugins
 
             if (DuelTerritory(player.transform.position))
             {
-                if (spectators.Contains(player.UserIDString) && !spectators.Contains(target.UserIDString))
-                    return false;
-
-                if (spectators.Contains(target.UserIDString) && !spectators.Contains(player.UserIDString))
-                    return false;
-
-                if (dataDuelists.ContainsKey(player.UserIDString))
+                if (spectators.Contains(player.UserIDString)) // spectator check
+                    return spectators.Contains(target.UserIDString) ? null : (object)false;
+                
+                if (dataDuelists.ContainsKey(player.UserIDString)) // 1v1 check
                     return dataDuelists[player.UserIDString] == target.UserIDString ? null : (object)false;
             }
 
@@ -1584,6 +1615,10 @@ namespace Oxide.Plugins
                         if (useInvisibility)
                             Disappear(player);
 
+                        if (DestroyUI(player) && !createUI.Contains(player.UserIDString))
+                            createUI.Add(player.UserIDString);
+
+                        EndSpectate(player);
                         zone.AddPlayer(player);
                         return;
                     }
@@ -1607,6 +1642,10 @@ namespace Oxide.Plugins
                     if (showWarning)
                         player.ChatMessage(msg("DuelWarning", player.UserIDString));
 
+                    if (DestroyUI(player) && !createUI.Contains(player.UserIDString))
+                        createUI.Add(player.UserIDString);
+
+                    EndSpectate(player);
                     GivePlayerKit(player);
                     Metabolize(player, true);
                     match.GiveShirt(player);
@@ -1686,6 +1725,9 @@ namespace Oxide.Plugins
             if (victim == null)
                 return;
 
+            if (spectators.Contains(victim.UserIDString))
+                EndSpectate(victim);
+
             if (IsDueling(victim))
             {
                 victim.inventory.Strip();
@@ -1732,7 +1774,7 @@ namespace Oxide.Plugins
             {
                 var info = tdmAttackers[victim.UserIDString];
 
-                if (tdmServerDeaths)
+                if (tdmServerDeaths || duelsData.ChatEx.Count > 0)
                 {
                     foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null))
                     {
@@ -1815,7 +1857,10 @@ namespace Oxide.Plugins
 
             foreach (var target in BasePlayer.activePlayerList.Where(p => p?.displayName != null))
             {
-                if ((duelsData.Chat.Contains(target.UserIDString) || !broadcastDefeat) && target != victim && target != attacker)
+                if (duelsData.Chat.Contains(target.UserIDString) && target != victim && target != attacker)
+                    continue;
+                
+                if (!broadcastDefeat && !duelsData.ChatEx.Contains(target.UserIDString) && target != victim && target != attacker)
                     continue;
 
                 string betWon = bet != null ? msg("BetWon", target.UserIDString, bet.trigger, bet.amount) : "";
@@ -1881,12 +1926,15 @@ namespace Oxide.Plugins
 
             if (attacker != null)
             {
-                var rematch = new Rematch();
-                rematches.Add(rematch);
-                rematch.Duelists.Add(attacker);
-                rematch.Duelists.Add(victim);
-                rematch.Notify();
-
+                if (victim.IsConnected && attacker.IsConnected)
+                {
+                    var rematch = new Rematch();
+                    rematches.Add(rematch);
+                    rematch.Duelists.Add(attacker);
+                    rematch.Duelists.Add(victim);
+                    rematch.Notify();
+                }
+                
                 if (!Rematch.InEvent(attacker) && !Rematch.InEvent(victim) && !sendHome)
                 {
                     StartSpectate(attacker);
@@ -1897,14 +1945,13 @@ namespace Oxide.Plugins
 
         private void SendSpectatorsHome()
         {
-            foreach (string playerId in spectators)
+            foreach (var player in BasePlayer.activePlayerList)
             {
-                var player = BasePlayer.activePlayerList.Find(x => x.UserIDString == playerId) ?? BasePlayer.sleepingPlayerList.Find(x => x.UserIDString == playerId);
-
-                if (!player)
-                    continue;
-
-                SendHome(player);
+                if (DuelTerritory(player.transform.position) && duelsData.Homes.ContainsKey(player.UserIDString))
+                {
+                    player.inventory.Strip();
+                    SendHome(player);
+                }
             }
 
             spectators.Clear();
@@ -1921,8 +1968,6 @@ namespace Oxide.Plugins
                 return;
             }
 
-            spectators.Add(player.UserIDString);
-
             if (!player.CanInteract())
             {
                 if (player.IsDead())
@@ -1932,12 +1977,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (!DuelTerritory(player.transform.position))
-            {
-                spectators.Remove(player.UserIDString);
-                return;
-            }
-
+            spectators.Add(player.UserIDString);
             player.ChatMessage(ins.msg("BeginSpectating", player.UserIDString));
             player.inventory.Strip();
             player.health = 100f;
@@ -1949,15 +1989,17 @@ namespace Oxide.Plugins
 
         private static void EndSpectate(BasePlayer player)
         {
+            CuiHelper.DestroyUi(player, "DuelistUI_Defeat");
+
             if (spectators.Contains(player.UserIDString))
             {
-                CuiHelper.DestroyUi(player, "DuelistUI_Defeat");
 
-                if (playerHealth > 0f)
+                if (playerHealth > 0f && player.IsAlive())
                     player.health = playerHealth;
 
                 spectators.Remove(player.UserIDString);
                 player.SendNetworkUpdate();
+                player.ChatMessage(ins.msg("EndSpectating", player.UserIDString));
             }
         }
 
@@ -2301,7 +2343,7 @@ namespace Oxide.Plugins
 
         private void OnLootEntity(BasePlayer player, BaseEntity entity) // stop all players from looting anything inside of dueling zones. this allows server owners to setup duels anywhere without worry.
         {
-            if (player != null && (IsDueling(player) || InDeathmatch(player) || spectators.Contains(player.UserIDString)))
+            if (player != null && (IsDueling(player) || InDeathmatch(player) || IsSpectator(player)))
                 timer.Once(0.01f, player.EndLooting);
 
             if (dataDuelists.Count == 0 && tdmMatches.Count == 0 && spectators.Count == 0)
@@ -3767,15 +3809,30 @@ namespace Oxide.Plugins
                     }
                 case "chat":
                     {
-                        if (!duelsData.Chat.Contains(player.UserIDString))
+                        if (broadcastDefeat)
                         {
-                            duelsData.Chat.Add(player.UserIDString);
-                            player.ChatMessage(msg("DuelChatOff", player.UserIDString));
-                            return;
-                        }
+                            if (!duelsData.Chat.Contains(player.UserIDString))
+                            {
+                                duelsData.Chat.Add(player.UserIDString);
+                                player.ChatMessage(msg("DuelChatOff", player.UserIDString));
+                                return;
+                            }
 
-                        duelsData.Chat.Remove(player.UserIDString);
-                        player.ChatMessage(msg("DuelChatOn", player.UserIDString));
+                            duelsData.Chat.Remove(player.UserIDString);
+                            player.ChatMessage(msg("DuelChatOn", player.UserIDString));
+                        }
+                        else
+                        {
+                            if (!duelsData.ChatEx.Contains(player.UserIDString))
+                            {
+                                duelsData.ChatEx.Add(player.UserIDString);
+                                player.ChatMessage(msg("DuelChatOff", player.UserIDString));
+                                return;
+                            }
+
+                            duelsData.ChatEx.Remove(player.UserIDString);
+                            player.ChatMessage(msg("DuelChatOn", player.UserIDString));
+                        }
                         return;
                     }
                 case "kit":
@@ -4731,6 +4788,22 @@ namespace Oxide.Plugins
                 RemoveEntities(player.userID);
                 var homePos = duelsData.Homes[player.UserIDString].ToVector3();
 
+                if (DuelTerritory(homePos) && !player.IsAdmin)
+                {
+                    var bags = SleepingBag.FindForPlayer(player.userID, true).ToList();
+
+                    if (bags.Count > 0)
+                    {
+                        bags.Sort((x, y) => x.net.ID.CompareTo(y.net.ID));
+                        homePos = bags[0].transform.position;
+                        homePos.y += 0.25f;
+                    }
+                    else
+                    {
+                        homePos = ServerMgr.FindSpawnPoint().pos;
+                    }
+                }
+
                 if (player.IsDead())
                 {
                     if (sendDeadHome)
@@ -5005,6 +5078,11 @@ namespace Oxide.Plugins
             return init && tdmMatches.Any(team => team.GetTeam(player) != Team.None) && DuelTerritory(player.transform.position);
         }
 
+        private static bool IsSpectator(BasePlayer player)
+        {
+            return init && spectators.Contains(player.UserIDString) && DuelTerritory(player.transform.position);
+        }
+
         private bool IsEventBanned(string targetId)
         {
             return duelsData.Bans.ContainsKey(targetId);
@@ -5064,24 +5142,16 @@ namespace Oxide.Plugins
                     rematches.Remove(rematch);
             }
 
-            if (DestroyUI(player) && !createUI.Contains(player.UserIDString))
-                createUI.Add(player.UserIDString);
-
             if (player.IsWounded())
                 player.StopWounded();
-
-            EndSpectate(player);
+            
             player.metabolism.bleeding.value = 0;
 
             if (playerHealth > 0f)
                 player.health = playerHealth;
 
             if (player.IsConnected)
-            {
                 player.StartSleeping();
-                player.CancelInvoke("InventoryUpdate");
-                player.inventory.crafting.CancelAll(true);
-            }
 
             Player.Teleport(player, destination);
 
@@ -5291,7 +5361,7 @@ namespace Oxide.Plugins
                         }
                     }
 
-                    positions.Add(new Vector3(position.x, y + 1f, position.z)); // slightly elevate the spawn point to avoid spawning in rocks
+                    positions.Add(new Vector3(position.x, y, position.z));
                 }
             }
 
@@ -5563,14 +5633,14 @@ namespace Oxide.Plugins
                     }
                 }
 
-                if (!DuelTerritory(player.transform.position))
+                if (!DuelTerritory(player.transform.position) || !duelsData.Homes.ContainsKey(player.UserIDString))
                 {
                     var ppos = player.transform.position;
                     if (IsOnConstruction(ppos)) ppos.y += 1; // prevent player from becoming stuck or dying when teleported home
                     duelsData.Homes[player.UserIDString] = ppos.ToString();
                 }
 
-                if (!DuelTerritory(target.transform.position))
+                if (!DuelTerritory(target.transform.position) || !duelsData.Homes.ContainsKey(target.UserIDString))
                 {
                     var tpos = target.transform.position;
                     if (IsOnConstruction(tpos)) tpos.y += 1;
@@ -6353,8 +6423,12 @@ namespace Oxide.Plugins
                     }
                 case "requeue":
                     {
-                        CuiHelper.DestroyUi(player, "DuelistUI_Defeat");
-                        if (sendHomeRequeue) SendHome(player);
+                        if (sendHomeRequeue)
+                        {
+                            CuiHelper.DestroyUi(player, "DuelistUI_Defeat");
+                            SendHome(player);
+                        }
+                        else CreateDefeatUI(player);
                         cmdQueue(player, szQueueChatCommand, new string[0]);
                         return;
                     }
@@ -6369,12 +6443,22 @@ namespace Oxide.Plugins
                 case "respawn":
                     {
                         CuiHelper.DestroyUi(player, "DuelistUI_Defeat");
-                        SendHome(player);
+
+                        if (!Rematch.InEvent(player))
+                            SendHome(player);
+
                         return;
                     }
                 case "ready":
                     {
                         ReadyUp(player);
+
+                        if (DuelTerritory(player.transform.position))
+                        {
+                            CreateDefeatUI(player);
+                            return;
+                        }
+
                         break;
                     }
                 case "tdm":
@@ -6904,6 +6988,7 @@ namespace Oxide.Plugins
         private static float guiAnnounceUITime;
         private static bool sendDefeatedHome;
         private bool sendHomeRequeue;
+        private static bool sendHomeSpectatorWhenRematchTimesOut;
 
         private List<object> RespawnLoot
         {
@@ -7723,6 +7808,7 @@ namespace Oxide.Plugins
                 ["UI_Respawn"] = "Respawn",
                 ["UI_Requeue"] = "Requeue",
                 ["BeginSpectating"] = "You are now spectating.",
+                ["EndSpectating"] = "You are no longer a spectator.",
             }, this);
         }
 
@@ -8042,7 +8128,9 @@ namespace Oxide.Plugins
             guiUseCursor = Convert.ToBoolean(GetConfig("User Interface", "Use Cursor", false));
             guiUseCloseButton = Convert.ToBoolean(GetConfig("User Interface", "Show Close Button (X)", true));
             guiAnnounceUITime = Convert.ToSingle(GetConfig("User Interface", "Show Defeat Message UI For X Seconds", 7.5f));
+
             sendHomeRequeue = Convert.ToBoolean(GetConfig("User Interface", "Send Spectators Home First When Clicking Requeue", false));
+            sendHomeSpectatorWhenRematchTimesOut = Convert.ToBoolean(GetConfig("Spectators", "Send Home If Rematch Times Out", false));
 
             if (guiAnnounceUITime < 1f)
                 guiAnnounceUITime = 1f;

@@ -5,11 +5,12 @@ using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Libraries;
+using UnityEngine;
 using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.4.5")]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.4.6", ResourceId = 777)]
     [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
@@ -37,20 +38,7 @@ namespace Oxide.Plugins
             if (Config.Get(stringArgs.ToArray()) == null) Config.Set(args);
         }
 
-        T GetConfig<T>(T defaultVal, params object[] args)
-        {
-            List<string> stringArgs = (from arg in args select arg.ToString()).ToList();
-            if (Config.Get(stringArgs.ToArray()) == null)
-            {
-                PrintError($"The plugin failed to read something from the config: {ListToString(stringArgs, 0, "/")}{Environment.NewLine}Please reload the plugin and see if this message is still showing. If so, please post this into the support thread of this plugin.");
-                return defaultVal;
-            }
-
-            return (T)Convert.ChangeType(Config.Get(stringArgs.ToArray()), typeof(T));
-        }
         bool hasAccess(BasePlayer player, string permissionName) { if (player.net.connection.authLevel > 1) return true; return permission.UserHasPermission(player.userID.ToString(), permissionName); }
-
-        string ListToString<T>(List<T> list, int first = 0, string seperator = ", ") => string.Join(seperator, (from val in list select val.ToString()).Skip(first).ToArray());
 
         void Loaded()
         {
@@ -485,54 +473,32 @@ namespace Oxide.Plugins
 
         void cmdEvent(BasePlayer player, string cmd, string[] args)
         {
-            if (player.net.connection.authLevel >= (int) Config["Default", "authLevel"])
+            if (!hasAccess(player, "runningman.admin"))
             {
-                if (eventpause != null)
-                {
-                    eventpause.Destroy();
-                    eventpause = null;
-                    runningman = null;
-                    Runlog("timer eventpause stopped");
-                }
-                if (eventstart != null)
-                {
-                    eventstart.Destroy();
-                    eventstart = null;
-                    runningman = null;
-                    Runlog("timer eventstart stopped");
-                }
-                List<BasePlayer> onlineplayers = BasePlayer.activePlayerList;
-                if (onlineplayers == null)
-                {
-                    SendReply(player, string.Format(lang.GetMessage("NobodyOnline", this, player.UserIDString), Config["Default", "ChatName"]));
-                    return;
-                }
-                var randI = rnd.Next(0, onlineplayers.Count);
-                runningman = onlineplayers[randI];
-                Runlog("Running man: " + runningman.displayName);
-                BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
-                eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
-                time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+                SendReply(player,
+                    string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), Config["Default", "ChatName"]));
+                return;
             }
-            else
-                SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), (string) Config["Default", "ChatName"]));
-        }
-
-        void ccmdEvent(ConsoleSystem.Arg arg)
-        {
             if (eventpause != null)
             {
                 eventpause.Destroy();
+                eventpause = null;
                 runningman = null;
                 Runlog("timer eventpause stopped");
             }
             if (eventstart != null)
             {
                 eventstart.Destroy();
+                eventstart = null;
                 runningman = null;
                 Runlog("timer eventstart stopped");
             }
             List<BasePlayer> onlineplayers = BasePlayer.activePlayerList;
+            if (onlineplayers == null)
+            {
+                SendReply(player, string.Format(lang.GetMessage("NobodyOnline", this, player.UserIDString), Config["Default", "ChatName"]));
+                return;
+            }
             var randI = rnd.Next(0, onlineplayers.Count);
             runningman = onlineplayers[randI];
             Runlog("Running man: " + runningman.displayName);
@@ -541,9 +507,44 @@ namespace Oxide.Plugins
             time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         }
 
+        void ccmdEvent(ConsoleSystem.Arg arg)
+        {
+            if (arg.Player() == null) return;
+            if (arg.Player().net.connection.authLevel >= (int) Config["Default", "authLevel"])
+            {
+                if (eventpause != null)
+                {
+                    eventpause.Destroy();
+                    runningman = null;
+                    Runlog("timer eventpause stopped");
+                }
+                if (eventstart != null)
+                {
+                    eventstart.Destroy();
+                    runningman = null;
+                    Runlog("timer eventstart stopped");
+                }
+                List<BasePlayer> onlineplayers = BasePlayer.activePlayerList;
+                var randI = rnd.Next(0, onlineplayers.Count);
+                runningman = onlineplayers[randI];
+                Runlog("Running man: " + runningman.displayName);
+                BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this),
+                    (string) Config["Default", "ChatName"], runningman.displayName));
+                eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
+                time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+            }
+            else
+                arg.ReplyWith(string.Format(lang.GetMessage("NoPerm", this, arg.Player().UserIDString), Config["Default", "ChatName"]));
+        }
+
         void cmdEventOf(ConsoleSystem.Arg arg)
         {
-            DestroyEvent();
+            if (arg.Player() == null) return;
+            if (arg.Player().net.connection.authLevel >= (int) Config["Default", "authLevel"])
+                DestroyEvent();
+            else
+                arg.ReplyWith(string.Format(lang.GetMessage("NoPerm", this, arg.Player().UserIDString),
+                    Config["Default", "ChatName"]));
         }
 
         void DestroyEvent()
@@ -592,27 +593,28 @@ namespace Oxide.Plugins
 
         void cmdEventOff(BasePlayer player, string cmd, string[] args)
         {
-            if (player.net.connection.authLevel >= (int) Config["Default", "authLevel"])
+            if (!hasAccess(player, "runningman.admin"))
             {
-                if (eventpause != null)
-                {
-                    eventpause.Destroy();
-                    eventpause = null;
-                    runningman = null;
-                    Runlog("timer eventpause stopped");
-                }
-                if (eventstart != null)
-                {
-                    eventstart.Destroy();
-                    eventstart = null;
-                    runningman = null;
-                    Runlog("timer eventstart stopped");
-                }
-                Runlog("Running Man has stopped");
-                SendReply(player, string.Format(lang.GetMessage("EventStopped", this, player.UserIDString), Config["Default", "ChatName"]));
+                SendReply(player,
+                    string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), Config["Default", "ChatName"]));
+                return;
             }
-            else
-                SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), Config["Default", "ChatName"]));
+            if (eventpause != null)
+            {
+                eventpause.Destroy();
+                eventpause = null;
+                runningman = null;
+                Runlog("timer eventpause stopped");
+            }
+            if (eventstart != null)
+            {
+                eventstart.Destroy();
+                eventstart = null;
+                runningman = null;
+                Runlog("timer eventstart stopped");
+            }
+            Runlog("Running Man has stopped");
+            SendReply(player, string.Format(lang.GetMessage("EventStopped", this, player.UserIDString), Config["Default", "ChatName"]));
         }
 
         [ChatCommand("running")]
@@ -620,7 +622,8 @@ namespace Oxide.Plugins
         {
             if (!hasAccess(player, "runningman.admin"))
             {
-                SendReply(player, lang.GetMessage("NoPerm", this, player.UserIDString));
+                SendReply(player,
+                    string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), Config["Default", "ChatName"]));
                 return;
             }
             if (args == null)
@@ -661,6 +664,8 @@ namespace Oxide.Plugins
                             break;
                     }
                 }
+                else
+                    SendHelpText(player);
             }
             if (args.Length == 5)
             {
@@ -704,8 +709,11 @@ namespace Oxide.Plugins
                             }
                         });
                         SendReply(player, string.Format(lang.GetMessage("PackageAdded", this, player.UserIDString), (string)Config["Default", "ChatName"], package));
+                        SaveLoadedData();
                     }
                 }
+                else
+                    SendHelpText(player);
             }
         }
     }
