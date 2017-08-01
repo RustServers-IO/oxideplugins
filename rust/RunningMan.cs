@@ -10,7 +10,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.4.6", ResourceId = 777)]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.4.7", ResourceId = 777)]
     [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
@@ -29,6 +29,9 @@ namespace Oxide.Plugins
         
         [PluginReference]
         Plugin KarmaSystem;
+
+        [PluginReference]
+        Plugin ServerRewards;
         
         void SetConfig(params object[] args)
         {
@@ -248,7 +251,7 @@ namespace Oxide.Plugins
                 foreach (var data in rand.Value.RewardItems)
                 {
                     int randomReward = rnd.Next(data.Value.MinValue, data.Value.MaxValue);
-                    switch (data.Key)
+                    switch (data.Key.ToLower())
                     {
                         case "karma":
                             if (KarmaSystem != null && KarmaSystem.IsLoaded)
@@ -268,6 +271,18 @@ namespace Oxide.Plugins
                             {
                                 Economics?.CallHook("Deposit", runningman.userID,
                                     randomReward);
+                            }
+                            else
+                            {
+                                inv?.GiveItem(
+                                    ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                        (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                            }
+                            break;
+                        case "serverreward":
+                            if (ServerRewards != null && ServerRewards.IsLoaded)
+                            {
+                                ServerRewards?.CallHook("AddPoints", new object[] {runningman.userID, randomReward});
                             }
                             else
                             {
@@ -361,7 +376,7 @@ namespace Oxide.Plugins
                 foreach (var data in rand.Value.RewardItems)
                 {
                     int randomReward = rnd.Next(data.Value.MinValue, data.Value.MaxValue);
-                    switch (data.Key)
+                    switch (data.Key.ToLower())
                     {
                         case "karma":
                             if (KarmaSystem != null && KarmaSystem.IsLoaded)
@@ -379,8 +394,20 @@ namespace Oxide.Plugins
                         case "money":
                             if (Economics != null && Economics.IsLoaded)
                             {
-                                Economics?.CallHook("Deposit", runningman.userID,
+                                Economics?.CallHook("Deposit", attacker.userID,
                                     randomReward);
+                            }
+                            else
+                            {
+                                inv?.GiveItem(
+                                    ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
+                                        (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                            }
+                            break;
+                        case "serverreward":
+                            if (ServerRewards != null && ServerRewards.IsLoaded)
+                            {
+                                ServerRewards?.CallHook("AddPoints", new object[] {attacker.userID, randomReward});
                             }
                             else
                             {
