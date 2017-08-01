@@ -18,7 +18,7 @@ using Oxide.Plugins.AutoCrafterNamespace.JsonConverters;
 
 namespace Oxide.Plugins
 {
-	[Info("AutoCrafter", "Skipcast", "1.0.1", ResourceId = 2582)]
+	[Info("AutoCrafter", "Skipcast", "1.0.2", ResourceId = 2582)]
 	[Description("A machine that automatically crafts items so the player can do more interesting stuff instead.")]
 	public class AutoCrafter : RustPlugin
 	{
@@ -212,8 +212,11 @@ namespace Oxide.Plugins
 		{
 			if (!serverInitialized) // Check if server is initialized. This hook tends to call on startup before OnServerInitialized has been called.
 				return;
-			
-			ShowJoinMessage(player);
+
+			timer.Once(1, () =>
+			{
+				ShowJoinMessage(player);
+			});
 		}
 
 		// Make sure nothing is clipping into recycler. Pretty hacky method, but the recycler doesn't block things like other deployables.
