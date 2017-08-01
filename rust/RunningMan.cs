@@ -10,7 +10,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.4.7", ResourceId = 777)]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.4.8", ResourceId = 777)]
     [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
@@ -135,6 +135,19 @@ namespace Oxide.Plugins
                             RewardItems = new Dictionary<string, ValueAmount>
                             {
                                 {"Karma", new ValueAmount
+                                    {
+                                        MinValue = 0,
+                                        MaxValue = 1
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {"ServerReward", new RewardData
+                        {
+                            RewardItems = new Dictionary<string, ValueAmount>
+                            {
+                                {"serverreward", new ValueAmount
                                     {
                                         MinValue = 0,
                                         MaxValue = 1
