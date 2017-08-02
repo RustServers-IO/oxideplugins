@@ -18,7 +18,7 @@ using Oxide.Plugins.AutoCrafterNamespace.JsonConverters;
 
 namespace Oxide.Plugins
 {
-	[Info("AutoCrafter", "Skipcast", "1.0.2", ResourceId = 2582)]
+	[Info("AutoCrafter", "Skipcast", "1.0.3", ResourceId = 2582)]
 	[Description("A machine that automatically crafts items so the player can do more interesting stuff instead.")]
 	public class AutoCrafter : RustPlugin
 	{
@@ -1004,6 +1004,26 @@ namespace Oxide.Plugins.AutoCrafterNamespace
 
 					currentTask.Amount -= 1;
 					currentTask.Elapsed -= currentTask.Blueprint.time;
+
+					// Take used items
+					foreach (var ingredient in currentTask.Blueprint.ingredients)
+					{
+						foreach (var taskItem in currentTask.TakenItems)
+						{
+							if (taskItem.info.itemid != ingredient.itemid)
+								continue;
+
+							taskItem.amount -= (int) ingredient.amount;
+
+							if (taskItem.amount <= 0)
+							{
+								taskItem.Remove();
+								currentTask.TakenItems.Remove(taskItem);
+							}
+
+							break;
+						}
+					}
 
 					if (currentTask.Amount <= 0)
 					{
