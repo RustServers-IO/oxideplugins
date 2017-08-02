@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.3", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.4", ResourceId = 2193)]
     class ImageLibrary : RustPlugin
     {
         #region Fields
@@ -267,7 +267,7 @@ namespace Oxide.Plugins
             {"burlappants", "burlap.trousers" },
             {"collaredshirt", "shirt.collared" },
             {"mp5", "smg.mp5" },
-            {"sword", "longsword" },
+            {"sword", "salvaged.sword" },
             {"workboots", "shoes.boots" },
             {"vagabondjacket", "jacket" },
             {"hideshoes", "attire.hide.boots" },
@@ -901,8 +901,9 @@ namespace Oxide.Plugins
             }
             internal void StoreByteArray(byte[] bytes, string name)
             {
+                if (bytes == null || !il.imageIdentifiers.imageIds.ContainsKey(name)) return;
                 ClearStream();
-                stream.Write(bytes, 0, bytes.Length);               
+                stream.Write(bytes, 0, bytes.Length);    
                 il.imageIdentifiers.imageIds[name] = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
                 ClearStream();
 
