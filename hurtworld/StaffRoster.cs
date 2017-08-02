@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("StaffRoster", "Noviets", "1.0.5", ResourceId = 2048)]
+    [Info("StaffRoster", "Noviets", "1.0.6", ResourceId = 2048)]
     [Description("Shows staff roster and availability")]
 
     class StaffRoster : HurtworldPlugin
@@ -21,6 +21,7 @@ namespace Oxide.Plugins
 				{"nopermission","StaffRoster: Only staff members are able to use this command."},
 				{"mod","<color=blue>{Mod}</color>"},
 				{"admin","<color=red>{Admin}</color>"},
+				{"helper","<color=green>{Helper}</color>"},
 				{"statuschange","You have changed your Status to: {Status}"},
 				{"playerchangedstatus","{Player} has changed their Status to: {Status}"},
 				{"invalidstatusmsg","StaffRoster: Invalid Status. ({available}, {afk}, {busy}, {offduty})"},
@@ -61,6 +62,11 @@ namespace Oxide.Plugins
 				if(!StaffList.ContainsKey(Msg("mod",session.SteamId.ToString()).Replace("{Mod}",session.Name)))
 					StaffList.Add(Msg("mod",session.SteamId.ToString()).Replace("{Mod}",session.Name), Msg("available",session.SteamId.ToString()));
 			}
+			else if(permission.UserHasGroup(session.SteamId.ToString(),"Helper"))
+			{
+				if(!StaffList.ContainsKey(Msg("helper",session.SteamId.ToString()).Replace("{Helper}",session.Name)))
+					StaffList.Add(Msg("helper",session.SteamId.ToString()).Replace("{Helper}",session.Name), Msg("available",session.SteamId.ToString()));
+			}
 		}
 		
 		void UpdateList()
@@ -76,6 +82,11 @@ namespace Oxide.Plugins
 				{
 					if(!StaffList.ContainsKey(Msg("mod",player.SteamId.ToString()).Replace("{Mod}",player.Name)))
 						StaffList.Add(Msg("mod",player.SteamId.ToString()).Replace("{Mod}",player.Name), Msg("available",player.SteamId.ToString()));
+				}
+				else if(permission.UserHasGroup(player.SteamId.ToString(),"Helper"))
+				{
+					if(!StaffList.ContainsKey(Msg("helper",player.SteamId.ToString()).Replace("{Helper}",player.Name)))
+						StaffList.Add(Msg("helper",player.SteamId.ToString()).Replace("{Helper}",player.Name), Msg("available",player.SteamId.ToString()));
 				}
 			}
 		}
@@ -107,7 +118,7 @@ namespace Oxide.Plugins
 								hurt.BroadcastChat(Msg("playerchangedstatus", session.SteamId.ToString()).Replace("{Player}", Msg("admin",session.SteamId.ToString()).Replace("{Admin}",session.Name)).Replace("{Status}", GetMsgForStatus(args[0].ToLower())));
 							}
 						}
-						if(permission.UserHasGroup(session.SteamId.ToString(),"Moderator"))
+						else if(permission.UserHasGroup(session.SteamId.ToString(),"Moderator"))
 						{
 							if(StaffList.ContainsKey(Msg("mod",session.SteamId.ToString()).Replace("{Mod}",session.Name)))
 							{
@@ -115,9 +126,17 @@ namespace Oxide.Plugins
 								hurt.BroadcastChat(Msg("playerchangedstatus", session.SteamId.ToString()).Replace("{Player}", Msg("mod",session.SteamId.ToString()).Replace("{Mod}",session.Name)).Replace("{Status}", GetMsgForStatus(args[0].ToLower())));
 							}
 						}
+						else if(permission.UserHasGroup(session.SteamId.ToString(),"Helper"))
+						{
+							if(StaffList.ContainsKey(Msg("helper",session.SteamId.ToString()).Replace("{Helper}",session.Name)))
+							{
+								StaffList[Msg("helper",session.SteamId.ToString()).Replace("{Helper}",session.Name)] = GetMsgForStatus(args[0].ToLower());
+								hurt.BroadcastChat(Msg("playerchangedstatus", session.SteamId.ToString()).Replace("{Player}", Msg("helper",session.SteamId.ToString()).Replace("{Helper}",session.Name)).Replace("{Status}", GetMsgForStatus(args[0].ToLower())));
+							}
+						}
 					}
 					else
-				hurt.SendChatMessage(session, Msg("invalidstatusmsg",session.SteamId.ToString()).Replace("{available}", Msg("availablecmd")).Replace("{afk}", Msg("afkcmd")).Replace("{busy}", Msg("busycmd")).Replace("{offduty}", Msg("offdutycmd")));
+						hurt.SendChatMessage(session, Msg("invalidstatusmsg",session.SteamId.ToString()).Replace("{available}", Msg("availablecmd")).Replace("{afk}", Msg("afkcmd")).Replace("{busy}", Msg("busycmd")).Replace("{offduty}", Msg("offdutycmd")));
 				}
 				else
 					hurt.SendChatMessage(session, Msg("nopermission",session.SteamId.ToString()));
