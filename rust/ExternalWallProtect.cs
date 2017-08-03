@@ -4,7 +4,7 @@ using Physics = UnityEngine.Physics;
 
 namespace Oxide.Plugins
 {
-    [Info("ExternalWallProtect", "redBDGR", "1.0.0")]
+    [Info("ExternalWallProtect", "redBDGR", "1.0.1", ResourceId = 2576)]
     [Description("Prevent ladders from being able to be placed on external walls")]
 
     class ExternalWallProtect : RustPlugin
