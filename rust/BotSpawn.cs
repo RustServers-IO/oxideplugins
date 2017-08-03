@@ -12,7 +12,7 @@ using Newtonsoft.Json.Linq;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.0.6", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.0.7", ResourceId = 2580)] //adjust effective distance + null animal targetting. better getground
 
     [Description("Spawn Bots with kits.")]
     
@@ -35,6 +35,10 @@ namespace Oxide.Plugins
         
         int no_of_AI = 0;
         
+        class TempRecord
+        {
+            public static Dictionary<NPCPlayerApex, int> NPCPlayers = new Dictionary<NPCPlayerApex, int>();
+        }
         class StoredData
         {
             public Dictionary<ulong, string> bots = new Dictionary<ulong, string>();
@@ -47,6 +51,13 @@ namespace Oxide.Plugins
         void Init()
         {
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("BotSpawn");
+            foreach(var bot in GameObject.FindObjectsOfType<NPCPlayer>())
+            {
+            if (storedData.bots.ContainsKey(bot.userID))
+                {
+                bot.Kill();
+                }
+            }
             storedData?.bots.Clear();
             Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData); 
             LoadConfigVariables();
@@ -54,7 +65,7 @@ namespace Oxide.Plugins
         void OnServerInitialized()
         {
             FindMonuments();           
-        }
+        } 
         
         void Unload()
         {
@@ -96,7 +107,7 @@ namespace Oxide.Plugins
                 Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData);
             }
         }
-        
+       
 		void OnPlayerDie(BasePlayer player, HitInfo info) 
 		{
             if (!configData.Options.Bots_Drop_Weapons)
@@ -109,7 +120,7 @@ namespace Oxide.Plugins
 		}
         
         void OnEntityDeath(BaseEntity entity)
-        {
+        {       
             BasePlayer Scientist = null;
             if (entity is NPCPlayer)
             {
@@ -197,33 +208,59 @@ namespace Oxide.Plugins
                     System.Random rnd = new System.Random(); 
                     int X = rnd.Next((-zone.Radius/2), (zone.Radius/2));
                     int Z = rnd.Next((-zone.Radius/2), (zone.Radius/2)); 
-                    var CentrePos = new Vector3((pos.x + X),30,(pos.z + Z));    
+                    var CentrePos = new Vector3((pos.x + X),100,(pos.z + Z));    
                     var rot = new Quaternion (0,0,0,0);
                     Vector3 newPos = CalculateGroundPos(CentrePos);
-                    var entity = GameManager.server.CreateEntity("assets/prefabs/npc/scientist/scientist.prefab", newPos, rot, true);            
+                    var entity = GameManager.server.CreateEntity("assets/prefabs/npc/scientist/scientist.prefab", newPos, rot, true) as NPCPlayer;
                     entity.Spawn();
                     no_of_AI++;
-                    Scientist = entity as NPCPlayer; 
                     if (zone.Kit != "default")
                     {
-                        Scientist.inventory.Strip(); 
-                        Kits?.Call($"GiveKit", Scientist, zone.Kit);
+                        entity.inventory.Strip(); 
+                        Kits?.Call($"GiveKit", entity, zone.Kit);
                     }
-                    Scientist.health = zone.BotHealth;
-                    Scientist.displayName = zone.BotName; 
-                    Update(Scientist, zone);
-                    if (single) return;
-                    timer.Once(0.1f, () => SpawnSci(zone, pos, false)); //delay to allow for random number to change
+                    entity.health = zone.BotHealth;
+                    entity.displayName = zone.BotName;
+                    var botapex = entity.GetComponent<NPCPlayerApex>();
+                    TempRecord.NPCPlayers.Add(botapex, 1); //for checking target
+
+                    Update(entity, zone);
+
+                        timer.Once(5, () => 
+                        {
+                        
+                        AttackEntity heldEntity = entity.GetHeldEntity() as AttackEntity;
+                        if (heldEntity != null)
+                        heldEntity.effectiveRange =  configData.Options.Bot_Firing_Range;
+                        }
+                        );
+                        
+                    if (single) return; 
+                    timer.Once(0.1f, () => SpawnSci(zone, pos, false)); //delay to allow for random number to change 
                     return;
+                    }
+        } 
+
+                void OnTick()
+                {
+                    NPCPlayerApex botapex;
+                    foreach(var bot in TempRecord.NPCPlayers)
+                    {
+                        if (bot.Key.AttackTarget != null)
+                        {
+                            if (bot.Key.AttackTarget.name.Contains("agents/")) /////////////////////////not exactly economical - I know.
+                            {
+                                bot.Key.AttackTarget = null; 
+                            }
+                        }
+                    }
                 }
 
-        } 
-        
-        static Vector3 CalculateGroundPos(Vector3 sourcePos) // credit Wulf & Nogrod
+        static Vector3 CalculateGroundPos(Vector3 sourcePos) // credit Wulf & Nogrod 
         {
             RaycastHit hitInfo;
 
-            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo))
+            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, 300f, LayerMask.GetMask("Terrain", "World", "Construction"), QueryTriggerInteraction.Ignore))
             {
                 sourcePos.y = hitInfo.point.y;
             }
@@ -382,6 +419,7 @@ namespace Oxide.Plugins
             public bool Bots_Drop_Weapons { get; set; }
             public int Upper_Bot_Limit { get; set; }
             public int Respawn_Timer { get; set; }
+            public int Bot_Firing_Range { get; set; }
         }
         class Zones
         {
@@ -419,6 +457,7 @@ namespace Oxide.Plugins
                     Bots_Drop_Weapons = true,
                     Upper_Bot_Limit = 80,
                     Respawn_Timer = 60,
+                    Bot_Firing_Range = 20,
                },
                Zones = new Zones
                {
