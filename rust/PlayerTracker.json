@@ -1,0 +1,16 @@
+{
+    "name": "PlayerTracker",
+    "description": "Easily track the movements of players",
+    "author": "redBDGR",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/playertracker.2584",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
