@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherControl", "CaseMan", "1.4.0", ResourceId = 2477)]
+    [Info("GatherControl", "CaseMan", "1.4.1", ResourceId = 2477)]
     [Description("Control gather rates by day and night with permissions")]
 
     class GatherControl : RustPlugin
@@ -25,7 +25,11 @@ namespace Oxide.Plugins
 		string TextColor;
 		public Dictionary<ulong, int> Temp = new Dictionary<ulong, int>();
 		float Sunrise;
-		float Sunset;		
+		float Sunset;
+		float DayRateMultStaticQuarry;
+		float NightRateMultStaticQuarry;
+		string PLPerm = "gathercontrol.AllowChatCommand";
+		string AdmPerm = "gathercontrol.AllowConsoleCommand";
 
 		class PermData
         {
@@ -80,6 +84,8 @@ namespace Oxide.Plugins
             LoadDefaultConfig();
 			permData = Interface.Oxide.DataFileSystem.ReadObject<PermData>("GatherControl");
 			LoadDefaultData();
+			permission.RegisterPermission(PLPerm, this);
+			permission.RegisterPermission(AdmPerm, this);
             foreach(var perm in permData.PermissionsGroups)
 			{
                 permission.RegisterPermission(perm.Value.PermGroup, this);
@@ -138,6 +144,8 @@ namespace Oxide.Plugins
 			Config["TextColor"] = TextColor = GetConfig("TextColor", "Yellow");
 			Config["Sunrise"] = Sunrise = GetConfig("Sunrise", 7);
 			Config["Sunset"] = Sunset = GetConfig("Sunset", 19);
+			Config["DayRateMultStaticQuarry"] = DayRateMultStaticQuarry = GetConfig("DayRateMultStaticQuarry", 1);
+			Config["NightRateMultStaticQuarry"] = NightRateMultStaticQuarry = GetConfig("NightRateMultStaticQuarry", 1);
 			SaveConfig();
 		}
 		#endregion		
@@ -160,6 +168,7 @@ namespace Oxide.Plugins
 				["RateCropGather"] = "Multiplier for your crop gather (day/night)",
 				["InvalidSyntax"] = "Invalid syntax! Use: showrate <name/ID>",
 				["NoPlayer"] = "Player not found!",
+				["NoPermission"] = "You don't have the permission to use this command",
             }, this);
 			lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -177,6 +186,7 @@ namespace Oxide.Plugins
 				["RateCropGather"] = "Множитель сбора своего урожая (день/ночь)",
 				["InvalidSyntax"] = "Неправильный синтаксис. Используйте: showrate <имя/ID>",
 				["NoPlayer"] = "Игрок не найден!",
+				["NoPermission"] = "У вас недостаточно прав для выполнения этой команды",
             }, this, "ru");
         }
         #endregion
@@ -256,6 +266,11 @@ namespace Oxide.Plugins
 		}
 		void OnQuarryGather(MiningQuarry quarry, Item item)
 		{
+			if(quarry.OwnerID == 0)
+			{
+				GatherMultiplier(item, DayRateMultStaticQuarry, NightRateMultStaticQuarry);
+				return;				
+			}
 			int gr=-1;
 			BasePlayer player = BasePlayer.FindByID(quarry.OwnerID);
             if(player == null)
@@ -344,6 +359,11 @@ namespace Oxide.Plugins
         [ChatCommand("showrate")]
         void ShowRate(BasePlayer player, string command, string[] args)
         {
+			if (!player.IsAdmin && !permission.UserHasPermission(player.userID.ToString(), PLPerm)) 
+			{
+				SendReply(player, lang.GetMessage("NoPermission", this, player.UserIDString));
+                return;
+			}
 			int gr = CheckPlayerPerms(player);
 			if(gr >= 0)	SendReply(player, lang.GetMessage("GatherRateInfo", this, player.UserIDString) + GatherInfo(player, gr));	
 			else SendReply(player, lang.GetMessage("NoGatherRate", this, player.UserIDString)); 
@@ -351,6 +371,12 @@ namespace Oxide.Plugins
 		[ConsoleCommand("showrate")]
         private void conShowRate(ConsoleSystem.Arg arg)
 		{
+			BasePlayer player0 = arg.Player();
+			if (player0 is BasePlayer && arg.Connection != null && (arg.Connection.authLevel < 2 && !permission.UserHasPermission(player0.userID.ToString(), AdmPerm))) 
+			{
+				Puts(lang.GetMessage("NoPermission", this));
+                return;
+			}
 			if (arg.Args == null || arg.Args.Length <= 0)
 			{
                 Puts(lang.GetMessage("InvalidSyntax", this));
