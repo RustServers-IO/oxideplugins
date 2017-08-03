@@ -2,7 +2,7 @@
     "name": "Security Lights",
     "description": "Search light targeting system",
     "author": "",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "configuration": true,
     "suggest": {
         "Clans": "*",
