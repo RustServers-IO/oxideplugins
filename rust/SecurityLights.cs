@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-using Oxide;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
@@ -9,9 +8,8 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	
-
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.1", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.2", ResourceId = 2577)]
+	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
 		#region Variables
@@ -31,11 +29,16 @@ namespace Oxide.Plugins
 
 		class ConfigData
 		{
-			public int allRadius;
-			public int playerRadius;
-			public int heliRadius;
+			public int allDetectionRadius;
+			public int allTrackingRadius;
+			public int playerDetectionRadius;
+			public int playerTrackingRadius;
+			public int heliDetectionRadius;
+			public int heliTrackingRadius;
 			public bool autoConvert;
 			public bool requireFuel;
+			public bool nightOnly;
+			public bool acquisitionSound;
 		}
 
 		class StoredData
@@ -46,6 +49,7 @@ namespace Oxide.Plugins
 		private ConfigData config = new ConfigData();
 		private StoredData data;
 		private List<BaseCombatEntity> heliList = new List<BaseCombatEntity>();
+		private bool lightsEnabled = true;
 		#endregion
 
 		#region Localization
@@ -77,7 +81,7 @@ namespace Oxide.Plugins
 				["SearchInfo"] = "Owner: {0}\nState: {1}",
 				["DataReload"] = "Reloaded plugin data.",
 				["ConfigReload"] = "Reloaded plugin config.",
-				["ConfigInfo"] = "Configuration Info:\nRadius - All: {0}\nRadius - Players: {1}\nRadius - Helicopters: {2}\nAuto-Convert: {3}\nRequire Fuel: {4}",
+				["ConfigInfo_1.0.1"] = "Configuration Info: \nRadius: (Detection,Tracking)\nRadius - All: ({0},{1})\nRadius - Players: ({2},{3})\nRadius - Helicopters: ({4},{5})\nAuto-Convert: {6}\nRequire Fuel: {7}\nNight Only Operation: {8}\nTarget Acquired Sound: {9}",
 				["AdminUsage"] = "Usage: /sl <add|remove|mode|globalmode|info|reloaddata|reloadconfig>",
 				["Usage"] = "Usage: /sl <add|remove|mode|globalmode|info>"
 			}, this);
@@ -90,12 +94,21 @@ namespace Oxide.Plugins
 		//
 		protected override void LoadDefaultConfig()
 		{
-			Config["Mode Radius - All"] = (int)ConfigValue("Mode Radius - All");
-			Config["Mode Radius - Players"] = (int)ConfigValue("Mode Radius - Players");
-			Config["Mode Radius - Helicopter"] = (int)ConfigValue("Mode Radius - Helicopter");
+			Config["Detection Radius - All"] = ConfigValue("Detection Radius - All");
+			Config["Tracking Radius - All"] = ConfigValue("Tracking Radius - All");
+			Config["Detection Radius - Players"] = ConfigValue("Detection Radius - Players");
+			Config["Tracking Radius - Players"] = ConfigValue("Tracking Radius - Players");
+			Config["Detection Radius - Helicopter"] = ConfigValue("Detection Radius - Helicopter");
+			Config["Tracking Radius - Helicopter"] = ConfigValue("Tracking Radius - Helicopter");
 			Config["Auto Convert"] = ConfigValue("Auto Convert");
 			Config["Require Fuel"] = ConfigValue("Require Fuel");
-			
+			Config["Night Only Operation"] = ConfigValue("Night Only Operation");
+			Config["Target Acquired Sound"] = ConfigValue("Target Acquired Sound");
+
+			Config.Remove("Mode Radius - All");
+			Config.Remove("Mode Radius - Players");
+			Config.Remove("Mode Radius - Helicopter");
+
 			SaveConfig();
 		}
 		//
@@ -103,8 +116,26 @@ namespace Oxide.Plugins
 		//
 		private void Init()
 		{
-			LoadConfig();
+			try
+			{
+				LoadConfigData();
+			}
+			catch
+			{
+				LoadDefaultConfig();
+				LoadConfigData();
+			}
 			LoadData();
+		}
+		//
+		// Register permissions
+		//
+		private void Loaded()
+		{
+			permission.RegisterPermission("securitylights.use", this);
+
+			if (config.nightOnly && TOD_Sky.Instance.IsDay)
+				lightsEnabled = false;
 		}
 		//
 		// Restore plugin data when server finishes startup
@@ -188,6 +219,11 @@ namespace Oxide.Plugins
 		[ChatCommand("sl")]
 		void manageSecurityLight(BasePlayer player, string command, string[] args)
 		{
+			if (!permission.UserHasPermission(player.UserIDString, "securitylights.use"))
+			{
+				PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
+				return;
+			}
 			var target = RaycastAll<BaseEntity>(player.eyes.HeadRay());
 			SearchLight sl = null;
 			BasePlayer owner = null;
@@ -226,7 +262,6 @@ namespace Oxide.Plugins
 					else
 						PrintToChat(player, Lang("AlreadySL", player.UserIDString));
 					return;
-					break;
 				case "remove":
 					if (!(target is SearchLight))
 					{
@@ -248,7 +283,6 @@ namespace Oxide.Plugins
 					else
 						PrintToChat(player, Lang("NotSL", player.UserIDString));
 					return;
-					break;
 				case "mode":
 					if (!(target is SearchLight))
 					{
@@ -293,7 +327,6 @@ namespace Oxide.Plugins
 					else
 						PrintToChat(player, Lang("NotSL", player.UserIDString));
 					return;
-					break;
 				case "globalmode":
 					TargetMode globalmode;
 					int lightsChanged = 0;
@@ -328,7 +361,6 @@ namespace Oxide.Plugins
 					}
 					PrintToChat(player, Lang("GlobalChange", player.UserIDString, lightsChanged, globalmode));
 					return;
-					break;
 				case "info":
 					if (!(target is SearchLight))
 					{
@@ -353,7 +385,6 @@ namespace Oxide.Plugins
 					else
 						PrintToChat(player, Lang("SearchInfo", player.UserIDString, ownerString, stateString));
 					return;
-					break;
 				case "reloaddata":
 					if (!player.IsAdmin)
 					{
@@ -363,28 +394,30 @@ namespace Oxide.Plugins
 					RestoreData();
 					PrintToChat(player, Lang("DataReload", player.UserIDString));
 					return;
-					break;
 				case "reloadconfig":
 					if (!player.IsAdmin)
 					{
 						PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
 						return;
 					}
-					Config.Load();
-					LoadConfig();
+					LoadConfigData();
 					PrintToChat(player, Lang("ConfigReload", player.UserIDString));
-					PrintToChat(player, Lang("ConfigInfo", player.UserIDString, config.allRadius, config.playerRadius, config.heliRadius, config.autoConvert, config.requireFuel));
+					PrintToChat(player, Lang("ConfigInfo_1.0.1", player.UserIDString, 
+						config.allDetectionRadius, config.allTrackingRadius, 
+						config.playerDetectionRadius, config.playerTrackingRadius,
+						config.heliDetectionRadius, config.heliTrackingRadius,
+						config.autoConvert,
+						config.requireFuel,
+						config.nightOnly,
+						config.acquisitionSound));
 					return;
-					break;
 				default:
 					if (player.IsAdmin)
 						PrintToChat(player, Lang("AdminUsage", player.UserIDString));
 					else
 						PrintToChat(player, Lang("Usage", player.UserIDString));
 					return;
-					break;
 			}
-			return;
 		}
 		#endregion
 
@@ -394,13 +427,22 @@ namespace Oxide.Plugins
 		//
 		void OnTick()
 		{
+			//Puts($"Lights Enabled: {lightsEnabled}");
+			
 			List<uint> removeIDs = new List<uint>();
 			foreach (SecurityLight sl in data.LightList.Values)
 			{
 				try
 				{
+					if (config.nightOnly && !lightsEnabled)
+					{
+						sl.light.SetFlag(BaseEntity.Flags.On, false);
+						sl.target = null;
+						sl.light.SetTargetAimpoint(sl.light.eyePoint.transform.position + Vector3.down * 3);
+						continue;
+					}
 					Item slot = sl.light.inventory.GetSlot(0);
-					if ((slot == null || (UnityEngine.Object)slot.info != (UnityEngine.Object)sl.light.inventory.onlyAllowedItem) && config.requireFuel)
+					if ((slot == null || slot.info != sl.light.inventory.onlyAllowedItem) && config.requireFuel)
 					{
 						sl.light.SetFlag(BaseEntity.Flags.On, false);
 						continue;
@@ -410,7 +452,7 @@ namespace Oxide.Plugins
 					List<BaseCombatEntity> list = Facepunch.Pool.GetList<BaseCombatEntity>();
 					list.AddRange(heliList);
 					if (list == null) continue;
-					Vis.Entities<BaseCombatEntity>(sl.light.eyePoint.transform.position, sl.mode == TargetMode.heli ? config.heliRadius : sl.mode == TargetMode.players ? config.playerRadius : config.allRadius, list, 133120, QueryTriggerInteraction.Collide);
+					Vis.Entities(sl.light.eyePoint.transform.position, sl.mode == TargetMode.heli ? config.heliDetectionRadius : sl.mode == TargetMode.players ? config.playerDetectionRadius : config.allDetectionRadius, list, 133120, QueryTriggerInteraction.Collide);
 					if (list == null) continue;
 					if (sl.mode == TargetMode.players)
 						list.RemoveAll(x => !(x is BasePlayer));
@@ -424,11 +466,7 @@ namespace Oxide.Plugins
 						sl.target = sl.owner;
 						sl.light.SetTargetAimpoint(sl.target.transform.position + Vector3.up);
 					}
-					else if (list.Count == 0)
-					{
-						sl.target = null;
-					}
-					else if (list.Contains(sl.target))
+					else if (sl.target != null)
 					{
 						if (sl.target is BasePlayer)
 						{
@@ -438,7 +476,16 @@ namespace Oxide.Plugins
 								sl.target = null;
 						}
 						else
-							sl.light.SetTargetAimpoint(sl.target.transform.position);
+						{
+							if (isTargetVisible(sl, sl.target))
+								sl.light.SetTargetAimpoint(sl.target.transform.position);
+							else
+								sl.target = null;
+						}
+					}
+					else if (list.Count == 0)
+					{
+						sl.target = null;
 					}
 					if (sl.target == null)
 					{
@@ -459,6 +506,11 @@ namespace Oxide.Plugins
 								sl.target = entity;
 								sl.light.SetTargetAimpoint(entity.transform.position);
 							}
+							if (sl.target !=  null && config.acquisitionSound)
+							{
+								Effect.server.Run("assets/prefabs/npc/autoturret/effects/targetacquired.prefab", sl.light.eyePoint.transform.position);
+								break;
+							}
 						}
 					}
 					if (sl.target == null)
@@ -471,8 +523,11 @@ namespace Oxide.Plugins
 						if (!config.requireFuel && sl.light.inventory.GetSlot(0) == null)
 							sl.light.inventory.AddItem(sl.light.inventory.onlyAllowedItem, 1);
 						sl.light.SetFlag(BaseEntity.Flags.On, true);
+
 					}
 					sl.light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+
+					list = null;
 				}
 				catch
 				{
@@ -490,6 +545,22 @@ namespace Oxide.Plugins
 			}
 		}
 		//
+		// Enable lights
+		//
+		void OnTimeSunset()
+		{
+			if (config.nightOnly)
+				lightsEnabled = true;
+		}
+		//
+		// Disable lights
+		//
+		void OnTimeSunrise()
+		{
+			if (config.nightOnly)
+				lightsEnabled = false;
+		}
+		//
 		// Check for heli spawn or searchlight placed
 		//
 		void OnEntitySpawned(BaseNetworkable entity)
@@ -500,6 +571,9 @@ namespace Oxide.Plugins
 			}
 			else if (entity is SearchLight && config.autoConvert)
 			{
+				if (!permission.UserHasPermission((entity as SearchLight).OwnerID.ToString(), "securitylights.use"))
+					return;
+
 				SecurityLight newLight = new SecurityLight() { id = entity.net.ID, light = entity as SearchLight, owner = BasePlayer.FindByID((entity as SearchLight).OwnerID) };
 				data.LightList.Add(entity.net.ID, newLight);
 				SaveData();
@@ -524,6 +598,8 @@ namespace Oxide.Plugins
 			{
 				if (item.parent.entityOwner is SearchLight && !config.requireFuel)
 				{
+					if (!permission.UserHasPermission(item.parent.entityOwner.OwnerID.ToString(), "securitylights.use"))
+						return;
 					item.parent.AddItem(item.info, 1);
 				}
 			}
@@ -539,51 +615,65 @@ namespace Oxide.Plugins
 		{
 			switch (value)
 			{
-				case "Mode Radius - All":
+				case "Detection Radius - All":
+				case "Tracking Radius - All":
 					if (Config[value] == null)
 						return 30;
 					else
 						return Config[value];
-					break;
-				case "Mode Radius - Players":
+				case "Detection Radius - Players":
+				case "Tracking Radius - Players":
 					if (Config[value] == null)
 						return 30;
 					else
 						return Config[value];
-					break;
-				case "Mode Radius - Helicopter":
+				case "Detection Radius - Helicopter":
+				case "Tracking Radius - Helicopter":
 					if (Config[value] == null)
 						return 100;
 					else
 						return Config[value];
-					break;
 				case "Auto Convert":
 					if (Config[value] == null)
 						return false;
 					else
 						return Config[value];
-					break;
 				case "Require Fuel":
 					if (Config[value] == null)
 						return true;
 					else
-						return Config[value]; ;
-					break;
+						return Config[value];
+				case "Night Only Operation":
+					if (Config[value] == null)
+						return false;
+					else
+						return Config[value];
+				case "Target Acquired Sound":
+					if (Config[value] == null)
+						return true;
+					else
+						return Config[value];
 				default:
 					return null;
-					break;
 			}
 		}
 		//
 		// Load the config values to the config class
 		//
-		private void LoadConfig()
+		private void LoadConfigData()
 		{
-			config.allRadius = (int)Config["Mode Radius - All"];
-			config.playerRadius = (int)Config["Mode Radius - Players"];
-			config.heliRadius = (int)Config["Mode Radius - Helicopter"];
+			Config.Load();
+
+			config.allDetectionRadius = (int)Config["Detection Radius - All"];
+			config.allTrackingRadius = (int)Config["Tracking Radius - All"];
+			config.playerDetectionRadius = (int)Config["Detection Radius - Players"];
+			config.playerTrackingRadius = (int)Config["Tracking Radius - Players"];
+			config.heliDetectionRadius = (int)Config["Detection Radius - Helicopter"];
+			config.heliTrackingRadius = (int)Config["Tracking Radius - Helicopter"];
 			config.autoConvert = (bool)Config["Auto Convert"];
 			config.requireFuel = (bool)Config["Require Fuel"];
+			config.nightOnly = (bool)Config["Night Only Operation"];
+			config.acquisitionSound = (bool)Config["Target Acquired Sound"];
 		}
 		//
 		// Get string and format from lang file
@@ -733,8 +823,8 @@ namespace Oxide.Plugins
 		//
 		private bool isTargetVisible(SecurityLight sl, BaseCombatEntity target)
 		{
-			Ray ray = new Ray(sl.light.eyePoint.transform.position, (target is BasePlayer ? (target.transform.position + Vector3.up) : target.transform.position) - sl.light.eyePoint.transform.position);
-			float distance = (sl.mode == TargetMode.all ? config.allRadius : (sl.mode == TargetMode.players ? config.playerRadius : config.heliRadius));
+			Ray ray = new Ray(sl.light.eyePoint.transform.position + Vector3.up, (target is BasePlayer ? (target.transform.position + Vector3.up) : target.transform.position) - (sl.light.eyePoint.transform.position + Vector3.up));
+			float distance = (sl.mode == TargetMode.all ? config.allTrackingRadius : (sl.mode == TargetMode.players ? config.playerTrackingRadius : config.heliTrackingRadius));
 			var foundEntity = RaycastAll<BaseEntity>(ray, distance);
 
 			if (foundEntity is BaseCombatEntity)
