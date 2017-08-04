@@ -5,7 +5,7 @@ using Time = UnityEngine.Time;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerTracker", "redBDGR", "1.0.0")]
+    [Info("PlayerTracker", "redBDGR", "1.0.1", ResourceId = 2584)]
     [Description("Easily track the movements of players")]
 
     class PlayerTracker : RustPlugin
@@ -33,11 +33,13 @@ namespace Oxide.Plugins
             {
                 //chat
                 ["No Permission"] = "You are not allowed to use this command",
-                ["Invalid Syntax"] = "Invalid Syntax! /track <playername | id> <length>",
+                ["Invalid Syntax"] = "Invalid Syntax! /track <start | stop | show> <playername | id> <length>",
                 ["Starttrack Invalid Syntax"] = "Invalid Syntax! /starttrack <playername | id>",
                 ["Tracker Started"] = "You have started tracking {0}",
                 ["Tracker Stopped"] = "You have stopped tracking {0}",
                 ["Not Being Tracked"] = "This player is not currently being tracked",
+                ["No Player Found"] = "No players were found with this name/id",
+                ["Already Being Tracked"] = "This player is already being tacked",
             }, this);
 
             if (!trackAllPlayers) return;
@@ -83,7 +85,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnPlayerSleepEnded(BasePlayer player)
+        private void OnPlayerSleepEnded(BasePlayer player)
         {
             if (!trackAllPlayers) return;
             Tracker tracker = player.GetComponent<Tracker>();
@@ -92,7 +94,7 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("track")]
-        void TrackCMD(BasePlayer player, string command, string[] args)
+        private void TrackCMD(BasePlayer player, string command, string[] args)
         {
             if (!permission.UserHasPermission(player.UserIDString, permissionName))
             {
@@ -108,42 +110,115 @@ namespace Oxide.Plugins
                 }
                 case 1:
                 {
-                    BasePlayer target = BasePlayer.Find(args[0]);
-                    if (target == null)
-                    {
-                        player.ChatMessage(msg("No Player Found", player.UserIDString));
-                        return;
-                    }
-                    Tracker tracker = target.GetComponent<Tracker>();
-                    if (!tracker)
-                    {
-                        player.ChatMessage(msg("Not Being Tracked", player.UserIDString));
-                        return;
-                    }
-                    for (int i = 0; i < tracker.locationList.Count - 1; i++)
-                        DoDraws(player, drawLength, tracker.locationList[i], tracker.locationList[i + 1]);
-                    if (clearPositionsOnCheck)
-                        tracker.locationList.Clear();
+                    player.ChatMessage(msg("Invalid Syntax", player.UserIDString));
                     break;
                 }
                 case 2:
                 {
-                    BasePlayer target = BasePlayer.Find(args[0]);
+                    BasePlayer target = BasePlayer.Find(args[1]);
                     if (target == null)
                     {
                         player.ChatMessage(msg("No Player Found", player.UserIDString));
                         return;
                     }
-                    Tracker tracker = target.GetComponent<Tracker>();
-                    if (!tracker)
+                    switch (args[0])
                     {
-                        player.ChatMessage(msg("Not Being Tracked", player.UserIDString));
+                        case "start":
+                        {
+                            Tracker tracker = target.GetComponent<Tracker>();
+                            if (!tracker)
+                            {
+                                target.gameObject.AddComponent<Tracker>();
+                                player.ChatMessage(string.Format(msg("Tracker Started", player.UserIDString), target.displayName));
+                            }
+                            break;
+                        }
+                        case "stop":
+                        {
+                            Tracker tracker = target.GetComponent<Tracker>();
+                            if (tracker)
+                            {
+                                UnityEngine.Object.Destroy(tracker);
+                                player.ChatMessage(string.Format(msg("Tracker Stopped", player.UserIDString), target.displayName));
+                                return;
+                            }
+                            player.ChatMessage(msg("Not Being Tracked", player.UserIDString));
+                            break;
+                        }
+                        case "show":
+                        {
+                            Tracker tracker = target.GetComponent<Tracker>();
+                            if (!tracker)
+                            {
+                                player.ChatMessage(msg("Not Being Tracked", player.UserIDString));
+                                return;
+                            }
+                            for (int i = 0; i < tracker.locationList.Count - 1; i++)
+                                DoDraws(player, drawLength, tracker.locationList[i], tracker.locationList[i + 1]);
+                            if (clearPositionsOnCheck)
+                                tracker.locationList.Clear();
+                            break;
+                        }
+                        default:
+                        {
+                            player.ChatMessage(msg("Invalid Syntax", player.UserIDString));
+                            return;
+                        }
+                    }
+                    break;
+                    }
+                case 3:
+                {
+                    BasePlayer target = BasePlayer.Find(args[1]);
+                    if (target == null)
+                    {
+                        player.ChatMessage(msg("No Player Found", player.UserIDString));
                         return;
                     }
-                    for (int i = 0; i < tracker.locationList.Count - 1; i++)
-                        DoDraws(player, Convert.ToSingle(args[1]), tracker.locationList[i], tracker.locationList[i + 1]);
-                    if (clearPositionsOnCheck)
-                        tracker.locationList.Clear();
+                    switch (args[0])
+                    {
+                        case "start":
+                        {
+                            Tracker tracker = target.GetComponent<Tracker>();
+                            if (!tracker)
+                            {
+                                target.gameObject.AddComponent<Tracker>();
+                                player.ChatMessage(msg("Tracker Started", player.UserIDString));
+                            }
+                        }
+                            break;
+                        case "stop":
+                        {
+                            Tracker tracker = target.GetComponent<Tracker>();
+                            if (tracker)
+                            {
+                                UnityEngine.Object.Destroy(tracker);
+                                player.ChatMessage(string.Format(msg("Tracker Stopped", player.UserIDString), target.displayName));
+                                return;
+                            }
+                            player.ChatMessage(msg("Not Being Tracked", player.UserIDString));
+                        }
+                            break;
+                        case "show":
+                        {
+                            Tracker tracker = target.GetComponent<Tracker>();
+                            if (!tracker)
+                            {
+                                player.ChatMessage(msg("Not Being Tracked", player.UserIDString));
+                                return;
+                            }
+                            for (int i = 0; i < tracker.locationList.Count - 1; i++)
+                                DoDraws(player, Convert.ToSingle(args[1]), tracker.locationList[i], tracker.locationList[i + 1]);
+                            if (clearPositionsOnCheck)
+                                tracker.locationList.Clear();
+                        }
+                            break;
+                        default:
+                        {
+                            player.ChatMessage(msg("Invalid Syntax", player.UserIDString));
+                            return;
+                        }
+                    }
                     break;
                 }
                 default:
@@ -152,36 +227,6 @@ namespace Oxide.Plugins
                     return;
                 }
             }
-        }
-
-        [ChatCommand("starttrack")]
-        void StartTrackCMD(BasePlayer player, string command, string[] args)
-        {
-            if (!permission.UserHasPermission(player.UserIDString, permissionName))
-            {
-                player.ChatMessage(msg("No Permission", player.UserIDString));
-                return;
-            }
-            if (args.Length != 1)
-            {
-                player.ChatMessage(msg("Starttrack Invalid Syntax", player.UserIDString));
-                return;
-            }
-            BasePlayer target = BasePlayer.Find(args[0]);
-            if (target == null)
-            {
-                player.ChatMessage(msg("No Player Found", player.UserIDString));
-                return;
-            }
-            Tracker tracker = player.GetComponent<Tracker>();
-            if (tracker)
-            {
-                UnityEngine.Object.Destroy(tracker);
-                player.ChatMessage(string.Format(msg("Tracker Stopped", player.UserIDString), target.displayName));
-                return;
-            }
-            target.gameObject.AddComponent<Tracker>();
-            player.ChatMessage(string.Format(msg("Tracker Started", player.UserIDString), target.displayName));
         }
 
         private class Tracker : MonoBehaviour
