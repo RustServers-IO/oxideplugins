@@ -2,7 +2,7 @@
 
 namespace Oxide.Plugins
 {
-    [Info("ItemSplitter", "sami37", "1.0.0", ResourceId = 2566)]
+    [Info("ItemSplitter", "sami37", "1.1.0", ResourceId = 2566)]
     [Description("It allow you to easily split your items from your main inventory.")]
     public class ItemSplitter : RustPlugin
     {
@@ -53,10 +53,19 @@ namespace Oxide.Plugins
                         var amount = invItems.amount;
                         if(amount < 2) continue;
                         var createdItem = ItemManager.CreateByItemID(invItems.info.itemid, amount / 2, invItems.skin);
-                        createdItem.Drop(player.eyes.position, player.eyes.BodyForward() * 2f);
-                        invItems.SplitItem(invItems.amount / 2);
-                        SendReply(player, string.Format(lang.GetMessage("Success", this, player.UserIDString), invItems.info.displayName.english));
-                        splited = true;
+                        if (createdItem != null)
+                        {
+                            var moved = createdItem.MoveToContainer(player.inventory.containerWear, -1, false) || createdItem.MoveToContainer(player.inventory.containerMain, -1, false);
+                            if (!moved)
+                            {
+                                createdItem.Drop(player.eyes.position, player.eyes.BodyForward()*2f);
+                            }
+                            invItems.SplitItem(invItems.amount/2);
+                            SendReply(player,
+                                string.Format(lang.GetMessage("Success", this, player.UserIDString),
+                                    invItems.info.displayName.english));
+                            splited = true;
+                        }
                     }
                 }
             }
