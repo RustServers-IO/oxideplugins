@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.7.21", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.7.22", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
@@ -454,6 +454,10 @@ namespace Oxide.Plugins
 			heli.Add(typeof(BaseHelicopter).Name);
 			data.groups.Add(heli);
 
+			EntityGroup npcs = new EntityGroup("npcs");
+			npcs.Add(typeof(NPCPlayerApex).Name);
+			data.groups.Add(npcs);
+
 			// create default ruleset
 			RuleSet defaultRuleSet = new RuleSet(data.defaultRuleSet);
 			defaultRuleSet.flags = RuleFlags.HumanNPCDamage | RuleFlags.LockedBoxesImmortal | RuleFlags.LockedDoorsImmortal;
@@ -468,6 +472,7 @@ namespace Oxide.Plugins
 			defaultRuleSet.AddRule(barricades.name + " cannot hurt " + players.name); // barricades cannot hurt players
 			defaultRuleSet.AddRule(highwalls.name + " cannot hurt " + players.name); // highwalls cannot hurt players
 			defaultRuleSet.AddRule("anything can hurt " + heli.name); // anything can hurt heli
+			defaultRuleSet.AddRule("anything can hurt " + npcs.name); // anything can hurt npcs
 
 			data.ruleSets.Add(defaultRuleSet); // add ruleset to rulesets list
 
@@ -575,7 +580,7 @@ namespace Oxide.Plugins
 			// after heli check, return true if initiator is null
 			if (hitinfo.Initiator == null)
 				return true;
-
+			
 			// check for sleeper protection - return false if sleeper protection is on (true)
 			if (ruleSet.HasFlag(RuleFlags.ProtectedSleepers) && hitinfo.Initiator is BaseNpc && entity is BasePlayer && (entity as BasePlayer).IsSleeping())
 				return false;
@@ -777,10 +782,10 @@ namespace Oxide.Plugins
 				else
 					return true;
 			}
-			
+
 			if (target is BasePlayer && (target as BasePlayer).IsSleeping())
 				return ruleSet.HasFlag(RuleFlags.LootableSleepers);
-			else if (target is LootableCorpse && player.userID != (target as LootableCorpse).playerSteamID)
+			else if (target is LootableCorpse && (target as LootableCorpse).playerSteamID > 76561190010000000L && player.userID != (target as LootableCorpse).playerSteamID)
 				return ruleSet.HasFlag(RuleFlags.LootableCorpses);
 			return true;
 		}
