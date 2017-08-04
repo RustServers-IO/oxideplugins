@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordMessages", "Slut", "1.4.0", ResourceId = 2486)]
+    [Info("DiscordMessages", "Slut", "1.4.1", ResourceId = 2486)]
     internal class DiscordMessages : CovalencePlugin
     {
 #region Classes
@@ -246,11 +246,11 @@ namespace Oxide.Plugins
 
         #region Webrequest
 
-        private void API_SendFancyMessage(string embedName, int embedColor, List<Fields> fields, Action<bool> callback)
+        private void API_SendFancyMessage(string webhookURL, string embedName, int embedColor, List<Fields> fields, Action<bool> callback)
         {
             FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(embedName, embedColor, fields) });
             var payload = message.toJSON(message);
-            SendPOST(MessageURL, payload, callback);
+            SendPOST(webhookURL, payload, callback);
         }
         Timer _timer;
         private void RateTimer()
@@ -278,7 +278,6 @@ namespace Oxide.Plugins
                     if (response != null)
                     {
                         JObject json = JObject.Parse(response);
-                        PrintWarning($"Discord rejected that payload! Responded with \"{json["message"].ToString()}\" Code: {code}");
                         if (json["message"].ToString().Contains("rate limit") && exists == false)
                         {
                             float seconds = float.Parse(Math.Ceiling((double) (int)json["retry_after"] / 1000).ToString());
@@ -287,6 +286,9 @@ namespace Oxide.Plugins
                             {
                                 RateTimer();
                             }
+                        } else
+                        {
+                            PrintWarning($"Discord rejected that payload! Responded with \"{json["message"].ToString()}\" Code: {code}");
                         }
                     } else
                     {
