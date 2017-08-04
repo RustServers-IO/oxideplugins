@@ -2,7 +2,7 @@
     "name": "Respawn Protection",
     "description": "Protect fresh respawned players",
     "author": "sami37",
-    "version": "1.0.0",
+    "version": "1.1.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/respawn-protection.2551",

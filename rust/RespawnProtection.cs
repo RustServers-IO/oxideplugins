@@ -4,7 +4,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("RespawnProtection", "sami37", "1.0.0")]
+    [Info("RespawnProtection", "sami37", "1.1.5")]
     [Description("RespawnProtection allow admin to set a respawn protection timer.")]
     public class RespawnProtection : RustPlugin
     {
@@ -40,12 +40,17 @@ namespace Oxide.Plugins
                 {"NoLongerProtected", "You are no longer protected, take care."}
             }, this);
         }
-
+		
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
             if (entity is BasePlayer && hitinfo?.Initiator is BasePlayer)
             {
                 BasePlayer attacker = hitinfo.InitiatorPlayer;
+                if (protectedPlayersList.ContainsKey(attacker.userID))
+                {
+                    protectedPlayersList.Remove(attacker.userID);
+                    SendReply(attacker, lang.GetMessage("NoLongerProtected", this, attacker.UserIDString));
+                }
                 BasePlayer victim = entity as BasePlayer;
                 if (protectedPlayersList.ContainsKey(victim.userID))
                 {
@@ -59,6 +64,15 @@ namespace Oxide.Plugins
                         string.Format(lang.GetMessage("Can't Hit", this, attacker.UserIDString), wait));
                 }
             }
+			if(entity is BuildingBlock && hitinfo?.Initiator is BasePlayer)
+			{
+                BasePlayer attacker = hitinfo.InitiatorPlayer;
+                if (protectedPlayersList.ContainsKey(attacker.userID))
+                {
+                    protectedPlayersList.Remove(attacker.userID);
+                    SendReply(attacker, lang.GetMessage("NoLongerProtected", this, attacker.UserIDString));
+                }
+			}
         }
 
         void OnPlayerRespawned(BasePlayer player)
@@ -72,6 +86,27 @@ namespace Oxide.Plugins
                 protectedPlayersList.Remove(player.userID);
                 SendReply(player, lang.GetMessage("NoLongerProtected", this, player.UserIDString));
             });
+        }
+		
+        bool PlayerRespawn(ulong UserID)
+        {
+            var baseplayer = BasePlayer.Find(UserID.ToString());
+            if (baseplayer == null) return false;
+            if (protectedPlayersList.ContainsKey(UserID))
+                protectedPlayersList.Remove(UserID);
+            protectedPlayersList.Add(UserID, DateTime.Now);
+            SendReply(baseplayer, string.Format(lang.GetMessage("Protected", this, UserID.ToString()), respawn));
+            timer.Once(respawn, () =>
+            {
+                protectedPlayersList.Remove(UserID);
+                SendReply(baseplayer, lang.GetMessage("NoLongerProtected", this, UserID.ToString()));
+            });
+            return true;
+        }
+		
+        private bool AddProtection(ulong UserID)
+        {
+			return PlayerRespawn(UserID);
         }
     }
 }
