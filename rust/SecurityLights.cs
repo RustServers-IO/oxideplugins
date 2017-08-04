@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.2", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.3", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
@@ -133,9 +133,6 @@ namespace Oxide.Plugins
 		private void Loaded()
 		{
 			permission.RegisterPermission("securitylights.use", this);
-
-			if (config.nightOnly && TOD_Sky.Instance.IsDay)
-				lightsEnabled = false;
 		}
 		//
 		// Restore plugin data when server finishes startup
@@ -143,6 +140,9 @@ namespace Oxide.Plugins
 		void OnServerInitialized()
 		{
 			RestoreData();
+
+			if (config.nightOnly && TOD_Sky.Instance.IsDay)
+				lightsEnabled = false;
 		}
 		//
 		// Unloading Plugin
@@ -402,8 +402,8 @@ namespace Oxide.Plugins
 					}
 					LoadConfigData();
 					PrintToChat(player, Lang("ConfigReload", player.UserIDString));
-					PrintToChat(player, Lang("ConfigInfo_1.0.1", player.UserIDString, 
-						config.allDetectionRadius, config.allTrackingRadius, 
+					PrintToChat(player, Lang("ConfigInfo_1.0.1", player.UserIDString,
+						config.allDetectionRadius, config.allTrackingRadius,
 						config.playerDetectionRadius, config.playerTrackingRadius,
 						config.heliDetectionRadius, config.heliTrackingRadius,
 						config.autoConvert,
@@ -428,13 +428,13 @@ namespace Oxide.Plugins
 		void OnTick()
 		{
 			//Puts($"Lights Enabled: {lightsEnabled}");
-			
+
 			List<uint> removeIDs = new List<uint>();
 			foreach (SecurityLight sl in data.LightList.Values)
 			{
 				try
 				{
-					if (config.nightOnly && !lightsEnabled)
+					if (config.nightOnly && !lightsEnabled && sl.mode != TargetMode.lightshow)
 					{
 						sl.light.SetFlag(BaseEntity.Flags.On, false);
 						sl.target = null;
@@ -477,7 +477,7 @@ namespace Oxide.Plugins
 						}
 						else
 						{
-							if (isTargetVisible(sl, sl.target))
+							if (list.Contains(sl.target))
 								sl.light.SetTargetAimpoint(sl.target.transform.position);
 							else
 								sl.target = null;
@@ -487,11 +487,12 @@ namespace Oxide.Plugins
 					{
 						sl.target = null;
 					}
+
 					if (sl.target == null)
 					{
 						foreach (BaseCombatEntity entity in list)
 						{
-							if ((sl.mode != TargetMode.heli && isOwnerTargeting(sl.owner, entity)) || !isTargetVisible(sl, entity) || sl.target != null)
+							if ((sl.mode != TargetMode.heli && isOwnerTargeting(sl.owner, entity)) || (entity is BasePlayer && !isTargetVisible(sl, entity)) || sl.target != null)
 								continue;
 							if (entity is BasePlayer)
 							{
@@ -506,9 +507,10 @@ namespace Oxide.Plugins
 								sl.target = entity;
 								sl.light.SetTargetAimpoint(entity.transform.position);
 							}
-							if (sl.target !=  null && config.acquisitionSound)
+							if (sl.target != null)
 							{
-								Effect.server.Run("assets/prefabs/npc/autoturret/effects/targetacquired.prefab", sl.light.eyePoint.transform.position);
+								if (config.acquisitionSound)
+									Effect.server.Run("assets/prefabs/npc/autoturret/effects/targetacquired.prefab", sl.light.eyePoint.transform.position);
 								break;
 							}
 						}
@@ -520,10 +522,15 @@ namespace Oxide.Plugins
 					}
 					else
 					{
-						if (!config.requireFuel && sl.light.inventory.GetSlot(0) == null)
-							sl.light.inventory.AddItem(sl.light.inventory.onlyAllowedItem, 1);
-						sl.light.SetFlag(BaseEntity.Flags.On, true);
-
+						if (!config.requireFuel)
+						{
+							if (sl.light.inventory.GetSlot(0) == null && !sl.light.IsOn())
+								sl.light.inventory.AddItem(sl.light.inventory.onlyAllowedItem, 1);
+							if (sl.light.inventory.GetSlot(0) != null)
+								sl.light.SetFlag(BaseEntity.Flags.On, true);
+						}
+						else if (config.requireFuel && sl.light.inventory.GetSlot(0) != null)
+							sl.light.SetFlag(BaseEntity.Flags.On, true);
 					}
 					sl.light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
 
@@ -592,19 +599,19 @@ namespace Oxide.Plugins
 		//
 		// Don't consume fuel for search lights
 		//
-		void OnItemUse(Item item, int amountToUse)
-		{
-			try
-			{
-				if (item.parent.entityOwner is SearchLight && !config.requireFuel)
-				{
-					if (!permission.UserHasPermission(item.parent.entityOwner.OwnerID.ToString(), "securitylights.use"))
-						return;
-					item.parent.AddItem(item.info, 1);
-				}
-			}
-			catch { }
-		}
+		//void OnItemUse(Item item, int amount)
+		//{
+		//	try
+		//	{
+		//		if (item.parent.entityOwner is SearchLight && !config.requireFuel)
+		//		{
+		//			if (!permission.UserHasPermission(item.parent.entityOwner.OwnerID.ToString(), "securitylights.use"))
+		//				return;
+		//			item.parent.AddItem(item.info, amount);
+		//		}
+		//	}
+		//	catch { }
+		//}
 		#endregion
 
 		#region Helpers
@@ -700,7 +707,7 @@ namespace Oxide.Plugins
 					if (current.userID == id)
 						return current;
 				}
-				
+
 				foreach (BasePlayer current in BasePlayer.sleepingPlayerList)
 				{
 					if (current.userID == id)
@@ -800,7 +807,7 @@ namespace Oxide.Plugins
 			return target;
 		}
 		//
-		// Find potential target for security light
+		// Check potential target for security light
 		//
 		private object RaycastAll<T>(Ray ray, float distance) where T : BaseEntity
 		{
@@ -823,7 +830,7 @@ namespace Oxide.Plugins
 		//
 		private bool isTargetVisible(SecurityLight sl, BaseCombatEntity target)
 		{
-			Ray ray = new Ray(sl.light.eyePoint.transform.position + Vector3.up, (target is BasePlayer ? (target.transform.position + Vector3.up) : target.transform.position) - (sl.light.eyePoint.transform.position + Vector3.up));
+			Ray ray = new Ray((target is BasePlayer ? (sl.light.eyePoint.transform.position + Vector3.up) : sl.light.eyePoint.transform.position), (target is BasePlayer ? ((target.transform.position + Vector3.up) - (sl.light.eyePoint.transform.position + Vector3.up)) : (target.transform.position - sl.light.eyePoint.transform.position)));
 			float distance = (sl.mode == TargetMode.all ? config.allTrackingRadius : (sl.mode == TargetMode.players ? config.playerTrackingRadius : config.heliTrackingRadius));
 			var foundEntity = RaycastAll<BaseEntity>(ray, distance);
 
