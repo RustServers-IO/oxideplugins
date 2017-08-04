@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.3", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.4", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
@@ -427,8 +427,6 @@ namespace Oxide.Plugins
 		//
 		void OnTick()
 		{
-			//Puts($"Lights Enabled: {lightsEnabled}");
-
 			List<uint> removeIDs = new List<uint>();
 			foreach (SecurityLight sl in data.LightList.Values)
 			{
@@ -477,7 +475,7 @@ namespace Oxide.Plugins
 						}
 						else
 						{
-							if (list.Contains(sl.target))
+							if (Vector3.Magnitude(sl.target.transform.position - sl.light.eyePoint.transform.position) < (sl.mode == TargetMode.heli ? config.heliDetectionRadius : sl.mode == TargetMode.players ? config.playerDetectionRadius : config.allDetectionRadius))
 								sl.light.SetTargetAimpoint(sl.target.transform.position);
 							else
 								sl.target = null;
@@ -502,7 +500,7 @@ namespace Oxide.Plugins
 									sl.light.SetTargetAimpoint(entity.transform.position + Vector3.up);
 								}
 							}
-							else
+							else if (Vector3.Magnitude(entity.transform.position - sl.light.eyePoint.transform.position) < (sl.mode == TargetMode.heli ? config.heliDetectionRadius : sl.mode == TargetMode.players ? config.playerDetectionRadius : config.allDetectionRadius))
 							{
 								sl.target = entity;
 								sl.light.SetTargetAimpoint(entity.transform.position);
