@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.6.1", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.6.2", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
     class ZLevelsRemastered : RustPlugin
@@ -676,7 +676,6 @@ namespace Oxide.Plugins
                 {
                     if (behaviour.name.Contains("(Clone)")) UnityEngine.Object.Destroy(behaviour);
                 }
-                task.blueprint = null;
             }
             return null;
         }
