@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordMessages", "Slut", "1.3.2", ResourceId = 2486)]
+    [Info("DiscordMessages", "Slut", "1.4.0", ResourceId = 2486)]
     internal class DiscordMessages : CovalencePlugin
     {
 #region Classes
@@ -38,7 +38,7 @@ namespace Oxide.Plugins
         public class FancyMessage {
             public string content { get; set; }
             public bool tts { get; set; }
-            public List<Embeds> embeds { get; set; }
+            public Embeds[] embeds { get; set; }
 
             public class Embeds {
                 public string title { get; set; }
@@ -51,7 +51,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            public FancyMessage(string content, bool tts, List<Embeds> embeds) {
+            public FancyMessage(string content, bool tts, Embeds[] embeds) {
                 this.content = content;
                 this.tts = tts;
                 this.embeds = embeds;
@@ -75,7 +75,7 @@ namespace Oxide.Plugins
 
         List<SavedMessages> savedmessages = new List<SavedMessages>();
         private Dictionary<string, Cooldowns> cooldowns = new Dictionary<string, Cooldowns>();
-        private static DiscordMessages Plugin;
+        private DiscordMessages Plugin;
 
 #endregion
 
@@ -158,7 +158,7 @@ namespace Oxide.Plugins
             CheckCfg<string>("Message - Webhook URL", ref MessageURL);
             CheckCfg<int>("Message - Cooldown", ref MessageCooldown);
             CheckCfg<int>("Message - Embed Color (DECIMAL)", ref MessageColor);
-            CheckCfg<int>("Report - Embed Color (DECIMAL)", ref ReportColor);
+            CheckCfg<int>("Reports - Embed Color (DECIMAL)", ref ReportColor);
             CheckCfg<int>("Ban - Embed Color (DECIMAL)", ref BanColor);
             CheckCfg<int>("Mute - Embed Color (DECIMAL)", ref MuteColor);
 
@@ -205,7 +205,7 @@ namespace Oxide.Plugins
                 ["Disabled"] = "This feature is currently disabled.",
                 ["Failed"] = "Your report failed to send, contact the server owner.",
                 ["ToSelf"] = "You cannot perform this action on yourself.",
-                ["BanPrefix"] = "Banned: {1}",
+                ["BanPrefix"] = "Banned: {0}",
                 ["Embed_ReportPlayer"] = "Reporter",
                 ["Embed_ReportTarget"] = "Reported",
                 ["Embed_ReportReason"] = "Reason",
@@ -232,9 +232,9 @@ namespace Oxide.Plugins
             Puts("Generating new config.");
         }
 
-        private string GetLang(string key, string id = null)
+        private string GetLang(string key, string id = null, params object[] args)
         {
-            return lang.GetMessage(key, this, id);
+            return string.Format(lang.GetMessage(key, this, id), args);
         }
 
         private void SendMessage(IPlayer player, string message)
@@ -245,6 +245,13 @@ namespace Oxide.Plugins
         #endregion
 
         #region Webrequest
+
+        private void API_SendFancyMessage(string embedName, int embedColor, List<Fields> fields, Action<bool> callback)
+        {
+            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(embedName, embedColor, fields) });
+            var payload = message.toJSON(message);
+            SendPOST(MessageURL, payload, callback);
+        }
         Timer _timer;
         private void RateTimer()
         {
@@ -323,7 +330,7 @@ namespace Oxide.Plugins
             if (onMessageCooldown(player))
             {
                 var time = (cooldowns[player.Id].messageCooldown.AddSeconds(MessageCooldown) - DateTime.Now).Seconds;
-                SendMessage(player, string.Format(GetLang("Cooldown", player.Id), time));
+                SendMessage(player, GetLang("Cooldown", player.Id, time));
 
                 return;
             }
@@ -331,7 +338,7 @@ namespace Oxide.Plugins
             List<Fields> fields = new List<Fields>();
             fields.Add(new Fields(GetLang("Embed_MessagePlayer"), $"[{ player.Name }](https://steamcommunity.com/profiles/{player.Id})", true));
             fields.Add(new Fields(GetLang("Embed_MessageMessage"), text, false));
-            FancyMessage message = new FancyMessage(null, false, new List<Embeds> { new Embeds(GetLang("Embed_MessageTitle"), MessageColor, fields) });
+            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_MessageTitle"), MessageColor, fields) });
             var payload = message.toJSON(message);
             SendPOST(MessageURL, payload, callback);
             SendMessage(player, GetLang("MessageSent", player.Id));
@@ -368,7 +375,7 @@ namespace Oxide.Plugins
             if (onReportCooldown(player))
             {
                 var time = (cooldowns[player.Id].reportCooldown.AddSeconds(ReportCooldown) - DateTime.Now).Seconds;
-                SendMessage(player, string.Format(GetLang("Cooldown", player.Id), time));
+                SendMessage(player, GetLang("Cooldown", player.Id, time));
 
                 return;
             }
@@ -376,26 +383,26 @@ namespace Oxide.Plugins
                 return;
             if (args.Length < 2)
             {
-                SendMessage(player, string.Format(GetLang("ReportSyntax", player.Id)));
+                SendMessage(player, GetLang("ReportSyntax", player.Id));
                 return;
             }
             var target = GetPlayer(args[0], player);
-            if (target == player)
-            {
-                SendMessage(player, GetLang("ToSelf", player.Id));
-                return;
-            }
             var reason = string.Join(" ", args.Skip(1).ToArray());
 
             if (target != null)
             {
+                if (target.Equals(player))
+                {
+                    SendMessage(player, GetLang("ToSelf", player.Id));
+                    return;
+                }
                 var status = target.IsConnected ? lang.GetMessage("Online", null) : lang.GetMessage("Offline", null);
                 List<Fields> fields = new List<Fields>();
                 fields.Add(new Fields(GetLang("Embed_ReportTarget"), $"[{target.Name}](https://steamcommunity.com/profiles/{target.Id})", true));
-                fields.Add(new Fields(GetLang("Embed_ReportPlayer"), player.Name, true));
+                fields.Add(new Fields(GetLang("Embed_ReportPlayer"), $"[{player.Name}](https://steamcommunity.com/profiles/{player.Id})", true));
                 fields.Add(new Fields(GetLang("Embed_ReportStatus"), status, true));
                 fields.Add(new Fields(GetLang("Embed_ReportReason"), reason, false));
-                FancyMessage message = new FancyMessage(null, false, new List<Embeds> { new Embeds(GetLang("Embed_MessageTitle"), ReportColor, fields) });
+                FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_MessageTitle"), ReportColor, fields) });
 
                 SendPOST(ReportURL, message.toJSON(message), callback);
                 SendMessage(player, GetLang("ReportSent", player.Id));
@@ -420,12 +427,11 @@ namespace Oxide.Plugins
         {
             if (!MuteEnabled)
                 return;
-            Puts(timed + " called");
             List<Fields> fields = new List<Fields>();
             fields.Add(new Fields(GetLang("Embed_MuteTarget"), $"[{target.Name}](https://steamcommunity.com/profiles/{target.Id})", true));
-            fields.Add(new Fields(GetLang("Embed_MutePlayer"), player.Name, true));
+            fields.Add(new Fields(GetLang("Embed_MutePlayer"), !player.Id.Equals("server_console") ? $"[{player.Name}](https://steamcommunity.com/profiles/{player.Id})" : player.Name, true));
             fields.Add(new Fields(GetLang("Embed_MuteTime"), timed ? FormatTime(expireDate) : "Permanent", true));
-            FancyMessage message = new FancyMessage(null, false, new List<Embeds> { new Embeds(GetLang("Embed_MuteTitle"), MuteColor, fields) });
+            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_MuteTitle"), MuteColor, fields) });
             SendPOST(MuteURL, message.toJSON(message), callback);
         }
 
@@ -442,7 +448,7 @@ namespace Oxide.Plugins
             }
             if (args.Length == 0)
             {
-                SendMessage(player, string.Format(GetLang("BanSyntax", player.Id)));
+                SendMessage(player, GetLang("BanSyntax", player.Id));
                 return;
             }
             var reason = args.Length == 1 ? "Banned" : string.Join(" ", args.Skip(1).ToArray());
@@ -467,16 +473,16 @@ namespace Oxide.Plugins
             var exists = ServerUsers.Get(ulong.Parse(target.Id));
             if (exists != null && ServerUsers.Get(ulong.Parse(target.Id)).group == ServerUsers.UserGroup.Banned)
             {
-                SendMessage(player, string.Format(GetLang("AlreadyBanned", player.Id), target.Name));
+                SendMessage(player, GetLang("AlreadyBanned", player.Id, target.Name));
             }
             else
             {
                 ServerUsers.Set(ulong.Parse(target.Id), ServerUsers.UserGroup.Banned, target.Name, reason);
                 ServerUsers.Save();
-                if (Announce) server.Broadcast(string.Format(GetLang("BanMessage", null), target.Name, reason));
+                if (Announce) server.Broadcast(GetLang("BanMessage", null, target.Name, reason));
                 if (target.IsConnected)
-                    target.Kick(string.Format(GetLang("BanPrefix", null), reason));
-                SendBanMessage(target.Name, target.Id, reason, player.Name);
+                    target.Kick(GetLang("BanPrefix", target.Id, reason));
+                SendBanMessage(target.Name, target.Id, reason, player.Name, player.Id);
             }
         }
 
@@ -489,26 +495,26 @@ namespace Oxide.Plugins
                 var exists = ServerUsers.Get(ulong.Parse(input));
                 if (exists != null && ServerUsers.Get(output).group == ServerUsers.UserGroup.Banned)
                 {
-                    SendMessage(player, string.Format(GetLang("AlreadyBanned", player.Id), output));
+                    SendMessage(player, GetLang("AlreadyBanned", player.Id, output));
                 }
                 else
                 {
                     ServerUsers.Set(output, ServerUsers.UserGroup.Banned, "Unnamed", reason);
                     ServerUsers.Save();
-                    if (Announce) server.Broadcast(string.Format(GetLang("BanMessage", null), "Unnamed", reason));
-                    SendBanMessage("Unnamed", output.ToString(), reason, player.Name);
+                    if (Announce) server.Broadcast(GetLang("BanMessage", null, "Unnamed", reason));
+                    SendBanMessage("Unnamed", output.ToString(), reason, player.Name, player.Id);
                 }
             }
         }
 
-        private void SendBanMessage(string name, string bannedID, string reason, string source, Action<bool> callback = null)
+        private void SendBanMessage(string name, string bannedId, string reason, string sourceName, string sourceId, Action<bool> callback = null)
         {
 
             List<Fields> fields = new List<Fields>();
-            fields.Add(new Fields(GetLang("Embed_BanTarget"), $"[{name}](https://steamcommunity.com/profiles/{bannedID})", true));
-            fields.Add(new Fields(GetLang("Embed_BanPlayer"), source, true));
+            fields.Add(new Fields(GetLang("Embed_BanTarget"), $"[{name}](https://steamcommunity.com/profiles/{bannedId})", true));
+            fields.Add(new Fields(GetLang("Embed_BanPlayer"), !sourceId.Equals("server_console") ? $"[{sourceName}](https://steamcommunity.com/profiles/{sourceId})" : sourceName, true));
             fields.Add(new Fields(GetLang("Embed_BanReason"), reason, false));
-            FancyMessage message = new FancyMessage(null, false, new List<Embeds> { new Embeds(GetLang("Embed_BanTitle"), ReportColor, fields) });
+            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_BanTitle"), ReportColor, fields) });
             SendPOST(BanURL, message.toJSON(message), callback);
         }
 
@@ -553,7 +559,7 @@ namespace Oxide.Plugins
             {
                 case 0:
                     if (!nameOrID.IsSteamId())
-                        SendMessage(player, string.Format(GetLang("NotFound", player.Id), nameOrID));
+                        SendMessage(player, GetLang("NotFound", player.Id, nameOrID));
                     break;
 
                 case 1:
@@ -561,7 +567,7 @@ namespace Oxide.Plugins
 
                 default:
                     var names = (from current in foundPlayers select current.Name).ToArray();
-                    SendMessage(player, string.Format(GetLang("Multiple", player.Id), string.Join(", ", names)));
+                    SendMessage(player, GetLang("Multiple", player.Id, string.Join(", ", names)));
                     break;
             }
 

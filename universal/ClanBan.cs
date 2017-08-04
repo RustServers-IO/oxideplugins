@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("ClanBan", "Slut", "1.1.0")]
+    [Info("ClanBan", "Slut", "1.2.0")]
     internal class ClanBan : CovalencePlugin
     {
         [PluginReference] private Plugin Clans, DiscordMessages, EnhancedBanSystem, BetterChatMute;
@@ -58,12 +58,12 @@ namespace Oxide.Plugins
                 ["PlayerUnbanned"] = "{0} was unbanned.",
                 ["AlreadyBanned"] = "{0} is already banned.",
                 ["AlreadyUnbanned"] = "{0} is already unbanned.",
-                ["BanMessage"] = "[Clan Ban] The clan ({0}) was banned for {1}.",
-                ["UnbanMessage"] = "[Clan Ban] The clan ({0}) was unbanned.",
-                ["MuteMessage"] = "[Clan Ban] The clan ({0}) was muted permanently muted.",
-                ["TimeMuteMessage"] = "[Clan Ban] The clan ({0}) was muted for {1}",
-                ["UnmuteMessage"] = "[Clan Ban] The clan ({0}) was unmuted.",
-                ["KickedMessage"] = "[Clan Ban] The clan ({0}) was kicked.",
+                ["BanMessage"] = "The clan ({0}) was banned for {1}.",
+                ["UnbanMessage"] = "The clan ({0}) was unbanned.",
+                ["MuteMessage"] = "The clan ({0}) was muted permanently muted.",
+                ["TimeMuteMessage"] = "The clan ({0}) was muted for {1}",
+                ["UnmuteMessage"] = "The clan ({0}) was unmuted.",
+                ["KickedMessage"] = "The clan ({0}) was kicked.",
                 ["NoClan"] = "The clan ({0}) doesn't exist.",
                 ["DefaultBanReason"] = "Your clan was banned from the server.",
                 ["DefaultKickReason"] = "Your clan was kicked from the server.",
@@ -123,11 +123,12 @@ namespace Oxide.Plugins
         }
         private void ProcessBan(IPlayer player, JObject clan, string reason)
         {
+            string reason1 = "CLAN BAN (" +clan["tag"] + ") : " + reason;
             foreach (var member in clan["members"])
             {
                 var target = covalence.Players.FindPlayerById(Convert.ToString(member));
                 if (type == 1)
-                    EnhancedBanSystem.Call("BanPlayer", player.Name, target, reason, 0.0);
+                    EnhancedBanSystem.Call("BanPlayer", player.Name, target, reason1, 0.0);
                 if (type == 2)
                 {
                     var exists = ServerUsers.Get(ulong.Parse(target.Id));
@@ -136,13 +137,13 @@ namespace Oxide.Plugins
                         SendMessage(player, string.Format(GetLang("AlreadyBanned", player.Id), target.Name));
                         return;
                     }
-                    ServerUsers.Set(ulong.Parse(target.Id), ServerUsers.UserGroup.Banned, target.Name, reason);
+                    ServerUsers.Set(ulong.Parse(target.Id), ServerUsers.UserGroup.Banned, target.Name, reason1);
                     ServerUsers.Save();
                     server.Broadcast(string.Format(GetLang("PlayerBanned", null), target.Name, reason));
                     if (target.IsConnected)
                         target.Kick(reason);
                 }
-                if (type == 3) DiscordMessages.Call("ExecuteBan", target, player, reason);
+                if (type == 3) DiscordMessages.Call("ExecuteBan", target, player, reason1);
             }
             if (AnnounceToServer)
                 server.Broadcast(string.Format(GetLang("BanMessage", null), clan["tag"], reason));
@@ -253,7 +254,7 @@ namespace Oxide.Plugins
                 foreach (var member in clan["members"])
                 {
                     IPlayer target = covalence.Players.FindPlayerById(Convert.ToString(member));
-                    BetterChatMute.Call("API_Unmute", target, player, true, true);
+                    BetterChatMute.Call("API_Unmute", target, player, true, false);
                 }
                 if (AnnounceToServer)
                 {
