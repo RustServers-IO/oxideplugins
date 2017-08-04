@@ -7,13 +7,16 @@ using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Cui;
 using UnityEngine;
 using Oxide.Core.Plugins;
+using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminRadar", "nivex", "4.0.4", ResourceId = 978)]
+    [Info("AdminRadar", "nivex", "4.0.5", ResourceId = 978)]
     [Description("ESP tool for Admins and Developers.")]
     public class AdminRadar: RustPlugin
     {
+        private static readonly FieldInfo BackpackInventory = typeof(DroppedItemContainer).GetField("inventory", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+
         readonly string permName = "adminradar.allowed";
         static AdminRadar ins;
         DynamicConfigFile dataFile;
@@ -32,6 +35,7 @@ namespace Oxide.Plugins
         static Dictionary<Vector3, CachedInfo> cachedBags = new Dictionary<Vector3, CachedInfo>();
         static Dictionary<Vector3, CachedInfo> cachedCollectibles = new Dictionary<Vector3, CachedInfo>();
         static Dictionary<Vector3, CachedInfo> cachedContainers = new Dictionary<Vector3, CachedInfo>();
+        static Dictionary<Vector3, CachedInfo> cachedBackpacks = new Dictionary<Vector3, CachedInfo>();
         static Dictionary<PlayerCorpse, CachedInfo> cachedCorpses = new Dictionary<PlayerCorpse, CachedInfo>();
         static Dictionary<Vector3, CachedInfo> cachedOres = new Dictionary<Vector3, CachedInfo>();
         static Dictionary<Vector3, CachedInfo> cachedTC = new Dictionary<Vector3, CachedInfo>();
@@ -45,6 +49,40 @@ namespace Oxide.Plugins
         bool IsRadar(BasePlayer player) => player.GetComponent<ESP>() != null;
         bool IsRadar(string id) => BasePlayer.activePlayerList.Find(x => x.UserIDString == id)?.GetComponent<ESP>() != null;
         static long TimeStamp() => (DateTime.Now.Ticks - DateTime.Parse("01/01/1970 00:00:00").Ticks) / 10000000;
+
+        class DropTracker : MonoBehaviour
+        {
+            DroppedItem droppedItem;
+            Vector3 position;
+
+            void Awake()
+            {
+                droppedItem = GetComponent<DroppedItem>();
+                InvokeRepeating("Tracker", 0.1f, 0.1f);
+                Tracker();
+            }
+
+            void Tracker()
+            {
+                if (position == transform.position)
+                {
+                    if (cachedItems.ContainsKey(position))
+                        cachedItems.Remove(position);
+
+                    cachedItems.Add(position, new CachedInfo() { Name = droppedItem.item.info.shortname, Size = droppedItem.item.amount, Info = droppedItem.item.uid });
+                    GameObject.Destroy(this);
+                    return;
+                }
+
+                position = transform.position;
+            }
+
+            void OnDestroy()
+            {
+                CancelInvoke("Tracker");
+                GameObject.Destroy(this);
+            }
+        }
 
         class PlayerTracker : MonoBehaviour
         {
@@ -611,7 +649,7 @@ namespace Oxide.Plugins
             init = true;
 
             int cached = 0, total = 0;
-            foreach (var e in BaseEntity.serverEntities)
+            foreach (var e in BaseNetworkable.serverEntities)
             {
                 if (AddToCache(e))
                     cached++;
@@ -642,23 +680,23 @@ namespace Oxide.Plugins
 
         void Unload()
         {
-            var espobjects = GameObject.FindObjectsOfType(typeof(ESP));
+            var espobjects = UnityEngine.Object.FindObjectsOfType(typeof(ESP));
 
             if (espobjects != null)
                 foreach (var gameObj in espobjects)
-                    GameObject.Destroy(gameObj);
+                    UnityEngine.Object.Destroy(gameObj);
 
-            var ptobjects = GameObject.FindObjectsOfType(typeof(PlayerTracker));
+            var ptobjects = UnityEngine.Object.FindObjectsOfType(typeof(PlayerTracker));
 
             if (ptobjects != null)
                 foreach (var gameObj in ptobjects)
-                    GameObject.Destroy(gameObj);
+                    UnityEngine.Object.Destroy(gameObj);
 
-            var tobjects = GameObject.FindObjectsOfType(typeof(DropTracker));
+            var tobjects = UnityEngine.Object.FindObjectsOfType(typeof(DropTracker));
 
             if (tobjects != null)
                 foreach (var gameObj in tobjects)
-                    GameObject.Destroy(gameObj);
+                    UnityEngine.Object.Destroy(gameObj);
 
             if (dataFile != null)
             {
@@ -684,6 +722,7 @@ namespace Oxide.Plugins
             cachedOres?.Clear();
             cachedCorpses?.Clear();
             cachedContainers?.Clear();
+            cachedBackpacks?.Clear();
             cachedBags?.Clear();
             cachedTC?.Clear();
             cachedTurrets?.Clear();
@@ -895,6 +934,44 @@ namespace Oxide.Plugins
                             }
                         }
 
+                        if (showLoot || showAll)
+                        {
+                            error = "BACKPACKS";
+
+                            foreach (var entry in cachedBackpacks)
+                            {
+                                double currDistance = Math.Floor(Vector3.Distance(entry.Key, source.transform.position));
+
+                                if (currDistance > maxDistance)
+                                    continue;
+
+                                if (currDistance < lootDistance)
+                                {
+                                    string contents = string.Empty;
+                                    uint uid;
+
+                                    if (entry.Value.Info != null && uint.TryParse(entry.Value.Info.ToString(), out uid))
+                                    {
+                                        var backpack = BaseNetworkable.serverEntities.Find(uid) as DroppedItemContainer;
+
+                                        if (backpack == null)
+                                            continue;
+
+                                        var inventory = BackpackInventory.GetValue(backpack) as ItemContainer;
+
+                                        if (inventory?.itemList != null)
+                                        {
+                                            contents = string.Format("({0}) ", backpackContentAmount > 0 && inventory.itemList.Count > 0 ? string.Join(", ", inventory.itemList.Take(backpackContentAmount).Select(item => string.Format("{0} ({1})", item.info.displayName.translated.ToLower(), item.amount)).ToArray()) : inventory.itemList.Count().ToString());
+                                        }
+
+                                        if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.red, entry.Key + new Vector3(0f, 0.5f, 0f), string.Format("{0} <color=silver>{1}</color><color=orange>{2}</color>", string.IsNullOrEmpty(backpack._playerName) ? ins.msg("backpack", player.UserIDString) : backpack._playerName, contents, currDistance));
+                                        if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, entry.Key + new Vector3(0f, 0.5f, 0f), GetScale(currDistance));
+                                        if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
+                                    }
+                                }
+                            }
+                        }
+
                         error = "CONTAINERS";
                         foreach (var box in cachedContainers)
                         {
@@ -939,8 +1016,11 @@ namespace Oxide.Plugins
 
                                 if (box.Value.Info != null && uint.TryParse(box.Value.Info.ToString(), out uid))
                                 {
-                                    var container = BaseEntity.serverEntities.Find(uid) as StorageContainer;
-                                    
+                                    var container = BaseNetworkable.serverEntities.Find(uid) as StorageContainer;
+
+                                    if (container == null)
+                                        continue;
+
                                     if (storedData.OnlineBoxes.Contains(player.UserIDString) && container.name.Contains("box"))
                                     {
                                         var owner = BasePlayer.activePlayerList.Find(x => x.userID == container.OwnerID);
@@ -1064,26 +1144,29 @@ namespace Oxide.Plugins
                     if (showNPC || showAll)
                     {
                         error = "NPCCACHE";
-                        foreach (var target in npcCache.Where(target => target?.displayName != null))
+                        foreach (var target in npcCache)
                         {
                             double currDistance = Math.Floor(Vector3.Distance(target.transform.position, source.transform.position));
 
                             if (player == target || currDistance > maxDistance)
                                 continue;
 
+                            var color = target is NPCPlayer ? Color.yellow : Color.blue;
+
                             if (currDistance < playerDistance)
                             {
-                                if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.blue, target.transform.position + new Vector3(0f, target.transform.position.y + 10), target.transform.position, 1);
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.blue, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", target.displayName, Math.Floor(target.health), currDistance));
-                                if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.blue, target.transform.position + new Vector3(0f, 1f, 0f), target.GetHeight(target.modelState.ducked));
+                                string displayName = target.displayName ?? (target.ShortPrefabName == "scientist" ? ins.msg("scientist", player.UserIDString) : ins.msg("npc", player.UserIDString));
+                                if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, target.transform.position.y + 10), target.transform.position, 1);
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", displayName, Math.Floor(target.health), currDistance));
+                                if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, 1f, 0f), target.GetHeight(target.modelState.ducked));
                             }
-                            else player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, 1f, 0f), 5f);
+                            else player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, 1f, 0f), 5f);
 
                             if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                         }
 
                         error = "ANIMALS";
-                        foreach (var npc in BaseEntity.serverEntities.Where(e => e is BaseNpc).Cast<BaseNpc>().ToList())
+                        foreach (var npc in BaseNetworkable.serverEntities.Where(e => e is BaseNpc).Cast<BaseNpc>().ToList())
                         {
                             double currDistance = Math.Floor(Vector3.Distance(npc.transform.position, source.transform.position));
 
@@ -1189,6 +1272,10 @@ namespace Oxide.Plugins
             if (!init || entity == null)
                 return;
 
+            if (cachedBackpacks.ContainsKey(entity.transform.position))
+            {
+                cachedBackpacks.Remove(entity.transform.position);
+            }
             if (cachedItems.ContainsKey(entity.transform.position))
             {
                 cachedItems.Remove(entity.transform.position);
@@ -1225,40 +1312,6 @@ namespace Oxide.Plugins
                 cachedCollectibles.Remove(entity.transform.position);
         }
 
-        class DropTracker : MonoBehaviour
-        {
-            DroppedItem droppedItem;
-            Vector3 position;
-
-            void Awake()
-            {
-                droppedItem = GetComponent<DroppedItem>();
-                InvokeRepeating("Tracker", 0.1f, 0.1f);
-                Tracker();
-            }
-
-            void Tracker()
-            {
-                if (position == transform.position)
-                {
-                    if (cachedItems.ContainsKey(position))
-                        cachedItems.Remove(position);
-
-                    cachedItems.Add(position, new CachedInfo() { Name = droppedItem.item.info.shortname, Size = droppedItem.item.amount, Info = droppedItem.item.uid });
-                    GameObject.Destroy(this);
-                    return;
-                }
-
-                position = transform.position;
-            }
-
-            void OnDestroy()
-            {
-                CancelInvoke("Tracker");
-                GameObject.Destroy(this);
-            }
-        }
-
         static bool AddToCache(BaseNetworkable entity)
         {
             if (!init || entity == null || entity.IsDestroyed)
@@ -1278,6 +1331,17 @@ namespace Oxide.Plugins
             }
             else if (entity is BasePlayer)
             {
+                if (entity.ShortPrefabName == "scientist")
+                {
+                    var npc = entity.GetComponent<NPCPlayer>();
+
+                    if (npc != null && !npcCache.Contains(npc))
+                    {
+                        npcCache.Add(npc.GetComponent<BasePlayer>());
+                        return true;
+                    }
+                }
+
                 var player = entity as BasePlayer;
 
                 if (!player.userID.IsSteamId() && !npcCache.Contains(player))
@@ -1297,7 +1361,7 @@ namespace Oxide.Plugins
                     return true;
                 }
             }
-            else if (entity is StorageContainer || entity is SupplyDrop)
+            else if (entity is StorageContainer || entity.ShortPrefabName == "supply_drop")
             {
                 if (cachedContainers.ContainsKey(entity.transform.position))
                     return false;
@@ -1315,6 +1379,11 @@ namespace Oxide.Plugins
                     cachedContainers.Add(entity.transform.position, new CachedInfo() { Name = entity.ShortPrefabName, Info = entity.net.ID });
                     return true;
                 }
+            }
+            else if (entity is DroppedItemContainer)
+            {
+                cachedBackpacks.Add(entity.transform.position, new CachedInfo() { Name = entity.ShortPrefabName, Info = entity.net.ID });
+                return true;
             }
             else if (entity is SleepingBag)
             {
@@ -1679,6 +1748,7 @@ namespace Oxide.Plugins
         static float maxTrackReportDistance { get; set; }
         static float trackDrawTime { get; set; }
         static float overlapDistance { get; set; }
+        private static int backpackContentAmount { get; set; }
 
         static string szChatCommand { get; set; }
         static List<object> authorized { get; set; }
@@ -1693,7 +1763,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void LoadVariables()
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -1719,12 +1789,18 @@ namespace Oxide.Plugins
                 ["Help6"] = "e.g: <color=orange>/{0} 0.5 400 all</color>",
                 ["VisionOn"] = "You will now see where players are looking.",
                 ["VisionOff"] = "You will no longer see where players are looking.",
-                ["Help7"] = "<color=orange>/{0} {1}</color> - Toggles showing where players are looking.",
-                ["Help8"] = "<color=orange>/{0} {1}</color> - Toggles extended information for players.",
                 ["ExtendedPlayersOn"] = "Extended information for players is now on.",
                 ["ExtendedPlayersOff"] = "Extended information for players is now off.",
+                ["Help7"] = "<color=orange>/{0} {1}</color> - Toggles showing where players are looking.",
+                ["Help8"] = "<color=orange>/{0} {1}</color> - Toggles extended information for players.",
+                ["backpack"] = "backpack",
+                ["scientist"] = "scientist",
+                ["npc"] = "npc",
             }, this);
+        }
 
+        void LoadVariables()
+        {
             authorized = GetConfig("Settings", "Restrict Access To Steam64 IDs", new List<object>()) as List<object>;
 
             foreach (var auth in authorized.ToList())
@@ -1749,6 +1825,7 @@ namespace Oxide.Plugins
             showStashContents = Convert.ToBoolean(GetConfig("Options", "Show Stash Contents", false));
             drawEmptyContainers = Convert.ToBoolean(GetConfig("Options", "Draw Empty Containers", true));
             showResourceAmounts = Convert.ToBoolean(GetConfig("Options", "Show Resource Amounts", true));
+            backpackContentAmount = Convert.ToInt32(GetConfig("Options", "Show X Items In Backpacks [0 = amount only]", 3));
 
             drawArrows = Convert.ToBoolean(GetConfig("Drawing Methods", "Draw Arrows On Players", false));
             drawBox = Convert.ToBoolean(GetConfig("Drawing Methods", "Draw Boxes", false));
