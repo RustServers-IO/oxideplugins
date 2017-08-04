@@ -1,14 +1,15 @@
 ﻿using System;
+using System.Globalization;
 using System.Collections.Generic;
-using System.Collections;
 
 using Oxide.Core;
 using Oxide.Core.Plugins;
+using Oxide.Game.Rust.Cui;
 using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.3.1", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.4.0", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
@@ -21,7 +22,7 @@ namespace Oxide.Plugins
         List<string> ChatType = new List<string>();
 
         #region Config
-        const string configVersion = "0.2.0";
+        const string configVersion = "0.2.1";
 
         ConfigData _config;
         class ConfigData
@@ -29,7 +30,16 @@ namespace Oxide.Plugins
             public bool Enabled { get; set; }
             public bool PlayerActive { get; set; }
             public Dictionary<string, List<string>> CustomChat { get; set; }
+            public UIConfig UISettings { get; set; }
             public string Version { get; set; }
+        }
+
+        class UIConfig
+        {
+            public string BackgroundColor { get; set; }
+            public string TextColor { get; set; }
+            public string AnchorMin { get; set; }
+            public string AnchorMax { get; set; }
         }
 
         ConfigData DefaultConfig()
@@ -39,6 +49,13 @@ namespace Oxide.Plugins
                 Enabled = true,
                 PlayerActive = false,
                 CustomChat = new Dictionary<string, List<string>>() { { "Test", new List<string> { "command1", "command2" } } },
+                UISettings = new UIConfig
+                {
+                    BackgroundColor = "0.29 0.49 0.69 0.5",
+                    TextColor = "#0000FF",
+                    AnchorMin = "0 0.125",
+                    AnchorMax = "0.012 0.1655"
+                },
                 Version = configVersion
             };
             return config;
@@ -63,6 +80,13 @@ namespace Oxide.Plugins
             SetConfig(oldConfig.Enabled, _config.Enabled);
             SetConfig(oldConfig.PlayerActive, _config.PlayerActive);
             SetConfig(oldConfig.CustomChat, _config.CustomChat);
+            if (oldConfig.UISettings != null)
+            {
+                SetConfig(oldConfig.UISettings.BackgroundColor, _config.UISettings.BackgroundColor);
+                SetConfig(oldConfig.UISettings.TextColor, _config.UISettings.TextColor);
+                SetConfig(oldConfig.UISettings.AnchorMin, _config.UISettings.AnchorMin);
+                SetConfig(oldConfig.UISettings.AnchorMax, _config.UISettings.AnchorMax);
+            }
 
             SaveConfigData();
         }
@@ -104,7 +128,7 @@ namespace Oxide.Plugins
                 Users[player.userID] = playerData = new PlayerChat(player.displayName, _config.PlayerActive);
                 SaveData();
             }
-            if (!chatUser.ContainsKey(player.userID)) chatUser.Add(player.userID, "");
+            if (!chatUser.ContainsKey(player.userID) && Users[player.userID].Active) chatUser.Add(player.userID, "g");
 
             return playerData;
         }
@@ -121,14 +145,50 @@ namespace Oxide.Plugins
 
             permission.RegisterPermission(PermAdmin, this);
             permission.RegisterPermission(PermUse, this);
+
+            if (_config.Enabled)
+            {
+                foreach (var p in BasePlayer.activePlayerList)
+                {
+                    if ((!Users.ContainsKey(p.userID) && !_config.PlayerActive) || 
+                        (p.IsSleeping() || p.IsWounded() || p.IsDead())) continue;
+                    GetPlayerData(p);
+                    ToggleUI(p, true);
+                }
+            }
         }
 
-        void Unload() { chatUser.Clear(); }
+        void Unload()
+        {
+            chatUser.Clear();
+
+            foreach (var p in chatUI) DestroyUI(p);
+            chatUI.Clear();
+
+        }
+
+        void OnPlayerSleep(BasePlayer player) { ToggleUI(player); }
+
+        void OnPlayerSleepEnded(BasePlayer player) { ToggleUI(player, true); }
+
+        void OnPlayerWound(BasePlayer player) { ToggleUI(player); }
+
+        void OnPlayerRecover(BasePlayer player) { ToggleUI(player, true); }
+
+        void OnPlayerDie(BasePlayer player, HitInfo info) { ToggleUI(player); }
+
+        void OnPlayerInit(BasePlayer player)
+        {
+            if (!_config.Enabled || (!_config.PlayerActive && !Users.ContainsKey(player.userID))) return;
+			GetPlayerData(player);
+        }
 
         void OnPlayerDisconnected(BasePlayer player, string reason)
         {
             if (chatUser.ContainsKey(player.userID))
                 chatUser.Remove(player.userID);
+
+            ToggleUI(player);
         }
         #endregion
 
@@ -182,9 +242,14 @@ namespace Oxide.Plugins
                             }
 
                             if (playerData.Active)
+                            {
+								chatUser.Add(player.userID, "g");
+                                ToggleUI(player, true);
                                 MessageChat(player, Lang("Activated", player.UserIDString));
+                            }
                             else
                             {
+                                ToggleUI(player);
                                 chatUser.Remove(player.userID);
                                 MessageChat(player, Lang("Deactivated", player.UserIDString));
                             }
@@ -218,10 +283,20 @@ namespace Oxide.Plugins
                             }
 
                             if (enabled)
+                            {
                                 MessageChat(player, Lang("Enabled", player.UserIDString));
+                                foreach (var p in BasePlayer.activePlayerList)
+                                {
+                                    if ((!Users.ContainsKey(p.userID) && !_config.PlayerActive) ||
+                                        (p.IsSleeping() || p.IsWounded() || p.IsDead())) continue;
+                                    GetPlayerData(p);
+                                    ToggleUI(p, true);
+                                }
+                            }
                             else
                             {
                                 chatUser.Clear();
+                                foreach (var p in chatUI) ToggleUI(p);
                                 MessageChat(player, Lang("Disabled", player.UserIDString));
                             }
                             SaveConfigData();
@@ -268,13 +343,18 @@ namespace Oxide.Plugins
         [ChatCommand("g")]
         private void cmdGlobalChat(BasePlayer player, string command, string[] args)
         {
-            if (chatUser.ContainsKey(player.userID))
-                chatUser[player.userID] = "";
-
+            if (!_config.Enabled || !Users.ContainsKey(player.userID) || !Users[player.userID].Active) return;
+            var flag = false;
             if (args.Length == 0 || args == null)
             {
+                if (chatUser[player.userID] == "g") return;
                 MessageChat(player, Lang("GlobalChat", player.UserIDString));
-                return;
+                flag = true;
+            }
+            if (flag || chatUser[player.userID] != "g")
+            {
+                chatUser[player.userID] = "g";
+                UpdateUI(player);
             }
 
             var message = string.Empty;
@@ -312,10 +392,20 @@ namespace Oxide.Plugins
                         }
 
                         if (enabled)
+                        {
                             Puts(Lang("Enabled"));
+                            foreach (var p in BasePlayer.activePlayerList)
+                            {
+                                if ((!Users.ContainsKey(p.userID) && !_config.PlayerActive) ||
+                                    (p.IsSleeping() || p.IsWounded() || p.IsDead())) continue;
+                                GetPlayerData(p);
+                                ToggleUI(p, true);
+                            }
+                        }
                         else
                         {
                             chatUser.Clear();
+                            foreach (var p in chatUI) ToggleUI(p);
                             Puts(Lang("Disabled"));
                         }
                         SaveConfigData();
@@ -371,8 +461,10 @@ namespace Oxide.Plugins
             if (!playerData.Active || (!ChatType.Contains(command) && !ChatType.Contains(cmdtarget))) return;
 
             if (!chatUser[player.userID].Contains(command) || (ChatType.Contains(cmdtarget) && !chatUser[player.userID].Equals(command + " " + args[1])))
+            {
                 chatUser[player.userID] = command + (ChatType.Contains(cmdtarget) ? $" {args[1]}" : "");
-            Puts(chatUser[player.userID]);
+                UpdateUI(player);
+            }
         }
 
 
@@ -404,7 +496,7 @@ namespace Oxide.Plugins
             var bPlayer = Game.Rust.RustCore.FindPlayerByIdString(player.Id);
             if (!bPlayer) return data;
             var playerData = GetPlayerData(bPlayer);
-            if (!playerData.Active || chatUser[bPlayer.userID] == "") return data;
+            if (!playerData.Active || chatUser[bPlayer.userID] == "g") return data;
 
             return false;
         }
@@ -495,6 +587,92 @@ namespace Oxide.Plugins
         void MessageChat(BasePlayer player, string message, string args = null) => PrintToChat(player, $"{message}", args);
 
         bool HasPermission(string id, string perm) => permission.UserHasPermission(id, perm);
+        #endregion
+
+        #region CUI
+        static string cuiJson = @"[
+        {
+            ""name"": ""backAC"",
+            ""parent"": ""Hud"",
+            ""components"": [
+              {
+                ""type"": ""UnityEngine.UI.Image"",
+                ""color"": ""{BackColor}""
+              },
+              {
+                ""type"": ""RectTransform"",
+                ""anchormin"": ""{AnchorMin}"",
+                ""anchormax"": ""{AnchorMax}""
+              }
+            ]
+          },
+          {
+            ""name"": ""lblAC"",
+            ""parent"": ""backAC"",
+            ""components"": [
+              {
+                ""text"": ""{Command}"",
+                ""type"": ""UnityEngine.UI.Text"",
+                ""color"": ""{TextColor}"",
+                ""fontSize"": 15,
+                ""align"": ""MiddleCenter""
+              },
+              {
+                ""type"": ""RectTransform"",
+                ""anchormin"": ""0 0"",
+                ""anchormax"": ""1 1""
+              }
+            ]
+          }
+        ]";
+
+        List<BasePlayer> chatUI = new List<BasePlayer>();
+        
+        void ToggleUI(BasePlayer player, bool show=false)
+        {
+            if (!_config.Enabled || (!Users[player.userID].Active && show)) return;
+            if (!chatUI.Contains(player) && show)
+            {
+                AddUI(player);
+                chatUI.Add(player);
+            }
+            else if (chatUI.Contains(player) && !show)
+            {
+                DestroyUI(player);
+                chatUI.Remove(player);
+            }
+        }
+
+        void AddUI(BasePlayer player)
+        {
+            var backColor = Color(_config.UISettings.BackgroundColor);
+            var textColor = Color(_config.UISettings.TextColor);
+            var command = chatUser[player.userID].Split(' ')[0];
+            var cui = cuiJson.Replace("{BackColor}", backColor)
+                            .Replace("{TextColor}", textColor)
+                            .Replace("{AnchorMin}", _config.UISettings.AnchorMin)
+                            .Replace("{AnchorMax}", _config.UISettings.AnchorMax)
+                            .Replace("{Command}", command);
+            CuiHelper.AddUi(player, cui);
+        }
+
+        void UpdateUI(BasePlayer player)
+        {
+            DestroyUI(player);
+            AddUI(player);
+        }
+
+        void DestroyUI(BasePlayer player) => CuiHelper.DestroyUi(player, "backAC");
+
+        public static string Color(string hexColor)
+        {
+            if (!hexColor.StartsWith("#")) return hexColor;
+            if (hexColor.StartsWith("#")) hexColor = hexColor.TrimStart('#');
+            int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
+            int green = int.Parse(hexColor.Substring(2, 2), NumberStyles.AllowHexSpecifier);
+            int blue = int.Parse(hexColor.Substring(4, 2), NumberStyles.AllowHexSpecifier);
+            return $"{(double)red / 255} {(double)green / 255} {(double)blue / 255} 1";
+        }
         #endregion
     }
 }

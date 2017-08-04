@@ -2,7 +2,7 @@
     "name": "Building Blocker",
     "description": "Fully prevents building in the building blocked zone. Fixes the \"Devblog 158 of 4th may\"",
     "author": "Vlad-00003",
-    "version": "2.2.2",
+    "version": "2.3.0",
     "configuration": true,
     "suggest": {
         "NoEscape": "*"

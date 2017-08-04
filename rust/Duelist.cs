@@ -18,7 +18,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "1.0.0", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
+    [Info("Duelist", "nivex", "1.0.1", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
     public class Duelist : RustPlugin
     {
         public enum Team
@@ -6404,14 +6404,14 @@ namespace Oxide.Plugins
         private readonly List<string> matchesUI = new List<string>();
 
         [ConsoleCommand("UI_DuelistCommand")]
-        public void ccmdDuelistUI(ConsoleSystem.Arg arg)
+        private void ccmdDuelistUI(ConsoleSystem.Arg arg)
         {
             var player = arg.Player();
 
             if (!player || !arg.HasArgs())
                 return;
 
-            switch (arg.Args[0])
+            switch (arg.Args[0].ToLower())
             {
                 case "accept":
                     {
