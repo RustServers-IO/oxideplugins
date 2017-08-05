@@ -12,7 +12,7 @@ using Newtonsoft.Json.Linq;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.0.7", ResourceId = 2580)] //adjust effective distance + null animal targetting. better getground
+    [Info("BotSpawn", "Steenamaroo", "1.0.8", ResourceId = 2580)] //added bot damage amount, added bot accuracy, made animal ignore optional, respawn issue fixed
 
     [Description("Spawn Bots with kits.")]
     
@@ -24,20 +24,29 @@ namespace Oxide.Plugins
         
         private ConfigData configData; 
         
-        Vector3 Airfield = new Vector3(0,0,0);
-        Vector3 Dome = new Vector3(0,0,0);
-        Vector3 PowerPlant = new Vector3(0,0,0);
-        Vector3 Radtown = new Vector3(0,0,0);
-        Vector3 Satellite = new Vector3(0,0,0);
-        Vector3 TrainYard = new Vector3(0,0,0);
-        Vector3 WaterTreatment = new Vector3(0,0,0);
-        Vector3 LaunchSite = new Vector3(0,0,0); 
+        Vector3 Airfield;
+        Vector3 Dome;
+        Vector3 PowerPlant;
+        Vector3 Radtown;
+        Vector3 Satellite; 
+        Vector3 TrainYard;
+        Vector3 WaterTreatment;
+        Vector3 LaunchSite; 
         
         int no_of_AI = 0;
         
         class TempRecord
         {
-            public static Dictionary<NPCPlayerApex, int> NPCPlayers = new Dictionary<NPCPlayerApex, int>();
+            public static Dictionary<NPCPlayerApex, botData> NPCPlayers = new Dictionary<NPCPlayerApex, botData>();
+        }
+        class botData
+        {
+            public Vector3 spawnPoint;
+            public int accuracy;
+            public ulong botID;
+            public BasePlayer bot;
+            public MonumentSettings zone;
+            
         }
         class StoredData
         {
@@ -48,6 +57,32 @@ namespace Oxide.Plugins
         }
         StoredData storedData; 
  
+        object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
+        {
+            if (info?.Initiator is NPCPlayer && entity is BasePlayer)
+            {
+                var attacker = info?.Initiator as NPCPlayer;
+                foreach (var bot in TempRecord.NPCPlayers)
+                {
+                    if (bot.Value.botID == attacker.userID)
+                    {
+                    System.Random rnd = new System.Random(); 
+                    int rand = rnd.Next(1, 10);
+                        if (bot.Value.accuracy < rand)
+                        {
+                        return true;
+                        }
+                        else
+                        {
+                        info.damageTypes.ScaleAll(configData.Options.Bot_Damage);
+                        return null;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+        
         void Init()
         {
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("BotSpawn");
@@ -64,9 +99,34 @@ namespace Oxide.Plugins
         }
         void OnServerInitialized()
         {
-            FindMonuments();           
-        } 
-        
+            FindMonuments();
+            int noOfBots = 0;
+                 timer.Once(30, () =>
+                {
+                    timer.Repeat(5,0, () =>
+                    {
+                    foreach (var bot in TempRecord.NPCPlayers)
+                    {
+                        noOfBots++;
+                        if (noOfBots == 0) return;
+                        var targetX = bot.Value.spawnPoint.x;
+                        var targetZ = bot.Value.spawnPoint.z;
+                        var current = bot.Value.bot.transform.position;
+                        int radius = bot.Value.zone.BotRadius;
+                        if (current.x > (targetX + radius) || current.x < (targetX - radius) || current.z > (targetZ + radius) || current.z < (targetZ - radius))
+                            {
+                              //Puts($"This Bot Has Wondered Off from {bot.Value.spawnPoint} to {bot.Value.bot.transform.position}");
+                                NPCPlayer test = bot.Key.GetComponent<NPCPlayer>();
+                                test.SetDestination(bot.Value.spawnPoint);
+                            }
+                    }
+                    }); 
+                });
+                 
+                 
+
+        }
+
         void Unload()
         {
             foreach(var bot in GameObject.FindObjectsOfType<NPCPlayer>())
@@ -99,12 +159,22 @@ namespace Oxide.Plugins
             {
                 storedData.bots.Remove(player.userID);
                 Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData); 
+                foreach (var bot in TempRecord.NPCPlayers)
+                {
+                    if (bot.Value.botID == player.userID)
+                    {
+                    TempRecord.NPCPlayers.Remove(bot.Key);
+                    return;
+                    }
+                }
             }
             else
             {
                 if (zone !=null)
+                {
                 storedData.bots.Add(player.userID, zone.Name);
                 Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData);
+                }
             }
         }
        
@@ -175,13 +245,11 @@ namespace Oxide.Plugins
                 }
             }
             Update(Scientist, zone); 
-            timer.Once(configData.Options.Respawn_Timer, () => SpawnSci(zone, pos, true));
-
-            
+            timer.Once(configData.Options.Respawn_Timer, () => SpawnSci(zone, pos, true));         
             foreach (Item item in Scientist.inventory.containerBelt.itemList) 
                 {
                 item.Remove();
-                }            
+                }  
             }
             else
             {
@@ -222,13 +290,17 @@ namespace Oxide.Plugins
                     entity.health = zone.BotHealth;
                     entity.displayName = zone.BotName;
                     var botapex = entity.GetComponent<NPCPlayerApex>();
-                    TempRecord.NPCPlayers.Add(botapex, 1); //for checking target
-
+                    TempRecord.NPCPlayers.Add(botapex, new botData()
+                    {
+                        spawnPoint = newPos,
+                        accuracy = configData.Options.Bot_Accuracy,
+                        botID = entity.userID,
+                        bot = entity,
+                        zone = zone,
+                    });
                     Update(entity, zone);
-
                         timer.Once(5, () => 
                         {
-                        
                         AttackEntity heldEntity = entity.GetHeldEntity() as AttackEntity;
                         if (heldEntity != null)
                         heldEntity.effectiveRange =  configData.Options.Bot_Firing_Range;
@@ -238,19 +310,23 @@ namespace Oxide.Plugins
                     if (single) return; 
                     timer.Once(0.1f, () => SpawnSci(zone, pos, false)); //delay to allow for random number to change 
                     return;
-                    }
+                }
         } 
 
                 void OnTick()
                 {
-                    NPCPlayerApex botapex;
-                    foreach(var bot in TempRecord.NPCPlayers)
+                    if (configData.Options.Ignore_Animals)
                     {
-                        if (bot.Key.AttackTarget != null)
+                        NPCPlayer activeBot;
+                        NPCPlayerApex botapex;
+                        foreach(var bot in TempRecord.NPCPlayers)
                         {
-                            if (bot.Key.AttackTarget.name.Contains("agents/")) /////////////////////////not exactly economical - I know.
+                            if (bot.Key.AttackTarget != null)
                             {
-                                bot.Key.AttackTarget = null; 
+                                if (bot.Key.AttackTarget.name.Contains("agents/")) /////////////////////////not exactly economical - I know.
+                                {
+                                    bot.Key.AttackTarget = null; 
+                                }
                             }
                         }
                     }
@@ -270,7 +346,6 @@ namespace Oxide.Plugins
   
        private void FindMonuments() // credit K1lly0u 
         {
-            
             var allobjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
             foreach (var gobject in allobjects)
             {
@@ -340,7 +415,6 @@ namespace Oxide.Plugins
 
                     if (gobject.name.Contains("satellite_dish")) 
                     {
-
                         if (configData.Zones.Satellite.Activate)
                         {
                             if (configData.Zones.Satellite.Kit != "default" && (CheckKit(configData.Zones.Satellite.Kit) == null))
@@ -412,6 +486,7 @@ namespace Oxide.Plugins
             public int Radius;
             public string Kit;
             public string BotName;
+            public int BotRadius;
             
         }
         class Options
@@ -420,6 +495,9 @@ namespace Oxide.Plugins
             public int Upper_Bot_Limit { get; set; }
             public int Respawn_Timer { get; set; }
             public int Bot_Firing_Range { get; set; }
+            public int Bot_Accuracy { get; set; }
+            public float Bot_Damage { get; set; }
+            public bool Ignore_Animals { get; set; }
         }
         class Zones
         {
@@ -458,6 +536,9 @@ namespace Oxide.Plugins
                     Upper_Bot_Limit = 80,
                     Respawn_Timer = 60,
                     Bot_Firing_Range = 20,
+                    Bot_Accuracy = 5,
+                    Bot_Damage = 0.1f,
+                    Ignore_Animals = true,
                },
                Zones = new Zones
                {
@@ -469,7 +550,8 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "Airfield Bot"
+                       BotName = "Airfield Bot",
+                       BotRadius = 10
                    },
                    Dome = new MonumentSettings
                    {
@@ -479,7 +561,8 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "Dome Bot"
+                       BotName = "Dome Bot",
+                       BotRadius = 10
                    },
                    Powerplant = new MonumentSettings
                    {
@@ -489,7 +572,8 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "Powerplant Bot"
+                       BotName = "Powerplant Bot",
+                       BotRadius = 10
                    },
                    Radtown = new MonumentSettings
                    {
@@ -499,7 +583,8 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "Radtown Bot"
+                       BotName = "Radtown Bot",
+                       BotRadius = 10
                    },
                    Satellite = new MonumentSettings
                    {
@@ -509,7 +594,8 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "Satellite Bot"
+                       BotName = "Satellite Bot",
+                       BotRadius = 10
                    },
                    Trainyard = new MonumentSettings
                    {
@@ -519,7 +605,8 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "Trainyard Bot"
+                       BotName = "Trainyard Bot",
+                       BotRadius = 10
                    },
 
                    WaterTreatment = new MonumentSettings
@@ -530,9 +617,10 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "WaterTreatment Bot"
+                       BotName = "WaterTreatment Bot",
+                       BotRadius = 10
                    },
-                   
+    
                    LaunchSite = new MonumentSettings
                    {
                        Activate = false,
@@ -541,7 +629,8 @@ namespace Oxide.Plugins
                        BotHealth = 100,
                        Radius = 200,
                        Kit = "default",
-                       BotName = "LaunchSite Bot"
+                       BotName = "LaunchSite Bot",
+                       BotRadius = 10
                    }
                }
         };
@@ -551,13 +640,8 @@ namespace Oxide.Plugins
         {
             Config.WriteObject(config, true);
         }
-       
         #endregion      
-
-        
-
     }
-
 }
 
 
