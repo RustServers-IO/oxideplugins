@@ -9,7 +9,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.4.1", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.4.2", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
@@ -343,7 +343,7 @@ namespace Oxide.Plugins
         [ChatCommand("g")]
         private void cmdGlobalChat(BasePlayer player, string command, string[] args)
         {
-            if (!_config.Enabled || !Users.ContainsKey(player.userID) || !Users[player.userID].Active) return;
+            if (!_config.Enabled || !isActive(player.userID)) return;
             var flag = false;
             if (args.Length == 0 || args == null)
             {
@@ -451,14 +451,12 @@ namespace Oxide.Plugins
             if (str.Length == 0 || str[0] != '/') return;
 
             var player = (BasePlayer)arg.Connection.player;
-            if (!player || !HasPermission(player.UserIDString, PermUse)) return;
-
-            var playerData = GetPlayerData(player);
+            if (!player || !HasPermission(player.UserIDString, PermUse) || !isActive(player.userID)) return;
 
             var args = str.Split(' ');
             var command = args[0].Replace("/", "");
             var cmdtarget = command + " $target";
-            if (!playerData.Active || (!ChatType.Contains(command) && !ChatType.Contains(cmdtarget))) return;
+            if (!ChatType.Contains(command) && !ChatType.Contains(cmdtarget)) return;
 
             if (!chatUser[player.userID].Contains(command) || (ChatType.Contains(cmdtarget) && !chatUser[player.userID].Equals(command + " " + args[1])))
             {
@@ -473,10 +471,8 @@ namespace Oxide.Plugins
             if (!_config.Enabled) return null;
 
             var player = (BasePlayer)arg.Connection.player;
-            if (!player || !HasPermission(player.UserIDString, PermUse)) return null;
+            if (!player || !HasPermission(player.UserIDString, PermUse) || !isActive(player.userID)) return null;
 
-            var playerData = GetPlayerData(player);
-            if (!playerData.Active) return null;
             var cmd = chatUser[player.userID];
             if (cmd == "g") return null;
 
@@ -494,13 +490,38 @@ namespace Oxide.Plugins
             var player = (IPlayer)data["Player"];
             if (!_config.Enabled || !HasPermission(player.Id, PermUse)) return data;
             var bPlayer = Game.Rust.RustCore.FindPlayerByIdString(player.Id);
-            if (!bPlayer) return data;
-            var playerData = GetPlayerData(bPlayer);
-            if (!playerData.Active || chatUser[bPlayer.userID] == "g") return data;
+            if (!bPlayer || !isActive(bPlayer.userID) || chatUser[bPlayer.userID] == "g") return data;
 
             return false;
         }
+        #endregion
 
+        #region Messages
+        void DefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>            {
+                ["Enabled"] = "AutoChat was enabled.",
+                ["Disabled"] = "AutoChat was disabled.",
+                ["Activated"] = "You have active the autochat.",
+                ["Deactivated"] = "You have deactive the autochat.",
+                ["AutoON"] = "AutoChat is now auto-activated for new players.",
+                ["AutoOFF"] = "AutoChat is now auto-deactivated for new players.",
+                ["GlobalChat"] = "You switched to the global chat.",
+                ["NoPerm"] = "You don't have permission to use this command.",
+                ["IsDisabled"] = "The plugin is disabled.",
+                ["ErrorBool"] = "Error. Only \"true\" or \"false\".",
+                ["NoPlugins"] = "The plugin was disabled because weren't found supported plugins.",
+                ["ListPlugins"] = "Supported plugins: {0}{1}",
+                ["Help"] = ">> AUTOCHAT HELP <<\n/ac active \"true/false:OPTIONAL\" - to active/deactive autochat.\n/g \"message:OPTIONAL\" - to send message and switch to global chat.",
+                ["HelpAdmin"] = "\nAdmin Commands:\n/ac enable \"true/false:OPTIONAL\" - to enable/disable plugin.\n/ac auto \"true/false:OPTIONAL\" - to auto-active/deactive plugin for new players.",
+            }, this);
+        }
+
+        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        void MessageChat(BasePlayer player, string message, string args = null) => PrintToChat(player, $"{message}", args);
+        #endregion
+
+        #region Utilities
         void CheckPlugins()
         {
             var list = new List<string>();
@@ -560,31 +581,8 @@ namespace Oxide.Plugins
             else
                 BC = false;
         }
-        #endregion
 
-        #region Messages & Utilities
-        void DefaultMessages()
-        {
-            lang.RegisterMessages(new Dictionary<string, string>            {
-                ["Enabled"] = "AutoChat was enabled.",
-                ["Disabled"] = "AutoChat was disabled.",
-                ["Activated"] = "You have active the autochat.",
-                ["Deactivated"] = "You have deactive the autochat.",
-                ["AutoON"] = "AutoChat is now auto-activated for new players.",
-                ["AutoOFF"] = "AutoChat is now auto-deactivated for new players.",
-                ["GlobalChat"] = "You switched to the global chat.",
-                ["NoPerm"] = "You don't have permission to use this command.",
-                ["IsDisabled"] = "The plugin is disabled.",
-                ["ErrorBool"] = "Error. Only \"true\" or \"false\".",
-                ["NoPlugins"] = "The plugin was disabled because weren't found supported plugins.",
-                ["ListPlugins"] = "Supported plugins: {0}{1}",
-                ["Help"] = ">> AUTOCHAT HELP <<\n/ac active \"true/false:OPTIONAL\" - to active/deactive autochat.\n/g \"message:OPTIONAL\" - to send message and switch to global chat.",
-                ["HelpAdmin"] = "\nAdmin Commands:\n/ac enable \"true/false:OPTIONAL\" - to enable/disable plugin.\n/ac auto \"true/false:OPTIONAL\" - to auto-active/deactive plugin for new players.",
-            }, this);
-        }
-
-        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
-        void MessageChat(BasePlayer player, string message, string args = null) => PrintToChat(player, $"{message}", args);
+        bool isActive(ulong id) => Users.ContainsKey(id) && Users[id].Active;
 
         bool HasPermission(string id, string perm) => permission.UserHasPermission(id, perm);
         #endregion
@@ -630,7 +628,7 @@ namespace Oxide.Plugins
         
         void ToggleUI(BasePlayer player, bool show=false)
         {
-            if (!_config.Enabled || (!Users[player.userID].Active && show)) return;
+            if (!_config.Enabled || (!isActive(player.userID) && show)) return;
             if (!chatUI.Contains(player) && show)
             {
                 AddUI(player);
