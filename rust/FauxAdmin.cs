@@ -3,9 +3,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("FauxAdmin", "Colon Blow", "1.0.11", ResourceId = 1933)]
+    [Info("FauxAdmin", "Colon Blow", "1.0.12", ResourceId = 1933)]
     class FauxAdmin : RustPlugin
     {
+
+        #region Config and Init
+
         public bool DisableFlyHackProtection => Config.Get<bool>("DisableFlyHackProtection");
         public bool DisableNoclipProtection => Config.Get<bool>("DisableNoclipProtection");
         public bool DisableFauxAdminDemolish => Config.Get<bool>("DisableFauxAdminDemolish");
@@ -45,9 +48,17 @@ namespace Oxide.Plugins
             permission.RegisterPermission("fauxadmin.blocked", this);
         }
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ////  Entitity Kill for Fauxadmins
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
+
+        Dictionary<string, string> messages = new Dictionary<string, string>()
+        {
+            {"restricted", "You are not allowed to noclip here." },
+            {"notallowed", "You are not worthy yet!" }
+        };
+
+        #endregion
+
+        #region EntKill
 
         BaseEntity baseEntity;
         RaycastHit RayHit;
@@ -76,7 +87,9 @@ namespace Oxide.Plugins
 
         }
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        #endregion
+
+        #region EntWho
 
         [ConsoleCommand("entwho")]
         void cmdConsoleEntWho(ConsoleSystem.Arg arg)
@@ -98,15 +111,9 @@ namespace Oxide.Plugins
             SendReply(player, "Owner ID: " + baseEntity.OwnerID.ToString());
         }
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        #endregion
 
-        Dictionary<string, string> messages = new Dictionary<string, string>()
-        {
-            {"restricted", "You are not allowed to noclip here." },
-            {"notallowed", "You are not worthy yet!" }
-        };
-
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        #region Noclip
 
         [ChatCommand("noclip")]
         void cmdChatnoclip(BasePlayer player, string command, string[] args)
@@ -128,6 +135,26 @@ namespace Oxide.Plugins
             }
             return;
         }
+
+        private void DeactivateNoClip(BasePlayer player, Vector3 newPos)
+        {
+            if (player == null) return;
+            if (_restricted.ContainsKey(player.userID)) return;
+            timer.Repeat(0.1f, 10, () => ForcePlayerPosition(player, newPos));
+
+            _restricted.Add(player.userID, new RestrictedData
+            {
+                player = player
+            });
+            SendReply(player, lang.GetMessage("restricted", this));
+            rust.RunClientCommand(player, "noclip");
+            timer.Once(1, () => _restricted.Remove(player.userID));
+            return;
+        }
+
+        #endregion
+
+        #region Player Hooks
 
         void OnPlayerTick(BasePlayer player)
         {
@@ -153,35 +180,44 @@ namespace Oxide.Plugins
             return;
         }
 
-        private void DeactivateNoClip(BasePlayer player, Vector3 newPos)
+        void OnPlayerInit(BasePlayer player)
         {
-            if (player == null) return;
-            if (_restricted.ContainsKey(player.userID)) return;
-            timer.Repeat(0.1f, 10, () => ForcePlayerPosition(player, newPos));
-
-            _restricted.Add(player.userID, new RestrictedData
+            if (isAllowed(player, "fauxadmin.blocked"))
             {
-                player = player
-            });
-            SendReply(player, lang.GetMessage("restricted", this));
-            rust.RunClientCommand(player, "noclip");
-            timer.Once(1, () => _restricted.Remove(player.userID));
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, false);
+                return;
+            }
+            if (player.net?.connection?.authLevel > 0) return;
+            if (!isAllowed(player, "fauxadmin.allowed"))
+            {
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, false);
+                return;
+            }
+            if (isAllowed(player, "fauxadmin.allowed"))
+            {
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, true);
+                return;
+            }
             return;
         }
+
+        #endregion
+
+        #region Ban Blocker
 
         object OnServerCommand(ConsoleSystem.Arg arg)
         {
             if (arg == null || arg.cmd == null) return null;
             string command = arg.cmd.Name;
+            string reason = arg.GetString(1).ToString();
             if (command.Equals("ban") || command.Equals("banid"))
             {
-                if (UseFauxAdminBanBlocker)
+                if (UseFauxAdminBanBlocker && reason.Equals("Cheat Detected!"))
                 {
                     BasePlayer player = arg.GetPlayer(0);
                     if ((player) && isAllowed(player, "fauxadmin.allowed"))
                     {
-
-                        PrintWarning($"FauxAdmin Ban Blocker worked !!");
+                        PrintWarning($"FauxAdmin Ban Blocker stopped a ban of " + player.ToString() + " for " + reason);
                         return false;
                     }
                 }
@@ -189,7 +225,9 @@ namespace Oxide.Plugins
             return null;
         }
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        #endregion
+
+        #region Structure Hooks
 
         object OnStructureDemolish(BuildingBlock block, BasePlayer player)
         {
@@ -233,31 +271,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        #endregion
 
-        void OnPlayerSleepEnded(BasePlayer player)
-        {
-            if (isAllowed(player, "fauxadmin.blocked"))
-            {
-                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, false);
-                return;
-            }
-            if (player.net?.connection?.authLevel > 0) return;
-            if (!isAllowed(player, "fauxadmin.allowed"))
-            {
-                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, false);
-                return;
-            }
-            if (isAllowed(player, "fauxadmin.allowed"))
-            {
-                player.SetPlayerFlag(BasePlayer.PlayerFlags.IsAdmin, true);
-                return;
-            }
-            return;
-        }
-
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
     }
 }
