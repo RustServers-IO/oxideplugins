@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("UCompass", "Nimant", "1.0.2", ResourceId = 0)]
+    [Info("UCompass", "Nimant", "1.0.3", ResourceId = 2583)]
     class UCompass : RustPlugin
     {                    
      
