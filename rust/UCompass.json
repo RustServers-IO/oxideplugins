@@ -1,0 +1,16 @@
+{
+    "name": "UCompass",
+    "description": "Useful GUI Compass",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ucompass.2583",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
