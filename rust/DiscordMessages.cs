@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordMessages", "Slut", "1.4.1", ResourceId = 2486)]
+    [Info("DiscordMessages", "Slut", "1.4.2", ResourceId = 2486)]
     internal class DiscordMessages : CovalencePlugin
     {
 #region Classes
@@ -511,10 +511,10 @@ namespace Oxide.Plugins
 
         private void SendBanMessage(string name, string bannedId, string reason, string sourceName, string sourceId, Action<bool> callback = null)
         {
-
+            Puts(name + bannedId + reason + sourceName + sourceId);
             List<Fields> fields = new List<Fields>();
             fields.Add(new Fields(GetLang("Embed_BanTarget"), $"[{name}](https://steamcommunity.com/profiles/{bannedId})", true));
-            fields.Add(new Fields(GetLang("Embed_BanPlayer"), !sourceId.Equals("server_console") ? $"[{sourceName}](https://steamcommunity.com/profiles/{sourceId})" : sourceName, true));
+            fields.Add(new Fields(GetLang("Embed_BanPlayer"), sourceId != null && !sourceId.Equals("server_console") ? $"[{sourceName}](https://steamcommunity.com/profiles/{sourceId})" : sourceName, true));
             fields.Add(new Fields(GetLang("Embed_BanReason"), reason, false));
             FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_BanTitle"), ReportColor, fields) });
             SendPOST(BanURL, message.toJSON(message), callback);
