@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.0", ResourceId = 2585)]
+	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.1", ResourceId = 2585)]
 	[Description("Makes resource output from quarries better")]
 	class OldSchoolQuarries : RustPlugin
 	{
@@ -62,11 +62,12 @@ namespace Oxide.Plugins
 		{
 			permission.RegisterPermission($"oldschoolquarries.probe", this);
 			LoadData();
+			InitializeDeposits();
 		}
 		//
 		// Edit the stored resource deposits
 		//
-		void OnTerrainInitialized()
+		void InitializeDeposits()
 		{
 			foreach (Deposit deposit in data.changedDeposits)
 			{
@@ -329,12 +330,20 @@ namespace Oxide.Plugins
 		}
 
 		[ConsoleCommand("oldschoolquarries.cleardata")]
-		void softWipe(ConsoleSystem.Arg arg)
+		void ClearDataConsole(ConsoleSystem.Arg arg)
 		{
 			if (!arg.IsAdmin)
 				return;
 			ClearData();
 			Puts(Lang("ClearData"));
+		}
+
+		[ConsoleCommand("getdeposit")]
+		void GetDepositConsole(ConsoleSystem.Arg arg)
+		{
+			BasePlayer player = arg.Player();
+
+			getDeposit(player, "getdeposit", null);
 		}
 		#endregion
 
