@@ -7,7 +7,7 @@ using Facepunch;
 
 namespace Oxide.Plugins {
 
-	[Info("CupboardRadius", "theconezone, formerly playrust.io / dcode", "2.1.0", ResourceId = 1316)]
+	[Info("CupboardRadius", "theconezone (formerly playrust.io / dcode)", "2.1.0", ResourceId = 1316)]
 	[Description("Fix for Facepunch treating modded servers like second class citizens... and cupboard placement.")]
 	public class CupboardRadius : RustPlugin {
 
