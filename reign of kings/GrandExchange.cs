@@ -1,22 +1,23 @@
-﻿using System;
-using System.Linq;
-using System.Collections.Generic;
+﻿using CodeHatch.Blocks;
 using CodeHatch.Blocks.Networking.Events;
 using CodeHatch.Common;
-using CodeHatch.Engine.Networking;
-using CodeHatch.Networking.Events.Entities;
-using Oxide.Core;
-using CodeHatch.ItemContainer;
-using UnityEngine;
-using CodeHatch.UserInterface.Dialogues;
 using CodeHatch.Engine.Core.Cache;
+using CodeHatch.Engine.Networking;
 using CodeHatch.Inventory.Blueprints;
-using CodeHatch.Blocks;
+using CodeHatch.Inventory.Blueprints.Components;
+using CodeHatch.ItemContainer;
+using CodeHatch.Networking.Events.Entities;
 using CodeHatch.Thrones.Weapons.Salvage;
+using CodeHatch.UserInterface.Dialogues;
+using Oxide.Core;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.1.1", ResourceId = 1145)]
+    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.0", ResourceId = 1145)]
     public class GrandExchange : ReignOfKingsPlugin
     {
         #region Variables
@@ -71,14 +72,14 @@ namespace Oxide.Plugins
 
             public void AddItem(string resource, int price)
             {
-                TradeList.Add(resource, new TradeData(price, _ItemList[resource]));
+                TradeList.Add(resource, new TradeData(price));
             }
 
             public int HasPosition()
             {
                 if (X1 == 0f || Z1 == 0f) return 0;
-                else if (X2 == 0f || Z2 == 0f) return 1;
-                else return 2;
+                if (X2 == 0f || Z2 == 0f) return 1;
+                return 2;
             }
 
             public void RemoveGEMarks()
@@ -104,16 +105,14 @@ namespace Oxide.Plugins
         private class TradeData
         {
             public int OriginalPrice { get; set; } = 0;
-            public int MaxStackSize { get; set; } = 0;
             public int BuyPrice { get; set; } = 0;
             public int SellPrice { get; set; } = 0;
 
             public TradeData() { }
 
-            public TradeData(int originalPrice, int maxStackSize)
+            public TradeData(int originalPrice)
             {
                 OriginalPrice = originalPrice;
-                MaxStackSize = maxStackSize;
                 BuyPrice = originalPrice;
                 SellPrice = (int)(originalPrice * (SellPercentage / 100));
             }
@@ -127,7 +126,7 @@ namespace Oxide.Plugins
 
             public int GetPrice(int amount, int type)
             {
-                int price = 0;
+                var price = 0;
                 switch (type)
                 {
                     case 1:
@@ -141,21 +140,16 @@ namespace Oxide.Plugins
                 return price * amount;
             }
 
-            public int GetStacks(int amount)
-            {
-                return (int)Math.Ceiling((double)amount / MaxStackSize);
-            }
-
-            public void UpdatePrices(int amount, int type)
+            public void UpdatePrices(int stackLimit, int amount, int type)
             {
                 switch (type)
                 {
                     case 1:
-                        BuyPrice = (int)(BuyPrice + ((OriginalPrice * (Inflation / 100)) * (amount / MaxStackSize)));
+                        BuyPrice = (int)(BuyPrice + ((OriginalPrice * (Inflation / 100)) * (amount / stackLimit)));
                         if (BuyPrice < 1) BuyPrice = 1;
                         break;
                     case 2:
-                        SellPrice = (int)(SellPrice - ((OriginalPrice * (Inflation / 100)) * (amount / MaxStackSize)));
+                        SellPrice = (int)(SellPrice - ((OriginalPrice * (Inflation / 100)) * (amount / stackLimit)));
                         if (SellPrice < 1) SellPrice = 1;
                         break;
                 }
@@ -163,14 +157,14 @@ namespace Oxide.Plugins
 
             public void DeflatePrice()
             {
-                double inflationModifier = Inflation / 100;
-                double deflationModifier = MaxDeflation / 100;
-                double stackModifier = 1;
-                int newBuyPrice = (int)(BuyPrice - ((OriginalPrice * inflationModifier) * stackModifier));
-                int newSellPrice = (int)(SellPrice + ((OriginalPrice * inflationModifier) * stackModifier));
+                var inflationModifier = Inflation / 100;
+                var deflationModifier = MaxDeflation / 100;
+                var stackModifier = 1.0;
+                var newBuyPrice = (int)(BuyPrice - ((OriginalPrice * inflationModifier) * stackModifier));
+                var newSellPrice = (int)(SellPrice + ((OriginalPrice * inflationModifier) * stackModifier));
 
-                int priceBottomShelf = (int)(OriginalPrice - ((OriginalPrice * deflationModifier) * stackModifier));
-                int priceTopShelf = (int)((OriginalPrice + ((OriginalPrice * deflationModifier) * stackModifier)) * (SellPercentage / 100));
+                var priceBottomShelf = (int)(OriginalPrice - ((OriginalPrice * deflationModifier) * stackModifier));
+                var priceTopShelf = (int)((OriginalPrice + ((OriginalPrice * deflationModifier) * stackModifier)) * (SellPercentage / 100));
 
                 if (newBuyPrice < priceBottomShelf) newBuyPrice = priceBottomShelf;
                 if (newSellPrice > priceTopShelf) newSellPrice = priceTopShelf;
@@ -182,7 +176,7 @@ namespace Oxide.Plugins
         private class PlayerData
         {
             public string Name { get; set; } = "";
-            public int Gold { get; set; } = 0;
+            public long Gold { get; set; } = 0;
             public ShopData Shop { get; set; } = new ShopData();
 
             public PlayerData() { }
@@ -224,8 +218,8 @@ namespace Oxide.Plugins
             public int HasPosition()
             {
                 if (X1 == 0 || Z1 == 0) return 0;
-                else if (X2 == 0f || Z2 == 0f) return 1;
-                else return 2;
+                if (X2 == 0f || Z2 == 0f) return 1;
+                return 2;
             }
 
             public void AddPosition(Vector3 position, int type)
@@ -283,17 +277,19 @@ namespace Oxide.Plugins
 
             public int AddItem(string resource, int price, int amount)
             {
+                var stackLimit = GetStackLimit(resource);
                 if (ItemList.ContainsKey(resource))
                 {
-                    if (!ItemList[resource].AddAmount(amount)) return 1;
+                    if (ItemList[resource].Amount + amount > PlayerShopStackLimit * stackLimit) return 1;
+                    ItemList[resource].AddAmount(amount);
                     if (price > 0) ItemList[resource].Price = price;
                     return 2;
                 }
 
                 if (ItemList.Count >= PlayerShopMaxSlots) return 0;
-                if (amount > PlayerShopStackLimit * _ItemList[resource]) return 1;
+                if (amount > PlayerShopStackLimit * stackLimit) return 1;
 
-                ItemList.Add(resource, new ItemData(price, amount, _ItemList[resource]));
+                ItemList.Add(resource, new ItemData(price, amount));
                 return 2;
             }
         }
@@ -301,461 +297,37 @@ namespace Oxide.Plugins
         {
             public int Price { get; set; } = 0;
             public int Amount { get; set; } = 0;
-            public int MaxStackSize { get; set; } = 0;
 
             public ItemData() { }
 
-            public ItemData(int price, int amount, int maxStackSize)
+            public ItemData(int price, int amount)
             {
                 Price = price;
                 Amount = amount;
-                MaxStackSize = maxStackSize;
             }
 
             public int GetAmount()
             {
-                if (Amount < MaxStackSize) return Amount;
-                return MaxStackSize;
+                return Amount;
             }
 
-            public int GetPrice(int amount)
+            public long GetPrice(long amount)
             {
                 return Price * amount;
             }
 
-            public int GetStacks()
+            public void AddAmount(int amount)
             {
-                return (int)Math.Ceiling((double)Amount / MaxStackSize);
-            }
-
-            public bool AddAmount(int amount)
-            {
-                if (Amount + amount > PlayerShopStackLimit * MaxStackSize) return false;
-
                 Amount += amount;
-                return true;
             }
         }
 
         private GrandExchangeData _GEData = new GrandExchangeData();
         private Dictionary<ulong, PlayerData> _PlayerData = new Dictionary<ulong, PlayerData>();
-        private static SortedDictionary<string, int> _ItemList = new SortedDictionary<string, int>();
+        //private static SortedDictionary<string, int> _ItemList = new SortedDictionary<string, int>();
 
         private readonly System.Random _Random = new System.Random();
-
-        #region Full Item List
-        private Dictionary<string, object> _DefaultItemList = new Dictionary<string, object>()
-        {
-            { "Advanced Fletcher", 1 },
-            { "African Mask", 1 },
-            { "Amberjack Fish", 1 },
-            { "Anvil", 1 },
-            { "Apple", 25 },
-            { "Apple Seed", 100 },
-            { "Archery Target", 25 },
-            { "Asian Mask", 1 },
-            { "Asian Tribal Mask", 1 },
-            { "Baked Clay", 1000 },
-            { "Ballista", 1 },
-            { "Ballista Bolt", 1000 },
-            { "Bandage", 25 },
-            { "Banquet Table", 25 },
-            { "Bascinet Helmet", 1 },
-            { "Bascinet Pointed Helmet", 1 },
-            { "Bass Fish", 1 },
-            { "Bat Wing", 1000 },
-            { "Bean Seed", 100 },
-            { "Bear Hide", 1000 },
-            { "Bear Skin Rug", 25 },
-            { "Beet", 25 },
-            { "Beet Seed", 100 },
-            { "Bell Gong", 25 },
-            { "Bellows", 1 },
-            { "Bent Horn", 1 },
-            { "Berries", 25 },
-            { "Berry Seed", 100 },
-            { "Bladed Pillar", 25 },
-            { "Blood", 1000 },
-            { "Bone", 1000 },
-            { "Bone Axe", 1 },
-            { "Bone Dagger", 1 },
-            { "Bone Horn", 1 },
-            { "Bone Longbow", 1 },
-            { "Bone Spiked Club", 1 },
-            { "Bread", 25 },
-            { "Bug Net", 1 },
-            { "Burnt Bird", 25 },
-            { "Burnt Meat", 25 },
-            { "Butterfly", 100 },
-            { "Cabbage", 25 },
-            { "Cabbage Seed", 100 },
-            { "Campfire", 1 },
-            { "Candle", 1 },
-            { "Candle Stand", 25 },
-            { "Carrot", 25 },
-            { "Carrot Seed", 100 },
-            { "Cat Mask", 1 },
-            { "Chandelier", 25 },
-            { "Chapel De Fer Helmet", 1 },
-            { "Chapel De Fer Rounded Helmet", 1 },
-            { "Charcoal", 1000 },
-            { "Clay", 1000 },
-            { "Clay Block", 1000 },
-            { "Clay Corner", 1000 },
-            { "Clay Inverted Corner", 1000 },
-            { "Clay Ramp", 1000 },
-            { "Clay Stairs", 1000 },
-            { "Cobblestone Block", 1000 },
-            { "Cobblestone Corner", 1000 },
-            { "Cobblestone Inverted Corner", 1000 },
-            { "Cobblestone Ramp", 1000 },
-            { "Cobblestone Stairs", 1000 },
-            { "Cooked Beans", 25 },
-            { "Cooked Bird", 25 },
-            { "Cooked Meat", 25 },
-            { "Crossbow", 1 },
-            { "Deer Head Trophy", 25 },
-            { "Deer Leg Club", 1 },
-            { "Defensive Barricade", 25 },
-            { "Diamond", 1000 },
-            { "Dirt", 1000 },
-            { "Djembe Drum", 1 },
-            { "Driftwood Club", 1 },
-            { "Duck Feet", 1000 },
-            { "Executioners Axe", 1 },
-            { "Fang", 1000 },
-            { "Fat", 1000 },
-            { "Feather", 1000 },
-            { "Fern", 1000 },
-            { "Fern Bracers", 1 },
-            { "Fern Helmet", 1 },
-            { "Fern Sandals", 1 },
-            { "Fern Skirt", 1 },
-            { "Fern Vest", 1 },
-            { "Fire Fly", 100 },
-            { "Fire Water", 1000 },
-            { "Firepit", 1 },
-            { "Fishing Rod", 1 },
-            { "Flat Top Helmet", 1 },
-            { "Flax", 1000 },
-            { "Fletcher", 1 },
-            { "Flour", 10 },
-            { "Flower Bracers", 1 },
-            { "Flower Helmet", 1 },
-            { "Flower Sandals", 1 },
-            { "Flower Skirt", 1 },
-            { "Flower Vest", 1 },
-            { "Flowers", 1000 },
-            { "Fluffy Bed", 1 },
-            { "Fly", 100 },
-            { "Forest Sprite", 1 },
-            { "Fuse", 1000 },
-            { "Gazebo", 1 },
-            { "Grain", 1000 },
-            { "Grain Seed", 100 },
-            { "Granary", 1 },
-            { "Grave Mask", 1 },
-            { "Great Fireplace", 25 },
-            { "Ground Torch", 25 },
-            { "Guillotine", 1 },
-            { "Hanging Lantern", 25 },
-            { "Hanging Torch", 25 },
-            { "Hay", 1000 },
-            { "Hay Bale Target", 25 },
-            { "Hay Bracers", 1 },
-            { "Hay Helmet", 1 },
-            { "Hay Sandals", 1 },
-            { "Hay Skirt", 1 },
-            { "Hay Vest", 1 },
-            { "Heart", 1000 },
-            { "High Quality Bed", 1 },
-            { "High Quality Bench", 25 },
-            { "High Quality Cabinet", 25 },
-            { "Hoe", 1 },
-            { "Iron", 1000 },
-            { "Iron Axe", 1 },
-            { "Iron Bar Window", 10 },
-            { "Iron Battle Axe", 1 },
-            { "Iron Battle Hammer", 1 },
-            { "Iron Bear Trap", 25 },
-            { "Iron Buckler", 1 },
-            { "Iron Chest", 10 },
-            { "Iron Crest", 1 },
-            { "Iron Dagger", 1 },
-            { "Iron Door", 10 },
-            { "Iron Flanged Mace", 1 },
-            { "Iron Floor Torch", 25 },
-            { "Iron Forked Spear", 1 },
-            { "Iron Gate", 10 },
-            { "Iron Halberd", 1 },
-            { "Iron Hatchet", 1 },
-            { "Iron Heater", 1 },
-            { "Iron Ingot", 1000 },
-            { "Iron Javelin", 50 },
-            { "Iron Morning Star Mace", 1 },
-            { "Iron Pickaxe", 1 },
-            { "Iron Plate Boots", 1 },
-            { "Iron Plate Gauntlets", 1 },
-            { "Iron Plate Helmet", 1 },
-            { "Iron Plate Pants", 1 },
-            { "Iron Plate Vest", 1 },
-            { "Iron Shackles", 1 },
-            { "Iron Spear", 1 },
-            { "Iron Spikes", 25 },
-            { "Iron Spikes (Hidden)", 25 },
-            { "Iron Star Mace", 1 },
-            { "Iron Sword", 1 },
-            { "Iron Throwing Axe", 50 },
-            { "Iron Throwing Battle Axe", 50 },
-            { "Iron Throwing Knife", 50 },
-            { "Iron Tipped Arrow", 100 },
-            { "Iron Totem", 1 },
-            { "Iron Tower", 1 },
-            { "Iron War Hammer", 1 },
-            { "Iron Wood Cutters Axe", 1 },
-            { "Japanese Demon", 1 },
-            { "Japanese Mask", 1 },
-            { "Jester Hat (Green & Pink)", 1 },
-            { "Jester Hat (Orange & Black)", 1 },
-            { "Jester Hat (Rainbow)", 1 },
-            { "Jester Hat (Red)", 1 },
-            { "Jester Mask (Gold & Blue)", 1 },
-            { "Jester Mask (Gold & Red)", 1 },
-            { "Jester Mask (White & Blue)", 1 },
-            { "Jester Mask (White & Gold)", 1 },
-            { "Kettle Board Helmet", 1 },
-            { "Kettle Hat", 1 },
-            { "Koi Fish", 1 },
-            { "Large Gallows", 1 },
-            { "Large Iron Cage", 1 },
-            { "Large Iron Hanging Cage", 1 },
-            { "Large Wood Billboard", 10 },
-            { "Leather Crest", 1 },
-            { "Leather Hide", 1000 },
-            { "Light Leather Boots", 1 },
-            { "Light Leather Bracers", 1 },
-            { "Light Leather Helmet", 1 },
-            { "Light Leather Pants", 1 },
-            { "Light Leather Vest", 1 },
-            { "Liver", 1000 },
-            { "Lockpick", 50 },
-            { "Log Block", 1000 },
-            { "Log Corner", 1000 },
-            { "Log Fence", 1000 },
-            { "Log Inverted Corner", 1000 },
-            { "Log Ramp", 1000 },
-            { "Log Stairs", 1000 },
-            { "Long Horn", 1 },
-            { "Long Wood Drawbridge", 10 },
-            { "Lord's Bath", 25 },
-            { "Lord's Bed", 1 },
-            { "Lord's Large Chair", 25 },
-            { "Lord's Small Chair", 25 },
-            { "Low Quality Bed", 1 },
-            { "Low Quality Bench", 25 },
-            { "Low Quality Chair", 25 },
-            { "Low Quality Fence", 1000 },
-            { "Low Quality Shelf", 25 },
-            { "Low Quality Stool", 25 },
-            { "Low Quality Table", 25 },
-            { "Lumber", 1000 },
-            { "Meat", 1000 },
-            { "Medium Banner", 10 },
-            { "Medium Quality Bed", 1 },
-            { "Medium Quality Bench", 25 },
-            { "Medium Quality Bookcase", 25 },
-            { "Medium Quality Chair", 25 },
-            { "Medium Quality Dresser", 25 },
-            { "Medium Quality Stool", 25 },
-            { "Medium Quality Table", 25 },
-            { "Medium Steel Hanging Sign", 10 },
-            { "Medium Stick Billboard", 10 },
-            { "Medium Wood Billboard", 10 },
-            { "Nasal Helmet", 1 },
-            { "Oil", 1000 },
-            { "Onion", 25 },
-            { "Onion Seed", 100 },
-            { "Pillory", 1 },
-            { "Pine Cone", 100 },
-            { "Plague Doctor Mask", 1 },
-            { "Poplar Seed", 100 },
-            { "Potion Of Antidote", 25 },
-            { "Potion Of Appearance", 25 },
-            { "Rabbit Pelt", 1000 },
-            { "Raw Bird", 1000 },
-            { "Reinforced Wood (Iron) Block", 1000 },
-            { "Reinforced Wood (Iron) Corner", 1000 },
-            { "Reinforced Wood (Iron) Door", 10 },
-            { "Reinforced Wood (Iron) Gate", 10 },
-            { "Reinforced Wood (Iron) Inverted Corner", 1000 },
-            { "Reinforced Wood (Iron) Ramp", 1000 },
-            { "Reinforced Wood (Iron) Stairs", 1000 },
-            { "Reinforced Wood (Iron) Trap Door", 10 },
-            { "Reinforced Wood (Steel) Door", 10 },
-            { "Repair Hammer", 1 },
-            { "Rocking Horse", 25 },
-            { "Rope", 1 },
-            { "Roses", 1000 },
-            { "Salmon Fish", 1 },
-            { "Sawmill", 1 },
-            { "Scythe", 1 },
-            { "Shardana Mask", 1 },
-            { "Sharp Rock", 50 },
-            { "Siegeworks", 1 },
-            { "Simple Helmet", 1 },
-            { "Small Banner", 10 },
-            { "Small Gallows", 1 },
-            { "Small Iron Cage", 1 },
-            { "Small Iron Hanging Cage", 1 },
-            { "Small Steel Hanging Sign", 10 },
-            { "Small Steel Signpost", 10 },
-            { "Small Stick Signpost", 10 },
-            { "Small Wall Lantern", 25 },
-            { "Small Wall Torch", 25 },
-            { "Small Wood Hanging Sign", 10 },
-            { "Small Wood Signpost", 10 },
-            { "Smelter", 1 },
-            { "Smithy", 1 },
-            { "Sod Block", 1000 },
-            { "Sod Corner", 1000 },
-            { "Sod Inverted Corner", 1000 },
-            { "Sod Ramp", 1000 },
-            { "Sod Stairs", 1000 },
-            { "Spinning Wheel", 1 },
-            { "Splintered Club", 1 },
-            { "Spruce Branches Block", 1000 },
-            { "Spruce Branches Corner", 1000 },
-            { "Spruce Branches Inverted Corner", 1000 },
-            { "Spruce Branches Ramp", 1000 },
-            { "Spruce Branches Stairs", 1000 },
-            { "Standing Iron Torch", 25 },
-            { "Steel Axe", 1 },
-            { "Steel Battle Axe", 1 },
-            { "Steel Battle Hammer", 1 },
-            { "Steel Bolt", 100 },
-            { "Steel Buckler", 1 },
-            { "Steel Cage", 1 },
-            { "Steel Chest", 10 },
-            { "Steel Compound", 1000 },
-            { "Steel Crest", 1 },
-            { "Steel Dagger", 1 },
-            { "Steel Flanged Mace", 1 },
-            { "Steel Greatsword", 1 },
-            { "Steel Halberd", 1 },
-            { "Steel Hatchet", 1 },
-            { "Steel Heater", 1 },
-            { "Steel Ingot", 1000 },
-            { "Steel Javelin", 50 },
-            { "Steel Morning Star Mace", 1 },
-            { "Steel Pickaxe", 1 },
-            { "Steel Picture Frame", 10 },
-            { "Steel Plate Boots", 1 },
-            { "Steel Plate Gauntlets", 1 },
-            { "Steel Plate Helmet", 1 },
-            { "Steel Plate Pants", 1 },
-            { "Steel Plate Vest", 1 },
-            { "Steel Spear", 1 },
-            { "Steel Star Mace", 1 },
-            { "Steel Sword", 1 },
-            { "Steel Throwing Battle Axe", 50 },
-            { "Steel Throwing Knife", 50 },
-            { "Steel Tipped Arrow", 100 },
-            { "Steel Tower", 1 },
-            { "Steel War Hammer", 1 },
-            { "Steel Wood Cutters Axe", 1 },
-            { "Sticks", 1000 },
-            { "Stiff Bed", 1 },
-            { "Stone", 1000 },
-            { "Stone Arch", 10 },
-            { "Stone Arrow", 100 },
-            { "Stone Block", 1000 },
-            { "Stone Corner", 1000 },
-            { "Stone Cutter", 1 },
-            { "Stone Dagger", 1 },
-            { "Stone Fireplace", 25 },
-            { "Stone Hatchet", 1 },
-            { "Stone Inverted Corner", 1000 },
-            { "Stone Javelin", 50 },
-            { "Stone Pickaxe", 1 },
-            { "Stone Ramp", 1000 },
-            { "Stone Slab", 1000 },
-            { "Stone Slit Window", 10 },
-            { "Stone Spear", 1 },
-            { "Stone Stairs", 1000 },
-            { "Stone Sword", 1 },
-            { "Stone Throwing Axe", 50 },
-            { "Stone Throwing Knife", 50 },
-            { "Stone Totem", 1 },
-            { "Stone Wood Cutters Axe", 1 },
-            { "Tabard", 1 },
-            { "Tannery", 1 },
-            { "Tears Of The Gods", 1000 },
-            { "Thatch Block", 1000 },
-            { "Thatch Corner", 1000 },
-            { "Thatch Inverted Corner", 1000 },
-            { "Thatch Ramp", 1000 },
-            { "Thatch Stairs", 1000 },
-            { "Theater Mask (Gold & Red)", 1 },
-            { "Theater Mask (White & Blue)", 1 },
-            { "Theater Mask (White & Gold)", 1 },
-            { "Theater Mask (White & Red)", 1 },
-            { "Theatre Mask (Comedy)", 1 },
-            { "Theatre Mask (Tragedy)", 1 },
-            { "Throwing Stone", 50 },
-            { "Tinker", 1 },
-            { "Torch", 1 },
-            { "Trebuchet", 1 },
-            { "Trebuchet Hay Bale", 50 },
-            { "Trebuchet Stone", 50 },
-            { "Wall Lantern", 25 },
-            { "Wall Torch", 25 },
-            { "War Drum", 1 },
-            { "Wasp", 100 },
-            { "Water", 1000 },
-            { "Watering Pot", 1 },
-            { "Well", 1 },
-            { "Wenceslas Helmet", 1 },
-            { "Whip", 1 },
-            { "Wolf Pelt", 1000 },
-            { "Wood", 1000 },
-            { "Wood Arrow", 100 },
-            { "Wood Barricade", 25 },
-            { "Wood Block", 1000 },
-            { "Wood Bracers", 1 },
-            { "Wood Buckler", 1 },
-            { "Wood Cage", 1 },
-            { "Wood Chest", 10 },
-            { "Wood Corner", 1000 },
-            { "Wood Door", 10 },
-            { "Wood Drawbridge", 10 },
-            { "Wood Flute", 1 },
-            { "Wood Gate", 10 },
-            { "Wood Heater", 1 },
-            { "Wood Helmet", 1 },
-            { "Wood Inverted Corner", 1000 },
-            { "Wood Javelin", 50 },
-            { "Wood Ledge", 1000 },
-            { "Wood Mace", 1 },
-            { "Wood Picture Frame", 10 },
-            { "Wood Ramp", 1000 },
-            { "Wood Sandals", 1 },
-            { "Wood Short Bow", 1 },
-            { "Wood Shutters", 10 },
-            { "Wood Skirt", 1 },
-            { "Wood Spear", 1 },
-            { "Wood Spikes", 25 },
-            { "Wood Stairs", 1000 },
-            { "Wood Stick", 1 },
-            { "Wood Sword", 1 },
-            { "Wood Totem", 1 },
-            { "Wood Tower", 1 },
-            { "Wood Vest", 1 },
-            { "Woodworking", 1 },
-            { "Wool", 1000 },
-            { "Work Bench", 1 },
-            { "Worms", 100 }
-        };
-        #endregion
+        
         #region Default Trade List
         private SortedDictionary<string, int> _DefaultTradeList = new SortedDictionary<string, int>()
         {
@@ -843,13 +415,6 @@ namespace Oxide.Plugins
             SellPercentage = GetConfig("Trading", "SellPercentage", 50);
             Inflation = GetConfig("Trading", "Inflation", 1);
             MaxDeflation = GetConfig("Trading", "MaxDeflation", 5);
-
-            Dictionary<string, object> list = GetConfig("Database", "Items", _DefaultItemList);
-            foreach (KeyValuePair<string, object> item in list)
-            {
-                if (_ItemList.ContainsKey(item.Key)) continue;
-                _ItemList.Add(item.Key, Convert.ToInt32(item.Value));
-            }
         }
 
         private void SaveConfigData()
@@ -866,7 +431,6 @@ namespace Oxide.Plugins
             Config["Trading", "SellPercentage"] = SellPercentage;
             Config["Trading", "Inflation"] = Inflation;
             Config["Trading", "MaxDeflation"] = MaxDeflation;
-            Config["Database", "Items"] = _ItemList;
 
             SaveConfig();
         }
@@ -937,7 +501,7 @@ namespace Oxide.Plugins
 
                 { "Store Buy Item", "What [00FF00]item [FFFFFF]would you like to buy on the [00FFFF]Grand Exchange[FFFFFF]?"},
                 { "Store Buy No Item", "I'm afraid that item is currently not for sale."},
-                { "Store Buy Amount", "Of course!\n [00FF00]{0}[FFFFFF] is currently selling for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\n It can be bought in stacks of up to [00FF00]{2}[FFFFFF].\n How much would you like to buy?"},
+                { "Store Buy Amount", "Of course!\n [00FF00]{0}[FFFFFF] is currently selling for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\n How much would you like to buy?"},
                 { "Store Buy Amount Wrong", "I'm afraid we cannot fulfill an order of that size."},
                 { "Store Buy Confirm", "Very good!\n [00FFFF]{0} [00FF00]{1}[FFFFFF] will cost you a total of [FF0000]{2} [FFFF00]gold.[FFFFFF]\n Do you want to complete the purchase?"},
                 { "Store Buy No Gold", "It looks like you don't have enough gold for this transaction."},
@@ -947,7 +511,7 @@ namespace Oxide.Plugins
 
                 { "Store Sell Item", "What [00FF00]item [FFFFFF]would you like to sell on the [00FFFF]Grand Exchange[FFFFFF]?"},
                 { "Store Sell No Item", "Sorry, we currently can't take that item from you."},
-                { "Store Sell Amount", "Hmmm!\n I believe that [00FF00]{0}[FFFFFF] is currently being purchased for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\n I'd be happy to buy this item in stacks of up to [00FF00]{2}[FFFFFF].\n How much did you want to sell?"},
+                { "Store Sell Amount", "Hmmm!\n I believe that [00FF00]{0}[FFFFFF] is currently being purchased for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\n How much did you want to sell?"},
                 { "Store Sell Amount Wrong", "I'm afraid we cannot fulfill an order of that size."},
                 { "Store Sell Confirm", "I suppose I can do that.\n [00FFFF]{0} [00FF00]{1}[FFFFFF] will give you a total of [FF0000]{2} [FFFF00]gold.[FFFFFF]\n Do you want to complete the sale?"},
                 { "Store Sell No Resources", "It looks like you don't have the goods! What are you trying to pull here?"},
@@ -956,7 +520,7 @@ namespace Oxide.Plugins
 
                 { "Shop Buy Item", "What [00FF00]item [FFFFFF]would you like to buy at this shop?"},
                 { "Shop Buy No Item", "I'm afraid that item is currently not for sale."},
-                { "Shop Buy Amount", "Yes, we have that!\n[00FF00]{0}[FFFFFF] is currently selling for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\nIt can be bought in stacks of up to [00FF00]{2}[FFFFFF].\n How much would you like to buy?"},
+                { "Shop Buy Amount", "Yes, we have that!\n[00FF00]{0}[FFFFFF] is currently selling for [00FFFF]{1}[FFFF00]g[FFFFFF] per item.\n The maximum amount we have available is [00FF00]{2}[FFFFFF].\n How much would you like to buy?"},
                 { "Shop Buy Amount Wrong", "I'm afraid we cannot fulfill an order of that size."},
                 { "Shop Buy Confirm", "Very good!\n [00FFFF]{0} [00FF00]{1}[FFFFFF] will cost you a total of [FF0000]{2} [FFFF00]gold.[FFFFFF]\n Do you want to complete the purchase?"},
                 { "Shop Buy No Gold", "It looks like you don't have enough gold for this transaction."},
@@ -1031,47 +595,40 @@ namespace Oxide.Plugins
 
             if (input.Length > 0)
             {
-                if (input[0].ToLower() == "all")
+                if (input[0].ToLower() != "all") return;
+                var topPlayers = new Dictionary<ulong, PlayerData>(_PlayerData);
+                var topListMax = 10;
+                if (topPlayers.Keys.Count < 10) topListMax = topPlayers.Keys.Count;
+                for (var i = 0; i < topListMax; i++)
                 {
-                    Dictionary<ulong, PlayerData> TopPlayers = new Dictionary<ulong, PlayerData>(_PlayerData);
-                    int topListMax = 10;
-                    if (TopPlayers.Keys.Count < 10) topListMax = TopPlayers.Keys.Count;
-                    for (int i = 0; i < topListMax; i++)
+                    var topGoldAmount = 0L;
+                    var target = new KeyValuePair<ulong, PlayerData>();
+                    foreach (var data in topPlayers)
                     {
-                        int TopGoldAmount = 0;
-                        KeyValuePair<ulong, PlayerData> target = new KeyValuePair<ulong, PlayerData>();
-                        foreach (KeyValuePair<ulong, PlayerData> data in TopPlayers)
-                        {
-                            if (data.Value.Gold >= TopGoldAmount)
-                            {
-                                target = data;
-                                TopGoldAmount = data.Value.Gold;
-                            }
-                        }
-                        PrintToChat(player, $"{i + 1}. {target.Value.Name} : {target.Value.Gold} gold");
-                        TopPlayers.Remove(target.Key);
+                        if (data.Value.Gold < topGoldAmount) continue;
+                        target = data;
+                        topGoldAmount = data.Value.Gold;
                     }
+                    PrintToChat(player, $"{i + 1}. {target.Value.Name} : {target.Value.Gold} gold");
+                    topPlayers.Remove(target.Key);
                 }
             }
             else
             {
-                List<Player> onlinePlayers = Server.ClientPlayers as List<Player>;
+                var onlinePlayers = Server.ClientPlayers;
+                var topList = onlinePlayers.Count;
 
-                int topList = onlinePlayers.Count;
-
-                for (int i = 0; i < topList; i++)
+                for (var i = 0; i < topList; i++)
                 {
-                    int topGoldAmount = 0;
+                    var topGoldAmount = 0L;
                     Player topPlayer = null;
 
-                    foreach (Player oPlayer in onlinePlayers)
+                    foreach (var oPlayer in onlinePlayers)
                     {
                         CheckPlayerExists(oPlayer);
-                        if (_PlayerData[oPlayer.Id].Gold >= topGoldAmount)
-                        {
-                            topGoldAmount = _PlayerData[oPlayer.Id].Gold;
-                            topPlayer = oPlayer;
-                        }
+                        if (_PlayerData[oPlayer.Id].Gold < topGoldAmount) continue;
+                        topGoldAmount = _PlayerData[oPlayer.Id].Gold;
+                        topPlayer = oPlayer;
                     }
 
                     if (topPlayer == null) continue;
@@ -1105,21 +662,27 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
+            player.SendMessage(" ");
+
             if (input.Length < 2) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+            player.SendMessage("Checked input format.");
 
-            int amount = 0;
+            int amount;
             if (!int.TryParse(input[0], out amount)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
-
+            player.SendMessage("Checked amount is valid.");
+            
             if (amount < 1) { PrintToChat(player, GetMessage("Gold Send Steal", player)); return; }
+            player.SendMessage($"Checked amount is not below zero ({amount})");
 
             if (_PlayerData[player.Id].Gold < amount) { PrintToChat(player, GetMessage("Gold Send Not Enough", player)); return; }
-
-            string text = input.JoinToString(" ");
-            string playerName = text.Substring(text.IndexOf(' ') + 1);
+            player.SendMessage($"Checked player has enough gold ({_PlayerData[player.Id]}).");
+            
+            string playerName = input.Skip(1).JoinToString(" ");
 
             Player target = Server.GetPlayerByName(playerName);
 
             if (target == null) { PrintToChat(player, GetMessage("Invalid Player", player)); return; }
+            player.SendMessage("Checked target is online.");
 
             CheckPlayerExists(target);
 
@@ -1127,7 +690,9 @@ namespace Oxide.Plugins
             PrintToChat(target, string.Format(GetMessage("Gold Received", player), amount, player.DisplayName));
 
             GiveGold(target, amount);
+            player.SendMessage($"Gave {amount} gold to {target.Name}.");
             RemoveGold(player, amount);
+            player.SendMessage($"Removed {amount} gold from {player.Name}.");
 
             SaveTradeData();
         }
@@ -1467,7 +1032,7 @@ namespace Oxide.Plugins
             int amount = 0;
             if (!int.TryParse(input[0], out amount)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
 
-            string playerName = "";
+            string playerName;
             ulong playerId = 0;
 
             if (input.Length > 1)
@@ -1604,13 +1169,14 @@ namespace Oxide.Plugins
             string resource = Capitalise(input[0]);
 
             if (_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Store Item Exists", player), resource)); return; }
-            if (!_ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Item Non-Existing", player), resource)); return; }
+            var stackLimit = GetStackLimit(resource);
+            if (stackLimit < 1) { PrintToChat(player, string.Format(GetMessage("Item Non-Existing", player), resource)); return; }
 
-            int price = 0;
+            int price;
             if (!int.TryParse(input[1], out price)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
             if (price < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
-            _GEData.TradeList.Add(resource, new TradeData(price, _ItemList[resource]));
+            _GEData.TradeList.Add(resource, new TradeData(price));
 
             PrintToChat(player, string.Format(GetMessage("Store Item Added", player), resource));
 
@@ -1626,12 +1192,13 @@ namespace Oxide.Plugins
             if (input.Length < 2 || input.Length > 3) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
 
             string resource = Capitalise(input[0]);
-            if (!_ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Item Non-Existing", player), resource)); return; }
+            var stackLimit = GetStackLimit(resource);
+            if (stackLimit < 1) { PrintToChat(player, string.Format(GetMessage("Item Non-Existing", player), resource)); return; }
 
-            int amount = 0;
+            int amount;
             if (!int.TryParse(input[1], out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
-            int price = 0;
+            var price = 0;
             if (input.Length == 3) if (!int.TryParse(input[2], out price)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
             if (price < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
@@ -1651,7 +1218,7 @@ namespace Oxide.Plugins
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Shop Item Added", player), resource));
 
-            RemoveItemsFromInventory(player, resource, amount);
+            RemoveItemsFromInventory(player.GetInventory().Contents, resource, stackLimit, amount);
 
             SaveTradeData();
         }
@@ -1704,7 +1271,7 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            string resource = Capitalise(input.JoinToString(" "));
+            var resource = Capitalise(input.JoinToString(" "));
 
             if (!_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Store No Item", player), resource)); return; }
 
@@ -1722,24 +1289,24 @@ namespace Oxide.Plugins
             
             if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
-            string resource = Capitalise(input[0]);
+            var resource = Capitalise(input[0]);
 
             if (!_PlayerData[player.Id].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Shop No Item Text", player), resource)); return; }
 
-            int amount = 0;
+            int amount;
 
             if (input.Length < 2) amount = _PlayerData[player.Id].Shop.ItemList[resource].Amount;
             else if (!int.TryParse(input[1], out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
             if (_PlayerData[player.Id].Shop.ItemList[resource].Amount < amount) { PrintToChat(player, GetMessage("Shop No Resources", player)); return; }
 
-            ItemCollection inventory = player.GetInventory().Contents;
+            var inventory = player.GetInventory().Contents;
+            var stackLimit = GetStackLimit(resource);
+            var stacks = (int)Math.Ceiling((double)amount / stackLimit);
 
-            if (inventory.FreeSlotCount < _PlayerData[player.Id].Shop.ItemList[resource].GetStacks()) { PrintToChat(player, string.Format(GetMessage("Shop No Inventory Space", player), _PlayerData[player.Id].Shop.ItemList[resource].GetStacks())); return; }
+            if (inventory.FreeSlotCount < stacks) { PrintToChat(player, string.Format(GetMessage("Shop No Inventory Space", player), stacks)); return; }
 
-            InvItemBlueprint blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
-            InvGameItemStack invGameItemStack = new InvGameItemStack(blueprintForName, amount, null);
-            ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
+            AddItemsToInventory(inventory, resource, stackLimit, amount);
 
             _PlayerData[player.Id].Shop.ItemList.Remove(resource);
 
@@ -1982,8 +1549,8 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (SafeTrade) { SafeTrade = false; PrintToChat(player, string.Format(GetMessage("Toggle Safe Trade", player), "[FF0000]OFF")); }
-            else { SafeTrade = true; PrintToChat(player, string.Format(GetMessage("Toggle Safe Trade", player), "[00FF00]ON")); }
+            if (SafeTrade) { SafeTrade = false; PrintToChat(player, string.Format(GetMessage("Toggle Safe Trade", player), "[00FF00]ON")); }
+            else { SafeTrade = true; PrintToChat(player, string.Format(GetMessage("Toggle Safe Trade", player), "[FF0000]OFF")); }
 
             SaveConfigData();
         }
@@ -2063,7 +1630,7 @@ namespace Oxide.Plugins
         {
             if (selection == Options.Cancel) return;
 
-            string resource = Capitalise(dialogue.ValueMessage);
+            var resource = Capitalise(dialogue.ValueMessage);
 
             if (!_GEData.TradeList.ContainsKey(resource))
             {
@@ -2081,15 +1648,15 @@ namespace Oxide.Plugins
 
             if (_GEData.TradeList[resource] == null) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
 
-            string message = "";
+            string message;
             switch (type)
             {
                 case 1:
-                    message = string.Format(GetMessage("Store Buy Amount", player), resource, _GEData.TradeList[resource].BuyPrice, _GEData.TradeList[resource].MaxStackSize);
+                    message = string.Format(GetMessage("Store Buy Amount", player), resource, _GEData.TradeList[resource].BuyPrice);
                     player.ShowInputPopup(GetMessage("Popup Title", player), message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeAmount(player, options, dialogue1, resource, 1));
                     break;
                 case 2:
-                    message = string.Format(GetMessage("Store Sell Amount", player), resource, _GEData.TradeList[resource].SellPrice, _GEData.TradeList[resource].MaxStackSize);
+                    message = string.Format(GetMessage("Store Sell Amount", player), resource, _GEData.TradeList[resource].SellPrice);
                     player.ShowInputPopup(GetMessage("Popup Title", player), message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeAmount(player, options, dialogue1, resource, 2));
                     break;
             }
@@ -2144,23 +1711,16 @@ namespace Oxide.Plugins
 
             if (!CanRemoveGold(player, totalValue)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy No Gold", player)); return; }
 
-            ItemCollection inventory = player.GetInventory().Contents;
+            var inventory = player.GetInventory().Contents;
+            var stackLimit = GetStackLimit(resource);
 
-            int stacks = _GEData.TradeList[resource].GetStacks(amount);
+            var stacks = (int)Math.Ceiling((double)amount / stackLimit);
             if (inventory.FreeSlotCount < stacks) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy No Inventory Space", player)); return; }
 
-            InvItemBlueprint blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
-            int amountRemaining = amount;
-            for (int i = 0; i < stacks; i++)
-            {
-                InvGameItemStack invGameItemStack = new InvGameItemStack(blueprintForName, amountRemaining, null);
-                ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
-                amountRemaining -= _ItemList[resource];
-            }
-
+            AddItemsToInventory(inventory, resource, stackLimit, amount);
             RemoveGold(player, totalValue);
 
-            _GEData.TradeList[resource].UpdatePrices(amount, 1);
+            _GEData.TradeList[resource].UpdatePrices(stackLimit, amount, 1);
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Store Buy Complete", player), amount, resource));
             PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy Finish", player));
@@ -2174,11 +1734,12 @@ namespace Oxide.Plugins
 
             if (!CanRemoveResource(player, resource, amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell No Resources", player)); return; }
 
-            RemoveItemsFromInventory(player, resource, amount);
+            var stackLimit = GetStackLimit(resource);
+            RemoveItemsFromInventory(player.GetInventory().Contents, resource, stackLimit, amount);
 
             GiveGold(player, totalValue);
             
-            _GEData.TradeList[resource].UpdatePrices(amount, 2);
+            _GEData.TradeList[resource].UpdatePrices(stackLimit, amount, 2);
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Store Sell Complete", player), amount, resource));
             PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell Finish", player));
@@ -2238,41 +1799,35 @@ namespace Oxide.Plugins
         {
             if (selection == Options.Cancel) return;
 
-            string amountText = dialogue.ValueMessage;
+            var amountText = dialogue.ValueMessage;
 
-            int amount = 0;
+            int amount;
             if (!int.TryParse(amountText, out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
             if (amount < 1 || amount > _PlayerData[shopOwner].Shop.ItemList[resource].GetAmount()) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy Amount Wrong", player)); return; }
 
-            int totalValue = _PlayerData[shopOwner].Shop.ItemList[resource].GetPrice(amount);
+            var totalValue = _PlayerData[shopOwner].Shop.ItemList[resource].GetPrice(amount);
 
-            string message = string.Format(GetMessage("Shop Buy Confirm", player), amount, resource, totalValue);
+            var message = string.Format(GetMessage("Shop Buy Confirm", player), amount, resource, totalValue);
 
             message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
 
             player.ShowConfirmPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, options, shopOwner, resource, totalValue, amount));
         }
 
-        private void CheckIfThePlayerCanAffordThis(Player player, Options selection, ulong shopOwner, string resource, int totalValue, int amount)
+        private void CheckIfThePlayerCanAffordThis(Player player, Options selection, ulong shopOwner, string resource, long totalValue, int amount)
         {
             if (selection != Options.Yes) return;
 
             if (!CanRemoveGold(player, totalValue)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Gold", player)); return; }
 
-            ItemCollection inventory = player.GetInventory().Contents;
+            var inventory = player.GetInventory().Contents;
+            var stackLimit = GetStackLimit(resource);
 
-            int stacks = _PlayerData[shopOwner].Shop.ItemList[resource].GetStacks();
+            var stacks = (int)Math.Ceiling((double)amount / stackLimit);
             if (inventory.FreeSlotCount < stacks) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Inventory Space", player)); return; }
 
-            InvItemBlueprint blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
-            int amountRemaining = amount;
-            for (int i = 0; i < stacks; i++)
-            {
-                InvGameItemStack invGameItemStack = new InvGameItemStack(blueprintForName, amountRemaining, null);
-                ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
-                amountRemaining -= _ItemList[resource];
-            }
+            AddItemsToInventory(inventory, resource, stackLimit, amount);
 
             RemoveGold(player, totalValue);
             GiveGold(shopOwner, totalValue);
@@ -2303,21 +1858,7 @@ namespace Oxide.Plugins
             SaveTradeData();
         }
 
-        //private void CheckExchangeItemList()
-        //{
-        //    if (_GEData.TradeList == null) _GEData.TradeList = new SortedDictionary<string, TradeData>();
-        //    if (_GEData.TradeList.Count > 0) return;
-
-        //    foreach (KeyValuePair<string, TradeData> item in _DefaultTradeList)
-        //    {
-        //        TradeData newItem = new TradeData(item.Value.OriginalPrice, _ItemList[item.Key], SellPercentage);
-        //        _GEData.TradeList.Add(item.Key, newItem);
-        //    }
-
-        //    SaveTradeData();
-        //}
-
-        private bool CanRemoveGold(Player player, int amount)
+        private bool CanRemoveGold(Player player, long amount)
         {
             if (_PlayerData[player.Id].Gold - amount < 0) return false;
             return true;
@@ -2361,7 +1902,7 @@ namespace Oxide.Plugins
             return 0;
         }
 
-        private void GiveGold(Player player, int amount)
+        private void GiveGold(Player player, long amount)
         {
             if (_PlayerData[player.Id].Gold + amount > MaxPossibleGold)
             {
@@ -2373,7 +1914,7 @@ namespace Oxide.Plugins
             SaveTradeData();
         }
 
-        private void GiveGold(ulong playerId, int amount)
+        private void GiveGold(ulong playerId, long amount)
         {
             if (_PlayerData[playerId].Gold + amount > MaxPossibleGold) _PlayerData[playerId].Gold = MaxPossibleGold;
             else _PlayerData[playerId].Gold += amount;
@@ -2381,36 +1922,51 @@ namespace Oxide.Plugins
             SaveTradeData();
         }
 
-        private void RemoveGold(Player player, int amount)
+        private void RemoveGold(Player player, long amount)
         {
             _PlayerData[player.Id].Gold -= amount;
 
-            if (_PlayerData[player.Id].Gold < 0) _PlayerData[player.Id].Gold = 0;
+            if (_PlayerData[player.Id].Gold < 0L) _PlayerData[player.Id].Gold = 0L;
         }
 
-        private void RemoveGold(ulong playerId, int amount)
+        private void RemoveGold(ulong playerId, long amount)
         {
             _PlayerData[playerId].Gold -= amount;
 
-            if (_PlayerData[playerId].Gold < 0) _PlayerData[playerId].Gold = 0;
+            if (_PlayerData[playerId].Gold < 0L) _PlayerData[playerId].Gold = 0L;
         }
 
-        public void RemoveItemsFromInventory(Player player, string resource, int amount)
+        private void AddItemsToInventory(ItemCollection inventory, string resource, int stackLimit, int amount)
         {
-            ItemCollection inventory = player.GetInventory().Contents;
-
-            int removeAmount = 0;
-            int amountRemaining = amount;
-
-            foreach (InvGameItemStack item in inventory.Where(item => item != null))
+            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
+            var stacks = (int)Math.Ceiling((double)amount / stackLimit);
+            var amountRemaining = amount;
+            for (var i = 0; i < stacks; i++)
             {
-                if (item.Name != resource) continue;
-
-                removeAmount = amountRemaining;
-                if (item.StackAmount < removeAmount) removeAmount = item.StackAmount;
-                inventory.SplitItem(item, removeAmount);
-                amountRemaining = amountRemaining - removeAmount;
+                var invGameItemStack = new InvGameItemStack(blueprintForName, amountRemaining, null);
+                inventory.AddItem(invGameItemStack, true);
+                amountRemaining -= stackLimit;
             }
+        }
+
+        private void RemoveItemsFromInventory(ItemCollection inventory, string resource, int stackLimit, int amount)
+        {
+            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
+            var stacks = (int)Math.Ceiling((double)amount / stackLimit);
+            var amountRemaining = amount;
+            for (var i = 0; i < stacks; i++)
+            {
+                var invGameItemStack = new InvGameItemStack(blueprintForName, amountRemaining, null);
+                inventory.RemoveItem(invGameItemStack, true);
+                amountRemaining -= stackLimit;
+            }
+        }
+
+        private static int GetStackLimit(string name)
+        {
+            var blueprint = InvDefinitions.Instance.Blueprints.GetBlueprintForName(name, true, true);
+            var containerManagement = blueprint.TryGet<ContainerManagement>();
+            return containerManagement?.StackLimit ?? 0;
         }
 
         private void DeflatePrices()
@@ -2458,12 +2014,15 @@ namespace Oxide.Plugins
         private void OnPlayerDisconnected(Player player)
         {
             CheckPlayerExists(player);
+
+            SaveTradeData();
         }
 
         private void OnEntityDeath(EntityDeathEvent e)
         {
             #region Null Checks
             if (e == null) return;
+            if (e.Cancelled) return;
             if (e.KillingDamage == null) return;
             if (e.KillingDamage.DamageSource == null) return;
             if (!e.KillingDamage.DamageSource.IsPlayer) return;
@@ -2472,13 +2031,13 @@ namespace Oxide.Plugins
             if (e.Entity == e.KillingDamage.DamageSource) return;
             #endregion
 
-            Player killer = e.KillingDamage.DamageSource.Owner;
+            var killer = e.KillingDamage.DamageSource.Owner;
             CheckPlayerExists(killer);
 
-            int goldReward = 0;
+            int goldReward;
             if (!e.Entity.IsPlayer)
             {
-                Entity entity = e.Entity;
+                var entity = e.Entity;
                 if (IsAnimal(entity) && PveGold)
                 {
                     goldReward = _Random.Next(2, GoldRewardForPve);
@@ -2492,16 +2051,16 @@ namespace Oxide.Plugins
                 if (!PvpGold) return;
 
                 if (e.Entity.Owner == null) return;
-                Player victim = e.Entity.Owner;
+                var victim = e.Entity.Owner;
                 CheckPlayerExists(victim);
 
                 if (victim.Id == 0 || killer.Id == 0) return;
                 if (victim.GetGuild() == null || killer.GetGuild() == null) return;
                 if (victim.GetGuild().Name == killer.GetGuild().Name) { PrintToChat(killer, GetMessage("Chat Title", killer) + GetMessage("Gold Guild", killer)); return; }
 
-                int victimGold = _PlayerData[victim.Id].Gold;
-                goldReward = (int)(victimGold * (double)(GoldStealPercentage / 100));
-                int goldAmount = _Random.Next(0, goldReward);
+                var victimGold = _PlayerData[victim.Id].Gold;
+                goldReward = (int)(victimGold * (GoldStealPercentage / 100));
+                var goldAmount = (long)_Random.Next(0, goldReward);
                 if (goldAmount > victimGold) goldAmount = victimGold;
 
                 if (goldAmount == 0) PrintToChat(killer, string.Format(GetMessage("Gold Kill", killer), victim.Name));
@@ -2521,6 +2080,7 @@ namespace Oxide.Plugins
         {
             #region Null Checks
             if (e == null) return;
+            if (e.Cancelled) return;
             if (e.Damage == null) return;
             if (e.Damage.DamageSource == null) return;
             if (!e.Damage.DamageSource.IsPlayer) return;
@@ -2541,13 +2101,14 @@ namespace Oxide.Plugins
         {
             #region Null Checks
             if (e == null) return;
+            if (e.Cancelled) return;
             if (e.Position == null) return;
             if (e.Damage == null) return;
             if (e.Damage.DamageSource == null) return;
             if (!e.Damage.DamageSource.IsPlayer) return;
             #endregion
 
-            TilesetColliderCube centralPrefabAtLocal = BlockManager.DefaultCubeGrid.GetCentralPrefabAtLocal(e.Position);
+            var centralPrefabAtLocal = BlockManager.DefaultCubeGrid.GetCentralPrefabAtLocal(e.Position);
             SalvageModifier component = null;
             if (centralPrefabAtLocal != null) component = centralPrefabAtLocal.GetComponent<SalvageModifier>();
 
