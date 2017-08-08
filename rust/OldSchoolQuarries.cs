@@ -6,16 +6,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.1", ResourceId = 2585)]
+	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.2", ResourceId = 2585)]
 	[Description("Makes resource output from quarries better")]
 	class OldSchoolQuarries : RustPlugin
 	{
 		#region Variables
 		private enum OreType { None, Sulfur, Metal, HighQuality };
-
-		private ItemDefinition sulfur = ItemManager.itemList.Find(x => x.shortname == "sulfur.ore");
-		private ItemDefinition metal = ItemManager.itemList.Find(x => x.shortname == "metal.ore");
-		private ItemDefinition hq = ItemManager.itemList.Find(x => x.shortname == "hq.metal.ore");
 
 		class DepositEntry
 		{
@@ -62,12 +58,11 @@ namespace Oxide.Plugins
 		{
 			permission.RegisterPermission($"oldschoolquarries.probe", this);
 			LoadData();
-			InitializeDeposits();
 		}
 		//
 		// Edit the stored resource deposits
 		//
-		void InitializeDeposits()
+		void OnServerInitialized()
 		{
 			foreach (Deposit deposit in data.changedDeposits)
 			{
@@ -94,6 +89,10 @@ namespace Oxide.Plugins
 
 				if (oreCount > 1)
 					return;
+
+				ItemDefinition sulfur = ItemManager.itemList.Find(x => x.shortname == "sulfur.ore");
+				ItemDefinition metal = ItemManager.itemList.Find(x => x.shortname == "metal.ore");
+				ItemDefinition hq = ItemManager.itemList.Find(x => x.shortname == "hq.metal.ore");
 
 				foreach (DepositEntry entry in deposit.entries)
 				{
@@ -189,6 +188,10 @@ namespace Oxide.Plugins
 
 				if (oreCount > 1)
 					return;
+
+				ItemDefinition sulfur = ItemManager.itemList.Find(x => x.shortname == "sulfur.ore");
+				ItemDefinition metal = ItemManager.itemList.Find(x => x.shortname == "metal.ore");
+				ItemDefinition hq = ItemManager.itemList.Find(x => x.shortname == "hq.metal.ore");
 
 				Deposit deposit = new Deposit { origin = rd.origin };
 
