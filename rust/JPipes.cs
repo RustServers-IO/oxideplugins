@@ -6,12 +6,14 @@ using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
+using Oxide.Game.Rust.Libraries;
 using Rust;
 using System.Collections;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.1", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.5.2", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -47,16 +49,16 @@ namespace Oxide.Plugins {
                 ["SelectFirst"] = "Use the Hammer to select the First Container",
                 ["SelectSecond"] = "Use the Hammer to select the Second Container",
                 //["SelectCancel"] = "Canceled Pipe Creation",
-                ["SelectSubtextBind"] = "Press [P] to Cancel",
-                ["SelectSubtextCmd"] = "Do /p to Cancel",
+                ["SelectSubtextBind"] = "Press [{0}] to Cancel",
+                ["SelectSubtextCmd"] = "Do /{0} to Cancel",
                 ["PipeCreated"] = "Pipe has been created!",
 
                 ["CopyingTextFirst"] = "Use the Hammer to select the jPipe to copy from",
                 ["CopyingText"] = "Use the Hammer to Paste",
-                ["CopyingSubtext"] = "Do /p c to Exit",
+                ["CopyingSubtext"] = "Do /{0} c to Exit",
                 
                 ["RemovingText"] = "Use the Hammer to Remove Pipes",
-                ["RemovingSubtext"] = "Do /p r to Exit",
+                ["RemovingSubtext"] = "Do /{0} r to Exit",
 
                 ["MenuTitle"] = "<color=#80c5ff>j</color>Pipe",
                 ["MenuTurnOn"] = "Turn On",
@@ -69,16 +71,17 @@ namespace Oxide.Plugins {
                 ["MenuInfo"] = "Owner  <color=#80c5ff>{0}</color>\nFlowrate  <color=#80c5ff>{1}/sec</color>\nLength  <color=#80c5ff>{2}</color>",
 
                 ["HelpCmdTitle"] = "<size=28><color=#80c5ff>j</color>Pipes</size> <size=10>by TheGreatJ</size>",
-                ["HelpCmdCommands"] = "<size=18>Commands</size>\n<color=#80c5ff>/p</color> create a pipe",
-                ["HelpCmdMenu"] = "<size=18>Pipe Menu</size><size=12> - hit pipe with hammer to open</size>\n<color=#80c5ff>Turn On / Turn Off</color> toggle item transfer\n<color=#80c5ff>Auto Starter</color> after a pipe sends an item to a furnace, recycler, refinery, mining quarry, or pump jack, it will attempt to start it\n<color=#80c5ff>Change Direction</color> makes the items go the other direction through the pipe\n<color=#80c5ff>Multi Stack / Single Stack</color> Multi Stack mode allows the pipe to create multiple stacks of the same item. Single Stack mode prevents the pipe from creating more than one stack of an item. Single Stack mode is mostly just for fueling furnaces to leave room for other items.\n<color=#80c5ff>Item Filter</color> when items are in the filter, only those items will be transferred through the pipe. When the filter is empty, all items will be transferred.",
+                ["HelpCmdCommands"] = "<size=18>Commands</size>\n<color=#80c5ff>/{0} </color> start or stop placing a pipe\n<color=#80c5ff>/{0} c /{0}copy </color>or<color=#80c5ff> /{0} copy </color> copy pipe settings from one pipe to another\n <color=#80c5ff>/{0} r /{0}remove </color>or<color=#80c5ff> /{0} remove </color> remove pipe with hammer\n <color=#80c5ff>/{0} s /{0}stats </color>or<color=#80c5ff> /{0} stats </color> pipe status with how many pipes you are using\n <color=#80c5ff>/{0} h /{0}help </color>or<color=#80c5ff> /{0} help </color> JPipes in-game help",
+                ["HelpCmdMenu"] = "<size=18>Pipe Menu</size><size=12> - hit pipe with hammer to open</size>\n<color=#80c5ff>Turn On / Turn Off</color> toggle item/liquid transfer\n<color=#80c5ff>Auto Starter</color> after a pipe sends an item to a furnace, recycler, refinery, mining quarry, or pump jack, it will attempt to start it\n<color=#80c5ff>Change Direction</color> makes the items go the other direction through the pipe\n<color=#80c5ff>Multi Stack / Single Stack</color> Multi Stack mode allows the pipe to create multiple stacks of the same item. Single Stack mode prevents the pipe from creating more than one stack of an item. Single Stack mode is mostly just for fueling furnaces to leave room for other items.\n<color=#80c5ff>Item Filter</color> when items are in the filter, only those items will be transferred through the pipe. When the filter is empty, all items will be transferred.",
                 ["HelpCmdUpgrade"] = "<size=18>Upgrading Pipes</size>\nUse a Hammer and upgrade the pipe just like any other building\nEach upgrade level increases the pipe's flow rate and Item Filter size.",
-                ["HelpBindTip"] = "JPipes Tip:\nYou can bind the /p command to a hotkey by putting\n\"bind p jpipes.create\" into the F1 console",
+                ["HelpBindTip"] = "JPipes Tip:\nYou can bind the /{0} command to a hotkey by putting\n\"bind {1} jpipes.create\" into the F1 console",
 
                 ["StatsCmd"] = "<size=20><color=#80c5ff>j</color>Pipes Stats</size>\nYou have {0} jpipes currently in use.",
                 ["StatsCmdLimit"] = "<size=20><color=#80c5ff>j</color>Pipes Stats</size>\nYou have {0} of {1} jpipes currently in use."
             }, this);
 
             LoadConfig();
+            LoadCommands();
             maxpipedistsq = (maxpipedist * 0.5f) * (maxpipedist * 0.5f);
 
             users = new Dictionary<ulong, UserInfo>();
@@ -191,7 +194,7 @@ namespace Oxide.Plugins {
                         if (userinfo.placestart == null) {
                             userinfo.placestart = hit.HitEntity;
 
-                            ShowOverlayText(player, lang.GetMessage("SelectSecond", this, player.UserIDString), lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString));
+                            ShowOverlayText(player, lang.GetMessage("SelectSecond", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey : pipecommandprefix));
                         } else if (userinfo.placestart != null) { // select second
                             userinfo.placeend = hit.HitEntity;
                             NewPipe(player, userinfo);
@@ -199,7 +202,7 @@ namespace Oxide.Plugins {
                     } else {
                         ShowOverlayText(player, lang.GetMessage("ErrorPrivilegeAttach", this, player.UserIDString));
                         timer.Once(2f, () => {
-                            ShowOverlayText(player, lang.GetMessage((userinfo.placestart == null) ? "SelectFirst" : "SelectSecond", this, player.UserIDString), lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString));
+                            ShowOverlayText(player, lang.GetMessage((userinfo.placestart == null) ? "SelectFirst" : "SelectSecond", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey : pipecommandprefix));
                         });
                     }
                 }
@@ -215,7 +218,7 @@ namespace Oxide.Plugins {
                                 userinfo.clipboard = new jPipeData();
                                 userinfo.clipboard.fromPipe(s.pipe);
 
-                                ShowOverlayText(player, lang.GetMessage("CopyingText", this, player.UserIDString), lang.GetMessage("CopyingSubtext", this, player.UserIDString));
+                                ShowOverlayText(player, lang.GetMessage("CopyingText", this, player.UserIDString), string.Format(lang.GetMessage("CopyingSubtext", this, player.UserIDString), pipecommandprefix));
 
                             } else {
                                 userinfo.clipboard.s = s.pipe.sourcecont.net.ID;
@@ -364,26 +367,47 @@ namespace Oxide.Plugins {
             }
             return true;
         }
+        
+        private void LoadCommands() {
+            AddCovalenceCommand(pipecommandprefix, "pipemainchat");
+            AddCovalenceCommand($"{pipecommandprefix}help", "cmdpipehelp");
+            AddCovalenceCommand($"{pipecommandprefix}copy", "cmdpipecopy");
+            AddCovalenceCommand($"{pipecommandprefix}remove", "cmdpiperemove");
+            AddCovalenceCommand($"{pipecommandprefix}stats", "cmdpipestats");
+            AddCovalenceCommand($"{pipecommandprefix}list", "cmdpipelist");
+        }
+        private void cmdpipehelp(IPlayer cmdplayer, string cmd, string[] args) => pipehelp(BasePlayer.Find(cmdplayer.Id), cmd, args);
+        private void cmdpipecopy(IPlayer cmdplayer, string cmd, string[] args) => pipecopy(BasePlayer.Find(cmdplayer.Id), cmd, args);
+        private void cmdpiperemove(IPlayer cmdplayer, string cmd, string[] args) => piperemove(BasePlayer.Find(cmdplayer.Id), cmd, args);
+        private void cmdpipestats(IPlayer cmdplayer, string cmd, string[] args) => pipestats(BasePlayer.Find(cmdplayer.Id), cmd, args);
+        private void cmdpipelist(IPlayer cmdplayer, string cmd, string[] args) => pipelist(BasePlayer.Find(cmdplayer.Id), cmd, args);
+        
+        // [ChatCommand("p")]
+        private void pipemainchat(IPlayer cmdplayer, string cmd, string[] args) {
+            BasePlayer player = BasePlayer.Find(cmdplayer.Id);
 
-        [ChatCommand("p")]
-        private void pipecreatechat(BasePlayer player, string cmd, string[] args) {
             if (!commandperm(player))
                 return;
 
             if (args.Length > 0) {
                 switch (args[0]) {
                     case "h":
+                    case "help":
                         pipehelp(player, cmd, args);
                         break;
                     case "c":
+                    case "copy":
                         pipecopy(player, cmd, args);
                         break;
                     case "r":
+                    case "remove":
                         piperemove(player, cmd, args);
                         break;
                     case "s":
+                    case "stats":
                         pipestats(player, cmd, args);
                         break;
+                    case "l":
                     case "list":
                         pipelist(player, cmd, args);
                         break;
@@ -393,17 +417,17 @@ namespace Oxide.Plugins {
             }
         }
 
-        [ChatCommand("phelp")]
+        //[ChatCommand("phelp")]
         private void pipehelp(BasePlayer player, string cmd, string[] args) {
             if (!commandperm(player))
                 return;
             PrintToChat(player, lang.GetMessage("HelpCmdTitle", this, player.UserIDString));
-            PrintToChat(player, lang.GetMessage("HelpCmdCommands", this, player.UserIDString));
+            PrintToChat(player, string.Format(lang.GetMessage("HelpCmdCommands", this, player.UserIDString), pipecommandprefix));
             PrintToChat(player, lang.GetMessage("HelpCmdMenu", this, player.UserIDString));
             PrintToChat(player, lang.GetMessage("HelpCmdUpgrade", this, player.UserIDString));
         }
 
-        [ChatCommand("pcopy")]
+        //[ChatCommand("pcopy")]
         private void pipecopy(BasePlayer player, string cmd, string[] args) {
             if (!commandperm(player))
                 return;
@@ -414,7 +438,7 @@ namespace Oxide.Plugins {
             userinfo.placestart = null;
 
             if (userinfo.state == UserState.copying) {
-                ShowOverlayText(player, lang.GetMessage("CopyingTextFirst", this, player.UserIDString), lang.GetMessage("CopyingSubtext", this, player.UserIDString));
+                ShowOverlayText(player, lang.GetMessage("CopyingTextFirst", this, player.UserIDString), string.Format(lang.GetMessage("CopyingSubtext", this, player.UserIDString), pipecommandprefix));
             } else {
                 HideOverlayText(player);
                 userinfo.clipboard = null;
@@ -422,7 +446,7 @@ namespace Oxide.Plugins {
 
         }
 
-        [ChatCommand("premove")]
+        //[ChatCommand("premove")]
         private void piperemove(BasePlayer player, string cmd, string[] args) {
             if (!commandperm(player))
                 return;
@@ -434,13 +458,13 @@ namespace Oxide.Plugins {
             userinfo.clipboard = null;
             
             if (userinfo.state == UserState.removing) {
-                ShowOverlayText(player, lang.GetMessage("RemovingText", this, player.UserIDString), lang.GetMessage("RemovingSubtext", this, player.UserIDString));
+                ShowOverlayText(player, lang.GetMessage("RemovingText", this, player.UserIDString), string.Format(lang.GetMessage("RemovingSubtext", this, player.UserIDString), pipecommandprefix));
             } else {
                 HideOverlayText(player);
             }
         }
 
-        [ChatCommand("pstats")]
+        //[ChatCommand("pstats")]
         private void pipestats(BasePlayer player, string cmd, string[] args) {
             if (!commandperm(player))
                 return;
@@ -453,7 +477,7 @@ namespace Oxide.Plugins {
                 PrintToChat(player, string.Format(lang.GetMessage("StatsCmdLimit", this, player.UserIDString), userinfo.pipes.Count, pipelimit));
         }
 
-        [ChatCommand("plist")]
+        //[ChatCommand("plist")]
         private void pipelist(BasePlayer player, string cmd, string[] args) {
 
             if (!permission.UserHasPermission(player.UserIDString, "jpipes.admin")) {
@@ -1379,9 +1403,9 @@ namespace Oxide.Plugins {
 
             if (userinfo.state == UserState.placing) {
                 if (!isUsingBind)
-                    PrintToChat(player, lang.GetMessage("HelpBindTip", this, player.UserIDString));
+                    PrintToChat(player, string.Format(lang.GetMessage("HelpBindTip", this, player.UserIDString), pipecommandprefix, pipehotkey));
 
-                ShowOverlayText(player, lang.GetMessage("SelectFirst", this, player.UserIDString), lang.GetMessage(isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString));
+                ShowOverlayText(player, lang.GetMessage("SelectFirst", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey : pipecommandprefix));
             } else {
                 //ShowOverlayText(player,"",lang.GetMessage("SelectCancel",this,player.UserIDString));
                 HideOverlayText(player);
@@ -1947,6 +1971,7 @@ namespace Oxide.Plugins {
         private static int updaterate;
         private static bool drawflowarrows;
         private static bool animatearrows;
+        private string pipecommandprefix;
         private string pipehotkey;
         private List<int> flowrates;
         private List<int> filtersizes;
@@ -1967,6 +1992,7 @@ namespace Oxide.Plugins {
             updaterate = ConfigGet("updaterate", 2, (int x) => x > 0, "should be greater than 0");
             drawflowarrows = ConfigGet("drawflowarrows", true);
             animatearrows = ConfigGet("animatearrows", false);
+            pipecommandprefix = ConfigGet("pipecommandprefix", "p");
             pipehotkey = ConfigGet("pipehotkey", "p");
             flowrates = ConfigGet("flowrates", new List<int>() { 1, 5, 10, 30, 50 }, (List<int> l) => l.Count == 5, "should contain 5 integers");
             filtersizes = ConfigGet("filtersizes", new List<int>() { 0, 6, 12, 18, 30 }, (List<int> l) => l.Count == 5 && !l.Exists(x => x < 0 || x > 30), "should contain 5 integers with each val ue between 0 and 30");
