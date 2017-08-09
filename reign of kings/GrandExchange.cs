@@ -17,7 +17,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.0", ResourceId = 1145)]
+    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.1", ResourceId = 1145)]
     public class GrandExchange : ReignOfKingsPlugin
     {
         #region Variables
@@ -1733,12 +1733,12 @@ namespace Oxide.Plugins
             if (selection != Options.Yes) return;
 
             if (!CanRemoveResource(player, resource, amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell No Resources", player)); return; }
-
+            
             var stackLimit = GetStackLimit(resource);
             RemoveItemsFromInventory(player.GetInventory().Contents, resource, stackLimit, amount);
 
             GiveGold(player, totalValue);
-            
+
             _GEData.TradeList[resource].UpdatePrices(stackLimit, amount, 2);
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Store Sell Complete", player), amount, resource));
@@ -1951,14 +1951,15 @@ namespace Oxide.Plugins
 
         private void RemoveItemsFromInventory(ItemCollection inventory, string resource, int stackLimit, int amount)
         {
-            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName(resource, true, true);
-            var stacks = (int)Math.Ceiling((double)amount / stackLimit);
             var amountRemaining = amount;
-            for (var i = 0; i < stacks; i++)
+            foreach (var item in inventory.Where(item => item != null))
             {
-                var invGameItemStack = new InvGameItemStack(blueprintForName, amountRemaining, null);
-                inventory.RemoveItem(invGameItemStack, true);
-                amountRemaining -= stackLimit;
+                if (!string.Equals(item.Name, resource, StringComparison.CurrentCultureIgnoreCase)) continue;
+
+                var removeAmount = amountRemaining;
+                if (item.StackAmount < removeAmount) removeAmount = item.StackAmount;
+                inventory.SplitItem(item, removeAmount);
+                amountRemaining -= removeAmount;
             }
         }
 
