@@ -112,7 +112,6 @@ namespace Oxide.Plugins
                 Blueprints.Add(bp.targetItem.shortname, bp.time);
 
             itemDefinitions = ItemManager.itemList;
-            Puts(itemDefinitions.Count.ToString());
             foreach (var itemdef in itemDefinitions)
                 Items.Add(itemdef.displayName.english);
 
