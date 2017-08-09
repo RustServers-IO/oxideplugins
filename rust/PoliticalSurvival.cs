@@ -1,5 +1,4 @@
-// Reference: MySql.Data
-
+﻿// Reference: MySql.Data
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Jonty", 0.2)]
+    [Info("PoliticalSurvival", "Jonty", 0.3)]
     [Description("Political Survival - Become the President, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
@@ -93,7 +92,7 @@ namespace Oxide.Plugins
                     string[] TaxCoordinates = SettingsReader.GetString(3).Split(';');
                     TaxChestX = Convert.ToSingle(TaxCoordinates[0]);
                     TaxChestY = Convert.ToSingle(TaxCoordinates[1]);
-                    TaxChestZ = Convert.ToSingle(TaxCoordinates[2]);				
+                    TaxChestZ = Convert.ToSingle(TaxCoordinates[2]);
                 }
 
                 SettingsReader.Dispose();
@@ -104,7 +103,7 @@ namespace Oxide.Plugins
                 PrintToConsole(e.ToString());
                 PrintToConsole("If this is the first time running the plugin, please edit the configuration!");
             }
-         
+
             Puts("Realm name is " + RealmName);
             Puts("Tax level is " + TaxLevel);
             Puts("President is " + President);
@@ -202,22 +201,22 @@ namespace Oxide.Plugins
         {
             BasePlayer Defender = Info.HitEntity.ToPlayer();
 
-            if (Defender != null)
+            if (Defender == null)
             {
-                // Is a person
-            }
-            else
-            {
-                uint EntityId = Info.HitEntity.prefabID;
+                List<long> PossibleChests = new List<long>();
+                PossibleChests.Add(2014947887);
+                PossibleChests.Add(3439001196);
 
-                if (EntityId == 2014947887 || EntityId == 3439001196)
+                if (PossibleChests.Contains(Info.HitEntity.prefabID))
                 {
-                    StrayPlayer Stray = OnlinePlayers[Attacker.ToPlayer()];
+                    StrayPlayer Player = null;
 
-                    if (Stray == null)
+                    if (OnlinePlayers.ContainsKey(Attacker.ToPlayer()))
+                        Player = OnlinePlayers[Attacker.ToPlayer()];
+                    else
                         return;
 
-                    if (Stray.IsSettingTaxChest)
+                    if (Player.IsSettingTaxChest)
                     {
                         Vector3 BoxPosition = Info.HitEntity.transform.position;
                         float x = BoxPosition.x;
@@ -229,11 +228,11 @@ namespace Oxide.Plugins
                         TaxChestX = x;
                         TaxChestY = y;
                         TaxChestZ = z;
-						
+
                         SaveTaxContainer();
                         LoadTaxContainer();
 
-                        Stray.IsSettingTaxChest = false;
+                        Player.IsSettingTaxChest = false;
                     }
                 }
             }
@@ -295,7 +294,7 @@ namespace Oxide.Plugins
 
             SendReply(Player, lang.GetMessage("InfoPresident", this, Player.UserIDString) + ": " + PresidentName);
             SendReply(Player, lang.GetMessage("InfoRealmName", this, Player.UserIDString) + ": " + RealmName);
-            SendReply(Player, lang.GetMessage("InfoTaxLevel", this, Player.UserIDString) + ": " + TaxLevel + "%");         
+            SendReply(Player, lang.GetMessage("InfoTaxLevel", this, Player.UserIDString) + ": " + TaxLevel + "%");
         }
 
         [ChatCommand("claimpresident")]
@@ -370,7 +369,7 @@ namespace Oxide.Plugins
             StringBuilder Builder = new StringBuilder();
             int PlayerCount = BasePlayer.activePlayerList.Count;
             int Cycle = 1;
-            
+
             Builder.Append(string.Format(lang.GetMessage("OnlinePlayers", this), PlayerCount) + " ");
 
             foreach (BasePlayer iPlayer in BasePlayer.activePlayerList)
