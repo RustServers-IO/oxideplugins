@@ -11,7 +11,7 @@ using System.Collections;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.0", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.5.1", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -54,6 +54,9 @@ namespace Oxide.Plugins {
                 ["CopyingTextFirst"] = "Use the Hammer to select the jPipe to copy from",
                 ["CopyingText"] = "Use the Hammer to Paste",
                 ["CopyingSubtext"] = "Do /p c to Exit",
+                
+                ["RemovingText"] = "Use the Hammer to Remove Pipes",
+                ["RemovingSubtext"] = "Do /p r to Exit",
 
                 ["MenuTitle"] = "<color=#80c5ff>j</color>Pipe",
                 ["MenuTurnOn"] = "Turn On",
@@ -180,9 +183,9 @@ namespace Oxide.Plugins {
 
             UserInfo userinfo = GetUserInfo(player);
 
-            if (hit.HitEntity.GetComponent<StorageContainer>() != null) {
+            if (hit.HitEntity.GetComponent<StorageContainer>() != null) { // if we hit a StorageContainer
 
-                if (userinfo.isPlacing && userinfo.placeend == null && checkcontwhitelist(hit.HitEntity)) {
+                if (userinfo.state == UserState.placing && userinfo.placeend == null && checkcontwhitelist(hit.HitEntity)) {
                     if (checkcontprivlage(hit.HitEntity, player)) {
                         // select first
                         if (userinfo.placestart == null) {
@@ -202,11 +205,11 @@ namespace Oxide.Plugins {
                 }
             } else {
                 jPipeSegChild s = hit.HitEntity.GetComponent<jPipeSegChild>();
-                if (s != null) {
+                if (s != null) { // if we hit a pipe
                     if (!commandperm(player))
                         return;
                     if (checkbuildingprivlage(player)) {
-                        if (userinfo.isCopying) {
+                        if (userinfo.state == UserState.copying) { // if user is copying
                             if (userinfo.clipboard == null) {
 
                                 userinfo.clipboard = new jPipeData();
@@ -215,10 +218,10 @@ namespace Oxide.Plugins {
                                 ShowOverlayText(player, lang.GetMessage("CopyingText", this, player.UserIDString), lang.GetMessage("CopyingSubtext", this, player.UserIDString));
 
                             } else {
-                                s.pipe.Destroy();
-
                                 userinfo.clipboard.s = s.pipe.sourcecont.net.ID;
                                 userinfo.clipboard.d = s.pipe.destcont.net.ID;
+
+                                s.pipe.Destroy();
 
                                 jPipe newpipe = new jPipe();
 
@@ -233,7 +236,11 @@ namespace Oxide.Plugins {
                                 }
                             }
 
-                        } else {
+                        } else if (userinfo.state == UserState.removing) { // if user is removing
+
+                            s.pipe.Destroy();
+
+                        } else if (userinfo.state == UserState.none) { // if user is not in a command
                             s.pipe.OpenMenu(player, userinfo);
                         }
                     } else {
@@ -279,7 +286,7 @@ namespace Oxide.Plugins {
         }
 
         void OnStructureRepair(BaseCombatEntity entity, BasePlayer player) {
-            if (GetUserInfo(player).isPlacing)
+            if (GetUserInfo(player).state != UserState.none)
                 return;
 
             jPipeSegChild p = entity.GetComponent<jPipeSegChild>();
@@ -371,6 +378,9 @@ namespace Oxide.Plugins {
                     case "c":
                         pipecopy(player, cmd, args);
                         break;
+                    case "r":
+                        piperemove(player, cmd, args);
+                        break;
                     case "s":
                         pipestats(player, cmd, args);
                         break;
@@ -399,20 +409,35 @@ namespace Oxide.Plugins {
                 return;
             UserInfo userinfo = GetUserInfo(player);
 
-            userinfo.isPlacing = false;
+            userinfo.state = userinfo.state == UserState.copying ? UserState.none : UserState.copying;
             userinfo.placeend = null;
             userinfo.placestart = null;
 
-            userinfo.isCopying = !userinfo.isCopying;
-
-            if (userinfo.isCopying) {
+            if (userinfo.state == UserState.copying) {
                 ShowOverlayText(player, lang.GetMessage("CopyingTextFirst", this, player.UserIDString), lang.GetMessage("CopyingSubtext", this, player.UserIDString));
             } else {
-                //ShowOverlayText(player,"",lang.GetMessage("SelectCancel",this,player.UserIDString));
                 HideOverlayText(player);
                 userinfo.clipboard = null;
             }
 
+        }
+
+        [ChatCommand("premove")]
+        private void piperemove(BasePlayer player, string cmd, string[] args) {
+            if (!commandperm(player))
+                return;
+            UserInfo userinfo = GetUserInfo(player);
+
+            userinfo.state = userinfo.state == UserState.removing ? UserState.none : UserState.removing;
+            userinfo.placeend = null;
+            userinfo.placestart = null;
+            userinfo.clipboard = null;
+            
+            if (userinfo.state == UserState.removing) {
+                ShowOverlayText(player, lang.GetMessage("RemovingText", this, player.UserIDString), lang.GetMessage("RemovingSubtext", this, player.UserIDString));
+            } else {
+                HideOverlayText(player);
+            }
         }
 
         [ChatCommand("pstats")]
@@ -609,8 +634,7 @@ namespace Oxide.Plugins {
 
         // user data for chat commands
         private class UserInfo {
-            public bool isPlacing = false;
-            public bool isCopying = false;
+            public UserState state = UserState.none;
             public bool isUsingBind = false;
             public BaseEntity placestart;
             public BaseEntity placeend;
@@ -635,6 +659,13 @@ namespace Oxide.Plugins {
                 users[id] = userinfo = new UserInfo();
             return userinfo;
         }
+
+        private enum UserState {
+            none,
+            placing,
+            copying,
+            removing
+        };
 
         // main pipe class
         private class jPipe {
@@ -1292,6 +1323,11 @@ namespace Oxide.Plugins {
             }
         }
 
+        // syncbox
+        private class jSyncBox {
+
+        }
+
         #endregion
 
         #region Pipe Parameters 
@@ -1337,12 +1373,11 @@ namespace Oxide.Plugins {
                 return;
             }
 
-            userinfo.isPlacing = !userinfo.isPlacing;
+            userinfo.state = userinfo.state == UserState.placing ? UserState.none : UserState.placing;
             userinfo.isUsingBind = isUsingBind;
-            userinfo.isCopying = false;
             userinfo.clipboard = null;
 
-            if (userinfo.isPlacing) {
+            if (userinfo.state == UserState.placing) {
                 if (!isUsingBind)
                     PrintToChat(player, lang.GetMessage("HelpBindTip", this, player.UserIDString));
 
@@ -1393,7 +1428,7 @@ namespace Oxide.Plugins {
             }
 
             HideOverlayText(player, 3f);
-            userinfo.isPlacing = false;
+            userinfo.state = UserState.none;
             userinfo.placestart = null;
             userinfo.placeend = null;
         }
@@ -1776,6 +1811,18 @@ namespace Oxide.Plugins {
             private void PlayerStoppedLooting(BasePlayer player) => callback(player);
             public void UpdateFilter(Item item) => itemcallback(item);
         }
+
+        private class jSyncBoxLogic : MonoBehaviour {
+
+            public jSyncBox syncbox;
+
+            public static jSyncBoxLogic Attach(BaseEntity entity, jSyncBox syncbox) {
+                jSyncBoxLogic n = entity.gameObject.AddComponent<jSyncBoxLogic>();
+                n.syncbox = syncbox;
+                return n;
+            }
+        }
+
 
         #endregion
 
