@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Jonty", 0.3.1)]
+    [Info("PoliticalSurvival", "Jonty", "0.3.2")]
     [Description("Political Survival - Become the President, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
@@ -469,11 +469,11 @@ namespace Oxide.Plugins
             RealmName = NewName;
             PrintToChat(string.Format(lang.GetMessage("RealmRenamed", this), NewName));
 
-            string RealmText = "UPDATE settings SET realm_name = '" + RealmName + "'";
-
-            MySqlCommand RealmCommand = new MySqlCommand(RealmText, Database);
-            RealmCommand.ExecuteNonQuery();
-            RealmCommand.Dispose();
+            MySqlCommand Command = new MySqlCommand();
+            Command.CommandText = "UPDATE settings SET realm_name = @realm";
+            Command.Parameters.AddWithValue("@name", RealmName);
+            Command.ExecuteNonQuery();
+            Command.Dispose();
         }
 
         void GetPlayerFromDatabase(BasePlayer Player)

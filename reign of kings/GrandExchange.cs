@@ -17,7 +17,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.1", ResourceId = 1145)]
+    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.2", ResourceId = 1145)]
     public class GrandExchange : ReignOfKingsPlugin
     {
         #region Variables
@@ -662,27 +662,20 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
-            player.SendMessage(" ");
-
             if (input.Length < 2) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
-            player.SendMessage("Checked input format.");
 
             int amount;
             if (!int.TryParse(input[0], out amount)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
-            player.SendMessage("Checked amount is valid.");
             
             if (amount < 1) { PrintToChat(player, GetMessage("Gold Send Steal", player)); return; }
-            player.SendMessage($"Checked amount is not below zero ({amount})");
 
             if (_PlayerData[player.Id].Gold < amount) { PrintToChat(player, GetMessage("Gold Send Not Enough", player)); return; }
-            player.SendMessage($"Checked player has enough gold ({_PlayerData[player.Id]}).");
             
-            string playerName = input.Skip(1).JoinToString(" ");
+            var playerName = input.Skip(1).JoinToString(" ");
 
-            Player target = Server.GetPlayerByName(playerName);
+            var target = Server.GetPlayerByName(playerName);
 
             if (target == null) { PrintToChat(player, GetMessage("Invalid Player", player)); return; }
-            player.SendMessage("Checked target is online.");
 
             CheckPlayerExists(target);
 
@@ -690,9 +683,7 @@ namespace Oxide.Plugins
             PrintToChat(target, string.Format(GetMessage("Gold Received", player), amount, player.DisplayName));
 
             GiveGold(target, amount);
-            player.SendMessage($"Gave {amount} gold to {target.Name}.");
             RemoveGold(player, amount);
-            player.SendMessage($"Removed {amount} gold from {player.Name}.");
 
             SaveTradeData();
         }
