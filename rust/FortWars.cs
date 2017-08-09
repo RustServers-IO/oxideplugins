@@ -7,7 +7,7 @@ using Random = Oxide.Core.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("FortWars", "Sami37 - Naleen", "1.0.0", ResourceId = 1618)]
+    [Info("FortWars", "Sami37 - Naleen", "1.0.1", ResourceId = 1618)]
     class FortWars : RustPlugin
     {
 
@@ -311,14 +311,13 @@ namespace Oxide.Plugins
                 i++;
             }
         }
+        protected override void LoadDefaultConfig() => PrintWarning("Generating new config file...");
 
         ////////////////////////////////////////////////////////////
         // Config //////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////   
         private void LoadConfigVariables()
         {
-            
-            Puts("Configuration file started.");
 
             SetConfig("Time", "Build", TimeBuild);
             SetConfig("Time", "Fight", TimeFight);
@@ -334,6 +333,8 @@ namespace Oxide.Plugins
             SetConfig("Heli", "HPRudder", HeliHPRudder);
             SetConfig("Gather", "Build", BuildGatherMulti);
             SetConfig("Gather", "Fight", FightGatherMulti);
+
+            SaveConfig();
 
             TimeBuild = GetConfig(TimeBuild, "Time", "Build");
             TimeFight = GetConfig(TimeFight, "Time", "Fight");
@@ -354,7 +355,7 @@ namespace Oxide.Plugins
             BuildGatherMulti = GetConfig(BuildGatherMulti, "Gather", "Build");
             FightGatherMulti = GetConfig(FightGatherMulti, "Gather", "Fight");
 
-            Puts("Configuration file updated.");
+            Puts("Configuration file loaded.");
         }
 
         ////////////////////////////////////////////////////////////
@@ -553,8 +554,8 @@ namespace Oxide.Plugins
         {
             List<string> stringArgs = (from arg in args select arg.ToString()).ToList();
             stringArgs.RemoveAt(args.Length - 1);
-
-            if (Config.Get(stringArgs.ToArray()) == null) Config.Set(args);
+            if (Config.Get(stringArgs.ToArray()) == null)
+                Config.Set(args);
         }
 
         T GetConfig<T>(T defaultVal, params object[] args)
