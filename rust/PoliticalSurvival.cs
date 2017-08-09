@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Jonty", 0.3)]
+    [Info("PoliticalSurvival", "Jonty", 0.3.1)]
     [Description("Political Survival - Become the President, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
@@ -199,6 +199,9 @@ namespace Oxide.Plugins
 
         void OnPlayerAttack(BasePlayer Attacker, HitInfo Info)
         {
+            if (Info == null) return;
+            if (Info.HitEntity == null) return;
+
             BasePlayer Defender = Info.HitEntity.ToPlayer();
 
             if (Defender == null)
