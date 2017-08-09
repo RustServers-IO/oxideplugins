@@ -1,16 +1,13 @@
+﻿using System;
 using System.Collections.Generic;
-using System;
-using UnityEngine;
 using System.Linq;
 using System.Reflection;
-using Oxide.Core;
-using Oxide.Core.Plugins;
-using Oxide.Core.Libraries;
-using Rust;
+using UnityEngine;
+using Random = Oxide.Core.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("FortWars", "Naleen", "0.3.3", ResourceId = 1618)]
+    [Info("FortWars", "Sami37 - Naleen", "1.0.0", ResourceId = 1618)]
     class FortWars : RustPlugin
     {
 
@@ -40,7 +37,7 @@ namespace Oxide.Plugins
         ////////////////////////////////////////////////////////////
         // Messages ////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////
-        Dictionary<string, string> LangMessages = new Dictionary<string, string>()
+        Dictionary<string, string> LangMessages = new Dictionary<string, string>
         {
             {"NotEnabled", "Fort Wars is disabled." },
             {"NoConfig", "Creating a new config file." },
@@ -57,63 +54,50 @@ namespace Oxide.Plugins
             {"LowGatherRate", "Gathering rate lowered."},
             {"HiGatherRate", "Gathering rate Increased."},
             {"DropSpawn", "Spawning {0} Cargo Planes."},
-            {"MoreCargoDrop", "Cargo Plane spawns increased."}
+            {"MoreCargoDrop", "Cargo Plane spawns increased."},
+            {"Help", "Syntax: /{0} {1}."}
         };
 
-
-
-        //Loot
-        private static readonly Dictionary<string, object> DefaultGatherResourceModifiers = new Dictionary<string, object>();
-        public Dictionary<string, float> GatherResourceModifiers { get; private set; }
-
         //Crafting
-        public float CraftingRate { get; private set; }
+        private float CraftingRate { get; set; }
 
         List<ItemBlueprint> blueprintDefinitions = new List<ItemBlueprint>();
 
-        private static readonly Dictionary<string, object> DefaultIndividualRates = new Dictionary<string, object>();
-
-        public Dictionary<string, float> Blueprints { get; } = new Dictionary<string, float>();
-        public Dictionary<string, float> IndividualRates { get; private set; }
+        private Dictionary<string, float> Blueprints { get; } = new Dictionary<string, float>();
 
         List<ItemDefinition> itemDefinitions = new List<ItemDefinition>();
 
-        public List<string> Items { get; } = new List<string>();
-
-        //Helicopter
+        private List<string> Items { get; } = new List<string>();
 
         //Timers
-        public List<Oxide.Plugins.Timer> AutoTimers = new List<Oxide.Plugins.Timer>();
+        private List<Timer> AutoTimers = new List<Timer>();
         DateTime PhaseStart;
 
         //Resource Gather
-        public int GatherRate { get; private set; }
-        public float GatherPC = 100;
+        private int GatherRate { get; set; }
+        private float GatherPC = 100;
 
         //Cargo
-        public int MinX { get; set; }
-        public int MaxX { get; set; }
+        private int MinX { get; set; }
+        private int MaxX { get; set; }
 
-        public int MinY { get; set; }
-        public int MaxY { get; set; }
+        private int MinY { get; set; }
+        private int MaxY { get; set; }
 
-        public int MinZ { get; set; }
-        public int MaxZ { get; set; }
+        private int MinZ { get; set; }
+        private int MaxZ { get; set; }
 
         ////////////////////////////////////////////////////////////
         // Oxide Hooks /////////////////////////////////////////////
         ////////////////////////////////////////////////////////////
         void Loaded()
         {
-            LoadDefaultConfig();
+            LoadConfigVariables();
             lang.RegisterMessages(LangMessages, this);
             LoadPermissions();
-        }
-        private void LoadDefaultConfig() {
-            //Config.Clear();
-            LoadConfigVariables();
             SaveConfig();
         }
+
         void OnServerInitialized()
         {
             int iWorldHalfSize = Convert.ToInt32(World.Size / 2);
@@ -123,7 +107,6 @@ namespace Oxide.Plugins
             MaxZ = iWorldHalfSize - 300;
             MinY = 250;
             MaxY = 400;
-            //Puts(" X:" + MinX + " " + MaxX + " Y:" + MinY + " " + MaxY + " Z:" + MinZ + " " + MaxZ);
             blueprintDefinitions = ItemManager.bpList;
             foreach (var bp in blueprintDefinitions)
                 Blueprints.Add(bp.targetItem.shortname, bp.time);
@@ -137,10 +120,9 @@ namespace Oxide.Plugins
             GatherRate = 100;
             FWEnabled = true;
             UpdateCraftingRate();
-            LoadConfigVariables();
-            SaveConfig();
             StartBuildPhase();
         }
+
         void LoadPermissions()
         {
             permission.RegisterPermission("FortWars.UseAll", this);
@@ -150,8 +132,11 @@ namespace Oxide.Plugins
             permission.RegisterPermission("FortWars.UseEnable", this); 
             permission.RegisterPermission("FortWars.UseDrop", this);
         }
+
         void Unload()
         {
+            foreach(var players in BasePlayer.activePlayerList)
+                SendReply(players, lang.GetMessage("NotEnabled", this, players.UserIDString));
             DestroyTimers();
             foreach (var bp in blueprintDefinitions)
                 bp.time = Blueprints[bp.targetItem.shortname];
@@ -170,7 +155,7 @@ namespace Oxide.Plugins
             
             BroadcastToChat(string.Format(lang.GetMessage("Title", this) + 
                 lang.GetMessage("BuildPhaseTime", this), 
-                (TimeBuild / 60).ToString()));
+                TimeBuild / 60));
 
             //Build Rate
             CraftingRate = CraftBuild;
@@ -178,18 +163,21 @@ namespace Oxide.Plugins
             //Gather Rate
             BroadcastToChat(string.Format(lang.GetMessage("Title", this) +
                 lang.GetMessage("HiGatherRate", this),
-                (TimeBuild / 60).ToString()));
+                TimeBuild / 60));
             GatherRate = BuildGatherMulti;
 
+            //Plane Wave
+            StartDropWaves();
 
             //Update
             UpdateGatherRate();
             UpdateCraftingRate();
 
             //Timers
-            PhaseStart = DateTime.Now.AddMinutes(TimeBuild/60);
-            AutoTimers.Add(timer.Once(TimeBuild, () => StartFightPhase()));
+            PhaseStart = DateTime.Now.AddMinutes(TimeBuild/60d);
+            AutoTimers.Add(timer.Once(TimeBuild, StartFightPhase));
         }
+
         private void StartFightPhase()
         {
             DestroyTimers();
@@ -200,11 +188,11 @@ namespace Oxide.Plugins
 
             BroadcastToChat(string.Format(lang.GetMessage("Title", this) +
                 lang.GetMessage("FightPhaseTime", this),
-                (TimeFight / 60).ToString()));
+                TimeFight / 60));
 
             //Heli Wave
             StartHeliWaves();
-            
+
             // Low Build
             BroadcastToChat(lang.GetMessage("Title", this) +
                         lang.GetMessage("LowBuildRate", this));
@@ -220,42 +208,39 @@ namespace Oxide.Plugins
             UpdateCraftingRate();
 
             //Timers
-            PhaseStart = DateTime.Now.AddMinutes(TimeBuild / 60);
-            AutoTimers.Add(timer.Once(TimeFight, () => StartBuildPhase()));
+            PhaseStart = DateTime.Now.AddMinutes(TimeBuild / 60d);
+            AutoTimers.Add(timer.Once(TimeFight, StartBuildPhase));
 
         }
 
-        
         private void StartHeliWaves()
         {
             BroadcastToChat(lang.GetMessage("Title", this) +
                         lang.GetMessage("MoreHelicopters", this));
-            callHeli(1);
-            AutoTimers.Add(timer.Once(TimeHeli, () => StartHeliWaves()));
+            callHeli();
+            AutoTimers.Add(timer.Once(TimeHeli, StartHeliWaves));
 
         }
+
         private void StartDropWaves()
         {
             if (DropBuild != 0 || DropFight != 0) { 
                 BroadcastToChat(lang.GetMessage("Title", this) +
                             lang.GetMessage("MoreCargoDrop", this));
-                callDrop(1);
+                callDrop();
                 if (DropBuild >= 1 && BuildPhase)
-                    AutoTimers.Add(timer.Once(TimeDropBuild, () => StartDropWaves()));
+                    AutoTimers.Add(timer.Once(TimeDropBuild, StartDropWaves));
                 else if (DropFight >= 1 && !BuildPhase)
-                    AutoTimers.Add(timer.Once(TimeDropFight, () => StartDropWaves()));
+                    AutoTimers.Add(timer.Once(TimeDropFight, StartDropWaves));
             }
 
         }
-
 
         private void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             if (!entity.ToPlayer()) return;
 
-            var gatherType = dispenser.gatherType.ToString("G");
             var amount = item.amount;
-
 
             item.amount = (int)(item.amount * GatherPC);
 
@@ -271,36 +256,42 @@ namespace Oxide.Plugins
         #region Helicopter
         void OnEntitySpawned(BaseNetworkable entity)
         {
-
-            if (entity == null) return;
-
             //994850627 is the prefabID of a heli.
-            if (entity.prefabID == 994850627)
+            if (entity?.prefabID == 994850627)
             {
                 BaseHelicopter heli = (BaseHelicopter)entity;
                 heli.maxCratesToSpawn = 2;
                 heli.bulletDamage = 10f;
-                typeof(PatrolHelicopterAI).GetField("maxRockets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(entity.GetComponent<PatrolHelicopterAI>(), 20);
+                typeof(PatrolHelicopterAI).GetField("maxRockets", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(entity.GetComponent<PatrolHelicopterAI>(), 20);
             }
         }
+
         private void callHeli(int num = 1)
         {
             int i = 0;
             while (i < num)
             {
-                BaseEntity entity = GameManager.server.CreateEntity("assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab", new Vector3(), new Quaternion(), true);
-                if (!(bool)((UnityEngine.Object)entity))
+                BaseEntity entity = GameManager.server.CreateEntity("assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab");
+                if (!entity)
                     return;
                 PatrolHelicopterAI heliAI = entity.GetComponent<PatrolHelicopterAI>();
-                heliAI.maxSpeed = (float)HeliSpeed;     //helicopter speed
-                                                        //Change the health & weakpoint(s) heath
-                ((BaseCombatEntity)entity).startHealth = HeliHP;
-                var weakspots = ((BaseHelicopter)entity).weakspots;
-                weakspots[0].maxHealth = HeliHP / 2;
-                weakspots[0].health = HeliHP / 2;
-                weakspots[1].maxHealth = HeliHPRudder;
-                weakspots[1].health = HeliHPRudder;
-                entity.Spawn(true);
+                heliAI.maxSpeed = HeliSpeed;     //helicopter speed
+                BaseCombatEntity BEntity = entity as BaseCombatEntity;
+                if (BEntity != null)
+                {
+                    //Change the health & weakpoint(s) heath
+                    BEntity.startHealth = HeliHP;
+                    BaseHelicopter Heli = entity as BaseHelicopter;
+                    if (Heli != null)
+                    {
+                        var weakspots = Heli.weakspots;
+                        weakspots[0].maxHealth = HeliHP/2;
+                        weakspots[0].health = HeliHP/2;
+                        weakspots[1].maxHealth = HeliHPRudder;
+                        weakspots[1].health = HeliHPRudder;
+                    }
+                    entity.Spawn();
+                }
                 i++;
             }
         }
@@ -310,16 +301,17 @@ namespace Oxide.Plugins
             int i = 0;
             while (i < num)
             {
-                BaseEntity entity = GameManager.server.CreateEntity("assets/prefabs/npc/cargo plane/cargo_plane.prefab", new Vector3(), new Quaternion(), true);
+                BaseEntity entity = GameManager.server.CreateEntity("assets/prefabs/npc/cargo plane/cargo_plane.prefab");
                 
-                if (!(bool)((UnityEngine.Object)entity))
+                if (!entity)
                     return;
                 CargoPlane cargoI = entity.GetComponent<CargoPlane>();
                 cargoI.InitDropPosition(GetRandomWorldPos());
-                entity.Spawn(true);
+                entity.Spawn();
                 i++;
             }
         }
+
         ////////////////////////////////////////////////////////////
         // Config //////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////   
@@ -328,20 +320,39 @@ namespace Oxide.Plugins
             
             Puts("Configuration file started.");
 
-            CheckCfg<int>("Time - Build", ref TimeBuild);
-            CheckCfg<int>("Time - Fight", ref TimeFight);
-            CheckCfg<int>("Time - Heli", ref TimeHeli);
-            CheckCfg<int>("Time - Drop Build", ref TimeDropBuild);
-            CheckCfg<int>("Time - Drop Fight", ref TimeDropFight);
-            CheckCfg<int>("Craft - Build", ref CraftBuild);
-            CheckCfg<int>("Craft - Fight", ref CraftFight);
-            CheckCfg<int>("Drop - Build", ref DropBuild);
-            CheckCfg<int>("Drop - Fight", ref DropFight);
-            CheckCfg<int>("Heli - Speed", ref HeliSpeed);
-            CheckCfg<int>("Heli - HP", ref HeliHP);
-            CheckCfg<int>("Heli - HPRudder", ref HeliHPRudder);
-            CheckCfg<int>("Gather - Build", ref BuildGatherMulti);
-            CheckCfg<int>("Gather - Fight", ref FightGatherMulti);
+            SetConfig("Time", "Build", TimeBuild);
+            SetConfig("Time", "Fight", TimeFight);
+            SetConfig("Time", "Heli", TimeHeli);
+            SetConfig("Time", "Drop Build", TimeDropBuild);
+            SetConfig("Time", "Drop Fight", TimeDropFight);
+            SetConfig("Craft", "Build", CraftBuild);
+            SetConfig("Craft", "Fight", CraftFight);
+            SetConfig("Drop", "Build", DropBuild);
+            SetConfig("Drop", "Fight", DropFight);
+            SetConfig("Heli", "Speed", HeliSpeed);
+            SetConfig("Heli", "HP", HeliHP);
+            SetConfig("Heli", "HPRudder", HeliHPRudder);
+            SetConfig("Gather", "Build", BuildGatherMulti);
+            SetConfig("Gather", "Fight", FightGatherMulti);
+
+            TimeBuild = GetConfig(TimeBuild, "Time", "Build");
+            TimeFight = GetConfig(TimeFight, "Time", "Fight");
+            TimeHeli = GetConfig(TimeHeli, "Time", "Heli");
+            TimeDropBuild = GetConfig(TimeDropBuild, "Time", "Drop Build");
+            TimeDropFight = GetConfig(TimeDropFight, "Time", "Drop Fight");
+
+            CraftBuild = GetConfig(CraftBuild, "Craft", "Build");
+            CraftFight = GetConfig(CraftFight, "Craft", "Fight");
+
+            DropBuild = GetConfig(DropBuild, "Drop", "Build");
+            DropFight = GetConfig(DropFight, "Drop", "Fight");
+
+            HeliSpeed = GetConfig(HeliSpeed, "Heli", "Speed");
+            HeliHP = GetConfig(HeliHP, "Heli", "HP");
+            HeliHPRudder = GetConfig(HeliHPRudder, "Heli", "HPRudder");
+
+            BuildGatherMulti = GetConfig(BuildGatherMulti, "Gather", "Build");
+            FightGatherMulti = GetConfig(FightGatherMulti, "Gather", "Fight");
 
             Puts("Configuration file updated.");
         }
@@ -360,14 +371,7 @@ namespace Oxide.Plugins
             {
 
                 timeRemaining = PhaseStart.Subtract(DateTime.Now);
-                if (BuildPhase)
-                {
-                    PhaseStr = lang.GetMessage("BuildPhaseTime", this, player.UserIDString);
-                }
-                else
-                    PhaseStr = lang.GetMessage("FightPhaseTime", this, player.UserIDString);
-
-
+                PhaseStr = lang.GetMessage(BuildPhase ? "BuildPhaseTime" : "FightPhaseTime", this, player.UserIDString);
             }
             SendReply(player, PhaseStr, (int)timeRemaining.TotalMinutes + 1);
         }
@@ -376,7 +380,7 @@ namespace Oxide.Plugins
         private void chatcmdHell(BasePlayer player, string command, string[] arg)
         {
             if (!IsAllowed(player, "FortWars.UseAll", false))
-                if (!IsAllowed(player, "FortWars.UseHeli", true)) return;
+                if (!IsAllowed(player, "FortWars.UseHeli")) return;
 
             int num = 1;
             PhaseStr = lang.GetMessage("NotEnabled", this, player.UserIDString);
@@ -385,6 +389,11 @@ namespace Oxide.Plugins
                 PhaseStr = lang.GetMessage("HeliBuild", this, player.UserIDString);
                 if (!BuildPhase)
                 {
+                    if (arg == null || arg.Length != 1)
+                    {
+                        SendReply(player, string.Format(lang.GetMessage("Help", this, player.UserIDString), "hell", "<number of heli>"));
+                        return;
+                    }
                     
                     bool result = Int32.TryParse(arg[0], out num);
                     if (!result)
@@ -403,8 +412,12 @@ namespace Oxide.Plugins
         private void chatcmdDrop(BasePlayer player, string command, string[] arg)
         {
             if (!IsAllowed(player, "FortWars.UseAll", false))
-                if (!IsAllowed(player, "FortWars.UseDrop", true)) return;
-
+                if (!IsAllowed(player, "FortWars.UseDrop")) return;
+            if (arg == null || arg.Length != 1)
+            {
+                SendReply(player, string.Format(lang.GetMessage("Help", this, player.UserIDString), "drop", "<number of airdrop>"));
+                return;
+            }
             int num = 1;
             PhaseStr = lang.GetMessage("NotEnabled", this, player.UserIDString);
             if (FWEnabled)
@@ -428,8 +441,6 @@ namespace Oxide.Plugins
                 if (!IsAllowed(arg, "FortWars.UseFight", true)) return;
 
             StartFightPhase();
-            return;
-
         }
 
         [ConsoleCommand("fw.build")]
@@ -439,14 +450,13 @@ namespace Oxide.Plugins
                 if(!IsAllowed(arg, "FortWars.UseBuild", true)) return;
 
             StartBuildPhase();
-            return;
         }
 
         [ConsoleCommand("fw.enable")]
         void ccmdEnable(ConsoleSystem.Arg arg)
         {
             if (!IsAllowed(arg, "FortWars.UseAll", false))
-                if (!IsAllowed(arg, "FortWars.UseEnable", true)) return;
+                if (!IsAllowed(arg, "FortWars.UseEnable")) return;
 
             var rate = arg.GetInt(0);
             if (rate == 1)
@@ -458,11 +468,16 @@ namespace Oxide.Plugins
             if (rate == 0)
             {
                 FWEnabled = false;
+                arg.ReplyWith(lang.GetMessage("NotEnabled", this));
+                foreach (var players in BasePlayer.activePlayerList)
+                {
+                    SendReply(players, lang.GetMessage("NotEnabled", this, players.UserIDString));
+                }
                 DestroyTimers();
-                return;
             }
 
         }
+
         #endregion
         ////////////////////////////////////////////////////////////
         // Utilities ///////////////////////////////////////////////
@@ -473,15 +488,17 @@ namespace Oxide.Plugins
             GatherPC = GatherRate / 100;
             if (GatherPC < 1) GatherPC = 1;
         }
+
         void DestroyTimers()
         {
-            foreach (Oxide.Plugins.Timer eventimer in AutoTimers)
+            foreach (Timer eventimer in AutoTimers)
             {
                 eventimer.Destroy();
             }
             
             AutoTimers.Clear();
         }
+
         bool IsAllowed(BasePlayer player, string perm, bool bmsg = true)
         {
             if (permission.UserHasPermission(player.userID.ToString(), perm)) return true;
@@ -489,6 +506,7 @@ namespace Oxide.Plugins
                 SendReply(player, lang.GetMessage("NoPerms", this, player.UserIDString));
             return false;
         }
+
         bool IsAllowed(ConsoleSystem.Arg arg, string perm, bool bmsg = true)
         {
             if (permission.UserHasPermission(arg.Player().userID.ToString(), perm)) return true;
@@ -496,58 +514,6 @@ namespace Oxide.Plugins
                 SendReply(arg, lang.GetMessage("NoPerms", this, arg.Player().UserIDString));
             return false;
         }
-
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-
-        T GetConfigValue<T>(string category, string setting, T defaultValue)
-        {
-            var data = Config[category] as Dictionary<string, object>;
-            object value;
-            if (data == null)
-            {
-                data = new Dictionary<string, object>();
-                Config[category] = data;
-            }
-            if (data.TryGetValue(setting, out value)) return (T)Convert.ChangeType(value, typeof(T));
-            value = defaultValue;
-            data[setting] = value;
-            return (T)Convert.ChangeType(value, typeof(T));
-        }
-
-        void SetConfigValue<T>(string category, string setting, T newValue)
-        {
-            var data = Config[category] as Dictionary<string, object>;
-            object value;
-            if (data != null && data.TryGetValue(setting, out value))
-            {
-                value = newValue;
-                data[setting] = value;
-            }
-            SaveConfig();
-        }
-        
-        ////////////////////////////////////////////////////////////
-        // Auth Check //////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////
-        bool isAuth(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection != null)
-            {
-                if (arg.connection.authLevel < 1)
-                {
-                    SendReply(arg, lang.GetMessage("NoPerms", this, arg.Player().UserIDString));
-                    return false;
-                }
-            }
-            return true;
-        }
-
 
         ////////////////////////////////////////////////////////////
         // Update Crafting /////////////////////////////////////////
@@ -565,31 +531,44 @@ namespace Oxide.Plugins
         ////////////////////////////////////////////////////////////
         void BroadcastToChat(string msg)
         {
-            Debug.Log(msg);
-            ConsoleSystem.Broadcast("chat.add", new object[] { 0, msg });
-        }
-        private void SendChatMessage(BasePlayer player, string message)
-        {
-            player?.SendConsoleCommand("chat.add", -1, message);
+            Puts(msg);
+            rust.BroadcastChat(msg);
         }
 
         ////////////////////////////////////////////////////////////
         // Random //////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////
-        public Vector3 GetRandomWorldPos()
+        private Vector3 GetRandomWorldPos()
         {
-            var x = Oxide.Core.Random.Range(MinX, MaxX + 1) + 1;
-            var y = Oxide.Core.Random.Range(MinY, MaxY + 1);
-            var z = Oxide.Core.Random.Range(MinZ, MaxZ + 1) + 1;
+            var x = Random.Range(MinX, MaxX + 1) + 1;
+            var y = Random.Range(MinY, MaxY + 1);
+            var z = Random.Range(MinZ, MaxZ + 1) + 1;
 
             return new Vector3(x, y, z);
         }
 
+        string ListToString<T>(List<T> list, int first = 0, string seperator = ", ") => string.Join(seperator, (from val in list select val.ToString()).Skip(first).ToArray());
 
+        void SetConfig(params object[] args)
+        {
+            List<string> stringArgs = (from arg in args select arg.ToString()).ToList();
+            stringArgs.RemoveAt(args.Length - 1);
+
+            if (Config.Get(stringArgs.ToArray()) == null) Config.Set(args);
+        }
+
+        T GetConfig<T>(T defaultVal, params object[] args)
+        {
+            List<string> stringArgs = (from arg in args select arg.ToString()).ToList();
+            if (Config.Get(stringArgs.ToArray()) == null)
+            {
+                PrintError($"The plugin failed to read something from the config: {ListToString(stringArgs, 0, "/")}{Environment.NewLine}Please reload the plugin and see if this message is still showing. If so, please post this into the support thread of this plugin.");
+                return defaultVal;
+            }
+
+            return (T)Convert.ChangeType(Config.Get(stringArgs.ToArray()), typeof(T));
+        }
         #endregion
-
-
-
     }
 }
 

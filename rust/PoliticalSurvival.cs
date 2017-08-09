@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Jonty", "0.3.2")]
+    [Info("PoliticalSurvival", "Jonty", "0.3.3")]
     [Description("Political Survival - Become the President, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
@@ -471,7 +471,7 @@ namespace Oxide.Plugins
 
             MySqlCommand Command = new MySqlCommand();
             Command.CommandText = "UPDATE settings SET realm_name = @realm";
-            Command.Parameters.AddWithValue("@name", RealmName);
+            Command.Parameters.AddWithValue("@realm", RealmName);
             Command.ExecuteNonQuery();
             Command.Dispose();
         }

@@ -1,8 +1,8 @@
 {
     "name": "Fort Wars Gamemode",
     "description": "Never ending Build - Fight phases",
-    "author": "",
-    "version": "0.3.3",
+    "author": "sami37",
+    "version": "1.0.0",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/fort-wars-gamemode.1618",
