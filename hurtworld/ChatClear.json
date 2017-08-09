@@ -1,0 +1,16 @@
+{
+    "name": "Chat Clear",
+    "description": "Clear your chat with the \/clear command",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/chat-clear.2587",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}
