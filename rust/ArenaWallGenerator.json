@@ -1,0 +1,16 @@
+{
+    "name": "Arena Wall Generator",
+    "description": "An easy to use arena wall generator.",
+    "author": "nivex",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/arena-wall-generator.2589",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
