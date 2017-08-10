@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.2.1", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.3.0", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -149,9 +149,11 @@ namespace Oxide.Plugins
 		void OnLootEntity(BasePlayer player, BaseEntity entity)
 		{
 			if(entity is SupplyDrop) return;
+			if((entity is LootableCorpse) && ((entity as LootableCorpse).playerSteamID < 76561190010000000L)) return;
 			if(entity is DroppedItemContainer && entity.name.Contains("item_drop_backpack"))
 			{
-				if(!CanLootBackpack) entity.OwnerID = (entity as DroppedItemContainer).playerSteamID;	
+				if((entity as DroppedItemContainer).playerSteamID < 76561190010000000L) return;
+				else if(!CanLootBackpack) entity.OwnerID = (entity as DroppedItemContainer).playerSteamID;	
 			}	
 			if(player.IsAdmin && AdminCanLoot) return;
 			if(permission.UserHasPermission(player.userID.ToString(), AdmPerm)) return;
