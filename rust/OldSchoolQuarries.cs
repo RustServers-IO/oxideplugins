@@ -6,12 +6,26 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.2", ResourceId = 2585)]
+	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.3", ResourceId = 2585)]
 	[Description("Makes resource output from quarries better")]
 	class OldSchoolQuarries : RustPlugin
 	{
 		#region Variables
 		private enum OreType { None, Sulfur, Metal, HighQuality };
+
+		class CustomItem
+		{
+			public string shortname;
+			public int amount;
+			public double chance;
+			public bool valid = true;
+		}
+
+		class ConfigData
+		{
+			public bool Detailed_Analysis = false;
+			public List<CustomItem> Custom_Items = new List<CustomItem>();
+		}
 
 		class DepositEntry
 		{
@@ -31,7 +45,10 @@ namespace Oxide.Plugins
 			public List<Deposit> changedDeposits = new List<Deposit>();
 		}
 
-		private StoredData data;
+		private static System.Random rng = new System.Random();
+		private ConfigData config = new ConfigData();
+		private StoredData data = new StoredData();
+		private bool initialized = true;
 		#endregion
 
 		#region Localization
@@ -44,6 +61,7 @@ namespace Oxide.Plugins
 				["NoResources"] = "No resources found.",
 				["AnalysisHeader"] = "Mineral Analysis:",
 				["Analysis"] = "Item: {0}, Amount: {1} pM",
+				["AnalysisDetailed"] = "Item: {0}, Amount: {1}, Work Needed: {2}, Return: {3} pM",
 				["AnalysisFooter"] = "----------------------------------",
 				["ClearData"] = "Plugin data cleared."
 			}, this);
@@ -56,7 +74,20 @@ namespace Oxide.Plugins
 		//
 		private void Init()
 		{
+			// Permissions
 			permission.RegisterPermission($"oldschoolquarries.probe", this);
+			permission.RegisterPermission($"oldschoolquarries.customloot", this);
+			// Configuration
+			try
+			{
+				LoadConfigData();
+			}
+			catch
+			{
+				LoadDefaultConfig();
+				LoadConfigData();
+			}
+			// Data
 			LoadData();
 		}
 		//
@@ -64,6 +95,7 @@ namespace Oxide.Plugins
 		//
 		void OnServerInitialized()
 		{
+			ValidateConfig();
 			foreach (Deposit deposit in data.changedDeposits)
 			{
 				ResourceDepositManager.ResourceDeposit rd = ResourceDepositManager.GetOrCreate(deposit.origin);
@@ -112,6 +144,64 @@ namespace Oxide.Plugins
 		}
 		#endregion
 
+		#region Config Handling
+		//
+		// Load config file
+		//
+		protected override void LoadDefaultConfig()
+		{
+			Config.Clear();
+			var config = new ConfigData();
+			// Create example item
+			config.Custom_Items.Add(new CustomItem() { shortname = "candycane", amount = 1, chance = 0 });
+			Config.WriteObject(config, true);
+		}
+		//
+		// Load the config values to the config class
+		//
+		private void LoadConfigData()
+		{
+			config = Config.ReadObject<ConfigData>();
+		}
+		//
+		// Validate the config file
+		//
+		private void ValidateConfig()
+		{
+			bool issuesFound = false;
+			List<ItemDefinition> itemDefinitions = ItemManager.itemList;
+			foreach (CustomItem item in config.Custom_Items)
+			{
+				if (!itemDefinitions.Exists(x => x.shortname == item.shortname))
+				{
+					Puts($"The shortname \"{item.shortname}\" is invalid!");
+					item.valid = false;
+					issuesFound = true;
+				}
+				else
+					item.valid = true;
+				if (item.chance > 100)
+				{
+					item.chance = 100;
+					issuesFound = true;
+				}
+				else if (item.chance < 0)
+				{
+					item.chance = 0;
+					issuesFound = true;
+				}
+				if (item.amount < 0)
+				{
+					item.amount = 0;
+					issuesFound = true;
+				}
+			}
+			if (issuesFound)
+				Puts("Issues found in configuration file!");
+			Config.WriteObject(config, true);
+		}
+		#endregion
+
 		#region Data Handling
 		//
 		// Load plugin data
@@ -148,6 +238,7 @@ namespace Oxide.Plugins
 		#region Functionality
 		//
 		// Update salt map when resource deposit is tapped for the first time
+		//
 		void OnEntitySpawned(BaseNetworkable entity)
 		{
 			if (entity is SurveyCharge)
@@ -287,6 +378,40 @@ namespace Oxide.Plugins
 				SaveData();
 			}
 		}
+		//
+		// Add custom item to quarries on fuel consumed
+		//
+		void OnItemUse(Item item, int amountToUse)
+		{
+			if (BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) is MiningQuarry)
+			{
+				MiningQuarry quarry = BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) as MiningQuarry;
+
+				if (!permission.UserHasPermission(quarry.OwnerID.ToString(), "oldschoolquarries.customloot"))
+					return;
+
+				ItemContainer hopper = (quarry.hopperPrefab.instance as StorageContainer).inventory;
+				
+				double value = (rng.Next(0, 100) + rng.NextDouble());
+				if (value > 100d)
+					value = 100d;
+				if (config.Custom_Items == null)
+					return;
+				foreach (CustomItem cItem in config.Custom_Items)
+				{
+					if (!cItem.valid || cItem.chance == 0 || cItem.amount == 0)
+						continue;
+					if (value <= cItem.chance)
+					{
+						try
+						{
+							hopper.AddItem(ItemManager.itemList.Find(x => x.shortname == cItem.shortname), cItem.amount);
+						}
+						catch { }
+					}
+				}
+			}
+		}
 		#endregion
 
 		#region Commands
@@ -319,7 +444,10 @@ namespace Oxide.Plugins
 				float num3 = (float)(60.0 / num1 * (num2 / (double)resource.workNeeded));
 				if (float.IsInfinity(num3))
 					fixIndex.Add(index);
-				PrintToChat(player, Lang("Analysis", player.UserIDString, resource.type.displayName.translated, Math.Round(num3, 1)));
+				if (config.Detailed_Analysis)
+					PrintToChat(player, Lang("AnalysisDetailed", player.UserIDString, resource.type.displayName.translated, resource.amount, resource.workNeeded, Math.Round(num3, 1)));
+				else
+					PrintToChat(player, Lang("Analysis", player.UserIDString, resource.type.displayName.translated, Math.Round(num3, 1)));
 				index++;
 			}
 
@@ -331,9 +459,28 @@ namespace Oxide.Plugins
 
 			PrintToChat(player, Lang("AnalysisFooter", player.UserIDString));
 		}
+		[ConsoleCommand("getdeposit")]
+		void GetDepositConsole(ConsoleSystem.Arg arg)
+		{
+			getDeposit(arg.Player(), "getdeposit", null);
+		}
+		//
+		// Reload plugin config from within the game
+		//
+		[ChatCommand("osq.reloadconfig")]
+		void ReloadConfig(BasePlayer player, string command, string[] args)
+		{
+			if (!player.IsAdmin)
+				return;
 
-		[ConsoleCommand("oldschoolquarries.cleardata")]
-		void ClearDataConsole(ConsoleSystem.Arg arg)
+			LoadConfigData();
+			ValidateConfig();
+		}
+		//
+		// Clear plugin data
+		//
+		[ConsoleCommand("osq.cleardata")]
+		void ClearData(ConsoleSystem.Arg arg)
 		{
 			if (!arg.IsAdmin)
 				return;
@@ -341,18 +488,11 @@ namespace Oxide.Plugins
 			Puts(Lang("ClearData"));
 		}
 
-		[ConsoleCommand("getdeposit")]
-		void GetDepositConsole(ConsoleSystem.Arg arg)
-		{
-			BasePlayer player = arg.Player();
-
-			getDeposit(player, "getdeposit", null);
-		}
 		#endregion
 
 		#region Helpers
 		//
-		// Get string and format from lang file
+		// Get formatted string from the lang file
 		//
 		private string Lang(string key, string userId = null, params object[] args) => string.Format(lang.GetMessage(key, this, userId), args);
 		#endregion
