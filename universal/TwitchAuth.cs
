@@ -4,7 +4,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("TwitchAuth", "Wulf/lukespragg", "0.1.1", ResourceId = 1838)]
+    [Info("TwitchAuth", "Wulf/lukespragg", "0.1.2", ResourceId = 1838)]
     [Description("Only allow your followers on Twitch to join your server")]
     public class TwitchAuth : CovalencePlugin
     {
@@ -81,6 +81,7 @@ namespace Oxide.Plugins
 
         #region Commands
 
+        [Command("twitchauth", "ta.account")]
         private void TwithAuthCommand(IPlayer player, string command, string[] args)
         {
             if (player.HasPermission(permAdmin))
