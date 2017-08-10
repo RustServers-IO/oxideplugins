@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherControl", "CaseMan", "1.4.1", ResourceId = 2477)]
+    [Info("GatherControl", "CaseMan", "1.4.2", ResourceId = 2477)]
     [Description("Control gather rates by day and night with permissions")]
 
     class GatherControl : RustPlugin
@@ -374,23 +374,23 @@ namespace Oxide.Plugins
 			BasePlayer player0 = arg.Player();
 			if (player0 is BasePlayer && arg.Connection != null && (arg.Connection.authLevel < 2 && !permission.UserHasPermission(player0.userID.ToString(), AdmPerm))) 
 			{
-				Puts(lang.GetMessage("NoPermission", this));
+				SendReply(arg, lang.GetMessage("NoPermission", this));
                 return;
 			}
 			if (arg.Args == null || arg.Args.Length <= 0)
 			{
-                Puts(lang.GetMessage("InvalidSyntax", this));
+                SendReply(arg, lang.GetMessage("InvalidSyntax", this));
                 return;
             }
 			BasePlayer player = BasePlayer.Find(arg.Args[0]) ?? BasePlayer.FindSleeping(arg.Args[0]);
 			if(player == null)
 			{
-				Puts(string.Format(lang.GetMessage("NoPlayer", this)));
+				SendReply(arg, (string.Format(lang.GetMessage("NoPlayer", this))));
 				return;
 			}	
 			int gr = CheckPlayerPerm(player, -1);
-			if(gr >= 0)	Puts(string.Format(lang.GetMessage("GatherRateInfoPlayer", this, player.UserIDString), player.displayName) + GatherInfo(player, gr));
-			else Puts(string.Format(lang.GetMessage("NoGatherRatePlayer", this), player.displayName));                  				          			
+			if(gr >= 0)	SendReply(arg, string.Format(lang.GetMessage("GatherRateInfoPlayer", this), player.displayName) + GatherInfo(player, gr));
+			else SendReply(arg, string.Format(lang.GetMessage("NoGatherRatePlayer", this), player.displayName));               				          			
 		}
 		#endregion
 		#region Helpers
@@ -407,7 +407,7 @@ namespace Oxide.Plugins
 		{
 			string message = "";
 			{
-				message= string.Format("\n\r{0}: {6}/{12}\n\r{1}: {7}/{13}\n\r{2}: {8}/{14}\n\r{3}: {9}/{15}\n\r{4}: {10}/{16}\n\r{5}: {11}/{17}\n\r", 
+				message= string.Format("\n{0}: {6}/{12}\n{1}: {7}/{13}\n{2}: {8}/{14}\n{3}: {9}/{15}\n{4}: {10}/{16}\n{5}: {11}/{17}\n", 
 					lang.GetMessage("RateResource", this, player.UserIDString),
 					lang.GetMessage("RateResourceBonus", this, player.UserIDString),
 					lang.GetMessage("RateResourceHQM", this, player.UserIDString),
