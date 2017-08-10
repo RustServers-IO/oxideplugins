@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.3", ResourceId = 2585)]
+	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.4", ResourceId = 2585)]
 	[Description("Makes resource output from quarries better")]
 	class OldSchoolQuarries : RustPlugin
 	{
@@ -383,34 +383,38 @@ namespace Oxide.Plugins
 		//
 		void OnItemUse(Item item, int amountToUse)
 		{
-			if (BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) is MiningQuarry)
+			try
 			{
-				MiningQuarry quarry = BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) as MiningQuarry;
-
-				if (!permission.UserHasPermission(quarry.OwnerID.ToString(), "oldschoolquarries.customloot"))
-					return;
-
-				ItemContainer hopper = (quarry.hopperPrefab.instance as StorageContainer).inventory;
-				
-				double value = (rng.Next(0, 100) + rng.NextDouble());
-				if (value > 100d)
-					value = 100d;
-				if (config.Custom_Items == null)
-					return;
-				foreach (CustomItem cItem in config.Custom_Items)
+				if (BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) is MiningQuarry)
 				{
-					if (!cItem.valid || cItem.chance == 0 || cItem.amount == 0)
-						continue;
-					if (value <= cItem.chance)
+					MiningQuarry quarry = BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) as MiningQuarry;
+
+					if (!permission.UserHasPermission(quarry.OwnerID.ToString(), "oldschoolquarries.customloot"))
+						return;
+
+					ItemContainer hopper = (quarry.hopperPrefab.instance as StorageContainer).inventory;
+
+					double value = (rng.Next(0, 100) + rng.NextDouble());
+					if (value > 100d)
+						value = 100d;
+					if (config.Custom_Items == null)
+						return;
+					foreach (CustomItem cItem in config.Custom_Items)
 					{
-						try
+						if (!cItem.valid || cItem.chance == 0 || cItem.amount == 0)
+							continue;
+						if (value <= cItem.chance)
 						{
-							hopper.AddItem(ItemManager.itemList.Find(x => x.shortname == cItem.shortname), cItem.amount);
+							try
+							{
+								hopper.AddItem(ItemManager.itemList.Find(x => x.shortname == cItem.shortname), cItem.amount);
+							}
+							catch { }
 						}
-						catch { }
 					}
 				}
 			}
+			catch { }
 		}
 		#endregion
 
