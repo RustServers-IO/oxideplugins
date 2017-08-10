@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.4", ResourceId = 2585)]
+	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.5", ResourceId = 2585)]
 	[Description("Makes resource output from quarries better")]
 	class OldSchoolQuarries : RustPlugin
 	{
@@ -388,6 +388,9 @@ namespace Oxide.Plugins
 				if (BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) is MiningQuarry)
 				{
 					MiningQuarry quarry = BaseNetworkable.serverEntities.Find(item.parent.entityOwner.parentEntity.uid) as MiningQuarry;
+
+					if (quarry.canExtractLiquid)
+						return;
 
 					if (!permission.UserHasPermission(quarry.OwnerID.ToString(), "oldschoolquarries.customloot"))
 						return;
