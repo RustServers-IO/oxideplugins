@@ -10,11 +10,138 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Jonty", "0.3.3")]
+    [Info("PoliticalSurvival", "Jonty", "0.3.4")]
     [Description("Political Survival - Become the President, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
-        static void Main(string[] args) { }
+        #region Database Wrapper
+        public class IDatabase
+        {
+            private MySqlConnectionStringBuilder _builder;
+
+            public IDatabase(string IpAddress, string Port, string Username, string Password, string DbName)
+            {
+                _builder = new MySqlConnectionStringBuilder
+                {
+                    ConnectionTimeout = 10,
+                    Database = DbName,
+                    DefaultCommandTimeout = 30,
+                    Logging = false,
+                    MaximumPoolSize = 5,
+                    MinimumPoolSize = 1,
+                    Password = Password,
+                    Pooling = true,
+                    Port = uint.Parse(Port),
+                    Server = IpAddress,
+                    UserID = Username,
+                    AllowZeroDateTime = true,
+                    ConvertZeroDateTime = true,
+                };
+            }
+
+            public MySqlConnection GetConnection()
+            {
+                return new MySqlConnection(_builder.ToString());
+            }
+
+            public bool RunPreparedStatement(string Query, Dictionary<string, object> Parameters)
+            {
+                using (MySqlConnection Connection = GetConnection())
+                {
+                    try
+                    {
+                        Connection.Open();
+                        MySqlCommand Command = Connection.CreateCommand();
+                        Command.CommandText = Query;
+
+                        foreach (KeyValuePair<string, object> Params in Parameters)
+                        {
+                            Command.Parameters.AddWithValue("@" + Params.Key, Params.Value);
+                        }
+
+                        Command.ExecuteNonQuery();
+                        Command.Dispose();
+                        Connection.Close();
+                        Connection.Dispose();
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("[IDatabase] Error running query: " + Query);
+                        Console.WriteLine(e.ToString());
+                        return false;
+                    }
+                }
+            }
+
+            public Dictionary<int, Dictionary<string, object>> RunQuickWithResult(string Query)
+            {
+                Dictionary<int, Dictionary<string, object>> Results = new Dictionary<int, Dictionary<string, object>>();
+
+                using (MySqlConnection Connection = GetConnection())
+                {
+                    try
+                    {
+                        Connection.Open();
+                        MySqlCommand Command = Connection.CreateCommand();
+                        Command.CommandText = Query;
+                        MySqlDataReader Reader = Command.ExecuteReader();
+
+                        int Row = 0;
+                        while (Reader.Read())
+                        {
+                            Dictionary<string, object> Data = new Dictionary<string, object>();
+
+                            for (int i = 0; i < Reader.FieldCount; i++)
+                            {
+                                Data.Add(Reader.GetName(i), Reader.GetValue(i));
+                            }
+
+                            Results.Add(Row, Data);
+                            Row++;
+                        }
+
+                        Reader.Dispose();
+                        Command.Dispose();
+                        Connection.Close();
+                        Connection.Dispose();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("[IDatabase] Error running query: " + Query);
+                        Console.WriteLine(e.ToString());
+                    }
+                }
+
+                return Results;
+            }
+
+            public bool RunQuickNoResult(string Query)
+            {
+                using (MySqlConnection Connection = GetConnection())
+                {
+                    try
+                    {
+                        Connection.Open();
+                        MySqlCommand Command = Connection.CreateCommand();
+                        Command.CommandText = Query;
+                        Command.ExecuteNonQuery();
+                        Command.Dispose();
+                        Connection.Close();
+                        Connection.Dispose();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("[IDatabase] Error running query: " + Query);
+                        Console.WriteLine(e.ToString());
+                        return false;
+                    }
+
+                    return true;
+                }
+            }
+        }
+        #endregion
 
         public class StrayPlayer
         {
@@ -31,8 +158,6 @@ namespace Oxide.Plugins
         Dictionary<BasePlayer, StrayPlayer> OnlinePlayers;
         Dictionary<string, string> ServerMessages;
 
-        MySqlConnection Database;
-
         string DatabaseHost = "";
         string DatabasePort = "";
         string DatabaseUsername = "";
@@ -48,6 +173,8 @@ namespace Oxide.Plugins
         float TaxChestZ = 0;
 
         StorageContainer TaxContainer = null;
+
+        private IDatabase Database;
 
         private void LoadDefaultConfig()
         {
@@ -76,27 +203,32 @@ namespace Oxide.Plugins
 
             try
             {
-                Database = new MySqlConnection();
-                Database.ConnectionString = "server=" + DatabaseHost + ";port=" + DatabasePort + ";uid=" + DatabaseUsername + ";pwd=" + DatabasePassword + ";database=" + DatabaseName + ";";
-                Database.Open();
+                Database = new IDatabase(DatabaseHost, DatabasePort, DatabaseUsername, DatabasePassword, DatabaseName);
 
-                MySqlCommand GetSettings = new MySqlCommand("SELECT president,tax_level,realm_name,tax_chest FROM settings LIMIT 1", Database);
-                MySqlDataReader SettingsReader = GetSettings.ExecuteReader();
-
-                while (SettingsReader.Read())
+                if (Database.RunQuickNoResult("SELECT 1+1"))
+                    Puts("Connection to database was successful.");
+                else
                 {
-                    President = SettingsReader.GetUInt64(0);
-                    TaxLevel = SettingsReader.GetInt32(1);
-                    RealmName = SettingsReader.GetString(2);
+                    PrintError("Connection to database failed.");
+                    PrintError("If this is the first time running the plugin, please edit the configuration!");
+                    return;
+                }
 
-                    string[] TaxCoordinates = SettingsReader.GetString(3).Split(';');
+                var GetSettings = Database.RunQuickWithResult("SELECT * FROM settings LIMIT 1");
+
+                if (GetSettings != null && GetSettings.Count > 0)
+                {
+                    var Data = GetSettings[0];
+
+                    President = Convert.ToUInt64(Data["president"]);
+                    TaxLevel = Convert.ToInt32(Data["tax_level"]);
+                    RealmName = Data["realm_name"].ToString();
+
+                    string[] TaxCoordinates = Data["tax_chest"].ToString().Split(';');
                     TaxChestX = Convert.ToSingle(TaxCoordinates[0]);
                     TaxChestY = Convert.ToSingle(TaxCoordinates[1]);
                     TaxChestZ = Convert.ToSingle(TaxCoordinates[2]);
                 }
-
-                SettingsReader.Dispose();
-                GetSettings.Dispose();
             }
             catch (Exception e)
             {
@@ -264,7 +396,7 @@ namespace Oxide.Plugins
             }
         }
 
-        [ChatCommand("info")]
+        [ChatCommand("pinfo")]
         void InfoCommand(BasePlayer Player, string Command, string[] Arguments)
         {
             string PresidentName = "";
@@ -350,7 +482,7 @@ namespace Oxide.Plugins
                 SendReply(Player, lang.GetMessage("PresidentError", this, Player.UserIDString));
         }
 
-        [ChatCommand("pm")]
+        [ChatCommand("ppm")]
         void PrivateMessage(BasePlayer Player, string Command, string[] Arguments)
         {
             string Name = Arguments[0];
@@ -366,7 +498,7 @@ namespace Oxide.Plugins
                 SendReply(Player, Name + lang.GetMessage("PrivateError", this));
         }
 
-        [ChatCommand("players")]
+        [ChatCommand("pplayers")]
         void PlayersCommand(BasePlayer Player, string Command, string[] Arguments)
         {
             StringBuilder Builder = new StringBuilder();
@@ -442,23 +574,12 @@ namespace Oxide.Plugins
             President = SteamId;
             RealmName = lang.GetMessage("DefaultRealm", this);
             TaxLevel = 0.0;
-
-            string PresidentText = "UPDATE settings SET tax_level = " + TaxLevel + ", realm_name = '" + RealmName + "', president = " + President;
-
-            MySqlCommand UpdatePresident = new MySqlCommand(PresidentText, Database);
-            UpdatePresident.ExecuteNonQuery();
-            UpdatePresident.Dispose();
+            Database.RunQuickNoResult("UPDATE settings SET tax_level = " + TaxLevel + ", realm_name = '" + RealmName + "', president = " + President);
         }
 
         void SetTaxLevel(double NewTaxLevel)
         {
-            TaxLevel = NewTaxLevel;
-
-            string TaxText = "UPDATE settings SET tax_level = " + NewTaxLevel;
-
-            MySqlCommand UpdateTax = new MySqlCommand(TaxText, Database);
-            UpdateTax.ExecuteNonQuery();
-            UpdateTax.Dispose();
+            Database.RunQuickNoResult("UPDATE settings SET tax_level = " + NewTaxLevel);
         }
 
         void SetRealmName(string NewName)
@@ -469,43 +590,20 @@ namespace Oxide.Plugins
             RealmName = NewName;
             PrintToChat(string.Format(lang.GetMessage("RealmRenamed", this), NewName));
 
-            MySqlCommand Command = new MySqlCommand();
-            Command.CommandText = "UPDATE settings SET realm_name = @realm";
-            Command.Parameters.AddWithValue("@realm", RealmName);
-            Command.ExecuteNonQuery();
-            Command.Dispose();
+            Dictionary<string, object> Parameters = new Dictionary<string, object>();
+            Parameters.Add("realm", RealmName);
+
+            Database.RunPreparedStatement("UPDATE settings SET realm_name = @realm", Parameters);
         }
 
         void GetPlayerFromDatabase(BasePlayer Player)
         {
-            StrayPlayer IPlayer = null;
-
-            string CommandText = "SELECT id FROM players WHERE steam_id = " + Player.userID;
-            MySqlCommand Command = new MySqlCommand(CommandText, Database);
-            bool Exists = Command.ExecuteScalar() != null ? true : false;
-            Command.Dispose();
+            bool Exists = Database.RunQuickWithResult("SELECT id FROM players WHERE steam_id = " + Player.userID).Count > 0;
 
             if (!Exists)
-            {
-                string InsertText = "INSERT INTO players (steam_id) VALUES ('" + Player.userID + "')";
-                MySqlCommand InsertCommand = new MySqlCommand(InsertText, Database);
-                InsertCommand.ExecuteNonQuery();
-                InsertCommand.Dispose();
-            }
+                Database.RunQuickNoResult("INSERT INTO players (steam_id) VALUES ('" + Player.userID + "')");
 
-            string InfoText = "SELECT * FROM players WHERE steam_id = " + Player.userID;
-            MySqlCommand InfoCommand = new MySqlCommand(InfoText, Database);
-            MySqlDataReader InfoReader = InfoCommand.ExecuteReader();
-
-            while (InfoReader.Read())
-            {
-                IPlayer = new StrayPlayer(Player.userID);
-            }
-
-            InfoReader.Dispose();
-            InfoCommand.Dispose();
-
-            OnlinePlayers.Add(Player, IPlayer);
+            OnlinePlayers.Add(Player, new StrayPlayer(Player.userID));
         }
 
         void LoadTaxContainer()
@@ -523,10 +621,7 @@ namespace Oxide.Plugins
 
         void SaveTaxContainer()
         {
-            string TaxCommandText = "UPDATE settings SET tax_chest = '" + TaxChestX + ";" + TaxChestY + ";" + TaxChestZ + "'";
-            MySqlCommand TaxCommand = new MySqlCommand(TaxCommandText, Database);
-            TaxCommand.ExecuteNonQuery();
-            TaxCommand.Dispose();
+            Database.RunQuickNoResult("UPDATE settings SET tax_chest = '" + TaxChestX + ";" + TaxChestY + ";" + TaxChestZ + "'");
         }
 
         private void CreateConfigEntry(string Key, string SubKey, string Value)
