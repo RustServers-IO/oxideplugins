@@ -4,6 +4,9 @@
     "author": "nivex",
     "version": "1.0.0",
     "configuration": true,
+    "require": {
+        "ZoneManager": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/arena-wall-generator.2589",
     "games": [
