@@ -1,19 +1,17 @@
-using System;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 //using System.Reflection; // enable for ListComponentDebug
 using System.Linq;
 using UnityEngine;
-using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
-using Oxide.Game.Rust.Libraries;
-using Rust;
-using System.Collections;
 using Oxide.Core.Libraries.Covalence;
+//using Rust;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.2", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.5.3", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -21,6 +19,7 @@ namespace Oxide.Plugins {
 
         private Dictionary<ulong, UserInfo> users;
         private Dictionary<ulong, jPipe> regpipes = new Dictionary<ulong, jPipe>();
+        private Dictionary<ulong, jSyncBox> regsyncboxes = new Dictionary<ulong, jSyncBox>();
         private PipeSaveData storedData;
 
         private static Color blue = new Color(0.2f, 0.4f, 1);
@@ -101,7 +100,8 @@ namespace Oxide.Plugins {
             
             UpdateTick();
 
-            Puts($"{regpipes.Count} pipes loaded");
+            Puts($"{regpipes.Count} Pipes Loaded");
+            Puts($"{regsyncboxes.Count} SyncBoxes Loaded");
         }
 
         private void Loaded() {
@@ -132,11 +132,13 @@ namespace Oxide.Plugins {
         private float[] frames = new float[] { 0.1f, 0.3f, 0.5f, 0.7f, 0.9f };
         private int frame = 0;
         private float maxpipedistsq = 0;
-        private static bool OnlyShowArrowsForOwner = true;
+        private static bool OnlyShowArrowsForOwner = false;
+        private static bool ShowSingleArrow = true;
+        private static bool ShowOnAllSides = false;
 
         void UpdateTick() {
 
-            if (!drawflowarrows)
+            //if (!drawflowarrows)
                 return;
             
             if (animatearrows) frame = (frame < 4) ? frame + 1 : 0;
@@ -146,7 +148,7 @@ namespace Oxide.Plugins {
                 var item = player.GetActiveItem();
                 if (item != null && item.info != null && (item.info.name == "hammer.item" || item.info.name == "camera.item")) {
 
-                    var pipes = OnlyShowArrowsForOwner && !permission.UserHasPermission(player.UserIDString, "jpipes.admin") ? GetUserInfo(player).pipes : regpipes;
+                    var pipes = OnlyShowArrowsForOwner && !checkbuildingprivlage(player) ? GetUserInfo(player).pipes : regpipes;
 
                     foreach (var pipe in pipes) {
 
@@ -194,7 +196,7 @@ namespace Oxide.Plugins {
                         if (userinfo.placestart == null) {
                             userinfo.placestart = hit.HitEntity;
 
-                            ShowOverlayText(player, lang.GetMessage("SelectSecond", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey : pipecommandprefix));
+                            ShowOverlayText(player, lang.GetMessage("SelectSecond", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey.ToUpper() : pipecommandprefix));
                         } else if (userinfo.placestart != null) { // select second
                             userinfo.placeend = hit.HitEntity;
                             NewPipe(player, userinfo);
@@ -202,7 +204,7 @@ namespace Oxide.Plugins {
                     } else {
                         ShowOverlayText(player, lang.GetMessage("ErrorPrivilegeAttach", this, player.UserIDString));
                         timer.Once(2f, () => {
-                            ShowOverlayText(player, lang.GetMessage((userinfo.placestart == null) ? "SelectFirst" : "SelectSecond", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey : pipecommandprefix));
+                            ShowOverlayText(player, lang.GetMessage((userinfo.placestart == null) ? "SelectFirst" : "SelectSecond", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey.ToUpper() : pipecommandprefix));
                         });
                     }
                 }
@@ -374,13 +376,13 @@ namespace Oxide.Plugins {
             AddCovalenceCommand($"{pipecommandprefix}copy", "cmdpipecopy");
             AddCovalenceCommand($"{pipecommandprefix}remove", "cmdpiperemove");
             AddCovalenceCommand($"{pipecommandprefix}stats", "cmdpipestats");
-            AddCovalenceCommand($"{pipecommandprefix}list", "cmdpipelist");
+            AddCovalenceCommand($"{pipecommandprefix}link", "cmdpipelink");
         }
         private void cmdpipehelp(IPlayer cmdplayer, string cmd, string[] args) => pipehelp(BasePlayer.Find(cmdplayer.Id), cmd, args);
         private void cmdpipecopy(IPlayer cmdplayer, string cmd, string[] args) => pipecopy(BasePlayer.Find(cmdplayer.Id), cmd, args);
         private void cmdpiperemove(IPlayer cmdplayer, string cmd, string[] args) => piperemove(BasePlayer.Find(cmdplayer.Id), cmd, args);
         private void cmdpipestats(IPlayer cmdplayer, string cmd, string[] args) => pipestats(BasePlayer.Find(cmdplayer.Id), cmd, args);
-        private void cmdpipelist(IPlayer cmdplayer, string cmd, string[] args) => pipelist(BasePlayer.Find(cmdplayer.Id), cmd, args);
+        private void cmdpipelink(IPlayer cmdplayer, string cmd, string[] args) => pipelink(BasePlayer.Find(cmdplayer.Id), cmd, args);
         
         // [ChatCommand("p")]
         private void pipemainchat(IPlayer cmdplayer, string cmd, string[] args) {
@@ -408,8 +410,8 @@ namespace Oxide.Plugins {
                         pipestats(player, cmd, args);
                         break;
                     case "l":
-                    case "list":
-                        pipelist(player, cmd, args);
+                    case "link":
+                        pipelink(player, cmd, args);
                         break;
                 }
             } else {
@@ -477,18 +479,11 @@ namespace Oxide.Plugins {
                 PrintToChat(player, string.Format(lang.GetMessage("StatsCmdLimit", this, player.UserIDString), userinfo.pipes.Count, pipelimit));
         }
 
-        //[ChatCommand("plist")]
-        private void pipelist(BasePlayer player, string cmd, string[] args) {
-
-            if (!permission.UserHasPermission(player.UserIDString, "jpipes.admin")) {
-                ShowOverlayText(player, lang.GetMessage("ErrorCmdPerm", this, player.UserIDString));
-                HideOverlayText(player, 2f);
+        //[ChatCommand("plink")]
+        private void pipelink(BasePlayer player, string cmd, string[] args) {
+            if (!commandperm(player))
                 return;
-            }
-
-            foreach (var u in users) {
-                PrintToChat(player, $"{u.Value.pipes.Count}");
-            }
+            startlinking(player, false);
         }
 
         [ConsoleCommand("jpipes.create")]
@@ -497,6 +492,14 @@ namespace Oxide.Plugins {
             if (!commandperm(p))
                 return;
             startplacingpipe(p, true);
+        }
+
+        [ConsoleCommand("jpipes.link")]
+        private void pipelink(ConsoleSystem.Arg arg) {
+            BasePlayer p = arg.Player();
+            if (!commandperm(p))
+                return;
+            startlinking(p, true);
         }
 
         [ConsoleCommand("jpipes.openmenu")]
@@ -688,7 +691,8 @@ namespace Oxide.Plugins {
             none,
             placing,
             copying,
-            removing
+            removing,
+            linking
         };
 
         // main pipe class
@@ -1291,10 +1295,12 @@ namespace Oxide.Plugins {
 
                     Vector3 pos = arroworigin + (rotation * (arrowup * ((arrowspace * i) + (arrowspace * frame))));
 
-                    if ((pos - player.transform.position).sqrMagnitude < 200f) {
-                        
-                        //DrawArrow(player, update, ((rotation * Vector3.back) * arrowoffset) + pos, rotation, arrowup, Vector3.left);
-                        //DrawArrow(player, update, ((rotation * Vector3.forward) * arrowoffset) + pos, rotation, arrowup, Vector3.right);
+                    if ((pos - player.transform.position).sqrMagnitude < 64f) {
+
+                        if (ShowOnAllSides) {
+                            DrawArrow(player, update, ((rotation * Vector3.back) * arrowoffset) + pos, rotation, arrowup, Vector3.left);
+                            DrawArrow(player, update, ((rotation * Vector3.forward) * arrowoffset) + pos, rotation, arrowup, Vector3.right);
+                        }
                         DrawArrow(player, update, ((rotation * Vector3.left) * arrowoffset) + pos, rotation, arrowup, Vector3.forward);
                         DrawArrow(player, update, ((rotation * Vector3.right) * arrowoffset) + pos, rotation, arrowup, Vector3.back);
 
@@ -1312,8 +1318,8 @@ namespace Oxide.Plugins {
                 Vector3 origin1 = ShortVec(origin + up);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left), origin1);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right), origin1);
-                
-                if ( pipegrade == 0 ) return;
+
+                if ( pipegrade == 0 || ShowSingleArrow) return;
 
                 Vector3 origin2 = ShortVec(origin);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left - up), origin2);
@@ -1349,7 +1355,15 @@ namespace Oxide.Plugins {
 
         // syncbox
         private class jSyncBox {
+            private JPipes pipeplugin;
 
+            public ulong id;
+            public string initerr = string.Empty;
+
+            public ulong ownerid;
+            public string ownername;
+
+            public bool isEnabled = true;
         }
 
         #endregion
@@ -1405,9 +1419,29 @@ namespace Oxide.Plugins {
                 if (!isUsingBind)
                     PrintToChat(player, string.Format(lang.GetMessage("HelpBindTip", this, player.UserIDString), pipecommandprefix, pipehotkey));
 
-                ShowOverlayText(player, lang.GetMessage("SelectFirst", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey : pipecommandprefix));
+                ShowOverlayText(player, lang.GetMessage("SelectFirst", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey.ToUpper() : pipecommandprefix));
             } else {
                 //ShowOverlayText(player,"",lang.GetMessage("SelectCancel",this,player.UserIDString));
+                HideOverlayText(player);
+                userinfo.placestart = null;
+                userinfo.placeend = null;
+            }
+        }
+        
+        private void startlinking(BasePlayer player, bool isUsingBind = false) {
+
+            UserInfo userinfo = GetUserInfo(player);
+            
+            userinfo.state = userinfo.state == UserState.linking ? UserState.none : UserState.linking;
+            userinfo.isUsingBind = isUsingBind;
+            userinfo.clipboard = null;
+
+            if (userinfo.state == UserState.linking) {
+                if (!isUsingBind)
+                    PrintToChat(player, string.Format(lang.GetMessage("HelpBindTip", this, player.UserIDString), pipecommandprefix, pipehotkey));
+
+                ShowOverlayText(player, lang.GetMessage("SelectFirst", this, player.UserIDString), string.Format(lang.GetMessage(userinfo.isUsingBind ? "SelectSubtextBind" : "SelectSubtextCmd", this, player.UserIDString), userinfo.isUsingBind ? pipehotkey.ToUpper() : pipecommandprefix));
+            } else {
                 HideOverlayText(player);
                 userinfo.placestart = null;
                 userinfo.placeend = null;
@@ -1457,11 +1491,29 @@ namespace Oxide.Plugins {
             userinfo.placeend = null;
         }
 
+        private void NewSyncBox(BasePlayer player, UserInfo userinfo) {
+
+            jSyncBoxData newdata = new jSyncBoxData();
+
+            HideOverlayText(player, 3f);
+            userinfo.state = UserState.none;
+            userinfo.placestart = null;
+            userinfo.placeend = null;
+        }
+
         private System.Random randomidgen = new System.Random();
         private ulong pipeidgen() {
             ulong id = (ulong) randomidgen.Next(1000000, 9999999);
             if (regpipes.ContainsKey(id))
                 return pipeidgen();
+            else
+                return id;
+        }
+
+        private ulong syncboxidgen() {
+            ulong id = (ulong) randomidgen.Next(1000000, 9999999);
+            if (regsyncboxes.ContainsKey(id))
+                return syncboxidgen();
             else
                 return id;
         }
@@ -1847,6 +1899,16 @@ namespace Oxide.Plugins {
             }
         }
 
+        private class jSyncBoxChild : MonoBehaviour {
+
+            public jSyncBox syncbox;
+
+            public static void Attach(BaseEntity entity, jSyncBox syncbox) {
+                jSyncBoxChild n = entity.gameObject.AddComponent<jSyncBoxChild>();
+                n.syncbox = syncbox;
+            }
+        }
+
 
         #endregion
 
@@ -2057,6 +2119,7 @@ namespace Oxide.Plugins {
         // data structure for jPipeData.json file
         private class PipeSaveData {
             public Dictionary<ulong, jPipeData> p = new Dictionary<ulong, jPipeData>();
+            public Dictionary<ulong, jSyncBoxData> s = new Dictionary<ulong, jSyncBoxData>();
             public PipeSaveData() { }
         }
 
@@ -2147,6 +2210,26 @@ namespace Oxide.Plugins {
             }
         }
 
+        // data structure for pipe save data
+        private class jSyncBoxData {
+            public bool e = true;   // On/Off
+            public uint s;          // source storage container id
+            public uint d;          // destination storage container id
+            public float h;         // health
+            public ulong o;         // Player ID of pipe owner
+            public string on;       // name of pipe owner
+
+            public jSyncBoxData() { }
+
+            public void fromSyncBox(jSyncBox p) {
+                e = p.isEnabled;
+            }
+
+            public void toSyncBox(jSyncBox p) {
+                p.isEnabled = e;
+            }
+        }
+
         private static void LoadData<T>(ref T data) => data = Core.Interface.Oxide.DataFileSystem.ReadObject<T>("JPipes");
         private static void SaveData<T>(T data) => Core.Interface.Oxide.DataFileSystem.WriteObject("JPipes", data);
 
@@ -2154,21 +2237,17 @@ namespace Oxide.Plugins {
 
         #region Debug tools
 
-
         // Lists the ent's components and variables to player's chat
-
+        
         //void ListComponentsDebug(BasePlayer player, BaseEntity ent) {
 
         //    List<string> lines = new List<string>();
-        //    string s = "-----------------------------------------\n";
-        //    int limit = 1040;
+        //    //string s = "-----------------------------------------";
+        //    string s = "<color=#80c5ff>───────────────────────</color>";
+        //    int limit = 1030;
 
         //    foreach (var c in ent.GetComponents<Component>()) {
-
-        //        s += "[ " + c.GetType() + " : " + c.GetType().BaseType + " ]\n";
-        //        //s += " <"+c.name+">\n";
-        //        //if (c.sharedMesh != null) s += "-> "+c.sharedMesh.triangles.Length.ToString()+"\n";
-
+                
         //        List<string> types = new List<string>();
         //        List<string> names = new List<string>();
         //        List<string> values = new List<string>();
@@ -2192,17 +2271,28 @@ namespace Oxide.Plugins {
 
         //        }
 
+        //        if (s.Length > 0) s += "\n";
+        //        s += types.Count > 0 ? "╔" : "═";
+        //        s += $" {c.GetType()} : {c.GetType().BaseType}";
+        //        //s += " <"+c.name+">\n";
+        //        //if (c.sharedMesh != null) s += "-> "+c.sharedMesh.triangles.Length.ToString()+"\n";
+                
         //        for (int i = 0; i < types.Count; i++) {
-        //            string typestring = types[i];
 
-        //            string ns = "<size=11><color=#80c5ff>    " + typestring + "</color>" + "  " + names[i] + " = <color=#00ff00>" + values[i] + "</color></size>\n";
+        //            string ns = $"<color=#80c5ff> {types[i]}</color> {names[i]} = <color=#00ff00>{values[i]}</color>";
 
-        //            if (s.Length + ns.Length > limit) {
+        //            if (s.Length + ns.Length >= limit) {
         //                lines.Add(s);
-        //                s = string.Empty;
+        //                s = "║" + ns;
+        //            } else {
+        //                s += "\n║" + ns;
         //            }
+        //        }
 
-        //            s += ns;
+        //        if (types.Count > 0) {
+        //            s += "\n╚══";
+        //            lines.Add(s);
+        //            s = string.Empty;
         //        }
         //    }
 
@@ -2211,12 +2301,6 @@ namespace Oxide.Plugins {
         //    foreach (string ls in lines)
         //        PrintToChat(player, ls);
 
-        //}
-        //public static string stringspacing(int length) {
-        //    string s = string.Empty;
-        //    for (int i = 0; i < length; i++)
-        //        s += "  ";
-        //    return s;
         //}
 
         #endregion
