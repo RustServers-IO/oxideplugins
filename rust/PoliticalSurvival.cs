@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PoliticalSurvival", "Jonty", "0.3.4")]
+    [Info("PoliticalSurvival", "Jonty", "0.3.5")]
     [Description("Political Survival - Become the President, tax your subjects and keep them in line!")]
     class PoliticalSurvival : RustPlugin
     {
@@ -269,6 +269,9 @@ namespace Oxide.Plugins
 
         void OnDispenserGather(ResourceDispenser Dispenser, BaseEntity Entity, Item Item)
         {
+            if (Dispenser == null || Entity == null || Item == null)
+                return;
+
             if (TaxLevel > 0 && President > 0)
             {
                 int Tax = Convert.ToInt32(Math.Round((Item.amount * TaxLevel) / 100));
@@ -447,20 +450,21 @@ namespace Oxide.Plugins
         {
             if (IsPresident(Player.userID))
             {
-                double NewTaxLevel = Convert.ToDouble(MergeParams(Arguments, 0));
+                double NewTaxLevel = 0.0;
+                if (double.TryParse(MergeParams(Arguments, 0), out NewTaxLevel))
+                {
+                    if (NewTaxLevel > 25.0)
+                        NewTaxLevel = 25.0;
 
-                if (NewTaxLevel > 25.0)
-                    NewTaxLevel = 25.0;
+                    if (NewTaxLevel == TaxLevel)
+                        return;
 
-                if (NewTaxLevel == TaxLevel)
-                    return;
+                    if (NewTaxLevel < 1)
+                        NewTaxLevel = 0;
 
-                if (NewTaxLevel < 1)
-                    NewTaxLevel = 0;
-
-                SetTaxLevel(NewTaxLevel);
-
-                PrintToChat(string.Format(lang.GetMessage("UpdateTaxMessage", this), Player.displayName, NewTaxLevel));
+                    SetTaxLevel(NewTaxLevel);
+                    PrintToChat(string.Format(lang.GetMessage("UpdateTaxMessage", this), Player.displayName, NewTaxLevel));
+                }
             }
             else
                 SendReply(Player, lang.GetMessage("PresidentError", this, Player.UserIDString));
