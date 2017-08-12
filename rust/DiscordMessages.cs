@@ -5,15 +5,14 @@ using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
-using static Oxide.Plugins.DiscordMessages.FancyMessage;
 using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordMessages", "Slut", "1.4.2", ResourceId = 2486)]
-    internal class DiscordMessages : CovalencePlugin
+    [Info("DiscordMessages", "Slut", "1.5.0", ResourceId = 2486)]
+    class DiscordMessages : CovalencePlugin
     {
-#region Classes
+        #region Classes
         public class Cooldowns
         {
             public DateTime reportCooldown { get; set; }
@@ -23,14 +22,12 @@ namespace Oxide.Plugins
         public class SavedMessages {
             public string url { get; set; }
             public string payload { get; set; }
-            public Action<bool> callback { get; set; }
             public float time { get; set; }
 
-            public SavedMessages(string url, string payload, Action<bool> callback, float time)
+            public SavedMessages(string url, string payload, float time)
             {
                 this.url = url;
                 this.payload = payload;
-                this.callback = callback;
                 this.time = time;
             }
 
@@ -56,20 +53,22 @@ namespace Oxide.Plugins
                 this.tts = tts;
                 this.embeds = embeds;
             }
-            public class Fields {
-                public string name { get; set; }
-                public string value { get; set; }
-                public bool inline { get; set; }
-                public Fields(string name, string value, bool inline) {
-                    this.name = name;
-                    this.value = value;
-                    this.inline = inline;
-                }
-            }
 
             public string toJSON(FancyMessage fancymessage) => JsonConvert.SerializeObject(fancymessage);
         }
-#endregion
+        public class Fields
+        {
+            public string name { get; set; }
+            public string value { get; set; }
+            public bool inline { get; set; }
+            public Fields(string name, string value, bool inline)
+            {
+                this.name = name;
+                this.value = value;
+                this.inline = inline;
+            }
+        }
+        #endregion
         #region Variables
         [PluginReference] private Plugin BetterChatMute;
 
@@ -77,7 +76,7 @@ namespace Oxide.Plugins
         private Dictionary<string, Cooldowns> cooldowns = new Dictionary<string, Cooldowns>();
         private DiscordMessages Plugin;
 
-#endregion
+        #endregion
 
         #region Config Variables
 
@@ -88,6 +87,8 @@ namespace Oxide.Plugins
         private bool ReportEnabled = true;
         private bool BanEnabled = true;
         private bool MessageEnabled = true;
+        private bool MessageAlert = false;
+        private bool ReportAlert = false;
         private bool MuteEnabled;
         private bool Announce = true;
         private int ReportCooldown = 30;
@@ -153,10 +154,12 @@ namespace Oxide.Plugins
             CheckCfg<string>("Mutes - Webhook URL", ref MuteURL);
             CheckCfg<string>("Reports - Webhook URL", ref ReportURL);
             CheckCfg<bool>("Reports - Enabled", ref ReportEnabled);
+            CheckCfg<bool>("Reports - Alert Channel", ref ReportAlert);
             CheckCfg<int>("Reports - Cooldown", ref ReportCooldown);
             CheckCfg<bool>("Message - Enabled", ref MessageEnabled);
             CheckCfg<string>("Message - Webhook URL", ref MessageURL);
             CheckCfg<int>("Message - Cooldown", ref MessageCooldown);
+            CheckCfg<bool>("Message - Alert Channel", ref MessageAlert);
             CheckCfg<int>("Message - Embed Color (DECIMAL)", ref MessageColor);
             CheckCfg<int>("Reports - Embed Color (DECIMAL)", ref ReportColor);
             CheckCfg<int>("Ban - Embed Color (DECIMAL)", ref BanColor);
@@ -182,7 +185,7 @@ namespace Oxide.Plugins
         private void CheckCfg<T>(string Key, ref T var)
         {
             if (Config[Key] is T)
-                var = (T) Config[Key];
+                var = (T)Config[Key];
             else
                 Config[Key] = var;
         }
@@ -244,14 +247,21 @@ namespace Oxide.Plugins
 
         #endregion
 
+        #region API
+        private void API_SendFancyMessage(string webhookURL, string embedName, int embedColor, List<Fields> fields)
+        {
+            if (embedColor == 0)
+            {
+                embedColor = 3329330;
+            }
+            FancyMessage message = new FancyMessage(null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(embedName, 3329330, fields) });
+            var payload = message.toJSON(message);
+            SendPOST(webhookURL, payload);
+        }
+        #endregion
+
         #region Webrequest
 
-        private void API_SendFancyMessage(string webhookURL, string embedName, int embedColor, List<Fields> fields, Action<bool> callback)
-        {
-            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(embedName, embedColor, fields) });
-            var payload = message.toJSON(message);
-            SendPOST(webhookURL, payload, callback);
-        }
         Timer _timer;
         private void RateTimer()
         {
@@ -262,13 +272,13 @@ namespace Oxide.Plugins
             }
             else
             {
-                SendPOST(savedmessages[0].url, savedmessages[0].payload, savedmessages[0].callback);
+                SendPOST(savedmessages[0].url, savedmessages[0].payload);
                 _timer = timer.Once(savedmessages[0].time, () => RateTimer());
                 return;
             }
         }
 
-        private void SendPOST(string url, string payload, Action<bool> callback)
+        private void SendPOST(string url, string payload)
         {
             bool exists = savedmessages.Exists(x => x.payload == payload);
             webrequest.EnqueuePost(url, payload, (code, response) =>
@@ -281,7 +291,7 @@ namespace Oxide.Plugins
                         if (json["message"].ToString().Contains("rate limit") && exists == false)
                         {
                             float seconds = float.Parse(Math.Ceiling((double) (int)json["retry_after"] / 1000).ToString());
-                            savedmessages.Add(new SavedMessages(url, payload, callback, seconds));
+                            savedmessages.Add(new SavedMessages(url, payload, seconds));
                             if (_timer == null || _timer.Destroyed)
                             {
                                 RateTimer();
@@ -297,7 +307,6 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    callback?.Invoke(code == 200 || code == 204 || response != null);
                     if (exists == true)
                     {
                         savedmessages.RemoveAt(0);
@@ -340,9 +349,9 @@ namespace Oxide.Plugins
             List<Fields> fields = new List<Fields>();
             fields.Add(new Fields(GetLang("Embed_MessagePlayer"), $"[{ player.Name }](https://steamcommunity.com/profiles/{player.Id})", true));
             fields.Add(new Fields(GetLang("Embed_MessageMessage"), text, false));
-            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_MessageTitle"), MessageColor, fields) });
+            FancyMessage message = new FancyMessage(MessageAlert == true ? "@here" : null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(GetLang("Embed_MessageTitle"), MessageColor, fields) });
             var payload = message.toJSON(message);
-            SendPOST(MessageURL, payload, callback);
+            SendPOST(MessageURL, payload);
             SendMessage(player, GetLang("MessageSent", player.Id));
             if (cooldowns.ContainsKey(player.Id))
             cooldowns[player.Id].messageCooldown = DateTime.Now;
@@ -404,9 +413,9 @@ namespace Oxide.Plugins
                 fields.Add(new Fields(GetLang("Embed_ReportPlayer"), $"[{player.Name}](https://steamcommunity.com/profiles/{player.Id})", true));
                 fields.Add(new Fields(GetLang("Embed_ReportStatus"), status, true));
                 fields.Add(new Fields(GetLang("Embed_ReportReason"), reason, false));
-                FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_MessageTitle"), ReportColor, fields) });
+                FancyMessage message = new FancyMessage(ReportAlert == true ? "@here": null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(GetLang("Embed_MessageTitle"), ReportColor, fields) });
 
-                SendPOST(ReportURL, message.toJSON(message), callback);
+                SendPOST(ReportURL, message.toJSON(message));
                 SendMessage(player, GetLang("ReportSent", player.Id));
                 if (cooldowns.ContainsKey(player.Id))
                     cooldowns[player.Id].reportCooldown = DateTime.Now;
@@ -433,8 +442,8 @@ namespace Oxide.Plugins
             fields.Add(new Fields(GetLang("Embed_MuteTarget"), $"[{target.Name}](https://steamcommunity.com/profiles/{target.Id})", true));
             fields.Add(new Fields(GetLang("Embed_MutePlayer"), !player.Id.Equals("server_console") ? $"[{player.Name}](https://steamcommunity.com/profiles/{player.Id})" : player.Name, true));
             fields.Add(new Fields(GetLang("Embed_MuteTime"), timed ? FormatTime(expireDate) : "Permanent", true));
-            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_MuteTitle"), MuteColor, fields) });
-            SendPOST(MuteURL, message.toJSON(message), callback);
+            FancyMessage message = new FancyMessage(null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(GetLang("Embed_MuteTitle"), MuteColor, fields) });
+            SendPOST(MuteURL, message.toJSON(message));
         }
 
         #endregion
@@ -516,8 +525,8 @@ namespace Oxide.Plugins
             fields.Add(new Fields(GetLang("Embed_BanTarget"), $"[{name}](https://steamcommunity.com/profiles/{bannedId})", true));
             fields.Add(new Fields(GetLang("Embed_BanPlayer"), sourceId != null && !sourceId.Equals("server_console") ? $"[{sourceName}](https://steamcommunity.com/profiles/{sourceId})" : sourceName, true));
             fields.Add(new Fields(GetLang("Embed_BanReason"), reason, false));
-            FancyMessage message = new FancyMessage(null, false, new Embeds[1] { new Embeds(GetLang("Embed_BanTitle"), ReportColor, fields) });
-            SendPOST(BanURL, message.toJSON(message), callback);
+            FancyMessage message = new FancyMessage(null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(GetLang("Embed_BanTitle"), ReportColor, fields) });
+            SendPOST(BanURL, message.toJSON(message));
         }
 
         #endregion
