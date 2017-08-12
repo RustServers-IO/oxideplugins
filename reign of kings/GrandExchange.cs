@@ -17,7 +17,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.2", ResourceId = 1145)]
+    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.3", ResourceId = 1145)]
     public class GrandExchange : ReignOfKingsPlugin
     {
         #region Variables
@@ -381,6 +381,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission("GrandExchange.Modify.Settings", this);
             permission.RegisterPermission("GrandExchange.Modify.Itemlist", this);
             permission.RegisterPermission("GrandExchange.Show", this);
+            permission.RegisterPermission("GrandExchange.Shop", this);
         }
 
         private void LoadTradeData()
@@ -948,6 +949,8 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
+            if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
             ShowShopList(player, 2);
         }
 
@@ -1129,6 +1132,8 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
+            if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
             if (_PlayerData[player.Id].Shop.HasPosition() == 2) { PrintToChat(player, GetMessage("Shop Mark Exists", player)); return; }
 
             if (GetShopOwner(player.Entity.Position) != 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Mark Occupied", player)); return; }
@@ -1177,7 +1182,9 @@ namespace Oxide.Plugins
         private void AddShopItem(Player player, string[] input)
         {
             CheckPlayerExists(player);
-            
+
+            if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
             if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
             if (input.Length < 2 || input.Length > 3) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
@@ -1232,6 +1239,8 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
+            if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
             if (_PlayerData[player.Id].Shop.HasPosition() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
 
             _PlayerData[player.Id].Shop.RemoveShop();
@@ -1275,6 +1284,8 @@ namespace Oxide.Plugins
         private void RemoveShopItem(Player player, string[] input)
         {
             CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
             if (input.Length > 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
             
@@ -1481,6 +1492,8 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
+            if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
             if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
             if (input.Length != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
@@ -1502,6 +1515,8 @@ namespace Oxide.Plugins
         private void SetShopName(Player player, string[] input)
         {
             CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
             if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
@@ -2156,15 +2171,17 @@ namespace Oxide.Plugins
                 PrintToChat(player, "[00ff00]/removegold <amount> <optional:player name>[FFFFFF] - Remove gold of a player. If no player name is given then you lose the amount of gold.");
                 PrintToChat(player, "[00ff00]/checkgold <player name>[FFFFFF] - Show the gold amount of a player.");
             }
-
-            PrintToChat(player, "[2020FF]Player Shop Commands[FFFFFF]");
-            PrintToChat(player, "[00ff00]/myshop[FFFFFF] - Show the item list of your own shop.");
-            PrintToChat(player, "[00ff00]/addshopmark[FFFFFF] - Set a mark for your own shop. The shop may not be bigger then 13 by 13 blocks.");
-            PrintToChat(player, "[00ff00]/removeshopmarks[FFFFFF] - Remove the marks for your show.");
-            PrintToChat(player, "[00ff00]/addshopitem <item name> <amount> <optional if already excists:price>[FFFFFF] - Add the amount of an item to your shop. You must have this item and the correct amount in your inventory.");
-            PrintToChat(player, "[00ff00]/removeshopitem <item name> <optional:amount>[FFFFFF] - Remove the amount of an item from your shop. You must have enough space in your inventory.");
-            PrintToChat(player, "[00ff00]/setitemprice <item name> <price>[FFFFFF] - Change the price of an item in your shop.");
-            PrintToChat(player, "[00ff00]/setshopname <name>[ffffff] - Changes the name of your shop.");
+            if (player.HasPermission("GrandExchange.Shop"))
+            {
+                PrintToChat(player, "[2020FF]Player Shop Commands[FFFFFF]");
+                PrintToChat(player, "[00ff00]/myshop[FFFFFF] - Show the item list of your own shop.");
+                PrintToChat(player, "[00ff00]/addshopmark[FFFFFF] - Set a mark for your own shop. The shop may not be bigger then 13 by 13 blocks.");
+                PrintToChat(player, "[00ff00]/removeshopmarks[FFFFFF] - Remove the marks for your show.");
+                PrintToChat(player, "[00ff00]/addshopitem <item name> <amount> <optional if already excists:price>[FFFFFF] - Add the amount of an item to your shop. You must have this item and the correct amount in your inventory.");
+                PrintToChat(player, "[00ff00]/removeshopitem <item name> <optional:amount>[FFFFFF] - Remove the amount of an item from your shop. You must have enough space in your inventory.");
+                PrintToChat(player, "[00ff00]/setitemprice <item name> <price>[FFFFFF] - Change the price of an item in your shop.");
+                PrintToChat(player, "[00ff00]/setshopname <name>[ffffff] - Changes the name of your shop.");
+            }
         }
 
         #endregion
