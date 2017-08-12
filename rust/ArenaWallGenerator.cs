@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ArenaWallGenerator", "nivex", "1.0.0", ResourceId = 0)]
+    [Info("ArenaWallGenerator", "nivex", "1.0.1", ResourceId = 2589)]
     [Description("An easy to use arena wall generator.")]
     public class ArenaWallGenerator : RustPlugin
     {
@@ -23,17 +23,18 @@ namespace Oxide.Plugins
             public StoredData() { }
         }
 
-        void OnServerSave()
+        private void OnServerSave()
         {
             timer.Once(5f, () => SaveData());
+
         }
 
-        void Unload()
+        private void Unload()
         {
             SaveData();
         }
 
-        void Loaded()
+        private void Loaded()
         {
             try
             {
@@ -106,12 +107,12 @@ namespace Oxide.Plugins
 
             return false;
         }
-        
+
         public string FormatPosition(Vector3 position)
         {
-            string x = Math.Round(position.x, 2).ToString();
-            string y = Math.Round(position.y, 2).ToString();
-            string z = Math.Round(position.z, 2).ToString();
+            string x = position.x.ToString("N2");
+            string y = position.y.ToString("N2");
+            string z = position.z.ToString("N2");
 
             return $"{x} {y} {z}";
         }
@@ -171,7 +172,7 @@ namespace Oxide.Plugins
             return removed;
         }
 
-        public List<Vector3> GetCircumferencePositions(Vector3 center, float radius, float next, float y) // as the name implies
+        public List<Vector3> GetCircumferencePositions(Vector3 center, float radius, float next, float y)
         {
             var positions = new List<Vector3>();
             float degree = 0f;
@@ -192,20 +193,20 @@ namespace Oxide.Plugins
             return positions;
         }
 
-        public void CreateZoneWalls(Vector3 center, float zoneRadius, string prefab, List<BaseEntity> entities, BasePlayer player = null)
+        public bool CreateZoneWalls(Vector3 center, float radius, string prefab, List<BaseEntity> entities, BasePlayer player = null)
         {
             var tick = DateTime.Now;
             ulong ownerId = GetOwnerId(center.ToString());
 
             if (ZoneWallsExist(ownerId, entities))
-                return;
+                return true;
 
             float maxHeight = -200f;
             float minHeight = 200f;
             int spawned = 0;
-            int raycasts = Mathf.CeilToInt(360 / zoneRadius * 0.1375f);
+            int raycasts = Mathf.CeilToInt(360 / radius * 0.1375f);
 
-            foreach (var position in GetCircumferencePositions(center, zoneRadius, raycasts, 0f))
+            foreach (var position in GetCircumferencePositions(center, radius, raycasts, 0f))
             {
                 RaycastHit hit;
                 if (Physics.Raycast(new Vector3(position.x, position.y + 200f, position.z), Vector3.down, out hit, Mathf.Infinity, wallMask))
@@ -218,11 +219,11 @@ namespace Oxide.Plugins
 
             float gap = prefab == heswPrefab ? 0.3f : 0.5f;
             int stacks = Mathf.CeilToInt((maxHeight - minHeight) / 6f) + extraWallStacks;
-            float next = 360 / zoneRadius - gap;
+            float next = 360 / radius - gap;
 
             for (int i = 0; i < stacks; i++)
             {
-                foreach (var position in GetCircumferencePositions(center, zoneRadius, next, center.y))
+                foreach (var position in GetCircumferencePositions(center, radius, next, center.y))
                 {
                     float groundHeight = TerrainMeta.HeightMap.GetHeight(new Vector3(position.x, position.y + 6f, position.z));
 
@@ -243,7 +244,7 @@ namespace Oxide.Plugins
                         spawned++;
                     }
                     else
-                        return;
+                        return false;
 
                     if (stacks == i - 1)
                     {
@@ -260,6 +261,18 @@ namespace Oxide.Plugins
                 Puts(msg("GeneratedWalls", null, spawned, stacks, FormatPosition(center), (DateTime.Now - tick).TotalSeconds));
             else
                 player.ChatMessage(msg("GeneratedWalls", player.UserIDString, spawned, stacks, FormatPosition(center), (DateTime.Now - tick).TotalSeconds));
+
+            return true;
+        }
+
+        private bool API_CreateZoneWalls(Vector3 center, float radius)
+        {
+            return CreateZoneWalls(center, radius, useWoodenWalls ? hewwPrefab : heswPrefab, null, null);
+        }
+
+        private bool API_RemoveZoneWalls(Vector3 center)
+        {
+            return RemoveCustomZoneWalls(center);
         }
 
         private void CommandWalls(BasePlayer player, string command, string[] args)
@@ -276,7 +289,7 @@ namespace Oxide.Plugins
                         radius = maxCustomWallRadius;
 
                     RaycastHit hit;
-                    if (Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity))
+                    if (Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity, wallMask))
                     {
                         string prefab = useWoodenWalls ? hewwPrefab : heswPrefab;
 
@@ -317,7 +330,7 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
-            { 
+            {
                 ["GeneratedWalls"] = "Generated {0} arena walls {1} high at {2} in {3}ms",
                 ["FailedRaycast"] = "Look towards the ground, and try again.",
                 ["InvalidNumber"] = "Invalid number: {0}",

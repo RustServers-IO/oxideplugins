@@ -2,7 +2,7 @@
     "name": "Arena Wall Generator",
     "description": "An easy to use arena wall generator.",
     "author": "nivex",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": true,
     "require": {
         "ZoneManager": "*"
