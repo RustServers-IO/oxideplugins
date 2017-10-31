@@ -18,7 +18,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("SpawnConfig", "Nogrod", "1.0.13")]
+    [Info("SpawnConfig", "Nogrod", "1.0.14")]
     internal class SpawnConfig : RustPlugin
     {
         private const bool Debug = false;
@@ -240,7 +240,7 @@ namespace Oxide.Plugins
                             stringBuilder.AppendLine($"\tDistribution #{i} is not set.");
                         else
                         {
-                            var currentCount = SpawnHandler.Instance.GetCurrentCount(spawnPopulations);
+                            var currentCount = SpawnHandler.Instance.GetCurrentCount(spawnPopulations, spawnDistributions);
                             var targetCount = SpawnHandler.Instance.GetTargetCount(spawnPopulations, spawnDistributions);
                             stringBuilder.AppendLine($"\tPopulation: {currentCount}/{targetCount} Scale: {spawnPopulations.ScaleWithServerPopulation}");
                             stringBuilder.AppendLine($"TerrainMeta X: {TerrainMeta.Size.x} Y: {TerrainMeta.Size.z} Density: {densityField.GetValue(spawnDistributions)} CurrentSpawnDensity: {spawnPopulations.GetCurrentSpawnDensity()}");

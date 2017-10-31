@@ -1,8 +1,8 @@
 {
     "name": "Automatic Build Grades",
     "description": "Auto update grade on build to what you need",
-    "author": "Wulf",
-    "version": "0.0.18",
+    "author": "Ryan",
+    "version": "0.0.22",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/automatic-build-grades.921",

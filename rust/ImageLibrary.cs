@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.5", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.9", ResourceId = 2193)]
     class ImageLibrary : RustPlugin
     {
         #region Fields
@@ -79,7 +79,7 @@ namespace Oxide.Plugins
         private void GetItemSkins()
         {
             PrintWarning("Retrieving item skin lists...");
-            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", (code, response) =>
+            webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, (code, response) =>
             {
                 if (!(response == null && code == 200))
                 {
@@ -90,10 +90,15 @@ namespace Oxide.Plugins
                     {
                         if (!string.IsNullOrEmpty(item.itemshortname) && !string.IsNullOrEmpty(item.icon_url))
                         {
-                            string identifier = $"{item.itemshortname}_{item.itemdefid}";
-
+                            string identifier;
+                            ItemDefinition def = ItemManager.FindItemDefinition(item.itemshortname);
+                            if (def == null) continue;
+                            int skinCount = def.skins.Where(k => k.id == item.itemdefid).Count();
+                            if (skinCount == 0)
+                                identifier = $"{item.itemshortname}_{item.workshopid}";
+                            else identifier = $"{item.itemshortname}_{item.itemdefid}";
                             if (!imageUrls.URLs.ContainsKey(identifier))
-                                imageUrls.URLs.Add(identifier, item.icon_url);                            
+                                imageUrls.URLs.Add(identifier, item.icon_url);
 
                             if (configData.GetSkinData)
                             {
@@ -118,13 +123,13 @@ namespace Oxide.Plugins
                     if (!configData.DLWhenNecessary)
                     {
                         PrintWarning("Item skin list queued for download");
-                        loadOrders.Enqueue(new LoadOrder("Item Skins", imageList));                        
+                        loadOrders.Enqueue(new LoadOrder("Item Skins", imageList));
                     }
                     if (configData.WorkshopImages)
                         ServerMgr.Instance.StartCoroutine(GetWorkshopSkins());
                     else ProcessLoadOrders();
                 }
-            }, this);            
+            }, this);
         }
         private IEnumerator GetWorkshopSkins()
         {
@@ -146,7 +151,7 @@ namespace Oxide.Plugins
                     foreach (var tag in item.Tags)
                     {
                         var adjTag = tag.ToLower().Replace("skin", "").Replace(" ", "").Replace("-", "");
-                            if (workshopNameToShortname.ContainsKey(adjTag))
+                        if (workshopNameToShortname.ContainsKey(adjTag))
                         {
                             string identifier = $"{workshopNameToShortname[adjTag]}_{item.Id}";
 
@@ -173,7 +178,7 @@ namespace Oxide.Plugins
                             continue;
                         }
                     }
-                }            
+                }
             }
             query.Dispose();
             SaveUrls();
@@ -210,7 +215,7 @@ namespace Oxide.Plugins
             if (!configData.StoreAvatars || string.IsNullOrEmpty(userId) || HasImage(userId, 0))
                 return;
            
-            webrequest.EnqueueGet($"http://steamcommunity.com/profiles/{userId}?xml=1", (code, response) =>
+            webrequest.Enqueue($"http://steamcommunity.com/profiles/{userId}?xml=1",null, (code, response) =>
             {
                 string avatar = null;
                 if (response != null && code == 200)
@@ -272,7 +277,8 @@ namespace Oxide.Plugins
             {"vagabondjacket", "jacket" },
             {"hideshoes", "attire.hide.boots" },
             {"deerskullmask", "deer.skull.mask" },
-            {"minerhat", "hat.miner" }
+            {"minerhat", "hat.miner" },
+            {"lr300", "rifle.lr300" }
         };
         private Hash<string, string> defaultUrls = new Hash<string, string>
         {
@@ -608,7 +614,9 @@ namespace Oxide.Plugins
             {"searchlight", "https://vignette2.wikia.nocookie.net/play-rust/images/c/c6/Search_Light_icon.png" },
             {"weapon.mod.simplesight", "https://vignette1.wikia.nocookie.net/play-rust/images/9/93/Simple_Handmade_Sight_icon.png" },
             {"guntrap", "http://i.imgur.com/iNFOxbT.png" },
-        };
+            {"dropbox", "http://i.imgur.com/KqV8FcU.png" },
+            {"mailbox", "http://i.imgur.com/DaDrDIK.png" },
+       };
         #endregion
 
         #region API
@@ -665,13 +673,17 @@ namespace Oxide.Plugins
         [HookMethod("GetImageList")]
         public List<ulong> GetImageList(string name)
         {
-            List<ulong> skinIds = new List<ulong>();            
+            List<ulong> skinIds = new List<ulong>();
             var matches = imageUrls.URLs.Keys.Where(x => x.StartsWith(name)).ToArray();
             for (int i = 0; i < matches.Length; i++)
             {
                 var index = matches[i].IndexOf("_");
-                if (matches[i].Substring(0, index) == name)               
-                    skinIds.Add(ulong.Parse(matches[i].Substring(index + 1)));                
+                if (matches[i].Substring(0, index) == name)
+                {
+                    ulong skinID;
+                    if (ulong.TryParse(matches[i].Substring(index + 1), out skinID))
+                        skinIds.Add(ulong.Parse(matches[i].Substring(index + 1)));
+                }
             }
             return skinIds;
         }
@@ -807,7 +819,6 @@ namespace Oxide.Plugins
         class ImageAssets : MonoBehaviour
         {
             private Queue<QueueItem> queueList = new Queue<QueueItem>();
-            private MemoryStream stream = new MemoryStream();
             private bool isLoading;
             private double nextUpdate;
             private int listCount;
@@ -871,12 +882,6 @@ namespace Oxide.Plugins
                     StartCoroutine(DownloadImage(queueItem));
                 else StoreByteArray(queueItem.bytes, queueItem.name);
             }
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
             IEnumerator DownloadImage(QueueItem info)
             {
                 using (var www = new WWW(info.url))
@@ -901,13 +906,7 @@ namespace Oxide.Plugins
             }
             internal void StoreByteArray(byte[] bytes, string name)
             {
-                if (bytes != null)
-                {
-                    ClearStream();
-                    stream.Write(bytes, 0, bytes.Length);
-                    il.imageIdentifiers.imageIds[name] = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
-                    ClearStream();
-                }
+                if (bytes != null) il.imageIdentifiers.imageIds[name] = FileStorage.server.Store(bytes, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
                 isLoading = false;
                 Next();
             }

@@ -13,15 +13,13 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Enhanced Hammer", "Fuji/Visa", "1.3.3", ResourceId = 1439)]
+    [Info("Enhanced Hammer", "Fuji/Visa", "1.3.4", ResourceId = 1439)]
     public class EnhancedHammer : RustPlugin
     {
         bool Changed = false;
 		
 		static EnhancedHammer eh = null;
-		static int colliderUpgrade = LayerMask.GetMask("Construction");
-		static FieldInfo serverInput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-		
+
         Dictionary<ulong, PlayerDetails> playersInfo = new Dictionary<ulong, PlayerDetails>();
         Dictionary<ulong, Timer> playersTimers = new Dictionary<ulong, Timer>();
 		List <BuildingBlock> upgradeBlockCheck = new List <BuildingBlock>();
@@ -164,17 +162,18 @@ namespace Oxide.Plugins
 
             public void Start()
             {
-				state = (InputState)serverInput.GetValue(player);
+				state = player.serverInput;
             }
 
             void FixedUpdate()
             {
-                if (!player.IsConnected) { Destroy(); return; }
+                if (!player.IsConnected) { OnDestroy(); return; }
                 if (player.IsSleeping()) return;
+				
 				float currentTime = UnityEngine.Time.realtimeSinceStartup;
                 if ((currentTime - lastUpdate >= refreshTime) && player.GetActiveItem()?.GetHeldEntity() is Hammer)
                 {
-                    bool flag1 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, distance, colliderUpgrade);
+                    bool flag1 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, distance, 2097152);
 					TargetEntity = flag1 ? RayHit.GetEntity() : null;
 					lastUpdate = currentTime;
                 }
@@ -186,7 +185,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            public void Destroy()
+            public void OnDestroy()
             {
 				GameObject.Destroy(this);
             }
@@ -311,9 +310,10 @@ namespace Oxide.Plugins
 				upgradeBlockCheck.Remove(block as BuildingBlock);
 				return;
 			}
+			if (!playersInfo.ContainsKey(player.userID))
+				playersInfo[player.userID] = new PlayerDetails();
 			if ((enablePermission && !permission.UserHasPermission(player.UserIDString, permissionName)) || PlayerHasFlag(player.userID, PlayerFlags.PLUGIN_DISABLED))
                 return;
-
             if (playersInfo[player.userID].upgradeInfo != grade)
             {
                 playersInfo[player.userID].upgradeInfo = grade;
@@ -384,7 +384,7 @@ namespace Oxide.Plugins
 
         void SetBackToDefault(BasePlayer player)
         {
-			player.GetComponent<EHammer>()?.Destroy();
+			player.GetComponent<EHammer>()?.OnDestroy();
 			playersTimers.Remove(player.userID);
 			if(playersInfo.ContainsKey(player.userID))
 				playersInfo[player.userID].upgradeInfo = BuildingGrade.Enum.Count;
@@ -405,7 +405,7 @@ namespace Oxide.Plugins
 
         void OnPlayerDisconnected(BasePlayer player, string reason)
         {
-			player.GetComponent<EHammer>()?.Destroy();
+			player.GetComponent<EHammer>()?.OnDestroy();
 			playersInfo.Remove(player.userID);
         }
 
@@ -416,16 +416,18 @@ namespace Oxide.Plugins
             return PlayerFlags.NONE;
         }
 
-        void Init()
+        void OnServerInitialized()
         {
             foreach (var player in BasePlayer.activePlayerList)
+			{
 				playersInfo[player.userID] = new PlayerDetails();
+			}
         }
 
         void Unload()
         {
-			foreach (EHammer ehammer in Resources.FindObjectsOfTypeAll<EHammer>())
-				ehammer.Destroy();
+			foreach (var player in BasePlayer.activePlayerList)
+				player.GetComponent<EHammer>()?.OnDestroy();
 			playersInfo.Clear();
 			foreach (var player in BasePlayer.activePlayerList)
                 RemoveUI(player);

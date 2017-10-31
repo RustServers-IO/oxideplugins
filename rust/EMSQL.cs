@@ -1,15 +1,15 @@
-﻿// Reference: Oxide.Core.MySql
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System;
 using System.Text;
-using Oxide.Core.Plugins;
 using Oxide.Core;
+using Oxide.Core.MySql;
+using Oxide.Core.Plugins;
 using Oxide.Core.Database;
 using MySql.Data.MySqlClient;
 
 namespace Oxide.Plugins
 {
-    [Info("EMSQL", "Steenamaroo", "0.0.3", ResourceId = 2442)] 
+    [Info("EMSQL", "Steenamaroo", "0.0.5", ResourceId = 2442)] 
     class EMSQL : RustPlugin
     {                                                              
         class DataStorage

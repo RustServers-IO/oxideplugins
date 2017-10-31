@@ -2,7 +2,7 @@
     "name": "EMSQL",
     "description": "MySQL database add-on for Event Manager",
     "author": "=BBUK= Steenamaroo",
-    "version": "0.0.3",
+    "version": "0.0.5",
     "configuration": true,
     "require": {
         "EventManager": "*",

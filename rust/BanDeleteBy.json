@@ -2,9 +2,9 @@
     "name": "BanDeleteBy",
     "description": "Removes all entities placed by a player when they get banned.",
     "author": "Ryan",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "configuration": false,
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/bandeleteby.2533",
     "games": [
         "rust"

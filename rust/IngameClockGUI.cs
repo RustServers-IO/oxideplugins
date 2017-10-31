@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-
 using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-	[Info("Ingame Clock GUI", "deer_SWAG", "0.0.5", ResourceId = 1245)]
+	[Info("Ingame Clock GUI", "deer_SWAG", "0.0.7", ResourceId = 1245)]
 	[Description("Displays ingame and server time")]
 	public class IngameClockGUI : RustPlugin
 	{
@@ -133,9 +132,6 @@ namespace Oxide.Plugins
 		TOD_Sky 	sky;
 		DateTime 	dt;
 
-		bool isLoaded = false,
-			 isInit   = false;
-
 		string   time = "";
 		DateTime gameTime;
 		DateTime serverTime;
@@ -153,24 +149,12 @@ namespace Oxide.Plugins
 			Puts("Default config was saved and loaded!");
 		}
 
-		void OnPluginLoaded()
-		{
-			isLoaded = true;
-			if(isInit) Load();
-		}
-
 		void OnServerInitialized()
 		{
-			isInit = true;
-			if(isLoaded) Load();
-		}
-
-		void Load()
-		{
-			data = Interface.GetMod().DataFileSystem.ReadObject<Data>(databaseName);
+			data = Interface.Oxide.DataFileSystem.ReadObject<Data>(databaseName);
 			tiList = new List<TimedInfo>();
 			currentTI = null;
-			sky  = TOD_Sky.Instance;
+			sky = TOD_Sky.Instance;
 
 			CheckCreateConfig();
 
@@ -317,7 +301,7 @@ namespace Oxide.Plugins
 
 		void AddGUI()
 		{
-			if(data.Players.Count > 0)
+			if(data?.Players?.Count > 0)
 			{
 				int size = BasePlayer.activePlayerList.Count;
 				for(int i = 0; i < size; i++)
@@ -341,7 +325,7 @@ namespace Oxide.Plugins
 
 								ShowTime();
 
-								CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection),	null, "AddUI", new Facepunch.ObjectList(clockJson.Replace("%time%", time)));
+								CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection),	null, "AddUI", clockJson.Replace("%time%", time));
 							}
 
 							break;
@@ -357,7 +341,7 @@ namespace Oxide.Plugins
 						if(!((bool)Config["PreventChangingTime"]))
 							dt = gameTime;
 						ShowTime();
-						CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection),	null, "AddUI", new Facepunch.ObjectList(clockJson.Replace("%time%", time)));
+						CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection),	null, "AddUI", clockJson.Replace("%time%", time));
 					}
 				}
 			}
@@ -370,7 +354,7 @@ namespace Oxide.Plugins
 					if(!((bool)Config["PreventChangingTime"]))
 						dt = gameTime;
 					ShowTime();
-					CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection),	null, "AddUI", new Facepunch.ObjectList(clockJson.Replace("%time%", time)));
+					CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection),	null, "AddUI", clockJson.Replace("%time%", time));
 				}
 			}
 		}
@@ -397,7 +381,7 @@ namespace Oxide.Plugins
 			for(int i = 0; i < size; i++)
 			{
 				BasePlayer bp = BasePlayer.activePlayerList[i];
-				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection), null, "DestroyUI", new Facepunch.ObjectList("Clock"));
+				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(bp.net.connection), null, "DestroyUI", "Clock");
 			}
 		}
 
@@ -419,7 +403,7 @@ namespace Oxide.Plugins
 		{
 			int size = BasePlayer.activePlayerList.Count;
 			for(int i = 0; i < size; i++)
-				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(BasePlayer.activePlayerList[i].net.connection),	null,  "AddUI", new Facepunch.ObjectList(infoJson.Replace("%info%", text).Replace("%info_right%", iSize)));
+				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(BasePlayer.activePlayerList[i].net.connection),	null,  "AddUI", infoJson.Replace("%info%", text).Replace("%info_right%", iSize));
 		}
 
 		void UpdateInfo()
@@ -477,14 +461,14 @@ namespace Oxide.Plugins
 		{
 			int size = BasePlayer.activePlayerList.Count;
 			for(int i = 0; i < size; i++)
-				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(BasePlayer.activePlayerList[i].net.connection), null, "DestroyUI", new Facepunch.ObjectList("ClockInfo"));
+				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo(BasePlayer.activePlayerList[i].net.connection), null, "DestroyUI", "ClockInfo");
 		}
 
 		// -------------------- UTILS --------------------
 
 		void SaveData()
 		{
-			Interface.GetMod().DataFileSystem.WriteObject(databaseName, data);
+			Interface.Oxide.DataFileSystem.WriteObject(databaseName, data);
 		}
 
 		bool GetOption(int options, int option)

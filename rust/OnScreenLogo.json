@@ -2,7 +2,7 @@
     "name": "OnScreenLogo",
     "description": "The small plugin that allows you to put your own logo on the players screen",
     "author": "Vlad-00003",
-    "version": "1.0.1",
+    "version": "1.1.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/onscreenlogo.2601",

@@ -2,7 +2,7 @@
     "name": "Underworld",
     "description": "Teleports admins\/developer under the world when they disconnect.",
     "author": "nivex",
-    "version": "0.1.6",
+    "version": "1.0.2",
     "configuration": true,
     "suggest": {
         "Vanish": "*"

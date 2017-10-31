@@ -2,10 +2,11 @@
     "name": "VendingManager",
     "description": "Utility for managing vending machines",
     "author": "ignignokt84",
-    "version": "0.1.9",
+    "version": "0.2.2",
     "configuration": true,
     "suggest": {
-        "Economics": "*"
+        "Economics": "*",
+        "ServerRewards": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/vendingmanager.2331",

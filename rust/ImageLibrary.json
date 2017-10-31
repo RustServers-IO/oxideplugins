@@ -2,7 +2,7 @@
     "name": "ImageLibrary",
     "description": "A Plugin to Manage External Images - For Devs",
     "author": "Absolut",
-    "version": "2.0.5",
+    "version": "2.0.9",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/imagelibrary.2193",

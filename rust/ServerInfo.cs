@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("ServerInfo", "Fujikura/baton", "0.5.1", ResourceId = 1317)]
+	[Info("ServerInfo", "Fujikura/baton", "0.5.3", ResourceId = 1317)]
 	[Description("UI customizable server info with multiple tabs.")]
 	public sealed class ServerInfo : RustPlugin
 	{
@@ -218,9 +218,14 @@ namespace Oxide.Plugins
 
 			if (!state.InfoShownOnLogin)
 				return;
-
+			if (state.InfoShownOnLoginOnce && checkedPlayers.Contains(player.userID))
+				return;
 			ShowInfo(player, string.Empty, new string[0]);
+			if (state.InfoShownOnLoginOnce)
+				checkedPlayers.Add(player.userID);
 		}
+		
+		List<ulong> checkedPlayers = new List <ulong>();
 
 		private void OnPlayerDisconnected(BasePlayer player, string reason)
 		{
@@ -319,8 +324,7 @@ namespace Oxide.Plugins
 			json = json.Replace(@"\t", "\t");
 			json = json.Replace(@"\n", "\n");
 
-			//CuiHelper.AddUi(player, container);
-			CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(json, null, null, null, null));
+			CuiHelper.AddUi(player, container);
 		}
 
 		private static string AddMainPanel(CuiElementContainer container)
@@ -680,6 +684,7 @@ namespace Oxide.Plugins
 			{
 				Tabs = new List<HelpTab>();
 				ShowInfoOnPlayerInit = true;
+				ShowInfoOnlyOncePerRuntime = true;
 				TabToOpenByDefault = 0;
 				Position = new Position();
 
@@ -705,6 +710,8 @@ namespace Oxide.Plugins
 
 			public List<HelpTab> Tabs { get; set; }
 			public bool ShowInfoOnPlayerInit { get; set; }
+			public bool ShowInfoOnlyOncePerRuntime { get; set; }
+			
 			public int TabToOpenByDefault { get; set; }
 
 			public Position Position { get; set; }
@@ -1008,6 +1015,7 @@ namespace Oxide.Plugins
 				ActiveTabIndex = settings.TabToOpenByDefault;
 				PageIndex = 0;
 				InfoShownOnLogin = settings.ShowInfoOnPlayerInit;
+				InfoShownOnLoginOnce = settings.ShowInfoOnlyOncePerRuntime;
 				ActiveTabContentPanelName = string.Empty;
 				ChatHelpButtonName = string.Empty;
 				MainPanelName = string.Empty;
@@ -1016,6 +1024,7 @@ namespace Oxide.Plugins
 			public int ActiveTabIndex { get; set; }
 			public int PageIndex { get; set; }
 			public bool InfoShownOnLogin { get; set; }
+			public bool InfoShownOnLoginOnce { get; set; }
 			public string ActiveTabContentPanelName { get; set; }
 			public string ChatHelpButtonName { get; set; }
 			public string MainPanelName { get; set; }

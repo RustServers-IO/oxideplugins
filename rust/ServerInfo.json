@@ -2,7 +2,7 @@
     "name": "ServerInfo",
     "description": "Adds ingame UI with custom text & images",
     "author": "Fujikura",
-    "version": "0.5.1",
+    "version": "0.5.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/serverinfo.1317",

@@ -1,0 +1,16 @@
+{
+    "name": "Food Grilling",
+    "description": "Add physical food on the grill",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/food-grilling.2661",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

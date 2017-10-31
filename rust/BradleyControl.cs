@@ -10,17 +10,19 @@ using Oxide.Core.Plugins;
 // TODO: Handle Bradley respawn length and despawn times.
 namespace Oxide.Plugins
 {
-	[Info("BradleyControl", "Mattparks", "0.1.4", ResourceId = 2611)]
+	[Info("BradleyControl", "Mattparks", "0.1.8", ResourceId = 2611)]
 	[Description("A plugin that controls Bradley properties.")]
 	class BradleyControl : RustPlugin 
 	{
 		#region Fields
 	   
-		[PluginReference] Plugin Vanish;
-
 		FieldInfo tooHotUntil = typeof(HelicopterDebris).GetField("tooHotUntil", (BindingFlags.Instance | BindingFlags.NonPublic));
 		
 		private System.Random random = new System.Random();
+        private List<BradleyAPC> bradleys = new List<BradleyAPC>();
+        private List<FireBall> fireBalls = new List<FireBall>();
+        private List<HelicopterDebris> gibs = new List<HelicopterDebris>();
+        private List<LockedByEntCrate> lockedCrates = new List<LockedByEntCrate>();
         private float lastBradleyDeath = 0.0f;
 
         #endregion
@@ -30,22 +32,26 @@ namespace Oxide.Plugins
         public class Options
 		{	 
 			public bool bradleyEnabled = true; // Enables Bradley spawning.
+            public int bradleyAverage = 1; // The average count of Bradleys that can exist at one time.
 			public float respawnDelay = -1.0f; // The delay before respawning the Bradley after its death.
 			public float despawnDelay = -1.0f; // How long a Bradley can be inactive before despawning.
-			public float startHealth = 500.0f; // How much health the Bradley starts with.
+			public float startHealth = 1000.0f; // How much health the Bradley starts with.
 			public float maxTurretRange = 100.0f; // The range of the turrets.
 			public float gunAccuracy = 1.0f; // The guns accuracy (scale of 0 to 1).
 			public float gunDamage = 1.0f; // The guns damage (scale of 0 to 1).
 			public float speed = 1.0f; // The speed of movement.
 			public bool targetsNakeds = true; // If the Bradley will only target if you have explosives, more than 2 clothing or a radsuit, or a weapon better than a crossbow.
 			public bool ammoDoesDamage = false; // If ammo does damage to the Bradley.
-			public int maxLootCrates = 3; // How many loot boxes are dropped.
+			public int maxLootCrates = 2; // How many loot boxes are dropped.
 			public bool customLootTables = false; // If the custom loot tables will be used.
 			public bool enableNapalm = true; // If there is napalm at all after death (makes boxes unlocked).
-			public float lootAccessDelay = -1.0f; // How long (in seconds) before the dropped boxes can be accessed.
+            public int napamWaterRequired = -1; // How much water is needed to extengwish the napalm.
+            public float lootAccessDelay = -1.0f; // How long (in seconds) before the dropped boxes can be accessed.
 			public bool enableGibs = true; // If the Bradley will drop parts on destruction.
 			public float gibsHotDelay = -1.0f; // How long (in seconds) the gibs parts will be unminable and 'hot'.
 			public float gibsHealth = 500.0f; // How much health the gibs parts will have, more health will give more resources.
+			
+			public bool disableStartSearch = false; // Some dumb thing causing people issues.
 		}
 		
 		public class LootTables
@@ -88,7 +94,7 @@ namespace Oxide.Plugins
 			if (configs.options.customLootTables && configs.lootTables.bradleyCrate.Count == 0)
 			{
 				configs.lootTables.bradleyCrate = new Dictionary<string, string[]>() {
-					{"explosive.timed", new string[]{ "1", "0", "1" } },
+				//	{"explosive.timed", new string[]{ "1", "0", "1" } },
 					{ "ammo.rocket.basic", new string[]{ "1", "0", "1" } },
 					{ "ammo.rocket.fire", new string[]{ "1", "0", "2" } },
 					{ "ammo.rocket.hv", new string[]{ "1", "0", "2" } },
@@ -146,20 +152,22 @@ namespace Oxide.Plugins
 		{
 			Config.WriteObject(configs, true);
 		}
-
-		#endregion
-
-		#region Messages/Localization
-
+        
 		private void LoadMessages() 
 		{
 			// English messages.
 			lang.RegisterMessages(new Dictionary<string, string>
 			{
-				["BRADLEY_ABOUT"] = "<color=#ff3b3b>Bradley Control {Version}</color>: by <color=green>mattparks</color>. Bradley Control is a plugin that controls Bradley properties. Use the /bradley command as follows: \n <color=#1586db>•</color> /bradley - Displays Bradley Control about and help. \n <color=#1586db>•</color> /bradley reset - Resets the Bradley in the arena.",
-				["BRADLEY_RESET"] = "<color=#ff3b3b>Resetting the Bradley!</color>",
-				["BRADLEY_RESET_FAIL"] = "<color=#ff3b3b>Failed to reset the Bradley!</color>",
-			}, this, "en");
+				["BRADLEY_ABOUT"] = "<color=#ff3b3b>Bradley Control {Version}</color>: by <color=green>mattparks</color>. Bradley Control is a plugin that controls Bradley properties. Use the /bradley command as follows: \n <color=#1586db>•</color> /bradley - Displays Bradley Control about and help. \n <color=#1586db>•</color> /bradley reset - Resets the Bradley in the area.. \n <color=#1586db>•</color> /bradley clearGibs - Clears all Bradley gibs/parts. \n <color=#1586db>•</color> /bradley clearFire - Clears all Bradley fire. \n <color=#1586db>•</color> /bradley clearCrates - Clears all Bradley crates. \n <color=#1586db>•</color> /bradley unlockCrates - Unlocks all Bradley crates. \n <color=#1586db>•</color> /bradley clearAll - Clears all Bradley stuff.",
+                ["BRADLEY_RESET"] = "<color=#ff3b3b>Resetting the Bradley!</color>",
+                ["BRADLEY_RESET_FAIL"] = "<color=#ff3b3b>Failed to reset the Bradley!</color>",
+                ["BRADLEY_REMOVE_GIBS"] = "<color=#ff3b3b>Removing Bradley gibs from the world!</color>",
+                ["BRADLEY_REMOVE_FIRE"] = "<color=#ff3b3b>Removing Bradley fire from the world!</color>",
+                ["BRADLEY_UNLOCK_CRATES"] = "<color=#ff3b3b>Unlocking Bradley crates!</color>",
+                ["BRADLEY_REMOVE_CRATES"] = "<color=#ff3b3b>Removing Bradley crates!</color>",
+                ["BRADLEY_REMOVE_ALL"] = "<color=#ff3b3b>Removing all Bradleys, parts, fires, and crates!</color>",
+                ["BRADLEY_COUNT"] = "There are {Count} Bradleys.",
+            }, this, "en"); 
 		}
 		
 		#endregion
@@ -172,22 +180,71 @@ namespace Oxide.Plugins
 			LoadMessages();
 		}
 
+        private void OnServerInitialized()
+        {
+			if (configs.options.disableStartSearch)
+			{
+				return;
+			}
+			
+            foreach (var gobject in UnityEngine.Object.FindObjectsOfType<BaseEntity>())
+            {
+              //  var nearGibs = new List<ServerGib>();
+              //  Vis.Entities<ServerGib>(gobject.transform.position, 7.0f, nearGibs);
+
+               // if (nearGibs?.Any(p => (p?.ShortPrefabName).Contains("bradley")) ?? false)
+               // {
+                    var prefabName = gobject?.ShortPrefabName ?? string.Empty;
+                    var bradley = gobject?.GetComponent<BradleyAPC>() ?? null;
+                    var debris = gobject?.GetComponent<HelicopterDebris>() ?? null;
+                    var fireball = gobject?.GetComponent<FireBall>() ?? null;
+                    var crate = gobject?.GetComponent<LockedByEntCrate>() ?? null;
+
+                    if (bradley != null)
+                    {
+                        bradleys.Add(bradley);
+                    }
+
+                    if (crate != null)
+                    {
+                        lockedCrates.Add(crate);
+                    }
+
+                    if (fireball != null && (prefabName.Contains("napalm") || prefabName.Contains("oil")))
+                    {
+                        fireBalls.Add(fireball);
+                    }
+
+                    if (debris != null)
+                    {
+                        gibs.Add(debris);
+                    }
+               // }
+            }
+        }
+
 		private void OnEntitySpawned(BaseNetworkable entity)
         {
+            var prefabname = entity.name;
+
+            if (prefabname.Contains("bradleyapc"))
+            {
+                bradleys.Add(entity as BradleyAPC);
+            }
+
             if (lastBradleyDeath == 0.0f || Time.realtimeSinceStartup - lastBradleyDeath > 2.0f) // TODO: Check if around a Bradley instead.
             {
                 lastBradleyDeath = 0.0f;
                 return;
             }
 
-            var prefabname = entity.name;
+            var debris = entity?.GetComponent<HelicopterDebris>() ?? null;
+            gibs.Add(debris);
 
-			if (prefabname.Contains("servergibs_bradley"))
+            if (prefabname.Contains("servergibs_bradley"))
 			{
 				NextTick(() => 
 				{ 
-					var debris = entity?.GetComponent<HelicopterDebris>() ?? null;
-
 					if (debris == null || entity.IsDestroyed) 
 					{
 						return;
@@ -206,12 +263,14 @@ namespace Oxide.Plugins
 					}
 					
 					debris.SendNetworkUpdate();
-				});
+                });
 			}
 
 			if ((prefabname.Contains("napalm") || prefabname.Contains("oilfireball")) && !prefabname.Contains("rocket"))
-			{
-				NextTick(() =>
+            {
+                fireBalls.Add(entity as FireBall);
+
+                NextTick(() =>
                 {
                     var fireball = entity?.GetComponent<FireBall>() ?? null;
 	
@@ -219,9 +278,18 @@ namespace Oxide.Plugins
 					{
 						return;
 					}
-					
-					fireball.waterToExtinguish = 10000; // configs.options.napamWaterRequired
-							
+
+                    if (configs.options.lootAccessDelay != -1)
+                    {
+                        fireball.lifeTimeMin = configs.options.lootAccessDelay - 10.0f;
+                        fireball.lifeTimeMax = configs.options.lootAccessDelay + 10.0f;
+                    }
+
+                    if (configs.options.napamWaterRequired != -1)
+                    {
+                        fireball.waterToExtinguish = configs.options.napamWaterRequired;
+                    }
+						
 					if (!configs.options.enableNapalm) 
 					{
 						fireball.enableSaving = false;
@@ -229,14 +297,15 @@ namespace Oxide.Plugins
 					}
 					
 					fireball.SendNetworkUpdate();
-				});
+                });
 			}
 			
-			if (prefabname.Contains("heli_crate"))
+			if (prefabname.Contains("bradley_crate"))
             {
                 var loot = entity?.GetComponent<LootContainer>() ?? null;
-					
-				if (configs.options.customLootTables)
+                lockedCrates.Add(entity?.GetComponent<LockedByEntCrate>() ?? null);
+
+                if (configs.options.customLootTables || configs.lootTables.bradleyCrate.Count == 0)
 				{
 					loot.inventory.itemList.Clear();
 
@@ -246,11 +315,13 @@ namespace Oxide.Plugins
 						int t = i == 0 ? 1 : i < 3 ? 2 : 3;
 						int r = random.Next(keys.Count);
 						var val = configs.lootTables.bradleyCrate[keys[r]];
+						int j = 0;
 
-						while (Convert.ToInt32(val[2]) != t)
+						while ((Convert.ToInt32(val[2]) != t || Convert.ToInt32(val[0]) == 0) && j != 20)
 						{
 							r = random.Next(keys.Count);
 							val = configs.lootTables.bradleyCrate[keys[r]];
+							j++;
 						}
 								
 						var item = ItemManager.CreateByItemID(ItemManager.FindItemDefinition(keys[r]).itemid, Convert.ToInt32(val[0]), Convert.ToUInt64(val[1]));
@@ -283,7 +354,7 @@ namespace Oxide.Plugins
 						crate.CancelInvoke(crate.Think);
 						crate.SetLocked(false);
 						crate.lockingEnt = null;
-					});
+                    });
 				}
 			}
 		}
@@ -292,11 +363,35 @@ namespace Oxide.Plugins
 		{
 			var prefabname = victim.name;
 
-			if (prefabname.Contains("bradleyapc"))
+            var crate = victim?.GetComponent<LockedByEntCrate>() ?? null;
+
+            if (crate != null && lockedCrates.Contains(crate))
             {
+                lockedCrates.Remove(crate);
+            }
+
+            if (prefabname.Contains("servergibs_bradley"))
+            {
+                var debris = victim?.GetComponent<HelicopterDebris>() ?? null;
+
+                if (debris != null && gibs.Contains(debris))
+                {
+                    gibs.Remove(debris);
+                }
+            }
+
+            if (prefabname.Contains("bradleyapc"))
+            {
+                var bradley = victim?.GetComponent<BradleyAPC>() ?? null;
+
+                if (bradley != null && bradleys.Contains(bradley))
+                {
+                    bradleys.Remove(bradley);
+                }
+
                 lastBradleyDeath = Time.realtimeSinceStartup;
             }
-		}
+        }
 		
 		private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
 		{
@@ -328,8 +423,15 @@ namespace Oxide.Plugins
 			bradley.leftThrottle = bradley.throttle;
 			bradley.rightThrottle = bradley.throttle;
 			bradley.maxCratesToSpawn = configs.options.maxLootCrates;
-			
-			if (!configs.options.bradleyEnabled)
+
+            // Ensures there is a AI path to follow.
+            Vector3 position = BradleySpawner.singleton.path.interestZones[UnityEngine.Random.Range(0, BradleySpawner.singleton.path.interestZones.Count)].transform.position;
+            bradley.transform.position = position;
+            bradley.DoAI = true;
+            bradley.DoSimpleAI();
+            bradley.InstallPatrolPath(BradleySpawner.singleton.path);
+
+            if (!configs.options.bradleyEnabled || bradleys.Count > configs.options.bradleyAverage)
 			{
 				bradley.Kill(); 
 			}
@@ -368,16 +470,6 @@ namespace Oxide.Plugins
 					return false;
 				}
 	  
-				var canNetwork = Vanish?.Call("IsInvisible", player);
-							
-				if (canNetwork is bool)
-				{
-					if ((bool) canNetwork)
-					{
-						return false;
-					}
-				}
-				
 				if (!configs.options.targetsNakeds)
 				{
 					foreach (var item in player.inventory.containerWear.itemList)
@@ -420,31 +512,104 @@ namespace Oxide.Plugins
 				MessagePlayer(Lang("No Permission", player), player);
 				return;
 			}
-			
-			if (args.Length == 0)
-			{
-				MessagePlayer(Lang("BRADLEY_ABOUT", player).Replace("{Version}", Version.ToString()), player);
-			}
-			else
-			{
-				if (args[0].Equals("reset"))
-				{
-					if (configs.options.bradleyEnabled)
-					{
-						MessagePlayer(Lang("BRADLEY_RESET", player), player);
+
+            if (args.Length == 0)
+            {
+                MessagePlayer(Lang("BRADLEY_ABOUT", player).Replace("{Version}", Version.ToString()), player);
+            }
+            else
+            {
+                if (args[0].Equals("reset"))
+                {
+                    if (configs.options.bradleyEnabled)
+                    {
+                        MessagePlayer(Lang("BRADLEY_RESET", player), player);
                         ResetBradley();
-					}
-					else
-					{
-						MessagePlayer(Lang("BRADLEY_RESPAWN_FAIL", player), player);
-					}
-				}
-			}
+                    }
+                    else
+                    {
+                        MessagePlayer(Lang("BRADLEY_RESPAWN_FAIL", player), player);
+                    }
+                }
+                else if (args[0].Equals("unlockCrates"))
+                {
+                    foreach (var crate in lockedCrates)
+                    {
+                        UnlockCrate(crate);
+                    }
+
+                 //   lockedCrates.Clear();
+                    MessagePlayer(Lang("BRADLEY_UNLOCK_CRATES", player), player);
+                }
+                else if (args[0].Equals("clearCrates"))
+                {
+                    foreach (var crate in lockedCrates)
+                    {
+                        RemoveCrate(crate);
+                    }
+
+                    lockedCrates.Clear();
+                    MessagePlayer(Lang("BRADLEY_REMOVE_CRATES", player), player);
+                }
+                else if (args[0].Equals("clearGibs"))
+                {
+                    foreach (var gib in gibs)
+                    {
+                        RemoveGib(gib);
+                    }
+
+                    gibs.Clear();
+                    MessagePlayer(Lang("BRADLEY_REMOVE_GIBS", player), player);
+                }
+                else if (args[0].Equals("clearFire"))
+                {
+                    foreach (var ball in fireBalls)
+                    {
+                        RemoveFireBall(ball);
+                    }
+
+                    fireBalls.Clear();
+                    MessagePlayer(Lang("BRADLEY_REMOVE_FIRE", player), player);
+                }
+                else if (args[0].Equals("clearAll"))
+                {
+                    foreach (var crate in lockedCrates)
+                    {
+                        RemoveCrate(crate);
+                    }
+
+                    foreach (var gib in gibs)
+                    {
+                        RemoveGib(gib);
+                    }
+
+                    foreach (var ball in fireBalls)
+                    {
+                        RemoveFireBall(ball);
+                    }
+
+                    foreach (var bradley in bradleys)
+                    {
+                        RemoveBradley(bradley);
+                    }
+
+                    lockedCrates.Clear();
+                    gibs.Clear();
+                    fireBalls.Clear();
+                    bradleys.Clear();
+                    MessagePlayer(Lang("BRADLEY_REMOVE_ALL", player), player);
+                }
+            }
 		}
-		
-		#endregion
-		
-		#region BradleyControl
+
+        [ConsoleCommand("bradley.count")]
+        void CommandTagsPlayers()
+        {
+            Puts(Lang("BRADLEY_COUNT", null).Replace("{Count}", bradleys.Count.ToString()));
+        }
+        #endregion
+
+        #region BradleyControl
 
         private void ResetBradley()
         {
@@ -466,20 +631,82 @@ namespace Oxide.Plugins
             }
         }
 
-		#endregion
+        private void UnlockCrate(LockedByEntCrate crate)
+        {
+            if (crate == null || (crate?.IsDestroyed ?? true))
+            {
+                return;
+            }
 
-		#region Helpers
+            var lockingEnt = (crate?.lockingEnt != null) ? crate.lockingEnt.GetComponent<FireBall>() : null;
 
-		private string Lang(string key, BasePlayer player)
-		{
-			return lang.GetMessage(key, this, player.UserIDString);
-		}
+            if (lockingEnt != null && !(lockingEnt?.IsDestroyed ?? true))
+            {
+                lockingEnt.enableSaving = false; //again trying to fix issue with savelist
+                lockingEnt.CancelInvoke(lockingEnt.Extinguish);
+                lockingEnt.Invoke(lockingEnt.Extinguish, 30.0f);
+            }
 
-		private void MessagePlayer(string message, BasePlayer player)
-		{
-			player.ChatMessage(message);
-		}
+            crate.CancelInvoke(crate.Think);
+            crate.SetLocked(false);
+            crate.lockingEnt = null;
+        }
+        
+        private void RemoveCrate(LockedByEntCrate crate)
+        {
+            if (crate == null || (crate?.IsDestroyed ?? true))
+            {
+                return;
+            }
 
-		#endregion
-	}
+            crate.Kill();
+        }
+
+        private void RemoveGib(HelicopterDebris gib)
+        {
+            if (gib == null || (gib?.IsDestroyed ?? true))
+            {
+                return;
+            }
+
+            gib.Kill();
+        }
+
+        private void RemoveFireBall(FireBall fireBall)
+        {
+            if (fireBall == null || (fireBall?.IsDestroyed ?? true))
+            {
+                return;
+            }
+
+            fireBall.Kill();
+        }
+
+        private void RemoveBradley(BradleyAPC bradley)
+        {
+            if (bradley == null || (bradley?.IsDestroyed ?? true))
+            {
+                return;
+            }
+
+            bradley.Kill();
+        }
+
+        #endregion
+
+        #region Helpers
+
+        private string Lang(string key, BasePlayer player)
+        {
+            var userString = player == null ? "null" : player.UserIDString;
+            return lang.GetMessage(key, this, userString);
+        }
+
+        private void MessagePlayer(string message, BasePlayer player)
+        {
+            player.ChatMessage(message);
+        }
+
+        #endregion
+    }
 }

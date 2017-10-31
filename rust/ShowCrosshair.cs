@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("ShowCrosshair", "Marat, edited by Ловец Душ", "1.0.76", ResourceId = 2057)]
+    [Info("ShowCrosshair", "Marat, edited by Ловец Душ", "1.0.78", ResourceId = 2057)]
     [Description("Shows a crosshair on the screen.")]
     class ShowCrosshair : RustPlugin
     {
@@ -100,7 +100,7 @@ namespace Oxide.Plugins
         ImageLibrary ImageLibrary;
         private bool usePermissions = false;
         private bool ShowOnLogin = false;
-        private bool HideAiming = false;
+        private bool HideWhenAiming = false;
         private bool EnableSound = true;
         private bool ShowMessage = true;
         private string SoundOpen = "assets/bundled/prefabs/fx/build/promote_metal.prefab";
@@ -128,6 +128,7 @@ namespace Oxide.Plugins
             commandmenu = GetConfig("Options", "CommandMenu", commandmenu);
             ShowMessage = GetConfig("Options", "ShowMessage", ShowMessage);
             ShowOnLogin = GetConfig("Options", "ShowOnLogin", ShowOnLogin);
+            HideWhenAiming = GetConfig("Options", "HideWhenAiming", HideWhenAiming);
             EnableSound = GetConfig("Options", "EnableSound", EnableSound);
             usePermissions = GetConfig("Options", "UsePermissions", usePermissions);
 
@@ -497,7 +498,7 @@ namespace Oxide.Plugins
         void OnPlayerInput(BasePlayer player, InputState input)
         {
             if (player.GetActiveItem() != null)
-                if (input.IsDown(BUTTON.FIRE_SECONDARY) && WeaponList.Contains(player.GetActiveItem().info.displayName.english))
+                if (input.IsDown(BUTTON.FIRE_SECONDARY) && WeaponList.Contains(player.GetActiveItem().info.displayName.english) && HideWhenAiming)
                 {
                     opened[player.UserIDString] = false;
                     DestroyCrosshair(player);

@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Hotel", "FireStorm78", "1.1.7", ResourceId = 1298)]
+    [Info("Hotel", "FireStorm78", "1.1.8", ResourceId = 1298)]
     class Hotel : RustPlugin
     {
         ////////////////////////////////////////////////////////////
@@ -897,7 +897,6 @@ namespace Oxide.Plugins
             }
         }
 
-
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////
         /// GUI
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -909,8 +908,9 @@ namespace Oxide.Plugins
             string Msg = CreateAdminGUIMsg(player);
             if (Msg == string.Empty) return;
             string send = adminguijson.Replace("{msg}", Msg);
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(send));
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", send);
         }
+
         void RefreshPlayerHotelGUI(BasePlayer player, HotelData hotel)
         {
             RemovePlayerHotelGUI(player);
@@ -930,7 +930,7 @@ namespace Oxide.Plugins
                 if (Msg == string.Empty) return;
                 send = playerguijson.Replace("{msg}", Msg);
             }
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(send));
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", send);
             playerguiTimers[player] = timer.Once(pTimeOut, () => RemovePlayerHotelGUI(player));
         }
         string ConvertSecondsToBetter(string seconds)
@@ -1019,13 +1019,13 @@ namespace Oxide.Plugins
             return newguimsg;
         }
 
-        void RemoveAdminHotelGUI(BasePlayer player) { CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList("HotelAdmin")); }
+        void RemoveAdminHotelGUI(BasePlayer player) { CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", "HotelAdmin"); }
         void RemovePlayerHotelGUI(BasePlayer player)
         {
             if (player == null || player.net == null) return;
             if (playerguiTimers[player] != null)
                 playerguiTimers[player].Destroy();
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList("HotelPlayer"));
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", "HotelPlayer");
         }
 
         void ShowHotelGrid(BasePlayer player)

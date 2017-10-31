@@ -1,8 +1,8 @@
 {
     "name": "Npctp",
-    "description": "Create a npc that will tp a player to any where. or have it  run commands",
+    "description": "Create an NPC that will TP a player to anywhere, run commands, or open a door",
     "author": "",
-    "version": null,
+    "version": "2.4.2",
     "configuration": true,
     "suggest": {
         "Economics": "*",

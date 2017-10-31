@@ -2,7 +2,7 @@
     "name": "Capture The Flag",
     "description": "Capture the flag event for EventManager",
     "author": "k1lly0u",
-    "version": "0.1.62",
+    "version": "0.1.63",
     "configuration": true,
     "require": {
         "EventManager": "*"

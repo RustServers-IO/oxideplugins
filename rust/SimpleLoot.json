@@ -1,0 +1,16 @@
+{
+    "name": "Simple Loot",
+    "description": "Set multipliers for any item of your choosing!",
+    "author": "Kappasaurus",
+    "version": "1.0.4",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/simple-loot.2650",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

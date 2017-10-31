@@ -2,7 +2,7 @@
     "name": "QuickSmelt",
     "description": "Can Increase the speed of all BaseOven types",
     "author": "Fujikura",
-    "version": "3.0.2",
+    "version": "3.0.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/quicksmelt.1067",

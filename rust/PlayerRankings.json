@@ -2,7 +2,7 @@
     "name": "Player Rankings",
     "description": "Automatically gives players ranks based on playtime",
     "author": "Ankawi",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "configuration": true,
     "suggest": {
         "BetterChat": "*"

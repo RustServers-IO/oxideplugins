@@ -2,7 +2,7 @@
     "name": "ShowCrosshair",
     "description": "Shows a crosshair on the screen",
     "author": "",
-    "version": "1.0.76",
+    "version": "1.0.78",
     "configuration": true,
     "require": {
         "ImageLibrary": "*"

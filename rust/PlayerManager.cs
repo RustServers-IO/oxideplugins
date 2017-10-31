@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerManager", "Reneb", "1.0.10", ResourceId = 1535)]
+    [Info("PlayerManager", "Reneb", "1.0.11", ResourceId = 1535)]
     class PlayerManager : RustPlugin
     {
         [PluginReference]
@@ -197,7 +197,7 @@ namespace Oxide.Plugins
 
         void AddUI(BasePlayer player, string json)
         {
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(json, null, null, null, null));
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", json);
         }
         void DestroyGUI(BasePlayer player, string GUIName) { Game.Rust.Cui.CuiHelper.DestroyUi(player, GUIName); }
 

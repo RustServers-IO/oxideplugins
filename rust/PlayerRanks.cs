@@ -1,31 +1,54 @@
-﻿// Reference: Oxide.Core.MySql
-using Rust;
+﻿using Rust;
 using System.Collections.Generic;
 using System;
 using System.Text;
 using UnityEngine;
-using Oxide.Core.Plugins;
 using Oxide.Core;
+using Oxide.Core.MySql;
+using Oxide.Core.Plugins;
+using Oxide.Core.Libraries;
 using Oxide.Core.Database; 
 using Oxide.Core.Configuration;
 using System.Linq;
 using Oxide.Game.Rust.Cui;
-using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
+using System.Reflection;
 
 namespace Oxide.Plugins 
 {
-    [Info("PlayerRanks", "Steenamaroo", "1.3.0", ResourceId = 2359)]
+    [Info("PlayerRanks", "Steenamaroo", "1.3.4", ResourceId = 2359)]
     class PlayerRanks : RustPlugin
     {                                                              
         [PluginReference]
         Plugin Clans, Friends, EventManager, PlaytimeTracker, Economics;
 
+        
+        #region RustIO
+        private Library lib;
+        private MethodInfo isInstalled;
+        private MethodInfo hasFriend;
+
+
+        private bool IsInstalled()
+        {
+            if (lib == null) return false;
+            return (bool)isInstalled.Invoke(lib, new object[] { });
+        }
+
+        private bool HasFriend(string playerId, string friendId)
+        {
+            if (lib == null) return false;
+            return (bool)hasFriend.Invoke(lib, new object[] { playerId, friendId });
+        }     
+        #endregion
+        
         private Dictionary<uint, Dictionary<ulong, int>> HeliAttackers = new Dictionary<uint, Dictionary<ulong, int>>();
         private Dictionary<uint, Dictionary<ulong, float>> BradleyAttackers = new Dictionary<uint, Dictionary<ulong, float>>();
         private Dictionary<ulong, WoundedData> woundedData = new Dictionary<ulong, WoundedData>();      
         private List<ulong> airdrops = new List<ulong>();
         const string permAllowed = "playerranks.allowed";
         bool HasPermission(string id, string perm) => permission.UserHasPermission(id, perm);
+        List<ulong> MenuOpen = new List<ulong>();
         
         class DataStorage
         {
@@ -86,14 +109,17 @@ namespace Oxide.Plugins
         DataStorage data;
         private DynamicConfigFile PRData;
 
+	void Loaded()
+	{
+	    lang.RegisterMessages(messages, this);
+            permission.RegisterPermission(permAllowed, this);
+	    cmd.AddChatCommand($"{chatCommandAlias}", this, "cmdTarget");
+	}
         void OnServerInitialized()
         {
-            lang.RegisterMessages(messages, this);
-            permission.RegisterPermission(permAllowed, this);
             PRData = Interface.Oxide.DataFileSystem.GetFile("PlayerRanks");
             LoadData();
             LoadVariables();
-            cmd.AddChatCommand($"{chatCommandAlias}", this, "cmdTarget");
             CheckDependencies();
             if (useTimedTopList)
                 {
@@ -126,20 +152,23 @@ namespace Oxide.Plugins
                 }
             }
             if (Clans == null)
-            {
                 if (useClans)
                 {
-                    PrintWarning($"Clans could not be found! Disabling clans feature");
+                    Puts("{0}: {1}", Title, "Clans could not be found! Disabling clans feature.");
                     useClans = false;
                 }
-            }
+
             if (PlaytimeTracker == null)
-            {
-                    PrintWarning($"PlayTime Tracker is not installed. Please install it and reload.");
-            }
+                Puts("{0}: {1}", Title, "PlayTime Tracker is not installed. Please install it and reload.");
+
             if (Economics == null)
+                Puts("{0}: {1}", Title, "Economics is not installed. Category will show 0 for all players.");
+
+            lib = Interface.GetMod().GetLibrary<Library>("RustIO");
+            if (lib == null || (isInstalled = lib.GetFunction("IsInstalled")) == null || (hasFriend = lib.GetFunction("HasFriend")) == null)
             {
-                    PrintWarning($"Economics is not installed. Category will show 0 for all players.");
+                lib = null;
+                Puts("{0}: {1}", Title, "Rust:IO is not installed.");
             }
         }
         protected override void LoadDefaultConfig()
@@ -151,7 +180,11 @@ namespace Oxide.Plugins
  
         void OnPlayerInit(BasePlayer player)
         {
-            topsOpen = false;
+            if (MenuOpen.Contains(player.userID))
+            {
+            MenuOpen.Remove(player.userID);
+            CuiHelper.DestroyUi(player, "ranksgui");
+            }
             int maxNum = 0;
             if (data.PlayerRankData.Count != 0)
             {
@@ -247,13 +280,21 @@ namespace Oxide.Plugins
 
         void OnEntityTakeDamage(BaseEntity entity, HitInfo hitinfo, HitInfo hitInfo)
         {
+            if (hitinfo.Initiator == null) return;
+            var player = hitinfo.Initiator.ToPlayer();
             DamageType type = hitinfo.damageTypes.GetMajorityDamageType();
             float amount = hitinfo.damageTypes.Total();
 
-
-            if (hitinfo?.Initiator is BasePlayer && entity is BaseHelicopter)
+            if (blockEvents)
             {
-                var player = hitinfo.Initiator.ToPlayer();
+                object isPlaying = EventManager?.Call("isPlaying", new object[] { player });
+                if (isPlaying is bool)
+                if ((bool)isPlaying)
+                return;
+            }
+            
+            if (hitinfo.Initiator is BasePlayer && entity is BaseHelicopter)
+            {
                 //NextTick(() =>
                 //{
                     //if (entity == null) return; //no longer necessary?
@@ -270,7 +311,6 @@ namespace Oxide.Plugins
             }
             if (hitinfo?.Initiator is BasePlayer && entity is BradleyAPC)
             {
-                var player = hitinfo.Initiator.ToPlayer();
                 if (type.ToString() == "Bullet")
                 {
                     ProcessAPCHits((BasePlayer)player, (BaseEntity)entity);//questionable
@@ -301,12 +341,10 @@ namespace Oxide.Plugins
             }
             if (BradleyAttackers.ContainsKey(id))
             {
-                Puts("contains the name, at least");
                 Dictionary<ulong, float> majority = BradleyAttackers[id].OrderByDescending(pair => pair.Value).Take(1).ToDictionary(pair => pair.Key, pair => pair.Value);
                 foreach (var name in majority)
                 {
                     majorityPlayer = name.Key;
-                    Puts($"majority = {name.Key}");
                 }
             }
             return majorityPlayer;
@@ -316,6 +354,7 @@ namespace Oxide.Plugins
         {            
             if (entity.name.Contains("corpse"))
             return;
+            
             var victim = entity as BasePlayer;
 
             if (hitinfo?.Initiator == null && entity is BasePlayer)
@@ -323,6 +362,13 @@ namespace Oxide.Plugins
                     if (woundedData.ContainsKey(victim.userID))
                     {
                         BasePlayer attacker = BasePlayer.FindByID(woundedData[victim.userID].attackerId);
+                            if (blockEvents)
+                            {
+                                object isPlaying = EventManager?.Call("isPlaying", new object[] { attacker });
+                                if (isPlaying is bool)
+                                if ((bool)isPlaying)
+                                return;
+                            }
                         var distance = woundedData[victim.userID].distance;
                         if (!victim.userID.IsSteamId() || victim is NPCPlayer)
                         {
@@ -368,9 +414,14 @@ namespace Oxide.Plugins
                 {
                     BasePlayer player = null;
                     player = BasePlayer.FindByID(GetMajorityAttacker(entity.net.ID));
+                    Puts("There wasn't one");
+                    if (player != null) //eject plug?
+                    {                           
                     ProcessHeliKills((BasePlayer)player);
                     HeliAttackers.Remove(entity.net.ID);
                     return;
+                    }
+                    else return; 
                 }
             if (entity is BradleyAPC)  
                 {
@@ -390,6 +441,7 @@ namespace Oxide.Plugins
             {
                 if (hitinfo?.Initiator is NPCPlayer) return;
                 var player = hitinfo.Initiator.ToPlayer();
+                
                 if (player.userID.IsSteamId())
                 {
                     if (entity.name.Contains("agents/"))
@@ -600,10 +652,13 @@ namespace Oxide.Plugins
         {
         foreach (BasePlayer current in BasePlayer.activePlayerList)
         {
-            CuiHelper.DestroyUi(current, "ranksgui");
-            topsOpen = false; 
+        if (MenuOpen.Contains(current.userID))
+            {
+                CuiHelper.DestroyUi(current, "ranksgui");
+                MenuOpen.Remove(current.userID);
+            }
         }
-        SaveData();
+        SaveData(); 
         }
         #region processes    
 
@@ -624,6 +679,11 @@ namespace Oxide.Plugins
                 object isPlaying = EventManager?.Call("isPlaying", new object[] { player });
                 if (isPlaying is bool)
                 if ((bool)isPlaying)
+                return;
+            }
+            if (useRustIO)
+            {
+                if(HasFriend(player.userID.ToString(), victim.userID.ToString()))
                 return;
             }
             if (data.PlayerRankData.ContainsKey(player.userID))
@@ -1036,8 +1096,11 @@ namespace Oxide.Plugins
             {
             data.PlayerRankData[player.userID].Admin = true;
             }
-            CuiHelper.DestroyUi(player, "ranksgui");
-            topsOpen = false;
+            if (MenuOpen.Contains(player.userID))
+                {
+                    CuiHelper.DestroyUi(player, "ranksgui");
+                    MenuOpen.Remove(player.userID);
+                }
         }
 
         void UseUI(BasePlayer player, string msg, string msg1)
@@ -1126,11 +1189,14 @@ namespace Oxide.Plugins
         private void Close(ConsoleSystem.Arg arg)
         { 
             var player = arg.Connection.player as BasePlayer;
-            CuiHelper.DestroyUi(player, "ranksgui");
-            topsOpen = false;
+            if (MenuOpen.Contains(player.userID))
+                {
+                    CuiHelper.DestroyUi(player, "ranksgui");
+                    MenuOpen.Remove(player.userID);
+                }
             return;
-
         }
+        
         [ConsoleCommand("ToggleTops")]
         private void cmdToggleTops(ConsoleSystem.Arg arg)
         { 
@@ -1144,6 +1210,15 @@ namespace Oxide.Plugins
         {
             SaveData();
             Puts("PlayerRanks database was saved.");
+        }
+
+        [ConsoleCommand("playerranks.wipe")]
+        private void cmdWipe(ConsoleSystem.Arg arg)
+        {
+	    data.PlayerRankData.Clear();
+	    PRData.WriteObject(data);
+	    OnServerInitialized();
+            Puts("PlayerRanks database was wiped.");
         }
         
         #endregion
@@ -1203,16 +1278,16 @@ namespace Oxide.Plugins
                     if(useresourcesgathered)topsMsgGUI += string.Format(string.Format(fontColor3 + lang.GetMessage("ResourcesGathered", this, player.UserIDString) + ": </color>" + fontColor1 + "{0}", d.ResourcesGathered), 1.0) + "</color> \n";
                     if(usestructuresupgraded)topsMsgGUI += string.Format(string.Format(fontColor3 + lang.GetMessage("StructuresUpgraded", this, player.UserIDString) + ": </color>" + fontColor1 + "{0}", d.StructuresUpgraded), 1.0) + "</color> \n";
                     
-                    if (topsOpen)
+                    if (MenuOpen.Contains(player.userID))
                     {
                         CuiHelper.DestroyUi(player, "ranksgui");
-                        topsOpen = false;
+                        MenuOpen.Remove(player.userID);
                         return;
                     }
-                    else
+                    else   
                     {
                         UseUI(player, topsMsgGUI.ToString(), msg1.ToString());
-                        topsOpen = true;
+                        MenuOpen.Add(player.userID);
                     }
                     return;
             
@@ -1227,7 +1302,7 @@ namespace Oxide.Plugins
                     }
                     Dictionary<string, int> top = dictToUse.OrderByDescending(pair => pair.Value.PVPKills).Take(amount).ToDictionary(pair => pair.Value.Name, pair => pair.Value.PVPKills);
                     top = top.Where(kvp => kvp.Value > 0).ToDictionary(x => x.Key, x => x.Value);
-                     if (top.Count > 0)
+                    if (top.Count > 0)
                     {
                         var outMsg = string.Format(fontColor1 + lang.GetMessage("title", this) + "</color>" + fontColor2 + lang.GetMessage("bestHits", this)  + lang.GetMessage("PVPKills", this), 1.0) + "</color> \n";
                         foreach (var name in top)
@@ -1235,9 +1310,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "pvpdistance":
                 if (usepvpdistance)
@@ -1258,9 +1337,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
-                    } 
+                        SendReply(player, outMsg);
+                    }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "pvekills":
                 if (usepvekills)
@@ -1281,9 +1364,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
-                    } 
+                        SendReply(player, outMsg);
+                    }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "pvedistance":
                 if (usepvedistance)
@@ -1304,9 +1391,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "npckills": case "npcs":
                 if (usenpckills)
@@ -1327,9 +1418,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "npcdistance":
                 if (usenpcdistance)
@@ -1350,9 +1445,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "deaths":
                 if (usedeaths)
@@ -1373,10 +1472,14 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
-                return; 
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
+                return;
             case "barrelsdestroyed": case "barrels":
                 if (usebarrelsdestroyed)
                 {                
@@ -1396,9 +1499,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "helicopterhits": case "helihits":
                 if (usehelihits)
@@ -1419,9 +1526,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "helicopterkills": case "helikills":
                 if (usehelikills)
@@ -1442,9 +1553,67 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
+                return;
+            case "apchits": case "bradleyhits":
+                if (useapchits)
+                {                
+                    var dictToUse = data.PlayerRankData;
+                    int amount = PrivateTopListAmount;
+                    if (allowadmin == false)
+                    {
+                        dictToUse = data.PlayerRankData.Where(pair => pair.Value.Admin == false).ToDictionary(val => val.Key, val => val.Value);
+                    }
+                    Dictionary<string, int> top = dictToUse.OrderByDescending(pair => pair.Value.APCHits).Take(amount).ToDictionary(pair => pair.Value.Name, pair => pair.Value.APCHits);
+                    top = top.Where(kvp => kvp.Value > 0).ToDictionary(x => x.Key, x => x.Value);
+                    if (top.Count > 0)
+                    {
+                        var outMsg = string.Format(fontColor1 + lang.GetMessage("title", this) + "</color>" + fontColor2 + lang.GetMessage("bestHits", this)  + lang.GetMessage("APCHits", this), 1.0) + "</color> \n";
+                        foreach (var name in top)
+                        {
+                            outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
+                        }
+                        if (outMsg != "")
+                        SendReply(player, outMsg);
+                    }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
+                }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
+                return;
+            case "apckills": case "bradleykills":
+                if (useapckills)
+                {                
+                    var dictToUse = data.PlayerRankData;
+                    int amount = PrivateTopListAmount;
+                    if (allowadmin == false)
+                    {
+                        dictToUse = data.PlayerRankData.Where(pair => pair.Value.Admin == false).ToDictionary(val => val.Key, val => val.Value);
+                    }
+                    Dictionary<string, int> top = dictToUse.OrderByDescending(pair => pair.Value.APCKills).Take(amount).ToDictionary(pair => pair.Value.Name, pair => pair.Value.APCKills);
+                    top = top.Where(kvp => kvp.Value > 0).ToDictionary(x => x.Key, x => x.Value);
+                    if (top.Count > 0)
+                    {
+                        var outMsg = string.Format(fontColor1 + lang.GetMessage("title", this) + "</color>" + fontColor2 + lang.GetMessage("bestHits", this)  + lang.GetMessage("APCKills", this), 1.0) + "</color> \n";
+                        foreach (var name in top)
+                        {
+                            outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
+                        }
+                        if (outMsg != "")
+                        SendReply(player, outMsg);
+                    }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
+                }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "suicides":
                 if (usesuicides)
@@ -1465,9 +1634,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "timeswounded": case "wounded":
                 if (usetimeswounded)
@@ -1488,9 +1661,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "explosivesthrown":  case "explosives":
                 if (useexplosivesthrown)
@@ -1511,9 +1688,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "arrowsfired": case "arrows":
                 if (usearrowsfired)
@@ -1534,9 +1715,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "bulletsfired": case "bullets":
                 if (usebulletsfired)
@@ -1557,9 +1742,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "weaponstrapsdestroyed": case "weapontraps":
                 if (useweapontrapsdestroyed)
@@ -1580,9 +1769,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "sleeperskilled": case "sleepers":
                 if (usesleeperskilled)
@@ -1603,9 +1796,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "rocketslaunched": case "rockets":
                 if (userocketslaunched)
@@ -1626,9 +1823,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "timeshealed": case "healed":
                 if (usetimeshealed)
@@ -1649,9 +1850,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "kdr":
                 if (usekdr)
@@ -1672,9 +1877,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "sdr":
                 if (usesdr)
@@ -1695,9 +1904,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "dropslooted": case "airdrops":
                 if (usedropslooted)
@@ -1718,9 +1931,13 @@ namespace Oxide.Plugins
                             outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                         }
                         if (outMsg != "")
-                            SendReply(player, outMsg); 
+                        SendReply(player, outMsg);
                     }
+                    else
+                    SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "structuresbuilt": case "structures":
                 if (usestructuresbuilt)
@@ -1735,18 +1952,22 @@ namespace Oxide.Plugins
                             }
                             Dictionary<string, int> top = dictToUse.OrderByDescending(pair => pair.Value.StructuresBuilt).Take(amount).ToDictionary(pair => pair.Value.Name, pair => pair.Value.StructuresBuilt);
                             top = top.Where(kvp => kvp.Value > 0).ToDictionary(x => x.Key, x => x.Value);
-                    if (top.Count > 0)
-                    {
-                        var outMsg = string.Format(fontColor1 + lang.GetMessage("title", this) + "</color>" + fontColor2 + lang.GetMessage("bestHits", this)  + lang.GetMessage("StructuresBuilt", this), 1.0) + "</color> \n";
-                        foreach (var name in top)
-                        {
-                            outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
-                        }
-                        if (outMsg != "")
-                            SendReply(player, outMsg); 
-                    }
+                            if (top.Count > 0)
+                            {
+                                var outMsg = string.Format(fontColor1 + lang.GetMessage("title", this) + "</color>" + fontColor2 + lang.GetMessage("bestHits", this)  + lang.GetMessage("StructuresBuilt", this), 1.0) + "</color> \n";
+                                foreach (var name in top)
+                                {
+                                    outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
+                                }
+                                if (outMsg != "")
+                                SendReply(player, outMsg);
+                            }
+                            else
+                            SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                         }
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "itemsdeployed": case "deployed":
                 if (useitemsdeployed)
@@ -1769,10 +1990,14 @@ namespace Oxide.Plugins
                                     outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                                 }
                                 if (outMsg != "")
-                                    SendReply(player, outMsg); 
+                                SendReply(player, outMsg);
                             }
+                            else
+                            SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                         }
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "itemscrafted": case "crafted":
                 if (useitemscrafted)
@@ -1795,10 +2020,14 @@ namespace Oxide.Plugins
                                     outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                                 }
                                 if (outMsg != "")
-                                    SendReply(player, outMsg); 
+                                SendReply(player, outMsg);
                             }
+                            else
+                            SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                         }
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "entitiesrepaired": case "repaired":
                 if (useentitiesrepaired)
@@ -1821,10 +2050,14 @@ namespace Oxide.Plugins
                                     outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                                 }
                                 if (outMsg != "")
-                                    SendReply(player, outMsg); 
+                                SendReply(player, outMsg);
                             }
+                            else
+                            SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                         }
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "structuresdemolished": case "demolished":
                 if (usestructuresdemolished)
@@ -1847,10 +2080,14 @@ namespace Oxide.Plugins
                                     outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                                 }
                                 if (outMsg != "")
-                                    SendReply(player, outMsg); 
+                                SendReply(player, outMsg);
                             }
+                            else
+                            SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                         }
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "resourcesgathered":  case "gathered": case "resources":
                 if (useresourcesgathered)
@@ -1873,10 +2110,14 @@ namespace Oxide.Plugins
                                     outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                                 }
                                 if (outMsg != "")
-                                    SendReply(player, outMsg); 
+                                SendReply(player, outMsg);
                             }
+                            else
+                            SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                         }
                 }
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
                 return;
             case "structuresupgraded": case "upgraded":
                 if (usestructuresupgraded)
@@ -1899,11 +2140,15 @@ namespace Oxide.Plugins
                                     outMsg += string.Format(fontColor3 + "{0} : " + "</color>" + fontColor1 + "{1}" + "</color>" + "\n", name.Key, name.Value);
                                 }
                                 if (outMsg != "")
-                                    SendReply(player, outMsg); 
+                                SendReply(player, outMsg);
                             }
+                            else
+                            SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("noResults", this, player.UserIDString));
                         }
                 }
-                return;            
+                else
+                SendReply(player, fontColor1 + lang.GetMessage("title", this, player.UserIDString) + "</color>" + lang.GetMessage("disabled", this, player.UserIDString));
+                return;           
             case "save":
                 if (HasPermission(player.UserIDString, permAllowed))
                 {
@@ -3009,7 +3254,6 @@ public static string RemoveSurrogatePairs(string str, string replacementCharacte
 
             sb.Append(replacementCharacter);
 
-            // If there is a high+low surrogate, skip the low surrogate
             if (i + 1 < str.Length && char.IsHighSurrogate(ch) && char.IsLowSurrogate(str[i + 1]))
             {
                 i++;
@@ -3023,50 +3267,47 @@ public static string RemoveSurrogatePairs(string str, string replacementCharacte
 
     return sb == null ? str : sb.ToString();
 }
-
-
-Core.MySql.Libraries.MySql Sql = Interface.GetMod().GetLibrary<Core.MySql.Libraries.MySql>(); 
-Connection Sql_conn;
-
+   
+        Core.MySql.Libraries.MySql Sql = Interface.GetMod().GetLibrary<Core.MySql.Libraries.MySql>(); 
+        Connection Sql_conn;
+        
         void LoadMySQL()
         {
-            Sql_conn = Sql.OpenDb(sql_host, sql_port, sql_db, sql_user, sql_pass, this); 
-            if (Sql_conn == null || Sql_conn.Con == null)
-            {
-                Puts("MySql connection is null.");
-                return;
-            }
+
+        if (Sql_conn != null)
+        {
+        Sql.CloseDb(Sql_conn);    
+        }
             try
             {
+                Sql_conn = Sql.OpenDb(sql_host, sql_port, sql_db, sql_user, sql_pass, this); 
 
+                if (Sql_conn == null || Sql_conn.Con == null) 
+                {
+                    Puts("Player Ranks MySQL connection has failed. Please check your credentials.");     
+                    return; 
+                }
                 Sql.Insert(Core.Database.Sql.Builder.Append($"CREATE TABLE IF NOT EXISTS {tablename} ( `UserID` VARCHAR(17) NOT NULL, `Name` LONGTEXT NOT NULL, `PVPKills` INT(11) NOT NULL, `PVPDistance` DOUBLE NOT NULL, `PVEKills` INT(11) NOT NULL, `PVEDistance` DOUBLE NOT NULL, `NPCKills` INT(11) NOT NULL, `NPCDistance` DOUBLE NOT NULL, `Deaths` INT(11) NOT NULL, `BarrelsDestroyed` INT(11) NOT NULL, `HeliHits` INT(11) NOT NULL, `HeliKills` INT(11) NOT NULL, `APCHits` INT(11) NOT NULL, `APCKills` INT(11) NOT NULL, `Suicides` INT(11) NOT NULL, `TimesWounded` INT(11) NOT NULL, `ExplosivesThrown` INT(11) NOT NULL, `ArrowsFired` INT(11) NOT NULL, `BulletsFired` INT(11) NOT NULL, `WeaponTrapsDestroyed` INT(11) NOT NULL, `SleepersKilled` INT(11) NOT NULL, `RocketsLaunched` INT(11) NOT NULL, `TimesHealed` INT(11) NOT NULL, `KDR` DOUBLE NOT NULL, `SDR` DOUBLE NOT NULL, `DropsLooted` Int(11) NOT NULL, `StructuresBuilt` INT(11) NOT NULL, `ItemsDeployed` INT(11) NOT NULL, `ItemsCrafted` INT(11) NOT NULL, `EntitiesRepaired` INT(11) NOT NULL, `StructuresDemolished` INT(11) NOT NULL, `ResourcesGathered` INT(11) NOT NULL, `StructuresUpgraded` INT(11) NOT NULL, `Status` VARCHAR(11) NOT NULL, `TimePlayed` TIME NOT NULL, `Recent` INT(11) NOT NULL, `Economics` INT(11) NOT NULL, PRIMARY KEY (`UserID`));"), Sql_conn);
             } 
-            catch
+            catch (Exception e)  
             { 
                 Puts("Player Ranks did not succesfully create a table.");    
             }  
-        
-            try
+
+            foreach(var c in data.PlayerRankData) 
             {
-                foreach(var c in data.PlayerRankData) 
-                {
-                    Sql.Insert(Core.Database.Sql.Builder.Append($"INSERT INTO {tablename} ( `UserID`, `Name`, `PVPKills`, `PVPDistance`, `PVEKills`, `PVEDistance`, `NPCKills`, `NPCDistance`, `Deaths`, `BarrelsDestroyed`, `HeliHits`, `HeliKills`, `APCHits`, `APCKills`, `Suicides`, `TimesWounded`, `ExplosivesThrown`, `ArrowsFired`, `BulletsFired`, `WeaponTrapsDestroyed`, `SleepersKilled`, `RocketsLaunched`, `TimesHealed`, `KDR`, `SDR`, `DropsLooted`,`StructuresBuilt`, `ItemsDeployed`, `ItemsCrafted`, `EntitiesRepaired`, `StructuresDemolished`, `ResourcesGathered`, `StructuresUpgraded`, `Status`, `TimePlayed`, `Recent`, `Economics`) VALUES ( @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12, @13, @14, @15, @16, @17, @18, @19, @20, @21, @22, @23, @24, @25, @26, @27, @28, @29, @30, @31, @32, @33, @34, @35, @36) ON DUPLICATE KEY UPDATE Name = @1, PVPKills = @2, PVPDistance = @3, PVEKills = @4, PVEDistance = @5, NPCKills = @6, NPCDistance = @7, Deaths = @8, BarrelsDestroyed = @9, HeliHits = @10, HeliKills = @11, APCHits = @12, APCKills = @13, Suicides = @14, TimesWounded = @15, ExplosivesThrown = @16, ArrowsFired = @17, BulletsFired = @18, WeaponTrapsDestroyed = @19, SleepersKilled = @20, RocketsLaunched = @21, TimesHealed = @22, KDR = @23, SDR = @24, DropsLooted = @25, StructuresBuilt = @26, ItemsDeployed = @27, ItemsCrafted = @28, EntitiesRepaired = @29, StructuresDemolished = @30, ResourcesGathered = @31, StructuresUpgraded = @32, Status = @33, TimePlayed = @34, Recent = @35, Economics = @36;", c.Value.UserID, RemoveSurrogatePairs(c.Value.Name, ""), c.Value.PVPKills, c.Value.PVPDistance, c.Value.PVEKills, c.Value.PVEDistance, c.Value.NPCKills, c.Value.NPCDistance, c.Value.Deaths, c.Value.BarrelsDestroyed, c.Value.HeliHits, c.Value.HeliKills, c.Value.APCHits, c.Value.APCKills, c.Value.Suicides, c.Value.TimesWounded, c.Value.ExplosivesThrown, c.Value.ArrowsFired, c.Value.BulletsFired, c.Value.WeaponTrapsDestroyed, c.Value.SleepersKilled, c.Value.RocketsLaunched, c.Value.TimesHealed, c.Value.KDR, c.Value.SDR, c.Value.DropsLooted, c.Value.StructuresBuilt, c.Value.ItemsDeployed, c.Value.ItemsCrafted, c.Value.EntitiesRepaired, c.Value.StructuresDemolished, c.Value.ResourcesGathered, c.Value.StructuresUpgraded, c.Value.Status, c.Value.TimePlayed, c.Value.Recent, c.Value.Economics), Sql_conn);
-                }
-                Puts("Player Ranks MySQL Database Was Saved.");
+            Sql.Insert(Core.Database.Sql.Builder.Append($"INSERT INTO {tablename} ( `UserID`, `Name`, `PVPKills`, `PVPDistance`, `PVEKills`, `PVEDistance`, `NPCKills`, `NPCDistance`, `Deaths`, `BarrelsDestroyed`, `HeliHits`, `HeliKills`, `APCHits`, `APCKills`, `Suicides`, `TimesWounded`, `ExplosivesThrown`, `ArrowsFired`, `BulletsFired`, `WeaponTrapsDestroyed`, `SleepersKilled`, `RocketsLaunched`, `TimesHealed`, `KDR`, `SDR`, `DropsLooted`,`StructuresBuilt`, `ItemsDeployed`, `ItemsCrafted`, `EntitiesRepaired`, `StructuresDemolished`, `ResourcesGathered`, `StructuresUpgraded`, `Status`, `TimePlayed`, `Recent`, `Economics`) VALUES ( @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12, @13, @14, @15, @16, @17, @18, @19, @20, @21, @22, @23, @24, @25, @26, @27, @28, @29, @30, @31, @32, @33, @34, @35, @36) ON DUPLICATE KEY UPDATE Name = @1, PVPKills = @2, PVPDistance = @3, PVEKills = @4, PVEDistance = @5, NPCKills = @6, NPCDistance = @7, Deaths = @8, BarrelsDestroyed = @9, HeliHits = @10, HeliKills = @11, APCHits = @12, APCKills = @13, Suicides = @14, TimesWounded = @15, ExplosivesThrown = @16, ArrowsFired = @17, BulletsFired = @18, WeaponTrapsDestroyed = @19, SleepersKilled = @20, RocketsLaunched = @21, TimesHealed = @22, KDR = @23, SDR = @24, DropsLooted = @25, StructuresBuilt = @26, ItemsDeployed = @27, ItemsCrafted = @28, EntitiesRepaired = @29, StructuresDemolished = @30, ResourcesGathered = @31, StructuresUpgraded = @32, Status = @33, TimePlayed = @34, Recent = @35, Economics = @36;", c.Value.UserID, RemoveSurrogatePairs(c.Value.Name, ""), c.Value.PVPKills, c.Value.PVPDistance, c.Value.PVEKills, c.Value.PVEDistance, c.Value.NPCKills, c.Value.NPCDistance, c.Value.Deaths, c.Value.BarrelsDestroyed, c.Value.HeliHits, c.Value.HeliKills, c.Value.APCHits, c.Value.APCKills, c.Value.Suicides, c.Value.TimesWounded, c.Value.ExplosivesThrown, c.Value.ArrowsFired, c.Value.BulletsFired, c.Value.WeaponTrapsDestroyed, c.Value.SleepersKilled, c.Value.RocketsLaunched, c.Value.TimesHealed, c.Value.KDR, c.Value.SDR, c.Value.DropsLooted, c.Value.StructuresBuilt, c.Value.ItemsDeployed, c.Value.ItemsCrafted, c.Value.EntitiesRepaired, c.Value.StructuresDemolished, c.Value.ResourcesGathered, c.Value.StructuresUpgraded, c.Value.Status, c.Value.TimePlayed, c.Value.Recent, c.Value.Economics), Sql_conn);
             }
-            catch
-            { 
-                Puts("Player Ranks could not save the data.");    
-            }
-            Sql.CloseDb(Sql_conn);    
-        }
-        
+            Puts("Player Ranks MySQL Database Was Saved.");
+            
+        }     
         #endregion
 
         #region config 
 
         static bool useFriendsAPI = true;
         static bool useClans = true;
+        static bool useRustIO = true;
         static bool blockEvents = true;
         static bool useIntenseOptions = true;
         static int TimedTopListTimer = 10;
@@ -3134,6 +3375,7 @@ Connection Sql_conn;
             CheckCfg("Options - Use FriendsAPI", ref useFriendsAPI);
             CheckCfg("Options - Use Clans", ref useClans);
             CheckCfg("Options - Block Events", ref blockEvents);
+            CheckCfg("Options - Use Rust:IO", ref useRustIO);
             CheckCfg("Options - Use Intense Options", ref useIntenseOptions);
             CheckCfg("Options - Use Random top table", ref useTimedTopList);
             CheckCfg("Options - Random Top List timer", ref TimedTopListTimer);
@@ -3263,6 +3505,8 @@ Connection Sql_conn;
             {"syntax", "ID must be 17 digits." },
             {"category", "Stats for this category have been removed." },
             {"nocategory", "This is not a recognised category." },           
+            {"noResults", "There are no statistics for this category." },
+            {"disabled", "This category has been disabled." },
             
             {"PVPKills", "PVP Kills " }, 
             {"PVPDistance", "PVP Distance " },

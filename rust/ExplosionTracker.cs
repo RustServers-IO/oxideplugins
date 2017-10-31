@@ -5,12 +5,18 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Explosion Tracker", "Ryan", "1.0.0", ResourceId = 1282)]
+    [Info("Explosion Tracker", "Ryan", "1.0.1", ResourceId = 1282)]
     [Description("This plugin tracks every explosion that happens in the server.")]
     internal class ExplosionTracker : RustPlugin
     {
-        [PluginReference] private Plugin Slack;
-        [PluginReference] private Plugin Discord;
+        [PluginReference] private Plugin Slack, Discord;
+
+        private enum  Actions
+        {
+            Throw,
+            Drop,
+            Launch
+        }
 
         #region Config
 
@@ -105,17 +111,9 @@ namespace Oxide.Plugins
 
         private void Log(string message, string action) => LogToFile(action, string.Format($"[{DateTime.Now}] " + message), this);
 
-        private void SendSlack(string message, BasePlayer player)
-        {
-            if (!Slack) return;
-            Slack.Call("SimpleMessage", message, covalence.Players.FindPlayerById(player.UserIDString), ConfigData.SlackInfo.Channel);
-        }
+        private void SendSlack(string message, BasePlayer player) => Slack?.Call("SimpleMessage", message, covalence.Players.FindPlayerById(player.UserIDString), ConfigData.SlackInfo.Channel);
 
-        private void SendDiscord(string message)
-        {
-            if (!Discord) return;
-            Discord.Call("SendMessage", message);
-        }
+        private void SendDiscord(string message) => Discord?.Call("SendMessage", message);
 
         private string ThrowMsg(BasePlayer player, BaseEntity entity)
         {
@@ -135,29 +133,26 @@ namespace Oxide.Plugins
                 Math.Round(entity.GetEstimatedWorldPosition().x, 2), Math.Round(entity.GetEstimatedWorldPosition().y, 2), Math.Round(entity.GetEstimatedWorldPosition().z, 2));
         }
 
-        private void SendMessages(string message, string action, BasePlayer player)
+        private void SendMessages(string message, Actions action, BasePlayer player)
         {
-            if (ConfigData.Log)
-                Log(message, action);
-            if (ConfigData.RCON)
-                Puts(message);
+            if (ConfigData.Log) Log(message, action.ToString());
+            if (ConfigData.RCON) Puts(message);
             if (ConfigData.AdminMsg)
+            {
                 foreach (var p in BasePlayer.activePlayerList)
-                    if (p.IsAdmin)
-                        PrintToChat(player, message);
-            if (ConfigData.SlackInfo.Enabled)
-                SendSlack(message, player);
-            if (ConfigData.Discord)
-                SendDiscord(message);
+                    if (p.IsAdmin) PrintToChat(player, message);
+            }
+            if (ConfigData.SlackInfo.Enabled) SendSlack(message, player);
+            if (ConfigData.Discord) SendDiscord(message);
         }
 
-        private void ConstructMessage(BasePlayer player, BaseEntity entity, string action)
+        private void ConstructMessage(BasePlayer player, BaseEntity entity, Actions action)
         {
-            if (action == "throw" && ConfigData.Throw)
+            if (action.Equals(Actions.Throw) && ConfigData.Throw)
                 SendMessages(ThrowMsg(player, entity), action, player);
-            if (action == "launch" && ConfigData.Launch)
+            if (action.Equals(Actions.Launch) && ConfigData.Launch)
                 SendMessages(LaunchMsg(player, entity), action, player);
-            if (action == "drop" && ConfigData.Drop)
+            if (action.Equals(Actions.Drop) && ConfigData.Drop)
                 SendMessages(DropMsg(player, entity), action, player);
         }
 
@@ -177,7 +172,8 @@ namespace Oxide.Plugins
         {
             NextTick(() =>
             {
-                ConstructMessage(player, entity, "throw");
+                try { ConstructMessage(player, entity, Actions.Throw); }
+                catch { }
             });
         }
 
@@ -185,7 +181,8 @@ namespace Oxide.Plugins
         {
             NextTick(() =>
             {
-                ConstructMessage(player, entity, "launch");
+                try { ConstructMessage(player, entity, Actions.Launch); }
+                catch { }
             });
         }
 
@@ -193,7 +190,8 @@ namespace Oxide.Plugins
         {
             NextTick(() =>
             {
-                ConstructMessage(player, entity, "drop");
+                try { ConstructMessage(player, entity, Actions.Drop); }
+                catch { }
             });
         }
 

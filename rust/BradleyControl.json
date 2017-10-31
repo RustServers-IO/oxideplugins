@@ -2,7 +2,7 @@
     "name": "BradleyControl",
     "description": "A plugin that controls Bradley properties.",
     "author": "Mattparks",
-    "version": "0.1.4",
+    "version": "0.1.8",
     "configuration": true,
     "suggest": {
         "Vanish": "*"

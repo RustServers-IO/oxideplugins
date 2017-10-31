@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("EasyTeams", "Skrallex", "1.1.3", ResourceId = 1970)]
+    [Info("EasyTeams", "Skrallex", "1.1.4", ResourceId = 1970)]
     [Description("Easily create minigame/pvp teams")]
     class EasyTeams : RustPlugin {
         const string configVersion = "3";
@@ -1028,7 +1028,7 @@ namespace Oxide.Plugins {
                 Vector3 vec3Pos = new Vector3(pos.x, pos.y, pos.z);
 
                 if (player.net?.connection != null)
-                    player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+                    player.ClientRPCPlayer(null, player, "StartLoading");
                 StartSleeping();
                 player.MovePosition(vec3Pos);
 

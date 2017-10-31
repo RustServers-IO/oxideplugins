@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Trade", "Calytic", "1.1.1", ResourceId = 1242)]
+    [Info("Trade", "Calytic", "1.1.2", ResourceId = 1242)]
     class Trade : RustPlugin
     {
         #region Configuration Data
@@ -715,16 +715,13 @@ namespace Oxide.Plugins
                 send = send.Replace("{targetitems}", "");
             }
 
-
-            var obj2 = new Facepunch.ObjectList(send);
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo {connection = player.net.connection}, null, "AddUI", obj2);
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo {connection = player.net.connection}, null, "AddUI", send);
         }
 
         private void HideTrade(BasePlayer player) {
             if (player.IsConnected)
             {
-                var obj = new Facepunch.ObjectList("TradeMsg");
-                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", obj);
+                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", "TradeMsg");
             }
         }
 

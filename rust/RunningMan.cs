@@ -10,19 +10,22 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.5.0", ResourceId = 777)]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.5.7", ResourceId = 777)]
     [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
         private Timer stillRunnerTimer;
         private Command command = Interface.Oxide.GetLibrary<Command>();
-        private Dictionary<string, RewardData> SavedReward = new Dictionary<string, RewardData>();
+        private Dictionary<string, Dictionary<string, RewardData>> SavedReward = new Dictionary<string, Dictionary<string, RewardData>>();
         private BasePlayer runningman;
         private Timer eventstart;
         private Timer eventpause;
+        private Timer ingameTimer;
+        private bool EventStarted;
         private double time1;
         private double time2;
         private Random rnd = new Random();
+        private bool displayDistance;
 
         [PluginReference]
         Plugin Economics;
@@ -51,16 +54,47 @@ namespace Oxide.Plugins
             command.AddChatCommand("run", this, "cmdRun");
             command.AddConsoleCommand("eventon", this, "ccmdEvent");
             command.AddConsoleCommand("eventoff", this, "cmdEventOf");
+            EventStarted = false;
             if (!Economics)
             {
                 Puts("Economics not found!");
             }
-            if ((string) Config["Default", "AutoStart"] == "true")
+            if ((string) Config["Default", "AutoStart"] == "true" && (string) Config["IngameTime", "Use ingame timer"] == "false")
             {
                 eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
             }
+            else if ((string) Config["Default", "AutoStart"] == "true" &&
+                     (string) Config["IngameTime", "Use ingame timer"] == "true")
+            {
+                ingameTimer = timer.Once(20, CheckTime);
+                CheckTime();
+            }
             LoadSavedData();
+        }
+
+        private void CheckTime()
+        {
+            if ((TOD_Sky.Instance.Cycle.Hour >= (int) Config["IngameTime", "Start War Time"] &&
+                 TOD_Sky.Instance.Cycle.Hour < 24) ||
+                (TOD_Sky.Instance.Cycle.Hour >= 0 &&
+                 TOD_Sky.Instance.Cycle.Hour < (int) Config["IngameTime", "End War Time"]))
+            {
+                if (!EventStarted)
+                {
+                    eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
+                    EventStarted = true;
+                }
+            }
+            else
+            {
+                if (!EventStarted)
+                {
+                    EventStarted = false;
+                    DestroyEvent();
+                }
+                eventpause = timer.Once(20, () => CheckTime());
+            }
         }
 
         void Init()
@@ -101,10 +135,14 @@ namespace Oxide.Plugins
             SetConfig("Default", "ChatName", "EVENT");
             SetConfig("Default", "authLevel", 1);
             SetConfig("Default", "AutoStart", "true");
+            SetConfig("Default", "Display Distance", "true");
             SetConfig("Default", "Count", 2);
             SetConfig("Default", "StarteventTime", 30);
             SetConfig("Default", "PauseeventTime", 30);
             SetConfig("Default", "DisconnectPendingTimer", 30);
+            SetConfig("IngameTime", "Start War Time", 18);
+            SetConfig("IngameTime", "End War Time", 8);
+            SetConfig("IngameTime", "Use ingame timer", "false");
             SetConfig("Config", "Reward", "Random", "true");
             SetConfig("Config", "Reward", "RewardFixing", "wood");
             SetConfig("Config", "Reward", "RewardFixingAmount", 10000);
@@ -127,10 +165,59 @@ namespace Oxide.Plugins
 
         void LoadSavedData()
         {
-            SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, RewardData>>(nameof(RunningMan));
+            SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, Dictionary<string, RewardData>>>(nameof(RunningMan));
             if (SavedReward.Count == 0)
             {
-                SavedReward = new Dictionary<string, RewardData>
+                SavedReward["runner"] = new Dictionary<string, RewardData>
+                {
+                    {"Karma", new RewardData
+                        {
+                            RewardItems = new Dictionary<string, ValueAmount>
+                            {
+                                {"Karma", new ValueAmount
+                                    {
+                                        MinValue = 0,
+                                        MaxValue = 1
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {"ServerReward", new RewardData
+                        {
+                            RewardItems = new Dictionary<string, ValueAmount>
+                            {
+                                {"serverreward", new ValueAmount
+                                    {
+                                        MinValue = 0,
+                                        MaxValue = 1
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {"build", new RewardData
+                        {
+                            RewardItems = new Dictionary<string, ValueAmount>
+                            {
+                                {"wood", new ValueAmount
+                                    {
+                                        MinValue = 1000,
+                                        MaxValue = 10000
+                                    }
+                                },
+                                {
+                                    "stones", new ValueAmount
+                                    {
+                                        MinValue = 1000,
+                                        MaxValue = 10000
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+                SavedReward["killer"] = new Dictionary<string, RewardData>
                 {
                     {"Karma", new RewardData
                         {
@@ -200,9 +287,8 @@ namespace Oxide.Plugins
         {
             eventpause?.Destroy();
             eventstart?.Destroy();
+            ingameTimer?.Destroy();
             runningman = null;
-            eventpause = null;
-            eventstart = null;
         }
 
         private void Startevent()
@@ -217,23 +303,28 @@ namespace Oxide.Plugins
                 eventstart.Destroy();
                 runningman = null;
             }
-            if (BasePlayer.activePlayerList != null && BasePlayer.activePlayerList.Count >= (int) Config["Default", "Count"])
+            if (BasePlayer.activePlayerList != null)
             {
-                var t = BasePlayer.activePlayerList.Where(x => x.net.connection.authLevel < (int) Config["Default", "Excluded auth level"]);
-                var basePlayers = t as BasePlayer[] ?? t.ToArray();
-                var randI = rnd.Next(0, basePlayers.Length);
-                runningman = basePlayers[randI];
-                Runlog("Running man: " + runningman.displayName);
-                BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
-                eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
-                time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
-            }
-            else
-            {
-                BroadcastChat(string.Format(lang.GetMessage("NotEnoughPlayers", this), (string) Config["Default", "ChatName"]));
-                eventpause?.Destroy();
-                eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
-                time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+				int auth = (int) Config["Default", "Excluded auth level"];
+                var t = auth == 0 ? BasePlayer.activePlayerList : BasePlayer.activePlayerList.Where(x => x.net.connection.authLevel < auth);
+                var enumerable = t as IList<BasePlayer> ?? t.ToList();
+                if (enumerable.Count >= (int) Config["Default", "Count"] && enumerable.Count > 0)
+                {
+                    var basePlayers = t as BasePlayer[] ?? enumerable.ToArray();
+                    var randI = rnd.Next(0, basePlayers.Length);
+                    runningman = basePlayers[randI];
+                    Runlog("Running man: " + runningman.displayName);
+                    BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
+                    eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
+                    time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+                }
+                else
+                {
+                    BroadcastChat(string.Format(lang.GetMessage("NotEnoughPlayers", this), (string) Config["Default", "ChatName"]));
+                    eventpause?.Destroy();
+                    eventpause = timer.Once(60*(int) Config["Default", "PauseeventTime"], Startevent);
+                    time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+                }
             }
         }
 
@@ -245,7 +336,7 @@ namespace Oxide.Plugins
             var inv = runningman.inventory;
             if ((string) Config["Config", "Reward", "Random"] == "true")
             {
-                if (SavedReward == null)
+                if (SavedReward?["runner"] == null)
                 {
                     PrintWarning("Reward list is empty, please add items");
                     inv?.GiveItem(ItemManager.CreateByName((string) Config["Reward", "RewardFixing"],
@@ -253,7 +344,7 @@ namespace Oxide.Plugins
                     return;
                 }
                 Runlog("random");
-                var rand = SavedReward.ElementAt(rnd.Next(0, SavedReward.Count));
+                var rand = SavedReward["runner"].ElementAt(rnd.Next(0, SavedReward["runner"].Count));
                 foreach (var data in rand.Value.RewardItems)
                 {
                     int randomReward = rnd.Next(data.Value.MinValue, data.Value.MaxValue);
@@ -383,14 +474,14 @@ namespace Oxide.Plugins
             var inv = attacker.inventory;
             if ((string) Config["Config", "Reward", "Random"] == "true")
             {
-                if (SavedReward == null)
+                if (SavedReward?["killer"] == null)
                 {
                     PrintWarning("Reward list is empty, please add items, using FixingReward option...");
                     inv?.GiveItem(ItemManager.CreateByName((string) Config["Reward", "RewardFixing"],
                         (int) Config["Reward", "RewardFixingAmount"]), inv.containerMain);
                     return;
                 }
-                var rand = SavedReward.ElementAt(rnd.Next(0, SavedReward.Count));
+                var rand = SavedReward["killer"].ElementAt(rnd.Next(0, SavedReward["killer"].Count));
                 foreach (var data in rand.Value.RewardItems)
                 {
                     int randomReward = rnd.Next(data.Value.MinValue, data.Value.MaxValue);
@@ -490,7 +581,10 @@ namespace Oxide.Plugins
                 var xk = player.transform.position.x;
                 var zk = player.transform.position.z;
                 var dist = Math.Floor(Math.Sqrt(Math.Pow(xr - xk, 2) + Math.Pow(zr - zk, 2)));
-                SendReply(player, string.Format(lang.GetMessage("RunnerDistance", this, player.UserIDString), (string) Config["Default", "ChatName"], runningman.displayName, dist));
+                if((string) Config["Default", "Display Distance"] == "true")
+                    SendReply(player, string.Format(lang.GetMessage("RunnerDistance", this, player.UserIDString), (string) Config["Default", "ChatName"], runningman.displayName, dist));
+                else
+                    SendReply(player, string.Format(lang.GetMessage("RunnerDistance", this, player.UserIDString), (string) Config["Default", "ChatName"], runningman.displayName, "unknown"));
                 time2 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
                 var time3 = time2 - time1;
                 time3 = eventstart.Delay - time3;
@@ -554,15 +648,23 @@ namespace Oxide.Plugins
             List<BasePlayer> onlineplayers = BasePlayer.activePlayerList;
             if (onlineplayers == null)
             {
-                SendReply(player, string.Format(lang.GetMessage("NobodyOnline", this, player.UserIDString), Config["Default", "ChatName"]));
+                SendReply(player,
+                    string.Format(lang.GetMessage("NobodyOnline", this, player.UserIDString),
+                        Config["Default", "ChatName"]));
                 return;
             }
             var randI = rnd.Next(0, onlineplayers.Count);
             runningman = onlineplayers[randI];
             Runlog("Running man: " + runningman.displayName);
-            BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this), (string) Config["Default", "ChatName"], runningman.displayName));
-            eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
-            time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+            BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this),
+                (string) Config["Default", "ChatName"], runningman.displayName));
+            if ((string) Config["IngameTime", "Use ingame timer"] == "true")
+                ingameTimer = timer.Once(20, CheckTime);
+            else
+            {
+                eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
+                time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+            }
         }
 
         void ccmdEvent(ConsoleSystem.Arg arg)
@@ -622,7 +724,7 @@ namespace Oxide.Plugins
                 runningman = null;
                 Runlog("timer eventstart stopped");
             }
-            Runlog("Running Man has stopped");
+            ingameTimer?.Destroy();
         }
 
         void DestroyLeaveEvent()
@@ -671,6 +773,11 @@ namespace Oxide.Plugins
                 runningman = null;
                 Runlog("timer eventstart stopped");
             }
+            if (ingameTimer != null)
+            {
+                ingameTimer.Destroy();
+                Runlog("ingameTimer stopped");
+            }
             Runlog("Running Man has stopped");
             SendReply(player, string.Format(lang.GetMessage("EventStopped", this, player.UserIDString), Config["Default", "ChatName"]));
         }
@@ -692,87 +799,111 @@ namespace Oxide.Plugins
             string action;
             string package;
             string item;
-            if (args.Length < 4)
+            string type;
+            if (args.Length < 5)
             {
-                action = args[0].ToLower();
-                package = args[1].ToLower();
-                item = args[2].ToLower();
+                type = args[0].ToLower();
+                action = args[1].ToLower();
+                package = args[2].ToLower();
+                item = args[3].ToLower();
                 if (action == "remove")
                 {
-                    switch (args.Length)
-                    {
-                        case 2:
-                            if (SavedReward.ContainsKey(package))
-                                SavedReward.Remove(package);
-                            else
-                                SendReply(player, string.Format(lang.GetMessage("PackageDontExist", this, player.UserIDString), (string)Config["Default", "ChatName"]));
-                            break;
-                        case 3:
-                            if (SavedReward.ContainsKey(package))
-                                if (SavedReward[package].RewardItems.ContainsKey(item))
-                                {
-                                    SavedReward[package].RewardItems.Remove(item);
-                                    SendReply(player, string.Format(lang.GetMessage("ItemRemoved", this, player.UserIDString), (string)Config["Default", "ChatName"], item));
-                                }
+                    if (type == "k" || type == "killer")
+                        type = "killer";
+                    else
+                        type = "runner";
+                        switch (args.Length)
+                        {
+                            case 2:
+                                if (SavedReward[type].ContainsKey(package))
+                                    SavedReward[type].Remove(package);
                                 else
                                     SendReply(player,
-                                        string.Format(lang.GetMessage("MissingItemFromPackage", this, player.UserIDString), (string)Config["Default", "ChatName"]));
-                            else
-                                SendReply(player, string.Format(lang.GetMessage("PackageDontExist", this, player.UserIDString), (string)Config["Default", "ChatName"]));
-                            break;
-                    }
-                }
-                else
-                    SendHelpText(player);
-            }
-            if (args.Length == 5)
-            {
-                action = args[0].ToLower();
-                package = args[1].ToLower();
-                item = args[2].ToLower();
-                int minamount = int.Parse(args[3]);
-                int maxamount = int.Parse(args[4]);
-
-                if (action == "add")
-                {
-                    if (SavedReward.ContainsKey(package))
-                    {
-                        if (SavedReward[package].RewardItems.ContainsKey(item))
-                        {
-                            SendReply(player,
-                                string.Format(lang.GetMessage("ItemExist", this, player.UserIDString),
-                                    (string) Config["Default", "ChatName"]));
-                            return;
+                                        string.Format(lang.GetMessage("PackageDontExist", this, player.UserIDString),
+                                            (string) Config["Default", "ChatName"]));
+                                break;
+                            case 3:
+                                if (SavedReward.ContainsKey(package))
+                                    if (SavedReward[type][package].RewardItems.ContainsKey(item))
+                                    {
+                                        SavedReward[type][package].RewardItems.Remove(item);
+                                        SendReply(player,
+                                            string.Format(lang.GetMessage("ItemRemoved", this, player.UserIDString),
+                                                (string) Config["Default", "ChatName"], item));
+                                    }
+                                    else
+                                        SendReply(player,
+                                            string.Format(
+                                                lang.GetMessage("MissingItemFromPackage", this, player.UserIDString),
+                                                (string) Config["Default", "ChatName"]));
+                                else
+                                    SendReply(player,
+                                        string.Format(lang.GetMessage("PackageDontExist", this, player.UserIDString),
+                                            (string) Config["Default", "ChatName"]));
+                                break;
                         }
-                        SavedReward[package].RewardItems.Add(item, new ValueAmount
-                        {
-                            MinValue = minamount,
-                            MaxValue = maxamount
-                        });
-                        SendReply(player, string.Format(lang.GetMessage("ItemAdded", this, player.UserIDString), (string)Config["Default", "ChatName"], item, package));
-                        SaveLoadedData();
                     }
                     else
+                        SendHelpText(player);
+                }
+                if (args.Length == 6)
+                {
+                    type = args[0].ToLower();
+                    action = args[1].ToLower();
+                    package = args[2].ToLower();
+                    item = args[3].ToLower();
+                    int minamount = int.Parse(args[4]);
+                    int maxamount = int.Parse(args[5]);
+
+                    if (action == "add")
                     {
-                        SavedReward.Add(package, new RewardData
+                        if (type == "k" || type == "killer")
+                            type = "killer";
+                        else
+                            type = "runner";
+                        if (SavedReward.ContainsKey(package))
                         {
-                            RewardItems = new Dictionary<string, ValueAmount>
+                            if (SavedReward[type][package].RewardItems.ContainsKey(item))
                             {
-                                {   item, new ValueAmount
+                                SendReply(player,
+                                    string.Format(lang.GetMessage("ItemExist", this, player.UserIDString),
+                                        (string) Config["Default", "ChatName"]));
+                                return;
+                            }
+                            SavedReward[type][package].RewardItems.Add(item, new ValueAmount
+                            {
+                                MinValue = minamount,
+                                MaxValue = maxamount
+                            });
+                            SendReply(player,
+                                string.Format(lang.GetMessage("ItemAdded", this, player.UserIDString),
+                                    (string) Config["Default", "ChatName"], item, package));
+                            SaveLoadedData();
+                        }
+                        else
+                        {
+                            SavedReward[type].Add(package, new RewardData
+                            {
+                                RewardItems = new Dictionary<string, ValueAmount>
+                                {
                                     {
-                                        MinValue = minamount,
-                                        MaxValue = maxamount
+                                        item, new ValueAmount
+                                        {
+                                            MinValue = minamount,
+                                            MaxValue = maxamount
+                                        }
                                     }
                                 }
-                            }
-                        });
-                        SendReply(player, string.Format(lang.GetMessage("PackageAdded", this, player.UserIDString), (string)Config["Default", "ChatName"], package));
-                        SaveLoadedData();
+                            });
+                            SendReply(player,
+                                string.Format(lang.GetMessage("PackageAdded", this, player.UserIDString),
+                                    (string) Config["Default", "ChatName"], package));
+                            SaveLoadedData();
+                        }
                     }
+                    else
+                        SendHelpText(player);
                 }
-                else
-                    SendHelpText(player);
-            }
         }
     }
 }

@@ -9,7 +9,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.4.2", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.4.7", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
@@ -22,7 +22,7 @@ namespace Oxide.Plugins
         List<string> ChatType = new List<string>();
 
         #region Config
-        const string configVersion = "0.2.1";
+        const string configVersion = "0.2.2";
 
         ConfigData _config;
         class ConfigData
@@ -30,6 +30,7 @@ namespace Oxide.Plugins
             public bool Enabled { get; set; }
             public bool PlayerActive { get; set; }
             public Dictionary<string, List<string>> CustomChat { get; set; }
+            public bool UIEnabled { get; set; }
             public UIConfig UISettings { get; set; }
             public string Version { get; set; }
         }
@@ -38,6 +39,7 @@ namespace Oxide.Plugins
         {
             public string BackgroundColor { get; set; }
             public string TextColor { get; set; }
+            public string FontSize { get; set; }
             public string AnchorMin { get; set; }
             public string AnchorMax { get; set; }
         }
@@ -49,10 +51,12 @@ namespace Oxide.Plugins
                 Enabled = true,
                 PlayerActive = false,
                 CustomChat = new Dictionary<string, List<string>>() { { "Test", new List<string> { "command1", "command2" } } },
+                UIEnabled = true,
                 UISettings = new UIConfig
                 {
                     BackgroundColor = "0.29 0.49 0.69 0.5",
                     TextColor = "#0000FF",
+                    FontSize = "15",
                     AnchorMin = "0 0.125",
                     AnchorMax = "0.012 0.1655"
                 },
@@ -80,10 +84,12 @@ namespace Oxide.Plugins
             SetConfig(oldConfig.Enabled, _config.Enabled);
             SetConfig(oldConfig.PlayerActive, _config.PlayerActive);
             SetConfig(oldConfig.CustomChat, _config.CustomChat);
+            SetConfig(oldConfig.UIEnabled, _config.UIEnabled);
             if (oldConfig.UISettings != null)
             {
                 SetConfig(oldConfig.UISettings.BackgroundColor, _config.UISettings.BackgroundColor);
                 SetConfig(oldConfig.UISettings.TextColor, _config.UISettings.TextColor);
+                SetConfig(oldConfig.UISettings.FontSize, _config.UISettings.FontSize);
                 SetConfig(oldConfig.UISettings.AnchorMin, _config.UISettings.AnchorMin);
                 SetConfig(oldConfig.UISettings.AnchorMax, _config.UISettings.AnchorMax);
             }
@@ -146,7 +152,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermAdmin, this);
             permission.RegisterPermission(PermUse, this);
 
-            if (_config.Enabled)
+            if (_config.Enabled && _config.UIEnabled)
             {
                 foreach (var p in BasePlayer.activePlayerList)
                 {
@@ -164,7 +170,6 @@ namespace Oxide.Plugins
 
             foreach (var p in chatUI) DestroyUI(p);
             chatUI.Clear();
-
         }
 
         void OnPlayerSleep(BasePlayer player) { ToggleUI(player); }
@@ -223,7 +228,7 @@ namespace Oxide.Plugins
                     case "active":
                         {
                             var playerData = GetPlayerData(player);
-                            var flag = playerData.Active;
+                            var flag = playerData.Active = !playerData.Active;
                             if (args.Length > 1)
                             {
                                 if (!bool.TryParse(args[1], out flag))
@@ -233,24 +238,23 @@ namespace Oxide.Plugins
                                 }
                                 playerData.Active = flag;
                             }
-                            else
-                            {
-                                if (flag)
-                                    playerData.Active = false;
-                                else
-                                    playerData.Active = true;
-                            }
 
                             if (playerData.Active)
                             {
-								chatUser.Add(player.userID, "g");
-                                ToggleUI(player, true);
+                                if (_config.UIEnabled)
+                                {
+                                    chatUser.Add(player.userID, "g");
+                                    ToggleUI(player, true);
+                                }
                                 MessageChat(player, Lang("Activated", player.UserIDString));
                             }
                             else
                             {
-                                ToggleUI(player);
-                                chatUser.Remove(player.userID);
+                                if (_config.UIEnabled)
+                                {
+                                    ToggleUI(player);
+                                    chatUser.Remove(player.userID);
+                                }
                                 MessageChat(player, Lang("Deactivated", player.UserIDString));
                             }
                             SaveData();
@@ -264,7 +268,7 @@ namespace Oxide.Plugins
                                 break;
                             }
 
-                            var enabled = _config.Enabled;
+                            var enabled = _config.Enabled = !_config.Enabled;
                             if (args.Length > 1)
                             {
                                 if (!bool.TryParse(args[1], out enabled))
@@ -273,13 +277,6 @@ namespace Oxide.Plugins
                                     break;
                                 }
                                 _config.Enabled = enabled;
-                            }
-                            else
-                            {
-                                if (enabled)
-                                    _config.Enabled = false;
-                                else
-                                    _config.Enabled = true;
                             }
 
                             if (enabled)
@@ -310,7 +307,7 @@ namespace Oxide.Plugins
                                 break;
                             }
 
-                            var pa = _config.PlayerActive;
+                            var pa = _config.PlayerActive = !_config.PlayerActive;
                             if (args.Length > 1)
                             {
                                 if (!bool.TryParse(args[1], out pa))
@@ -320,18 +317,50 @@ namespace Oxide.Plugins
                                 }
                                 _config.PlayerActive = pa;
                             }
-                            else
-                            {
-                                if (pa)
-                                    _config.PlayerActive = false;
-                                else
-                                    _config.PlayerActive = true;
-                            }
 
                             if (pa)
                                 MessageChat(player, Lang("AutoON", player.UserIDString));
                             else
                                 MessageChat(player, Lang("AutoOFF", player.UserIDString));
+                            SaveConfigData();
+                            break;
+                        }
+                    case "ui":
+                        {
+                            if (!HasPermission(player.UserIDString, PermAdmin))
+                            {
+                                MessageChat(player, Lang("NoPerm", player.UserIDString));
+                                break;
+                            }
+
+                            var ui = _config.UIEnabled = !_config.UIEnabled;
+                            if (args.Length > 1)
+                            {
+                                if (!bool.TryParse(args[1], out ui))
+                                {
+                                    MessageChat(player, Lang("ErrorBool", player.UserIDString));
+                                    break;
+                                }
+                                _config.UIEnabled = ui;
+                            }
+
+                            if (ui)
+                            {
+                                foreach (var p in BasePlayer.activePlayerList)
+                                {
+                                    if ((!Users.ContainsKey(p.userID) && !_config.PlayerActive) ||
+                                        (p.IsSleeping() || p.IsWounded() || p.IsDead())) continue;
+                                    GetPlayerData(p);
+                                    ToggleUI(p, true);
+                                }
+                                MessageChat(player, Lang("UIEnabled", player.UserIDString));
+                            }
+                            else
+                            {
+                                foreach (var p in chatUI) DestroyUI(p);
+                                chatUI.Clear();
+                                MessageChat(player, Lang("UIDisabled", player.UserIDString));
+                            }
                             SaveConfigData();
                             break;
                         }
@@ -373,7 +402,7 @@ namespace Oxide.Plugins
             {
                 case "enable":
                     {
-                        var enabled = _config.Enabled;
+                        var enabled = _config.Enabled = !_config.Enabled;
                         if (arg.Args.Length > 1)
                         {
                             if (!bool.TryParse(arg.Args[1], out enabled))
@@ -382,13 +411,6 @@ namespace Oxide.Plugins
                                 break;
                             }
                             _config.Enabled = enabled;
-                        }
-                        else
-                        {
-                            if (enabled)
-                                _config.Enabled = false;
-                            else
-                                _config.Enabled = true;
                         }
 
                         if (enabled)
@@ -413,7 +435,7 @@ namespace Oxide.Plugins
                     }
                 case "auto":
                     {
-                        var pa = _config.PlayerActive;
+                        var pa = _config.PlayerActive = !_config.PlayerActive;
                         if (arg.Args.Length > 1)
                         {
                             if (!bool.TryParse(arg.Args[1], out pa))
@@ -423,18 +445,44 @@ namespace Oxide.Plugins
                             }
                             _config.PlayerActive = pa;
                         }
-                        else
-                        {
-                            if (pa)
-                                _config.PlayerActive = false;
-                            else
-                                _config.PlayerActive = true;
-                        }
 
                         if (pa)
                             Puts(Lang("AutoON"));
                         else
                             Puts(Lang("AutoOFF"));
+                        SaveConfigData();
+                        break;
+                    }
+                case "ui":
+                    {
+                        var ui = _config.UIEnabled = !_config.UIEnabled;
+                        if (arg.Args.Length > 1)
+                        {
+                            if (!bool.TryParse(arg.Args[1], out ui))
+                            {
+                                Puts(Lang("ErrorBool"));
+                                break;
+                            }
+                            _config.UIEnabled = ui;
+                        }
+
+                        if (ui)
+                        {
+                            foreach (var p in BasePlayer.activePlayerList)
+                            {
+                                if ((!Users.ContainsKey(p.userID) && !_config.PlayerActive) ||
+                                    (p.IsSleeping() || p.IsWounded() || p.IsDead())) continue;
+                                GetPlayerData(p);
+                                ToggleUI(p, true);
+                            }
+                            Puts(Lang("UIEnabled"));
+                        }
+                        else
+                        {
+                            foreach (var p in chatUI) DestroyUI(p);
+                            chatUI.Clear();
+                            Puts(Lang("UIDisabled"));
+                        }
                         SaveConfigData();
                         break;
                     }
@@ -458,13 +506,18 @@ namespace Oxide.Plugins
             var cmdtarget = command + " $target";
             if (!ChatType.Contains(command) && !ChatType.Contains(cmdtarget)) return;
 
-            if (!chatUser[player.userID].Contains(command) || (ChatType.Contains(cmdtarget) && !chatUser[player.userID].Equals(command + " " + args[1])))
+            var target = "";
+            if (ChatType.Contains(cmdtarget))
             {
-                chatUser[player.userID] = command + (ChatType.Contains(cmdtarget) ? $" {args[1]}" : "");
+                if (args.Length > 1) target = " " + args[1];
+                else return;
+            }
+            if (!chatUser[player.userID].Contains(command) || (target != "" && !chatUser[player.userID].Equals(command + target)))
+            {
+                chatUser[player.userID] = command + target;
                 UpdateUI(player);
             }
         }
-
 
         object OnPlayerChat(ConsoleSystem.Arg arg)
         {
@@ -504,6 +557,8 @@ namespace Oxide.Plugins
                 ["Disabled"] = "AutoChat was disabled.",
                 ["Activated"] = "You have active the autochat.",
                 ["Deactivated"] = "You have deactive the autochat.",
+                ["UIEnabled"] = "UI was enabled.",
+                ["UIDisabled"] = "UI was disabled.",
                 ["AutoON"] = "AutoChat is now auto-activated for new players.",
                 ["AutoOFF"] = "AutoChat is now auto-deactivated for new players.",
                 ["GlobalChat"] = "You switched to the global chat.",
@@ -612,7 +667,7 @@ namespace Oxide.Plugins
                 ""text"": ""{Command}"",
                 ""type"": ""UnityEngine.UI.Text"",
                 ""color"": ""{TextColor}"",
-                ""fontSize"": 15,
+                ""fontSize"": {FontSize},
                 ""align"": ""MiddleCenter""
               },
               {
@@ -628,17 +683,20 @@ namespace Oxide.Plugins
         
         void ToggleUI(BasePlayer player, bool show=false)
         {
-            if (!_config.Enabled || (!isActive(player.userID) && show)) return;
-            if (!chatUI.Contains(player) && show)
+            try
             {
-                AddUI(player);
-                chatUI.Add(player);
-            }
-            else if (chatUI.Contains(player) && !show)
-            {
-                DestroyUI(player);
-                chatUI.Remove(player);
-            }
+                if (!_config.Enabled || !_config.UIEnabled || (!isActive(player.userID) && show)) return;
+                if (!chatUI.Contains(player) && show)
+                {
+                    AddUI(player);
+                    chatUI.Add(player);
+                }
+                else if (chatUI.Contains(player) && !show)
+                {
+                    DestroyUI(player);
+                    chatUI.Remove(player);
+                }
+            } catch { }
         }
 
         void AddUI(BasePlayer player)
@@ -648,6 +706,7 @@ namespace Oxide.Plugins
             var command = chatUser[player.userID].Split(' ')[0];
             var cui = cuiJson.Replace("{BackColor}", backColor)
                             .Replace("{TextColor}", textColor)
+                            .Replace("{FontSize}", _config.UISettings.FontSize)
                             .Replace("{AnchorMin}", _config.UISettings.AnchorMin)
                             .Replace("{AnchorMax}", _config.UISettings.AnchorMax)
                             .Replace("{Command}", command);

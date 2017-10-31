@@ -1,17 +1,21 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("PumpkinBombs", "k1lly0u", "0.1.1", ResourceId = 2070)]
+    [Info("PumpkinBombs", "k1lly0u", "0.1.2", ResourceId = 2070)]
     class PumpkinBombs : RustPlugin
     {
-        #region Fields
-        private const string Jack1 = "jackolantern.angry";
-        private const string Jack2 = "jackolantern.happy";
-        private Dictionary<string, ItemDefinition> ItemDefs;
+        #region Fields      
+        static PumpkinBombs ins; 
+         
+        private Dictionary<string, ItemDefinition> itemDefs;
         private List<ulong> craftedBombs;
+
+        const string jackAngry = "jackolantern.angry";
+        const string jackHappy = "jackolantern.happy";
         #endregion
 
         #region Oxide Hooks
@@ -24,8 +28,9 @@ namespace Oxide.Plugins
         }
         void OnServerInitialized()
         {
+            ins = this;
             LoadVariables();
-            ItemDefs = ItemManager.itemList.ToDictionary(i => i.shortname);
+            itemDefs = ItemManager.itemList.ToDictionary(i => i.shortname);
         }
         void OnPlayerDisconnected(BasePlayer player)
         {
@@ -33,8 +38,8 @@ namespace Oxide.Plugins
             {
                 if (player != null)
                 {
-                    foreach (var item in configData.CraftingCosts)
-                        player.inventory.GiveItem(ItemManager.CreateByItemID(item.itemid, item.amount));
+                    foreach (var item in configData.Costs)
+                        player.GiveItem(ItemManager.CreateByItemID(itemDefs[item.Name].itemid, item.Amount), BaseEntity.GiveItemReason.PickedUp);
                 }
                 craftedBombs.Remove(player.userID);
             }
@@ -45,21 +50,11 @@ namespace Oxide.Plugins
             {
                 if (entity.ShortPrefabName == "jackolantern.happy" || entity.ShortPrefabName == "jackolantern.angry")
                 {
-                    var jack = entity.GetComponent<BaseOven>();
-                    if (craftedBombs.Contains(jack.OwnerID))
+                    var baseOven = entity as BaseOven;
+                    if (craftedBombs.Contains(baseOven.OwnerID))
                     {
-                        jack.gameObject.AddComponent<BombLight>();
-                        var expEnt = GameManager.server.CreateEntity("assets/prefabs/tools/c4/explosive.timed.deployed.prefab", jack.transform.position, new Quaternion(), true);
-                        TimedExplosive explosive = expEnt.GetComponent<TimedExplosive>();
-                        explosive.timerAmountMax = configData.ExplosiveSettings.DetonationTimer;
-                        explosive.timerAmountMin = configData.ExplosiveSettings.DetonationTimer;
-                        explosive.explosionRadius = configData.ExplosiveSettings.ExplosionRadius;
-                        explosive.damageTypes = new List<Rust.DamageTypeEntry>
-                        {
-                            new Rust.DamageTypeEntry {amount = configData.ExplosiveSettings.DamageAmount, type = Rust.DamageType.Explosion }
-                        };
-                        explosive.Spawn();
-                        craftedBombs.Remove(jack.OwnerID);
+                        baseOven.gameObject.AddComponent<BombLight>();                        
+                        craftedBombs.Remove(baseOven.OwnerID);
                     }
                 }
             }
@@ -67,7 +62,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
-        bool CanUse(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "pumpkinbombs.use") || player.IsAdmin();
+        bool CanUse(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "pumpkinbombs.use") || player.IsAdmin;
         bool IsFree(BasePlayer player) => permission.UserHasPermission(player.UserIDString, "pumpkinbombs.free");
         private bool HasEnoughRes(BasePlayer player, int itemid, int amount) => player.inventory.GetAmount(itemid) >= amount;
         private void TakeResources(BasePlayer player, int itemid, int amount) => player.inventory.Take(null, itemid, amount);
@@ -76,31 +71,38 @@ namespace Oxide.Plugins
         #region Classes
         class BombLight : MonoBehaviour
         {
-            bool isOn;
+            private BaseOven entity;
+            private bool lastOn;
+
             public void Awake()
             {
-                isOn = false;
-                InvokeRepeating("StartLight", 0.5f, 0.5f);
+                entity = GetComponent<BaseOven>();
+                lastOn = false;
+                entity.SetFlag(BaseEntity.Flags.On, false);
+
+                var expEnt = GameManager.server.CreateEntity("assets/prefabs/tools/c4/explosive.timed.deployed.prefab", entity.transform.position, new Quaternion(), true);
+                TimedExplosive explosive = expEnt.GetComponent<TimedExplosive>();
+                explosive.timerAmountMax = ins.configData.Explosives.Timer;
+                explosive.timerAmountMin = ins.configData.Explosives.Timer;
+                explosive.explosionRadius = ins.configData.Explosives.Radius;
+                explosive.damageTypes = new List<Rust.DamageTypeEntry> { new Rust.DamageTypeEntry {amount = ins.configData.Explosives.Amount, type = Rust.DamageType.Explosion } };
+                explosive.Spawn();
+
+                entity.InvokeRepeating(this.ToggleLight, 0.5f, 0.5f);
             }
 
             public void OnDestroy()
             {
-                CancelInvoke("StartLight");
-                Destroy(gameObject);
+                entity.CancelInvoke();
             }
 
-            private void StartLight()
+            private void ToggleLight()
             {
-                if (isOn)
-                {
-                    GetComponent<BaseOven>().SetFlag(BaseEntity.Flags.On, false);
-                    isOn = false;
-                }
-                else
-                {
-                    GetComponent<BaseOven>().SetFlag(BaseEntity.Flags.On, true);
-                    isOn = true;
-                }
+                if (lastOn)                
+                    entity.SetFlag(BaseEntity.Flags.On, false);
+                else entity.SetFlag(BaseEntity.Flags.On, true);
+
+                lastOn = !lastOn;
             }            
         }
         #endregion
@@ -114,63 +116,66 @@ namespace Oxide.Plugins
             {
                 if (!HasEnoughRes(player, -1284735799, 1))
                 {
-                    SendReply(player, $"{configData.Messaging.Main}{msg("lostBomb", player.UserIDString)}</color>");
+                    SendReply(player, $"<color={configData.Main}>{msg("lostBomb", player.UserIDString)}</color>");
                     craftedBombs.Remove(player.userID);
                     return;
                 }
-                SendReply(player, $"{configData.Messaging.Main}{msg("alreadyhave", player.UserIDString)}</color>");
+                SendReply(player, $"<color={configData.Main}>{msg("alreadyhave", player.UserIDString)}</color>");
                 return;
             }
             if (!IsFree(player))
             {
                 bool canCraft = true;
-                foreach (var item in configData.CraftingCosts)
+                foreach (var item in configData.Costs)
                 {
-                    if (!HasEnoughRes(player, item.itemid, item.amount)) { canCraft = false; break; }
+                    if (!HasEnoughRes(player, itemDefs[item.Name].itemid, item.Amount)) { canCraft = false; break; }
                 }
                 if (canCraft)
                 {
-                    foreach (var item in configData.CraftingCosts)
-                        TakeResources(player, item.itemid, item.amount);
+                    foreach (var item in configData.Costs)
+                        TakeResources(player, itemDefs[item.Name].itemid, item.Amount);
                 }
                 else
                 {
-                    SendReply(player, $"{configData.Messaging.Main}{msg("noRes", player.UserIDString)}</color>");
-                    foreach (var item in configData.CraftingCosts)
-                        SendReply(player, $"{configData.Messaging.Main}{item.amount}x {ItemDefs[item.shortname].displayName.english}</color>");
+                    SendReply(player, $"<color={configData.Main}>{msg("noRes", player.UserIDString)}</color>");
+                    foreach (var item in configData.Costs)
+                        SendReply(player, $"<color={configData.Main}>{item.Amount}x {itemDefs[item.Name].displayName.english}</color>");
                     return;
                 }
             }
             craftedBombs.Add(player.userID);
             player.inventory.GiveItem(ItemManager.CreateByItemID(-1284735799, 1));
-            SendReply(player, $"{configData.Messaging.Main}{msg("readyMsg", player.UserIDString)}</color>");
+            SendReply(player, $"<color={configData.Main}>{msg("readyMsg", player.UserIDString)}</color>");
         }
         #endregion
 
-        #region Config 
-        class CraftCost
-        {
-            public string shortname;
-            public int itemid;
-            public int amount;
-        }
-        class Explosive
-        {
-            public int DetonationTimer { get; set; }
-            public float ExplosionRadius { get; set; }
-            public float DamageAmount { get; set; }
-        }
-        class Messaging
-        {
-            public string Main { get; set; }
-        }
+        #region Config         
         private ConfigData configData;
         class ConfigData
         {
-            public Explosive ExplosiveSettings { get; set; }
-            public List<CraftCost> CraftingCosts { get; set; }
-            public Messaging Messaging { get; set; }
-            
+            [JsonProperty(PropertyName = "Explosive Settings")]
+            public Explosive Explosives { get; set; }
+            [JsonProperty(PropertyName = "Crafting Costs")]
+            public List<CraftCost> Costs { get; set; }
+            [JsonProperty(PropertyName = "Message Color (hex)")]
+            public string Main { get; set; }
+
+            public class CraftCost
+            {
+                [JsonProperty(PropertyName = "Item shortname")]
+                public string Name;
+                [JsonProperty(PropertyName = "Amount required")]
+                public int Amount;
+            }
+            public class Explosive
+            {
+                [JsonProperty(PropertyName = "Detonation timer (seconds)")]
+                public int Timer { get; set; }
+                [JsonProperty(PropertyName = "Explosive radius")]
+                public float Radius { get; set; }
+                [JsonProperty(PropertyName = "Damage amount")]
+                public float Amount { get; set; }
+            }            
         }
         private void LoadVariables()
         {
@@ -181,31 +186,26 @@ namespace Oxide.Plugins
         {
             var config = new ConfigData
             {
-                CraftingCosts = new List<CraftCost>
+                Costs = new List<ConfigData.CraftCost>
                 {
-                    new CraftCost
+                    new ConfigData.CraftCost
                     {
-                        amount = 1,
-                        itemid = 498591726,
-                        shortname = "explosive.timed"
+                        Amount = 1,
+                        Name = "explosive.timed"
                     },
-                    new CraftCost
+                    new ConfigData.CraftCost
                     {
-                        amount = 1,
-                        itemid = -225085592,
-                        shortname = "pumpkin"
+                        Amount = 1,
+                        Name = "pumpkin"
                     }
                 },
-                ExplosiveSettings = new Explosive
+                Explosives = new ConfigData.Explosive
                 {
-                    DetonationTimer = 10,
-                    ExplosionRadius = 10,
-                    DamageAmount = 550
-                },                
-                Messaging = new Messaging
-                {
-                    Main = "<color=orange>"
-                }
+                    Timer = 10,
+                    Radius = 5,
+                    Amount = 70
+                },
+                Main = "#D85540"
             };
             SaveConfig(config);
         }

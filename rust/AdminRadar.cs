@@ -11,7 +11,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminRadar", "nivex", "4.1.0", ResourceId = 978)]
+    [Info("AdminRadar", "nivex", "4.1.2", ResourceId = 978)]
     [Description("ESP tool for Admins and Developers.")]
     public class AdminRadar: RustPlugin
     {
@@ -28,7 +28,6 @@ namespace Oxide.Plugins
 
         // to reduce server strain we'll cache all entities once. this process is extremely fast and efficient. any newly created or destroyed entities will be removed from it's respective cache. 
         // this excludes containers as content information needs to be current
-        static Dictionary<Vector3, CachedInfo> cachedItems = new Dictionary<Vector3, CachedInfo>();
         static Dictionary<Vector3, CachedInfo> cachedBags = new Dictionary<Vector3, CachedInfo>();
         static Dictionary<Vector3, CachedInfo> cachedCollectibles = new Dictionary<Vector3, CachedInfo>();
         static Dictionary<Vector3, CachedInfo> cachedContainers = new Dictionary<Vector3, CachedInfo>();
@@ -42,46 +41,13 @@ namespace Oxide.Plugins
         static Dictionary<ulong, Timer> trackerTimers = new Dictionary<ulong, Timer>();
         static List<BasePlayer> npcCache = new List<BasePlayer>();
         static List<BradleyAPC> bradleyCache = new List<BradleyAPC>();
+        static List<SupplyDrop> airdropCache = new List<SupplyDrop>();
 
         const float flickerDelay = 0.05f;
 
-        bool IsRadar(BasePlayer player) => activeRadars.Any(x => x.player == player);
+        //bool IsRadar(BasePlayer player) => activeRadars.Any(x => x.player == player);
         bool IsRadar(string id) => activeRadars.Any(x => x.player.UserIDString == id);
         static long TimeStamp() => (DateTime.Now.Ticks - DateTime.Parse("01/01/1970 00:00:00").Ticks) / 10000000;
-
-        class DropTracker : MonoBehaviour
-        {
-            DroppedItem droppedItem;
-            Vector3 position;
-
-            void Awake()
-            {
-                droppedItem = GetComponent<DroppedItem>();
-                InvokeRepeating("Tracker", 0.1f, 0.1f);
-                Tracker();
-            }
-
-            void Tracker()
-            {
-                if (position == transform.position)
-                {
-                    if (cachedItems.ContainsKey(position))
-                        cachedItems.Remove(position);
-
-                    cachedItems.Add(position, new CachedInfo() { Name = droppedItem.item.info.shortname, Size = droppedItem.item.amount, Info = droppedItem.item.uid });
-                    GameObject.Destroy(this);
-                    return;
-                }
-
-                position = transform.position;
-            }
-
-            void OnDestroy()
-            {
-                CancelInvoke("Tracker");
-                GameObject.Destroy(this);
-            }
-        }
 
         class PlayerTracker : MonoBehaviour
         {
@@ -600,6 +566,11 @@ namespace Oxide.Plugins
         ]";
         #endregion
 
+        void Init()
+        {
+            ins = this;
+        }
+
         void Loaded()
         {
             permission.RegisterPermission(permName, this);
@@ -607,7 +578,6 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            ins = this;
             dataFile = Interface.Oxide.DataFileSystem.GetFile(Title);
 
             try
@@ -660,14 +630,6 @@ namespace Oxide.Plugins
             Track(player);
         }
 
-        void OnItemPickup(Item item, BasePlayer player)
-        {
-            if (cachedItems.Any(entry => entry.Value.Info.ToString() == item.uid.ToString()))
-            {
-                cachedItems.Remove(cachedItems.First(kvp => kvp.Value.Info.ToString() == item.uid.ToString()).Key);
-            }
-        }
-
         void Unload()
         {
             var espobjects = UnityEngine.Object.FindObjectsOfType(typeof(ESP));
@@ -682,16 +644,8 @@ namespace Oxide.Plugins
                 foreach (var gameObj in ptobjects)
                     UnityEngine.Object.Destroy(gameObj);
 
-            var tobjects = UnityEngine.Object.FindObjectsOfType(typeof(DropTracker));
-
-            if (tobjects != null)
-                foreach (var gameObj in tobjects)
-                    UnityEngine.Object.Destroy(gameObj);
-
             if (dataFile != null)
-            {
                 dataFile.WriteObject(storedData);
-            }
 
             foreach(var entry in trackerTimers.ToList())
                 if (entry.Value != null && !entry.Value.Destroyed)
@@ -984,22 +938,6 @@ namespace Oxide.Plugins
 
                     if (showBox || showLoot || showStash || showAll)
                     {
-                        if (showLoot)
-                        {
-                            error = "DROPPEDITEM";
-                            foreach (var item in cachedItems)
-                            {
-                                double currDistance = Math.Floor(Vector3.Distance(item.Key, source.transform.position));
-
-                                if (currDistance < maxDistance)
-                                {
-                                    if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.red, item.Key, string.Format("{0} <color=yellow>{1}</color>", item.Value.Name, item.Value.Size));
-                                    if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, item.Key, 0.25f);
-                                    if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
-                                }
-                            }
-                        }
-
                         if (showLoot || showAll)
                         {
                             error = "BACKPACKS";
@@ -1032,6 +970,23 @@ namespace Oxide.Plugins
                             }
                         }
 
+                        if (showBox || showAll)
+                        {
+                            error = "AIRDROPS";
+                            foreach (var drop in airdropCache)
+                            {
+                                double currDistance = Math.Floor(Vector3.Distance(drop.transform.position, source.transform.position));
+
+                                if (currDistance > maxDistance || currDistance > adDistance)
+                                    continue;
+
+                                string contents = showAirdropContents && drop.inventory.itemList.Count > 0 ? string.Format("({0}) ", string.Join(", ", drop.inventory.itemList.Select(item => string.Format("{0} ({1})", item.info.displayName.translated.ToLower(), item.amount)).ToArray())) : string.Format("({0}) ", drop.inventory.itemList.Count());
+
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.magenta, drop.transform.position + new Vector3(0f, 0.5f, 0f), string.Format("{0} {1}<color=orange>{2}</color>", _(drop.ShortPrefabName), contents, currDistance));
+                                if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.magenta, drop.transform.position + new Vector3(0f, 0.5f, 0f), GetScale(currDistance));
+                            }
+                        }
+
                         error = "CONTAINERS";
                         foreach (var box in cachedContainers)
                         {
@@ -1040,8 +995,8 @@ namespace Oxide.Plugins
                             if (currDistance > maxDistance)
                                 continue;
 
-                            bool isBox = box.Value.Name.Contains("box") || box.Value.Name.Equals("heli_crate") || box.Value.Name.Equals("supply_drop");
-                            bool isLoot = box.Value.Name.Contains("loot") || box.Value.Name.Contains("crate_");
+                            bool isBox = (box.Value.Name.Contains("box") || box.Value.Name.Equals("heli_crate"));
+                            bool isLoot = box.Value.Name.Contains("loot") || box.Value.Name.Contains("crate_") || box.Value.Name.Contains("trash");
                             
                             if (isBox)
                             {
@@ -1096,7 +1051,7 @@ namespace Oxide.Plugins
                                 {
                                     if (container.inventory.itemList.Count > 0)
                                     {
-                                        if ((isLoot && showLootContents) || (container.ShortPrefabName.Equals("supply_drop") && showAirdropContents) || (container.ShortPrefabName.Contains("stash") && showStashContents))
+                                        if ((isLoot && showLootContents) || (container.ShortPrefabName.Contains("stash") && showStashContents))
                                             contents = string.Format("({0}) ", string.Join(", ", container.inventory.itemList.Select(item => string.Format("{0} ({1})", item.info.displayName.translated.ToLower(), item.amount)).ToArray()));
                                         else
                                             contents = string.Format("({0}) ", container.inventory.itemList.Count());
@@ -1337,10 +1292,6 @@ namespace Oxide.Plugins
             {
                 cachedBackpacks.Remove(entity.transform.position);
             }
-            if (cachedItems.ContainsKey(entity.transform.position))
-            {
-                cachedItems.Remove(entity.transform.position);
-            }
             else if (entity is BasePlayer && npcCache.Contains(entity as BasePlayer))
             {
                 npcCache.Remove(entity as BasePlayer);
@@ -1360,7 +1311,9 @@ namespace Oxide.Plugins
                     helisCache.Remove(heli);
             }
             else if (cachedOres.ContainsKey(entity.transform.position))
+            {
                 cachedOres.Remove(entity.transform.position);
+            }
             else if (entity is PlayerCorpse)
             {
                 var corpse = entity as PlayerCorpse;
@@ -1378,6 +1331,8 @@ namespace Oxide.Plugins
                 cachedTurrets.Remove(entity.transform.position);
             else if (cachedCollectibles.ContainsKey(entity.transform.position))
                 cachedCollectibles.Remove(entity.transform.position);
+            else if (entity is SupplyDrop)
+                airdropCache.Remove(entity as SupplyDrop);
         }
 
         static bool AddToCache(BaseNetworkable entity)
@@ -1385,19 +1340,7 @@ namespace Oxide.Plugins
             if (!init || entity == null || entity.IsDestroyed)
                 return false;
 
-            if (entity is DroppedItem)
-            {
-                if (Vector3.Distance(entity.transform.position, Vector3.zero) > 5f && !cachedItems.ContainsKey(entity.transform.position))
-                {
-                    var droppedItem = entity as DroppedItem;
-
-                    if (!itemExceptions.Any(item => droppedItem.item.info.shortname.Contains(item)))
-                    {
-                        droppedItem.gameObject.AddComponent<DropTracker>();
-                    }
-                }
-            }
-            else if (entity is BasePlayer)
+            if (entity is BasePlayer)
             {
                 if (entity.ShortPrefabName == "scientist")
                 {
@@ -1408,6 +1351,8 @@ namespace Oxide.Plugins
                         npcCache.Add(npc.GetComponent<BasePlayer>());
                         return true;
                     }
+
+                    return false;
                 }
 
                 var player = entity as BasePlayer;
@@ -1415,15 +1360,28 @@ namespace Oxide.Plugins
                 if (!player.userID.IsSteamId() && !npcCache.Contains(player))
                 {
                     npcCache.Add(player);
+                    return true;
                 }
             }
             else if (entity is BaseHelicopter && trackHelis)
             {
-                helisCache.Add(entity.GetComponent<BaseHelicopter>());
+                var heli = entity as BaseHelicopter;
+
+                if (!helisCache.Contains(heli))
+                {
+                    helisCache.Add(heli);
+                    return true;
+                }
             }
             else if (entity is BradleyAPC && trackBradleys)
             {
-                bradleyCache.Add(entity.GetComponent<BradleyAPC>());
+                var apc = entity as BradleyAPC;
+
+                if (!bradleyCache.Contains(apc))
+                {
+                    bradleyCache.Add(apc);
+                    return true;
+                }
             }
             else if (entity is BuildingPrivlidge)
             {
@@ -1433,7 +1391,17 @@ namespace Oxide.Plugins
                     return true;
                 }
             }
-            else if (entity is StorageContainer || entity.ShortPrefabName == "supply_drop")
+            else if (entity is SupplyDrop)
+            {
+                var drop = entity as SupplyDrop;
+
+                if (!airdropCache.Contains(drop))
+                {
+                    airdropCache.Add(drop);
+                    return true;
+                }
+            }
+            else if (entity is StorageContainer)
             {
                 if (cachedContainers.ContainsKey(entity.transform.position))
                     return false;
@@ -1446,7 +1414,7 @@ namespace Oxide.Plugins
                         return true;
                     }
                 }
-                else if (entity.name.Contains("box") || entity.ShortPrefabName.Equals("heli_crate") || entity.ShortPrefabName.Equals("supply_drop") || entity.name.Contains("loot") || entity.name.Contains("crate_") || entity.name.Contains("stash"))
+                else if (entity.name.Contains("box") || entity.ShortPrefabName.Equals("heli_crate") || entity.name.Contains("loot") || entity.name.Contains("crate_") || entity.name.Contains("stash"))
                 {
                     cachedContainers.Add(entity.transform.position, new CachedInfo() { Name = entity.ShortPrefabName, Info = entity.net.ID });
                     return true;
@@ -1543,6 +1511,29 @@ namespace Oxide.Plugins
             {
                 switch (args[0].ToLower())
                 {
+                    case "drops":
+                        {
+                            int drops = 0;
+
+                            foreach (var drop in BaseNetworkable.serverEntities.Where(e => e is DroppedItem).Cast<DroppedItem>())
+                            {
+                                if (drop.item == null) continue;
+                                double currDistance = Math.Floor(Vector3.Distance(drop.transform.position, player.transform.position));
+
+                                if (currDistance < lootDistance)
+                                {
+                                    if (drawText) player.SendConsoleCommand("ddraw.text", 30f, Color.red, drop.transform.position, string.Format("{0} <color=yellow>{1}</color>", drop.item.info.shortname, currDistance));
+                                    if (drawBox) player.SendConsoleCommand("ddraw.box", 30f, Color.red, drop.transform.position, 0.25f);
+                                    drops++;
+                                }
+                            }
+
+                            if (drops == 0)
+                            {
+                                player.ChatMessage(msg("NoDrops", player.UserIDString, lootDistance));
+                            }
+                        }
+                        return;
                     case "online":
                         {
                             if (storedData.OnlineBoxes.Contains(player.UserIDString))
@@ -1665,6 +1656,7 @@ namespace Oxide.Plugins
                     player.ChatMessage(msg("Help4", player.UserIDString, szChatCommand, "tracker"));
                     player.ChatMessage(msg("Help7", player.UserIDString, szChatCommand, "vision"));
                     player.ChatMessage(msg("Help8", player.UserIDString, szChatCommand, "ext"));
+                    player.ChatMessage(msg("Help9", player.UserIDString, szChatCommand, lootDistance));
                     player.ChatMessage(msg("Help5", player.UserIDString, szChatCommand));
                     player.ChatMessage(msg("Help6", player.UserIDString, szChatCommand));
                     player.ChatMessage(msg("PreviousFilter", player.UserIDString, command));
@@ -1769,7 +1761,7 @@ namespace Oxide.Plugins
             esp.Invoke("DoESP", invokeTime);
             esp.InvokeRepeating("DoESP", 0f, invokeTime);
 
-            if (!IsRadar(player))
+            if (!IsRadar(player.UserIDString))
                 activeRadars.Add(esp);
 
             if (command == "espgui")
@@ -1788,6 +1780,7 @@ namespace Oxide.Plugins
         static float defaultInvokeTime;
         static float defaultMaxDistance;
 
+        static float adDistance;
         static float boxDistance;
         static float playerDistance;
         static float tcDistance;
@@ -1868,6 +1861,8 @@ namespace Oxide.Plugins
                 ["backpack"] = "backpack",
                 ["scientist"] = "scientist",
                 ["npc"] = "npc",
+                ["NoDrops"] = "No item drops found within {0}m",
+                ["Help9"] = "<color=orange>/{0} drops</color> - Show all dropped items within {1}m.",
             }, this);
         }
 
@@ -1909,6 +1904,7 @@ namespace Oxide.Plugins
             groupRange = Convert.ToSingle(GetConfig("Group Limit", "Range", 50f));
             groupCountHeight = Convert.ToSingle(GetConfig("Group Limit", "Height Offset [0.0 = disabled]", 0f));
 
+            adDistance = Convert.ToSingle(GetConfig("Drawing Distances", "Airdrop Crates", 400f));
             npcDistance = Convert.ToSingle(GetConfig("Drawing Distances", "Animals", 200));
             bagDistance = Convert.ToSingle(GetConfig("Drawing Distances", "Sleeping Bags", 250));
             boxDistance = Convert.ToSingle(GetConfig("Drawing Distances", "Boxes", 100));

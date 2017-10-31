@@ -1,11 +1,11 @@
 {
-    "name": "BlueprintManager",
-    "description": "Add, AddAll, and reset learned Blueprints",
-    "author": "Nogrod",
-    "version": "1.2.0",
+    "name": "Blueprint Manager",
+    "description": "Manage blueprints at ease!",
+    "author": "Kappasaurus",
+    "version": "1.0.2",
     "configuration": true,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/blueprintmanager.833",
+    "url": "http:\/\/oxidemod.org\/plugins\/blueprint-manager.2644",
     "games": [
         "rust"
     ],

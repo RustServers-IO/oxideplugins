@@ -2,7 +2,7 @@
     "name": "Tank Commander",
     "description": "Drive tanks",
     "author": "k1lly0u",
-    "version": "0.1.3",
+    "version": "0.1.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/tank-commander.2560",

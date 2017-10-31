@@ -7,7 +7,7 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("PresentLoot", "redBDGR", "1.0.3", ResourceId = 2599)]
+    [Info("PresentLoot", "redBDGR", "1.0.5", ResourceId = 2599)]
     [Description("Modify the loot tables for the presents")]
 
     class PresentLoot : RustPlugin
@@ -80,12 +80,17 @@ namespace Oxide.Plugins
         {
             smallMinItems = Convert.ToInt16(GetConfig("Small Presents", "Min Items", 1));
             smallMaxItems = Convert.ToInt16(GetConfig("Small Presents", "Max Items", 2));
+            smallPresentsToUse = Convert.ToInt16(GetConfig("Small Presents", "Num Needed To Unwrap", 1));
 
             mediumMinItems = Convert.ToInt16(GetConfig("Medium Presents", "Min Items", 1));
             mediumMaxItems = Convert.ToInt16(GetConfig("Medium Presents", "Max Items", 2));
+            mediumPresentsToUse = Convert.ToInt16(GetConfig("Medium Presents", "Num Needed To Unwrap", 1));
 
             largeMinItems = Convert.ToInt16(GetConfig("Large Presents", "Min Items", 1));
             largeMaxItems = Convert.ToInt16(GetConfig("Large Presents", "Max Items", 2));
+            largePresentsToUse = Convert.ToInt16(GetConfig("Large Presents", "Num Needed To Unwrap", 1));
+
+            weaponsSpawnWithAmmo = Convert.ToBoolean(GetConfig("General", "Weapons Spawn With Random Ammo", false));
 
             if (!Changed) return;
             SaveConfig();
@@ -115,12 +120,18 @@ namespace Oxide.Plugins
         private List<ItemInfo> mediumList = new List<ItemInfo>();
         private List<ItemInfo> largeList = new List<ItemInfo>();
 
+        private int smallPresentsToUse = 1;
+        private int mediumPresentsToUse = 1;
+        private int largePresentsToUse = 1;
+        private Dictionary<string, int> amountNeededDic = new Dictionary<string, int>();
+
         private int smallMinItems = 1;
         private int smallMaxItems = 2;
         private int mediumMinItems = 1;
         private int mediumMaxItems = 2;
         private int largeMinItems = 1;
         private int largeMaxItems = 2;
+        bool weaponsSpawnWithAmmo = false;
 
         private void Init()
         {
@@ -130,11 +141,14 @@ namespace Oxide.Plugins
             LoadData();
             AddDefaultItems();
             LoadVariables();
+            amountNeededDic.Add("xmas.present.large", largePresentsToUse); amountNeededDic.Add("xmas.present.medium", mediumPresentsToUse); amountNeededDic.Add("xmas.present.small", smallPresentsToUse);
+
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 //chat
                 ["No Permission"] = "You are not allowed to use this command",
                 ["Tables Reloaded"] = "The present data tables have been reloaded",
+                ["NotEnoughItems"] = "You do not have enough of this item to unwrap it!",
             }, this);
         }
 
@@ -177,10 +191,39 @@ namespace Oxide.Plugins
             BasePlayer player = item.GetRootContainer().GetOwnerPlayer();
             if (player == null)
                 return null;
+            if (!CheckAmountNeeded(item.info.shortname, player))
+            {
+                player.ChatMessage(msg("NotEnoughItems", player.UserIDString));
+                return false;
+            }
             GiveThink(player, item.info.shortname);
-            ItemRemovalThink(item, player);
+            ItemRemovalThink(item, player, amountNeededDic[item.info.shortname]);
             Effect.server.Run("assets/prefabs/misc/xmas/presents/effects/unwrap.prefab", player.transform.position);
             return false;
+        }
+
+        private bool CheckAmountNeeded(string itemName, BasePlayer player)
+        {
+            bool sufficent = false;
+            foreach(Item item in player.inventory.containerMain.itemList)
+            {
+                if (item.info.shortname == itemName)
+                    if (item.amount >= amountNeededDic[item.info.shortname])
+                        sufficent = true;
+            }
+            foreach (Item item in player.inventory.containerWear.itemList)
+            {
+                if (item.info.shortname == itemName)
+                    if (item.amount >= amountNeededDic[item.info.shortname])
+                        sufficent = true;
+            }
+            foreach (Item item in player.inventory.containerBelt.itemList)
+            {
+                if (item.info.shortname == itemName)
+                    if (item.amount >= amountNeededDic[item.info.shortname])
+                        sufficent = true;
+            }
+            return sufficent;
         }
 
         private void GiveThink(BasePlayer player, string presentName)
@@ -239,9 +282,11 @@ namespace Oxide.Plugins
             return x;
         }
 
-        private static Item TryMakeItem(List<ItemInfo> list)
+        private Item TryMakeItem(List<ItemInfo> list)
         {
-            while (true)
+            Item madeItem = null;
+            bool x = true;
+            while (x == true)
             {
                 ItemInfo entry = list[Mathf.RoundToInt(Random.Range(0f, Convert.ToSingle(list.Count - 1)))];
                 if (Random.Range(0f, 1f) > entry.chance)
@@ -250,27 +295,34 @@ namespace Oxide.Plugins
                 foreach (var attachmentName in entry.attachments)
                     if (Random.Range(0f, 1f) < attachmentName.Value)
                         ItemManager.CreateByName(attachmentName.Key).MoveToContainer(newItem.contents);
-                return newItem;
+                if (weaponsSpawnWithAmmo)
+                    if (newItem.info.category == ItemCategory.Weapon)
+                    {
+                        BaseProjectile ent = newItem.GetHeldEntity()?.GetComponent<BaseProjectile>();
+                        if (ent != null)
+                            if (ent.primaryMagazine != null)
+                                ent.primaryMagazine.contents = Mathf.RoundToInt(UnityEngine.Random.Range(1f, Convert.ToSingle(ent.primaryMagazine.capacity)));
+                    }
+                madeItem = newItem;
+                break;
             }
+            return madeItem;
         }
 
-        private static void ItemRemovalThink(Item item, BasePlayer player)
+        private static void ItemRemovalThink(Item item, BasePlayer player, int itemsToTake)
         {
-            if (item.amount == 1)
+            if (item.amount == itemsToTake)
             {
                 item.RemoveFromContainer();
                 item.Remove();
             }
             else
             {
-                item.amount = item.amount - 1;
+                item.amount = item.amount - itemsToTake;
                 player.inventory.SendSnapshot();
             }
         }
 
-        private string msg(string key, string id = null)
-        {
-            return lang.GetMessage(key, this, id);
-        }
+        private string msg(string key, string id = null) { return lang.GetMessage(key, this, id); }
     }
 }

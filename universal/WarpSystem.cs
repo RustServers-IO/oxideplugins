@@ -1,3 +1,18 @@
+/*
+Warp System
+
+Copyright (c) 2015-2016 <talk@juliocesar.me>, <http://steamcommunity.com/profiles/76561197983103320/>
+Copyright (c) 2016-2018 <pain45dev@gmail.com>, <http://steamcommunity.com/id/pain45/>
+
+-------------------------------------------------------------------------------------------------------------------
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.
+To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-sa/4.0/deed.en_US
+-----------------------------------------------------------------------------------------------------------------
+
+$Id$
+Version 1.9.13 by PaiN 2017-10-09 21:36 (UTC +03:00)
+*/
+
 using System;
 using System.Collections.Generic;
 using Oxide.Core;
@@ -6,8 +21,8 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Warp System", "PaiN", "1.9.11", ResourceId = 760)]
-    [Description("Create warp points for players.")]
+    [Info("Warp System", "PaiN", "1.9.14", ResourceId = 760)]
+    [Description("Original Developer: Dathus BR || Create warp points for players.")]
     class WarpSystem : RustPlugin
     {
         [PluginReference]
@@ -807,12 +822,12 @@ namespace Oxide.Plugins
             player.inventory.crafting.CancelAll(true);
 
             player.MovePosition(xyz);
-            player.ClientRPCPlayer(null, player, "ForcePositionTo", xyz, null, null, null, null);
+            player.ClientRPCPlayer(null, player, "ForcePositionTo", xyz);
             player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
 
             player.SendNetworkUpdateImmediate(false);
-            player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+            player.ClientRPCPlayer(null, player, "StartLoading");
             player.SendFullSnapshot();
         }
     }

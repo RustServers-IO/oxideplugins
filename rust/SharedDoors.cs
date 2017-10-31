@@ -9,31 +9,47 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("SharedDoors", "dbteku", "0.7.6", ResourceId = 2108)]
+    [Info("SharedDoors", "dbteku", "0.7.7", ResourceId = 2108)]
     [Description("Making sharing doors easier.")]
     class SharedDoors : CovalencePlugin
     {
         [PluginReference]
         private Plugin Clans;
 
+        private static SharedDoors instance;
         private const string RUST_IO = "clans";
         private const string CLANS_NAME = "Clans";
-        private const string RUST_CLANS_LOADED_AFTER = "Rust Clans has been loaded. SharedDoors now hooking.";
+        private const string RUST_CLANS_HOOK = "SharedDoors now hooking to Rust:IO Clans";
+        private const string RUST_CLANS_NOT_FOUND = "Rust Clans has not been found.";
         private const string MASTER_PERM = "shareddoors.master";
         private MasterKeyHolders holders;
 
         void OnServerInitialized()
         {
+            instance = this;
             permission.RegisterPermission(MASTER_PERM, this);
             holders = new MasterKeyHolders();
+            if (Clans == null)
+            {
+                Puts(RUST_CLANS_NOT_FOUND);
+            }
+            else
+            {
+                Puts(RUST_CLANS_HOOK);
+            }
         }
 
-        void OnPluginLoaded(Plugin name)
+        void Unload()
         {
-            if (name.Name == CLANS_NAME)
+            instance = null;
+        }
+
+        void OnPluginLoaded(Plugin plugin)
+        {
+            if (plugin.Name == CLANS_NAME)
             {
-                Puts(RUST_CLANS_LOADED_AFTER);
-                Clans = name;
+                Puts(RUST_CLANS_HOOK);
+                Clans = plugin;
             }
         }
 
@@ -41,7 +57,7 @@ namespace Oxide.Plugins
         {
             if (name.Name == CLANS_NAME)
             {
-                Puts(RUST_CLANS_LOADED_AFTER);
+                Puts(RUST_CLANS_HOOK);
                 Clans = null;
             }
         }
@@ -118,6 +134,12 @@ namespace Oxide.Plugins
             {
                 PlayerResponder.NotifyUser(player, "Master Mode Toggle: /sd masterMode");
             }
+
+        }
+
+        public static SharedDoors getInstance()
+        {
+            return instance;
         }
 
         private class PlayerResponder
@@ -155,7 +177,7 @@ namespace Oxide.Plugins
             public bool CanOpen()
             {
                 bool canUse = false;
-                if (BaseDoor.IsLocked())
+                if (BaseDoor.IsLocked() )
                 {
                     if (BaseDoor is CodeLock)
                     {
@@ -272,6 +294,7 @@ namespace Oxide.Plugins
                     }
                 }
                 this.Door = door;
+                this.Clans = SharedDoors.getInstance().Clans;
             }
 
             public bool IsInClan(BasePlayer player)

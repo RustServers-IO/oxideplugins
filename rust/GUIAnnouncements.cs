@@ -13,7 +13,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GUIAnnouncements", "JoeSheep", "1.23.81", ResourceId = 1222)]
+    [Info("GUIAnnouncements", "JoeSheep", "1.23.83", ResourceId = 1222)]
     [Description("Creates announcements with custom messages by command across the top of every player's screen in a banner.")]
 
     class GUIAnnouncements : RustPlugin
@@ -252,8 +252,8 @@ namespace Oxide.Plugins
         public string lustyMapPosition { get; private set; } = "Left";
 
         //Welcome Announcement
-        public string welcomeAnnouncementText { get; private set; } = "Welcome {playername}";
-        public string welcomeBackAnnouncementText { get; private set; } = "Welcome back {playername}";
+        public string welcomeAnnouncementText { get; private set; } = "Welcome {playername}! There are {playercount} player(s) online.";
+        public string welcomeBackAnnouncementText { get; private set; } = "Welcome back {playername}! There are {playercount} player(s) online.";
         public string welcomeAnnouncementBannerColor { get; private set; } = "Grey";
         public string welcomeAnnouncementTextColor { get; private set; } = "White";
         public float welcomeAnnouncementDuration { get; private set; } = 20f;
@@ -765,7 +765,7 @@ namespace Oxide.Plugins
                 timer.Once(5, () =>
                 {
                     PrintWarning("Reloading...");
-                    ConsoleSystem.Run(ConsoleSystem.Option.Server, "reload GUIAnnouncements");
+                    Interface.Oxide.ReloadPlugin("GUIAnnouncements");
                 });
             }
         }
@@ -1662,11 +1662,11 @@ namespace Oxide.Plugins
             {
                 if (welcomeBackAnnouncement && storedData.PlayerData[player.userID].TimesJoined > 1)
                 {
-                    CreateAnnouncement(welcomeBackAnnouncementText.Replace("{playername}", player.displayName), welcomeAnnouncementBannerColor, welcomeAnnouncementTextColor, player, isWelcomeAnnouncement: true);
+                    CreateAnnouncement(welcomeBackAnnouncementText.Replace("{playername}", player.displayName).Replace("{playercount}", BasePlayer.activePlayerList.Count.ToString()), welcomeAnnouncementBannerColor, welcomeAnnouncementTextColor, player, isWelcomeAnnouncement: true);
                 }
                 else
                 {
-                    CreateAnnouncement(welcomeAnnouncementText.Replace("{playername}", player.displayName), welcomeAnnouncementBannerColor, welcomeAnnouncementTextColor, player, isWelcomeAnnouncement: true);
+                    CreateAnnouncement(welcomeAnnouncementText.Replace("{playername}", player.displayName).Replace("{playercount}", BasePlayer.activePlayerList.Count.ToString()), welcomeAnnouncementBannerColor, welcomeAnnouncementTextColor, player, isWelcomeAnnouncement: true);
                 }
             }
         }

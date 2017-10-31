@@ -3,24 +3,28 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Reflection;
 using System.Linq;
+using System.Globalization;
 using Rust;
 using Facepunch;
 using Newtonsoft.Json;
+using Oxide.Core;
+using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
+using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("TankCommander", "k1lly0u", "0.1.3", ResourceId = 2560)]
+    [Info("TankCommander", "k1lly0u", "0.1.5", ResourceId = 2560)]
     class TankCommander : RustPlugin
     {
         #region Fields
         [PluginReference] Plugin Friends, Clans, Godmode;
+        RestoreData restoreData;
+        private DynamicConfigFile restorationdata;
+
         static TankCommander ins;
 
         private FieldInfo spectateFilter = typeof(BasePlayer).GetField("spectateFilter", (BindingFlags.Instance | BindingFlags.NonPublic));
-        private static FieldInfo aimVec = typeof(BradleyAPC).GetField("turretAimVector", (BindingFlags.Instance | BindingFlags.NonPublic));
-        private static FieldInfo topAimVec = typeof(BradleyAPC).GetField("topTurretAimVector", (BindingFlags.Instance | BindingFlags.NonPublic));
-
         private static FieldInfo meshLookupField = typeof(MeshColliderBatch).GetField("meshLookup", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private List<Controller> controllers = new List<Controller>();
@@ -32,8 +36,13 @@ namespace Oxide.Plugins
         private Dictionary<CommandType, BUTTON> controlButtons;
 
         private bool initialized;
+        private int rocketId;
+        private int mgId;
 
         const string tankPrefab = "assets/prefabs/npc/m2bradley/bradleyapc.prefab";
+        const string uiHealth = "TCUI_Health";
+        const string uiAmmoMg = "TCUI_Ammo_MG";
+        const string uiAmmoRocket = "TCUI_Ammo_Rocket";
         #endregion
 
         #region Oxide Hooks
@@ -42,13 +51,18 @@ namespace Oxide.Plugins
             lang.RegisterMessages(Messages, this);
             permission.RegisterPermission("tankcommander.admin", this);
             permission.RegisterPermission("tankcommander.use", this);
+            restorationdata = Interface.Oxide.DataFileSystem.GetFile("tankcommander_data");
         }
         void OnServerInitialized()
         {
             ins = this;
             LoadVariables();
+            LoadData();
+
             ConvertControlButtons();
             itemNames = ItemManager.itemList.ToDictionary(x => x.shortname, y => y.displayName.english);
+            rocketId = ItemManager.itemList.Find(x => x.shortname == configData.Weapons.Cannon.Type)?.itemid ?? 0;
+            mgId = ItemManager.itemList.Find(x => x.shortname == configData.Weapons.MG.Type)?.itemid ?? 0;
 
             initialized = true;
         }
@@ -56,9 +70,9 @@ namespace Oxide.Plugins
         {
             if (entity is BradleyAPC)
             {
-                Controller commander = entity.GetComponent<Controller>();
-                if (commander != null)
-                    commander.ManageDamage(info);                
+                Controller controller = entity.GetComponent<Controller>();
+                if (controller != null)
+                    controller.ManageDamage(info);                
             }
             if (entity is BasePlayer)
             {
@@ -68,6 +82,22 @@ namespace Oxide.Plugins
                     info.HitEntity = null;
                     info.HitMaterial = 0;
                     info.PointStart = Vector3.zero;
+                    return;
+                }
+
+                if (info.Initiator is BradleyAPC)
+                {
+                    Controller controller = (info.Initiator as BradleyAPC).GetComponent<Controller>();
+                    if (controller != null)
+                    {
+                        if (!controller.HasCommander())
+                        {
+                            info.damageTypes = new DamageTypeList();
+                            info.HitEntity = null;
+                            info.HitMaterial = 0;
+                            info.PointStart = Vector3.zero;
+                        }
+                    }
                 }
             }
         }
@@ -146,7 +176,7 @@ namespace Oxide.Plugins
         object OnRunPlayerMetabolism(PlayerMetabolism metabolism, BaseCombatEntity entity)
         {
             var player = entity.ToPlayer();            
-            if (player == null && !commanders.ContainsKey(player.userID)) return null;
+            if (player == null || !commanders.ContainsKey(player.userID)) return null;
             if (Godmode && (bool)Godmode.Call("IsGod", player.UserIDString)) return null;
             return true;
         }
@@ -190,7 +220,7 @@ namespace Oxide.Plugins
             player.inventory.loot.itemSource = null;
             player.inventory.loot.AddContainer(controller.inventory);
             player.inventory.loot.SendImmediate();
-            player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "generic", null, null, null, null);
+            player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "generic");
             player.SendNetworkUpdate();
         }
         private void StartSpectating(BasePlayer player, Controller controller, bool isOperator)
@@ -202,7 +232,7 @@ namespace Oxide.Plugins
             player.CancelInvoke("InventoryUpdate");
             player.SendNetworkUpdateImmediate();
 
-            timer.In(1.5f, () =>
+            timer.In(0.5f, () =>
             {
                 player.transform.position = controller.transform.position;
                 player.SetParent(controller.entity, 0);
@@ -211,18 +241,24 @@ namespace Oxide.Plugins
                 if (isOperator)
                 {
                     controller.enabled = true;
-                    SendReply(player, msg("controls", player.UserIDString));
+
+                    string ctrlStr = msg("controls", player.UserIDString);
                     if (configData.Weapons.Cannon.Enabled)
-                        SendReply(player, string.Format(msg("fire_cannon", player.UserIDString), configData.Buttons.Cannon));
+                        ctrlStr += $"\n{string.Format(msg("fire_cannon", player.UserIDString), configData.Buttons.Cannon)}";
                     if (configData.Weapons.Coax.Enabled)
-                        SendReply(player, string.Format(msg("fire_coax", player.UserIDString), configData.Buttons.Coax));
+                        ctrlStr += $"\n{string.Format(msg("fire_coax", player.UserIDString), configData.Buttons.Coax)}";
                     if (configData.Weapons.MG.Enabled)
-                        SendReply(player, string.Format(msg("fire_mg", player.UserIDString), configData.Buttons.MG));                    
-                    SendReply(player, string.Format(msg("speed_boost", player.UserIDString), configData.Buttons.Boost));
-                    SendReply(player, string.Format(msg("enter_exit", player.UserIDString), configData.Buttons.Boost));
-                    SendReply(player, string.Format(msg("toggle_lights", player.UserIDString), configData.Buttons.Lights));
+                        ctrlStr += $"\n{string.Format(msg("fire_mg", player.UserIDString), configData.Buttons.MG)}";                    
+                    ctrlStr += $"\n{string.Format(msg("speed_boost", player.UserIDString), configData.Buttons.Boost)}";
+                    ctrlStr += $"\n{string.Format(msg("enter_exit", player.UserIDString), configData.Buttons.Enter)}";
+                    ctrlStr += $"\n{string.Format(msg("toggle_lights", player.UserIDString), configData.Buttons.Lights)}";
                     if (configData.Inventory.Enabled)
-                        SendReply(player, string.Format(msg("access_inventory", player.UserIDString), configData.Buttons.Inventory));
+                        ctrlStr += $"\n{string.Format(msg("access_inventory", player.UserIDString), configData.Buttons.Inventory)}";
+                    SendReply(player, ctrlStr);
+
+                    CreateHealthUI(player, controller);
+                    CreateMGAmmoUI(player, controller);
+                    CreateRocketAmmoUI(player, controller);
                 }
                 else
                 {
@@ -231,7 +267,9 @@ namespace Oxide.Plugins
                     SendReply(player, string.Format(msg("enter_exit", player.UserIDString), configData.Buttons.Enter));
                     if (configData.Inventory.Enabled)
                         SendReply(player, string.Format(msg("access_inventory", player.UserIDString), configData.Buttons.Inventory));
+                    CreateHealthUI(player, controller);
                 }
+                
             });
         }
         private void EndSpectating(BasePlayer player, Controller commander, bool isOperator)
@@ -270,7 +308,7 @@ namespace Oxide.Plugins
 
             private float forwardTorque = 2000f;
             private float maxBrakeTorque = 50f;
-            private float turnTorque = 1000f;
+            private float turnTorque = 2000f;
 
             private float lastFireCannon;
             private float lastFireMG;
@@ -283,6 +321,7 @@ namespace Oxide.Plugins
             private ConfigData.WeaponOptions.WeaponSystem cannon;
             private ConfigData.WeaponOptions.WeaponSystem mg;
             private ConfigData.WeaponOptions.WeaponSystem coax;
+            private ConfigData.CrushableTypes crushables;
 
             private List<ulong> enteringPassengers = new List<ulong>();
             private List<BasePlayer> passengers = new List<BasePlayer>();
@@ -290,27 +329,27 @@ namespace Oxide.Plugins
             private void Awake()
             {
                 entity = GetComponent<BradleyAPC>();
-               
+
                 entity.enabled = false;
                 enabled = false;
 
                 entity.CancelInvoke(entity.UpdateTargetList);
                 entity.CancelInvoke(entity.UpdateTargetVisibilities);
-                               
-                var collider = entity.gameObject.AddComponent<BoxCollider>();
-                collider.size = new Vector3(3, 1, 5);                
-                collider.isTrigger = true;
-
-                gameObject.layer = (int)Layer.Reserved1;                
-
+                       
                 rigidBody = entity.myRigidBody;
                 leftWheels = entity.leftWheels;
                 rightWheels = entity.rightWheels;
+
+                forwardTorque = ins.configData.Movement.ForwardTorque;
+                turnTorque = ins.configData.Movement.TurnTorque;
+                maxBrakeTorque = ins.configData.Movement.BrakeTorque;
+                accelTimeToTake = ins.configData.Movement.Acceleration;
 
                 controlButtons = ins.controlButtons;
                 cannon = ins.configData.Weapons.Cannon;
                 mg = ins.configData.Weapons.MG;
                 coax = ins.configData.Weapons.Coax;
+                crushables = ins.configData.Crushables;
 
                 if (ins.configData.Inventory.Enabled)
                 {
@@ -325,24 +364,33 @@ namespace Oxide.Plugins
             {                                    
                 if (player != null)
                     ExitTank();
-                entity.Kill();
+                if (entity != null && !entity.IsDestroyed)
+                    entity.Kill();
             }
 
             private void FixedUpdate()
             {
-                CheckOtherInput();
-                CheckForMovement();
-                entity.SendNetworkUpdate();
-                AdjustAiming();
+                CheckOtherInput();               
             }
-                
-            private void OnTriggerEnter(Collider col)
-            {
-                if (!enabled) return;
 
-                if (ins.configData.Crushables.Players)
-                {                    
-                    var triggerPlayer = col.gameObject.GetComponentInParent<BasePlayer>();
+            private void LateUpdate()
+            {
+                CheckForMovement();                
+                AdjustAiming();
+                entity.SendNetworkUpdate();
+            }
+
+            private void OnCollisionEnter(Collision collision)
+            {
+                if (!HasCommander()) return;
+                
+                GameObject gObject = collision.gameObject;
+                if (gObject == null)
+                    return;
+                               
+                if (crushables.Players)
+                {                   
+                    var triggerPlayer = gObject.GetComponentInParent<BasePlayer>();
                     if (triggerPlayer != null && triggerPlayer != player && !passengers.Contains(triggerPlayer) && !enteringPassengers.Contains(triggerPlayer.userID))
                     {
                         triggerPlayer.Die(new HitInfo(player, triggerPlayer, DamageType.Blunt, 200f));
@@ -350,9 +398,9 @@ namespace Oxide.Plugins
                     }                    
                 }
 
-                if (ins.configData.Crushables.Animals)
+                if (crushables.Animals)
                 {
-                    var npc = col.gameObject.GetComponentInParent<BaseNpc>();
+                    var npc = gObject.GetComponentInParent<BaseNpc>();
                     if (npc != null)
                     {
                         npc.Die(new HitInfo(player, npc, DamageType.Blunt, 200f));
@@ -360,16 +408,18 @@ namespace Oxide.Plugins
                     }
                 }
 
-                if (ins.configData.Crushables.Buildings)
+                float impactForce = CalculateImpactForce(collision);
+
+                if (crushables.Buildings)
                 {
-                    var buildingBlock = col.gameObject.GetComponentInParent<BuildingBlock>();
-                    if (buildingBlock != null)
+                    var buildingBlock = gObject.GetComponentInParent<BuildingBlock>();
+                    if (buildingBlock != null && impactForce >= crushables.GradeForce[buildingBlock.grade.ToString()])
                     {
                         buildingBlock.Die(new HitInfo(player, buildingBlock, DamageType.Blunt, 1000f));
                         return;
                     }
 
-                    var colliderBatch = col.gameObject.GetComponent<MeshColliderBatch>();
+                    var colliderBatch = gObject.GetComponent<MeshColliderBatch>();
                     if (colliderBatch != null)
                     {
                         var colliders = ((MeshColliderLookup)meshLookupField.GetValue(colliderBatch)).src.data;
@@ -377,7 +427,7 @@ namespace Oxide.Plugins
                         foreach (var instance in colliders)
                         {
                             var block = instance.collider?.GetComponentInParent<BuildingBlock>();
-                            if (Vector3.Distance(block.transform.position, entity.transform.position) < 4)
+                            if (block != null && Vector3.Distance(block.transform.position, entity.transform.position) < 4 && impactForce >= crushables.GradeForce[block.grade.ToString()])
                             {
                                 block.Die(new HitInfo(player, block, DamageType.Blunt, 1000f));
                                 return;
@@ -386,17 +436,17 @@ namespace Oxide.Plugins
                         return;
                     }
 
-                    var simpleBlock = col.gameObject.GetComponentInParent<SimpleBuildingBlock>();
-                    if (simpleBlock != null)
+                    var simpleBlock = gObject.GetComponentInParent<SimpleBuildingBlock>();
+                    if (simpleBlock != null && impactForce >= crushables.WallForce)
                     {
                         simpleBlock.Die(new HitInfo(player, simpleBlock, DamageType.Blunt, 1500));
                         return;
                     }
                 }
 
-                if (ins.configData.Crushables.Loot)
+                if (crushables.Loot)
                 {
-                    var loot = col.gameObject.GetComponentInParent<LootContainer>();
+                    var loot = gObject.GetComponentInParent<LootContainer>();
                     if (loot != null)
                     {
                         loot.Die(new HitInfo(player, loot, DamageType.Blunt, 200f));
@@ -404,15 +454,27 @@ namespace Oxide.Plugins
                     }
                 }
 
-                if (ins.configData.Crushables.Resources)
+                if (crushables.Resources)
                 {
-                    var resource = col.gameObject.GetComponentInParent<ResourceEntity>();
-                    if (resource != null)
+                    var resource = gObject.GetComponentInParent<ResourceEntity>();
+                    if (resource != null && impactForce >= crushables.ResourceForce)
                     {
                         resource.Kill(BaseNetworkable.DestroyMode.None);
                         return;
                     }                    
                 }
+            }
+
+            private float CalculateImpactForce(Collision col)
+            {
+                var impactVelocityX = rigidBody.velocity.x;
+                impactVelocityX *= Mathf.Sign(impactVelocityX);
+                var impactVelocityY = rigidBody.velocity.y;
+                impactVelocityY *= Mathf.Sign(impactVelocityY);
+                var impactVelocity = impactVelocityX + impactVelocityY;
+                var impactForce = impactVelocity * rigidBody.mass;
+                impactForce *= Mathf.Sign(impactForce);
+                return impactForce;
             }
 
             private void CheckOtherInput()
@@ -474,8 +536,7 @@ namespace Oxide.Plugins
                 Vector3 desiredAim = targetPos - (entity.transform.position + (Vector3.up * 2));
 
                 aimVector = Vector3.Lerp(aimVector, desiredAim, Time.deltaTime * 5f);
-                aimVec.SetValue(entity, aimVector);
-                topAimVec.SetValue(entity, aimVector);
+                entity.turretAimVector = aimVector;
                 AimCannon();
                 AimMG();                
             }
@@ -496,7 +557,7 @@ namespace Oxide.Plugins
                 {
                     Vector3 desiredAim = hit.point - (entity.topTurretMuzzle.transform.position + (Vector3.up * 2));
                     aimVectorTop = Vector3.Lerp(aimVectorTop, desiredAim, Time.deltaTime * 5f);
-                    topAimVec.SetValue(entity, aimVector);
+                    entity.topTurretAimVector = aimVector;
                     entity.AimWeaponAt(entity.topTurretYaw, entity.topTurretPitch, aimVectorTop, -360f, 360f, 360f, entity.mainTurret);
                 }
             }
@@ -526,14 +587,16 @@ namespace Oxide.Plugins
 
                     TimedExplosive projectile = rocket.GetComponent<TimedExplosive>();
                     if (projectile != null)                    
-                        projectile.damageTypes.Add(new DamageTypeEntry { amount = cannon.Damage, type = DamageType.Explosion });                    
-
+                        projectile.damageTypes.Add(new DamageTypeEntry { amount = cannon.Damage, type = DamageType.Explosion });
+                                        
                     lastFireCannon = Time.realtimeSinceStartup + cannon.Interval;
 
                     if (cannon.RequireAmmo)                    
-                        inventory.itemList.Find(x => x.info.shortname == cannon.Type)?.UseItem(1);                    
+                        inventory.itemList.Find(x => x.info.shortname == cannon.Type)?.UseItem(1);
+                    ins.CreateRocketAmmoUI(player, this);
                 }               
             }
+
             private void FireCoax()
             {
                 if (coax.RequireAmmo)
@@ -572,13 +635,14 @@ namespace Oxide.Plugins
                             }
                         }
                     }
-                    entity.ClientRPC(null, "CLIENT_FireGun", true, targetPos, null, null, null);
+                    entity.ClientRPC(null, "CLIENT_FireGun", true, targetPos);
                     Pool.FreeList<RaycastHit>(ref list);
 
                     lastFireCoax = Time.realtimeSinceStartup + coax.Interval;
 
                     if (coax.RequireAmmo)
                         inventory.itemList.Find(x => x.info.shortname == coax.Type)?.UseItem(1);
+                    ins.CreateMGAmmoUI(player, this);
                 }
             }
 
@@ -620,13 +684,14 @@ namespace Oxide.Plugins
                             }
                         }
                     }
-                    entity.ClientRPC(null, "CLIENT_FireGun", false, targetPos, null, null, null);
+                    entity.ClientRPC(null, "CLIENT_FireGun", false, targetPos);
                     Pool.FreeList<RaycastHit>(ref list);
 
                     lastFireMG = Time.realtimeSinceStartup + mg.Interval;
 
                     if (mg.RequireAmmo)
                         inventory.itemList.Find(x => x.info.shortname == mg.Type)?.UseItem(1);
+                    ins.CreateMGAmmoUI(player, this);
                 }
             }
 
@@ -753,21 +818,32 @@ namespace Oxide.Plugins
             public void EnterTank(BasePlayer player)
             {
                 this.player = player;
+                ins.restoreData.AddData(player);
+                player.inventory.Strip();
                 ins.StartSpectating(player, this, true);                                               
             }
             public void ExitTank()
             {
-                ApplyBrakes(1f);
-                enabled = false;
+                this.enabled = false;
 
-                for (int i = 0; i < passengers.Count; i++)               
-                    PassengerExit(passengers[i]);                
+                ApplyBrakes(1f);
+
+                if (passengers.Count > 0)
+                {
+                    for (int i = 0; i < passengers.Count; i++)
+                        PassengerExit(passengers[i]);
+                }
 
                 ins.EndSpectating(player, this, true);
+
+                ins.DestroyAllUI(player); print("");
+                ins.restoreData.RestorePlayer(player);
                 player = null;
             }
             public void PassengerEnter(BasePlayer passenger)
             {
+                ins.restoreData.AddData(passenger);
+                passenger.inventory.Strip();
                 ins.passengers.Add(passenger.userID);
                 enteringPassengers.Add(passenger.userID);
                 ins.StartSpectating(passenger, this, false);
@@ -775,9 +851,11 @@ namespace Oxide.Plugins
             }
             private void PassengerExit(BasePlayer passenger)
             {
+                ins.DestroyAllUI(passenger);
                 ins.passengers.Remove(passenger.userID);
                 passengers.Remove(passenger);
-                ins.EndSpectating(passenger, this, false);                
+                ins.EndSpectating(passenger, this, false);
+                ins.restoreData.RestorePlayer(player);
             }
             public void SetPassengerActive(BasePlayer passenger)
             {
@@ -803,15 +881,24 @@ namespace Oxide.Plugins
                     info.HitMaterial = 0;
                     info.PointStart = Vector3.zero;
 
-                    if (player != null)
-                        ExitTank();
-
                     OnDeath();
+                }
+                else
+                {
+                    ins.NextTick(() =>
+                    {
+                        ins.CreateHealthUI(player, this);
+                        foreach (var passenger in passengers)
+                            ins.CreateHealthUI(passenger, this);
+                    });                    
                 }
             } 
             
             private void OnDeath()
             {
+                if (player != null)
+                    ExitTank();
+
                 Effect.server.Run(entity.explosionEffect.resourcePath, entity.transform.position, Vector3.up, null, true);
 
                 List<ServerGib> serverGibs = ServerGib.CreateGibs(entity.servergibs.resourcePath, entity.gameObject, entity.servergibs.Get().GetComponent<ServerGib>()._gibSource, Vector3.zero, 3f);
@@ -872,7 +959,8 @@ namespace Oxide.Plugins
                             Physics.IgnoreCollision(collider, serverGib1.GetCollider(), true);
                     }                   
                 }
-                entity.Kill(BaseNetworkable.DestroyMode.Gib);
+                if (entity != null && !entity.IsDestroyed)
+                    entity.Kill(BaseNetworkable.DestroyMode.Gib);
             }         
         }
         #endregion
@@ -967,6 +1055,114 @@ namespace Oxide.Plugins
         }
         #endregion
 
+        #region UI
+        #region UI Elements
+        public static class UI
+        {
+            static public CuiElementContainer ElementContainer(string panelName, string color, UI4 dimensions, bool useCursor = false, string parent = "Overlay")
+            {
+                var NewElement = new CuiElementContainer()
+                {
+                    {
+                        new CuiPanel
+                        {
+                            Image = {Color = color},
+                            RectTransform = {AnchorMin = dimensions.GetMin(), AnchorMax = dimensions.GetMax()},
+                            CursorEnabled = useCursor
+                        },
+                        new CuiElement().Parent = parent,
+                        panelName
+                    }
+                };
+                return NewElement;
+            }
+            static public void Panel(ref CuiElementContainer container, string panel, string color, UI4 dimensions, bool cursor = false)
+            {
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = color },
+                    RectTransform = { AnchorMin = dimensions.GetMin(), AnchorMax = dimensions.GetMax() },
+                    CursorEnabled = cursor
+                },
+                panel);
+            }
+            static public void Label(ref CuiElementContainer container, string panel, string text, int size, UI4 dimensions, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiLabel
+                {
+                    Text = { FontSize = size, Align = align, Text = text, Font = "droidsansmono.ttf" },
+                    RectTransform = { AnchorMin = dimensions.GetMin(), AnchorMax = dimensions.GetMax() }
+                },
+                panel);
+
+            }
+            public static string Color(string hexColor, float alpha)
+            {
+                if (hexColor.StartsWith("#"))
+                    hexColor = hexColor.Substring(1);
+                int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
+                int green = int.Parse(hexColor.Substring(2, 2), NumberStyles.AllowHexSpecifier);
+                int blue = int.Parse(hexColor.Substring(4, 2), NumberStyles.AllowHexSpecifier);
+                return $"{(double)red / 255} {(double)green / 255} {(double)blue / 255} {alpha}";
+            }
+        }
+        public class UI4
+        {
+            public float xMin, yMin, xMax, yMax;
+            public UI4(float xMin, float yMin, float xMax, float yMax)
+            {
+                this.xMin = xMin;
+                this.yMin = yMin;
+                this.xMax = xMax;
+                this.yMax = yMax;
+            }
+            public string GetMin() => $"{xMin} {yMin}";
+            public string GetMax() => $"{xMax} {yMax}";
+        }
+        #endregion
+
+        #region UI Creation        
+        private void CreateHealthUI(BasePlayer player, Controller controller)
+        {
+            var container = UI.ElementContainer(uiHealth, "0.95 0.95 0.95 0.05", new UI4(0.69f, 0.1f, 0.83f, 0.135f));
+            UI.Label(ref container, uiHealth, $"HLTH: ", 12, new UI4(0.03f, 0, 1, 1), TextAnchor.MiddleLeft);
+            var percentHealth = System.Convert.ToDouble((float)controller.entity.health / (float)controller.entity.MaxHealth());
+            float yMaxHealth = 0.25f + (0.73f * (float)percentHealth);
+            UI.Panel(ref container, uiHealth, UI.Color("#ce422b", 0.6f), new UI4(0.25f, 0.1f, yMaxHealth, 0.9f));
+            DestroyUI(player, uiHealth);
+            CuiHelper.AddUi(player, container);
+        }
+        private void CreateMGAmmoUI(BasePlayer player, Controller controller)
+        {
+            if (configData.Weapons.MG.Enabled && configData.Weapons.MG.RequireAmmo)
+            {
+                var container = UI.ElementContainer(uiAmmoMg, "0.95 0.95 0.95 0.05", new UI4(0.69f, 0.060f, 0.83f, 0.096f));
+                UI.Label(ref container, uiAmmoMg, $"MGUN: <color=#ce422b>{controller.inventory.GetAmount(mgId, false)}</color>", 12, new UI4(0.03f, 0, 1, 1), TextAnchor.MiddleLeft);
+                DestroyUI(player, uiAmmoMg);
+                CuiHelper.AddUi(player, container);
+            }
+        }
+        private void CreateRocketAmmoUI(BasePlayer player, Controller controller)
+        {
+            if (configData.Weapons.Cannon.Enabled && configData.Weapons.Cannon.RequireAmmo)
+            {
+                var container = UI.ElementContainer(uiAmmoRocket, "0.95 0.95 0.95 0.05", new UI4(0.69f, 0.021f, 0.83f, 0.056f));
+                UI.Label(ref container, uiAmmoRocket, $"CNON: <color=#ce422b>{controller.inventory.GetAmount(rocketId, false)}</color>", 12, new UI4(0.03f, 0, 1, 1), TextAnchor.MiddleLeft);
+                DestroyUI(player, uiAmmoRocket);
+                CuiHelper.AddUi(player, container);
+            }
+        }
+        private void DestroyUI(BasePlayer player, string panel) => CuiHelper.DestroyUi(player, panel);
+
+        private void DestroyAllUI(BasePlayer player)
+        {
+            DestroyUI(player, uiHealth);
+            DestroyUI(player, uiAmmoMg);
+            DestroyUI(player, uiAmmoRocket);
+        }
+        #endregion
+        #endregion
+
         #region Config        
         private ConfigData configData;
         class ConfigData
@@ -986,16 +1182,22 @@ namespace Oxide.Plugins
 
             public class CrushableTypes
             {
-                [JsonProperty(PropertyName = "Buildings")]
+                [JsonProperty(PropertyName = "Can crush buildings")]
                 public bool Buildings { get; set; }
-                [JsonProperty(PropertyName = "Resources")]
+                [JsonProperty(PropertyName = "Can crush resources")]
                 public bool Resources { get; set; }
-                [JsonProperty(PropertyName = "Loot")]
+                [JsonProperty(PropertyName = "Can crush loot containers")]
                 public bool Loot { get; set; }
-                [JsonProperty(PropertyName = "Animals")]
+                [JsonProperty(PropertyName = "Can crush animals")]
                 public bool Animals { get; set; }
-                [JsonProperty(PropertyName = "Players")]
+                [JsonProperty(PropertyName = "Can crush players")]
                 public bool Players { get; set; }
+                [JsonProperty(PropertyName = "Amount of force required to crush various building grades")]
+                public Dictionary<string, float> GradeForce { get; set; }
+                [JsonProperty(PropertyName = "Amount of force required to crush external walls")]
+                public float WallForce { get; set; }
+                [JsonProperty(PropertyName = "Amount of force required to crush resources")]
+                public float ResourceForce { get; set; }
             }
             public class ButtonConfiguration
             {                
@@ -1100,7 +1302,17 @@ namespace Oxide.Plugins
                     Buildings = true,
                     Loot = true,
                     Players = true,
-                    Resources = true
+                    Resources = true,
+                    GradeForce = new Dictionary<string, float>
+                    {
+                        [BuildingGrade.Enum.Twigs.ToString()] = 1000f,
+                        [BuildingGrade.Enum.Wood.ToString()] = 2000f,
+                        [BuildingGrade.Enum.Stone.ToString()] = 3000f,
+                        [BuildingGrade.Enum.Metal.ToString()] = 5000f,
+                        [BuildingGrade.Enum.TopTier.ToString()] = 7000f,
+                    },
+                    ResourceForce = 1500f,
+                    WallForce = 3000f
                 },
                 Movement = new ConfigData.MovementSettings
                 {
@@ -1161,6 +1373,162 @@ namespace Oxide.Plugins
         void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
         #endregion
 
+        #region Data Management
+        void SaveData() => restorationdata.WriteObject(restoreData);
+        void LoadData()
+        {
+            try
+            {
+                restoreData = restorationdata.ReadObject<RestoreData>();
+            }
+            catch
+            {
+                restoreData = new RestoreData();
+            }
+        }
+        public class RestoreData
+        {
+            public Hash<ulong, PlayerData> restoreData = new Hash<ulong, PlayerData>();
+
+            public void AddData(BasePlayer player)
+            {
+                restoreData[player.userID] = new PlayerData(player);
+            }
+
+            public void RemoveData(ulong playerId)
+            {
+                if (HasRestoreData(playerId))
+                    restoreData.Remove(playerId);
+            }
+
+            public bool HasRestoreData(ulong playerId) => restoreData.ContainsKey(playerId);
+
+            public void RestorePlayer(BasePlayer player)
+            {
+                PlayerData playerData;
+                if (restoreData.TryGetValue(player.userID, out playerData))
+                {
+                    player.inventory.Strip();
+
+                    if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+                    {
+                        ins.timer.Once(1, () => RestorePlayer(player));
+                        return;
+                    }
+
+                    ins.NextTick(() =>
+                    {
+                        RestoreAllItems(player, playerData);
+                    });
+                }
+            }
+
+            private void RestoreAllItems(BasePlayer player, PlayerData playerData)
+            {
+                if (player == null || !player.IsConnected)
+                    return;
+
+                if (RestoreItems(player, playerData.containerBelt, "belt") && RestoreItems(player, playerData.containerWear, "wear") && RestoreItems(player, playerData.containerMain, "main"))
+                    RemoveData(player.userID);
+            }
+
+            private bool RestoreItems(BasePlayer player, ItemData[] itemData, string type)
+            {
+                ItemContainer container = type == "belt" ? player.inventory.containerBelt : type == "wear" ? player.inventory.containerWear : player.inventory.containerMain;
+
+                for (int i = 0; i < itemData.Length; i++)
+                {
+                    ItemData data = itemData[i];
+                    if (data.amount == 0)
+                        continue;
+                    Item item = CreateItem(data);
+                    item.position = data.position;
+                    item.SetParent(container);
+                }
+                return true;
+            }
+
+            private Item CreateItem(ItemData itemData)
+            {                
+                var item = ItemManager.CreateByItemID(itemData.itemid, itemData.amount, itemData.skin);
+                item.condition = itemData.condition;
+                if (itemData.instanceData != null)
+                    item.instanceData = itemData.instanceData;
+
+                var weapon = item.GetHeldEntity() as BaseProjectile;
+                if (weapon != null)
+                {
+                    if (!string.IsNullOrEmpty(itemData.ammotype))
+                        weapon.primaryMagazine.ammoType = ItemManager.FindItemDefinition(itemData.ammotype);
+                    weapon.primaryMagazine.contents = itemData.ammo;
+                }
+                if (itemData.contents != null)
+                {
+                    foreach (var contentData in itemData.contents)
+                    {
+                        var newContent = ItemManager.CreateByItemID(contentData.itemid, contentData.amount);
+                        if (newContent != null)
+                        {
+                            newContent.condition = contentData.condition;
+                            newContent.MoveToContainer(item.contents);
+                        }
+                    }
+                }
+                return item;
+            }
+
+            public class PlayerData
+            {
+                public ItemData[] containerMain;
+                public ItemData[] containerWear;
+                public ItemData[] containerBelt;
+
+                public PlayerData() { }
+
+                public PlayerData(BasePlayer player)
+                {
+                    containerBelt = GetItems(player.inventory.containerBelt).ToArray();
+                    containerMain = GetItems(player.inventory.containerMain).ToArray();
+                    containerWear = GetItems(player.inventory.containerWear).ToArray();
+                }
+
+                private IEnumerable<ItemData> GetItems(ItemContainer container)
+                {
+                    return container.itemList.Select(item => new ItemData
+                    {
+                        itemid = item.info.itemid,
+                        amount = item.amount,
+                        ammo = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.contents ?? 0,
+                        ammotype = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.ammoType.shortname ?? null,
+                        position = item.position,
+                        skin = item.skin,
+                        condition = item.condition,
+                        instanceData = item.instanceData ?? null,
+                        contents = item.contents?.itemList.Select(item1 => new ItemData
+                        {
+                            itemid = item1.info.itemid,
+                            amount = item1.amount,
+                            condition = item1.condition
+                        }).ToArray()
+                    });
+                }
+            }
+
+            public class ItemData
+            {
+                public int itemid;
+                public ulong skin;
+                public int amount;
+                public float condition;
+                public int ammo;
+                public string ammotype;
+                public int position;
+                public ProtoBuf.Item.InstanceData instanceData;
+                public ItemData[] contents;
+            }
+        }
+        #endregion
+
         #region Localization
         string msg(string key, string playerId = null) => lang.GetMessage(key, this, playerId);
 
@@ -1180,7 +1548,7 @@ namespace Oxide.Plugins
             ["access_inventory"] = "<color=#D3D3D3>Access Inventory (from outside of the vehicle) </color><color=#ce422b>{0}</color>",
             ["no_ammo_cannon"] = "<color=#D3D3D3>You do not have ammunition to fire the cannon. It requires </color><color=#ce422b>{0}</color>",
             ["no_ammo_mg"] = "<color=#D3D3D3>You do not have ammunition to fire the machine gun. It requires </color><color=#ce422b>{0}</color>",
-            ["no_ammo_coax"] = "<color=#D3D3D3>You do not have ammunition to coaxial gun. It requires </color><color=#ce422b>{0}</color>",
+            ["no_ammo_coax"] = "<color=#D3D3D3>You do not have ammunition to fire the coaxial gun. It requires </color><color=#ce422b>{0}</color>",
         };
         #endregion
     }

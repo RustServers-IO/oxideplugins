@@ -10,33 +10,32 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Compass GUI", "PaiN", 1.2, ResourceId = 1231)]
+    [Info("Compass GUI", "PaiN", "1.2.1", ResourceId = 1231)]
     [Description("This plugin shows which direction is the player facing in a GUI.")]
     public class CompassGUI : RustPlugin
-    {     
-		List<BasePlayer> gui = new List<BasePlayer>();
+    {
+        List<BasePlayer> gui = new List<BasePlayer>();
 
-		private Timer _timer;
-		private bool Changed;
-		private bool displaycoords;
-		private string xmin;
-		private string xmax; 
-		private string ymin;
-		private string ymax; 
-		private bool enableonconnect;
-		
-        void Loaded() 
-        {  
+        private Timer _timer;
+        private bool Changed;
+        private bool displaycoords;
+        private string xmin;
+        private string xmax;
+        private string ymin;
+        private string ymax;
+        private bool enableonconnect;
+
+        void Loaded()
+        {
             _timer = timer.Every(1, Test);
-			foreach(BasePlayer current in BasePlayer.activePlayerList)
-			{
-				gui.Add(current); 
-			}
-			LoadVariables();
+            foreach(BasePlayer current in BasePlayer.activePlayerList)
+            {
+                gui.Add(current);
+            }
+            LoadVariables();
+        }
 
-        } 
-		
-		object GetConfig(string menu, string datavalue, object defaultValue)
+        object GetConfig(string menu, string datavalue, object defaultValue)
         {
             var data = Config[menu] as Dictionary<string, object>;
             if (data == null)
@@ -53,34 +52,32 @@ namespace Oxide.Plugins
                 Changed = true;
             }
             return value;
-        } 
-		
-		void LoadVariables() 
-		{
-			xmin = Convert.ToString(GetConfig("GUI", "X min", "0.45"));
-			xmax = Convert.ToString(GetConfig("GUI", "X max", "0.56"));
-			ymin = Convert.ToString(GetConfig("GUI", "Y min", "0.91"));
-			ymax = Convert.ToString(GetConfig("GUI", "Y max", "0.99"));
-			enableonconnect = Convert.ToBoolean(GetConfig("Settings", "EnableOnConnect", true));
-			displaycoords = Convert.ToBoolean(GetConfig("Settings", "DisplayCoordinates", true));
-			
-			if (Changed)
-			{
-				SaveConfig();
-				Changed = false;
-			
-			}	
-		}
-		
-		protected override void LoadDefaultConfig()
-		{
-			Puts("Creating a new configuration file!");
-			Config.Clear();
-			LoadVariables();
-		}
-		 
+        }
 
-        static string Title = "<color=yellow>Compass</color>"; 
+        void LoadVariables()
+        {
+            xmin = Convert.ToString(GetConfig("GUI", "X min", "0.45"));
+            xmax = Convert.ToString(GetConfig("GUI", "X max", "0.56"));
+            ymin = Convert.ToString(GetConfig("GUI", "Y min", "0.91"));
+            ymax = Convert.ToString(GetConfig("GUI", "Y max", "0.99"));
+            enableonconnect = Convert.ToBoolean(GetConfig("Settings", "EnableOnConnect", true));
+            displaycoords = Convert.ToBoolean(GetConfig("Settings", "DisplayCoordinates", true));
+
+            if (Changed)
+            {
+                SaveConfig();
+                Changed = false;
+            }
+        }
+
+        protected override void LoadDefaultConfig()
+        {
+            Puts("Creating a new configuration file!");
+            Config.Clear();
+            LoadVariables();
+        }
+
+        static string Title = "<color=yellow>Compass</color>";
         #region JSON
         string json = @"[
                        {
@@ -130,10 +127,10 @@ namespace Oxide.Plugins
                                     ""type"":""RectTransform"",
                                     ""anchormin"": ""0 0.20"",
                                     ""anchormax"": ""1 0.65""
-                                } 
+                                }
                             ]
                         },
-						{
+                        {
                             ""parent"": ""EyesPosition"",
                             ""components"":
                             [
@@ -153,11 +150,12 @@ namespace Oxide.Plugins
                     ]
                     ";
         #endregion
-     //Credits to Mughishi for the Compass plugin s
+
+        // Credits to Mughisi for the Compass plugin
         string GetEyesPosition(BasePlayer player)
         {
             double lookRotation = player.eyes.rotation.eulerAngles.y;
-         
+
             if (lookRotation > 337.5 || lookRotation < 22.5)
               return "<color=cyan>North</color>";
             else if (lookRotation > 22.5 && lookRotation < 67.5)
@@ -176,122 +174,107 @@ namespace Oxide.Plugins
                 return "<color=cyan>North-West</color>";
             return "None";
         }
-		
-		
-		
+
         void Test()
         {
-			foreach(BasePlayer player in BasePlayer.activePlayerList)
-			{
-				if (gui.Contains(player))		
-				{
-		
-					//Debug PrintToChat("Contains " + player.displayName);
-					int posx = Convert.ToInt32(player.transform.position.x);
-					int posy = Convert.ToInt32(player.transform.position.y);
-					int posz = Convert.ToInt32(player.transform.position.z);
-					if(displaycoords == false)
-					{
-						CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList("EyesPosition", null, null, null, null));
-						CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(json.Replace("{eyeposition}", GetEyesPosition(player)).Replace("{xmin}", xmin).Replace("{xmax}", xmax).Replace("{ymin}", ymin).Replace("{ymax}", ymax), null, null, null, null));
-					}
-					CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList("EyesPosition", null, null, null, null));
-					CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(json.Replace("{eyeposition}", GetEyesPosition(player)).Replace("{positionx}", posx.ToString()).Replace("{positionz}", posz.ToString()).Replace("{xmin}", xmin).Replace("{xmax}", xmax).Replace("{ymin}", ymin).Replace("{ymax}", ymax), null, null, null, null));
-				}
-			}
-
-     
+            foreach(BasePlayer player in BasePlayer.activePlayerList)
+            {
+                if (gui.Contains(player))
+                {
+                    //Debug PrintToChat("Contains " + player.displayName);
+                    int posx = Convert.ToInt32(player.transform.position.x);
+                    int posy = Convert.ToInt32(player.transform.position.y);
+                    int posz = Convert.ToInt32(player.transform.position.z);
+                    if (displaycoords == false)
+                    {
+                        CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", "EyesPosition");
+                        CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", json.Replace("{eyeposition}", GetEyesPosition(player)).Replace("{xmin}", xmin).Replace("{xmax}", xmax).Replace("{ymin}", ymin).Replace("{ymax}", ymax));
+                    }
+                    CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", "EyesPosition");
+                    CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", json.Replace("{eyeposition}", GetEyesPosition(player)).Replace("{positionx}", posx.ToString()).Replace("{positionz}", posz.ToString()).Replace("{xmin}", xmin).Replace("{xmax}", xmax).Replace("{ymin}", ymin).Replace("{ymax}", ymax));
+                }
+            }
         }
-         
-		 
-		/*NextUpdate[ChatCommand("compassbuy")]
-		void cmdBuyCompass(BasePlayer player, string cmd, string[] args)
-		{	
-			if(!plugins.Exists("00-Economics"))
-			{
-				Puts("Economics plugin is not installed! If you dont wanna use the buy system then do not download it! Get it at http://oxidemod.org/plugins/717/ . ");
-				SendReply(player, "<color=orange>CompassGUI</color>" + "You can't buy a compass since the server owner has disabled this feature!");
-				return;
-			}
 
-			string checkconfig = Config["Compass", "EnableEconomics"].ToString();
-			if(checkconfig == "true")
-			{
-				string steamId = player.userID.ToString();
-				if (storedData.Players.Any(p => p.UserId == steamId))
-				{
-					SendReply(player, "<color=orange>CompassGUI</color>" + " You already have a compass.");	
-					return;
-				}  
-				 var playerMoney = API.GetUserDataFromPlayer(player);
-				 int price = Convert.ToInt32(Config["Compass", "Price"]);
-				 
-				 if(playerMoney[1] >= price)
-				 {
-					var info = new PlayerInfo(player);
-					storedData.Players.Add(info);
-					playerMoney.Withdraw(price);
-					SendReply(player, "<color=orange>CompassGUI</color>" + " You have successfully bought a compass for(" + price + "). Use /compass to enable and disable your compass.");	
+        /*NextUpdate[ChatCommand("compassbuy")]
+        void cmdBuyCompass(BasePlayer player, string cmd, string[] args)
+        {
+            if (!plugins.Exists("00-Economics"))
+            {
+                Puts("Economics plugin is not installed! If you dont wanna use the buy system then do not download it! Get it at http://oxidemod.org/plugins/717/ . ");
+                SendReply(player, "<color=orange>CompassGUI</color>" + "You can't buy a compass since the server owner has disabled this feature!");
+                return;
+            }
 
-				}
-			}
-		}*/
-		
-		[ChatCommand("showpos")]
-		void cmdCopyPos(BasePlayer player, string cmd, string[] args)
-		{
-			SendReply(player, "<color=orange>CompassGUI</color>" + " To copy your position open the console \"<color=blue>F1</color>\" ");
-			player.SendConsoleCommand("echo <color=aqua>CompassGUI</color>");
-			player.SendConsoleCommand("echo <color=yellow>Your position is</color>: X: " + player.transform.position.x + " Y: " + player.transform.position.y + " Z: " + player.transform.position.z);
-		
-		
-		}
-		
-		[ChatCommand("compass")]
-		void cmdCompass(BasePlayer player, string cmd, string[] args)
-		{
-			if(gui.Contains(player))
-			{
-				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList("EyesPosition", null, null, null, null));
-				SendReply(player, "<color=orange>CompassGUI</color>" + " You have disabled your compass!");
-				gui.Remove(player);
-			}
-			else
-			{ 
-				gui.Add(player);
-				SendReply(player, "<color=orange>CompassGUI</color>" + " You have enabled your compass!");		
-			}
-		
-		
-		}
-		
-         
-		 
-        [HookMethod("OnPlayerInit")]
+            string checkconfig = Config["Compass", "EnableEconomics"].ToString();
+            if (checkconfig == "true")
+            {
+                string steamId = player.userID.ToString();
+                if (storedData.Players.Any(p => p.UserId == steamId))
+                {
+                    SendReply(player, "<color=orange>CompassGUI</color>" + " You already have a compass.");
+                    return;
+                }
+                 var playerMoney = API.GetUserDataFromPlayer(player);
+                 int price = Convert.ToInt32(Config["Compass", "Price"]);
+
+                 if (playerMoney[1] >= price)
+                 {
+                    var info = new PlayerInfo(player);
+                    storedData.Players.Add(info);
+                    playerMoney.Withdraw(price);
+                    SendReply(player, "<color=orange>CompassGUI</color>" + " You have successfully bought a compass for(" + price + "). Use /compass to enable and disable your compass.");
+
+                }
+            }
+        }*/
+
+        [ChatCommand("showpos")]
+        void cmdCopyPos(BasePlayer player, string cmd, string[] args)
+        {
+            SendReply(player, "<color=orange>CompassGUI</color>" + " To copy your position open the console \"<color=blue>F1</color>\" ");
+            player.SendConsoleCommand("echo <color=aqua>CompassGUI</color>");
+            player.SendConsoleCommand("echo <color=yellow>Your position is</color>: X: " + player.transform.position.x + " Y: " + player.transform.position.y + " Z: " + player.transform.position.z);
+        }
+
+        [ChatCommand("compass")]
+        void cmdCompass(BasePlayer player, string cmd, string[] args)
+        {
+            if (gui.Contains(player))
+            {
+                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", "EyesPosition");
+                SendReply(player, "<color=orange>CompassGUI</color>" + " You have disabled your compass!");
+                gui.Remove(player);
+            }
+            else
+            {
+                gui.Add(player);
+                SendReply(player, "<color=orange>CompassGUI</color>" + " You have enabled your compass!");
+            }
+        }
+
         void OnPlayerInit(BasePlayer player)
         {
-			if(enableonconnect == true)
-			{
-				gui.Add(player);	
-			}
-		}
-		
-		void Unloaded()
-		{ 
-			foreach(BasePlayer current in BasePlayer.activePlayerList)
-			{
-			CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = current.net.connection }, null, "DestroyUI", new Facepunch.ObjectList("EyesPosition", null, null, null, null));
+            if (enableonconnect == true)
+            {
+                gui.Add(player);
+            }
+        }
 
-			
-			}
-			gui.Clear();
-			_timer.Destroy();
-		} 
-		void OnPlayerDisconnected(BasePlayer player)
-		{
-			gui.Remove(player);
-			CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList("EyesPosition", null, null, null, null));
+        void Unload()
+        {
+            foreach(BasePlayer current in BasePlayer.activePlayerList)
+            {
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = current.net.connection }, null, "DestroyUI", "EyesPosition");
+            }
+            gui.Clear();
+            _timer.Destroy();
+        }
 
-		}
+        void OnPlayerDisconnected(BasePlayer player)
+        {
+            gui.Remove(player);
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", "EyesPosition");
+        }
     }
 }

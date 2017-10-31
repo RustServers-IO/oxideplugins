@@ -2,7 +2,7 @@
     "name": "NoRaid",
     "description": "Prevents players from destroying buildings they're not associated with",
     "author": "Ryan",
-    "version": "1.1.5",
+    "version": "1.1.8",
     "configuration": true,
     "suggest": {
         "Friends": "*",

@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.4", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.5.7", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -55,7 +55,7 @@ namespace Oxide.Plugins {
                 ["CopyingTextFirst"] = "Use the Hammer to select the jPipe to copy from",
                 ["CopyingText"] = "Use the Hammer to Paste",
                 ["CopyingSubtext"] = "Do /{0} c to Exit",
-                
+
                 ["RemovingText"] = "Use the Hammer to Remove Pipes",
                 ["RemovingSubtext"] = "Do /{0} r to Exit",
 
@@ -116,7 +116,7 @@ namespace Oxide.Plugins {
             if (loadindex >= storedData.p.Keys.Count) {
                 LoadEnd();
                 return;
-            } 
+            }
 
             NextFrame(PipeLazyLoad);
         }
@@ -155,7 +155,7 @@ namespace Oxide.Plugins {
         }
 
         void OnServerSave() => SavePipes();
-        
+
         private float animaterate = 0.5f;
         private float animatelength = 2.5f;
         private float updatetickrate = 3f; // update without animation
@@ -169,30 +169,30 @@ namespace Oxide.Plugins {
         void UpdateTick() {
 
             //if (!drawflowarrows)
-                return;
-            
-            if (animatearrows) frame = (frame < 4) ? frame + 1 : 0;
-            
-            foreach (var player in BasePlayer.activePlayerList) {
+            //    return;
 
-                var item = player.GetActiveItem();
-                if (item != null && item.info != null && (item.info.name == "hammer.item" || item.info.name == "camera.item")) {
+            //if (animatearrows) frame = (frame < 4) ? frame + 1 : 0;
 
-                    var pipes = OnlyShowArrowsForOwner && !checkbuildingprivlage(player) ? GetUserInfo(player).pipes : regpipes;
+            //foreach (var player in BasePlayer.activePlayerList) {
 
-                    foreach (var pipe in pipes) {
+            //    var item = player.GetActiveItem();
+            //    if (item != null && item.info != null && (item.info.name == "hammer.item" || item.info.name == "camera.item")) {
 
-                        if ((pipe.Value.sourcepos - player.transform.position).sqrMagnitude < maxpipedistsq || (pipe.Value.endpos - player.transform.position).sqrMagnitude < maxpipedistsq) {
-                            if (animatearrows)
-                                pipe.Value.DrawArrows(player, animatelength, animaterate, frames[frame]);
-                            else
-                                pipe.Value.DrawArrows(player, updatetickrate, updatetickrate, 0.5f);
-                        }
-                    }
-                }
-            }
-            
-            timer.Once(animatearrows ? animaterate : updatetickrate, UpdateTick);
+            //        var pipes = OnlyShowArrowsForOwner && !checkbuildingprivlage(player) ? GetUserInfo(player).pipes : regpipes;
+
+            //        foreach (var pipe in pipes) {
+
+            //            if ((pipe.Value.sourcepos - player.transform.position).sqrMagnitude < maxpipedistsq || (pipe.Value.endpos - player.transform.position).sqrMagnitude < maxpipedistsq) {
+            //                if (animatearrows)
+            //                    pipe.Value.DrawArrows(player, animatelength, animaterate, frames[frame]);
+            //                else
+            //                    pipe.Value.DrawArrows(player, updatetickrate, updatetickrate, 0.5f);
+            //            }
+            //        }
+            //    }
+            //}
+
+            //timer.Once(animatearrows ? animaterate : updatetickrate, UpdateTick);
         }
 
         void OnPlayerInit(BasePlayer player) {
@@ -300,6 +300,14 @@ namespace Oxide.Plugins {
             }
         }
 
+        void OnEntityKill(BaseNetworkable entity) {
+            if (entity is BuildingBlock) {
+                jPipeSegChild p = entity.GetComponent<jPipeSegChild>();
+                if (p != null && p.pipe != null)
+                    p.pipe.OnSegmentKilled();
+            }
+        }
+
         bool? OnStructureUpgrade(BaseCombatEntity entity, BasePlayer player, BuildingGrade.Enum grade) {
             jPipeSegChild p = entity.GetComponent<jPipeSegChild>();
             if (p != null && p.pipe != null) {
@@ -350,7 +358,7 @@ namespace Oxide.Plugins {
 
         // When item is added to filter
         ItemContainer.CanAcceptResult? CanAcceptItem(ItemContainer container, Item item) {
-            
+
             if (container == null || item == null || container.entityOwner == null || container.entityOwner.GetComponent<jPipeFilterStash>() == null)
                 return null;
 
@@ -373,7 +381,7 @@ namespace Oxide.Plugins {
 
             return ItemContainer.CanAcceptResult.CannotAccept;
         }
-        
+
         bool? CanVendingAcceptItem(VendingMachine container, Item item) {
             //Puts(item.ToString());
 
@@ -411,7 +419,7 @@ namespace Oxide.Plugins {
             }
             return true;
         }
-        
+
         private void LoadCommands() {
             AddCovalenceCommand(pipecommandprefix, "pipemainchat");
             AddCovalenceCommand($"{pipecommandprefix}help", "cmdpipehelp");
@@ -425,7 +433,7 @@ namespace Oxide.Plugins {
         private void cmdpiperemove(IPlayer cmdplayer, string cmd, string[] args) => piperemove(BasePlayer.Find(cmdplayer.Id), cmd, args);
         private void cmdpipestats(IPlayer cmdplayer, string cmd, string[] args) => pipestats(BasePlayer.Find(cmdplayer.Id), cmd, args);
         private void cmdpipelink(IPlayer cmdplayer, string cmd, string[] args) => pipelink(BasePlayer.Find(cmdplayer.Id), cmd, args);
-        
+
         // [ChatCommand("p")]
         private void pipemainchat(IPlayer cmdplayer, string cmd, string[] args) {
             BasePlayer player = BasePlayer.Find(cmdplayer.Id);
@@ -500,7 +508,7 @@ namespace Oxide.Plugins {
             userinfo.placeend = null;
             userinfo.placestart = null;
             userinfo.clipboard = null;
-            
+
             if (userinfo.state == UserState.removing) {
                 ShowOverlayText(player, lang.GetMessage("RemovingText", this, player.UserIDString), string.Format(lang.GetMessage("RemovingSubtext", this, player.UserIDString), pipecommandprefix));
             } else {
@@ -780,7 +788,7 @@ namespace Oxide.Plugins {
             public BuildingGrade.Enum pipegrade = BuildingGrade.Enum.Twigs;
             public float health;
 
-            private List<BaseEntity> pillars = new List<BaseEntity>();
+            public List<BaseEntity> pillars = new List<BaseEntity>();
             private BaseEntity filterstash;
             private StorageContainer stashcont;
             private int lookingatstash = 0;
@@ -811,15 +819,15 @@ namespace Oxide.Plugins {
 
                 data.toPipe(this);
 
-                if (source == null) {
+                if (source == null || sourcecont == null) {
                     initerr = "ErrorFindFirst";
                     return false;
                 }
-                if (dest == null) {
+                if (dest == null || destcont == null) {
                     initerr = "ErrorFindSecond";
                     return false;
                 }
-                
+
                 destisstartable = isStartable(dest);
                 isWaterPipe = dest is LiquidContainer && source is LiquidContainer;
 
@@ -840,7 +848,9 @@ namespace Oxide.Plugins {
 
                 //arrowspace = distance / segments;
                 //RefreshArrows();
-                
+
+                initerr = "";
+
                 for (int i = 0; i < segments; i++) {
 
                     //float offset = (segspace * i);
@@ -856,7 +866,9 @@ namespace Oxide.Plugins {
                         mainlogic = jPipeLogic.Attach(ent, this, updaterate, pipeplugin.flowrates[0]);
                         mainparent = ent;
                     } else {
-                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset));
+                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", sourcepos + rotation * (Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset)), rotation);
+                        // position based on parent
+                        //ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset));
                     }
 
                     ent.enableSaving = false;
@@ -873,8 +885,8 @@ namespace Oxide.Plugins {
 
                     jPipeSegChild.Attach(ent, this);
 
-                    if (i != 0)
-                        ent.SetParent(mainparent);
+                    //if (i != 0)
+                    //ent.SetParent(mainparent);
 
                     pillars.Add(ent);
                     ent.enableSaving = false;
@@ -893,7 +905,7 @@ namespace Oxide.Plugins {
                     //arrowent.globalBroadcast = true;
 
                     //arrowent.name = "JPipe";
-                    
+
                     //DudTimedExplosive explosive = arrowent.GetComponent<DudTimedExplosive>();
 
                     ////explosive.itemToGive = ItemManager.FindItemDefinition(1916127949);
@@ -902,9 +914,9 @@ namespace Oxide.Plugins {
                     //explosive.CancelInvoke("Kill");
                     //explosive.SetFlag(BaseEntity.Flags.On, false);
                     //explosive.SendNetworkUpdate();
-                    
+
                     //arrowent.enableSaving = false;
-                    
+
                 }
 
                 mainlogic.flowrate = ((int) pipegrade == -1) ? pipeplugin.flowrates[0] : pipeplugin.flowrates[(int) pipegrade];
@@ -930,6 +942,8 @@ namespace Oxide.Plugins {
                         return contoffset.largefurnace;
                     else if (panel == "smallrefinery")
                         return e.transform.rotation * contoffset.refinery;
+                    else if (panel == "bbq")
+                        return contoffset.bbq;
                     else
                         return contoffset.furnace;
                     //} else if (e is ResourceExtractorFuelStorage) {
@@ -1148,7 +1162,7 @@ namespace Oxide.Plugins {
                             AnchorMin = "0.5 0",
                             AnchorMax = "1 1"
                         }
-                    }, window
+                }, window
                 );
 
                 // title
@@ -1164,7 +1178,7 @@ namespace Oxide.Plugins {
                             AnchorMin = $"{margin*0.75f} 0.59",
                             AnchorMax = $"{0.5f-(margin*0.75f)} 0.78"
                         }
-                    }, window
+                }, window
                 );
 
                 string FlowPipe = elements.Add(new CuiPanel {
@@ -1173,14 +1187,14 @@ namespace Oxide.Plugins {
                             AnchorMin = "0.2 0.33",
                             AnchorMax = "0.8 0.66"
                         }
-                    }, FlowMain
+                }, FlowMain
                 );
 
                 elements.Add(
                     CreateLabel(ArrowString((int) pipegrade), 1, 1, TextAnchor.MiddleCenter, 12, "0", "1", "1 1 1 1"),
                     FlowPipe
                 );
-                
+
                 elements.Add(
                     CreateItemIcon(FlowMain, "0 0", "0.35 1", sourceiconurl)
                 );
@@ -1197,7 +1211,7 @@ namespace Oxide.Plugins {
                                AnchorMin = $"{margin*0.5f} 0.23",
                                AnchorMax = $"{0.5f-(margin*0.5f)} 0.53"
                            }
-                        }, window
+                    }, window
                     );
 
                     elements.Add(
@@ -1210,7 +1224,7 @@ namespace Oxide.Plugins {
                                AnchorMin = "0 0.7",
                                AnchorMax = "1 1"
                            }
-                        }, FSmain
+                    }, FSmain
                     );
 
                     elements.Add(
@@ -1226,7 +1240,7 @@ namespace Oxide.Plugins {
                            }
                     }, FSmain
                     );
-                    
+
                     // elements.Add(
                     //    CreateLabel("ETA: 0s (0 wood)", 1, 0.3f, TextAnchor.MiddleLeft, 10, $"{margin}", "1", "1 1 1 0.8"),
                     //    FScontent
@@ -1370,10 +1384,14 @@ namespace Oxide.Plugins {
             }
 
             private string ArrowString(int count) {
-                if (count == 1) return ">>";
-                if (count == 2) return ">>>";
-                if (count == 3) return ">>>>";
-                if (count == 4) return ">>>>>";
+                if (count == 1)
+                    return ">>";
+                if (count == 2)
+                    return ">>>";
+                if (count == 3)
+                    return ">>>>";
+                if (count == 4)
+                    return ">>>>>";
                 return ">";
             }
 
@@ -1408,6 +1426,8 @@ namespace Oxide.Plugins {
                         return GetItemIconURL("Small_Oil_Refinery", 140);
                     else if (panel == "lantern")
                         return GetItemIconURL("Lantern", 140);
+                    else if (panel == "bbq")
+                        return GetItemIconURL("BBQ", 140);
                     else if (panel == "campfire")
                         return GetItemIconURL("Camp_Fire", 140);
                     else
@@ -1444,7 +1464,7 @@ namespace Oxide.Plugins {
 
                 return "http://i.imgur.com/BwJN0rt.png";
             }
-            
+
             private float arrowspace;
             private Color arrowcolor;
             private bool invertarrows = false;
@@ -1458,13 +1478,13 @@ namespace Oxide.Plugins {
                 float[] arrowsizes = new float[] { 0.08f, 0.06f, 0.06f, 0.06f, 0.08f };
                 arrowoffset = arrowoffsets[(int) pipegrade];
                 arrowsize = arrowsizes[(int) pipegrade];
-                
+
                 arrowcolor = isEnabled ? blue : orange;
 
                 arrowup = invertarrows ? Vector3.down : Vector3.up;
                 arroworigin = invertarrows ? endpos : sourcepos;
             }
-            
+
             public void DrawArrows(BasePlayer player, float updaterate, float update, float frame) {
                 //return;
                 if (!isEnabled) {
@@ -1501,25 +1521,29 @@ namespace Oxide.Plugins {
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left), origin1);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right), origin1);
 
-                if ( pipegrade == 0 || ShowSingleArrow) return;
+                if (pipegrade == 0 || ShowSingleArrow)
+                    return;
 
                 Vector3 origin2 = ShortVec(origin);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left - up), origin2);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right - up), origin2);
 
-                if ((int) pipegrade == 1 ) return;
-                
+                if ((int) pipegrade == 1)
+                    return;
+
                 Vector3 origin3 = ShortVec(origin - up);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left - up * 2), origin3);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right - up * 2), origin3);
 
-                if ((int) pipegrade == 2) return;
+                if ((int) pipegrade == 2)
+                    return;
 
                 Vector3 origin4 = ShortVec(origin + up * 2);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left + up), origin4);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right + up), origin4);
 
-                if ((int) pipegrade == 3) return;
+                if ((int) pipegrade == 3)
+                    return;
 
                 Vector3 origin5 = ShortVec(origin - up * 2);
                 player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left - up * 3), origin5);
@@ -1568,14 +1592,15 @@ namespace Oxide.Plugins {
             public static Vector3 pumpfuel = Vector3.zero;
             public static Vector3 pumpoutput = new Vector3(-1, 2, 0);
             public static Vector3 recycler = Vector3.zero;
-            public static Vector3 largewatercatcher = new Vector3(0,-0.6f,0);
-            public static Vector3 smallwatercatcher = new Vector3(0,-0.6f,0);
-            public static Vector3 waterbarrel = new Vector3(0,0.2f,0);
+            public static Vector3 largewatercatcher = new Vector3(0, -0.6f, 0);
+            public static Vector3 smallwatercatcher = new Vector3(0, -0.6f, 0);
+            public static Vector3 waterbarrel = new Vector3(0, 0.2f, 0);
             public static Vector3 waterpurifier = new Vector3(0, 0.25f, 0);
+            public static Vector3 bbq = Vector3.up * 0.03f;
             //public static Vector3 quarryfuel = new Vector3(1,-0.2f,0);
             //public static Vector3 quarryoutput = new Vector3(1,0,0);
         }
-        
+
         readonly static Dictionary<string, string> ItemUrls = new Dictionary<string, string>() {
             { "Small_Stocking", "http://vignette2.wikia.nocookie.net/play-rust/images/9/97/Small_Stocking_icon.png/revision/latest/scale-to-width-down/{0}" },
             { "SUPER_Stocking", "http://vignette1.wikia.nocookie.net/play-rust/images/6/6a/SUPER_Stocking_icon.png/revision/latest/scale-to-width-down/{0}" },
@@ -1597,6 +1622,7 @@ namespace Oxide.Plugins {
             { "Hammer", "http://vignette4.wikia.nocookie.net/play-rust/images/5/57/Hammer_icon.png/revision/latest/scale-to-width-down/{0}" },
             { "Auto_Turret", "http://vignette2.wikia.nocookie.net/play-rust/images/f/f9/Auto_Turret_icon.png/revision/latest/scale-to-width-down/{0}" },
             { "Camp_Fire", "http://vignette4.wikia.nocookie.net/play-rust/images/3/35/Camp_Fire_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "BBQ", "http://i.imgur.com/DfCm0EJ.png" },
             { "Furnace", "http://vignette4.wikia.nocookie.net/play-rust/images/e/e3/Furnace_icon.png/revision/latest/scale-to-width-down/{0}" },
             { "Lantern", "http://vignette4.wikia.nocookie.net/play-rust/images/4/46/Lantern_icon.png/revision/latest/scale-to-width-down/{0}" },
             { "Large_Water_Catcher", "http://vignette2.wikia.nocookie.net/play-rust/images/3/35/Large_Water_Catcher_icon.png/revision/latest/scale-to-width-down/{0}" },
@@ -1649,11 +1675,11 @@ namespace Oxide.Plugins {
                 userinfo.placeend = null;
             }
         }
-        
+
         private void startlinking(BasePlayer player, bool isUsingBind = false) {
 
             UserInfo userinfo = GetUserInfo(player);
-            
+
             userinfo.state = userinfo.state == UserState.linking ? UserState.none : UserState.linking;
             userinfo.isUsingBind = isUsingBind;
             userinfo.clipboard = null;
@@ -1675,7 +1701,7 @@ namespace Oxide.Plugins {
 
             jPipeData newdata = new jPipeData();
             newdata.setContainers(userinfo.placestart, userinfo.placeend);
-            
+
             bool destiswater = userinfo.placeend is LiquidContainer;
 
             if (userinfo.placestart is LiquidContainer == destiswater) {
@@ -1715,7 +1741,7 @@ namespace Oxide.Plugins {
 
         private void NewSyncBox(BasePlayer player, UserInfo userinfo) {
 
-            jSyncBoxData newdata = new jSyncBoxData();
+            //jSyncBoxData newdata = new jSyncBoxData();
 
             HideOverlayText(player, 3f);
             userinfo.state = UserState.none;
@@ -1742,11 +1768,11 @@ namespace Oxide.Plugins {
 
         // TODO this could be improved by only compairing ids
         private static bool checkpipeoverlap(Dictionary<ulong, jPipe> rps, jPipeData data) {
-            StorageContainer s = getcontfromid(data.s, data.cs);
-            StorageContainer e = getcontfromid(data.d, data.cd);
+            uint s = getcontfromid(data.s, data.cs).net.ID;
+            uint e = getcontfromid(data.d, data.cd).net.ID;
 
             foreach (var p in rps)
-                if ((p.Value.sourcecont == s && p.Value.destcont == e) || (p.Value.sourcecont == e && p.Value.destcont == s))
+                if ((p.Value.sourcecont.net.ID == s && p.Value.destcont.net.ID == e) || (p.Value.sourcecont.net.ID == e && p.Value.destcont.net.ID == s))
                     return true;
             return false;
         }
@@ -1827,7 +1853,7 @@ namespace Oxide.Plugins {
         // find storage container from parent and child id
         private static StorageContainer getchildcont(BaseEntity parent, uint id = 0) {
             if (id != 0) {
-                BaseResourceExtractor ext = parent.GetComponent<BaseResourceExtractor>();
+                BaseResourceExtractor ext = parent?.GetComponent<BaseResourceExtractor>();
                 if (ext != null) {
                     foreach (var c in ext.children) {
                         if (c is ResourceExtractorFuelStorage && c.GetComponent<ResourceExtractorFuelStorage>().panelName == ((id == 2) ? "fuelstorage" : "generic"))
@@ -1836,7 +1862,7 @@ namespace Oxide.Plugins {
                 }
                 //return parent.GetComponent<StorageContainer>();
             }
-            return parent.GetComponent<StorageContainer>();
+            return parent?.GetComponent<StorageContainer>();
         }
 
         private void RegisterPipe(jPipe pipe) {
@@ -1857,13 +1883,8 @@ namespace Oxide.Plugins {
         public void RemovePipe(ulong id, bool remove = true) {
 
             jPipe pipe;
-            if (regpipes.TryGetValue(id, out pipe)) {
-                NextFrame(() => {
-                    if (!pipe.mainparent.IsDestroyed)
-                        pipe.mainparent.Kill();
-                    //Puts($"Pipe {id} removed");
-                });
-            }
+            if (regpipes.TryGetValue(id, out pipe))
+                UnloadPipe(pipe);
 
             if (remove)
                 UnRegisterPipe(id);
@@ -1876,8 +1897,13 @@ namespace Oxide.Plugins {
 
         private void UnloadPipe(jPipe p) {
             NextFrame(() => {
-                if (!p.mainparent.IsDestroyed)
-                    p.mainparent.Kill();
+                // destroy parent
+                //if (!p.mainparent.IsDestroyed)
+                //    p.mainparent.Kill();
+
+                foreach (var pil in p.pillars)
+                    if (!pil.IsDestroyed)
+                        pil.Kill();
             });
         }
 
@@ -1898,7 +1924,7 @@ namespace Oxide.Plugins {
         }
 
         public void MoveItem(Item itemtomove, int amounttotake, StorageContainer cont, int stacks) {
-            
+
             if (itemtomove.amount > amounttotake)
                 itemtomove = itemtomove.SplitItem(amounttotake);
 
@@ -1944,7 +1970,7 @@ namespace Oxide.Plugins {
                     if (pipe.isEnabled && pipe.sourcecont.inventory.itemList.Count > 0 && pipe.sourcecont.inventory.itemList[0] != null) {
 
                         if (pipe.isWaterPipe) {
-                            
+
                             int amounttotake = tickdelay * flowrate;
                             Item itemtomove = pipe.sourcecont.inventory.itemList[0];
 
@@ -1974,14 +2000,14 @@ namespace Oxide.Plugins {
                             //} else {
                             //    pipe.moveitem(itemtomove, amounttotake, pipe.destcont, -1);
                             //}
-                            
-                        } else {  
+
+                        } else {
 
                             Item itemtomove = FindItem();
 
                             // move the item
                             if (itemtomove != null && CanAcceptItem(itemtomove)) {
-                                
+
                                 int amounttotake = tickdelay * flowrate;
 
                                 if (pipe.singlestack) {
@@ -2011,7 +2037,7 @@ namespace Oxide.Plugins {
 
                         }
                     }
-                    
+
                     period = 0;
                 }
                 period += UnityEngine.Time.deltaTime;
@@ -2047,7 +2073,7 @@ namespace Oxide.Plugins {
                 //if ( !((BaseEntity) pipe.destcont is Recycler) || (((BaseEntity) pipe.destcont is Recycler) && (i.position > 5))) {
                 //FindPosition(Item item)
 
-                return pipe.destcont.inventory.CanAcceptItem(itemtomove) == ItemContainer.CanAcceptResult.CanAccept && pipe.destcont.inventory.CanTake(itemtomove);
+                return pipe.destcont.inventory.CanAcceptItem(itemtomove, -1) == ItemContainer.CanAcceptResult.CanAccept && pipe.destcont.inventory.CanTake(itemtomove);
             }
 
             private Item FindItem() {
@@ -2205,7 +2231,7 @@ namespace Oxide.Plugins {
             });
             return cuiElement;
         }
-        
+
         private void ShowOverlayText(BasePlayer player, string text, string subtext = "", string textcolor = "1.0 1.0 1.0 1.0") {
 
             HideOverlayText(player);
@@ -2271,7 +2297,7 @@ namespace Oxide.Plugins {
                 },
             }
         };
-        
+
         static string GetItemIconURL(string name, int size) {
             string url;
             if (ItemUrls.TryGetValue(name, out url)) {
@@ -2505,7 +2531,7 @@ namespace Oxide.Plugins {
         #region Debug tools
 
         // Lists the ent's components and variables to player's chat
-        
+
         //void ListComponentsDebug(BasePlayer player, BaseEntity ent) {
 
         //    List<string> lines = new List<string>();
@@ -2514,7 +2540,7 @@ namespace Oxide.Plugins {
         //    int limit = 1030;
 
         //    foreach (var c in ent.GetComponents<Component>()) {
-                
+
         //        List<string> types = new List<string>();
         //        List<string> names = new List<string>();
         //        List<string> values = new List<string>();
@@ -2543,7 +2569,7 @@ namespace Oxide.Plugins {
         //        s += $" {c.GetType()} : {c.GetType().BaseType}";
         //        //s += " <"+c.name+">\n";
         //        //if (c.sharedMesh != null) s += "-> "+c.sharedMesh.triangles.Length.ToString()+"\n";
-                
+
         //        for (int i = 0; i < types.Count; i++) {
 
         //            string ns = $"<color=#80c5ff> {types[i]}</color> {names[i]} = <color=#00ff00>{values[i]}</color>";

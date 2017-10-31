@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using Newtonsoft.Json;
+using Oxide.Core;
 using Oxide.Core.Plugins;
 using UnityEngine;
 using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("NoRaid", "Ryan", "1.1.5", ResourceId = 2530)]
+    [Info("NoRaid", "Ryan", "1.1.8", ResourceId = 2530)]
     [Description("Prevents players destroying buildings of those they're not associated with")]
 
     class NoRaid : RustPlugin
@@ -389,7 +389,7 @@ namespace Oxide.Plugins
 
             public static void ConstructCachedUi()
             {
-                _instance._cachedContainer = Container(_uiParent, "0 0 0 0.1", new Anchor(0.75f, 0.92f), new Anchor(0.98f, 0.98f));
+                _instance._cachedContainer = Container(_uiParent, "0 0 0 0.1", cFile.Ui.AnchorMin, cFile.Ui.AnchorMax);
 
                 Element("Title_Element", _uiParent, ref _instance._cachedContainer, new Anchor(0.2f, 0f), new Anchor(0.75f, 1f), Rgba.Format(cFile.Ui.PrimaryColor));
 
@@ -506,15 +506,32 @@ namespace Oxide.Plugins
                 _uiPlayers.Remove(player.userID);
         }
 
+        private void OnPlayerInit(BasePlayer player)
+        {
+            if (cFile.Ui.Enabled && !_canWipeRaid || !_canRaid)
+            {
+                var container = UI.ConstructTimer(DateTime.UtcNow, 1);
+                if (!_canRaid)
+                    container = UI.ConstructTimer(_cachedRaidTime, _startMinutes);
+                if (!_canWipeRaid)
+                    container = UI.ConstructTimer(_cachedWipeTime, cFile.WipeRaiding.MinsFromWipe);
+                if (!_uiPlayers.Contains(player.userID))
+                {
+                    CuiHelper.AddUi(player, _cachedContainer);
+                    _uiPlayers.Add(player.userID);
+                }
+                CuiHelper.DestroyUi(player, _timerParent);
+                CuiHelper.AddUi(player, container);
+            }
+        }
 
         private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
             if (entity is BuildingBlock || entity.PrefabName.Contains("deployable"))
             {
-                var target = BasePlayer.FindByID(entity.OwnerID);
                 var player = info?.Initiator?.ToPlayer();
 
-                if (!target || !player)
+                if (!player || !entity.OwnerID.IsSteamId())
                 {
                     return null;
                 }
@@ -522,18 +539,18 @@ namespace Oxide.Plugins
                 if (cFile.FriendBypass.Enabled)
                 {
                     // Owner checks
-                    if (cFile.FriendBypass.PlayerOwner.Enabled && player.userID == target.userID)
+                    if (cFile.FriendBypass.PlayerOwner.Enabled && player.userID == entity.OwnerID)
                     {
                         return null;
                     }
                     // Friend checks
-                    var hasFriend = Friends?.Call("HasFriend", target.UserIDString, player.UserIDString) ?? false;
+                    var hasFriend = Friends?.Call("HasFriend", entity.OwnerID.ToString(), player.UserIDString) ?? false;
                     if (cFile.FriendBypass.FriendsApi.Enabled && (bool)hasFriend)
                     {
                         return null;
                     }
                     // Clan checks
-                    var targetClan = (string)Clans?.Call("GetClanOf", target.UserIDString);
+                    var targetClan = (string)Clans?.Call("GetClanOf", entity.OwnerID.ToString());
                     var playerClan = (string)Clans?.Call("GetClanOf", player.UserIDString);
                     if (cFile.FriendBypass.RustIoClans.Enabled && playerClan != null && targetClan != null && targetClan == playerClan)
                     {

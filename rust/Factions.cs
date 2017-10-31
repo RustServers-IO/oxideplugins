@@ -11,7 +11,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Factions", "Absolut", "3.5.4", ResourceId = 1919)]
+    [Info("Factions", "Absolut", "3.5.5", ResourceId = 1919)]
 
     class Factions : RustPlugin
     {
@@ -1618,12 +1618,12 @@ namespace Oxide.Plugins
             player.inventory.crafting.CancelAll(true);
 
             player.MovePosition(destination);
-            player.ClientRPCPlayer(null, player, "ForcePositionTo", destination, null, null, null, null);
+            player.ClientRPCPlayer(null, player, "ForcePositionTo", destination);
             player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
 
             player.SendNetworkUpdateImmediate(false);
-            player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+            player.ClientRPCPlayer(null, player, "StartLoading");
             player.SendFullSnapshot();
         }
 

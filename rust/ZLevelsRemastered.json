@@ -2,7 +2,7 @@
     "name": "ZLevels Remastered",
     "description": "Allows player to level up 5 different skills (Mining, Woodcutting, Crafting, Skinning, Aquire)",
     "author": "Fujikura",
-    "version": "2.6.3",
+    "version": "2.9.0",
     "configuration": true,
     "suggest": {
         "TimeOfDay": "*"

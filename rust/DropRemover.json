@@ -1,0 +1,16 @@
+{
+    "name": "DropRemover",
+    "description": "Remove selected world items from the map with commands",
+    "author": "Ryan",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/dropremover.2631",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

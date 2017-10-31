@@ -10,7 +10,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Automatic Build Grades", "AlexALX", "0.0.18", ResourceId = 921)]
+    [Info("Automatic Build Grades", "AlexALX", "0.0.22", ResourceId = 921)]
     [Description("Auto update grade on build to what you need")]
     public class AutoGrades : CovalencePlugin
     {
@@ -310,7 +310,7 @@ namespace Oxide.Plugins
                             buildingBlock.SetGrade((BuildingGrade.Enum)pgrade);
                             buildingBlock.UpdateSkin();
                             buildingBlock.SetHealthToMax();
-                            buildingBlock.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+                            buildingBlock.SendNetworkUpdate();
                             Interface.CallHook("OnStructureUpgrade", buildingBlock, player, (BuildingGrade.Enum)pgrade);
                             UpdateTimer(player);
 
@@ -391,12 +391,13 @@ namespace Oxide.Plugins
                     case "t":
                         if (args.Length > 1 && allow_timer)
                         {
-                            var vtimer = Convert.ToInt32(args[1]);
-                            if (vtimer < 0) vtimer = 0;
+                            var outValue = 0;
+                            if (!int.TryParse(args[1], out outValue))
+                                outValue = 0;
                             var ptimer = PlayerGrade(player.Id);
-                            playerGrades[player.Id].Timer = vtimer;
-                            if (vtimer > 0)
-                                chatmsg.Add(string.Format(GetMessage("BGRADE_SET_TIMER", player.Id), vtimer + " " + GetMessage("BGRADE_SEC", player.Id)));
+                            playerGrades[player.Id].Timer = outValue;
+                            if (outValue > 0)
+                                chatmsg.Add(string.Format(GetMessage("BGRADE_SET_TIMER", player.Id), outValue + " " + GetMessage("BGRADE_SEC", player.Id)));
                             else
                                 chatmsg.Add(GetMessage("BGRADE_DIS_TIMER", player.Id));
                         }

@@ -1,19 +1,16 @@
 using System;
-using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using UnityEngine;
+using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-
-    [Info("SDonate", "Webmaster10", "1.6.1")]
+    [Info("SDonate", "Webmaster10", "1.7.7", ResourceId = 1965)]
     [Description("A plugin to interface with an SDonate web server to automatically handle donations.")]
-
-    class SDonate : RustPlugin
+    public class SDonate : RustPlugin
     {
-
         private string[] ParseResponse(string response)
         {
             string[] commands = JsonConvert.DeserializeObject<string[]>(response);
@@ -22,7 +19,7 @@ namespace Oxide.Plugins
 
         private void GetRequest(string URL, string requestType)
         {
-            webrequest.EnqueueGet(URL, (code, response) => GetRequestCallback(code, response, URL, requestType), this);
+            webrequest.Enqueue(URL, null, (code, response) => GetRequestCallback(code, response, URL, requestType), this);
         }
 
         private void GetRequestCallback(int code, string response, string URL, string requestType)
@@ -103,14 +100,13 @@ namespace Oxide.Plugins
             GetRequest(URL, "requestCommandsToRunNow");
         }
 
-        void OnPlayerInit(BasePlayer player)
+        private void OnPlayerInit(BasePlayer player)
         {
             RequestPlayerCommands(player);
         }
 
-        void Loaded()
+        private void Init()
         {
-            Puts("SDonate plugin has been loaded.");
             timer.Repeat(30.0f, 0, () =>
             {
                 RequestCommandsToRunNow();
@@ -127,23 +123,5 @@ namespace Oxide.Plugins
             Config["SDonateAPIKey"] = "YOURAPIKEY";
             SaveConfig();
         }
-
-        /*[ConsoleCommand("inventory.giveblueprintto")]
-        void GiveBlueprint(ConsoleSystem.Arg arg)
-        {
-            if (arg.connection == null)
-            {
-                string steamID = arg.Args[0];
-                ulong steamIDInt = (ulong)Decimal.Parse(steamID);
-                var target = BasePlayer.FindByID(steamIDInt);
-                target.inventory.GiveItem(ItemManager.CreateByItemID((int)ItemManager.FindItemDefinition(arg.Args[1].ToString()).itemid, 1, true));
-            }
-            else
-            {
-                SendReply(arg, "Only the server has access to this command.");
-            }
-        }*/
-
     }
-
 }

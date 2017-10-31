@@ -12,7 +12,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Kill Feed", "Tuntenfisch", "1.15.9", ResourceId = 1433)]
+    [Info("Kill Feed", "Tuntenfisch", "1.17", ResourceId = 1433)]
     [Description("Displays a basic Kill Feed on screen!")]
     public class KillFeed : RustPlugin
     {
@@ -950,8 +950,6 @@ namespace Oxide.Plugins
 
             public static Dictionary<string, string> fileIDs = new Dictionary<string, string>();
 
-            private static MemoryStream stream = new MemoryStream();
-
             /// <summary>
             /// Stores a value inside the server's file storage.
             /// </summary>
@@ -1006,11 +1004,7 @@ namespace Oxide.Plugins
 
                 if (string.IsNullOrEmpty(www.error))
                 {
-                    stream.Position = 0;
-                    stream.SetLength(0);
-
-                    stream.Write(www.bytes, 0, www.bytes.Length);
-                    fileIDs[shortname] = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
+                    fileIDs[shortname] = FileStorage.server.Store(www.bytes, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
                 }
                 else
                 {
@@ -1895,7 +1889,7 @@ namespace Oxide.Plugins
         {
             if (player.connection == null || !player.enabled) return;
 
-            CommunityEntity.ServerInstance.ClientRPCEx(new SendInfo(player.connection), null, "AddUI", new Facepunch.ObjectList(elements.ToJson()));
+            CommunityEntity.ServerInstance.ClientRPCEx(new SendInfo(player.connection), null, "AddUI", elements.ToJson());
         }
 
         /// <summary>
@@ -1921,7 +1915,7 @@ namespace Oxide.Plugins
 
             foreach (CuiElement element in elements)
             {
-                CommunityEntity.ServerInstance.ClientRPCEx(new SendInfo(player.connection), null, "DestroyUI", new Facepunch.ObjectList(element.Name));
+                CommunityEntity.ServerInstance.ClientRPCEx(new SendInfo(player.connection), null, "DestroyUI", element.Name);
             }
         }
 

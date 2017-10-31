@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using System.Globalization;
@@ -15,7 +16,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("TurboGather", "redBDGR", "1.1.10", ResourceId = 2221)]
+    [Info("TurboGather", "redBDGR", "1.1.12", ResourceId = 2221)]
     [Description("Lets players activate a resouce gather boost for a certain amount of time")]
 
     class TurboGather : RustPlugin
@@ -62,15 +63,11 @@ namespace Oxide.Plugins
             public double adminMultiplierGiven;
         }
 
-        List<string> orenodes = new List<string>();
-
         void Unload()
         {
-            SaveData();
-            foreach(BasePlayer player in BasePlayer.activePlayerList)
-            {
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
                 EndGUI(player);
-            }
+            SaveData();
         }
 
         void OnServerSave()
@@ -231,7 +228,7 @@ namespace Oxide.Plugins
             LoadData();
             AddWeapons();
 
-            foreach (var key in cacheDictionary.Keys)
+            foreach (var key in cacheDictionary.Keys.ToList())
             {
                 if (cacheDictionary[key].turboEndTime < GrabCurrentTime())
                 {
@@ -266,7 +263,7 @@ namespace Oxide.Plugins
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             if (!activateTurboOnAnimalKill) return;
-            if (info == null || !(info.Initiator is BasePlayer)) return;
+            if (!(info?.Initiator is BasePlayer)) return;
             BasePlayer player = info.InitiatorPlayer;
             if (!permission.UserHasPermission(info.InitiatorPlayer.UserIDString, permissionNameANIMAL)) return;
             if (cacheDictionary.ContainsKey(info.InitiatorPlayer.UserIDString))
@@ -275,13 +272,11 @@ namespace Oxide.Plugins
                     StartAnimalTurbo(player);
             }
             else
-            {
                 if (TurboAnimals.Contains(entity.ShortPrefabName))
                 {
-                    cacheDictionary.Add(info.InitiatorPlayer.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
-                    StartAnimalTurbo(info.InitiatorPlayer);
+                    cacheDictionary.Add(player.UserIDString, new Information { turboEnabled = false, activeAgain = GrabCurrentTime(), turboEndTime = 0 });
+                    StartAnimalTurbo(player);
                 }
-            }
         }
 
         void OnPlayerDie(BasePlayer player, HitInfo info)
@@ -300,9 +295,6 @@ namespace Oxide.Plugins
                         Effect.server.Run(effect, info.HitPositionWorld);
                         return;
                     }
-                    else if (globalBoostEnabled)
-                        if (turboweapons.Contains(info.Weapon.ShortPrefabName))
-                            Effect.server.Run(effect, info.HitPositionWorld);
             return;
         }
 
@@ -317,45 +309,40 @@ namespace Oxide.Plugins
                 return;
             }
             if (cacheDictionary.ContainsKey(player.UserIDString))
+            {
+                if (cacheDictionary[player.UserIDString].adminTurboGiven == true)
                 {
-                    if (cacheDictionary[player.UserIDString].adminTurboGiven == true)
-                    {
-                        if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
-                            item.amount = (int)(item.amount * cacheDictionary[player.UserIDString].adminMultiplierGiven);
-                        else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
-                            cacheDictionary[player.UserIDString].adminTurboGiven = false;
-                    }
-                    else
-                    {
-                        if (permission.UserHasPermission(player.UserIDString, permissionName))
-                        {
-                            if (cacheDictionary[player.UserIDString].turboEnabled == true)
-                            {
-                                if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
-                                {
-                                    if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
-                                    {
-                                        item.amount = (int)(item.amount * boostMultiplierVIP);
-                                        return;
-                                    }
-                                    item.amount = (int)(item.amount * boostMultiplier);
-                                }
-                                else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
-                                    cacheDictionary[player.UserIDString].turboEnabled = false;
-                            }
-                        }
-                        else if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
-                        {
-                            if (cacheDictionary[player.UserIDString].turboEnabled == true)
-                            {
-                                if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
-                                    item.amount = (int)(item.amount * boostMultiplierVIP);
-                                else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
-                                    cacheDictionary[player.UserIDString].turboEnabled = false;
-                            }
-                        }
-                    }
+                    if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
+                        item.amount = (int)(item.amount * cacheDictionary[player.UserIDString].adminMultiplierGiven);
+                    else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
+                        cacheDictionary[player.UserIDString].adminTurboGiven = false;
                 }
+                else
+                {
+                    if (permission.UserHasPermission(player.UserIDString, permissionName))
+                        if (cacheDictionary[player.UserIDString].turboEnabled == true)
+                            if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
+                            {
+                                if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
+                                {
+                                    item.amount = (int)(item.amount * boostMultiplierVIP);
+                                    return;
+                                }
+                                item.amount = (int)(item.amount * boostMultiplier);
+                            }
+                            else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
+                                cacheDictionary[player.UserIDString].turboEnabled = false;
+                            else if (permission.UserHasPermission(player.UserIDString, permissionNameVIP))
+                                if (cacheDictionary[player.UserIDString].turboEnabled == true)
+                                {
+                                    if (cacheDictionary[player.UserIDString].turboEndTime > GrabCurrentTime())
+                                        item.amount = (int)(item.amount * boostMultiplierVIP);
+                                    else if (cacheDictionary[player.UserIDString].turboEndTime < GrabCurrentTime())
+                                        cacheDictionary[player.UserIDString].turboEnabled = false;
+                                }
+
+                }
+            }
         }
 
         // Dispensers
@@ -381,6 +368,12 @@ namespace Oxide.Plugins
                 BasePlayer player = BasePlayer.FindByID(quarry.OwnerID) ?? BasePlayer.FindSleeping(quarry.OwnerID);
                 DoGather(player, item);
             }
+        }
+
+        void OnDispenserBonus(ResourceDispenser dispenser, BasePlayer player, Item item)
+        {
+            if (dispenserEnabled)
+                DoGather(player, item);
         }
         #endregion
 

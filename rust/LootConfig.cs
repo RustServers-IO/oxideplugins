@@ -14,16 +14,15 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.21", ResourceId = 861)]
-    [Description("Allows you to adjust the server's loot list")]
+    [Info("LootConfig", "Nogrod", "1.0.23", ResourceId = 861)]
     internal class LootConfig : RustPlugin
     {
-        private const int VersionConfig = 10;
+        private const int VersionConfig = 11;
         private readonly FieldInfo ParentSpawnGroupField = typeof (SpawnPointInstance).GetField("parentSpawnGroup", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnGroupsField = typeof (SpawnHandler).GetField("SpawnGroups", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnPointsField = typeof(SpawnGroup).GetField("spawnPoints", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        private readonly Regex _findLoot = new Regex(@"(crate[\-_](mine|normal|tools)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private readonly Regex _findLoot = new Regex(@"(crate[\-_](elite|mine|normal|tools)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed|minecart|bradley[\-_]crate[\-_\d\w]*)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private ConfigData _config;
         private Dictionary<string, ItemDefinition> _itemsDict;
 
@@ -118,9 +117,8 @@ namespace Oxide.Plugins
                 sb.AppendLine(unwrap.name);
                 PrintLootSpawn(unwrap.revealList, 1, sb, 1);
             }
-            var logname = $"oxide/logs/Loot_{DateTime.Now.ToString("yyMMdd_HHmmss")}.txt";
-            ConVar.Server.Log(logname, sb.ToString());
-            Puts("Stats written to '{0}'", logname);
+            LogToFile("loot", sb.ToString(), this);
+            Puts("Stats written to '{0}'", "oxide/logs");
         }
 
         private bool CreateDefaultConfig()

@@ -1,29 +1,23 @@
-﻿// Reference: Newtonsoft.Json
-// Reference: Rust.Data
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-
 using Facepunch;
-
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Owner", "rustservers.io", "3.1.3", ResourceId = 1255)]
-    [Description("Modify entity ownership and cupboard/turret authorization")]
+    [Info("Entity Owner", "rustservers.io", "3.1.4", ResourceId = 1255)]
+    [Description("Modify entity ownership and cupboard/turret authorization")]      
     class EntityOwner : RustPlugin
     {
         #region Data & Config
         private Dictionary<string, string> messages = new Dictionary<string, string>();
         private readonly int layerMasks = LayerMask.GetMask("Construction", "Construction Trigger", "Trigger", "Deployed");
-        FieldInfo keyCodeField = typeof(CodeLock).GetField("code", (BindingFlags.Instance | BindingFlags.NonPublic));
 
         private bool prodKeyCode = true;
         private int EntityLimit = 8000;
@@ -265,7 +259,7 @@ namespace Oxide.Plugins
                             BaseLock baseLock = door.GetSlot(BaseEntity.Slot.Lock) as BaseLock;
                             if(baseLock is CodeLock) {
                                 CodeLock codeLock = (CodeLock)baseLock;
-                                string keyCode = keyCodeField.GetValue(codeLock).ToString();
+                                string keyCode = codeLock.code;
                                 msg += "\n" + string.Format(messages["Code: {0}"], keyCode);
                             }
                         }
@@ -947,7 +941,7 @@ namespace Oxide.Plugins
                     {
                         if (debug)
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        
+
                         SendReply(player, $"Count ({total})");
                         break;
                     }
@@ -961,9 +955,9 @@ namespace Oxide.Plugins
                     skip = false;
                     foreach (var fentity in hits)
                     {
-                        if (fentity.transform == null || !entityList.Add(fentity) || fentity.name == "player/player") 
+                        if (fentity.transform == null || !entityList.Add(fentity) || fentity.name == "player/player")
                             continue;
-                        
+
                         if(filter.Length > 0) {
                             skip = true;
                             foreach(var f in filter) {
@@ -981,7 +975,7 @@ namespace Oxide.Plugins
                             if(highlight) {
                                 SendHighlight(player, fentity.transform.position);
                             }
-                            
+
                             var pid = fentity.OwnerID;
                             if (prodOwners.ContainsKey(pid))
                             {
@@ -1017,10 +1011,10 @@ namespace Oxide.Plugins
 
                 if (unknown > 0)
                     SendReply(player, string.Format(messages["Unknown: {0}%"], unknown));
-                
+
             }
         }
-        
+
         void SendHighlight(BasePlayer player, Vector3 position) {
             player.SendConsoleCommand("ddraw.sphere",  30f, Color.magenta, position, 2f);
             player.SendNetworkUpdateImmediate();
@@ -1034,7 +1028,7 @@ namespace Oxide.Plugins
                 sb.AppendLine(string.Format(messages["({0}) Authorized"], authorizedUsers.Count));
                 foreach (var n in authorizedUsers)
                     sb.AppendLine(n);
-                
+
             } else
                 sb.Append(string.Format(messages["({0}) Authorized"], 0));
 
@@ -1085,7 +1079,7 @@ namespace Oxide.Plugins
                     {
                         if (debug)
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1170,7 +1164,7 @@ namespace Oxide.Plugins
                     {
                         if (debug)
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1217,8 +1211,8 @@ namespace Oxide.Plugins
                         } else {
                             continue;
                         }
-                        
-                        
+
+
 
                         total++;
                     }
@@ -1277,7 +1271,7 @@ namespace Oxide.Plugins
                     {
                         if (debug)
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1341,7 +1335,7 @@ namespace Oxide.Plugins
                     {
                         if (debug)
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1407,7 +1401,7 @@ namespace Oxide.Plugins
                     {
                         if (debug)
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1471,7 +1465,7 @@ namespace Oxide.Plugins
                     {
                         if (debug)
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1511,7 +1505,7 @@ namespace Oxide.Plugins
         private bool TryGetCupboardUserNames(BuildingPrivlidge cupboard, out List<string> names)
         {
             names = new List<string>();
-            if(cupboard.authorizedPlayers == null) 
+            if(cupboard.authorizedPlayers == null)
                 return false;
             if (cupboard.authorizedPlayers.Count == 0)
                 return false;
@@ -1759,7 +1753,7 @@ namespace Oxide.Plugins
         {
             if(playerID.IsSteamId()) {
                 var player = FindPlayerByPartialName(playerID.ToString());
-                if (player) 
+                if (player)
                 {
                     if (player.IsSleeping())
                     {
@@ -1813,7 +1807,7 @@ namespace Oxide.Plugins
             if(player != null) {
                 return Convert.ToUInt64(player.Id);
             }
-            
+
             return 0;
         }
 
@@ -1827,7 +1821,7 @@ namespace Oxide.Plugins
             if(player != null) {
                 return (BasePlayer)player.Object;
             }
-            
+
             return null;
         }
 

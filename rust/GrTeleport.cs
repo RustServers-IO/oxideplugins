@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.0.5", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.0.6", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
@@ -23,9 +23,9 @@ namespace Oxide.Plugins
         class GrTeleportData
         {
             public int CooldownInSeconds { get; set; }
-            public int GridWidth { get; set; }
             public bool AvoidWater { get; set; }
-            public int CupboardDistance { get; set; }
+
+            public bool AllowBuildingBlocked { get; set; }
         }
 
         class SpawnPosition
@@ -33,6 +33,7 @@ namespace Oxide.Plugins
             public Vector3 Position;
             public Vector3 GroundPosition;
             public bool aboveWater;
+            public string GridReference;
 
             public SpawnPosition(Vector3 position)
             {
@@ -100,6 +101,7 @@ namespace Oxide.Plugins
 
                 lang.RegisterMessages(new Dictionary<string, string>
                 {
+                    { "buildingblocked", "You cannot grTeleport into or out from a building blocked area." },
                     { "nosquares", "Admin must configure set the grid width using setgridwidth ##" },
                     { "noinit", "spawnGrid was not initialized. 0 spawn points available." },
                     { "teleported", "You have GrTeleported to {gridreference}" }, // {playerPosition}
@@ -110,16 +112,14 @@ namespace Oxide.Plugins
                     { "cooldown", "Sorry, your are currently in a {cooldownperiod} second cooldown, you have another {secondsleft} seconds remaining." },
                     { "cooldownreply", "Cooldown has been set to {cooldownperiod} seconds" },
                     { "gridwidthreply", "Gridwidth has been set to {gridwidth}x{gridwidth}" },
-                    { "cuboardreply", "Cupboard distance has been set to {distance}" },
+                    { "cuboardreply", "Buidling block teleportation is {togglebuildingblocked}" },
                     { "avoidwaterreplay", "Avoid water has been set tp {avoidwater}" },
                     { "cupboard", "Sorry, you cannot teleport within {distance}f of a cupboard." }
                 }, this, "en");
-
-                PrintWarning("Loaded " + lang.GetMessages("en", this).Count + " mesages registerd.");
             }
             catch (Exception ex)
             {
-                PrintToConsole($"Loaded: {ex.Message}");
+                throw new Exception($"Loaded {ex.Message}");
             }
         }
 
@@ -128,9 +128,8 @@ namespace Oxide.Plugins
             var data = new GrTeleportData
             {
                 CooldownInSeconds = 30,
-                CupboardDistance = 50,
                 AvoidWater = true,
-                GridWidth = 0
+                AllowBuildingBlocked = false
             };
             Config.WriteObject(data, true);
         }
@@ -144,48 +143,36 @@ namespace Oxide.Plugins
             {
                 if (!CheckAccess(player, command, grtPermission)) return;
 
-                if (grTeleportData.GridWidth <= 0)
-                {
-                    PrintToChat(player, lang.GetMessage("nosquares", this, player.UserIDString));
-                    PrintError(lang.GetMessage("nosquares", this));
-                    return;
-                }
-
                 var tmp = GetCooldown(player.displayName);
-                if (tmp != null)
+                if (tmp != null)  
                 {
                     PrintToChat(player, lang.GetMessage("cooldown", this, player.UserIDString).Replace("{cooldownperiod}", tmp.cooldownPeriodSeconds.ToString()).Replace("{secondsleft}", tmp.expirtyDateTime.Subtract(DateTime.Now).TotalSeconds.ToString("0")));
                     return;
                 }
 
-                if (spawnGrid == null)
-                {
+                if (spawnGrid == null || spawnGrid.Count <= 0)
                     spawnGrid = CreateSpawnGrid();
-                    if (spawnGrid == null)
-                        throw new Exception("spawnGrid=null!");
-
-                }
 
                 if (args.Length > 0)
                 {
                     var gr = args[0];
                     var index = GridIndexFromReference(gr);
 
+                    
+                    if (player.IsBuildingBlocked(spawnGrid[index].GroundPosition, new Quaternion(0, 0, 0, 0), new Bounds(Vector3.zero, Vector3.zero)) && !grTeleportData.AllowBuildingBlocked) 
+                    {
+                        PrintToChat(player, lang.GetMessage("buildingblocked", this, player.UserIDString));
+                        return;
+                    }
+
                     if (spawnGrid[index].aboveWater && grTeleportData.AvoidWater)
                     {
                         PrintToChat(player, lang.GetMessage("overwater", this, player.UserIDString));
                         return;
                     }
-
-                    if (AreThereCupboardsWithinDistance(spawnGrid[index].Position, grTeleportData.CupboardDistance))
-                    {
-                        PrintToChat(player, lang.GetMessage("cupboard", this, player.UserIDString).Replace("{distance}", grTeleportData.CupboardDistance.ToString()));
-                        return;
-                    }
-
                     else
                     {
-                        if (TeleportToGridReference(player, gr, grTeleportData.AvoidWater))
+                        if (TeleportToGridReference(player, gr, grTeleportData.AvoidWater))                    
                         {
                             PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{playerPosition}", player.transform.position.ToString()).Replace("{gridreference}", gr.ToUpper()));
                             AddToCoolDown(player.displayName, grTeleportData.CooldownInSeconds);
@@ -206,64 +193,85 @@ namespace Oxide.Plugins
         [ConsoleCommand("grt.nextspawn")]
         void ccGrtNextspawn(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() == null) return;
+            try
+            {
+                if (arg.Player() == null) return;
 
-            BasePlayer player = arg.Player();
+                BasePlayer player = arg.Player();
 
-            if (spawnGrid.Count <= 0)
-                throw new Exception(lang.GetMessage("noinit", this, player.UserIDString));
+                if (spawnGrid.Count <= 0)
+                    throw new Exception(lang.GetMessage("noinit", this, player.UserIDString));
 
-            if (!CheckAccess(player, "grt.nextspawn", adminPermission)) return;
+                if (!CheckAccess(player, "grt.nextspawn", adminPermission)) return;
 
-            while (spawnGrid[++lastGridTested].aboveWater)
-                if (lastGridTested > 1000) // endless loop               
-                    throw new Exception(lang.GetMessage("sgerror", this, player.UserIDString));
+                while (spawnGrid[++lastGridTested].aboveWater)
+                    if (lastGridTested > 1000) // endless loop               
+                        throw new Exception(lang.GetMessage("sgerror", this, player.UserIDString));
 
-            Teleport(player, spawnGrid[lastGridTested].GroundPosition, false);
+                Teleport(player, spawnGrid[lastGridTested].GroundPosition, false);
 
-            PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{playerPosition}", player.transform.position.ToString()));
-            
+                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{playerPosition}", player.transform.position.ToString()));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"ccGrtNextspawn {ex.Message}");
+            }
         }
 
         [ChatCommand("setcooldown")]
         void chmSetCooldown(BasePlayer player, string command, string[] args)
         {
-            if (!CheckAccess(player, "setcooldown", adminPermission)) return;
-            if (args.Length > 0)
-                grTeleportData.CooldownInSeconds = int.Parse(args[0]);
-            Config.WriteObject(grTeleportData, true);
-            PrintToChat(player, lang.GetMessage("cooldownreply", this, player.UserIDString).Replace("{cooldownperiod}", grTeleportData.CooldownInSeconds.ToString()));
+            try
+            {
+                if (!CheckAccess(player, "setcooldown", adminPermission)) return;
+                if (args.Length > 0)
+                    grTeleportData.CooldownInSeconds = int.Parse(args[0]);
+
+                coolDowns.Clear();
+
+                Config.WriteObject(grTeleportData, true);
+                PrintToChat(player, lang.GetMessage("cooldownreply", this, player.UserIDString).Replace("{cooldownperiod}", grTeleportData.CooldownInSeconds.ToString()));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetCooldown {ex.Message}");
+            }
+
         }
 
-        [ChatCommand("setgridwidth")]
-        void chmSetGridWidth(BasePlayer player, string command, string[] args)
+        [ChatCommand("togglebuildingblocked")]
+        void chmtogglebuildingblocked(BasePlayer player, string command, string[] args)
         {
-            if (!CheckAccess(player, "setgridwidth", adminPermission)) return;
-            if (args.Length > 0)
-                grTeleportData.GridWidth = int.Parse(args[0]);
-            Config.WriteObject(grTeleportData, true);
-            CreateSpawnGrid();
-            PrintToChat(player, lang.GetMessage("gridwidthreply", this, player.UserIDString).Replace("{gridwidth}", grTeleportData.GridWidth.ToString()));
-        }
+            try
+            {
+                if (!CheckAccess(player, "togglebuildingblocked", adminPermission)) return;
+                grTeleportData.AllowBuildingBlocked = !grTeleportData.AllowBuildingBlocked;
+                Config.WriteObject(grTeleportData, true);
+                PrintToChat(player, lang.GetMessage("cuboardreply", this, player.UserIDString).Replace("{togglebuildingblocked}", grTeleportData.AllowBuildingBlocked.ToString()));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"setcupboard {ex.Message}");
+            }
 
-        [ChatCommand("setcupboard")]
-        void chmSetCupboard(BasePlayer player, string command, string[] args)
-        {
-            if (!CheckAccess(player, "setcupboard", adminPermission)) return;
-            if (args.Length > 0)
-                grTeleportData.CupboardDistance = int.Parse(args[0]);
-            Config.WriteObject(grTeleportData, true);
-            PrintToChat(player, lang.GetMessage("cuboardreply", this, player.UserIDString).Replace("{distance}", grTeleportData.CupboardDistance.ToString()));
         }
 
         [ChatCommand("avoidwater")]
         void chmSetAvoidWater(BasePlayer player, string command, string[] args)
         {
-            if (!CheckAccess(player, "avoidwater", adminPermission)) return;
-            if (args.Length > 0)
-                grTeleportData.AvoidWater = bool.Parse(args[0]);
-            Config.WriteObject(grTeleportData, true);
-            PrintToChat(player, lang.GetMessage("avoidwaterreplay", this, player.UserIDString).Replace("{avoidwater}", grTeleportData.AvoidWater.ToString()));
+            try
+            {
+                if (!CheckAccess(player, "avoidwater", adminPermission)) return;
+                if (args.Length > 0)
+                    grTeleportData.AvoidWater = bool.Parse(args[0]);
+                Config.WriteObject(grTeleportData, true);
+                PrintToChat(player, lang.GetMessage("avoidwaterreplay", this, player.UserIDString).Replace("{avoidwater}", grTeleportData.AvoidWater.ToString()));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetAvoidWater {ex.Message}");
+            }
+
         }
         #endregion
 
@@ -271,17 +279,33 @@ namespace Oxide.Plugins
         [HookMethod("TeleportToGridReference")]
         private bool TeleportToGridReference(BasePlayer player, string gridReference, bool avoidWater = true)
         {
-            var index = GridIndexFromReference(gridReference);
-            if (avoidWater && spawnGrid[index].aboveWater) return false;
-            Teleport(player, spawnGrid[index].GroundPosition);
-            return true;
+            try
+            {
+                var index = GridIndexFromReference(gridReference);
+                if (avoidWater && spawnGrid[index].aboveWater) return false;
+                Teleport(player, spawnGrid[index].GroundPosition);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"TeleportToGridReference {ex.Message}");
+            }
+
         }
 
         [HookMethod("IsGridReferenceAboveWater")]
         private bool IsGridReferenceAboveWater(string gridReference)
         {
-            var index = GridIndexFromReference(gridReference);
-            return spawnGrid[index].aboveWater;
+            try
+            {
+                var index = GridIndexFromReference(gridReference);
+                return spawnGrid[index].aboveWater;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"IsGridReferenceAboveWater {ex.Message}");
+            }
+
         }
         #endregion
 
@@ -289,8 +313,20 @@ namespace Oxide.Plugins
 
         int GridIndexFromReference(string gridReference)
         {
-            var tmp = ExtractGridReference(gridReference);
-            return ((int)tmp.x * grTeleportData.GridWidth + (int)tmp.y);
+            try
+            {
+                foreach(SpawnPosition s in spawnGrid)
+                {
+                    if (gridReference.ToUpper().Trim() == s.GridReference.ToUpper().Trim())
+                        return spawnGrid.IndexOf(s);
+                }
+                throw new Exception($"GridIndexFromReference {gridReference.ToUpper()} was not found in spawnGrid {spawnGrid.Count}");
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"GridIndexFromReference {ex.Message}");
+            }
+
         }
 
         Cooldown GetCooldown(string playerName)
@@ -311,22 +347,45 @@ namespace Oxide.Plugins
 
         List<SpawnPosition> CreateSpawnGrid()
         {
-            if (grTeleportData.GridWidth <= 0)
+            try
             {
-                PrintError("You must set TotalSquares"); //TODO: fix
-                return null;
+                List<SpawnPosition> retval = new List<SpawnPosition>();
+
+                var worldSize = (ConVar.Server.worldsize);
+                float offset = worldSize / 2;
+                var gridWidth = (0.0066666666666667f * worldSize);
+                float step = worldSize / gridWidth;
+                string start = "";
+
+                char letter = 'A';
+                int number = 0;
+
+                for (float zz = offset; zz > -offset; zz -= step)
+                {
+                    for (float xx = -offset; xx < offset; xx += step)
+                    {
+                        var sp = new SpawnPosition(new Vector3(xx, 0, zz));
+                        sp.GridReference = $"{start}{letter}{number}";
+                        retval.Add(sp);
+                        number++;
+                    }
+
+                    number = 0;
+                    if (letter.ToString().ToUpper() == "Z")
+                    {
+                        start = "A";
+                        letter = 'A';
+                    }
+                    else
+                    {
+                        letter = (char)(((int)letter) + 1);
+                    }
+                }
+                return retval;
+            } catch(Exception ex)
+            {
+                throw new Exception($"CreateSpawnGrid {ex.Message}");
             }
-
-            List<SpawnPosition> retval = new List<SpawnPosition>();
-
-            var worldSize = (ConVar.Server.worldsize);
-            var offset = worldSize / 2;
-
-            for (int zz = offset; zz > -offset; zz -= (worldSize / grTeleportData.GridWidth))
-                for (int xx = -offset; xx < offset; xx += (worldSize / grTeleportData.GridWidth))
-                    retval.Add(new SpawnPosition(new Vector3(xx, 0, zz)));
-
-            return retval;
         }
 
         void StartSleeping(BasePlayer player)
@@ -346,7 +405,6 @@ namespace Oxide.Plugins
 
         void Teleport(BasePlayer player, Vector3 position, bool startSleeping = true)
         {
-
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "StartLoading");
 
@@ -375,14 +433,21 @@ namespace Oxide.Plugins
 
         bool CheckAccess(BasePlayer player, string command, string sPermission, bool onErrorDisplayMessageToUser = true)
         {
-            if (!permission.UserHasPermission(player.UserIDString, sPermission))
+            try
             {
-                if (onErrorDisplayMessageToUser)
-                    PrintToChat(player, lang.GetMessage("noaccess", this, player.UserIDString));
+                if (!permission.UserHasPermission(player.UserIDString, sPermission))
+                {
+                    if (onErrorDisplayMessageToUser)
+                        PrintToChat(player, lang.GetMessage("noaccess", this, player.UserIDString));
 
-                return false;
+                    return false;
+                }
+                return true;
             }
-            return true;
+            catch (Exception ex)
+            {
+                throw new Exception($"CheckAccess {ex.Message}");
+            }
         }
 
         void AddToCoolDown(string userName, int seconds)
@@ -390,38 +455,29 @@ namespace Oxide.Plugins
             coolDowns.Add(new Cooldown(userName.ToLower(), seconds));
         }
 
-        Vector2 ExtractGridReference(string GridReference)
-        {
-            var letter = "";
-            var numeric = "";
-
-            foreach (char c in GridReference.ToLower().ToCharArray())
-            {
-                if ((c >= 97) && (c <= 122)) letter += c;
-                if ((c >= 48) && (c <= 57)) numeric += c;
-            }
-
-            int parta = (letter.Length > 1) ? (26 + (int)(letter.ToCharArray()[1] - 97)) : (int)(letter.ToCharArray()[0] - 97);
-            int partb = int.Parse(numeric);
-            return new Vector2(parta, partb); 
-        }
-
         bool AreThereCupboardsWithinDistance(Vector3 position, int distance)
         {
-            var spawns = Resources.FindObjectsOfTypeAll<GameObject>();
-            foreach (GameObject s in spawns)
+            try
             {
-                if (Vector3.Distance(s.transform.position, position) < distance)
+                var spawns = Resources.FindObjectsOfTypeAll<GameObject>();
+                foreach (GameObject s in spawns)
                 {
-                    if (s.name.Contains("tool_cupboard"))
-                        return true;                    
+                    if (Vector3.Distance(s.transform.position, position) < distance)
+                    {
+                        if (s.name.Contains("tool_cupboard"))
+                            return true;
+                    }
                 }
+                return false;
+            } catch(Exception ex)
+            {
+                throw new Exception($"AreThereCupboardsWithinDistance {ex.Message}");
             }
-            return false;
         }
 
-
+        
         #endregion
 
     }
 }
+
