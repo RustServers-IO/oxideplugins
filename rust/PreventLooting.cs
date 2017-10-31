@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.4.2", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.4.3", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -161,7 +161,8 @@ namespace Oxide.Plugins
 			}
 			if(entity is SupplyDrop) return;
 			if(entity is LootableCorpse)
-			{				
+			{			
+				if(UsePermission && !permission.UserHasPermission((entity as LootableCorpse).playerSteamID.ToString(), PLPerm)) return;
 				if((entity as LootableCorpse).playerSteamID < 76561197960265728L || CanLootCorpse || player.userID == (entity as LootableCorpse).playerSteamID) return;
 				if(IsFriend((entity as LootableCorpse).playerSteamID.ToString(), player.userID.ToString())) return;
 				StopLooting(player, "OnTryLootCorpse");
@@ -169,6 +170,7 @@ namespace Oxide.Plugins
 			}
 			if(entity is BasePlayer)
 			{
+				if(UsePermission && !permission.UserHasPermission((entity as BasePlayer).userID.ToString(), PLPerm)) return;
 				if(player.userID == (entity as BasePlayer).userID || CanLootPlayer) return;
 				if(IsFriend((entity as BasePlayer).userID.ToString(), player.userID.ToString())) return;
 				StopLooting(player, "OnTryLootPlayer");
@@ -176,6 +178,7 @@ namespace Oxide.Plugins
 			}	
 			if((entity is DroppedItemContainer) && entity.name.Contains("item_drop_backpack"))
 			{
+				if(UsePermission && !permission.UserHasPermission((entity as DroppedItemContainer).playerSteamID.ToString(), PLPerm)) return;
 				if((entity as DroppedItemContainer).playerSteamID < 76561197960265728L || CanLootBackpack || player.userID == (entity as DroppedItemContainer).playerSteamID) return;
 				if(IsFriend((entity as DroppedItemContainer).playerSteamID.ToString(), player.userID.ToString())) return;
 				StopLooting(player, "OnTryLootBackpack");	
