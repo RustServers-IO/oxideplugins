@@ -1,10 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("TwitchAuth", "Wulf/lukespragg", "0.1.2", ResourceId = 1838)]
+    [Info("TwitchAuth", "Wulf/lukespragg", "0.1.3", ResourceId = 1838)]
     [Description("Only allow your followers on Twitch to join your server")]
     public class TwitchAuth : CovalencePlugin
     {
@@ -54,13 +55,14 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["AccountSetTo"] = "Twitch account set to: {0}",
+                ["CommandTwitchAuth"] = "twitchauth",
                 ["CommandUsage"] = "Usage: {0} <Twitch account name>",
                 ["IsExcluded"] = "{0} is excluded from Twitch auth check",
                 ["IsFollowing"] = "{0} is a Twitch follower, allowing connection",
                 ["NotAllowed"] = "You are not allowed to use the '{0}' command",
                 ["NotFollowing"] = "{0} tried to join, but is not a Twitch follower",
-                ["Rejection"] = "Please follow @ twitch.tv/{0} and link to Steam to join"
+                ["NotLinked"] = "Please follow @ twitch.tv/{0} and link to Steam to join",
+                ["TwitchAccountSet"] = "Twitch account set to: {0}"
             }, this);
         }
 
@@ -77,11 +79,18 @@ namespace Oxide.Plugins
             public string Name { get; set; }
         }
 
+        private void Init()
+        {
+            permission.RegisterPermission(permAdmin, this);
+            permission.RegisterPermission(permExclude, this);
+
+            AddCommandAliases("CommandTwitchAuth", "TwithAuthCommand");
+        }
+
         #endregion
 
         #region Commands
 
-        [Command("twitchauth", "ta.account")]
         private void TwithAuthCommand(IPlayer player, string command, string[] args)
         {
             if (player.HasPermission(permAdmin))
@@ -97,7 +106,7 @@ namespace Oxide.Plugins
             }
 
             config.TwitchAccount = args[0];
-            Message(player, "AccountSetTo", args[0]);
+            Message(player, "TwitchAccountSet", args[0]);
             SaveConfig();
         }
 
@@ -105,7 +114,7 @@ namespace Oxide.Plugins
 
         #region Twitch Handling
 
-        private void OnPlayerConnected(IPlayer player)
+        private void OnUserConnected(IPlayer player)
         {
             if (player.HasPermission(permExclude))
             {
@@ -126,7 +135,7 @@ namespace Oxide.Plugins
         {
             if (code != 200 && !string.IsNullOrEmpty(response))
             {
-                player.Kick(Lang("Rejection", player.Id, config.TwitchAccount));
+                player.Kick(Lang("NotLinked", player.Id, config.TwitchAccount));
                 Puts(Lang("NotFollowing", null, player.Name));
                 return;
             }
@@ -155,6 +164,16 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
+
+        private void AddCommandAliases(string key, string command)
+        {
+            foreach (var language in lang.GetLanguages(this))
+            {
+                var messages = lang.GetMessages(language, this);
+                foreach (var message in messages.Where(m => m.Key.Equals(key)))
+                    if (!string.IsNullOrEmpty(message.Value)) AddCovalenceCommand(message.Value, command);
+            }
+        }
 
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 

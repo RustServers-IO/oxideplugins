@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 namespace Oxide.Plugins
 {
-    [Info("ProfessionSystem", "juk3b0x", "1.0.1")] // Known/Future Issues: 1:Might want to specify the Resource/Item by its Unique ID, 2:Add German Language support 3: Might add a few more professions like smith and carpenter
+    [Info("ProfessionSystem", "juk3b0x", "1.0.2")] // Known/Future Issues: 1:Might want to specify the Resource/Item by its Unique ID, 2:Add German Language support 3: Might add a few more professions like smith and carpenter
     public class ProfessionSystem : ReignOfKingsPlugin
     {
         #region Language API
@@ -125,7 +125,6 @@ namespace Oxide.Plugins
         T GetConfig<T>(string name, T defaultValue) => Config[name] == null ? defaultValue : (T)System.Convert.ChangeType(Config[name], typeof(T));
 
         #endregion
-
         #region The Magic
         private void OnPlayerSpawn (PlayerFirstSpawnEvent e)
         {
@@ -204,7 +203,7 @@ namespace Oxide.Plugins
         private void OnEntityHealthChange(EntityDamageEvent e)
         {
             var attacker = e.Damage.DamageSource.Owner;
-            if (e.Damage.DamageSource.IsPlayer &&(!attacker.DisplayName.ToLower().Contains("worker") && (!attacker.DisplayName.ToLower().Contains("warrior"))))
+            if (e.Damage.DamageSource.IsPlayer &&(!HasProfession(e.Damage.DamageSource.Owner)))
             {
                 if (!KillViolator)
                 {

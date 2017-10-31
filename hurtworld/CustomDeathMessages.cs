@@ -1,12 +1,16 @@
 using System.Collections.Generic;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomDeathMessages", "Wil Simpson", "1.0.5")]
+    [Info("CustomDeathMessages", "Wil Simpson", "1.0.6")]
     [Description("Just displays custom death messages.")]
 
     class CustomDeathMessages : HurtworldPlugin
     {
+        [PluginReference("KillCounter")]
+        private Plugin KillCounter;
+
         protected override void LoadDefaultConfig()
         {
             Config["TextColor"] = "#FFBF00";
@@ -39,7 +43,7 @@ namespace Oxide.Plugins
                 {"Creatures/Sasquatch","{Name} got killed by a Sasquatch"},
                 {"Machines/Medusa Vine", "{Name} killed by Medusa Trap"},
                 {"Machines/Landmine", "{Name} killed by Landmine"},
-                {"player","{Name} got killed by {Killer}"},
+                {"player","{Name} got killed by {Killer} [{Kills}]"},
                 {"Unknown","{Name} just died on a mystic way"}
             };
 
@@ -65,9 +69,30 @@ namespace Oxide.Plugins
             {
                 hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
             }
+            else if (KillerName == "Creatures/Tokar")
+            {
+                hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage("Creatures/Tokar", this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
+            }
+            else if (KillerName == "Machines/Medusa Vine")
+            {
+                hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage("Machines/Medusa Vine", this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
+            }
             else
             {
-                hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName) + "</color>");
+                if (KillerName.Length >= 3)
+                    KillerName = KillerName.Substring(0, KillerName.Length - 3);
+                if (KillCounter != null)
+                {
+                    var killerkills = KillCounter.Call("AddKill", playerSession, dataSource);
+                    if(killerkills != null)
+                    {
+                        hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName).Replace("{Kills}", killerkills.ToString()) + "</color>");
+                    }
+                    else
+                        hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName) + "</color>");
+                }
+                else
+                    hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName) + "</color>");
             }
         }
     }

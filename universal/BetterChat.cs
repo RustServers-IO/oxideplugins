@@ -5,9 +5,15 @@ using Oxide.Core.Plugins;
 using System.Linq;
 using System;
 
+#if RUST
+using ConVar;
+using Facepunch;
+using Facepunch.Math;
+#endif
+
 namespace Oxide.Plugins
 {
-    [Info("Better Chat", "LaserHydra", "5.0.12", ResourceId = 979)]
+    [Info("Better Chat", "LaserHydra", "5.0.14", ResourceId = 979)]
     [Description("Manage Chat Groups, Customize Colors And Add Titles.")]
     internal class BetterChat : CovalencePlugin
     {
@@ -29,7 +35,7 @@ namespace Oxide.Plugins
         };
 #endif
 
-        #endregion
+        #endregion    
 
         #region Classes
 
@@ -210,13 +216,14 @@ namespace Oxide.Plugins
                 ChatGroup primary = GetUserPrimaryGroup(player);
                 List<ChatGroup> groups = GetUserGroups(player);
 
-                groups.Sort((a, b) => b.Priority.CompareTo(a.Priority));
-
                 if (primary == null)
-                    return null;
+                {
+                    Instance.PrintWarning($"{player} does not seem to be in any BetterChat group - using plugins default group! This should never happen! Please make sure you have a group called 'default'.");
+                    primary = new ChatGroup("default");
+                    groups.Add(primary);
+                }
 
-                string console = primary.Format.Console;
-                string chat = primary.Format.Chat;
+                groups.Sort((a, b) => b.Priority.CompareTo(a.Priority));
 
                 List<string> titles = (from g in groups
                                        where !g.Title.Hidden && !(g.Title.HiddenIfNotPrimary && primary != g)
@@ -411,6 +418,10 @@ namespace Oxide.Plugins
                 message = message.Substring(0, Configuration.MaxMessageLength);
 
             BetterChatMessage chatMessage = ChatGroup.FormatMessage(player, message);
+
+            if (chatMessage == null)
+                return null;
+
             Dictionary<string, object> chatMessageDict = chatMessage.ToDictionary();
 
             foreach (Plugin plugin in plugins.GetAll())
@@ -448,10 +459,22 @@ namespace Oxide.Plugins
 
             Puts(output.Console);
 
+#if RUST
+            Chat.ChatEntry chatEntry = new Chat.ChatEntry
+            {
+                Message = output.Console,
+                UserId = Convert.ToUInt64(player.Id),
+                Username = player.Name,
+                Time = Epoch.Current
+            };
+
+            RCon.Broadcast(RCon.LogType.Chat, chatEntry);
+#endif
+
             return true;
         }
 
-        #endregion
+#endregion
 
         #region API
 
@@ -466,6 +489,8 @@ namespace Oxide.Plugins
             return true;
         }
 
+        private List<object> API_GetUserGroups(IPlayer player) => ChatGroup.GetUserGroups(player).ConvertAll(group => (object) group);
+
         private bool API_GroupExists(string group) => ChatGroup.Find(group) != null;
 
         private ChatGroup.SetFieldResult? API_SetGroupField(string group, string field, string value) => ChatGroup.Find(group)?.SetField(field, value);
@@ -475,6 +500,11 @@ namespace Oxide.Plugins
         private string API_GetFormattedUsername(IPlayer player)
         {
             var primary = ChatGroup.GetUserPrimaryGroup(player);
+
+            // Player has no groups - this should never happen
+            if (primary == null)
+                return player.Name;
+
             return $"[#{primary.Username.GetUniversalColor()}][+{primary.Username.Size}]{player.Name}[/+][/#]";
         }
 

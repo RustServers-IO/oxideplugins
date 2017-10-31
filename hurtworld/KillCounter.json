@@ -1,8 +1,8 @@
 {
     "name": "KillCounter",
     "description": "Creates a kill count for each player. Displays on the death notice.",
-    "author": "SouZa",
-    "version": "1.0.6",
+    "author": "Mr. Blue",
+    "version": "1.0.7",
     "configuration": true,
     "suggest": {
         "HWClans": "*"
