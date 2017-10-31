@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.3", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.5.4", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -90,6 +90,8 @@ namespace Oxide.Plugins {
         void OnServerInitialized() {
             LoadData(ref storedData);
 
+            //PipeLazyLoad();
+
             foreach (var p in storedData.p) {
                 jPipe newpipe = new jPipe();
                 if (newpipe.init(this, p.Key, p.Value, RemovePipe, MoveItem))
@@ -97,11 +99,33 @@ namespace Oxide.Plugins {
                 else
                     PrintWarning(newpipe.initerr);
             }
-            
+
+            LoadEnd();
+        }
+
+        private int loadindex = 0;
+        void PipeLazyLoad() {
+            var p = storedData.p.ElementAt(loadindex);
+            jPipe newpipe = new jPipe();
+            if (newpipe.init(this, p.Key, p.Value, RemovePipe, MoveItem))
+                RegisterPipe(newpipe);
+            else
+                PrintWarning(newpipe.initerr);
+
+            loadindex += 1;
+            if (loadindex >= storedData.p.Keys.Count) {
+                LoadEnd();
+                return;
+            } 
+
+            NextFrame(PipeLazyLoad);
+        }
+
+        void LoadEnd() {
             UpdateTick();
 
             Puts($"{regpipes.Count} Pipes Loaded");
-            Puts($"{regsyncboxes.Count} SyncBoxes Loaded");
+            //Puts($"{regsyncboxes.Count} SyncBoxes Loaded");
         }
 
         private void Loaded() {
@@ -122,6 +146,12 @@ namespace Oxide.Plugins {
 
             SavePipes();
             UnloadPipes();
+        }
+
+        void OnNewSave(string filename) {
+            regpipes.Clear();
+            regsyncboxes.Clear();
+            SavePipes();
         }
 
         void OnServerSave() => SavePipes();
@@ -319,7 +349,8 @@ namespace Oxide.Plugins {
         }
 
         // When item is added to filter
-        object CanAcceptItem(ItemContainer container, Item item) {
+        ItemContainer.CanAcceptResult? CanAcceptItem(ItemContainer container, Item item) {
+            
             if (container == null || item == null || container.entityOwner == null || container.entityOwner.GetComponent<jPipeFilterStash>() == null)
                 return null;
 
@@ -341,6 +372,17 @@ namespace Oxide.Plugins {
             ItemManager.Create(item.info).MoveToContainer(container);
 
             return ItemContainer.CanAcceptResult.CannotAccept;
+        }
+        
+        bool? CanVendingAcceptItem(VendingMachine container, Item item) {
+            //Puts(item.ToString());
+
+            BasePlayer ownerPlayer = item.GetOwnerPlayer();
+            if (container.transactionActive || item.parent == null || container.inventory.itemList.Contains(item))
+                return true;
+            if ((UnityEngine.Object) ownerPlayer == (UnityEngine.Object) null)
+                return true;
+            return container.CanPlayerAdmin(ownerPlayer);
         }
 
         // when item is removed from filter it is destroyed
@@ -376,7 +418,7 @@ namespace Oxide.Plugins {
             AddCovalenceCommand($"{pipecommandprefix}copy", "cmdpipecopy");
             AddCovalenceCommand($"{pipecommandprefix}remove", "cmdpiperemove");
             AddCovalenceCommand($"{pipecommandprefix}stats", "cmdpipestats");
-            AddCovalenceCommand($"{pipecommandprefix}link", "cmdpipelink");
+            //AddCovalenceCommand($"{pipecommandprefix}link", "cmdpipelink");
         }
         private void cmdpipehelp(IPlayer cmdplayer, string cmd, string[] args) => pipehelp(BasePlayer.Find(cmdplayer.Id), cmd, args);
         private void cmdpipecopy(IPlayer cmdplayer, string cmd, string[] args) => pipecopy(BasePlayer.Find(cmdplayer.Id), cmd, args);
@@ -494,13 +536,13 @@ namespace Oxide.Plugins {
             startplacingpipe(p, true);
         }
 
-        [ConsoleCommand("jpipes.link")]
-        private void pipelink(ConsoleSystem.Arg arg) {
-            BasePlayer p = arg.Player();
-            if (!commandperm(p))
-                return;
-            startlinking(p, true);
-        }
+        //[ConsoleCommand("jpipes.link")]
+        //private void pipelink(ConsoleSystem.Arg arg) {
+        //    BasePlayer p = arg.Player();
+        //    if (!commandperm(p))
+        //        return;
+        //    startlinking(p, true);
+        //}
 
         [ConsoleCommand("jpipes.openmenu")]
         private void pipeopenmenu(ConsoleSystem.Arg arg) {
@@ -705,6 +747,7 @@ namespace Oxide.Plugins {
 
             public ulong id;
             public string initerr = string.Empty;
+            public string debugstring = string.Empty;
 
             public ulong ownerid;
             public string ownername;
@@ -720,6 +763,9 @@ namespace Oxide.Plugins {
 
             public Vector3 sourcepos;
             public Vector3 endpos;
+
+            public string sourceiconurl;
+            public string endiconurl;
 
             // storage containers
             public StorageContainer sourcecont;
@@ -739,7 +785,7 @@ namespace Oxide.Plugins {
             private StorageContainer stashcont;
             private int lookingatstash = 0;
 
-            public bool singlestack = false;
+            public bool singlestack = false; // change this to enum and add fuel mode
             public bool autostarter = false;
 
             private bool destisstartable = false;
@@ -792,13 +838,15 @@ namespace Oxide.Plugins {
                 int segments = (int) Mathf.Ceil(distance / pipesegdist);
                 float segspace = (distance - pipesegdist) / (segments - 1);
 
-                arrowspace = distance / segments;
-                RefreshArrows();
+                //arrowspace = distance / segments;
+                //RefreshArrows();
                 
                 for (int i = 0; i < segments; i++) {
 
                     //float offset = (segspace * i);
                     //Vector3 pos = sourcepos + ((rotation * Vector3.up) * offset);
+
+                    // create pillar
 
                     BaseEntity ent;
 
@@ -830,12 +878,43 @@ namespace Oxide.Plugins {
 
                     pillars.Add(ent);
                     ent.enableSaving = false;
+
+                    //create satchel charge for arrows
+
+                    //var arrowent = GameManager.server.CreateEntity("assets/prefabs/weapons/satchelcharge/explosive.satchel.deployed.prefab", Vector3.zero, Quaternion.Euler(0, 0, -90));
+
+                    //arrowent.SetParent(ent);
+
+                    //arrowent.UpdateNetworkGroup();
+                    //arrowent.SendNetworkUpdateImmediate();
+
+                    //arrowent.Spawn();
+
+                    //arrowent.globalBroadcast = true;
+
+                    //arrowent.name = "JPipe";
+                    
+                    //DudTimedExplosive explosive = arrowent.GetComponent<DudTimedExplosive>();
+
+                    ////explosive.itemToGive = ItemManager.FindItemDefinition(1916127949);
+                    //explosive.dudChance = 2;
+                    //explosive.CancelInvoke("Explode");
+                    //explosive.CancelInvoke("Kill");
+                    //explosive.SetFlag(BaseEntity.Flags.On, false);
+                    //explosive.SendNetworkUpdate();
+                    
+                    //arrowent.enableSaving = false;
+                    
                 }
-                
+
                 mainlogic.flowrate = ((int) pipegrade == -1) ? pipeplugin.flowrates[0] : pipeplugin.flowrates[(int) pipegrade];
 
                 if (health != 0)
                     SetHealth(health);
+
+                // cache container icon urls
+                sourceiconurl = GetContIcon(source);
+                endiconurl = GetContIcon(dest);
 
                 return true;
 
@@ -950,21 +1029,27 @@ namespace Oxide.Plugins {
             }
 
             public void ChangeDirection() {
+                // swap the containers
                 BaseEntity newdest = source;
                 source = dest;
                 dest = newdest;
+
                 StorageContainer newdestcont = sourcecont;
                 sourcecont = destcont;
                 destcont = newdestcont;
+
                 uint newdestchild = sourcechild;
                 sourcechild = destchild;
                 destchild = newdestchild;
 
-                invertarrows = !invertarrows;
+                sourceiconurl = GetContIcon(source);
+                endiconurl = GetContIcon(dest);
+
+                //invertarrows = !invertarrows;
 
                 destisstartable = isStartable(dest);
                 RefreshMenu();
-                RefreshArrows();
+                //RefreshArrows();
             }
 
             // destroy entire pipe when one segment fails
@@ -1063,7 +1148,7 @@ namespace Oxide.Plugins {
                             AnchorMin = "0.5 0",
                             AnchorMax = "1 1"
                         }
-                }, window
+                    }, window
                 );
 
                 // title
@@ -1072,29 +1157,64 @@ namespace Oxide.Plugins {
                     contentleft
                 );
 
+                // flow 
+                string FlowMain = elements.Add(new CuiPanel {
+                    Image = { Color = "1 1 1 0" },
+                    RectTransform = {
+                            AnchorMin = $"{margin*0.75f} 0.59",
+                            AnchorMax = $"{0.5f-(margin*0.75f)} 0.78"
+                        }
+                    }, window
+                );
+
+                string FlowPipe = elements.Add(new CuiPanel {
+                    Image = { Color = "1 1 1 0.04" },
+                    RectTransform = {
+                            AnchorMin = "0.2 0.33",
+                            AnchorMax = "0.8 0.66"
+                        }
+                    }, FlowMain
+                );
+
+                elements.Add(
+                    CreateLabel(ArrowString((int) pipegrade), 1, 1, TextAnchor.MiddleCenter, 12, "0", "1", "1 1 1 1"),
+                    FlowPipe
+                );
+                
+                elements.Add(
+                    CreateItemIcon(FlowMain, "0 0", "0.35 1", sourceiconurl)
+                );
+                elements.Add(
+                    CreateItemIcon(FlowMain, "0.65 0", "1 1", endiconurl)
+                );
+
                 //Furnace Splitter
                 if ((BaseEntity) destcont is BaseOven && pipeplugin.FurnaceSplitter != null) {
 
                     string FSmain = elements.Add(new CuiPanel {
                         Image = { Color = "1 1 1 0" },
                         RectTransform = {
-                               AnchorMin = $"{margin*0.5f} 0.33",
-                               AnchorMax = $"{0.5f-(margin*0.5f)} 0.76"
+                               AnchorMin = $"{margin*0.5f} 0.23",
+                               AnchorMax = $"{0.5f-(margin*0.5f)} 0.53"
                            }
-                    }, window
+                        }, window
+                    );
+
+                    elements.Add(
+                        CreateItemIcon(window, "0.348 0.538", "0.433 0.59", "http://i.imgur.com/BwJN0rt.png", "1 1 1 0.04")
                     );
 
                     string FShead = elements.Add(new CuiPanel {
                         Image = { Color = "1 1 1 0.04" },
                         RectTransform = {
-                               AnchorMin = "0 0.775",
+                               AnchorMin = "0 0.7",
                                AnchorMax = "1 1"
                            }
-                    }, FSmain
+                        }, FSmain
                     );
 
                     elements.Add(
-                       CreateLabel("Furnace Splitter", 1, 1, TextAnchor.MiddleCenter, 13, "0", "1", "1 1 1 0.8"),
+                       CreateLabel("Furnace Splitter", 1, 1, TextAnchor.MiddleCenter, 12, "0", "1", "1 1 1 0.8"),
                        FShead
                     );
 
@@ -1102,11 +1222,11 @@ namespace Oxide.Plugins {
                         Image = { Color = "1 1 1 0" },
                         RectTransform = {
                                AnchorMin = "0 0",
-                               AnchorMax = "1 0.74"
+                               AnchorMax = "1 0.66"
                            }
                     }, FSmain
                     );
-
+                    
                     // elements.Add(
                     //    CreateLabel("ETA: 0s (0 wood)", 1, 0.3f, TextAnchor.MiddleLeft, 10, $"{margin}", "1", "1 1 1 0.8"),
                     //    FScontent
@@ -1114,12 +1234,12 @@ namespace Oxide.Plugins {
 
                     if (fsplit) {
                         elements.Add(
-                            CreateButton($"jpipes.fsdisable {id}", 1.25f, 0.25f, 12, pipeplugin.lang.GetMessage("MenuTurnOff", pipeplugin, player.UserIDString), $"{margin}", $"{0.5f - (margin * 0.5f)}", "0.59 0.27 0.18 0.8", "0.89 0.49 0.31 1"),
+                            CreateButton($"jpipes.fsdisable {id}", 1.2f, 0.4f, 12, pipeplugin.lang.GetMessage("MenuTurnOff", pipeplugin, player.UserIDString), $"{margin}", $"{0.5f - (margin * 0.5f)}", "0.59 0.27 0.18 0.8", "0.89 0.49 0.31 1"),
                             FScontent
                         );
                     } else {
                         elements.Add(
-                            CreateButton($"jpipes.fsenable {id}", 1.25f, 0.25f, 12, pipeplugin.lang.GetMessage("MenuTurnOn", pipeplugin, player.UserIDString), $"{margin}", $"{0.5f - (margin * 0.5f)}", "0.43 0.51 0.26 0.8", "0.65 0.76 0.47 1"),
+                            CreateButton($"jpipes.fsenable {id}", 1.2f, 0.4f, 12, pipeplugin.lang.GetMessage("MenuTurnOn", pipeplugin, player.UserIDString), $"{margin}", $"{0.5f - (margin * 0.5f)}", "0.43 0.51 0.26 0.8", "0.65 0.76 0.47 1"),
                             FScontent
                         );
                     }
@@ -1131,11 +1251,11 @@ namespace Oxide.Plugins {
 
                     float arrowbuttonmargin = 0.1f;
                     elements.Add(
-                        CreateButton($"jpipes.fsstack {id} {fsstacks - 1}", 2.5f, 0.25f, 12, "<", $"{margin}", $"{margin + arrowbuttonmargin}", "1 1 1 0.08", "1 1 1 0.8"),
+                        CreateButton($"jpipes.fsstack {id} {fsstacks - 1}", 2.4f, 0.4f, 12, "<", $"{margin}", $"{margin + arrowbuttonmargin}", "1 1 1 0.08", "1 1 1 0.8"),
                         FScontent
                     );
                     elements.Add(
-                        CreateLabel($"{fsstacks}", 3, 0.205f, TextAnchor.MiddleCenter, 12, $"{margin + arrowbuttonmargin}", $"{0.5f - (margin * 0.5f) - arrowbuttonmargin}", "1 1 1 0.8"),
+                        CreateLabel($"{fsstacks}", 3, 0.31f, TextAnchor.MiddleCenter, 12, $"{margin + arrowbuttonmargin}", $"{0.5f - (margin * 0.5f) - arrowbuttonmargin}", "1 1 1 0.8"),
                         FScontent
                     );
 
@@ -1144,20 +1264,22 @@ namespace Oxide.Plugins {
                     //);
 
                     elements.Add(
-                        CreateButton($"jpipes.fsstack {id} {fsstacks + 1}", 2.5f, 0.25f, 12, ">", $"{0.5f - (margin * 0.5f) - arrowbuttonmargin}", $"{0.5f - (margin * 0.5f)}", "1 1 1 0.08", "1 1 1 0.8"),
+                        CreateButton($"jpipes.fsstack {id} {fsstacks + 1}", 2.4f, 0.4f, 12, ">", $"{0.5f - (margin * 0.5f) - arrowbuttonmargin}", $"{0.5f - (margin * 0.5f)}", "1 1 1 0.08", "1 1 1 0.8"),
                         FScontent
                     );
 
                     elements.Add(
-                        CreateLabel("Total Stacks", 3, 0.205f, TextAnchor.MiddleLeft, 12, $"{(margin * 0.5f) + 0.5f}", "1", "1 1 1 0.8"),
+                        CreateLabel("Total Stacks", 3, 0.31f, TextAnchor.MiddleLeft, 12, $"{(margin * 0.5f) + 0.5f}", "1", "1 1 1 0.8"),
                         FScontent
                     );
                 }
 
+                string infostring = string.Format(pipeplugin.lang.GetMessage("MenuInfo", pipeplugin, player.UserIDString), ownername, isWaterPipe ? $"{mainlogic.flowrate}ml" : mainlogic.flowrate.ToString(), Math.Round(distance, 2));
+
                 // info
                 elements.Add(
                     CreateLabel(
-                        string.Format(pipeplugin.lang.GetMessage("MenuInfo", pipeplugin, player.UserIDString), ownername, isWaterPipe ? $"{mainlogic.flowrate}ml" : mainlogic.flowrate.ToString(), Math.Round(distance, 2)),
+                        debugstring == string.Empty ? infostring : $"{infostring}\nDebug:\n{debugstring}",
                         1, 1, TextAnchor.LowerLeft, 16, "0", "1", "1 1 1 0.4"
                     ), contentleft
                 );
@@ -1247,6 +1369,14 @@ namespace Oxide.Plugins {
                 userinfo.isMenuOpen = true;
             }
 
+            private string ArrowString(int count) {
+                if (count == 1) return ">>";
+                if (count == 2) return ">>>";
+                if (count == 3) return ">>>>";
+                if (count == 4) return ">>>>>";
+                return ">";
+            }
+
             public void CloseMenu(BasePlayer player, UserInfo userinfo) {
                 if (!string.IsNullOrEmpty(userinfo.menu))
                     CuiHelper.DestroyUi(player, userinfo.menu);
@@ -1262,7 +1392,59 @@ namespace Oxide.Plugins {
                 }
             }
 
+            public string GetContIcon(BaseEntity e) {
+                if (e is BoxStorage) {
+                    string panel = e.GetComponent<StorageContainer>().panelName;
+                    if (panel == "largewoodbox")
+                        return GetItemIconURL("Large_Wood_Box", 140);
+                    return GetItemIconURL("Wood_Storage_Box", 140);
 
+                } else if (e is BaseOven) {
+                    string panel = e.GetComponent<BaseOven>().panelName;
+
+                    if (panel == "largefurnace")
+                        return GetItemIconURL("Large_Furnace", 140);
+                    else if (panel == "smallrefinery")
+                        return GetItemIconURL("Small_Oil_Refinery", 140);
+                    else if (panel == "lantern")
+                        return GetItemIconURL("Lantern", 140);
+                    else if (panel == "campfire")
+                        return GetItemIconURL("Camp_Fire", 140);
+                    else
+                        return GetItemIconURL("Furnace", 140);
+                } else if (e is AutoTurret) {
+                    return GetItemIconURL("Auto_Turret", 140);
+                } else if (e is Recycler) {
+                    return GetItemIconURL("Recycler", 140);
+                } else if (e is FlameTurret) {
+                    return GetItemIconURL("Flame_Turret", 140);
+                } else if (e is GunTrap) {
+                    return GetItemIconURL("Shotgun_Trap", 140);
+                } else if (e is SearchLight) {
+                    return GetItemIconURL("Search_Light", 140);
+                } else if (e is WaterCatcher) {
+                    if (e.GetComponent<WaterCatcher>()._collider.ToString().Contains("small"))
+                        return GetItemIconURL("Small_Water_Catcher", 140);
+                    return GetItemIconURL("Large_Water_Catcher", 140);
+                } else if (e is LiquidContainer) {
+                    if (e.GetComponent<LiquidContainer>()._collider.ToString().Contains("purifier"))
+                        return GetItemIconURL("Water_Purifier", 140);
+                    return GetItemIconURL("Water_Barrel", 140);
+                } else if (e is VendingMachine) {
+                    return GetItemIconURL("Vending_Machine", 140);
+                } else if (e is DropBox) {
+                    return GetItemIconURL("Drop_Box", 140);
+                } else if (e is StashContainer) {
+                    return GetItemIconURL("Small_Stash", 140);
+                } else if (e is MiningQuarry) {
+                    if (e.ToString().Contains("pump"))
+                        return GetItemIconURL("Pump_Jack", 140);
+                    return GetItemIconURL("Mining_Quarry", 140);
+                }
+
+                return "http://i.imgur.com/BwJN0rt.png";
+            }
+            
             private float arrowspace;
             private Color arrowcolor;
             private bool invertarrows = false;
@@ -1393,6 +1575,46 @@ namespace Oxide.Plugins {
             //public static Vector3 quarryfuel = new Vector3(1,-0.2f,0);
             //public static Vector3 quarryoutput = new Vector3(1,0,0);
         }
+        
+        readonly static Dictionary<string, string> ItemUrls = new Dictionary<string, string>() {
+            { "Small_Stocking", "http://vignette2.wikia.nocookie.net/play-rust/images/9/97/Small_Stocking_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "SUPER_Stocking", "http://vignette1.wikia.nocookie.net/play-rust/images/6/6a/SUPER_Stocking_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Small_Present", "http://vignette2.wikia.nocookie.net/play-rust/images/d/da/Small_Present_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Medium_Present", "http://vignette3.wikia.nocookie.net/play-rust/images/6/6b/Medium_Present_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Large_Present", "http://vignette1.wikia.nocookie.net/play-rust/images/9/99/Large_Present_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Pump_Jack", "http://vignette2.wikia.nocookie.net/play-rust/images/c/c9/Pump_Jack_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Shop_Front", "http://vignette4.wikia.nocookie.net/play-rust/images/c/c1/Shop_Front_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Water_Purifier", "http://vignette3.wikia.nocookie.net/play-rust/images/6/6e/Water_Purifier_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Water_Barrel", "http://vignette4.wikia.nocookie.net/play-rust/images/e/e2/Water_Barrel_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Survival_Fish_Trap", "http://vignette2.wikia.nocookie.net/play-rust/images/9/9d/Survival_Fish_Trap_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Research_Table", "http://vignette2.wikia.nocookie.net/play-rust/images/2/21/Research_Table_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Small_Planter_Box", "http://vignette3.wikia.nocookie.net/play-rust/images/a/a7/Small_Planter_Box_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Large_Planter_Box", "http://vignette1.wikia.nocookie.net/play-rust/images/3/35/Large_Planter_Box_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Jack_O_Lantern_Happy", "http://vignette1.wikia.nocookie.net/play-rust/images/9/92/Jack_O_Lantern_Happy_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Jack_O_Lantern_Angry", "http://vignette4.wikia.nocookie.net/play-rust/images/9/96/Jack_O_Lantern_Angry_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Large_Furnace", "http://vignette3.wikia.nocookie.net/play-rust/images/e/ee/Large_Furnace_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Ceiling_Light", "http://vignette3.wikia.nocookie.net/play-rust/images/4/43/Ceiling_Light_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Hammer", "http://vignette4.wikia.nocookie.net/play-rust/images/5/57/Hammer_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Auto_Turret", "http://vignette2.wikia.nocookie.net/play-rust/images/f/f9/Auto_Turret_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Camp_Fire", "http://vignette4.wikia.nocookie.net/play-rust/images/3/35/Camp_Fire_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Furnace", "http://vignette4.wikia.nocookie.net/play-rust/images/e/e3/Furnace_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Lantern", "http://vignette4.wikia.nocookie.net/play-rust/images/4/46/Lantern_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Large_Water_Catcher", "http://vignette2.wikia.nocookie.net/play-rust/images/3/35/Large_Water_Catcher_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Large_Wood_Box", "http://vignette1.wikia.nocookie.net/play-rust/images/b/b2/Large_Wood_Box_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Mining_Quarry", "http://vignette1.wikia.nocookie.net/play-rust/images/b/b8/Mining_Quarry_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Repair_Bench", "http://vignette1.wikia.nocookie.net/play-rust/images/3/3b/Repair_Bench_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Small_Oil_Refinery", "http://vignette2.wikia.nocookie.net/play-rust/images/a/ac/Small_Oil_Refinery_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Small_Stash", "http://vignette2.wikia.nocookie.net/play-rust/images/5/53/Small_Stash_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Small_Water_Catcher", "http://vignette2.wikia.nocookie.net/play-rust/images/0/04/Small_Water_Catcher_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Search_Light", "http://vignette2.wikia.nocookie.net/play-rust/images/c/c6/Search_Light_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Wood_Storage_Box", "http://vignette2.wikia.nocookie.net/play-rust/images/f/ff/Wood_Storage_Box_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Vending_Machine", "http://vignette2.wikia.nocookie.net/play-rust/images/5/5c/Vending_Machine_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Drop_Box", "http://vignette2.wikia.nocookie.net/play-rust/images/4/46/Drop_Box_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Fridge", "http://vignette2.wikia.nocookie.net/play-rust/images/8/88/Fridge_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Shotgun_Trap", "http://vignette2.wikia.nocookie.net/play-rust/images/6/6c/Shotgun_Trap_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Flame_Turret", "http://vignette2.wikia.nocookie.net/play-rust/images/f/f9/Flame_Turret_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Recycler", "http://vignette2.wikia.nocookie.net/play-rust/images/e/ef/Recycler_icon.png/revision/latest/scale-to-width-down/{0}" }
+        };
 
         #endregion
 
@@ -1722,26 +1944,24 @@ namespace Oxide.Plugins {
                     if (pipe.isEnabled && pipe.sourcecont.inventory.itemList.Count > 0 && pipe.sourcecont.inventory.itemList[0] != null) {
 
                         if (pipe.isWaterPipe) {
+                            
+                            int amounttotake = tickdelay * flowrate;
+                            Item itemtomove = pipe.sourcecont.inventory.itemList[0];
 
                             if (pipe.destcont.inventory.itemList.Count == 1) {
-
-                                int amounttotake = tickdelay * flowrate;
-                                Item itemtomove = pipe.sourcecont.inventory.itemList[0];
                                 Item slot = pipe.destcont.inventory.itemList[0];
 
-                                if (slot != null) {
-                                    if (slot.CanStack(itemtomove)) {
+                                if (slot.CanStack(itemtomove)) {
 
-                                        int maxstack = slot.MaxStackable();
-                                        if (slot.amount < maxstack) {
-                                            if ((maxstack - slot.amount) < amounttotake)
-                                                amounttotake = maxstack - slot.amount;
-                                            pipe.moveitem(itemtomove, amounttotake, pipe.destcont, -1);
-                                        }
+                                    int maxstack = slot.MaxStackable();
+                                    if (slot.amount < maxstack) {
+                                        if ((maxstack - slot.amount) < amounttotake)
+                                            amounttotake = maxstack - slot.amount;
+                                        pipe.moveitem(itemtomove, amounttotake, pipe.destcont, -1);
                                     }
-                                } else {
-                                    pipe.moveitem(itemtomove, amounttotake, pipe.destcont, -1);
                                 }
+                            } else {
+                                pipe.moveitem(itemtomove, amounttotake, pipe.destcont, -1);
                             }
 
                             //if (pipe.destcont.inventory.itemList.Count == 1 && pipe.destcont.inventory.itemList[0] != null) {
@@ -1758,12 +1978,10 @@ namespace Oxide.Plugins {
                         } else {  
 
                             Item itemtomove = FindItem();
-                            
+
                             // move the item
-                            if (itemtomove != null && pipe.destcont.inventory.CanAcceptItem(itemtomove) == ItemContainer.CanAcceptResult.CanAccept && pipe.destcont.inventory.CanTake(itemtomove)) {
-
-                                //if ( !((BaseEntity) pipe.destcont is Recycler) || (((BaseEntity) pipe.destcont is Recycler) && (i.position > 5))) {
-
+                            if (itemtomove != null && CanAcceptItem(itemtomove)) {
+                                
                                 int amounttotake = tickdelay * flowrate;
 
                                 if (pipe.singlestack) {
@@ -1793,6 +2011,7 @@ namespace Oxide.Plugins {
 
                         }
                     }
+                    
                     period = 0;
                 }
                 period += UnityEngine.Time.deltaTime;
@@ -1818,16 +2037,29 @@ namespace Oxide.Plugins {
                 return null;
             }
 
+            private bool CanAcceptItem(Item itemtomove) {
+                //if (pipe.dest is VendingMachine) {
+                //    bool result = pipe.destcont.inventory.CanTake(itemtomove);
+                //    pipe.debugstring = result.ToString() + (pipe.destcont.inventory.CanAcceptItem(itemtomove) == ItemContainer.CanAcceptResult.CanAccept).ToString();
+                //    //return result;
+                //}
+
+                //if ( !((BaseEntity) pipe.destcont is Recycler) || (((BaseEntity) pipe.destcont is Recycler) && (i.position > 5))) {
+                //FindPosition(Item item)
+
+                return pipe.destcont.inventory.CanAcceptItem(itemtomove) == ItemContainer.CanAcceptResult.CanAccept && pipe.destcont.inventory.CanTake(itemtomove);
+            }
+
             private Item FindItem() {
 
-                foreach (Item i in pipe.sourcecont.inventory.itemList) {
-                    if (pipe.filteritems.Count == 0 || pipe.filteritems.Contains(i.info.itemid)) {
-                        if (!((BaseEntity) pipe.sourcecont is Recycler) || (((BaseEntity) pipe.sourcecont is Recycler) && (i.position > 5))) {
+                foreach (Item i in pipe.sourcecont.inventory.itemList) { // for each item in source container
+                    if (pipe.filteritems.Count == 0 || pipe.filteritems.Contains(i.info.itemid)) { // if filter is empty or contains this item
+                        if (!(pipe.source is Recycler) || (pipe.source is Recycler && i.position > 5)) { // if source is recycler then only take items from the output
 
-                            if ((BaseEntity) pipe.destcont is BaseOven) {
+                            if (pipe.dest is BaseOven) { // only send Burnable or Cookable to BaseOven
                                 if ((bool) ((UnityEngine.Object) i.info.GetComponent<ItemModBurnable>()) || (bool) ((UnityEngine.Object) i.info.GetComponent<ItemModCookable>()))
                                     return i;
-                            } else if ((BaseEntity) pipe.destcont is Recycler) {
+                            } else if (pipe.dest is Recycler) { // only send recyclables to recycler
                                 if ((UnityEngine.Object) i.info.Blueprint != (UnityEngine.Object) null)
                                     return i;
                             } else {
@@ -1854,7 +2086,6 @@ namespace Oxide.Plugins {
                         ext.GetComponent<MiningQuarry>().EngineSwitch(true);
                 }
             }
-
         }
 
         private class jPipeSegChild : MonoBehaviour {
@@ -1886,6 +2117,19 @@ namespace Oxide.Plugins {
 
             private void PlayerStoppedLooting(BasePlayer player) => callback(player);
             public void UpdateFilter(Item item) => itemcallback(item);
+        }
+
+        private class jPipeVendingMachine : MonoBehaviour {
+            public jPipe pipe;
+            public VendingMachine vm;
+
+            public static void Attach(VendingMachine entity, jPipe pipe) {
+                jPipeVendingMachine n = entity.gameObject.AddComponent<jPipeVendingMachine>();
+                n.vm = entity;
+                n.pipe = pipe;
+            }
+
+            //private void CanAccept
         }
 
         private class jSyncBoxLogic : MonoBehaviour {
@@ -2011,6 +2255,29 @@ namespace Oxide.Plugins {
                 userinfo.overlaytext = string.Empty;
                 userinfo.overlaysubtext = string.Empty;
             }
+        }
+
+        private static CuiElement CreateItemIcon(string parent = "Hud", string anchorMin = "0 0", string anchorMax = "1 1", string imageurl = "", string color = "1 1 1 1") => new CuiElement {
+            Parent = parent,
+            Components = {
+                new CuiRawImageComponent {
+                    Url = imageurl,
+                    Sprite = "assets/content/textures/generic/fulltransparent.tga",
+                    Color = color
+                },
+                new CuiRectTransformComponent {
+                    AnchorMin = anchorMin,
+                    AnchorMax = anchorMax
+                },
+            }
+        };
+        
+        static string GetItemIconURL(string name, int size) {
+            string url;
+            if (ItemUrls.TryGetValue(name, out url)) {
+                return string.Format(url, size);
+            }
+            return string.Empty;
         }
 
         #endregion

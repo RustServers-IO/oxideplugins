@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.3.0", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.4.2", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -98,6 +98,7 @@ namespace Oxide.Plugins
 				["OnTryLootPlayer"] = "You can not loot players!",
 				["OnTryLootCorpse"] = "You can not loot corpses of players!",
 				["OnTryLootEntity"] = "You can not use this entity because it is not yours!",
+				["OnTryLootBackpack"] = "You can not open this backup because it is not yours!",
 				["NoAccess"] = "This entity is not yours!",
 				["PlayerNotFound"] = "Player {0} not found!",
 				["ShareAll"] = "All players were given permission to use this entity!",
@@ -122,6 +123,7 @@ namespace Oxide.Plugins
                 ["OnTryLootPlayer"] = "Вы не можете обворовывать игроков!",
                 ["OnTryLootCorpse"] = "Вы не можете обворовывать трупы игроков!",
                 ["OnTryLootEntity"] = "Вы не можете использовать этот объект, потому что он вам не принадлежит!",
+				["OnTryLootBackpack"] = "Вы не можете открыть чужой рюкзак!",
 				["NoAccess"]="Этот объект не принадлежит вам!",
 				["PlayerNotFound"]="Игрок с именем {0} не найден!",
 				["ShareAll"]="Всем игрокам было выдано разрешение на использование этого объекта!",
@@ -148,15 +150,37 @@ namespace Oxide.Plugins
 	
 		void OnLootEntity(BasePlayer player, BaseEntity entity)
 		{
-			if(entity is SupplyDrop) return;
-			if((entity is LootableCorpse) && ((entity as LootableCorpse).playerSteamID < 76561190010000000L)) return;
-			if(entity is DroppedItemContainer && entity.name.Contains("item_drop_backpack"))
-			{
-				if((entity as DroppedItemContainer).playerSteamID < 76561190010000000L) return;
-				else if(!CanLootBackpack) entity.OwnerID = (entity as DroppedItemContainer).playerSteamID;	
-			}	
 			if(player.IsAdmin && AdminCanLoot) return;
 			if(permission.UserHasPermission(player.userID.ToString(), AdmPerm)) return;
+			if(UseZoneManager && ZoneManager != null)
+			{
+				foreach(var zoneID in ZoneID)
+				{
+					if((bool)ZoneManager.Call("isPlayerInZone", zoneID, player)) return;				
+				}
+			}
+			if(entity is SupplyDrop) return;
+			if(entity is LootableCorpse)
+			{				
+				if((entity as LootableCorpse).playerSteamID < 76561197960265728L || CanLootCorpse || player.userID == (entity as LootableCorpse).playerSteamID) return;
+				if(IsFriend((entity as LootableCorpse).playerSteamID.ToString(), player.userID.ToString())) return;
+				StopLooting(player, "OnTryLootCorpse");
+				return;
+			}
+			if(entity is BasePlayer)
+			{
+				if(player.userID == (entity as BasePlayer).userID || CanLootPlayer) return;
+				if(IsFriend((entity as BasePlayer).userID.ToString(), player.userID.ToString())) return;
+				StopLooting(player, "OnTryLootPlayer");
+				return;
+			}	
+			if((entity is DroppedItemContainer) && entity.name.Contains("item_drop_backpack"))
+			{
+				if((entity as DroppedItemContainer).playerSteamID < 76561197960265728L || CanLootBackpack || player.userID == (entity as DroppedItemContainer).playerSteamID) return;
+				if(IsFriend((entity as DroppedItemContainer).playerSteamID.ToString(), player.userID.ToString())) return;
+				StopLooting(player, "OnTryLootBackpack");	
+				return;
+			}
 			var st = entity.GetComponent<StorageContainer>();
 			if (neededShortNames.Contains(st?.inventory.entityOwner.ShortPrefabName))
 			{
@@ -176,46 +200,33 @@ namespace Oxide.Plugins
 						}
 					}	
 				}
-			}			
-			if(UsePermission && !permission.UserHasPermission(entity.OwnerID.ToString(), PLPerm)) return;
+			}
+			if(IsFriend(entity.OwnerID.ToString(), player.userID.ToString())) return;			
+			if(UsePermission && !permission.UserHasPermission(entity.OwnerID.ToString(), PLPerm)) return;		
 			if(UseExcludeEntities)
 			{
 				if(ExcludeEntities.Contains(entity.ShortPrefabName)) return;
-			}
-			if (UseZoneManager && ZoneManager != null)
-			{
-				foreach(var zoneID in ZoneID)
-				{
-					if((bool)ZoneManager.Call("isPlayerInZone", zoneID, player)) return;				
-				}
 			}			
-			if(IsFriend(entity.OwnerID.ToString(), player.userID.ToString())) return;
 			if(storedData.Data.ContainsKey(entity.net.ID))
 				{
 					if(storedData.Data[entity.net.ID].Share.Contains(player.userID) || storedData.Data[entity.net.ID].Share.Contains(0)) return;
-				}	
-			if((entity is LootableCorpse) && player.userID == (entity as LootableCorpse).playerSteamID) return;
-			if(UseCupboard && (!(entity is BasePlayer) && !(entity is LootableCorpse)))
-			{	
-				if(CheckAuthCupboard(entity, player)) return;	
-			}
-			if(entity.OwnerID != player.userID && (entity.OwnerID != 0 || entity is BasePlayer || entity is LootableCorpse) && !IsVendingOpen(player, entity) && !IsDropBoxOpen(player, entity))
-				{
-					StopLooting(player, entity);
 				}
+			if(IsVendingOpen(player, entity) || IsDropBoxOpen(player, entity) || CanLootEntity) return;
+			if(entity.OwnerID != player.userID && entity.OwnerID != 0)
+			{								
+				if(UseCupboard || UseOnlyInCupboardRange)
+				{	
+					Collider[] findcoll = Physics.OverlapBox(entity.transform.position, entity.bounds.extents/2f, entity.transform.rotation, LayerMask.GetMask("Trigger"));
+					if(CheckAuthCupboard(entity, player, findcoll)) return;
+				}
+				StopLooting(player, "OnTryLootEntity");
+			}
 		}
-				
-		void StopLooting(BasePlayer player, BaseEntity entity)
-		{
-			string message = "OnTryLootEntity";
-			if(entity is LootableCorpse && !CanLootCorpse) message = "OnTryLootCorpse";
-			else if(entity is LootableCorpse && CanLootCorpse) return;
-			if(entity is BasePlayer && !CanLootPlayer) message = "OnTryLootPlayer";
-			else if(entity is BasePlayer && CanLootPlayer) return;
-			if(!(entity is BasePlayer) && !(entity is LootableCorpse) && CanLootEntity) return;
+		private void StopLooting(BasePlayer player, string message)
+		{			
 			NextTick(() => player.EndLooting());
-			SendReply(player, lang.GetMessage(message, this, player.UserIDString));
-		}
+			SendReply(player, lang.GetMessage(message, this, player.UserIDString));	
+		}	
 		
 		bool IsVendingOpen(BasePlayer player, BaseEntity entity)
 		{
@@ -241,7 +252,7 @@ namespace Oxide.Plugins
 		{
 			if (UseFriendsAPI && Friends != null)	
 			{
-				var fr = Friends.CallHook("HasFriend", playerid, friend);
+				var fr = Friends.CallHook("AreFriendsS", playerid, friend);
                 if (fr != null && (bool)fr) return true;
 			}
 			return false;
@@ -256,20 +267,23 @@ namespace Oxide.Plugins
 			success = hit.GetEntity();
 			return true; 
         }
-		bool CheckAuthCupboard(BaseEntity entity, BasePlayer player)
+		bool CheckAuthCupboard(BaseEntity entity, BasePlayer player, Collider[] findcoll)
 		{
-			int found = Physics.OverlapSphereNonAlloc(player.ServerPosition, 1.5f, colBuffer, LayerMask.GetMask("Trigger"));
-			for (var i = 0; i < found; i++)
+			if(UseOnlyInCupboardRange && (findcoll == null || findcoll.Length == 0)) return true;
+			if(UseCupboard)
 			{
-				var cupbpriv = colBuffer[i].GetComponentInParent<BuildingPrivlidge>();
-				if (cupbpriv != null)
-				{	
-					if (!cupbpriv.IsAuthed(player)) return false;
-					else return true;
-				}	
+				List<BuildingPrivlidge> listcupbpriv = new List<BuildingPrivlidge>();
+				foreach (Collider findentity in findcoll)
+				{
+					BuildingPrivlidge cupbpriv = findentity.GetComponentInParent<BuildingPrivlidge>();
+					if (cupbpriv != null)
+					{		
+						listcupbpriv.Add(cupbpriv);
+					}				
+				}
+				if(listcupbpriv.Any(p => p.IsAuthed(player))) return true;
 			}
-			if(UseOnlyInCupboardRange) return true;
-			else return false;
+			return false;	
 		}
 		#endregion
 		#region Commands

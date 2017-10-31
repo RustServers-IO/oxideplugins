@@ -3,8 +3,8 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("ToolsGatherManager", "hoppel", "1.0.4", ResourceId = 2553)]
-    [Description("adjust the gather rate from certrain tools")]
+    [Info("ToolsGatherManager", "hoppel", "1.0.5", ResourceId = 2553)]
+    [Description("adjust the gather rate from certain tools")]
     class ToolsGatherManager : RustPlugin
     {
 
@@ -34,6 +34,12 @@ namespace Oxide.Plugins
             }
 
         }
+
+        void OnDispenserBonus(ResourceDispenser dispenser, BasePlayer player, Item item)
+        {
+            OnDispenserGather(dispenser, player, item);
+        }
+
         #region config
         const string permname = "toolsgathermanager.allow";
 

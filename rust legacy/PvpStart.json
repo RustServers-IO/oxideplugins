@@ -2,8 +2,11 @@
     "name": "PvpStart",
     "description": "Plugin targeted to specific locations with Pvp kit spawn",
     "author": "",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "configuration": true,
+    "require": {
+        "Kits": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/pvpstart.2346",
     "games": [

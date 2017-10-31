@@ -9,7 +9,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Death Notes", "LaserHydra", "5.2.12", ResourceId = 819)]
+    [Info("Death Notes", "LaserHydra", "5.2.17", ResourceId = 819)]
     [Description("Broadcast deaths with many details")]
     class DeathNotes : RustPlugin
     {
@@ -67,73 +67,73 @@ namespace Oxide.Plugins
 
         // ------------------->  Config Values
 
-            // ------->   General
+        // ------->   General
 
-                //  Needs Permission to see messages?
-                    bool NeedsPermission;
+        //  Needs Permission to see messages?
+        bool NeedsPermission;
 
-                //  Chat Icon (Steam Profile - SteamID)
-                    string ChatIcon;
+        //  Chat Icon (Steam Profile - SteamID)
+        string ChatIcon;
 
-                //  Message Radius
-                    bool MessageRadiusEnabled;
-                    float MessageRadius;
+        //  Message Radius
+        bool MessageRadiusEnabled;
+        float MessageRadius;
 
-                //  Where Should the message appear?
-                    bool LogToFile;
-                    bool WriteToConsole;
-                    bool WriteToChat;
-                    bool UsePopupNotifications;
-                    bool UseSimpleUI;
-                    bool SnowNpcBattles;
+        //  Where Should the message appear?
+        bool LogToFile;
+        bool WriteToConsole;
+        bool WriteToChat;
+        bool UsePopupNotifications;
+        bool UseSimpleUI;
+        bool SnowNpcBattles;
 
-                //  Attachments
-                    string AttachmentSplit;
-                    string AttachmentFormatting;
+        //  Attachments
+        string AttachmentSplit;
+        string AttachmentFormatting;
 
-                //  Other
-                    string ChatTitle;
-                    string ChatFormatting;
-                    string ConsoleFormatting;
+        //  Other
+        string ChatTitle;
+        string ChatFormatting;
+        string ConsoleFormatting;
 
-            // ------->   Colors
+        // ------->   Colors
 
-                    string TitleColor;
-                    string VictimColor;
-                    string AttackerColor;
-                    string WeaponColor;
-                    string AttachmentColor;
-                    string DistanceColor;
-                    string BodypartColor;
-                    string MessageColor;
-                    string HealthColor;
+        string TitleColor;
+        string VictimColor;
+        string AttackerColor;
+        string WeaponColor;
+        string AttachmentColor;
+        string DistanceColor;
+        string BodypartColor;
+        string MessageColor;
+        string HealthColor;
 
-            // ------->   Localization
+        // ------->   Localization
 
-                    Dictionary<string, object> Names;
-                    Dictionary<string, object> Bodyparts;
-                    Dictionary<string, object> Weapons;
-                    Dictionary<string, object> Attachments;
+        Dictionary<string, object> Names;
+        Dictionary<string, object> Bodyparts;
+        Dictionary<string, object> Weapons;
+        Dictionary<string, object> Attachments;
 
-            // ------->   Messages
+        // ------->   Messages
 
-                    Dictionary<string, List<string>> Messages;
+        Dictionary<string, List<string>> Messages;
 
-            // ------->   Simple UI
+        // ------->   Simple UI
 
-                //  Other
-                    bool SimpleUI_StripColors;
+        //  Other
+        bool SimpleUI_StripColors;
 
-                //  Scaling & Positioning
-                    int SimpleUI_FontSize;
+        //  Scaling & Positioning
+        int SimpleUI_FontSize;
 
-                    float SimpleUI_Top;
-                    float SimpleUI_Left;
-                    float SimpleUI_MaxWidth;
-                    float SimpleUI_MaxHeight;
+        float SimpleUI_Top;
+        float SimpleUI_Left;
+        float SimpleUI_MaxWidth;
+        float SimpleUI_MaxHeight;
 
-                //  Timer
-                    float SimpleUI_HideTimer;
+        //  Timer
+        float SimpleUI_HideTimer;
 
         // ----------------------------------------------------
 
@@ -179,13 +179,13 @@ namespace Oxide.Plugins
 
             public void Draw(BasePlayer player)
             {
-                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(JsonConvert.SerializeObject(ui).Replace("{NEWLINE}", Environment.NewLine)));
+                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", JsonConvert.SerializeObject(ui).Replace("{NEWLINE}", Environment.NewLine));
             }
 
             public void Destroy(BasePlayer player)
             {
                 foreach (string uiName in objectList)
-                    CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList(uiName));
+                    CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", uiName);
             }
 
             public string AddText(string name, double left, double top, double width, double height, UIColor color, string text, int textsize = 15, string parent = "Hud", int alignmode = 0, float fadeIn = 0f, float fadeOut = 0f)
@@ -266,12 +266,14 @@ namespace Oxide.Plugins
 
                 if (type == AttackerType.Player)
                     return entity.ToPlayer().displayName;
+                if (type == AttackerType.Zombie)
+                    return "Zombie";
                 if (type == AttackerType.Helicopter)
                     return "Patrol Helicopter";
                 if (type == AttackerType.Turret)
                     return "Auto Turret";
                 if (type == AttackerType.Self)
-                    return "himself";
+                    return "themselves";
                 if (type == AttackerType.Animal)
                 {
                     if (entity.name.Contains("boar"))
@@ -323,6 +325,8 @@ namespace Oxide.Plugins
             {
                 if (entity == null)
                     return AttackerType.Invalid;
+                if (entity is NPCMurderer)
+                    return AttackerType.Zombie;
                 if (entity.ToPlayer() != null)
                     return AttackerType.Player;
                 if (entity is BaseHelicopter)// entity.name.Contains("patrolhelicopter.prefab") && !entity.name.Contains("gibs"))
@@ -351,6 +355,8 @@ namespace Oxide.Plugins
             {
                 if (type == VictimType.Player)
                     return entity.ToPlayer().displayName;
+                if (type == VictimType.Zombie)
+                    return "Zombie";
                 if (type == VictimType.Helicopter)
                     return "Patrol Helicopter";
                 if (type == VictimType.Animal)
@@ -378,9 +384,11 @@ namespace Oxide.Plugins
             {
                 if (entity == null)
                     return VictimType.Invalid;
+                if (entity is NPCMurderer)
+                    return VictimType.Zombie;
                 if (entity.ToPlayer() != null)
                     return VictimType.Player;
-                if (entity.name.Contains("patrolhelicopter.prefab") && entity.name.Contains("gibs"))
+                if (entity.name.Contains("patrolhelicopter.prefab") && !entity.name.Contains("gibs"))
                     return VictimType.Helicopter;
                 if ((bool)entity?.name?.Contains("agents/"))
                     return VictimType.Animal;
@@ -417,7 +425,7 @@ namespace Oxide.Plugins
 
                         return victim.entity.Distance(attacker.entity.transform.position);
                     }
-                    catch(Exception)
+                    catch (Exception)
                     {
                         return 0f;
                     }
@@ -428,23 +436,27 @@ namespace Oxide.Plugins
             {
                 if (victim.type == VictimType.Helicopter)
                     return DeathReason.HelicopterDeath;
-                else if (attacker.type == AttackerType.Helicopter)
+                if (attacker.type == AttackerType.Helicopter)
                     return DeathReason.Helicopter;
-                else if (attacker.type == AttackerType.Turret)
+                if (attacker.type == AttackerType.Turret)
                     return DeathReason.Turret;
-                else if (attacker.type == AttackerType.Trap)
+                if (attacker.type == AttackerType.Trap)
                     return DeathReason.Trap;
-                else if (attacker.type == AttackerType.Structure)
+                if (attacker.type == AttackerType.Structure)
                     return DeathReason.Structure;
-                else if (attacker.type == AttackerType.Animal)
+                if (attacker.type == AttackerType.Animal)
                     return DeathReason.Animal;
-                else if (victim.type == VictimType.Animal)
+                if (victim.type == VictimType.Animal)
                     return DeathReason.AnimalDeath;
-                else if (weapon == "F1 Grenade" || weapon == "Survey Charge")
+                if (attacker.type == AttackerType.Zombie)
+                    return DeathReason.Zombie;
+                if (victim.type == VictimType.Zombie)
+                    return DeathReason.ZombieDeath;
+                if (weapon == "F1 Grenade" || weapon == "Survey Charge")
                     return DeathReason.Explosion;
-                else if (weapon == "Flamethrower")
+                if (weapon == "Flamethrower")
                     return DeathReason.Flamethrower;
-                else if (victim.type == VictimType.Player)
+                if (victim.type == VictimType.Player)
                     return GetDeathReason(damageType);
 
                 return DeathReason.Unknown;
@@ -461,17 +473,11 @@ namespace Oxide.Plugins
             }
 
             [JsonIgnore]
-            internal string JSON
-            {
-                get
-                {
-                    return JsonConvert.SerializeObject(this, Formatting.Indented);
-                }
-            }
+            internal string JSON => JsonConvert.SerializeObject(this, Formatting.Indented);
 
             internal static DeathData Get(object obj)
             {
-                JObject jobj = (JObject) obj;
+                JObject jobj = (JObject)obj;
                 DeathData data = new DeathData();
 
                 data.bodypart = jobj["bodypart"].ToString();
@@ -511,6 +517,7 @@ namespace Oxide.Plugins
         enum VictimType
         {
             Player,
+            Zombie,
             Helicopter,
             Animal,
             Invalid
@@ -521,6 +528,7 @@ namespace Oxide.Plugins
             Player,
             Helicopter,
             Animal,
+            Zombie,
             Turret,
             Structure,
             Trap,
@@ -537,6 +545,8 @@ namespace Oxide.Plugins
             Trap,
             Animal,
             AnimalDeath,
+            Zombie,
+            ZombieDeath,
             Generic,
             Hunger,
             Thirst,
@@ -562,19 +572,13 @@ namespace Oxide.Plugins
 
         #region Player Settings
 
-        List<string> playerSettingFields
-        {
-            get
-            {
-                return (from field in typeof(PlayerSettings).GetFields() select field.Name).ToList();
-            }
-        }
+        List<string> playerSettingFields => (from field in typeof(PlayerSettings).GetFields() select field.Name).ToList();
 
         List<string> GetSettingValues(BasePlayer player) => (from field in typeof(PlayerSettings).GetFields() select $"{field.Name} : {field.GetValue(playerSettings[player.userID]).ToString().ToLower()}").ToList();
 
         void SetSettingField<T>(BasePlayer player, string field, T value)
         {
-            foreach(var curr in typeof(PlayerSettings).GetFields())
+            foreach (var curr in typeof(PlayerSettings).GetFields())
             {
                 if (curr.Name == field)
                     curr.SetValue(playerSettings[player.userID], value);
@@ -721,6 +725,8 @@ namespace Oxide.Plugins
             SetConfig("Messages", "HelicopterDeath", new List<object> { "The {victim} was taken down." });
             SetConfig("Messages", "Animal", new List<object> { "A {attacker} followed {victim} until it finally caught him." });
             SetConfig("Messages", "AnimalDeath", new List<object> { "{attacker} killed a {victim} with a {weapon}{attachments} from {distance}m." });
+            SetConfig("Messages", "Zombie", new List<object> { "A {attacker} haunted down {victim}." });
+            SetConfig("Messages", "ZombieDeath", new List<object> { "{attacker} killed a {victim} with a {weapon}{attachments} from {distance}m." });
             SetConfig("Messages", "Hunger", new List<object> { "{victim} forgot to eat." });
             SetConfig("Messages", "Poison", new List<object> { "{victim} died after being poisoned." });
             SetConfig("Messages", "Radiation", new List<object> { "{victim} became a bit too radioactive." });
@@ -807,6 +813,8 @@ namespace Oxide.Plugins
                 { "HelicopterDeath", new List<object> { "The {victim} was taken down." }},
                 { "Animal", new List<object> { "A {attacker} followed {victim} until it finally caught him." }},
                 { "AnimalDeath", new List<object> { "{attacker} killed a {victim} with a {weapon}{attachments} from {distance}m." }},
+                { "Zombie", new List<object> { "A {attacker} haunted down {victim}." }},
+                { "ZombieDeath", new List<object> { "{attacker} killed a {victim} with a {weapon}{attachments} from {distance}m." }},
                 { "Hunger", new List<object> { "{victim} forgot to eat." }},
                 { "Poison", new List<object> { "{victim} died after being poisoned." }},
                 { "Radiation", new List<object> { "{victim} became a bit too radioactive." }},
@@ -867,7 +875,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            switch(args[0].ToLower())
+            switch (args[0].ToLower())
             {
                 case "set":
                     if (args.Length != 3)
@@ -888,7 +896,7 @@ namespace Oxide.Plugins
                     {
                         value = Convert.ToBoolean(args[2]);
                     }
-                    catch(FormatException)
+                    catch (FormatException)
                     {
                         SendChatMessage(player, GetMsg("True Or False", player.userID).Replace("{arg}", "<value>"));
                         return;
@@ -1153,6 +1161,9 @@ namespace Oxide.Plugins
 
         string StripTags(string original)
         {
+            if (original == null || original == string.Empty)
+                return string.Empty;
+
             foreach (string tag in tags)
                 original = original.Replace(tag, "");
 
@@ -1208,7 +1219,7 @@ namespace Oxide.Plugins
                     else
                         return false;
                 }
-                catch(Exception)
+                catch (Exception)
                 {
                     return false;
                 }

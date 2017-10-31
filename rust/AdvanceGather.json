@@ -1,0 +1,16 @@
+{
+    "name": "AdvanceGather",
+    "description": "Custom gathering with some action's and extension drop",
+    "author": "HOUGAN_Y",
+    "version": "0.1.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/advancegather.2575",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

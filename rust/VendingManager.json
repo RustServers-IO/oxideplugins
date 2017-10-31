@@ -2,7 +2,7 @@
     "name": "VendingManager",
     "description": "Utility for managing vending machines",
     "author": "ignignokt84",
-    "version": "0.1.8",
+    "version": "0.1.9",
     "configuration": true,
     "suggest": {
         "Economics": "*"

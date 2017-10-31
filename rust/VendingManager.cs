@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("VendingManager", "ignignokt84", "0.1.8", ResourceId = 2331)]
+	[Info("VendingManager", "ignignokt84", "0.1.9", ResourceId = 2331)]
 	[Description("Improved vending machine control")]
 	class VendingManager : RustPlugin
 	{
@@ -66,7 +66,6 @@ namespace Oxide.Plugins
 
 		FieldInfo sellOrderIdField = typeof(VendingMachine).GetField("vend_sellOrderID", BindingFlags.NonPublic | BindingFlags.Instance);
 		FieldInfo numTransactionsField = typeof(VendingMachine).GetField("vend_numberOfTransactions", BindingFlags.NonPublic | BindingFlags.Instance);
-		FieldInfo transactionActiveField = typeof(VendingMachine).GetField("transactionActive", BindingFlags.NonPublic | BindingFlags.Instance);
 
 		Dictionary<ulong, Timer> econTransactionTimers = new Dictionary<ulong, Timer>();
 		Dictionary<ulong, Timer> timeoutTimers = new Dictionary<ulong, Timer>();
@@ -339,7 +338,7 @@ namespace Oxide.Plugins
 			
 			bool isEconomicsSellOrder = useEconomics && sellOrder.currencyID == 93832698; // blood bag
 			bool isEconomicsBuyOrder = useEconomics && sellOrder.itemToSellID == 93832698; // blood bag
-
+			
 			LogEntry logEntry = new LogEntry();
 			if (log)
 			{
@@ -356,7 +355,7 @@ namespace Oxide.Plugins
 			int numberOfTransactions = Mathf.Clamp(numTransactions, 1, (!items[0].hasCondition ? 1000000 : 1));
 			int sellCount = sellOrder.itemToSellAmount * numberOfTransactions;
 			int buyCount = sellOrder.currencyAmountPerItem * numberOfTransactions;
-
+			
 			if (sellCount > items.Sum(x => x.amount))
 				return false;
 			
@@ -390,8 +389,8 @@ namespace Oxide.Plugins
 					}
 					return false;
 				}
-
-				transactionActiveField.SetValue(vm, true);
+				
+				vm.transactionActive = true;
 				int num3 = 0;
 				Item item;
 				foreach (Item item2 in items1)
@@ -430,8 +429,8 @@ namespace Oxide.Plugins
 					}
 					return false;
 				}
-
-				if(Mathf.FloorToInt((float)money) < cost)
+				
+				if (Mathf.FloorToInt((float)money) < cost)
 				{
 					if (log)
 					{
@@ -442,8 +441,8 @@ namespace Oxide.Plugins
 					SendMessage(player, "EconNotEnoughMoney");
 					return false;
 				}
-				
-				transactionActiveField.SetValue(vm, true);
+
+				vm.transactionActive = true;
 				bool success = false;
 				if (bottomless)
 					success = (bool)Economics.CallHook("Withdraw", player.userID, (double)cost);
@@ -459,7 +458,7 @@ namespace Oxide.Plugins
 						LogTransaction(logEntry, force);
 					}
 					SendMessage(player, "EconTransferFailed");
-					transactionActiveField.SetValue(vm, false);
+					vm.transactionActive = false;
 					return false;
 				}
 			}
@@ -496,8 +495,8 @@ namespace Oxide.Plugins
 					SendMessage(player, "EconNotEnoughMoneyOwner");
 					return false;
 				}
-				
-				transactionActiveField.SetValue(vm, true);
+
+				vm.transactionActive = true;
 				bool success = false;
 				if (bottomless)
 				{
@@ -516,13 +515,13 @@ namespace Oxide.Plugins
 						LogTransaction(logEntry, force);
 					}
 					SendMessage(player, "EconTransferFailed");
-					transactionActiveField.SetValue(vm, false);
+					vm.transactionActive = false;
 					return false;
 				}
 			}
 			else
 			{
-				if(log) logEntry.bought = sellOrder.itemToSellAmount + " " + ItemManager.FindItemDefinition(sellOrder.itemToSellID).displayName.translated;
+				if (log) logEntry.bought = sellOrder.itemToSellAmount + " " + ItemManager.FindItemDefinition(sellOrder.itemToSellID).displayName.translated;
 				if (!bottomless)
 				{
 					int num5 = 0;
@@ -543,9 +542,9 @@ namespace Oxide.Plugins
 					player.GiveItem(item, BaseEntity.GiveItemReason.PickedUp);
 				}
 			}
-
+			
 			vm.UpdateEmptyFlag();
-			transactionActiveField.SetValue(vm, false);
+			vm.transactionActive = false;
 
 			if (ConfigValue<bool>(Option.transMessages) && isEconomicsSellOrder && cost > 0 )
 			{

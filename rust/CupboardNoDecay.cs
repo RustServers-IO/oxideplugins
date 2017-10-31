@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("CupboardNoDecay", "Dubz", "1.0.4", ResourceId = 2341)]
+    [Info("CupboardNoDecay", "Dubz", "1.0.5", ResourceId = 2341)]
     [Description("Decay items without build priv")]
     public class CupboardNoDecay : RustPlugin
     {
@@ -22,10 +22,14 @@ namespace Oxide.Plugins
 		
 		void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
 		{
+			
 			if (!hitInfo.damageTypes.Has(Rust.DamageType.Decay)) return;
+			ulong hitEntityOwnerID = entity.OwnerID != 0 ? entity.OwnerID: hitInfo.HitEntity.OwnerID;
+			
 			var multiplier = 1.0f;
 
-			if (CupboardPrivlidge(entity.transform.position))
+			
+			if (CupboardPrivlidge(entity.transform.position, hitEntityOwnerID))
 			{
 				multiplier = 0.0f;
 				//var block = entity as BuildingBlock;
@@ -44,7 +48,7 @@ namespace Oxide.Plugins
         }
 		
 					
-		private bool CupboardPrivlidge(Vector3 position)
+		private bool CupboardPrivlidge(Vector3 position, ulong hitEntityOwnerID)
         {
 		    float distance = 1f;
             List<BaseEntity> list = new List<BaseEntity>();
@@ -59,20 +63,23 @@ namespace Oxide.Plugins
 					{
 						foreach (var auth in buildingPrivlidge.authorizedPlayers.Select(x => x.userid).ToArray())
 						{
-							if (auth.ToString() == buildingPrivlidge.OwnerID.ToString())
+							if (auth.ToString() == hitEntityOwnerID.ToString())
 							{
 								if (HasPerm(auth.ToString()))
 								{
+
 									return true;
 								}
 							}
 						}
+
 						return false;
 					}
-					
+				
 					return true;
                 }
             }
+
 		    return false;
         }
 		

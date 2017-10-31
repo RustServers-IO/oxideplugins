@@ -10,12 +10,13 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("BackupExt", "Fujikura", "0.3.1", ResourceId = 2137 )]
+    [Info("BackupExt", "Fujikura", "0.4.0", ResourceId = 2137 )]
     class BackupExt : RustPlugin
     {
 		bool Changed;
 		bool _backup;
 		int currentRetry;
+		bool wasShutDown;
 		string [] backupFolders;
 		string [] backupFoldersShutdown;
 
@@ -30,6 +31,7 @@ namespace Oxide.Plugins
 		int maxPlayers;
 		int maxRetry;
 		int delayRetrySeconds;
+		string currentIdentity;
 	
 		object GetConfig(string menu, string datavalue, object defaultValue)
 		{
@@ -91,12 +93,16 @@ namespace Oxide.Plugins
 		{
 			LoadVariables();
 			LoadDefaultMessages();
-			backupFolders = BackupFolders();
-			backupFoldersShutdown = BackupFoldersShutdown();
+			wasShutDown = false;
 		}
 
 		void OnServerInitialized()
         {
+			currentIdentity = ConVar.Server.rootFolder.Replace("server/", "");
+			if (Interface.Oxide.CommandLine.HasVariable("server.identity"))
+				currentIdentity = Interface.Oxide.CommandLine.GetVariable("server.identity");
+			backupFolders = BackupFolders();
+			backupFoldersShutdown = BackupFoldersShutdown();
 			currentRetry = 0;
 			if (useTimer)
 			{
@@ -105,9 +111,13 @@ namespace Oxide.Plugins
 			}
         }
 		
-		void OnServerShutdown()
+		void OnPluginUnloaded(Plugin name)
 		{
-			try { DirectoryEx.Backup(BackupFoldersShutdown()); } catch {}
+			if (Interface.Oxide.IsShuttingDown && !wasShutDown)
+			{
+				wasShutDown = true;
+				try { DirectoryEx.Backup(BackupFoldersShutdown()); } catch {}
+			}
 		}		
 
 		void BackupCreate(bool manual = false)
@@ -134,7 +144,7 @@ namespace Oxide.Plugins
 			else
 			{
 				currentRetry = 0;
-				ccmdExtBackup(new ConsoleSystem.Arg(null));
+				ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "extbackup");
 				timer.Once(timerInterval, TimerCheck);
 			}
 		}
@@ -175,7 +185,7 @@ namespace Oxide.Plugins
 		{
 			string [] dp = new string[numberOfBackups];
 			for (int i = 0; i < numberOfBackups; i++)
-				dp[i] = $"backup/{i}/{ConVar.Server.identity}";
+				dp[i] = $"backup/{i}/"+ currentIdentity;
 			return dp;
 		}
 		
@@ -183,7 +193,7 @@ namespace Oxide.Plugins
 		{
 			string [] dp = new string[numberOfBackups];
 			for (int i = 3; i < numberOfBackups; i++)
-				dp[i] = $"backup/{i}/{ConVar.Server.identity}";
+				dp[i] = $"backup/{i}/" + currentIdentity;
 			return dp;
 		}
 		

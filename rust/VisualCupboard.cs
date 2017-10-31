@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using Oxide.Core.Plugins;
 namespace Oxide.Plugins
 {
-     	[Info("VisualCupboard", "Colon Blow", "1.0.8", ResourceId = 2030)]
+     	[Info("VisualCupboard", "Colon Blow", "1.0.10", ResourceId = 2030)]
     	class VisualCupboard : RustPlugin
      	{
 		void OnServerInitialized() { serverInitialized = true; }
@@ -41,6 +41,7 @@ namespace Oxide.Plugins
 		private static float UseCupboardRadius = 25f;
 		float DurationToShowRadius = 60f;
 		float ShowCupboardsWithinRangeOf = 50f;
+		int VisualDarkness = 5;
 
 		private static bool serverInitialized = false;
 
@@ -49,6 +50,7 @@ namespace Oxide.Plugins
         		CheckCfgFloat("My Cupboard Radius is (25 is default)", ref UseCupboardRadius);
         		CheckCfgFloat("Show Visuals On Cupboards Withing Range Of", ref ShowCupboardsWithinRangeOf);
 			CheckCfgFloat("Show Visuals For This Long", ref DurationToShowRadius);
+			CheckCfg("How Dark to make Visual Cupboard", ref VisualDarkness );
         	}
 
         	private void LoadVariables()
@@ -112,6 +114,11 @@ namespace Oxide.Plugins
 
 			void Awake()
 			{
+				SpawnSphere();
+			}
+
+			void SpawnSphere()
+			{
 				entity = GetComponent<BaseEntity>();
 				sphere = GameManager.server.CreateEntity(strPrefab, pos, rot, true);
 				SphereEntity ball = sphere.GetComponent<SphereEntity>();
@@ -119,8 +126,8 @@ namespace Oxide.Plugins
 				ball.lerpRadius = 2.0f*UseCupboardRadius;
 				ball.lerpSpeed = 100f;
 				showall = false;
-				sphere.SetParent(entity, "");
-				sphere?.Spawn();
+				sphere.SetParent(entity);
+				sphere.Spawn();
 			}
 
            	 	void OnDestroy()
@@ -178,6 +185,8 @@ namespace Oxide.Plugins
 			}
 		}
 
+		ToolCupboardSphere sphereobj;
+
 		void AddSphere(BasePlayer player, bool showall, bool adminshow)
 		{
 			if (isAllowed(player, "visualcupboard.allowed"))
@@ -192,19 +201,26 @@ namespace Oxide.Plugins
 						if (bp.GetComponent<ToolCupboardSphere>() == null)
 						{
 							Vector3 pos = bp.transform.position;
-							
+
 							if (!adminshow)
 							{
 								if (player.userID != bp.OwnerID) return;
-								var sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
-								if (showall) sphereobj.showall = true;
-								GameManager.Destroy(sphereobj, DurationToShowRadius);
+            							for (int i = 0; i < VisualDarkness; i++)
+            							{
+									sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
+									if (showall) sphereobj.showall = true;
+									GameManager.Destroy(sphereobj, DurationToShowRadius);
+								}
+								return;
 							}
 							if (adminshow)
 							{
-								var sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
-								sphereobj.showall = true;
-								GameManager.Destroy(sphereobj, DurationToShowRadius);
+            							for (int i = 0; i < VisualDarkness; i++)
+            							{
+									sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
+									sphereobj.showall = true;
+									GameManager.Destroy(sphereobj, DurationToShowRadius);
+								}
 								PrintWarning("Tool Cupboard Owner " + bp.OwnerID + " : " + FindPlayerName(bp.OwnerID));
 							}	
 						}

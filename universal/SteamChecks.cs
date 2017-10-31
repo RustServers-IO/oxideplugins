@@ -1,4 +1,4 @@
-/* 
+/*
  * Feature List:
  * Community ban kicking -- done
  * VAC ban kicking -- done
@@ -24,8 +24,8 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("SteamChecks", "Spicy", "3.0.0", ResourceId = 2113)]
-
+    [Info("SteamChecks", "Spicy", "3.0.1", ResourceId = 2113)]
+    [Description("Check Steam servers to grab information about players")]
     internal class SteamChecks : CovalencePlugin
     {
         #region Globals
@@ -463,7 +463,7 @@ namespace Oxide.Plugins
 
         private void CheckBans(IPlayer player)
         {
-            webrequest.EnqueueGet(string.Format(RootUrl + BansStr, apiKey, player.Id), (code, response) =>
+            webrequest.Enqueue(string.Format(RootUrl + BansStr, apiKey, player.Id), null, (code, response) =>
             {
                 if (!IsValidRequest((ResponseCode)code))
                     return;
@@ -506,7 +506,7 @@ namespace Oxide.Plugins
 
         private void CheckSummaries(IPlayer player)
         {
-            webrequest.EnqueueGet(string.Format(RootUrl + PlayerStr, apiKey, player.Id), (code, response) =>
+            webrequest.Enqueue(string.Format(RootUrl + PlayerStr, apiKey, player.Id), null, (code, response) =>
             {
                 if (!IsValidRequest((ResponseCode)code))
                     return;
@@ -526,7 +526,7 @@ namespace Oxide.Plugins
 
         private void CheckXml(IPlayer player)
         {
-            webrequest.EnqueueGet(string.Format(XmlUrl, player.Id), (code, response) =>
+            webrequest.Enqueue(string.Format(XmlUrl, player.Id), null, (code, response) =>
             {
                 if (!IsValidRequest((ResponseCode)code))
                     return;
@@ -551,7 +551,7 @@ namespace Oxide.Plugins
 
         private void CheckSharing(IPlayer player)
         {
-            webrequest.EnqueueGet(string.Format(RootUrl + SharingStr, apiKey, player.Id, appId), (code, response) =>
+            webrequest.Enqueue(string.Format(RootUrl + SharingStr, apiKey, player.Id, appId), null, (code, response) =>
             {
                 if (!IsValidRequest((ResponseCode)code))
                     return;
@@ -583,7 +583,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            webrequest.EnqueueGet(string.Format(RootUrl + GamesStr, apiKey, player.Id), (code, response) =>
+            webrequest.Enqueue(string.Format(RootUrl + GamesStr, apiKey, player.Id), null, (code, response) =>
             {
                 if (!IsValidRequest((ResponseCode)code))
                     return;

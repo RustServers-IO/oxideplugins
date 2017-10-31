@@ -7,10 +7,12 @@ using Oxide.Core.Configuration;
 using UnityEngine;
 using System.Reflection;
 using Newtonsoft.Json.Converters;
+using Facepunch;
+using UnityEngine.SceneManagement;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomLootSpawns", "k1lly0u", "0.2.5", ResourceId = 1655)]
+    [Info("CustomLootSpawns", "k1lly0u", "0.2.6", ResourceId = 1655)]
     class CustomLootSpawns : RustPlugin
     {
         #region Fields
@@ -27,20 +29,22 @@ namespace Oxide.Plugins
         #endregion
 
         #region Oxide Hooks
-        void Loaded()
+        private void Loaded()
         {
             permission.RegisterPermission("customlootspawns.admin", this);
             lang.RegisterMessages(messages, this);
             clsdata = Interface.Oxide.DataFileSystem.GetFile("CustomSpawns/cls_data");
             clsdata.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter() };
         }
-        void OnServerInitialized()
+
+        private void OnServerInitialized()
         {
             LoadVariables();
             LoadData();
             FindBoxTypes();
             InitializeBoxSpawns();
         }
+
         private void OnEntityKill(BaseNetworkable entity)
         {
             var baseEnt = entity as BaseEntity;
@@ -61,7 +65,8 @@ namespace Oxide.Plugins
                 }
             }
         }
-        void OnPlayerLootEnd(PlayerLoot inventory)
+
+        private void OnPlayerLootEnd(PlayerLoot inventory)
         {
             BasePlayer player = inventory.GetComponent<BasePlayer>();
             if (boxCreators.ContainsKey(player.userID))
@@ -83,7 +88,14 @@ namespace Oxide.Plugins
                 }
             }
         }
-        void Unload()
+
+        private void OnLootSpawn(LootContainer container)
+        {
+            if (boxCache.ContainsKey(container))            
+                SpawnLoot(container, boxCache[container]);            
+        }
+
+        private void Unload()
         {
             foreach (var time in refreshTimers)
                 time.Destroy();
@@ -107,19 +119,32 @@ namespace Oxide.Plugins
                 InitializeNewBox(box.Key);
             }
         }
+
         private void InitiateRefresh(BaseEntity box, int ID)
         {            
             refreshTimers.Add(timer.Once(configData.RespawnTimer * 60, () =>
             {
                 InitializeNewBox(ID);                
             }));
+
             boxCache.Remove(box);
         }
+
         private void InitializeNewBox(int ID)
         {
             if (!clsData.lootBoxes.ContainsKey(ID)) return;
             var boxData = clsData.lootBoxes[ID];
-            var newBox = SpawnBoxEntity(boxData.boxType.Type, boxData.Position, boxData.yRotation, boxData.boxType.SkinID);
+            BaseEntity newBox = SpawnBoxEntity(boxData.boxType.Type, boxData.Position, boxData.yRotation, boxData.boxType.SkinID);
+
+            SpawnLoot(newBox, ID);
+            boxCache.Add(newBox, ID);           
+        }
+
+        private void SpawnLoot(BaseEntity entity, int ID)
+        {
+            if (!clsData.lootBoxes.ContainsKey(ID)) return;
+            var boxData = clsData.lootBoxes[ID];
+
             if (!string.IsNullOrEmpty(boxData.customLoot) && clsData.customBoxes.ContainsKey(boxData.customLoot))
             {
                 var customLoot = clsData.customBoxes[boxData.customLoot];
@@ -127,28 +152,44 @@ namespace Oxide.Plugins
                 {
                     timer.In(3, () =>
                     {
-                        ClearContainer(newBox);
+                        ClearContainer(entity);
                         for (int i = 0; i < customLoot.itemList.Count; i++)
                         {
                             var itemInfo = customLoot.itemList[i];
                             var item = CreateItem(itemInfo.ID, itemInfo.Amount, itemInfo.SkinID);
-                            if (newBox is LootContainer)
-                                item.MoveToContainer((newBox as LootContainer).inventory);
-                            else item.MoveToContainer((newBox as StorageContainer).inventory);
+                            if (entity is LootContainer)
+                                item.MoveToContainer((entity as LootContainer).inventory);
+                            else item.MoveToContainer((entity as StorageContainer).inventory);
                         }
                     });
                 }
-            }            
-            boxCache.Add(newBox, ID);           
+            }
         }
+
         private BaseEntity SpawnBoxEntity(string type, Vector3 pos, float rot, ulong skin = 0)
         {
-            BaseEntity entity = GameManager.server.CreateEntity(type, pos, Quaternion.Euler(0, rot, 0), true);
+            BaseEntity entity = InstantiateEntity(type, pos, Quaternion.Euler(0, rot, 0));
             entity.skinID = skin;
             entity.Spawn();
             return entity;
         }
-        
+
+        private BaseEntity InstantiateEntity(string type, Vector3 position, Quaternion rotation)
+        {
+            var gameObject = Instantiate.GameObject(GameManager.server.FindPrefab(type), position, rotation);
+            gameObject.name = type;
+
+            SceneManager.MoveGameObjectToScene(gameObject, Rust.Server.EntityScene);
+
+            UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
+
+            if (!gameObject.activeSelf)
+                gameObject.SetActive(true);
+
+            BaseEntity component = gameObject.GetComponent<BaseEntity>();
+            return component;
+        }
+
         private void ClearContainer(BaseEntity container)
         {
             if (container is LootContainer)
@@ -187,6 +228,7 @@ namespace Oxide.Plugins
             SaveData();
             InitializeNewBox(ID);
         }
+
         private void CreateNewCLB(BasePlayer player, string name, int type, ulong skin = 0)
         {
             if (boxCreators.ContainsKey(player.userID))
@@ -212,6 +254,7 @@ namespace Oxide.Plugins
 
             boxCreators.Add(player.userID, new BoxCreator { entity = box, boxData = new CustomBoxData { Name = name, boxType = boxData.boxType } });
         }
+
         private void StoreBoxData(BasePlayer player)
         {
             ulong ID = player.userID;

@@ -1,28 +1,26 @@
-﻿using Oxide.Core.Plugins;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Oxide.Core.Plugins;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Trapper", "redBDGR", "1.0.4", ResourceId = 2417)]
+    [Info("Trapper", "redBDGR", "1.0.5", ResourceId = 2417)]
     [Description("Adds a few new features to traps")]
-
     class Trapper : RustPlugin
     {
-        [PluginReference] Plugin Friends;
-
-        private bool Changed = false;
-        private float resetTime = 5f;
-        private bool hurtOwner = false;
-        private bool hurtFriends = false;
-
         private const string permissionName = "trapper.auto";
         private const string permissionNameOWNER = "trapper.owner";
         private const string permissionNameFRIENDS = "trapper.friends";
 
-        void Init()
+        private bool Changed;
+        [PluginReference] private Plugin Friends;
+        private bool hurtFriends;
+        private bool hurtOwner;
+        private float resetTime = 5f;
+
+        private void Init()
         {
             LoadVariables();
             permission.RegisterPermission(permissionName, this);
@@ -36,7 +34,7 @@ namespace Oxide.Plugins
             LoadVariables();
         }
 
-        void LoadVariables()
+        private void LoadVariables()
         {
             resetTime = Convert.ToSingle(GetConfig("Settings", "Reset Time", 5f));
             hurtOwner = Convert.ToBoolean(GetConfig("Settings", "Trigger for Owner", true));
@@ -47,46 +45,42 @@ namespace Oxide.Plugins
             Changed = false;
         }
 
-        void Loaded()
+        private void Loaded()
         {
-            if (hurtFriends)
-                if (!Friends)
-                {
-                    PrintError("Friends.cs was not found! all friend functions of this plugin have been disabled");
-                    hurtFriends = false;
-                }
+            if (!hurtFriends) return;
+            if (Friends) return;
+            PrintError("Friends.cs was not found! all friend functions of this plugin have been disabled");
+            hurtFriends = false;
         }
 
-        object OnTrapTrigger(BaseTrap _trap, GameObject obj)
+        private object OnTrapTrigger(BaseTrap trap, GameObject obj)
         {
-            if (_trap is BearTrap || _trap is Landmine)
+            if (!(trap is BearTrap) && !(trap is Landmine)) return null;
+            var player = FindPlayer(trap.OwnerID.ToString());;
+            if (!player) return null;
+            if (!hurtOwner || !hurtFriends)
             {
-                BasePlayer player = FindPlayer(_trap.OwnerID.ToString());
-                if (!player) return null;
-                if (!hurtOwner || !hurtFriends)
+                var target = obj.GetComponent<BasePlayer>();
+                if (target)
                 {
-                    BasePlayer target = obj.GetComponent<BasePlayer>();
-                    if (target)
-                    {
-                        if (hurtOwner)
-                            if (target == player)
-                                if (permission.UserHasPermission(target.UserIDString, permissionNameOWNER))
-                                    return false;
-                        if (hurtFriends)
-                            if (Convert.ToBoolean(Friends?.CallHook("AreFriends", target.userID, player.userID)))
-                                if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
-                                    return false;
-                    }
+                    if (!hurtOwner)
+                        if (target == player)
+                            if (permission.UserHasPermission(target.UserIDString, permissionNameOWNER))
+                                return false;
+                    if (!hurtFriends)
+                        if (Convert.ToBoolean(Friends?.CallHook("AreFriends", target.userID, player.userID)))
+                            if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
+                                return false;
                 }
-
-                if (_trap is BearTrap)
-                    if (!player || permission.UserHasPermission(player?.UserIDString, permissionName))
-                        timer.Once(resetTime, () => ((BearTrap)_trap).Arm());
             }
+
+            if (!(trap is BearTrap)) return null;
+            if (!player || permission.UserHasPermission(player?.UserIDString, permissionName))
+                timer.Once(resetTime, () => ((BearTrap) trap).Arm());
             return null;
         }
 
-        object GetConfig(string menu, string datavalue, object defaultValue)
+        private object GetConfig(string menu, string datavalue, object defaultValue)
         {
             var data = Config[menu] as Dictionary<string, object>;
             if (data == null)
@@ -96,12 +90,10 @@ namespace Oxide.Plugins
                 Changed = true;
             }
             object value;
-            if (!data.TryGetValue(datavalue, out value))
-            {
-                value = defaultValue;
-                data[datavalue] = value;
-                Changed = true;
-            }
+            if (data.TryGetValue(datavalue, out value)) return value;
+            value = defaultValue;
+            data[datavalue] = value;
+            Changed = true;
             return value;
         }
 

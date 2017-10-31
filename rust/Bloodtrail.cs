@@ -1,29 +1,126 @@
-﻿using UnityEngine;
+﻿using Newtonsoft.Json;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Bloodtrail", "hoppel", "1.0.2")]
+    [Info("Bloodtrail", "hoppel", "1.0.3")]
     public class Bloodtrail : RustPlugin
     {
-        const string permname = "bloodtrail.allow";
+        private const string PermAllow = "bloodtrail.allow";
+        private const string PermBypass = "bloodtrail.bypass";
+        static Bloodtrail ins;
 
-        void Init()
+        private void Init()
         {
-            permission.RegisterPermission(permname, this);
-
+            permission.RegisterPermission(PermAllow, this);
+            permission.RegisterPermission(PermBypass, this);
         }
 
-        void OnPlayerInput(BasePlayer player, InputState input)
+        private void OnServerInitialized()
         {
-            if (player == null) return;
-            if (!permission.UserHasPermission(player.UserIDString, permname))
-                return;
+            foreach (var player in BasePlayer.activePlayerList)
+                OnPlayerInit(player);
+            ins = this;
+        }
+
+        private void OnPlayerInit(BasePlayer player)
+        {
+            if (HasPerm(player) && !player.gameObject.GetComponent<Blood>())
+                player.gameObject.AddComponent<Blood>();
+        }
+
+        private void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            if (player.gameObject.GetComponent<Blood>())    
+                UnityEngine.Object.Destroy(player.gameObject.GetComponent<Blood>());
+        }
+
+        private void Unload()
+        {
+            var objects = UnityEngine.Object.FindObjectsOfType(typeof(Blood));
+
+            if (objects != null)
+                foreach (var gameObj in objects)
+                    UnityEngine.Object.Destroy(gameObj);
+        }
+
+        bool HasPerm(BasePlayer player)
+        {
+            return permission.UserHasPermission(player.UserIDString, "bloodtrail.allow") && !permission.UserHasPermission(player.UserIDString, "bloodtrail.bypass");
+        }
+
+        public class Blood : MonoBehaviour
+        {
+            private BasePlayer _player;
+            private Vector3 _position;
+
+            private void Awake()
             {
-                if (player.metabolism.bleeding.value > 0)
+                    _player = GetComponent<BasePlayer>();
+                    _position = _player.transform.position;
+                    InvokeRepeating("Track", 0.2f, config.refreshtime);
+            }
+
+            private void Track()
+            {
+                if (!_player || !ins.HasPerm(_player))
+                    return;
                 {
-                    Effect.server.Run("assets/bundled/prefabs/fx/player/beartrap_blood.prefab", player.transform.position, Vector3.up, null, true);
+                    if (_position == _player.transform.position)
+                        return;
+
+                    _position = _player.transform.position;
+
+                    if (!_player || !_player.IsConnected)
+                    {
+                        Destroy(this);
+                        return;
+                    }
+
+                    if (_player.metabolism.bleeding.value > 0)
+                        Effect.server.Run("assets/bundled/prefabs/fx/player/beartrap_blood.prefab", _player.transform.position, Vector3.up, null, true);
                 }
             }
+
+            private void OnDestroy()
+            {
+                CancelInvoke("Track");
+                Destroy(this);
+            }
         }
+        static Configuration config;
+
+        public class Configuration
+        {
+            [JsonProperty(PropertyName = "Refresh Time")]
+            public float refreshtime = 0.2f;
+
+            public static Configuration DefaultConfig()
+            {
+                return new Configuration
+                {
+                };
+            }
+        }
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            try
+            {
+                config = Config.ReadObject<Configuration>();
+                if (config == null)
+                {
+                    LoadDefaultConfig();
+                    SaveConfig();
+                }
+            }
+            catch
+            {
+                PrintWarning($"Creating new config file.");
+                LoadDefaultConfig();
+            }
+        }
+        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+        protected override void SaveConfig() => Config.WriteObject(config);
     }
 }

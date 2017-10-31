@@ -4,25 +4,31 @@ using UnityEngine;
 using System.Reflection;
 using System.Linq;
 using Rust;
+using Facepunch;
 using Newtonsoft.Json;
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("TankCommander", "k1lly0u", "0.1.24", ResourceId = 2560)]
+    [Info("TankCommander", "k1lly0u", "0.1.3", ResourceId = 2560)]
     class TankCommander : RustPlugin
     {
         #region Fields
-        [PluginReference] Plugin Friends, Clans;
+        [PluginReference] Plugin Friends, Clans, Godmode;
         static TankCommander ins;
 
         private FieldInfo spectateFilter = typeof(BasePlayer).GetField("spectateFilter", (BindingFlags.Instance | BindingFlags.NonPublic));
+        private static FieldInfo aimVec = typeof(BradleyAPC).GetField("turretAimVector", (BindingFlags.Instance | BindingFlags.NonPublic));
+        private static FieldInfo topAimVec = typeof(BradleyAPC).GetField("topTurretAimVector", (BindingFlags.Instance | BindingFlags.NonPublic));
+
         private static FieldInfo meshLookupField = typeof(MeshColliderBatch).GetField("meshLookup", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private List<Controller> controllers = new List<Controller>();
         private List<ulong> passengers = new List<ulong>();
 
-        private Dictionary<ulong, Controller> commanders = new Dictionary<ulong, Controller>();        
+        private Dictionary<ulong, Controller> commanders = new Dictionary<ulong, Controller>();
+        private Dictionary<string, string> itemNames = new Dictionary<string, string>();
+                
         private Dictionary<CommandType, BUTTON> controlButtons;
 
         private bool initialized;
@@ -42,6 +48,8 @@ namespace Oxide.Plugins
             ins = this;
             LoadVariables();
             ConvertControlButtons();
+            itemNames = ItemManager.itemList.ToDictionary(x => x.shortname, y => y.displayName.english);
+
             initialized = true;
         }
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
@@ -51,6 +59,16 @@ namespace Oxide.Plugins
                 Controller commander = entity.GetComponent<Controller>();
                 if (commander != null)
                     commander.ManageDamage(info);                
+            }
+            if (entity is BasePlayer)
+            {
+                if (commanders.ContainsKey((entity as BasePlayer).userID) || passengers.Contains((entity as BasePlayer).userID))
+                {
+                    info.damageTypes = new DamageTypeList();
+                    info.HitEntity = null;
+                    info.HitMaterial = 0;
+                    info.PointStart = Vector3.zero;
+                }
             }
         }
         void OnPlayerInput(BasePlayer player, InputState input)
@@ -70,19 +88,19 @@ namespace Oxide.Plugins
             }
             
             if (input.WasJustPressed(controlButtons[CommandType.EnterExit]))
-            {
-                if (player.IsFlying)
-                {
-                    SendReply(player, msg("is_flying", player.UserIDString));
-                    return;
-                }
-
+            {        
                 RaycastHit hit;
                 if (Physics.SphereCast(player.eyes.position, 0.5f, Quaternion.Euler(player.serverInput.current.aimAngles) * Vector3.forward, out hit, 3f))
                 {                    
                     Controller controller = hit.GetEntity()?.GetComponent<Controller>();
                     if (controller != null)
                     {
+                        if (player.IsFlying)
+                        {
+                            SendReply(player, msg("is_flying", player.UserIDString));
+                            return;
+                        }
+
                         if (!controller.HasCommander())
                         {
                             commanders.Add(player.userID, controller);
@@ -125,6 +143,14 @@ namespace Oxide.Plugins
             if (commanders.ContainsKey(player.userID))            
                 commanders[player.userID].ExitTank();            
         }
+        object OnRunPlayerMetabolism(PlayerMetabolism metabolism, BaseCombatEntity entity)
+        {
+            var player = entity.ToPlayer();            
+            if (player == null && !commanders.ContainsKey(player.userID)) return null;
+            if (Godmode && (bool)Godmode.Call("IsGod", player.UserIDString)) return null;
+            return true;
+        }
+
         void Unload()
         {
             foreach (var controller in controllers)            
@@ -151,7 +177,10 @@ namespace Oxide.Plugins
                 [CommandType.EnterExit] = ParseType<BUTTON>(configData.Buttons.Enter),
                 [CommandType.Lights] = ParseType<BUTTON>(configData.Buttons.Lights),
                 [CommandType.Inventory] = ParseType<BUTTON>(configData.Buttons.Inventory),
-                [CommandType.Boost] = ParseType<BUTTON>(configData.Buttons.Boost)
+                [CommandType.Boost] = ParseType<BUTTON>(configData.Buttons.Boost),
+                [CommandType.Cannon] = ParseType<BUTTON>(configData.Buttons.Cannon),
+                [CommandType.Coax] = ParseType<BUTTON>(configData.Buttons.Coax),
+                [CommandType.MG] = ParseType<BUTTON>(configData.Buttons.MG)
             };            
         }
         void OpenTankInventory(BasePlayer player, Controller controller)
@@ -178,18 +207,31 @@ namespace Oxide.Plugins
                 player.transform.position = controller.transform.position;
                 player.SetParent(controller.entity, 0);
                 player.Command("client.camoffset", new object[] { new Vector3(0, 3.5f, 0) });
-
-                SendReply(player, string.Format(msg("leave_help", player.UserIDString), configData.Buttons.Enter));
-
+                   
                 if (isOperator)
                 {
                     controller.enabled = true;
-                    SendReply(player, string.Format(msg("boost_help", player.UserIDString), configData.Buttons.Boost));
+                    SendReply(player, msg("controls", player.UserIDString));
+                    if (configData.Weapons.Cannon.Enabled)
+                        SendReply(player, string.Format(msg("fire_cannon", player.UserIDString), configData.Buttons.Cannon));
+                    if (configData.Weapons.Coax.Enabled)
+                        SendReply(player, string.Format(msg("fire_coax", player.UserIDString), configData.Buttons.Coax));
+                    if (configData.Weapons.MG.Enabled)
+                        SendReply(player, string.Format(msg("fire_mg", player.UserIDString), configData.Buttons.MG));                    
+                    SendReply(player, string.Format(msg("speed_boost", player.UserIDString), configData.Buttons.Boost));
+                    SendReply(player, string.Format(msg("enter_exit", player.UserIDString), configData.Buttons.Boost));
+                    SendReply(player, string.Format(msg("toggle_lights", player.UserIDString), configData.Buttons.Lights));
+                    if (configData.Inventory.Enabled)
+                        SendReply(player, string.Format(msg("access_inventory", player.UserIDString), configData.Buttons.Inventory));
                 }
-                else controller.SetPassengerActive(player);
+                else
+                {
+                    controller.SetPassengerActive(player);
 
-                if (configData.Inventory.Enabled)
-                    SendReply(player, string.Format(msg("inv_help", player.UserIDString), configData.Buttons.Inventory));
+                    SendReply(player, string.Format(msg("enter_exit", player.UserIDString), configData.Buttons.Enter));
+                    if (configData.Inventory.Enabled)
+                        SendReply(player, string.Format(msg("access_inventory", player.UserIDString), configData.Buttons.Inventory));
+                }
             });
         }
         private void EndSpectating(BasePlayer player, Controller commander, bool isOperator)
@@ -209,7 +251,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Component
-        enum CommandType { EnterExit, Lights, Inventory, Boost }
+        enum CommandType { EnterExit, Lights, Inventory, Boost, Cannon, Coax, MG }
 
         class Controller : MonoBehaviour
         {
@@ -230,17 +272,31 @@ namespace Oxide.Plugins
             private float maxBrakeTorque = 50f;
             private float turnTorque = 1000f;
 
+            private float lastFireCannon;
+            private float lastFireMG;
+            private float lastFireCoax;
+
+            private Vector3 aimVector = Vector3.forward;
+            private Vector3 aimVectorTop = Vector3.forward;
+
             private Dictionary<CommandType, BUTTON> controlButtons;
+            private ConfigData.WeaponOptions.WeaponSystem cannon;
+            private ConfigData.WeaponOptions.WeaponSystem mg;
+            private ConfigData.WeaponOptions.WeaponSystem coax;
+
             private List<ulong> enteringPassengers = new List<ulong>();
             private List<BasePlayer> passengers = new List<BasePlayer>();
 
             private void Awake()
             {
                 entity = GetComponent<BradleyAPC>();
-
+               
                 entity.enabled = false;
                 enabled = false;
 
+                entity.CancelInvoke(entity.UpdateTargetList);
+                entity.CancelInvoke(entity.UpdateTargetVisibilities);
+                               
                 var collider = entity.gameObject.AddComponent<BoxCollider>();
                 collider.size = new Vector3(3, 1, 5);                
                 collider.isTrigger = true;
@@ -252,6 +308,9 @@ namespace Oxide.Plugins
                 rightWheels = entity.rightWheels;
 
                 controlButtons = ins.controlButtons;
+                cannon = ins.configData.Weapons.Cannon;
+                mg = ins.configData.Weapons.MG;
+                coax = ins.configData.Weapons.Coax;
 
                 if (ins.configData.Inventory.Enabled)
                 {
@@ -271,42 +330,12 @@ namespace Oxide.Plugins
 
             private void FixedUpdate()
             {
-                for (int i = 0; i < passengers.Count; i++)              
-                {
-                    var passenger = passengers[i];
-                    if (passenger.serverInput.WasJustPressed(controlButtons[CommandType.EnterExit]))
-                        PassengerExit(passenger);
-                }
-
-                if (player.serverInput.WasJustPressed(controlButtons[CommandType.EnterExit]))
-                {
-                    ExitTank();
-                    return;
-                }
-
-                if (player.serverInput.WasJustPressed(controlButtons[CommandType.Lights]))
-                    ToggleLights();
-
-                float accelerate = 0f;
-                float steer = 0f;
-                
-                if (player.serverInput.IsDown(BUTTON.FORWARD)) 
-                    accelerate += 1f;                
-
-                if (player.serverInput.IsDown(BUTTON.BACKWARD))
-                    accelerate -= 1f;
-
-                if (player.serverInput.IsDown(BUTTON.RIGHT))
-                    steer += 1f;
-
-                if (player.serverInput.IsDown(BUTTON.LEFT))
-                    steer -= 1f;
-
-                bool boost = player.serverInput.IsDown(controlButtons[CommandType.Boost]);
-
-                SetThrottleSpeed(accelerate, steer, boost);                
+                CheckOtherInput();
+                CheckForMovement();
+                entity.SendNetworkUpdate();
+                AdjustAiming();
             }
-
+                
             private void OnTriggerEnter(Collider col)
             {
                 if (!enabled) return;
@@ -384,7 +413,243 @@ namespace Oxide.Plugins
                         return;
                     }                    
                 }
-            }            
+            }
+
+            private void CheckOtherInput()
+            {
+                for (int i = 0; i < passengers.Count; i++)
+                {
+                    var passenger = passengers[i];
+                    if (passenger.serverInput.WasJustPressed(controlButtons[CommandType.EnterExit]))
+                        PassengerExit(passenger);
+                }
+
+                if (player.serverInput.WasJustPressed(controlButtons[CommandType.EnterExit]))
+                {
+                    ExitTank();
+                    return;
+                }
+
+                if (player.serverInput.WasJustPressed(controlButtons[CommandType.Lights]))
+                    ToggleLights();
+
+                if (player.serverInput.WasJustPressed(controlButtons[CommandType.Cannon]))
+                    FireCannon();
+
+                if (player.serverInput.IsDown(controlButtons[CommandType.MG]) || player.serverInput.WasJustPressed(controlButtons[CommandType.MG]))
+                    FireMG();
+
+                if (player.serverInput.IsDown(controlButtons[CommandType.Coax]) || player.serverInput.WasJustPressed(controlButtons[CommandType.Coax]))
+                    FireCoax();
+            }
+
+            private void CheckForMovement()
+            {
+                float accelerate = 0f;
+                float steer = 0f;
+
+                if (player.serverInput.IsDown(BUTTON.FORWARD))
+                    accelerate += 1f;
+
+                if (player.serverInput.IsDown(BUTTON.BACKWARD))
+                    accelerate -= 1f;
+
+                if (player.serverInput.IsDown(BUTTON.RIGHT))
+                    steer += 1f;
+
+                if (player.serverInput.IsDown(BUTTON.LEFT))
+                    steer -= 1f;
+
+                bool boost = player.serverInput.IsDown(controlButtons[CommandType.Boost]);
+
+                SetThrottleSpeed(accelerate, steer, boost);
+            }
+
+            private void AdjustAiming()
+            {
+                Vector3 aimAngle = player.serverInput.current.aimAngles;
+                float adjustedY = aimAngle.y + entity.transform.rotation.eulerAngles.y;
+
+                Vector3 targetPos = new Ray(entity.CannonMuzzle.transform.position, Quaternion.Euler(new Vector3(aimAngle.x, adjustedY, 0)) * Vector3.forward).GetPoint(10);               
+                Vector3 desiredAim = targetPos - (entity.transform.position + (Vector3.up * 2));
+
+                aimVector = Vector3.Lerp(aimVector, desiredAim, Time.deltaTime * 5f);
+                aimVec.SetValue(entity, aimVector);
+                topAimVec.SetValue(entity, aimVector);
+                AimCannon();
+                AimMG();                
+            }
+
+            private void AimCannon()
+            {
+                entity.AimWeaponAt(entity.mainTurret, entity.coaxPitch, aimVector, -90f, 90f, 360f, null);
+                entity.AimWeaponAt(entity.mainTurret, entity.CannonPitch, aimVector, -90f, 7f, 360f, null);      
+            }
+
+            private void AimMG()
+            {
+                Vector3 aimAngle = player.serverInput.current.aimAngles;
+                float adjustedY = aimAngle.y + entity.transform.rotation.eulerAngles.y;
+
+                RaycastHit hit;
+                if (Physics.Raycast(new Ray(entity.topTurretMuzzle.transform.position, Quaternion.Euler(new Vector3(aimAngle.x, adjustedY, 0)) * Vector3.forward), out hit, 500f))
+                {
+                    Vector3 desiredAim = hit.point - (entity.topTurretMuzzle.transform.position + (Vector3.up * 2));
+                    aimVectorTop = Vector3.Lerp(aimVectorTop, desiredAim, Time.deltaTime * 5f);
+                    topAimVec.SetValue(entity, aimVector);
+                    entity.AimWeaponAt(entity.topTurretYaw, entity.topTurretPitch, aimVectorTop, -360f, 360f, 360f, entity.mainTurret);
+                }
+            }
+
+            private void FireCannon()
+            {
+                if (cannon.RequireAmmo)
+                {
+                    if (inventory.itemList.Find(x => x.info.shortname == cannon.Type) == null)
+                    {
+                        if (ins.itemNames.ContainsKey(cannon.Type))
+                            ins.SendReply(player, string.Format(ins.msg("no_ammo_cannon", player.UserIDString), ins.itemNames[cannon.Type]));
+                        else print($"Invalid ammo type for the cannon set in config: {cannon.Type}");
+                        return;
+                    }
+                }
+                if (Time.realtimeSinceStartup >= lastFireCannon)
+                {
+                    Vector3 modifiedAimConeDirection = AimConeUtil.GetModifiedAimConeDirection(cannon.Accuracy, entity.CannonMuzzle.rotation * Vector3.forward, true);
+                    Vector3 cannonPitch = (entity.CannonPitch.transform.rotation * Vector3.back) + (base.transform.up * -1f);
+                    Vector3 vector3 = cannonPitch.normalized;
+                    entity.myRigidBody.AddForceAtPosition(vector3 * entity.recoilScale, entity.CannonPitch.transform.position, ForceMode.Impulse);
+                    Effect.server.Run(entity.mainCannonMuzzleFlash.resourcePath, entity, StringPool.Get(entity.CannonMuzzle.gameObject.name), Vector3.zero, Vector3.zero, null, false);
+                    BaseEntity rocket = GameManager.server.CreateEntity(entity.mainCannonProjectile.resourcePath, entity.CannonMuzzle.transform.position, Quaternion.LookRotation(modifiedAimConeDirection), true);
+                    rocket.SendMessage("InitializeVelocity", modifiedAimConeDirection);
+                    rocket.Spawn();
+
+                    TimedExplosive projectile = rocket.GetComponent<TimedExplosive>();
+                    if (projectile != null)                    
+                        projectile.damageTypes.Add(new DamageTypeEntry { amount = cannon.Damage, type = DamageType.Explosion });                    
+
+                    lastFireCannon = Time.realtimeSinceStartup + cannon.Interval;
+
+                    if (cannon.RequireAmmo)                    
+                        inventory.itemList.Find(x => x.info.shortname == cannon.Type)?.UseItem(1);                    
+                }               
+            }
+            private void FireCoax()
+            {
+                if (coax.RequireAmmo)
+                {
+                    if (inventory.itemList.Find(x => x.info.shortname == coax.Type) == null)
+                    {
+                        if (ins.itemNames.ContainsKey(coax.Type))
+                            ins.SendReply(player, string.Format(ins.msg("no_ammo_coax", player.UserIDString), ins.itemNames[coax.Type]));
+                        else print($"Invalid ammo type for the coaxial gun set in config: {coax.Type}");
+                        return;
+                    }
+                }
+                if (Time.realtimeSinceStartup >= lastFireCoax)
+                {
+                    Transform transforms = entity.coaxMuzzle;
+                    Vector3 vector3 = transforms.transform.position - (transforms.forward * 0.25f);
+                    Vector3 vector31 = transforms.transform.forward;
+                    Vector3 modifiedAimConeDirection = AimConeUtil.GetModifiedAimConeDirection(coax.Accuracy, vector31, true);
+                    Vector3 targetPos = vector3 + (modifiedAimConeDirection * 300f);
+                    List<RaycastHit> list = Pool.GetList<RaycastHit>();
+                    GamePhysics.TraceAll(new Ray(vector3, modifiedAimConeDirection), 0f, list, 300f, 1084435201, QueryTriggerInteraction.UseGlobal);
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        RaycastHit item = list[i];
+                        BaseEntity entity = item.GetEntity();
+                        if (!(entity != null) || !(entity == this) && !entity.EqualNetID(entity))
+                        {
+                            BaseCombatEntity baseCombatEntity = entity as BaseCombatEntity;
+                            if (baseCombatEntity != null)                            
+                                ApplyDamage(baseCombatEntity, coax.Damage, item.point, modifiedAimConeDirection);
+                            
+                            if (!(entity != null) || entity.ShouldBlockProjectiles())
+                            {
+                                targetPos = item.point;
+                                break;
+                            }
+                        }
+                    }
+                    entity.ClientRPC(null, "CLIENT_FireGun", true, targetPos, null, null, null);
+                    Pool.FreeList<RaycastHit>(ref list);
+
+                    lastFireCoax = Time.realtimeSinceStartup + coax.Interval;
+
+                    if (coax.RequireAmmo)
+                        inventory.itemList.Find(x => x.info.shortname == coax.Type)?.UseItem(1);
+                }
+            }
+
+            private void FireMG()
+            {
+                if (mg.RequireAmmo)
+                {
+                    if (inventory.itemList.Find(x => x.info.shortname == mg.Type) == null)
+                    {
+                        if (ins.itemNames.ContainsKey(mg.Type))
+                            ins.SendReply(player, string.Format(ins.msg("no_ammo_mg", player.UserIDString), ins.itemNames[mg.Type]));
+                        else print($"Invalid ammo type for the machine gun set in config: {mg.Type}");
+                        return;
+                    }
+                }
+                if (Time.realtimeSinceStartup >= lastFireMG)
+                {
+                    Transform transforms = (entity.topTurretMuzzle);
+                    Vector3 vector3 = transforms.transform.position - (transforms.forward * 0.25f);
+                    Vector3 vector31 = transforms.transform.forward;
+                    Vector3 modifiedAimConeDirection = AimConeUtil.GetModifiedAimConeDirection(mg.Accuracy, vector31, true);
+                    Vector3 targetPos = vector3 + (modifiedAimConeDirection * 300f);
+                    List<RaycastHit> list = Pool.GetList<RaycastHit>();
+                    GamePhysics.TraceAll(new Ray(vector3, modifiedAimConeDirection), 0f, list, 300f, 1084435201, QueryTriggerInteraction.UseGlobal);
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        RaycastHit item = list[i];
+                        BaseEntity entity = item.GetEntity();
+                        if (!(entity != null) || !(entity == this) && !entity.EqualNetID(entity))
+                        {
+                            BaseCombatEntity baseCombatEntity = entity as BaseCombatEntity;
+                            if (baseCombatEntity != null)                            
+                                ApplyDamage(baseCombatEntity, mg.Damage, item.point, modifiedAimConeDirection);
+                            
+                            if (!(entity != null) || entity.ShouldBlockProjectiles())
+                            {
+                                targetPos = item.point;
+                                break;
+                            }
+                        }
+                    }
+                    entity.ClientRPC(null, "CLIENT_FireGun", false, targetPos, null, null, null);
+                    Pool.FreeList<RaycastHit>(ref list);
+
+                    lastFireMG = Time.realtimeSinceStartup + mg.Interval;
+
+                    if (mg.RequireAmmo)
+                        inventory.itemList.Find(x => x.info.shortname == mg.Type)?.UseItem(1);
+                }
+            }
+
+            private void FireSideGuns()
+            {
+
+            }
+
+            private void ApplyDamage(BaseCombatEntity entity, float damage, Vector3 point, Vector3 normal)
+            {
+                float single = damage * UnityEngine.Random.Range(0.9f, 1.1f);
+                entity.OnAttacked(new HitInfo(this.entity, entity, DamageType.Bullet, single, point));
+                if (entity is BasePlayer || entity is BaseNpc)
+                {
+                    HitInfo hitInfo = new HitInfo()
+                    {
+                        HitPositionWorld = point,
+                        HitNormalWorld = -normal,
+                        HitMaterial = StringPool.Get("Flesh")
+                    };
+                    Effect.server.ImpactEffect(hitInfo);
+                }
+            }
 
             private void SetThrottleSpeed(float acceleration, float steering, bool boost)
             {                
@@ -461,6 +726,7 @@ namespace Oxide.Plugins
                     ApplyMotorTorque(Mathf.Clamp(rightTrack * throttle, -1f, 1f) * torque, true);                   
                 }
             }
+
             private void ApplyBrakes(float amount)
             {
                 amount = Mathf.Clamp(maxBrakeTorque * amount, 0, maxBrakeTorque);
@@ -475,14 +741,13 @@ namespace Oxide.Plugins
                 for (int i = 0; i < wheelColliderArray.Length; i++)
                     wheelColliderArray[i].brakeTorque = maxBrakeTorque * amount;
             }
+
             private void ApplyMotorTorque(float torque, bool rightSide)
             {                
                 WheelCollider[] wheelColliderArray = (!rightSide ? leftWheels : rightWheels);
-
-                // Slightly increase torque to the left side tracks in attempt to fix the pull to the left
-                float equalizer = !rightSide ? 1.2f : 1f;
+                                
                 for (int i = 0; i < wheelColliderArray.Length; i++)
-                    wheelColliderArray[i].motorTorque = torque * equalizer;
+                    wheelColliderArray[i].motorTorque = torque;
             }
 
             public void EnterTank(BasePlayer player)
@@ -531,12 +796,84 @@ namespace Oxide.Plugins
 
             public void ManageDamage(HitInfo info)
             {
-                // Temporarily nullify damage until some form of death sequence has been added to the game
-                info.damageTypes = new DamageTypeList();
-                info.HitEntity = null;
-                info.HitMaterial = 0;
-                info.PointStart = Vector3.zero;
-            }          
+                if (info.damageTypes.Total() >= entity.health)
+                {
+                    info.damageTypes = new DamageTypeList();
+                    info.HitEntity = null;
+                    info.HitMaterial = 0;
+                    info.PointStart = Vector3.zero;
+
+                    if (player != null)
+                        ExitTank();
+
+                    OnDeath();
+                }
+            } 
+            
+            private void OnDeath()
+            {
+                Effect.server.Run(entity.explosionEffect.resourcePath, entity.transform.position, Vector3.up, null, true);
+
+                List<ServerGib> serverGibs = ServerGib.CreateGibs(entity.servergibs.resourcePath, entity.gameObject, entity.servergibs.Get().GetComponent<ServerGib>()._gibSource, Vector3.zero, 3f);
+                for (int i = 0; i < 12 - entity.maxCratesToSpawn; i++)
+                {
+                    BaseEntity fireBall = GameManager.server.CreateEntity(entity.fireBall.resourcePath, entity.transform.position, entity.transform.rotation, true);
+                    if (fireBall)
+                    {                      
+                        Vector3 onSphere = UnityEngine.Random.onUnitSphere;
+                        fireBall.transform.position = (entity.transform.position + new Vector3(0f, 1.5f, 0f)) + (onSphere * UnityEngine.Random.Range(-4f, 4f));
+                        Collider collider = fireBall.GetComponent<Collider>();
+                        fireBall.Spawn();
+                        fireBall.SetVelocity(Vector3.zero + (onSphere * UnityEngine.Random.Range(3, 10)));
+                        foreach (ServerGib serverGib in serverGibs)                        
+                            Physics.IgnoreCollision(collider, serverGib.GetCollider(), true);                        
+                    }
+                }
+
+                if (ins.configData.Inventory.DropInv)
+                {
+                    inventory.Drop("assets/prefabs/misc/item drop/item_drop.prefab", (entity.transform.position + new Vector3(0f, 1.5f, 0f)) + (UnityEngine.Random.onUnitSphere * UnityEngine.Random.Range(2f, 3f)), new Quaternion());
+                }
+                if (ins.configData.Inventory.DropLoot)
+                {
+                    for (int j = 0; j < entity.maxCratesToSpawn; j++)
+                    {
+                        Vector3 onSphere = UnityEngine.Random.onUnitSphere;
+                        BaseEntity lootCrate = GameManager.server.CreateEntity(entity.crateToDrop.resourcePath, (entity.transform.position + new Vector3(0f, 1.5f, 0f)) + (onSphere * UnityEngine.Random.Range(2f, 3f)), Quaternion.LookRotation(onSphere), true);
+                        lootCrate.Spawn();
+
+                        LootContainer lootContainer = lootCrate as LootContainer;
+                        if (lootContainer)                        
+                            lootContainer.Invoke(new Action(lootContainer.RemoveMe), 1800f);
+
+                        Collider collider = lootCrate.GetComponent<Collider>();
+                        Rigidbody rigidbody = lootCrate.gameObject.AddComponent<Rigidbody>();
+                        rigidbody.useGravity = true;
+                        rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                        rigidbody.mass = 2f;
+                        rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+                        rigidbody.velocity = Vector3.zero + (onSphere * UnityEngine.Random.Range(1f, 3f));
+                        rigidbody.angularVelocity = Vector3Ex.Range(-1.75f, 1.75f);
+                        rigidbody.drag = 0.5f * (rigidbody.mass / 5f);
+                        rigidbody.angularDrag = 0.2f * (rigidbody.mass / 5f);
+
+                        FireBall fireBall = GameManager.server.CreateEntity(entity.fireBall.resourcePath, lootCrate.transform.position, new Quaternion(), true) as FireBall;
+                        if (fireBall)
+                        {
+                            fireBall.transform.position = lootCrate.transform.position;
+                            fireBall.Spawn();
+                            fireBall.GetComponent<Rigidbody>().isKinematic = true;
+                            fireBall.GetComponent<Collider>().enabled = false;
+                            fireBall.transform.parent = lootCrate.transform;
+                        }
+                        lootCrate.SendMessage("SetLockingEnt", fireBall.gameObject, SendMessageOptions.DontRequireReceiver);
+
+                        foreach (ServerGib serverGib1 in serverGibs)
+                            Physics.IgnoreCollision(collider, serverGib1.GetCollider(), true);
+                    }                   
+                }
+                entity.Kill(BaseNetworkable.DestroyMode.Gib);
+            }         
         }
         #endregion
 
@@ -644,6 +981,8 @@ namespace Oxide.Plugins
             public PassengerOptions Passengers { get; set; }
             [JsonProperty(PropertyName = "Inventory Options")]
             public InventoryOptions Inventory { get; set; }
+            [JsonProperty(PropertyName = "Weapon Options")]
+            public WeaponOptions Weapons { get; set; }
 
             public class CrushableTypes
             {
@@ -668,6 +1007,12 @@ namespace Oxide.Plugins
                 public string Inventory { get; set; }
                 [JsonProperty(PropertyName = "Speed boost")]
                 public string Boost { get; set; }
+                [JsonProperty(PropertyName = "Fire Cannon")]
+                public string Cannon { get; set; }
+                [JsonProperty(PropertyName = "Fire Coaxial Gun")]
+                public string Coax { get; set; }
+                [JsonProperty(PropertyName = "Fire MG")]
+                public string MG { get; set; }
             }
             public class MovementSettings
             {
@@ -697,8 +1042,37 @@ namespace Oxide.Plugins
             {
                 [JsonProperty(PropertyName = "Enable inventory system")]
                 public bool Enabled { get; set; }
+                [JsonProperty(PropertyName = "Drop inventory on death")]
+                public bool DropInv { get; set; }
+                [JsonProperty(PropertyName = "Drop loot on death")]
+                public bool DropLoot { get; set; }
                 [JsonProperty(PropertyName = "Inventory size (max 36)")]
                 public int Size { get; set; }
+            }
+            public class WeaponOptions
+            {
+                [JsonProperty(PropertyName = "Cannon")]
+                public WeaponSystem Cannon { get; set; }
+                [JsonProperty(PropertyName = "Coaxial")]
+                public WeaponSystem Coax { get; set; }
+                [JsonProperty(PropertyName = "Machine Gun")]
+                public WeaponSystem MG { get; set; }
+
+                public class WeaponSystem
+                {
+                    [JsonProperty(PropertyName = "Enable weapon system")]
+                    public bool Enabled { get; set; }
+                    [JsonProperty(PropertyName = "Require ammunition in inventory")]
+                    public bool RequireAmmo { get; set; }
+                    [JsonProperty(PropertyName = "Ammunition type (item shortname)")]
+                    public string Type { get; set; }
+                    [JsonProperty(PropertyName = "Fire rate (seconds)")]
+                    public float Interval { get; set; }
+                    [JsonProperty(PropertyName = "Aim cone (smaller number is more accurate)")]
+                    public float Accuracy { get; set; }
+                    [JsonProperty(PropertyName = "Damage")]
+                    public float Damage { get; set; }
+                }
             }
         }
         private void LoadVariables()
@@ -715,7 +1089,10 @@ namespace Oxide.Plugins
                     Enter = "USE",
                     Lights = "RELOAD",
                     Inventory = "RELOAD",
-                    Boost = "SPRINT"
+                    Boost = "SPRINT",
+                    Cannon = "FIRE_PRIMARY",
+                    Coax = "FIRE_SECONDARY",
+                    MG = "FIRE_THIRD"
                 },
                 Crushables = new ConfigData.CrushableTypes
                 {
@@ -730,7 +1107,7 @@ namespace Oxide.Plugins
                     Acceleration = 3f,
                     BrakeTorque = 50f,
                     ForwardTorque = 2000f,
-                    TurnTorque = 1000f,
+                    TurnTorque = 2500f,
                     BoostTorque = 600f
                 },
                 Passengers = new ConfigData.PassengerOptions
@@ -743,7 +1120,39 @@ namespace Oxide.Plugins
                 Inventory = new ConfigData.InventoryOptions
                 {
                     Enabled = true,
-                    Size = 36
+                    Size = 36,
+                    DropInv = true,
+                    DropLoot = false
+                },
+                Weapons = new ConfigData.WeaponOptions
+                {
+                    Cannon = new ConfigData.WeaponOptions.WeaponSystem
+                    {
+                        Accuracy = 0.025f,
+                        Damage = 90f,
+                        Enabled = true,
+                        Interval = 1.75f,
+                        RequireAmmo = false,
+                        Type = "ammo.rocket.hv"
+                    },
+                    Coax = new ConfigData.WeaponOptions.WeaponSystem
+                    {
+                        Accuracy = 0.75f,
+                        Damage = 10f,
+                        Enabled = true,
+                        Interval = 0.06667f,
+                        RequireAmmo = false,
+                        Type = "ammo.rifle.hv"
+                    },
+                    MG = new ConfigData.WeaponOptions.WeaponSystem
+                    {
+                        Accuracy = 1.25f,
+                        Damage = 10f,
+                        Enabled = true,
+                        Interval = 0.1f,
+                        RequireAmmo = false,
+                        Type = "ammo.rifle.hv"
+                    }
                 }
             };
             SaveConfig(config);
@@ -756,14 +1165,22 @@ namespace Oxide.Plugins
         string msg(string key, string playerId = null) => lang.GetMessage(key, this, playerId);
 
         Dictionary<string, string> Messages = new Dictionary<string, string>
-        {
-            ["leave_help"] = "<color=#D3D3D3>You can exit the tank by pressing </color><color=#ce422b>{0}</color>",
+        {          
             ["is_flying"] = "<color=#D3D3D3>You can not enter the tank when you are flying</color>",
             ["in_use"] = "<color=#D3D3D3>This tank is already in use</color>",
             ["not_friend"] = "<color=#D3D3D3>You must be a friend or clanmate with the operator</color>",
-            ["passenger_enter"] = "<color=#D3D3D3>You have entered the tank as a passenger</color>",
-            ["boost_help"] = "<color=#D3D3D3>Hold </color><color=#ce422b>{0}</color><color=#D3D3D3> to use boost</color>",
-            ["inv_help"] = "<color=#D3D3D3>You can access this vehicles inventory from the outside by pressing the </color><color=#ce422b>{0}</color><color=#D3D3D3> key when there is no operator.</color>"
+            ["passenger_enter"] = "<color=#D3D3D3>You have entered the tank as a passenger</color>",           
+            ["controls"] = "<color=#ce422b>Tank Controls:</color>",
+            ["fire_cannon"] = "<color=#D3D3D3>Fire Cannon </color><color=#ce422b>{0}</color>",
+            ["fire_coax"] = "<color=#D3D3D3>Fire Coaxial Gun </color><color=#ce422b>{0}</color>",
+            ["fire_mg"] = "<color=#D3D3D3>Fire MG </color><color=#ce422b>{0}</color>",
+            ["speed_boost"] = "<color=#D3D3D3>Speed Boost </color><color=#ce422b>{0}</color>",
+            ["enter_exit"] = "<color=#D3D3D3>Enter/Exit Vehicle </color><color=#ce422b>{0}</color>",
+            ["toggle_lights"] = "<color=#D3D3D3>Toggle Lights </color><color=#ce422b>{0}</color>",
+            ["access_inventory"] = "<color=#D3D3D3>Access Inventory (from outside of the vehicle) </color><color=#ce422b>{0}</color>",
+            ["no_ammo_cannon"] = "<color=#D3D3D3>You do not have ammunition to fire the cannon. It requires </color><color=#ce422b>{0}</color>",
+            ["no_ammo_mg"] = "<color=#D3D3D3>You do not have ammunition to fire the machine gun. It requires </color><color=#ce422b>{0}</color>",
+            ["no_ammo_coax"] = "<color=#D3D3D3>You do not have ammunition to coaxial gun. It requires </color><color=#ce422b>{0}</color>",
         };
         #endregion
     }

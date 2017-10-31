@@ -1,0 +1,16 @@
+{
+    "name": "Compass",
+    "description": "Compass like in PUBG game",
+    "author": "bazuka5801",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/compass.2605",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

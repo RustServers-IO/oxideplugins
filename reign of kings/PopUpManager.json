@@ -1,0 +1,16 @@
+{
+    "name": "PopUpManager",
+    "description": "Simply allows a server to have a popup for Rules, Commands, and Notices, and when a player joins",
+    "author": "Mordeus",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/popupmanager.2668",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

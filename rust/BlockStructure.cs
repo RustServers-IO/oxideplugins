@@ -4,8 +4,8 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("BlockStructure", "Marat", "1.0.2", ResourceId = 2092)]
-	[Description("Sets a limit build in height and depth in water")]
+    [Info("BlockStructure", "Marat", "1.0.4", ResourceId = 2092)]
+	[Description("Building blocks in the rocks, terrain and icebergs. Sets a limit build in height and depth in water.")]
 	
     class BlockStructure : RustPlugin
     {
@@ -16,13 +16,16 @@ namespace Oxide.Plugins
 			permission.RegisterPermission(permBS, this);
         }
 		
-		int HeightBlock = 15;
-		int WaterBlock = -1;
+		int HeightBlock = 20;
+		int WaterBlock = -5;
+		int AuthLvl = 3;
 		bool ConfigChanged;
 		bool usePermissions = true;
-        bool BlockInHeight = false;
-		bool BlockInWater = false;
-		bool BlockInRock = false;
+        bool BlockInHeight = true;
+		bool BlockInWater = true;
+		bool BlockInRock = true;
+		bool BlockOnIceberg = false;
+		bool BlockUnTerrain = true;
         string permBS = "blockstructure.allowed";
 		
 		protected override void LoadDefaultConfig() => PrintWarning("New configuration file created.");
@@ -34,7 +37,11 @@ namespace Oxide.Plugins
 			BlockInHeight = GetConfigValue("Options", "Block in Height", BlockInHeight);
 			BlockInWater = GetConfigValue("Options", "Block in Water", BlockInWater);
 			BlockInRock = GetConfigValue("Options", "Block In Rock", BlockInRock);
+			BlockOnIceberg = GetConfigValue("Options", "Block On Iceberg", BlockOnIceberg);
+			BlockUnTerrain = GetConfigValue("Options", "Block Under Terrain", BlockUnTerrain);
 			usePermissions = GetConfigValue("Options", "UsePermissions", usePermissions);
+			AuthLvl = GetConfigValue("Options", "Ignore Authorization Level", AuthLvl);
+			
 			if (!ConfigChanged) return;
             PrintWarning("Configuration file updated.");
             SaveConfig();
@@ -59,14 +66,25 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-				["blockWater"] = "<size=16><color=yellow>You can not build in water</color></size>",
+				["blockWater"] = "<size=16><color=yellow>You can not build in water deeper {0} meters</color></size>",
                 ["blockHeight"] = "<size=16><color=yellow>You can not build higher {0} meters</color></size>",
-				["block"] = "<size=16><color=red>You can not build here</color></size>"
+				["block"] = "<size=16><color=red>You can not build here</color></size>",
+				["blockIce"] = "<size=16><color=red>You can not build on iceberg</color></size>",
+				["blockTerrain"] = "<size=16><color=#ffff00>You can not build under the terrain</color></size>",
             }, this, "en");
+			
+			lang.RegisterMessages(new Dictionary<string, string>
+            {
+				["blockWater"] = "<size=16><color=#ffff00>Вы не можете строить в воде глубже {0} метров</color></size>",
+                ["blockHeight"] = "<size=16><color=#ffff00>Вы не можете строить выше {0} метров</color></size>",
+				["block"] = "<size=16><color=#ff0000>Вы не можете строить здесь</color></size>",
+				["blockIce"] = "<size=16><color=#ffff00>Вы не можете строить на айсберге</color></size>",
+				["blockTerrain"] = "<size=16><color=#ffff00>Вы не можете строить под рельефом</color></size>"
+            }, this, "ru");
         }
         void Block(BaseNetworkable block, BasePlayer player, bool Height, bool Water)
         {
-            if (usePermissions && !IsAllowed(player.UserIDString, permBS) && block && !block.IsDestroyed)
+            if (usePermissions && !IsAllowed(player.UserIDString, permBS) && player.net.connection.authLevel < AuthLvl && block && !block.IsDestroyed)
             {
                 Vector3 Pos = block.transform.position;
                 if (Height || Water)
@@ -88,19 +106,87 @@ namespace Oxide.Plugins
 				if (BlockInRock)
 				{
 				    Pos.y += 200;
-                    RaycastHit[] hits = Physics.RaycastAll(Pos, Vector3.down, 200.0f);
+                    RaycastHit[] hits = Physics.RaycastAll(Pos, Vector3.down, 199.0f);
                     Pos.y -= 200;
                     for (int i = 0; i < hits.Length; i++)
                     {
                         RaycastHit hit = hits[i];
                         if (hit.collider)
                         {
-                            if (hit.collider.name == "Mesh")
+                            string ColName = hit.collider.name;
+                            if ((ColName.StartsWith("rock", StringComparison.CurrentCultureIgnoreCase) || ColName.StartsWith("cliff", StringComparison.CurrentCultureIgnoreCase)) && (hit.point.y < Pos.y ? BlockInRock : hit.collider.bounds.Contains(Pos)))
                             {
-							    Reply(player, Lang("block", player.UserIDString));
+							    var buildingBlock = block.GetComponent<BuildingBlock>();
+                                if (buildingBlock != null)
+                                {
+                                    foreach (ItemAmount item in buildingBlock.blockDefinition.grades[(int)buildingBlock.grade].costToBuild)
+                                    {
+                                        player.inventory.GiveItem(ItemManager.CreateByItemID(item.itemid, (int)item.amount));
+                                    }
+                                }
+								Reply(player, Lang("block", player.UserIDString));
                                 block.Kill(BaseNetworkable.DestroyMode.Gib);
+                                break;
+						    }
+                        }							
+                    }
+                }
+				if (BlockOnIceberg)
+				{
+				    Pos.y += 200;
+                    RaycastHit[] hits = Physics.RaycastAll(Pos, Vector3.down, 202.8f);
+                    Pos.y -= 200;
+                    for (int i = 0; i < hits.Length; i++)
+                    {
+                        RaycastHit hit = hits[i];
+                        if (hit.collider)
+                        {
+                            string ColName = hit.collider.name;
+                            if (BlockOnIceberg && ColName == "iceberg_COL")
+                            {
+								var buildingBlock = block.GetComponent<BuildingBlock>();
+                                if (buildingBlock != null)
+                                {
+                                    foreach (ItemAmount item in buildingBlock.blockDefinition.grades[(int)buildingBlock.grade].costToBuild)
+                                    {
+                                        player.inventory.GiveItem(ItemManager.CreateByItemID(item.itemid, (int)item.amount));
+                                    }
+                                }
+                                Reply(player, Lang("blockIce", player.UserIDString));
+                                block.Kill(BaseNetworkable.DestroyMode.Gib);
+                                break;
                             }
-                        }
+                        }							
+                    }
+					
+                }
+				if (BlockUnTerrain)
+				{
+				    Pos.y += 200;
+                    RaycastHit[] hits = Physics.RaycastAll(Pos, Vector3.down, 199.0f);
+                    Pos.y -= 200;
+					bool isMining = block is MiningQuarry;
+                    for (int i = 0; i < hits.Length; i++)
+                    {
+                        RaycastHit hit = hits[i];
+                        if (hit.collider)
+                        {
+                            string ColName = hit.collider.name;
+                            if (BlockUnTerrain && !isMining && ColName == "Terrain" && hit.point.y > Pos.y)
+                            {
+								var buildingBlock = block.GetComponent<BuildingBlock>();
+                                if (buildingBlock != null)
+                                {
+                                    foreach (ItemAmount item in buildingBlock.blockDefinition.grades[(int)buildingBlock.grade].costToBuild)
+                                    {
+                                        player.inventory.GiveItem(ItemManager.CreateByItemID(item.itemid, (int)item.amount));
+                                    }
+                                }
+                                Reply(player, Lang("blockTerrain", player.UserIDString));
+                                block.Kill(BaseNetworkable.DestroyMode.Gib);
+                                break;
+                            }
+                        }							
                     }
 				}
             }

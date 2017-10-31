@@ -18,7 +18,7 @@ using Oxide.Plugins.AutoCrafterNamespace.JsonConverters;
 
 namespace Oxide.Plugins
 {
-	[Info("AutoCrafter", "Skipcast", "1.0.3", ResourceId = 2582)]
+	[Info("AutoCrafter", "Skipcast", "1.0.4", ResourceId = 2582)]
 	[Description("A machine that automatically crafts items so the player can do more interesting stuff instead.")]
 	public class AutoCrafter : RustPlugin
 	{
@@ -1432,19 +1432,14 @@ namespace Oxide.Plugins.AutoCrafterNamespace
 		private DroppedItemContainer CreateItemContainer(Vector3 position, Quaternion rotation, string name, out ItemContainer inventory)
 		{
 			var container = (DroppedItemContainer)GameManager.server.CreateEntity(Constants.ItemDropPrefab, position, rotation);
+			
 			container.playerName = name;
 			container.enableSaving = false;
 			container.Spawn();
 
 			container.TakeFrom(new ItemContainer());
 
-			inventory = (ItemContainer)typeof(DroppedItemContainer).GetField("inventory", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(container);
-
-			if (inventory == null)
-			{
-				throw new NotImplementedException("Could not find private 'inventory' field in type DroppedItemContainer.");
-			}
-
+			inventory = container.inventory;
 			return container;
 		}
 	}

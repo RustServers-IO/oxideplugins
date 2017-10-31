@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Autokick", "Exel80", "1.1.5", ResourceId = 2138)]
+    [Info("Autokick", "Exel80", "1.2.0", ResourceId = 2138)]
     [Description("Autokick help you change your server to \"maintenance break\" mode, if you need it!")]
     class Autokick : CovalencePlugin
     {
@@ -19,23 +19,23 @@ namespace Oxide.Plugins
 
         private void Loaded()
         {
-            LoadConfigValues();
-
-            #region Permission
             permission.RegisterPermission("autokick.use", this);
-            permission.RegisterPermission("autokick.join", this);
-            #endregion
 
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 ["Toggle"] = "Autokick is [#yellow]{0}[/#]",
                 ["KickHelp"] = "When Autokick is [#yellow]{0}[/#], use [#yellow]{1}[/#] to kick all online players.",
-                ["Kicked"] = "All online players has been kicked! Except players that have [#yellow]{0}[/#] permission or is admin.",
+                ["Kicked"] = "All online players has been kicked! Except players whos in whitelist or is admin.",
                 ["Set"] = "Kick message is now setted to \"[#yellow]{0}[/#]\"",
                 ["Message"] = "Kick message is \"[#yellow]{0}[/#]\"",
                 ["ToggleHint"] = "Autokick must be [#yellow]{0}[/#], before can execute [#yellow]{1}[/#] command!",
                 ["Usage"] = "[#cyan]Usage:[/#] [#silver]{0}[/#] [#grey]{1}[/#]"
             }, this);
+        }
+        private void Init()
+        {
+            if (!config.akEnable)
+                Unsubscribe("CanUserLogin");
         }
         #endregion
 
@@ -64,50 +64,50 @@ namespace Oxide.Plugins
                 case "on":
                     {
                         // Change Toggle from config file
-                        _config.Settings["Enabled"] = "true";
-                        Config["Settings", "Enabled"] = "true";
+                        config.akEnable = true;
+                        SaveConfig();
 
                         // Save config
                         Config.Save();
 
                         // Print Toggle
                         _chat(player, Lang("Toggle", _id, "ACTIVATED!") + "\n" + Lang("KickHelp", _id, "true", "/ak kick"));
-                        _debug(player, $"Changed Toggle to {_config.Settings["Enabled"]}");
+                        _debug(player, $"Changed Toggle to {config.akEnable}");
                     }
                     break;
                 case "kick":
                     {
                         // Check if Toggle isn't False
-                        if (_config.Settings["Enabled"] != "true")
+                        if (!config.akEnable)
                         {
                             _chat(player, Lang("ToggleHint", _id, "true", "/ak kick"));
                             return;
                         }
-                        // Kick all players (Except if config allow auth 1 and/or 2 to stay)
-                        foreach (IPlayer clients in players.Connected.ToList())
-                            Kicker(clients);
 
-                        _chat(player, Lang("Kicked", _id, "autokick.join"));
+                        // Kick all players (Except if config allow auth 1 and/or 2 to stay)
+                        KickerFromOnlineList();
+
+                        _chat(player, Lang("Kicked", _id));
                     }
                     break;
                 case "off":
                     {
                         // Change Toggle from config file
-                        _config.Settings["Enabled"] = "false";
-                        Config["Settings", "Enabled"] = "false";
+                        config.akEnable = false;
+                        SaveConfig();
 
                         // Save config
                         Config.Save();
 
                         // Print Toggle
                         _chat(player, Lang("Toggle", _id, "DE-ACTIVATED!"));
-                        _debug(player, $"Changed Toggle to {_config.Settings["Enabled"]}");
+                        _debug(player, $"Changed Toggle to {config.akEnable}");
                     }
                     break;
                 case "set":
                     {
                         // Checking that args length isnt less then 5
-                        if (args?.Length < 5)
+                        if (args?.Length > 5)
                         {
                             _chat(player, Lang("Usage", _id, $"/{command}", "on/off | kick | set | message"));
                             return;
@@ -117,63 +117,47 @@ namespace Oxide.Plugins
                         string _arg = string.Join(" ", args)?.Remove(0, 4);
 
                         // Change KickMessage from config file
-                        _config.Settings["KickMessage"] = _arg;
-                        Config["Settings", "KickMessage"] = _arg;
+                        config.akKickMessage = _arg;
+                        SaveConfig();
 
                         // Save config
                         Config.Save();
 
                         // Print KickMessage
-                        _chat(player, Lang("Set", _id, _config.Settings["KickMessage"]));
+                        _chat(player, Lang("Set", _id, config.akKickMessage));
                     }
                     break;
                 case "message":
                     {
                         // Print KickMessage
-                        _chat(player, Lang("Message", _id, _config.Settings["KickMessage"]));
+                        _chat(player, Lang("Message", _id, config.akKickMessage));
                     }
                     break;
             }
         }
         #endregion
 
-        #region Connected & Spawned
-        void OnUserConnected(IPlayer client)
+        #region Oxide Hooks
+        object CanUserLogin(string name, string id, string ip)
         {
-            timer.Once(2.55f, () => { KickerFromList(); });
-        }
-        void OnUserSpawn(IPlayer player)
-        {
-            KickerFromList();
+            if (config.akEnable)
+            {
+                if (config.akWhitelist.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    return config.akKickMessage;
+                if (config.akWhitelist.Contains(ip))
+                    return config.akKickMessage;
+                if (config.akWhitelist.Contains(id))
+                    return config.akKickMessage;
+            }
+            return null;
         }
         #endregion
 
         #region Kicker
-        private void Kicker(IPlayer player)
-        {
-            try
-            {
-                if (_config.Settings["Enabled"]?.ToLower() == "true")
-                {
-                    string _name = player.Name;
-                    string _id = player.Id.ToString();
-                    string message = _config.Settings["KickMessage"];
-
-                    if (DEBUG) Puts($"[Deubg] Name: {_name}, Id: {_id}");
-
-                    if (hasPermission(player, "autokick.join"))
-                        return;
-
-                    if (player.IsConnected)
-                        player.Kick(message);
-                }
-            }
-            catch (Exception e) { PrintWarning($"{e.GetBaseException()}"); }
-        }
-        private void KickerFromList()
+        private void KickerFromOnlineList()
         {
             // If Autokick is enabled, then start timer (8sec)
-            if (_config.Settings["Enabled"]?.ToLower() == "true")
+            if (config.akEnable)
             {
                 try
                 {
@@ -181,11 +165,18 @@ namespace Oxide.Plugins
                     {
                         string _name = player.Name;
                         string _id = player.Id.ToString();
-                        string message = _config.Settings["KickMessage"];
+                        string _ip = player.Address;
+                        string message = config.akKickMessage;
 
                         if (DEBUG) Puts($"[Deubg] Name: {_name}, Id: {_id}, isAdmin: {player.IsAdmin}");
 
-                        if (hasPermission(player, "autokick.join"))
+                        if (config.akWhitelist.Contains(_name, StringComparer.OrdinalIgnoreCase))
+                            return;
+                        if (config.akWhitelist.Contains(_id))
+                            return;
+                        if (config.akWhitelist.Contains(_ip))
+                            return;
+                        if (player.IsAdmin)
                             return;
 
                         if (player.IsConnected)
@@ -198,7 +189,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helper
-        private void _chat(IPlayer player, string msg) => player.Reply(covalence.FormatText($"{_config.Settings["Prefix"]} {msg}"));
+        private void _chat(IPlayer player, string msg) => player.Reply(covalence.FormatText($"{config.akPrefix} {msg}"));
         private void _debug(IPlayer player, string msg)
         {
             if (DEBUG)
@@ -211,65 +202,54 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Configuration Defaults
-        PluginConfig DefaultConfig()
+        #region Configuration
+        private Configuration config;
+
+        public class Configuration
         {
-            var defaultConfig = new PluginConfig
+            [JsonProperty(PropertyName = "Enable AutoKick (true/false)")]
+            public bool akEnable;
+
+            [JsonProperty(PropertyName = "Messages Prefix (Disable == Empty string)")]
+            public string akPrefix;
+
+            [JsonProperty(PropertyName = "Kick Messages")]
+            public string akKickMessage;
+
+            [JsonProperty(PropertyName = "Whitelist (SteamID64 or IP Address or Displayname)")]
+            public List<string> akWhitelist;
+
+            public static Configuration DefaultConfig()
             {
-                Settings = new Dictionary<string, string>
+                return new Configuration
                 {
-                    { PluginSettings.Prefix, "[#cyan][AutoKick][/#]" },
-                    { PluginSettings.KickMessage, "You have been kicked! Reason: Server is on maintenance break!" },
-                    { PluginSettings.Enabled, "false" },
-                }
-            };
-            return defaultConfig;
-        }
-        #endregion
-
-        #region Configuration Setup
-        private PluginConfig _config;
-        private bool configChanged;
-
-        class PluginSettings
-        {
-            public const string Prefix = "Prefix";
-            public const string KickMessage = "KickMessage";
-            public const string Enabled = "Enabled";
-        }
-
-        class PluginConfig
-        {
-            public Dictionary<string, string> Settings { get; set; }
-        }
-
-        protected override void LoadDefaultConfig() => Config.WriteObject(DefaultConfig(), true);
-
-        void LoadConfigValues()
-        {
-            _config = Config.ReadObject<PluginConfig>();
-            var defaultConfig = DefaultConfig();
-            Merge(_config.Settings, defaultConfig.Settings);
-
-            if (!configChanged) return;
-            PrintWarning("Configuration file updated.");
-            Config.WriteObject(_config);
-        }
-
-        void Merge<T1, T2>(IDictionary<T1, T2> current, IDictionary<T1, T2> defaultDict)
-        {
-            foreach (var pair in defaultDict)
-            {
-                if (current.ContainsKey(pair.Key)) continue;
-                current[pair.Key] = pair.Value;
-                configChanged = true;
-            }
-            var oldPairs = defaultDict.Keys.Except(current.Keys).ToList();
-            foreach (var oldPair in oldPairs)
-            {
-                configChanged = true;
+                    akEnable = false,
+                    akPrefix = "[#cyan][AutoKick][/#]",
+                    akKickMessage = "You have been kicked! Reason: Server is on maintenance break!",
+                    akWhitelist = new List<string> { "Exel80", "127.0.0.1", "localhost", "76561198014553078" }
+                };
             }
         }
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            try
+            {
+                config = Config.ReadObject<Configuration>();
+                if (config?.akWhitelist == null) LoadDefaultConfig();
+            }
+            catch
+            {
+                LogWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+                LoadDefaultConfig();
+            }
+            SaveConfig();
+        }
+
+        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+
+        protected override void SaveConfig() => Config.WriteObject(config);
         #endregion
     }
 }

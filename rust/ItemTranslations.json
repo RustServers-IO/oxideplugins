@@ -1,0 +1,16 @@
+{
+    "name": "ItemTranslations",
+    "description": "Provides a data file of item names for translation",
+    "author": "Ryan",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/itemtranslations.2578",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

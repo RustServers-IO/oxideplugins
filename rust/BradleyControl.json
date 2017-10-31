@@ -1,0 +1,19 @@
+{
+    "name": "BradleyControl",
+    "description": "A plugin that controls Bradley properties.",
+    "author": "Mattparks",
+    "version": "0.1.4",
+    "configuration": true,
+    "suggest": {
+        "Vanish": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/bradleycontrol.2611",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

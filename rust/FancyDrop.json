@@ -1,8 +1,8 @@
 {
     "name": "FancyDrop",
-    "description": "The \"Next Level\" of a fancy airdrop-toolset",
+    "description": "The All-In-One Airdrop",
     "author": "Fujikura",
-    "version": "2.6.20",
+    "version": "2.6.21",
     "configuration": true,
     "suggest": {
         "GUIAnnouncements": "*",

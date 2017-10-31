@@ -1,0 +1,16 @@
+{
+    "name": "Checkpoints",
+    "description": "Restore points for players to teleport to when the server restarts",
+    "author": "Ryan",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/checkpoints.2603",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

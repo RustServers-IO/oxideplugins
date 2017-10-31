@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Wounded Screams", "Skipcast", "2.1.2", ResourceId = 2416)]
+    [Info("Wounded Screams", "Skipcast", "2.1.4", ResourceId = 2416)]
     [Description("Restores the screams when a player gets wounded.")]
     public class WoundedScreams : RustPlugin
     {
@@ -93,6 +93,9 @@ namespace Oxide.Plugins
 
         private void CreateUI(BasePlayer player)
         {
+	        if (!config.ScreamOnDemand)
+		        return;
+
             DestroyUI(player);
 
             bool canScream = screams[player].NextPlay <= Time.time;
@@ -134,7 +137,7 @@ namespace Oxide.Plugins
 
         private void DestroyUI(BasePlayer player)
         {
-            if (!openUis.ContainsKey(player.userID))
+            if (!config.ScreamOnDemand || !openUis.ContainsKey(player.userID))
                 return;
 
             CuiHelper.DestroyUi(player, openUis[player.userID]);

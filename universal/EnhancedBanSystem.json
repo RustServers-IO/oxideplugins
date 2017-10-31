@@ -1,10 +1,12 @@
 {
     "name": "Enhanced Ban System",
     "description": "Ban by steam or ip, online & offline players, local or webrequest banlist",
-    "author": "Reneb",
-    "version": "5.0.9",
+    "author": "Slut",
+    "version": "5.1.10",
     "configuration": true,
-    "suggest": {},
+    "suggest": {
+        "DiscordMessages": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/enhanced-ban-system.1951",
     "games": [

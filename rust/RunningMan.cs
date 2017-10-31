@@ -10,7 +10,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.4.8", ResourceId = 777)]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.5.0", ResourceId = 777)]
     [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
@@ -91,6 +91,7 @@ namespace Oxide.Plugins
                  {"ItemAdded", "<color=#C4FF00>{0}</color>: Successfully added item {1} to package {2}."},
                  {"PackageAdded", "<color=#C4FF00>{0}</color>: Successfully added package {1} and inserted item to it."},
                  {"ItemExist", "<color=#C4FF00>{0}</color>: Item already exist in package."},
+                 {"Rewarded", "<color=#C4FF00>{0}</color>: You won a reward : {1}."}
             }, this);
             permission.RegisterPermission("runningman.admin", this);
         }
@@ -123,6 +124,7 @@ namespace Oxide.Plugins
             public int MinValue;
             public int MaxValue;
         }
+
         void LoadSavedData()
         {
             SavedReward = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, RewardData>>(nameof(RunningMan));
@@ -203,15 +205,6 @@ namespace Oxide.Plugins
             eventstart = null;
         }
 
-        void Reload()
-        {
-            eventpause?.Destroy();
-            eventstart?.Destroy();
-            runningman = null;
-            eventpause = null;
-            eventstart = null;
-        }
-
         private void Startevent()
         {
             if (eventpause != null)
@@ -271,12 +264,15 @@ namespace Oxide.Plugins
                             {
                                 IPlayer player = covalence.Players.FindPlayerById(runningman.UserIDString);
                                 KarmaSystem.Call("AddKarma", player, (double) randomReward);
+                                SendReply(runningman, string.Format(lang.GetMessage("Rewarded", this, runningman.UserIDString), (string) Config["Default", "ChatName"], data.Key + " x " + randomReward));
                             }
                             else
                             {
                                 inv?.GiveItem(
                                     ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                                         (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                                SendReply(runningman, string.Format(lang.GetMessage("Rewarded", this, runningman.UserIDString), (string) Config["Default", "ChatName"], (string) Config["Config", "Reward", "RewardFixing"] + " x " +
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]));
                             }
                             break;
                         case "money":
@@ -284,31 +280,40 @@ namespace Oxide.Plugins
                             {
                                 Economics?.CallHook("Deposit", runningman.userID,
                                     randomReward);
+                                SendReply(runningman, string.Format(lang.GetMessage("Rewarded", this, runningman.UserIDString), (string) Config["Default", "ChatName"], "money x " + randomReward));
                             }
                             else
                             {
                                 inv?.GiveItem(
                                     ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                                         (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                                SendReply(runningman, string.Format(lang.GetMessage("Rewarded", this, runningman.UserIDString), (string) Config["Default", "ChatName"], (string) Config["Config", "Reward", "RewardFixing"] + " x " +
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]));
                             }
                             break;
                         case "serverreward":
                             if (ServerRewards != null && ServerRewards.IsLoaded)
                             {
                                 ServerRewards?.CallHook("AddPoints", new object[] {runningman.userID, randomReward});
+                                SendReply(runningman, string.Format(lang.GetMessage("Rewarded", this, runningman.UserIDString), (string) Config["Default", "ChatName"], "ServerRewards points x " + randomReward));
                             }
                             else
                             {
                                 inv?.GiveItem(
                                     ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                                         (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                                SendReply(runningman, string.Format(lang.GetMessage("Rewarded", this, runningman.UserIDString), (string) Config["Default", "ChatName"], (string) Config["Config", "Reward", "RewardFixing"] + " x " +
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]));
                             }
                             break;
                         default:
                             Item item = ItemManager.CreateByName(data.Key,
                                 randomReward);
                             if (item != null)
+                            {
                                 inv?.GiveItem(item, inv.containerMain);
+                                SendReply(runningman, string.Format(lang.GetMessage("Rewarded", this, runningman.UserIDString), (string) Config["Default", "ChatName"], item.info.displayName.english + " x " + item.amount));
+                            }
                             else
                                 PrintError($"Failed to create item...{rand.Key}");
                             break;
@@ -396,12 +401,15 @@ namespace Oxide.Plugins
                             {
                                 IPlayer player = covalence.Players.FindPlayerById(attacker.UserIDString);
                                 KarmaSystem.Call("AddKarma", player, (double) randomReward);
+                                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], data.Key + " x " + randomReward));
                             }
                             else
                             {
                                 inv?.GiveItem(
                                     ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                                         (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], (string) Config["Config", "Reward", "RewardFixing"] + " x " +
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]));
                             }
                             break;
                         case "money":
@@ -409,31 +417,40 @@ namespace Oxide.Plugins
                             {
                                 Economics?.CallHook("Deposit", attacker.userID,
                                     randomReward);
+                                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], "money x " + randomReward));
                             }
                             else
                             {
                                 inv?.GiveItem(
                                     ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                                         (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], (string) Config["Config", "Reward", "RewardFixing"] + " x " +
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]));
                             }
                             break;
                         case "serverreward":
                             if (ServerRewards != null && ServerRewards.IsLoaded)
                             {
                                 ServerRewards?.CallHook("AddPoints", new object[] {attacker.userID, randomReward});
+                                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], "ServerRewards points x " + randomReward));
                             }
                             else
                             {
                                 inv?.GiveItem(
                                     ItemManager.CreateByName((string) Config["Config", "Reward", "RewardFixing"],
                                         (int) Config["Config", "Reward", "RewardFixingAmount"]), inv.containerMain);
+                                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], (string) Config["Config", "Reward", "RewardFixing"] + " x " +
+                                    (int) Config["Config", "Reward", "RewardFixingAmount"]));
                             }
                             break;
                         default:
                             Item item = ItemManager.CreateByName(data.Key,
                                 randomReward);
                             if (item != null)
+                            {
                                 inv?.GiveItem(item, inv.containerMain);
+                                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], item.info.displayName.english + " x " + item.amount));
+                            }
                             else
                                 PrintError($"Failed to create item...{rand.Key}");
                             break;
@@ -442,9 +459,10 @@ namespace Oxide.Plugins
             }
             else
             {
-                Puts(Config["Reward", "RewardFixing"].ToString());
                 inv?.GiveItem(ItemManager.CreateByName((string) Config["Reward", "RewardFixing"],
                     (int) Config["Reward", "RewardFixingAmount"]), inv.containerMain);
+                SendReply(attacker, string.Format(lang.GetMessage("Rewarded", this, attacker.UserIDString), (string) Config["Default", "ChatName"], (string) Config["Config", "Reward", "RewardFixing"] + " x " +
+                    (int) Config["Config", "Reward", "RewardFixingAmount"]));
             }
             eventstart?.Destroy();
             eventstart = null;

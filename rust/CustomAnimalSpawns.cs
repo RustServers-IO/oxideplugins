@@ -12,7 +12,7 @@ using UnityEngine.SceneManagement;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomAnimalSpawns", "k1lly0u", "0.1.5", ResourceId = 2015)]
+    [Info("CustomAnimalSpawns", "k1lly0u", "0.1.55", ResourceId = 2015)]
     class CustomAnimalSpawns : RustPlugin
     {
         #region Fields
@@ -20,6 +20,9 @@ namespace Oxide.Plugins
         private DynamicConfigFile casdata;
 
         private List<BaseEntity> animalCache = new List<BaseEntity>();
+        private List<Timer> refreshTimers = new List<Timer>();
+        private Dictionary<ulong, int> animalCreators = new Dictionary<ulong, int>();
+
         private Dictionary<int, string> animalTypes = new Dictionary<int, string>
         {
             {0, "assets/rust.ai/agents/zombie/zombie.prefab" },
@@ -30,42 +33,39 @@ namespace Oxide.Plugins
             {5, "assets/rust.ai/agents/stag/stag.prefab" },
             {6, "assets/rust.ai/agents/wolf/wolf.prefab" }
         };
-        private List<Timer> refreshTimers = new List<Timer>();
-
-        private Dictionary<ulong, int> animalCreators = new Dictionary<ulong, int>();
-
         #endregion
 
         #region Oxide Hooks
-        void Loaded()
+        private void Loaded()
         {
             permission.RegisterPermission("customanimalspawns.admin", this);
             lang.RegisterMessages(messages, this);
             casdata = Interface.Oxide.DataFileSystem.GetFile("CustomSpawns/cas_data");
             casdata.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter() };
         }
-        void OnServerInitialized()
+
+        private void OnServerInitialized()
         {
             LoadVariables();
             LoadData();
             InitializeAnimalSpawns();
-        }        
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        }
+
+        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
-            try
+            if (entity == null)
+                return;
+
+            if (entity.GetComponent<BaseNpc>() != null)
             {
-                if (entity.GetComponent<BaseNpc>() != null)
+                if (animalCache.Contains(entity as BaseEntity))
                 {
-                    if (animalCache.Contains(entity as BaseEntity))
-                    {
-                        UnityEngine.Object.Destroy(entity.GetComponent<NPCController>());
-                        InitiateRefresh(entity as BaseEntity);
-                    }
+                    UnityEngine.Object.Destroy(entity.GetComponent<NPCController>());
+                    InitiateRefresh(entity as BaseEntity);
                 }
             }
-            catch { }
         }
-        void OnPlayerInput(BasePlayer player, InputState input)
+        private void OnPlayerInput(BasePlayer player, InputState input)
         {
             if (animalCreators.ContainsKey(player.userID))
                 if (input.WasJustPressed(BUTTON.FIRE_PRIMARY))
@@ -74,7 +74,7 @@ namespace Oxide.Plugins
                     AddSpawn(player, type);
                 }
         }
-        void Unload()
+        private void Unload()
         {
             foreach (var time in refreshTimers)
                 time.Destroy();
@@ -129,16 +129,19 @@ namespace Oxide.Plugins
             }
             return Vector3.zero;
         }
+
         private BaseEntity InstantiateEntity(string type, Vector3 position)
         {
-            var prefab = GameManager.server.FindPrefab(type);
-            var gameObject = Instantiate.GameObject(prefab, position, new Quaternion());
+            var gameObject = Instantiate.GameObject(GameManager.server.FindPrefab(type), position, new Quaternion());
             gameObject.name = type;
+
             SceneManager.MoveGameObjectToScene(gameObject, Rust.Server.EntityScene);
+
+            UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
+
             if (!gameObject.activeSelf)
                 gameObject.SetActive(true);
-            if (gameObject.GetComponent<Spawnable>())
-                UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
+
             BaseEntity component = gameObject.GetComponent<BaseEntity>();
             return component;
         }

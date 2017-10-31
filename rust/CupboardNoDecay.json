@@ -2,7 +2,7 @@
     "name": "Cupboard NoDecay",
     "description": "Prevents decay on items under a cupboard radius.",
     "author": "Dubz",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/cupboard-nodecay.2341",

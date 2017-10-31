@@ -2,7 +2,7 @@
     "name": "ServerAnnouncer",
     "description": "Allows you to broadcast a message to the server with a custom prefix",
     "author": "Austinv900",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "configuration": true,
     "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/serverannouncer.2198",

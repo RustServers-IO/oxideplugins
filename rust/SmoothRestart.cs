@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Collections.Generic;
 //using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using System.Linq;
 using System.Text;
 using Oxide.Core.Configuration;
@@ -10,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.1.0", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.0", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -191,7 +192,7 @@ namespace Oxide.Plugins
 			lastSecond = DateTime.Now.Second;
 			currentCountDown = 0;
 			jsonsettings = new JsonSerializerSettings();
-			jsonsettings.Converters.Add(new KeyValuesConverter());
+			jsonsettings.Converters.Add(new KeyValuePairConverter());
 			newDevblogDetected = false;
 			newOxideBuildDetected = false;
 			userAgent = new Dictionary<string, string>();
@@ -207,10 +208,10 @@ namespace Oxide.Plugins
 		{
 			if (!permission.PermissionExists("smoothrestart.canrestart"))
 				permission.RegisterPermission("smoothrestart.canrestart", this);
-				CheckDevBlog(6);
+				CheckDevBlog(4);
 				CheckOxideCommits();
 			if (enableAutoChecks)
-				_blogTimer = timer.Every(checkIntervalMinutes*60, () => CheckDevBlog(6));
+				_blogTimer = timer.Every(checkIntervalMinutes*60, () => CheckDevBlog(4));
 		}
 
 		void OnTick()
@@ -272,7 +273,7 @@ namespace Oxide.Plugins
 		{
 			var url = $"http://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=252490&count={countNews}&maxlength=1&format=json";
 			try { webrequest.EnqueueGet(url, (code, response) => APIResponse(code, response, "devblog", countNews), this); }
-			catch { timer.Once(60f, () => CheckDevBlog(6)); }
+			catch { timer.Once(60f, () => CheckDevBlog(4)); }
 		}
 
 		void CheckOxideCommits()
@@ -288,16 +289,14 @@ namespace Oxide.Plugins
 		{
 			if (!(response == null || code != 200) && apiType == "devblog")
 			{
-				var jsonresponse1 = JsonConvert.DeserializeObject<Dictionary<string, object>>(response, jsonsettings);
-				if (!(jsonresponse1["appnews"] is Dictionary<string, object>)) return;
-				var items = ((jsonresponse1["appnews"] as Dictionary<string, object>)["newsitems"] as List<object>).ToArray();
-				foreach (Dictionary<string, object> info in items.Where(p => (p as Dictionary<string, object>)["title"].ToString().Contains("Devblog")))
+				var news = JsonConvert.DeserializeObject<AppNewsClass>(response);
+				foreach (var item in news.appnews.newsitems)
 				{
-					if (info["title"].ToString().Contains("Devblog"))
+					if (item.title.Contains("Devblog"))
 					{
 						if (currentDevblog == 0 || initCheckDevblog)
 						{
-							var resultBlog = Convert.ToInt32((info["title"].ToString().Replace("Devblog ", "")));
+							var resultBlog = Convert.ToInt32(item.title.Replace(" ", "").Replace("Devblog", ""));
 							if (resultBlog != currentDevblog)
 							{
 								currentDevblog = resultBlog;
@@ -307,7 +306,7 @@ namespace Oxide.Plugins
 							if (initCheckDevblog) initCheckDevblog = false;
 							break;
 						}
-						var checkedDevblog = Convert.ToInt32((info["title"].ToString().Replace("Devblog ", "")));
+						var checkedDevblog = Convert.ToInt32(item.title.Replace(" ", "").Replace("Devblog", ""));
 						bool blogChanged = false;
 						if (currentDevblog != checkedDevblog)
 						{
@@ -331,7 +330,7 @@ namespace Oxide.Plugins
 						}
 						break;
 					}
-				}
+				} 
 			}
 			else if (!(response == null || code != 200) && apiType == "oxide")
 			{
@@ -665,6 +664,33 @@ namespace Oxide.Plugins
 				original = regexTag.Replace(original, "");
 
 			return original;
+		}
+		
+		public class AppNewsClass
+		{
+			public Appnews appnews { get; set; }
+			
+			public class Appnews
+			{
+				public int appid { get; set; }
+				public List<Newsitem> newsitems { get; set; }
+				public int count { get; set; }
+				
+				public class Newsitem
+				{
+					public string gid { get; set; }
+					public string title { get; set; }
+					public string url { get; set; }
+					public bool is_external_url { get; set; }
+					public string author { get; set; }
+					public string contents { get; set; }
+					public string feedlabel { get; set; }
+					public int date { get; set; }
+					public string feedname { get; set; }
+					public int feed_type { get; set; }
+					public int appid { get; set; }
+				}
+			}
 		}
 
 	}

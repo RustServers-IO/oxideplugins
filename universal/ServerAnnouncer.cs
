@@ -5,7 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Server Announcer", "austinv900", "1.0.4", ResourceId = 2198)]
+    [Info("Server Announcer", "austinv900", "1.0.6", ResourceId = 2198)]
     [Description("Allows you to send messages as the server with custom prefix")]
     public class ServerAnnouncer : CovalencePlugin
     {
@@ -13,14 +13,7 @@ namespace Oxide.Plugins
 
         private const string Permission = "ServerAnnouncer.Allowed";
 
-#if (Blackwake || Blockstorm || FromTheDepths || GangBeasts || SavageLands)
         private void Init()
-        {
-            throw new NotSupportedException("This plugin is not supported with this game");
-        }
-#endif
-
-        private void OnServerInitialized()
         {
             LoadConfig();
             permission.RegisterPermission(Permission, this);

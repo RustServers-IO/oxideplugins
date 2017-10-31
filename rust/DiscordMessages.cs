@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordMessages", "Slut", "1.5.0", ResourceId = 2486)]
+    [Info("DiscordMessages", "Slut", "1.5.1", ResourceId = 2486)]
     class DiscordMessages : CovalencePlugin
     {
         #region Classes
@@ -19,7 +19,8 @@ namespace Oxide.Plugins
             public DateTime messageCooldown { get; set; }
         }
 
-        public class SavedMessages {
+        public class SavedMessages
+        {
             public string url { get; set; }
             public string payload { get; set; }
             public float time { get; set; }
@@ -32,23 +33,27 @@ namespace Oxide.Plugins
             }
 
         }
-        public class FancyMessage {
+        public class FancyMessage
+        {
             public string content { get; set; }
             public bool tts { get; set; }
             public Embeds[] embeds { get; set; }
 
-            public class Embeds {
+            public class Embeds
+            {
                 public string title { get; set; }
                 public int color { get; set; }
                 public List<Fields> fields { get; set; }
-                public Embeds(string title, int color, List<Fields> fields) {
+                public Embeds(string title, int color, List<Fields> fields)
+                {
                     this.title = title;
                     this.color = color;
                     this.fields = fields;
                 }
             }
 
-            public FancyMessage(string content, bool tts, Embeds[] embeds) {
+            public FancyMessage(string content, bool tts, Embeds[] embeds)
+            {
                 this.content = content;
                 this.tts = tts;
                 this.embeds = embeds;
@@ -89,7 +94,7 @@ namespace Oxide.Plugins
         private bool MessageEnabled = true;
         private bool MessageAlert = false;
         private bool ReportAlert = false;
-        private bool MuteEnabled;
+        private bool MuteEnabled = true;
         private bool Announce = true;
         private int ReportCooldown = 30;
         private int MessageCooldown = 15;
@@ -248,13 +253,25 @@ namespace Oxide.Plugins
         #endregion
 
         #region API
-        private void API_SendFancyMessage(string webhookURL, string embedName, int embedColor, List<Fields> fields)
+        private void API_SendFancyMessage(string webhookURL, string embedName, int embedColor, string json)
         {
+            List<Fields> fields = new List<Fields>();
+            JArray Jarray = (JArray)JsonConvert.DeserializeObject(json);
+            foreach (var field in Jarray)
+            {
+                fields.Add(new Fields(field["name"].ToString(), field["value"].ToString(), bool.Parse(field["inline"].ToString())));
+            }
             if (embedColor == 0)
             {
                 embedColor = 3329330;
             }
             FancyMessage message = new FancyMessage(null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(embedName, 3329330, fields) });
+            var payload = message.toJSON(message);
+            SendPOST(webhookURL, payload);
+        }
+        private void API_SendTextMessage(string webhookURL, string content)
+        {
+            FancyMessage message = new FancyMessage(content, false, null);
             var payload = message.toJSON(message);
             SendPOST(webhookURL, payload);
         }
@@ -290,17 +307,19 @@ namespace Oxide.Plugins
                         JObject json = JObject.Parse(response);
                         if (json["message"].ToString().Contains("rate limit") && exists == false)
                         {
-                            float seconds = float.Parse(Math.Ceiling((double) (int)json["retry_after"] / 1000).ToString());
+                            float seconds = float.Parse(Math.Ceiling((double)(int)json["retry_after"] / 1000).ToString());
                             savedmessages.Add(new SavedMessages(url, payload, seconds));
                             if (_timer == null || _timer.Destroyed)
                             {
                                 RateTimer();
                             }
-                        } else
+                        }
+                        else
                         {
                             PrintWarning($"Discord rejected that payload! Responded with \"{json["message"].ToString()}\" Code: {code}");
                         }
-                    } else
+                    }
+                    else
                     {
                         PrintWarning($"Discord didn't respond (down?) Code: {code}");
                     }
@@ -354,9 +373,9 @@ namespace Oxide.Plugins
             SendPOST(MessageURL, payload);
             SendMessage(player, GetLang("MessageSent", player.Id));
             if (cooldowns.ContainsKey(player.Id))
-            cooldowns[player.Id].messageCooldown = DateTime.Now;
+                cooldowns[player.Id].messageCooldown = DateTime.Now;
             else
-                cooldowns.Add(player.Id, new Cooldowns {messageCooldown = DateTime.Now});
+                cooldowns.Add(player.Id, new Cooldowns { messageCooldown = DateTime.Now });
         }
 
         #endregion
@@ -413,14 +432,14 @@ namespace Oxide.Plugins
                 fields.Add(new Fields(GetLang("Embed_ReportPlayer"), $"[{player.Name}](https://steamcommunity.com/profiles/{player.Id})", true));
                 fields.Add(new Fields(GetLang("Embed_ReportStatus"), status, true));
                 fields.Add(new Fields(GetLang("Embed_ReportReason"), reason, false));
-                FancyMessage message = new FancyMessage(ReportAlert == true ? "@here": null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(GetLang("Embed_MessageTitle"), ReportColor, fields) });
+                FancyMessage message = new FancyMessage(ReportAlert == true ? "@here" : null, false, new FancyMessage.Embeds[1] { new FancyMessage.Embeds(GetLang("Embed_MessageTitle"), ReportColor, fields) });
 
                 SendPOST(ReportURL, message.toJSON(message));
                 SendMessage(player, GetLang("ReportSent", player.Id));
                 if (cooldowns.ContainsKey(player.Id))
                     cooldowns[player.Id].reportCooldown = DateTime.Now;
                 else
-                    cooldowns.Add(player.Id, new Cooldowns { reportCooldown = DateTime.Now});
+                    cooldowns.Add(player.Id, new Cooldowns { reportCooldown = DateTime.Now });
             }
         }
 
@@ -589,7 +608,7 @@ namespace Oxide.Plugins
         {
             try
             {
-                var parsed = (T) Convert.ChangeType(s, typeof(T));
+                var parsed = (T)Convert.ChangeType(s, typeof(T));
                 return true;
             }
             catch

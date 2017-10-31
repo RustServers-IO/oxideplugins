@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("FancyDrop", "Fujikura", "2.6.20", ResourceId = 1934)]
+	[Info("FancyDrop", "Fujikura", "2.6.21", ResourceId = 1934)]
 	[Description("The Next Level of a fancy airdrop-toolset")]
 	class FancyDrop : RustPlugin
 	{
@@ -822,7 +822,7 @@ namespace Oxide.Plugins
 			Rust.Registry.Entity.Register(ent.GetComponent<UnityEngine.Component>().gameObject, ent);
 			if (ent.net == null)
 				ent.net = Network.Net.sv.CreateNetworkable();
-			ent.net.owner = ent;
+			ent.net.handler = ent;
 			_creationFrame.SetValue(ent, Time.frameCount);
 			ent.PreInitShared();
 			ent.InitShared();

@@ -8,14 +8,16 @@ using Oxide.Core.Plugins;
 using Oxide.Core.Configuration;
 using Oxide.Core.Libraries.Covalence;
 
+// TODO: Fully implement hits options.
 namespace Oxide.Plugins
 {
-	[Info("Timber", "Mattparks", "0.1.8", ResourceId = 2565)]
+	[Info("Timber", "Mattparks", "0.1.11", ResourceId = 2565)]
 	[Description("Makes trees and cacti fall before being destroyed.")]
 	class Timber : RustPlugin 
 	{
-		private readonly static float MAX_FIRST_DISTANCE = 18.0f;
-		private readonly string PERMISSION_FIRST = "timber.first";
+		#region Fields
+	   
+		private readonly static float maxFirstDistance = 18.0f;
 
 		private readonly static string soundWoundedPrefab = "assets/bundled/prefabs/fx/player/beartrap_scream.prefab";
 		private readonly static string soundFallNormalPrefab = "assets/bundled/prefabs/fx/player/groundfall.prefab";
@@ -25,94 +27,96 @@ namespace Oxide.Plugins
 		private readonly static string despawnPrefab = "assets/prefabs/misc/junkpile/effects/despawn.prefab";
 		private readonly static string stumpPrefab = "assets/bundled/prefabs/autospawn/collectable/stone/wood-collectable.prefab";
 
+		#endregion
+
         #region Configuration
 
-		private float harvestStanding; // The rate of gather in fallen trees.
-		private float harvestFallen; // The rate of gather in standing trees.
-		private float despawnLength; // How long the fallen tree will sit on the ground before despawning.
-		private float screamPercent; // The percent of trees that will scream when chopped down.
-		private bool includeCacti; // If cacti will be included in the timber plugin.
-		private bool logToPlayer; // If enabled a message will be displayed to a player after they chop down there first tree.
+		public class Options
+		{	 
+			public float harvestStanding = 0.5f; // The rate of gather in fallen trees.
+			public float harvestFallen = 2.805f; // The rate of gather in standing trees.
+			public int hitsStanding = 10; // The amount of hits from a hatchet to take a standing tree down.
+			public int hitsFallen = 10; // The amount of hits from a hatchet to finish a fallen tree.
+			public float despawnLength = 30.0f; // How long the fallen tree will sit on the ground before despawning.
+			public float screamPercent = 0.03f; // The percent of trees that will scream when chopped down.
+			public bool includeCacti = true; // If cacti will be included in the timber plugin.
+			public bool logToPlayer = true; // If enabled a message will be displayed to a player after they chop down there first tree.
+		}
+		
+		public class ConfigData
+		{
+			public Options options = new Options();
+		}
+
+		public class StoredData
+		{
+			public List<string> loggedTo = new List<string>();
+		}
+		
+		private ConfigData configs;
+		private StoredData storedData;
 		
 		private void LoadDefaultConfig()
 		{
-			Config["HarvestStanding"] = harvestStanding = GetConfig("HarvestStanding", 0.5f);
-			Config["HarvestFallen"] = harvestFallen = GetConfig("HarvestFallen", 2.805f);
-			Config["DespawnLength"] = despawnLength = GetConfig("DespawnLength", 30.0f);
-			Config["ScreamPercent"] = screamPercent = GetConfig("ScreamPercent", 0.06f);
-			Config["IncludeCacti"] = includeCacti = GetConfig("IncludeCacti", true);
-			Config["LogToPlayer"] = logToPlayer = GetConfig("LogToPlayer", true);
+			Puts("Creating a new config file!"); 
+			configs = new ConfigData();
 			SaveConfig();
+		}
+
+		private void LoadVariables()
+		{
+			configs = Config.ReadObject<ConfigData>();
+			
+			if (configs == null)
+			{
+				LoadDefaultConfig();
+			}
+			
+			storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("Timber");
+			
+			if (storedData == null)
+			{
+				storedData = new StoredData();
+			}
+			
+			SaveConfig();
+			SaveStored();
+		}
+
+		private void SaveConfig()
+		{
+			Config.WriteObject(configs, true);
+		}
+
+		private void SaveStored()
+		{
+			Interface.Oxide.DataFileSystem.WriteObject("Timber", storedData);
 		}
 
         #endregion
 
         #region Messages/Localization
 
-		private void LoadDefaultMessages() 
+		private void LoadMessages() 
 		{
 			// English messages.
 			lang.RegisterMessages(new Dictionary<string, string>
 			{
-				["TIMBER_ABOUT"] = "<color=red>Timber " + Version + "</color>: by <color=green>mattparks</color>. Timber is a plugin that animates the destruction of trees and cacti.",
-				["TIMBER_FIRST"] = "<color=red>Timber!</color> Tree falling is not in vanilla Rust, read more from the command <color=green>/timber</color>",
+				["TIMBER_ABOUT"] = "<color=#ff3b3b>Timber {Version}</color>: by <color=green>mattparks</color>. Timber is a plugin that animates the destruction of trees and cacti.",
+				["TIMBER_FIRST"] = "<color=#ff3b3b>Timber!</color> Tree falling is not in vanilla Rust, hit the tree on the ground for more wood, read more from the command <color=green>/timber</color>",
 			}, this, "en");
-
-			// French messages.
-			lang.RegisterMessages(new Dictionary<string, string>
-			{
-				["TIMBER_ABOUT"] = "<color=red>Timber " + Version + "</color>: by <color=green>mattparks</color>. Le bois est un plugin qui anime la destruction des arbres et des cactus.",
-				["TIMBER_FIRST"] = "<color=red>Bois!</color> L'arbre qui tombe n'est pas dans la rouille vanille, lis plus de la commande <color=green>/timber</color>",
-			}, this, "fr");
-
-			// German messages.
-			lang.RegisterMessages(new Dictionary<string, string>
-			{
-				["TIMBER_ABOUT"] = "<color=red>Timber " + Version + "</color>: by <color=green>mattparks</color>. Holz ist ein Plugin, das die Zerstörung von Bäumen und Kakteen animiert.",
-				["TIMBER_FIRST"] = "<color=red>Bauholz!</color> Baum fallen ist nicht in Vanille Rust, lesen Sie mehr aus dem Befehl <color=green>/timber</color>",
-			}, this, "de");
-
-			// Russian messages.
-			lang.RegisterMessages(new Dictionary<string, string>
-			{
-				["TIMBER_ABOUT"] = "<color=red>Timber " + Version + "</color>: by <color=green>mattparks</color>. Древесина - это плагин, который оживляет разрушение деревьев и кактусов.",
-				["TIMBER_FIRST"] = "<color=red>Древесина!</color> Падение дерева не в ванильном ржавчине, больше читайте из команды <color=green>/timber</color>",
-			}, this, "ru");
-
-			// Spanish messages.
-			lang.RegisterMessages(new Dictionary<string, string>
-			{
-				["TIMBER_ABOUT"] = "<color=red>Timber " + Version + "</color>: by <color=green>mattparks</color>. Timber es un plugin que anima la destrucción de árboles y cactus.",
-				["TIMBER_FIRST"] = "<color=red>¡Madera!</color> Árbol que cae no está en el moho de la vainilla, leyó más del comando <color=green>/timber</color>",
-			}, this, "es");
 		}
 		
         #endregion
 
-        #region Initialization
+        #region Hooks
 
 		private void Init()
 		{
-			LoadDefaultConfig();
-			LoadDefaultMessages();
-			
-			// Registers permissions.
-			permission.RegisterPermission(PERMISSION_FIRST, this);
+			LoadVariables();
+			LoadMessages();
+			SaveStored();
 		}
-
-		#endregion
-
-        #region Chat/Console Commands
-
-		[ChatCommand("timber")]
-		private void TimberCmd(BasePlayer player, string command, string[] args)
-		{
-			MessagePlayer(Lang("TIMBER_ABOUT", player), player);
-		}
-		
-        #endregion
-
-		#region OnDispenserGather
 
 		private void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
 		{
@@ -129,18 +133,14 @@ namespace Oxide.Plugins
 			// Changes the harvest amount in objects that are falling or despawning.
 			if (fallDefined || despawnDefined)
 			{
-				item.amount = (int) (item.amount * harvestFallen);
+				item.amount = (int) (item.amount * configs.options.harvestFallen);
 			}
 			else if (dispenser.gatherType == ResourceDispenser.GatherType.Tree)
 			{
-				item.amount = (int) (item.amount * harvestStanding);
+				item.amount = (int) (item.amount * configs.options.harvestStanding);
 			}
 		}
 		
-        #endregion
-		
-		#region OnEntityKill
-
 		private void OnEntityKill(BaseNetworkable entity)
 		{
 			bool fallDefined = entity.GetComponent<FallControl>() != null;
@@ -152,22 +152,22 @@ namespace Oxide.Plugins
 			// Creates the fall behaviour if none is defined.
 			if (!fallDefined && !despawnDefined)
 			{
-				if (entity is TreeEntity || (includeCacti && StringPool.Get(entity.prefabID).Contains("cactus")))
+				if (entity is TreeEntity || (configs.options.includeCacti && StringPool.Get(entity.prefabID).Contains("cactus")))
 				{
 					Effect.server.Run(despawnPrefab, entityPosition);
 
-					if (logToPlayer)
+					if (configs.options.logToPlayer)
 					{
 						foreach (var player in BasePlayer.activePlayerList)
 						{
 							float distance = Vector3.Distance(player.transform.position, entityPosition);
 							
-							if (distance < MAX_FIRST_DISTANCE)
+							if (distance < maxFirstDistance)
 							{
-								if (!permission.UserHasPermission(player.UserIDString, PERMISSION_FIRST))
+								if (!storedData.loggedTo.Contains(player.UserIDString))
 								{
 									MessagePlayer(Lang("TIMBER_FIRST", player), player);
-									permission.GrantUserPermission(player.UserIDString, PERMISSION_FIRST, this);
+									storedData.loggedTo.Add(player.UserIDString);
 								}
 							}
 						}
@@ -176,7 +176,7 @@ namespace Oxide.Plugins
 					var newFalling = GameManager.server.CreateEntity(StringPool.Get(entity.prefabID), entityPosition, entityRotation, true);
 
 					var controlFall = newFalling.gameObject.AddComponent<FallControl>();
-					controlFall.Load(newFalling, despawnLength, new System.Random().NextDouble() <= screamPercent);
+					controlFall.Load(newFalling, configs.options.despawnLength, configs.options.screamPercent);
 
 					newFalling.Spawn();
 				}
@@ -198,34 +198,23 @@ namespace Oxide.Plugins
 			}
 		}
 
+		private void Unload()
+		{
+			SaveStored();
+		}
+		
         #endregion
 		
-        #region Helpers
+        #region Chat/Console Commands
 
-		private T GetConfig<T>(string name, T original)
+		[ChatCommand("timber")]
+		private void CommandTimber(BasePlayer player, string command, string[] args)
 		{
-			// Returns the reading of present.
-			if (Config[name] != null)
-			{
-				return (T)Convert.ChangeType(Config[name], typeof(T));
-			}
-
-			// Otherwise return the original.
-			return original;
+			MessagePlayer(Lang("TIMBER_ABOUT", player).Replace("{Version}", Version.ToString()), player); 
 		}
 		
-		private string Lang(string key, BasePlayer player)
-		{
-			return lang.GetMessage(key, this, player.UserIDString);
-		}
-
-		private void MessagePlayer(string message, BasePlayer player)
-		{
-			player.ChatMessage(message);
-		}
-
         #endregion
-		
+
 		#region Behaviours
 
 		public class FallControl : MonoBehaviour
@@ -248,6 +237,8 @@ namespace Oxide.Plugins
 			private float currentOffsetY;
 			private float timeDespawn;
 
+			private int lastFrame = Time.frameCount;
+			
 			public FallControl()
 			{
 				this.parentEntity = null;
@@ -263,7 +254,7 @@ namespace Oxide.Plugins
 				this.timeDespawn = 0.0f;
 			}
 
-			public void Load(BaseEntity parentEntity, float despawnLength, bool scream)
+			public void Load(BaseEntity parentEntity, float despawnLength, float screamPercent)
 			{
 				this.parentEntity = parentEntity;
 				this.despawnLength = despawnLength;
@@ -284,8 +275,8 @@ namespace Oxide.Plugins
 					var stumpEntity = GameManager.server.CreateEntity(stumpPrefab, new Vector3(stumpPosition.x, stumpHeight, stumpPosition.z));
 					stumpEntity.Spawn();
 				}
-
-				if (scream)
+				
+				if (screamPercent > 0 && new System.Random().NextDouble() <= screamPercent)
 				{
 					Effect.server.Run(soundWoundedPrefab, gameObject.transform.position);
 				}
@@ -304,38 +295,43 @@ namespace Oxide.Plugins
 
 			private void Update()
 			{
-				// Falls until the target angle has been reached.
-				if (Math.Abs(currentAngle.x) <= targetAngle) 
+				if (Time.frameCount - lastFrame > 1)
 				{
-					currentSpeed += ACCELERATION_Y * Time.deltaTime;
-					Vector3 deltaAngle = Vector3.left * currentSpeed;
-					currentAngle += deltaAngle;
-					gameObject.transform.rotation *= Quaternion.Euler(deltaAngle.x, deltaAngle.y, deltaAngle.z);
-					gameObject.transform.hasChanged = true;
-
-					if (currentOffsetY < colliderRadius)
+					// Falls until the target angle has been reached.
+					if (Math.Abs(currentAngle.x) <= targetAngle) 
 					{
-						currentOffsetY += RADIUS_OFFSET_SPEED * currentSpeed;
-						parentEntity.transform.position += new Vector3(0.0f, RADIUS_OFFSET_SPEED * currentSpeed, 0.0f);
+						currentSpeed += ACCELERATION_Y * Time.deltaTime;
+						Vector3 deltaAngle = Vector3.left * currentSpeed;
+						currentAngle += deltaAngle;
+						gameObject.transform.rotation *= Quaternion.Euler(deltaAngle.x, deltaAngle.y, deltaAngle.z);
+						gameObject.transform.hasChanged = true;
+
+						if (currentOffsetY < colliderRadius)
+						{
+							currentOffsetY += RADIUS_OFFSET_SPEED * currentSpeed;
+							parentEntity.transform.position += new Vector3(0.0f, RADIUS_OFFSET_SPEED * currentSpeed, 0.0f);
+						}
+
+						// TODO: Fix rendering rotation from far distance.
+						parentEntity.SendNetworkUpdateImmediate();
+					}
+					// This is when the tree has hit the ground.
+					else if (currentSpeed != 0.0f)
+					{
+						Effect.server.Run(soundGroundPrefab, gameObject.transform.position);
+						currentSpeed = 0.0f;
+					}
+					else
+					{
+						timeDespawn += Time.deltaTime;
 					}
 
-					// TODO: Fix rendering rotation from far distance.
-					parentEntity.SendNetworkUpdateImmediate();
-				}
-				// This is when the tree has hit the ground.
-				else if (currentSpeed != 0.0f)
-				{
-					Effect.server.Run(soundGroundPrefab, gameObject.transform.position);
-					currentSpeed = 0.0f;
-				}
-				else
-				{
-					timeDespawn += Time.deltaTime;
-				}
-
-				if (timeDespawn > despawnLength)
-				{
-					parentEntity.Kill();
+					if (timeDespawn > despawnLength)
+					{
+						parentEntity.Kill();
+					}
+				
+					lastFrame = Time.frameCount;
 				}
 			}
 		}
@@ -347,6 +343,8 @@ namespace Oxide.Plugins
 
 			private BaseEntity parentEntity;
 			private float currentSpeed;
+			
+			private int lastFrame = Time.frameCount;
 
 			public DespawnControl()
 			{
@@ -361,19 +359,38 @@ namespace Oxide.Plugins
 
 			private void Update()
 			{
-				currentSpeed += ACCELERATION_Y * Time.deltaTime;
-				gameObject.transform.position += new Vector3(0.0f, -currentSpeed, 0.0f);
-				gameObject.transform.hasChanged = true;
-
-				parentEntity.SendNetworkUpdateImmediate();
-
-				if (gameObject.transform.position.y < DESPAWN_HEIGHT)
+				if (Time.frameCount - lastFrame > 1)
 				{
-					parentEntity.Kill();
+					currentSpeed += ACCELERATION_Y * Time.deltaTime;
+					gameObject.transform.position += new Vector3(0.0f, -currentSpeed, 0.0f);
+					gameObject.transform.hasChanged = true;
+
+					parentEntity.SendNetworkUpdateImmediate();
+
+					if (gameObject.transform.position.y < DESPAWN_HEIGHT)
+					{
+						parentEntity.Kill();
+					}
+					
+					lastFrame = Time.frameCount;
 				}
 			}
 		}
 		
+        #endregion
+
+        #region Helpers
+
+		private string Lang(string key, BasePlayer player)
+		{
+			return lang.GetMessage(key, this, player.UserIDString);
+		}
+
+		private void MessagePlayer(string message, BasePlayer player)
+		{
+			player.ChatMessage(message);
+		}
+
         #endregion
 	}
 }

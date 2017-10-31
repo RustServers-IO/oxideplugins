@@ -2,8 +2,11 @@
     "name": "Respawn Protection",
     "description": "Protect fresh respawned players",
     "author": "sami37",
-    "version": "1.1.5",
+    "version": "1.2.0",
     "configuration": true,
+    "suggest": {
+        "Economics": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/respawn-protection.2551",
     "games": [

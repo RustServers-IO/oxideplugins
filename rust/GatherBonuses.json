@@ -1,0 +1,16 @@
+{
+    "name": "Gather Bonuses",
+    "description": "Change ore gather bonuses",
+    "author": "wzp",
+    "version": "0.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/gather-bonuses.2607",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

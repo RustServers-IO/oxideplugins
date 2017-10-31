@@ -1,0 +1,16 @@
+{
+    "name": "AdvancedArrows",
+    "description": "Allows players with permission to use various different custom arrow types",
+    "author": "Ryan",
+    "version": "2.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/advancedarrows.1413",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.6.2", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.6.3", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
     class ZLevelsRemastered : RustPlugin
@@ -344,7 +344,7 @@ namespace Oxide.Plugins
 
 		void OnPlayerInit(BasePlayer player)
         {
-            if (!initialized || player == null) return;
+            if (!initialized || player == null || !IsValid(player)) return;
 			UpdatePlayer(player);
 			RenderUI(player);			
 			/*
@@ -433,7 +433,7 @@ namespace Oxide.Plugins
 
 		void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
 		{
-			if (!initialized || entity == null || !(entity is BasePlayer)) return;
+			if (!initialized || entity == null || !(entity is BasePlayer) || !IsValid(entity as BasePlayer)) return;
 			NextTick(()=>{
 				if (entity != null && entity.health <= 0f) BlendOutUI(entity as BasePlayer);
 			});
@@ -441,7 +441,7 @@ namespace Oxide.Plugins
 
 		void OnEntityDeath(BaseCombatEntity entity, HitInfo hitInfo)
         {
-            if (!initialized || !penaltyOnDeath || entity == null || !(entity is BasePlayer)) return;
+            if (!initialized || !penaltyOnDeath || entity == null || !(entity is BasePlayer) || !IsValid(entity as BasePlayer)) return;
 			var player = entity as BasePlayer;
 			if (Interface.CallHook("CanBePenalized", player) != null) return;
 			PlayerInfo p = null;
@@ -1462,13 +1462,20 @@ namespace Oxide.Plugins
 
         void BlendOutUI(BasePlayer player)
         {
-            if (!cuiEnabled || player.userID < 76560000000000000L || !playerPrefs.PlayerInfo[player.userID].CUI || !hasRights(player.UserIDString)) return;
+            if (!cuiEnabled || !IsValid(player) || !playerPrefs.PlayerInfo[player.userID].CUI || !hasRights(player.UserIDString)) return;
 			CuiHelper.DestroyUi(player, "StatsUI");
+		}
+		
+		Boolean IsValid(BasePlayer player)
+		{
+			if (player is NPCPlayer || player.userID < 76561197960265728L)
+				return false;
+			return true;
 		}
 
         void RenderUI(BasePlayer player)
         {
-            if (!cuiEnabled || !playerPrefs.PlayerInfo[player.userID].CUI || !hasRights(player.UserIDString)) return;
+            if (!cuiEnabled || !IsValid(player) || !playerPrefs.PlayerInfo[player.userID].CUI || !hasRights(player.UserIDString)) return;
             var enabledSkillCount = 0;
             foreach (var skill in Skills.ALL)
             {

@@ -1,92 +1,88 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using Facepunch;
-using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
-using Rust;
 using UnityEngine;
+using Random = UnityEngine.Random;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Raid Tracker", "nivex", "0.1.13", ResourceId = 2458)]
-    [Description("Add tracking devices to explosives for detailed raid logging.")]
+    [Info("Raid Tracker", "nivex", "0.1.14", ResourceId = 2458), Description("Add tracking devices to explosives for detailed raid logging.")]
     public class RaidTracker : RustPlugin
     {
-        [PluginReference]
-        Plugin Discord, Slack;
+        [PluginReference] private Plugin Discord, Slack, DiscordMessages, PopupNotifications;
 
-        static RaidTracker ins;
-
-        private bool init = false;
-        private bool wipeData = false;
-        private static bool explosionsLogChanged = false;
-        private Dictionary<string, Color> attackersColor = new Dictionary<string, Color>();
+        private bool init;
+        private bool wipeData;
+        private static RaidTracker ins;
+        private static bool explosionsLogChanged;
         private static List<Dictionary<string, string>> dataExplosions;
+        private static readonly int layerMask = LayerMask.GetMask("Construction", "Deployed");
+
+        private readonly Dictionary<string, Color> attackersColor = new Dictionary<string, Color>();
+
         private DynamicConfigFile explosionsFile;
-        private static int layerMask = LayerMask.GetMask("Construction", "Deployed");
-        private List<string> limits = new List<string>();
-        List<BasePlayer> flagged = new List<BasePlayer>();
+        private readonly List<BasePlayer> flagged = new List<BasePlayer>();
+        private readonly List<string> limits = new List<string>();
 
-        private static readonly string szEntityOwner = "EntityOwner";
-        private static readonly string szEntityHit = "EntityHit";
-        private static readonly string szEntitiesHit = "EntitiesHit";
-        private static readonly string szAttacker = "Attacker";
-        private static readonly string szAttackerId = "AttackerId";
-        private static readonly string szStartPositionId = "StartPositionId";
-        private static readonly string szEndPositionId = "EndPositionId";
-        private static readonly string szWeapon = "Weapon";
-        private static readonly string szDeleteDate = "DeleteDate";
-        private static readonly string szLoggedDate = "LoggedDate";
+        public class Fields
+        {
+            public Fields(string name, string value, bool inline)
+            {
+                this.name = name;
+                this.value = value;
+                this.inline = inline;
+            }
 
-        class EntityInfo
+            public string name { get; set; }
+            public string value { get; set; }
+            public bool inline { get; set; }
+        }
+
+        public class EntityInfo
         {
             public string ShortPrefabName { get; set; }
             public ulong OwnerID { get; set; }
             public uint NetworkID { get; set; }
             public Vector3 Position { get; set; }
-            public EntityInfo() { }
+            public float Health { get; set; }
         }
 
         public class TrackingDevice : MonoBehaviour
         {
+            private int entitiesHit;
             private BaseEntity entity;
-            private Vector3 position;
-            private string weapon;
             private string entityHit;
             private ulong entityOwner;
-            private int entitiesHit;
-            private float radius;
-            private bool updated;
-            private bool isRocket;
             private double millisecondsTaken;
+            private Vector3 position;
             private Dictionary<Vector3, EntityInfo> prefabs;
+            private bool updated;
+            private string weapon;
 
             public string playerName { get; set; }
             public string playerId { get; set; }
             public Vector3 playerPosition { get; set; }
 
-            void Awake()
+            private void Awake()
             {
                 prefabs = new Dictionary<Vector3, EntityInfo>();
                 entity = GetComponent<BaseEntity>();
                 weapon = entity.ShortPrefabName;
-                isRocket = weapon.Contains("rocket");
                 position = entity.GetEstimatedWorldPosition();
-                radius = isRocket ? GetComponent<TimedExplosive>().explosionRadius : 0.5f;
-                Update(); // for instantaneous explosions?
-                //Debug.Log(entity.ShortPrefabName);
             }
 
-            void Update()
+            private void Update()
             {
                 var newPosition = entity.GetEstimatedWorldPosition();
 
-                if (newPosition == position) // don't continue if the position hasn't changed. this usually only occurs once
+                if (newPosition == position)
                     return;
 
                 if (Vector3.Distance(newPosition, Vector3.zero) < 5f) // entity moved to vector3.zero
@@ -96,7 +92,7 @@ namespace Oxide.Plugins
                 position = newPosition;
 
                 var colliders = Pool.GetList<Collider>();
-                Vis.Colliders(position, radius, colliders, layerMask, QueryTriggerInteraction.Collide);
+                Vis.Colliders(position, 1f, colliders, layerMask, QueryTriggerInteraction.Collide);
 
                 if (colliders.Count > 0)
                 {
@@ -109,111 +105,183 @@ namespace Oxide.Plugins
 
                         if (!prefabs.ContainsKey(e.transform.position))
                         {
-                            prefabs.Add(e.transform.position, new EntityInfo() { NetworkID = e.net.ID, OwnerID = e.OwnerID, Position = e.transform.position, ShortPrefabName = e.ShortPrefabName });
+                            prefabs.Add(e.transform.position, new EntityInfo
+                            {
+                                NetworkID = e.net.ID,
+                                OwnerID = e.OwnerID,
+                                Position = e.transform.position,
+                                ShortPrefabName = e.ShortPrefabName,
+                                Health = e.Health()
+                            });
 
                             updated = true;
+                        }
+                    }
+                }
 
-                            if (isRocket)
-                                entitiesHit++;
-                            else
-                                entitiesHit = 1;
+                Pool.FreeList(ref colliders);
+                millisecondsTaken += (DateTime.Now - tick).TotalMilliseconds;
+            }
+
+            private void CheckHealth()
+            {
+                if (Vector3.Distance(position, Vector3.zero) < 5f) // entity moved to vector3.zero
+                    return;
+
+                int count = 0;
+                var tick = DateTime.Now;
+                var colliders = Pool.GetList<Collider>();
+                Vis.Colliders(position, 1f, colliders, layerMask, QueryTriggerInteraction.Collide);
+
+                if (colliders.Count > 0)
+                {
+                    foreach (var collider in colliders)
+                    {
+                        var e = collider.gameObject?.ToBaseEntity() ?? null;
+
+                        if (e == null)
+                            continue;
+
+                        if (prefabs.ContainsKey(e.transform.position) && prefabs[e.transform.position].Health != e.Health())
+                        {
+                            prefabs[e.transform.position].Health = e.Health();
+                            entitiesHit++;
+                        }
+
+                        count++;
+                    }
+                }
+
+                Pool.FreeList(ref colliders);
+                entitiesHit += prefabs.Count - count;
+                millisecondsTaken += (DateTime.Now - tick).TotalMilliseconds;
+            }
+
+            private void OnDestroy()
+            {
+                ins.NextTick(() => {
+                    var tick = DateTime.Now;
+
+                    if (prefabs.Count > 0)
+                    {
+                        CheckHealth();
+
+                        var sorted = prefabs.ToList();
+                        sorted.Sort((x, y) => Vector3.Distance(x.Key, playerPosition).CompareTo(Vector3.Distance(y.Key, playerPosition)));
+
+                        //foreach (var kvp in sorted) Debug.Log(string.Format("{0} {1}", kvp.Value, kvp.Key));
+
+                        entityHit = sorted[0].Value.ShortPrefabName;
+                        entityOwner = sorted[0].Value.OwnerID;
+
+                        prefabs.Clear();
+                        sorted.Clear();
+                    }
+
+                    if (string.IsNullOrEmpty(entityHit))
+                    {
+                        Destroy(this);
+                        return;
+                    }
+
+                    if (weapon.Contains("timed"))
+                        weapon = "C4";
+                    else if (weapon.Contains("satchel"))
+                        weapon = "Satchel Charge";
+                    else if (weapon.Contains("basic"))
+                        weapon = "Rocket";
+                    else if (weapon.Contains("hv"))
+                        weapon = "High Velocity Rocket";
+                    else if (weapon.Contains("fire"))
+                        weapon = "Incendiary Rocket";
+                    else if (weapon.Contains("beancan"))
+                        weapon = "Beancan Grenade";
+                    else if (weapon.Contains("f1"))
+                        weapon = "F1 Grenade";
+
+                    var explosion = new Dictionary<string, string>
+                    {
+                        ["Attacker"] = playerName,
+                        ["AttackerId"] = playerId,
+                        ["StartPositionId"] = GetPositionID(playerPosition),
+                        ["EndPositionId"] = GetPositionID(position),
+                        ["Weapon"] = weapon,
+                        ["EntitiesHit"] = entitiesHit.ToString(),
+                        ["EntityHit"] = entityHit,
+                        ["DeleteDate"] = _daysBeforeDelete > 0 ? DateTime.UtcNow.AddDays(_daysBeforeDelete).ToString() : DateTime.MinValue.ToString(),
+                        ["LoggedDate"] = DateTime.UtcNow.ToString(),
+                        ["EntityOwner"] = entityOwner.ToString()
+                    };
+
+                    dataExplosions.Add(explosion);
+                    explosionsLogChanged = true;
+
+                    var endPosStr = string.Format("{0} {1} {2}", Math.Round(position.x, 2), Math.Round(position.y, 2), Math.Round(position.z, 2));
+                    string victim = entityOwner > 0 ? ins.covalence.Players.FindPlayerById(entityOwner.ToString())?.Name ?? entityOwner.ToString() : "No owner";
+                    string message = ins.msg("ExplosionMessage").Replace("{AttackerName}", playerName).Replace("{AttackerId}", playerId).Replace("{EndPos}", endPosStr).Replace("{Distance}", Vector3.Distance(position, playerPosition).ToString("N2")).Replace("{Weapon}", weapon).Replace("{EntityHit}", entityHit).Replace("{VictimName}", victim).Replace("{OwnerID}", entityOwner.ToString());
+
+                    if (_outputExplosionMessages)
+                        Debug.Log(message);
+
+                    if (_sendDiscordNotifications)
+                        ins.Discord?.Call("SendMessage", message);
+
+                    if (_sendSlackNotifications)
+                    {
+                        switch (_slackMessageStyle.ToLower())
+                        {
+                            case "message":
+                                ins.Slack?.Call(_slackMessageStyle, message, _slackChannel);
+                                break;
+                            default:
+                                ins.Slack?.Call(_slackMessageStyle, message, ins.covalence.Players.FindPlayerById(playerId), _slackChannel);
+                                break;
                         }
                     }
 
-                    Pool.FreeList<Collider>(ref colliders);
-                }
+                    if (_sendDiscordMessages)
+                        ins.DiscordMessage(playerName, playerId, message);
 
-                millisecondsTaken += (DateTime.Now - tick).TotalMilliseconds;
-            }
+                    foreach (var target in BasePlayer.activePlayerList)
+                    {
+                        if (target != null && ins.permission.UserHasPermission(target.UserIDString, "raidtracker.see"))
+                        {
+                            message = ins.msg("ExplosionMessage", target.UserIDString).Replace("{AttackerName}", playerName).Replace("{AttackerId}", playerId).Replace("{EndPos}", endPosStr).Replace("{Distance}", Vector3.Distance(position, playerPosition).ToString("N2")).Replace("{Weapon}", weapon).Replace("{EntityHit}", entityHit).Replace("{VictimName}", victim).Replace("{OwnerID}", entityOwner.ToString());
 
-            void OnDestroy()
-            {
-                var tick = DateTime.Now;
+                            if (usePopups && ins.PopupNotifications != null)
+                                ins.PopupNotifications.Call("CreatePopupNotification", message, target, popupDuration);
+                            else
+                                target.ChatMessage(message);
+                        }
+                    }
 
-                if (prefabs.Count > 0)
-                {
-                    var sorted = prefabs.ToList<KeyValuePair<Vector3, EntityInfo>>();
-                    sorted.Sort((x, y) => Vector3.Distance(x.Key, playerPosition).CompareTo(Vector3.Distance(y.Key, playerPosition)));
+                    millisecondsTaken += (DateTime.Now - tick).TotalMilliseconds;
 
-                    //foreach (var kvp in sorted) Debug.Log(string.Format("{0} {1}", kvp.Value, kvp.Key));
+                    if (_showMillisecondsTaken)
+                        Debug.Log(string.Format("Took {0}ms for tracking device operations", millisecondsTaken));
 
-                    entityHit = sorted[0].Value.ShortPrefabName;
-                    entityOwner = sorted[0].Value.OwnerID;
-
-                    prefabs.Clear();
-                    sorted.Clear();
-                }
-
-                if (string.IsNullOrEmpty(entityHit))
-                {
-                    GameObject.Destroy(this);
-                    return;
-                }
-
-                if (weapon.Contains("timed"))
-                    weapon = "C4";
-                else if (weapon.Contains("satchel"))
-                    weapon = "Satchel Charge";
-                else if (weapon.Contains("basic"))
-                    weapon = "Rocket";
-                else if (weapon.Contains("hv"))
-                    weapon = "High Velocity Rocket";
-                else if (weapon.Contains("fire"))
-                    weapon = "Incendiary Rocket";
-                else if (weapon.Contains("beancan"))
-                    weapon = "Beancan Grenade";
-                else if (weapon.Contains("f1"))
-                    weapon = "F1 Grenade";
-
-                var explosion = new Dictionary<string, string>
-                {
-                    [szAttacker] = playerName,
-                    [szAttackerId] = playerId,
-                    [szStartPositionId] = GetPositionID(playerPosition),
-                    [szEndPositionId] = GetPositionID(position),
-                    [szWeapon] = weapon,
-                    [szEntitiesHit] = entitiesHit.ToString(),
-                    [szEntityHit] = entityHit,
-                    [szDeleteDate] = daysBeforeDelete > 0 ? DateTime.UtcNow.AddDays(daysBeforeDelete).ToString() : DateTime.MinValue.ToString(),
-                    [szLoggedDate] = DateTime.UtcNow.ToString(),
-                    [szEntityOwner] = entityOwner.ToString()
-                };
-
-                dataExplosions.Add(explosion);
-                explosionsLogChanged = true;
-
-                var endPosStr = string.Format("{0} {1} {2}", Math.Round(position.x, 2), Math.Round(position.y, 2), Math.Round(position.z, 2));
-                string victim = entityOwner > 0 ? ins.covalence.Players.FindPlayerById(entityOwner.ToString())?.Name ?? entityOwner.ToString() : "No owner";
-                string message = string.Format("[Explosion] {0} ({1}) @ {2} ({3}m) {4}: {5} - Victim: {6} ({7})", playerName, playerId, endPosStr, Math.Round(Vector3.Distance(position, playerPosition), 2), weapon, entityHit, victim, entityOwner);
-
-                if (outputExplosionMessages)
-                    Debug.Log(message);
-
-                if (sendDiscordNotifications)
-                    ins.Discord?.Call("SendMessage", message);
-
-                if (sendSlackNotifications)
-                    ins.Slack?.Call(slackMessageStyle, message, ins.covalence.Players.FindPlayerById(playerId));
-
-                millisecondsTaken += (DateTime.Now - tick).TotalMilliseconds;
-
-                if (showMillisecondsTaken)
-                    Debug.Log(string.Format("Took {0}ms for tracking device operations", millisecondsTaken));
-
-                GameObject.Destroy(this);
+                    Destroy(this);
+                });
             }
         }
 
-        void OnServerSave() => SaveExplosionData();
-        void OnNewSave(string filename) => wipeData = true;
-
-        void Unload()
+        private void OnServerSave()
         {
-            var objects = GameObject.FindObjectsOfType(typeof(TrackingDevice));
+            SaveExplosionData();
+        }
+
+        private void OnNewSave(string filename)
+        {
+            wipeData = true;
+        }
+
+        private void Unload()
+        {
+            var objects = UnityEngine.Object.FindObjectsOfType(typeof(TrackingDevice));
 
             if (objects != null)
                 foreach (var gameObj in objects)
-                    GameObject.Destroy(gameObj);
+                    UnityEngine.Object.Destroy(gameObj);
 
             foreach (var target in flagged.ToList()) // in the event the plugin is unloaded while a player has an admin flag
             {
@@ -232,7 +300,7 @@ namespace Oxide.Plugins
             attackersColor?.Clear();
         }
 
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             if (init)
                 return;
@@ -257,7 +325,7 @@ namespace Oxide.Plugins
                 explosionsLogChanged = true;
             }
 
-            if (wipeData && automateWipes)
+            if (wipeData && _automateWipes)
             {
                 int entries = dataExplosions.Count;
                 dataExplosions.Clear();
@@ -271,35 +339,35 @@ namespace Oxide.Plugins
             {
                 foreach (var dict in dataExplosions.ToList())
                 {
-                    if (dict.ContainsKey(szDeleteDate)) // apply retroactive changes
+                    if (dict.ContainsKey("DeleteDate")) // apply retroactive changes
                     {
-                        if (applyInactiveChanges)
+                        if (_applyInactiveChanges)
                         {
-                            if (daysBeforeDelete > 0 && dict[szDeleteDate] == DateTime.MinValue.ToString())
+                            if (_daysBeforeDelete > 0 && dict["DeleteDate"] == DateTime.MinValue.ToString())
                             {
-                                dict[szDeleteDate] = DateTime.UtcNow.AddDays(daysBeforeDelete).ToString();
+                                dict["DeleteDate"] = DateTime.UtcNow.AddDays(_daysBeforeDelete).ToString();
                                 explosionsLogChanged = true;
                             }
-                            if (daysBeforeDelete == 0 && dict[szDeleteDate] != DateTime.MinValue.ToString())
+                            if (_daysBeforeDelete == 0 && dict["DeleteDate"] != DateTime.MinValue.ToString())
                             {
-                                dict[szDeleteDate] = DateTime.MinValue.ToString();
+                                dict["DeleteDate"] = DateTime.MinValue.ToString();
                                 explosionsLogChanged = true;
                             }
                         }
 
-                        if (applyActiveChanges && daysBeforeDelete > 0 && dict.ContainsKey(szLoggedDate))
+                        if (_applyActiveChanges && _daysBeforeDelete > 0 && dict.ContainsKey("LoggedDate"))
                         {
-                            var deleteDate = DateTime.Parse(dict[szDeleteDate]);
-                            var loggedDate = DateTime.Parse(dict[szLoggedDate]);
+                            var deleteDate = DateTime.Parse(dict["DeleteDate"]);
+                            var loggedDate = DateTime.Parse(dict["LoggedDate"]);
                             int days = deleteDate.Subtract(loggedDate).Days;
 
-                            if (days != daysBeforeDelete)
+                            if (days != _daysBeforeDelete)
                             {
                                 int daysLeft = deleteDate.Subtract(DateTime.UtcNow).Days;
 
-                                if (daysLeft > daysBeforeDelete)
+                                if (daysLeft > _daysBeforeDelete)
                                 {
-                                    dict[szDeleteDate] = loggedDate.AddDays(daysBeforeDelete).ToString();
+                                    dict["DeleteDate"] = loggedDate.AddDays(_daysBeforeDelete).ToString();
                                     explosionsLogChanged = true;
                                 }
                             }
@@ -307,7 +375,7 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        dict.Add(szDeleteDate, daysBeforeDelete > 0 ? DateTime.UtcNow.AddDays(daysBeforeDelete).ToString() : DateTime.MinValue.ToString());
+                        dict.Add("DeleteDate", _daysBeforeDelete > 0 ? DateTime.UtcNow.AddDays(_daysBeforeDelete).ToString() : DateTime.MinValue.ToString());
                         explosionsLogChanged = true;
                     }
                 }
@@ -316,16 +384,16 @@ namespace Oxide.Plugins
             init = true;
         }
 
-        void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
+        private void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
             if (!init || player == null || entity?.net == null)
                 return;
 
-            if (entity.ShortPrefabName.Contains("f1") && !trackF1)
+            if (entity.ShortPrefabName.Contains("f1") && !_trackF1)
                 return;
-            else if (entity.ShortPrefabName.Contains("beancan") && !trackBeancan)
+            if (entity.ShortPrefabName.Contains("beancan") && !_trackBeancan)
                 return;
-            else if (!trackF1 && !trackBeancan && !entity.name.Contains("explosive"))
+            if (!_trackF1 && !_trackBeancan && !entity.name.Contains("explosive"))
                 return;
 
             var tracker = entity.gameObject.AddComponent<TrackingDevice>();
@@ -337,7 +405,7 @@ namespace Oxide.Plugins
             tracker.playerPosition = position;
         }
 
-        void OnRocketLaunched(BasePlayer player, BaseEntity entity)
+        private void OnRocketLaunched(BasePlayer player, BaseEntity entity)
         {
             if (!init || player == null || entity?.net == null || entity.name.Contains("smoke"))
                 return;
@@ -351,8 +419,15 @@ namespace Oxide.Plugins
             tracker.playerPosition = position;
         }
 
-        private bool IsNumeric(string value) => !string.IsNullOrEmpty(value) && value.All(char.IsDigit);
-        private static string GetPositionID(Vector3 pos) => pos.x + " " + pos.y + " " + pos.z;
+        private bool IsNumeric(string value)
+        {
+            return !string.IsNullOrEmpty(value) && value.All(char.IsDigit);
+        }
+
+        private static string GetPositionID(Vector3 pos)
+        {
+            return pos.x + " " + pos.y + " " + pos.z;
+        }
 
         private Vector3 GetPosition(string positionId)
         {
@@ -369,7 +444,7 @@ namespace Oxide.Plugins
 
         private void SaveExplosionData()
         {
-            int expired = dataExplosions.RemoveAll(x => x.ContainsKey(szDeleteDate) && x[szDeleteDate] != DateTime.MinValue.ToString() && DateTime.Parse(x[szDeleteDate]) < DateTime.UtcNow);
+            int expired = dataExplosions.RemoveAll(x => x.ContainsKey("DeleteDate") && x["DeleteDate"] != DateTime.MinValue.ToString() && DateTime.Parse(x["DeleteDate"]) < DateTime.UtcNow);
 
             if (expired > 0)
                 explosionsLogChanged = true;
@@ -381,12 +456,21 @@ namespace Oxide.Plugins
             }
         }
 
+        public void DiscordMessage(string name, string playerId, string text)
+        {
+            var fields = new List<Fields>();
+            fields.Add(new Fields(msg("Embed_MessagePlayer"), $"[{name}](https://steamcommunity.com/profiles/{playerId})", true));
+            fields.Add(new Fields(msg("Embed_MessageMessage"), text, false));
+            string content = JsonConvert.SerializeObject(fields);
+            DiscordMessages?.Call("API_SendFancyMessage", _webhookUrl, msg("Embed_MessageTitle"), _messageColor, content);
+        }
+
         private void cmdPX(BasePlayer player, string command, string[] args)
         {
-            if (!allowPlayerExplosionMessages && !allowPlayerDrawing)
+            if (!_allowPlayerExplosionMessages && !_allowPlayerDrawing)
                 return;
 
-            if (!permission.UserHasPermission(player.UserIDString, playerPerm) && !player.IsAdmin)
+            if (!permission.UserHasPermission(player.UserIDString, _playerPerm) && !player.IsAdmin)
             {
                 player.ChatMessage(msg("Not Allowed", player.UserIDString));
                 return;
@@ -402,7 +486,7 @@ namespace Oxide.Plugins
                 return;
 
             var colors = new List<Color>();
-            var explosions = dataExplosions.FindAll(x => x.ContainsKey(szEntityOwner) && x[szEntityOwner] == player.UserIDString && x[szAttackerId] != player.UserIDString && Vector3.Distance(player.transform.position, GetPosition(x[szEndPositionId])) <= playerDistance);
+            var explosions = dataExplosions.FindAll(x => x.ContainsKey("EntityOwner") && x["EntityOwner"] == player.UserIDString && x["AttackerId"] != player.UserIDString && Vector3.Distance(player.transform.position, GetPosition(x["EndPositionId"])) <= _playerDistance);
 
             if (explosions == null || explosions.Count == 0)
             {
@@ -412,16 +496,16 @@ namespace Oxide.Plugins
 
             player.ChatMessage(msg("Showing Owned", player.UserIDString));
 
-            bool drawX = explosions.Count > maxNamedExplosions;
+            bool drawX = explosions.Count > _maxNamedExplosions;
             int shownExplosions = 0;
             var attackers = new Dictionary<string, string>();
-            
-            if (showExplosionMessages && maxMessagesToPlayer > 0)
-                foreach (var x in explosions)
-                    if (!attackers.ContainsKey(x[szAttackerId]))
-                        attackers.Add(x[szAttackerId], ParseExplosions(explosions.Where(ex => ex[szAttackerId] == x[szAttackerId]).ToList()));
 
-            if (allowPlayerDrawing)
+            if (_showExplosionMessages && _maxMessagesToPlayer > 0)
+                foreach (var x in explosions)
+                    if (!attackers.ContainsKey(x["AttackerId"]))
+                        attackers.Add(x["AttackerId"], ParseExplosions(explosions.Where(ex => ex["AttackerId"] == x["AttackerId"]).ToList()));
+
+            if (_allowPlayerDrawing)
             {
                 try
                 {
@@ -437,41 +521,50 @@ namespace Oxide.Plugins
 
                     foreach (var x in explosions)
                     {
-                        var startPos = GetPosition(x[szStartPositionId]);
-                        var endPos = GetPosition(x[szEndPositionId]);
+                        var startPos = GetPosition(x["StartPositionId"]);
+                        var endPos = GetPosition(x["EndPositionId"]);
                         var endPosStr = string.Format("{0} {1} {2}", Math.Round(endPos.x, 2), Math.Round(endPos.y, 2), Math.Round(endPos.z, 2));
 
                         if (colors.Count == 0)
-                            colors = new List<Color>() { Color.blue, Color.cyan, Color.gray, Color.green, Color.magenta, Color.red, Color.yellow };
+                            colors = new List<Color>
+                            {
+                                Color.blue,
+                                Color.cyan,
+                                Color.gray,
+                                Color.green,
+                                Color.magenta,
+                                Color.red,
+                                Color.yellow
+                            };
 
-                        var color = colorByWeaponType ? (x[szWeapon].Contains("Rocket") ? Color.red : x[szWeapon].Equals("C4") ? Color.yellow : Color.blue) : attackersColor.ContainsKey(x[szAttackerId]) ? attackersColor[x[szAttackerId]] : colors[UnityEngine.Random.Range(0, colors.Count - 1)];
+                        var color = _colorByWeaponType ? (x["Weapon"].Contains("Rocket") ? Color.red : x["Weapon"].Equals("C4") ? Color.yellow : Color.blue) : attackersColor.ContainsKey(x["AttackerId"]) ? attackersColor[x["AttackerId"]] : colors[Random.Range(0, colors.Count - 1)];
 
-                        attackersColor[x[szAttackerId]] = color;
+                        attackersColor[x["AttackerId"]] = color;
 
                         if (colors.Contains(color))
                             colors.Remove(color);
 
-                        if (showConsoleMessages)
+                        if (_showConsoleMessages)
                         {
-                            var explosion = msg("Explosions", player.UserIDString, ColorUtility.ToHtmlStringRGB(attackersColor[x[szAttackerId]]), x[szAttacker], x[szAttackerId], endPosStr, Math.Round(Vector3.Distance(startPos, endPos), 2), x[szWeapon], x[szEntitiesHit], x[szEntityHit]);
-                            var victim = x.ContainsKey(szEntityOwner) ? string.Format(" - Victim: {0} ({1})", covalence.Players.FindPlayerById(x[szEntityOwner])?.Name ?? "Unknown", x[szEntityOwner]) : "";
+                            var explosion = msg("Explosions", player.UserIDString, ColorUtility.ToHtmlStringRGB(attackersColor[x["AttackerId"]]), x["Attacker"], x["AttackerId"], endPosStr, Math.Round(Vector3.Distance(startPos, endPos), 2), x["Weapon"], x["EntitiesHit"], x["EntityHit"]);
+                            var victim = x.ContainsKey("EntityOwner") ? string.Format(" - Victim: {0} ({1})", covalence.Players.FindPlayerById(x["EntityOwner"])?.Name ?? "Unknown", x["EntityOwner"]) : "";
 
                             player.ConsoleMessage(explosion + victim);
                         }
 
-                        if (drawArrows && Vector3.Distance(startPos, endPos) > 1f)
+                        if (_drawArrows && Vector3.Distance(startPos, endPos) > 1f)
                         {
-                            player.SendConsoleCommand("ddraw.arrow", invokeTime, color, startPos, endPos, 0.2);
-                            player.SendConsoleCommand("ddraw.text", invokeTime, color, startPos, x[szWeapon].Substring(0, 1));
+                            player.SendConsoleCommand("ddraw.arrow", _invokeTime, color, startPos, endPos, 0.2);
+                            player.SendConsoleCommand("ddraw.text", _invokeTime, color, startPos, x["Weapon"].Substring(0, 1));
                         }
 
-                        player.SendConsoleCommand("ddraw.text", invokeTime, color, endPos, drawX ? "X" : x[szAttacker]);
+                        player.SendConsoleCommand("ddraw.text", _invokeTime, color, endPos, drawX ? "X" : x["Attacker"]);
                     }
                 }
                 catch (Exception ex)
                 {
-                    allowPlayerExplosionMessages = false;
-                    allowPlayerDrawing = false;
+                    _allowPlayerExplosionMessages = false;
+                    _allowPlayerDrawing = false;
                     Puts("cmdPX Exception: {0} --- {1}", ex.Message, ex.StackTrace);
                     Puts("Player functionality disabled!");
                 }
@@ -484,15 +577,15 @@ namespace Oxide.Plugins
                 }
             }
 
-            if (allowPlayerExplosionMessages)
+            if (_allowPlayerExplosionMessages)
             {
                 if (attackers.Count > 0)
                     foreach (var kvp in attackers)
-                        if (++shownExplosions < maxMessagesToPlayer)
+                        if (++shownExplosions < _maxMessagesToPlayer)
                             player.ChatMessage(string.Format("<color=#{0}>{1}</color>", ColorUtility.ToHtmlStringRGB(attackersColor.ContainsKey(kvp.Key) ? attackersColor[kvp.Key] : Color.red), kvp.Value));
             }
 
-            player.ChatMessage(msg("Explosions Listed", player.UserIDString, explosions.Count, playerDistance));
+            player.ChatMessage(msg("Explosions Listed", player.UserIDString, explosions.Count, _playerDistance));
             colors.Clear();
 
             if (player.IsAdmin)
@@ -501,12 +594,12 @@ namespace Oxide.Plugins
             var uid = player.UserIDString;
 
             limits.Add(uid);
-            timer.Once(playerRestrictionTime, () => limits.Remove(uid));
+            timer.Once(_playerRestrictionTime, () => limits.Remove(uid));
         }
 
         private void cmdX(BasePlayer player, string command, string[] args)
         {
-            if (player.net.connection.authLevel < authLevel && !authorized.Contains(player.UserIDString))
+            if (player.net.connection.authLevel < _authLevel && !_authorized.Contains(player.UserIDString))
             {
                 player.ChatMessage(msg("Not Allowed", player.UserIDString));
                 return;
@@ -516,7 +609,7 @@ namespace Oxide.Plugins
             {
                 if (args.Any(arg => arg.Contains("del") || arg.Contains("wipe")))
                 {
-                    if (!allowManualWipe)
+                    if (!_allowManualWipe)
                     {
                         player.ChatMessage(msg("No Manual Wipe", player.UserIDString));
                         return;
@@ -537,7 +630,7 @@ namespace Oxide.Plugins
                         {
                             if (args.Length == 2)
                             {
-                                int deleted = dataExplosions.RemoveAll(x => (x.ContainsKey(szAttackerId) && x[szAttackerId] == args[1]) || (x.ContainsKey(szAttacker) && x[szAttacker] == args[1]));
+                                int deleted = dataExplosions.RemoveAll(x => x.ContainsKey("AttackerId") && x["AttackerId"] == args[1] || x.ContainsKey("Attacker") && x["Attacker"] == args[1]);
 
                                 if (deleted > 0)
                                 {
@@ -546,7 +639,7 @@ namespace Oxide.Plugins
                                     SaveExplosionData();
                                 }
                                 else
-                                    player.ChatMessage(msg("None Found", player.UserIDString, delRadius));
+                                    player.ChatMessage(msg("None Found", player.UserIDString, _delRadius));
                             }
                             else
                                 SendHelp(player);
@@ -554,16 +647,16 @@ namespace Oxide.Plugins
                         return;
                     case "delm":
                         {
-                            int deleted = dataExplosions.RemoveAll(x => Vector3.Distance(player.transform.position, GetPosition(x[szEndPositionId])) < delRadius);
+                            int deleted = dataExplosions.RemoveAll(x => Vector3.Distance(player.transform.position, GetPosition(x["EndPositionId"])) < _delRadius);
 
                             if (deleted > 0)
                             {
-                                player.ChatMessage(msg("RemovedM", player.UserIDString, deleted, delRadius));
+                                player.ChatMessage(msg("RemovedM", player.UserIDString, deleted, _delRadius));
                                 explosionsLogChanged = true;
                                 SaveExplosionData();
                             }
                             else
-                                player.ChatMessage(msg("None In Radius", player.UserIDString, delRadius));
+                                player.ChatMessage(msg("None In Radius", player.UserIDString, _delRadius));
                         }
                         return;
                     case "delbefore":
@@ -573,7 +666,7 @@ namespace Oxide.Plugins
                                 DateTime deleteDate;
                                 if (DateTime.TryParse(args[1], out deleteDate))
                                 {
-                                    int deleted = dataExplosions.RemoveAll(x => x.ContainsKey(szLoggedDate) && DateTime.Parse(x[szLoggedDate]) < deleteDate);
+                                    int deleted = dataExplosions.RemoveAll(x => x.ContainsKey("LoggedDate") && DateTime.Parse(x["LoggedDate"]) < deleteDate);
 
                                     if (deleted > 0)
                                     {
@@ -585,7 +678,7 @@ namespace Oxide.Plugins
                                         player.ChatMessage(msg("None Dated Before", player.UserIDString, deleteDate.ToString()));
                                 }
                                 else
-                                    player.ChatMessage(msg("Invalid Date", player.UserIDString, szChatCommand, DateTime.UtcNow.ToString("yyyy-mm-dd HH:mm:ss")));
+                                    player.ChatMessage(msg("Invalid Date", player.UserIDString, _chatCommand, DateTime.UtcNow.ToString("yyyy-mm-dd HH:mm:ss")));
                             }
                             else
                                 SendHelp(player);
@@ -598,7 +691,7 @@ namespace Oxide.Plugins
                                 DateTime deleteDate;
                                 if (DateTime.TryParse(args[1], out deleteDate))
                                 {
-                                    int deleted = dataExplosions.RemoveAll(x => x.ContainsKey(szLoggedDate) && DateTime.Parse(x[szLoggedDate]) > deleteDate);
+                                    int deleted = dataExplosions.RemoveAll(x => x.ContainsKey("LoggedDate") && DateTime.Parse(x["LoggedDate"]) > deleteDate);
 
                                     if (deleted > 0)
                                     {
@@ -610,7 +703,7 @@ namespace Oxide.Plugins
                                         player.ChatMessage(msg("None Dated After", player.UserIDString, deleteDate.ToString()));
                                 }
                                 else
-                                    player.ChatMessage(msg("Invalid Date", player.UserIDString, szChatCommand, DateTime.UtcNow.ToString("yyyy-mm-dd HH:mm:ss")));
+                                    player.ChatMessage(msg("Invalid Date", player.UserIDString, _chatCommand, DateTime.UtcNow.ToString("yyyy-mm-dd HH:mm:ss")));
                             }
                             else
                                 SendHelp(player);
@@ -631,53 +724,62 @@ namespace Oxide.Plugins
             }
 
             var colors = new List<Color>();
-            int distance = args.Length == 1 && IsNumeric(args[0]) ? int.Parse(args[0]) : defaultMaxDistance;
-            var explosions = dataExplosions.FindAll(x => Vector3.Distance(player.transform.position, GetPosition(x[szEndPositionId])) <= distance);
-            bool drawX = explosions.Count > maxNamedExplosions;
+            int distance = args.Length == 1 && IsNumeric(args[0]) ? int.Parse(args[0]) : _defaultMaxDistance;
+            var explosions = dataExplosions.FindAll(x => Vector3.Distance(player.transform.position, GetPosition(x["EndPositionId"])) <= distance);
+            bool drawX = explosions.Count > _maxNamedExplosions;
             int shownExplosions = 0;
             var attackers = new Dictionary<string, string>();
 
-            if (showExplosionMessages && maxMessagesToPlayer > 0)
+            if (_showExplosionMessages && _maxMessagesToPlayer > 0)
                 foreach (var x in explosions)
-                    if (!attackers.ContainsKey(x[szAttackerId]))
-                        attackers.Add(x[szAttackerId], ParseExplosions(explosions.Where(ex => ex[szAttackerId] == x[szAttackerId]).ToList()));
+                    if (!attackers.ContainsKey(x["AttackerId"]))
+                        attackers.Add(x["AttackerId"], ParseExplosions(explosions.Where(ex => ex["AttackerId"] == x["AttackerId"]).ToList()));
 
             foreach (var x in explosions)
             {
-                var startPos = GetPosition(x[szStartPositionId]);
-                var endPos = GetPosition(x[szEndPositionId]);
+                var startPos = GetPosition(x["StartPositionId"]);
+                var endPos = GetPosition(x["EndPositionId"]);
                 var endPosStr = string.Format("{0} {1} {2}", Math.Round(endPos.x, 2), Math.Round(endPos.y, 2), Math.Round(endPos.z, 2));
 
                 if (colors.Count == 0)
-                    colors = new List<Color>() { Color.blue, Color.cyan, Color.gray, Color.green, Color.magenta, Color.red, Color.yellow };
+                    colors = new List<Color>
+                    {
+                        Color.blue,
+                        Color.cyan,
+                        Color.gray,
+                        Color.green,
+                        Color.magenta,
+                        Color.red,
+                        Color.yellow
+                    };
 
-                var color = colorByWeaponType ? (x[szWeapon].Contains("Rocket") ? Color.red : x[szWeapon].Equals("C4") ? Color.yellow : Color.blue) : attackersColor.ContainsKey(x[szAttackerId]) ? attackersColor[x[szAttackerId]] : colors[UnityEngine.Random.Range(0, colors.Count - 1)];
+                var color = _colorByWeaponType ? (x["Weapon"].Contains("Rocket") ? Color.red : x["Weapon"].Equals("C4") ? Color.yellow : Color.blue) : attackersColor.ContainsKey(x["AttackerId"]) ? attackersColor[x["AttackerId"]] : colors[Random.Range(0, colors.Count - 1)];
 
-                attackersColor[x[szAttackerId]] = color;
+                attackersColor[x["AttackerId"]] = color;
 
                 if (colors.Contains(color))
                     colors.Remove(color);
 
-                if (showConsoleMessages)
+                if (_showConsoleMessages)
                 {
-                    var explosion = msg("Explosions", player.UserIDString, ColorUtility.ToHtmlStringRGB(color), x[szAttacker], x[szAttackerId], endPosStr, Math.Round(Vector3.Distance(startPos, endPos), 2), x[szWeapon], x[szEntitiesHit], x[szEntityHit]);
-                    var victim = x.ContainsKey(szEntityOwner) ? string.Format(" - Victim: {0} ({1})", covalence.Players.FindPlayerById(x[szEntityOwner])?.Name ?? "Unknown", x[szEntityOwner]) : "";
+                    var explosion = msg("Explosions", player.UserIDString, ColorUtility.ToHtmlStringRGB(color), x["Attacker"], x["AttackerId"], endPosStr, Math.Round(Vector3.Distance(startPos, endPos), 2), x["Weapon"], x["EntitiesHit"], x["EntityHit"]);
+                    var victim = x.ContainsKey("EntityOwner") ? string.Format(" - Victim: {0} ({1})", covalence.Players.FindPlayerById(x["EntityOwner"])?.Name ?? "Unknown", x["EntityOwner"]) : "";
 
                     player.ConsoleMessage(explosion + victim);
                 }
 
-                if (drawArrows && Vector3.Distance(startPos, endPos) > 1f)
+                if (_drawArrows && Vector3.Distance(startPos, endPos) > 1f)
                 {
-                    player.SendConsoleCommand("ddraw.arrow", invokeTime, color, startPos, endPos, 0.2);
-                    player.SendConsoleCommand("ddraw.text", invokeTime, color, startPos, x[szWeapon].Substring(0, 1));
+                    player.SendConsoleCommand("ddraw.arrow", _invokeTime, color, startPos, endPos, 0.2);
+                    player.SendConsoleCommand("ddraw.text", _invokeTime, color, startPos, x["Weapon"].Substring(0, 1));
                 }
 
-                player.SendConsoleCommand("ddraw.text", invokeTime, color, endPos, drawX ? "X" : x[szAttacker]);
+                player.SendConsoleCommand("ddraw.text", _invokeTime, color, endPos, drawX ? "X" : x["Attacker"]);
             }
 
             if (attackers.Count > 0)
                 foreach (var kvp in attackers)
-                    if (++shownExplosions < maxMessagesToPlayer)
+                    if (++shownExplosions < _maxMessagesToPlayer)
                         player.ChatMessage(string.Format("<color=#{0}>{1}</color>", ColorUtility.ToHtmlStringRGB(attackersColor[kvp.Key]), kvp.Value));
 
             if (explosions.Count > 0)
@@ -688,65 +790,72 @@ namespace Oxide.Plugins
             colors.Clear();
         }
 
-        string ParseExplosions(List<Dictionary<string, string>> explosions)
+        private string ParseExplosions(List<Dictionary<string, string>> explosions)
         {
             if (explosions.Count == 0)
                 return string.Empty;
 
             var sb = new StringBuilder();
-            var weapons = explosions.Select(x => x[szWeapon]).Distinct();
+            var weapons = explosions.Select(x => x["Weapon"]).Distinct();
 
             foreach (var weapon in weapons)
             {
-                var targets = explosions.Where(x => x[szWeapon] == weapon).Select(x => x[szEntityHit]).Distinct();
+                var targets = explosions.Where(x => x["Weapon"] == weapon).Select(x => x["EntityHit"]).Distinct();
 
                 sb.Append(string.Format("{0}: [", weapon));
 
                 foreach (var target in targets)
-                    sb.Append(string.Format("{0} ({1}), ", target, explosions.Where(x => x[szEntityHit] == target && x[szWeapon] == weapon).Count()));
+                    sb.Append(string.Format("{0} ({1}), ", target, explosions.Count(x => x["EntityHit"] == target && x["Weapon"] == weapon)));
 
                 sb.Length = sb.Length - 2;
                 sb.Append("], ");
             }
 
             sb.Length = sb.Length - 2;
-            return string.Format("{0} used {1} explosives: {2}", explosions[0][szAttacker], explosions.Count, sb.ToString());
+            return string.Format("{0} used {1} explosives: {2}", explosions[0]["Attacker"], explosions.Count, sb.ToString());
         }
 
         #region Config
-        private bool Changed;
-        private int authLevel { get; set; }
-        private int defaultMaxDistance { get; set; }
-        private int delRadius { get; set; }
-        private int maxNamedExplosions { get; set; }
-        private int invokeTime { get; set; }
-        private bool showExplosionMessages { get; set; }
-        private int maxMessagesToPlayer { get; set; }
-        private static bool outputExplosionMessages { get; set; }
-        private bool drawArrows { get; set; }
-        private static bool showMillisecondsTaken { get; set; }
-        private bool allowManualWipe { get; set; }
-        private bool automateWipes { get; set; }
-        private bool colorByWeaponType { get; set; }
-        private bool applyInactiveChanges { get; set; }
-        private bool applyActiveChanges { get; set; }
-        private static bool sendDiscordNotifications { get; set; }
-        private static bool sendSlackNotifications { get; set; }
-        private static string slackMessageStyle { get; set; }
-        private string szChatCommand { get; set; }
-        private static List<object> authorized { get; set; }
-        private static int daysBeforeDelete { get; set; }
-        private bool trackF1 { get; set; }
-        private bool trackBeancan { get; set; }
-        private bool allowPlayerDrawing { get; set; }
-        private string playerPerm { get; set; }
-        private string szPlayerChatCommand { get; set; }
-        private float playerDistance { get; set; }
-        private bool allowPlayerExplosionMessages { get; set; }
-        private float playerRestrictionTime { get; set; }
-        bool showConsoleMessages { get; set; }
 
-        void LoadMessages()
+        private bool _changed;
+        private int _authLevel;
+        private int _defaultMaxDistance;
+        private int _delRadius;
+        private int _maxNamedExplosions;
+        private int _invokeTime;
+        private bool _showExplosionMessages;
+        private int _maxMessagesToPlayer;
+        private static bool _outputExplosionMessages;
+        private bool _drawArrows;
+        private static bool _showMillisecondsTaken;
+        private bool _allowManualWipe;
+        private bool _automateWipes;
+        private bool _colorByWeaponType;
+        private bool _applyInactiveChanges;
+        private bool _applyActiveChanges;
+        private static bool _sendDiscordNotifications;
+        private static bool _sendSlackNotifications;
+        private static string _slackMessageStyle;
+        private static string _slackChannel;
+        private string _chatCommand;
+        private static List<object> _authorized;
+        private static int _daysBeforeDelete;
+        private bool _trackF1;
+        private bool _trackBeancan;
+        private bool _allowPlayerDrawing;
+        private string _playerPerm;
+        private string _szPlayerChatCommand;
+        private float _playerDistance;
+        private bool _allowPlayerExplosionMessages;
+        private float _playerRestrictionTime;
+        private bool _showConsoleMessages;
+        private int _messageColor;
+        private static bool _sendDiscordMessages;
+        private static string _webhookUrl;
+        private static bool usePopups;
+        private static float popupDuration;
+
+        private void LoadMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -775,95 +884,112 @@ namespace Oxide.Plugins
                 ["Help Distance"] = "Show explosions from <color=orange>X</color> distance",
                 ["None Owned"] = "No explosions found near entities you own or have owned.",
                 ["Showing Owned"] = "Showing list of explosions to entities which you own or have owned...",
+                ["Embed_MessageTitle"] = "Player Message",
+                ["Embed_MessagePlayer"] = "Player",
+                ["Embed_MessageMessage"] = "Message",
+                ["ExplosionMessage"] = "[Explosion] {AttackerName} ({AttackerId}) @ {EndPos} ({Distance}m) {Weapon}: {EntityHit} - Victim: {VictimName} ({OwnerID})",
             }, this);
         }
 
-        void SendHelp(BasePlayer player)
+        private void SendHelp(BasePlayer player)
         {
-            player.ChatMessage(string.Format("/{0} wipe - {1}", szChatCommand, msg("Help Wipe", player.UserIDString)));
-            player.ChatMessage(string.Format("/{0} del id - {1}", szChatCommand, msg("Help Del Id", player.UserIDString)));
-            player.ChatMessage(string.Format("/{0} delm - {1}", szChatCommand, msg("Help Delm", player.UserIDString, delRadius)));
-            player.ChatMessage(string.Format("/{0} delafter date - {1}", szChatCommand, msg("Help After", player.UserIDString, szChatCommand, DateTime.UtcNow.Subtract(new TimeSpan(daysBeforeDelete, 0, 0, 0)).ToString())));
-            player.ChatMessage(string.Format("/{0} delbefore date - {1}", szChatCommand, msg("Help Before", player.UserIDString, szChatCommand, DateTime.UtcNow.ToString())));
-            player.ChatMessage(string.Format("/{0} <distance> - {1}", szChatCommand, msg("Help Distance", player.UserIDString)));
+            player.ChatMessage(string.Format("/{0} wipe - {1}", _chatCommand, msg("Help Wipe", player.UserIDString)));
+            player.ChatMessage(string.Format("/{0} del id - {1}", _chatCommand, msg("Help Del Id", player.UserIDString)));
+            player.ChatMessage(string.Format("/{0} delm - {1}", _chatCommand, msg("Help Delm", player.UserIDString, _delRadius)));
+            player.ChatMessage(string.Format("/{0} delafter date - {1}", _chatCommand, msg("Help After", player.UserIDString, _chatCommand, DateTime.UtcNow.Subtract(new TimeSpan(_daysBeforeDelete, 0, 0, 0)).ToString())));
+            player.ChatMessage(string.Format("/{0} delbefore date - {1}", _chatCommand, msg("Help Before", player.UserIDString, _chatCommand, DateTime.UtcNow.ToString())));
+            player.ChatMessage(string.Format("/{0} <distance> - {1}", _chatCommand, msg("Help Distance", player.UserIDString)));
         }
 
-        void LoadVariables()
+        private void LoadVariables()
         {
-            authorized = GetConfig("Settings", "Authorized List", new List<object>()) as List<object>;
+            _authorized = GetConfig("Settings", "Authorized List", new List<object>()) as List<object>;
 
-            foreach (var auth in authorized.ToList())
+            if (_authorized != null)
             {
-                ulong targetId;
-                if (auth == null || !ulong.TryParse(auth.ToString(), out targetId) || !targetId.IsSteamId())
+                foreach (var auth in _authorized.ToList())
                 {
-                    PrintWarning("{0} is not a valid steam id. Entry removed.", auth == null ? "null" : auth);
-                    authorized.Remove(auth);
+                    if (auth == null || !auth.ToString().IsSteamId())
+                    {
+                        PrintWarning("{0} is not a valid steam id. Entry removed.", auth == null ? "null" : auth);
+                        _authorized.Remove(auth);
+                    }
                 }
             }
 
-            showConsoleMessages = Convert.ToBoolean(GetConfig("Settings", "Output Detailed Explosion Messages To Client Console", true));
-            authLevel = authorized.Count == 0 ? Convert.ToInt32(GetConfig("Settings", "Auth Level", 1)) : int.MaxValue;
-            defaultMaxDistance = Convert.ToInt32(GetConfig("Settings", "Show Explosions Within X Meters", 50));
-            delRadius = Convert.ToInt32(GetConfig("Settings", "Delete Radius", 50));
-            maxNamedExplosions = Convert.ToInt32(GetConfig("Settings", "Max Names To Draw", 25));
-            invokeTime = Convert.ToInt32(GetConfig("Settings", "Time In Seconds To Draw Explosions", 60f));
-            showExplosionMessages = Convert.ToBoolean(GetConfig("Settings", "Show Explosion Messages To Player", true));
-            maxMessagesToPlayer = Convert.ToInt32(GetConfig("Settings", "Max Explosion Messages To Player", 10));
-            outputExplosionMessages = Convert.ToBoolean(GetConfig("Settings", "Print Explosions To Server Console", true));
-            drawArrows = Convert.ToBoolean(GetConfig("Settings", "Draw Arrows", true));
-            showMillisecondsTaken = Convert.ToBoolean(GetConfig("Settings", "Print Milliseconds Taken To Track Explosives In Server Console", false));
-            automateWipes = Convert.ToBoolean(GetConfig("Settings", "Wipe Data When Server Is Wiped (Recommended)", true));
-            allowManualWipe = Convert.ToBoolean(GetConfig("Settings", "Allow Manual Deletions and Wipe of Explosion Data", true));
-            colorByWeaponType = Convert.ToBoolean(GetConfig("Settings", "Color By Weapon Type Instead Of By Player Name", false));
-            daysBeforeDelete = Convert.ToInt32(GetConfig("Settings", "Automatically Delete Each Explosion X Days After Being Logged", 0));
-            applyInactiveChanges = Convert.ToBoolean(GetConfig("Settings", "Apply Retroactive Deletion Dates When No Date Is Set", true));
-            applyActiveChanges = Convert.ToBoolean(GetConfig("Settings", "Apply Retroactive Deletion Dates When Days To Delete Is Changed", true));
-            sendDiscordNotifications = Convert.ToBoolean(GetConfig("Discord", "Send Notifications", false));
-            sendSlackNotifications = Convert.ToBoolean(GetConfig("Slack", "Send Notifications", false));
-            slackMessageStyle = Convert.ToString(GetConfig("Slack", "Message Style (FancyMessage, SimpleMessage, Message, TicketMessage)", "FancyMessage"));
-            szChatCommand = Convert.ToString(GetConfig("Settings", "Explosions Command", "x"));
+            _showConsoleMessages = Convert.ToBoolean(GetConfig("Settings", "Output Detailed Explosion Messages To Client Console", true));
+            _authLevel = _authorized?.Count == 0 ? Convert.ToInt32(GetConfig("Settings", "Auth Level", 1)) : int.MaxValue;
+            _defaultMaxDistance = Convert.ToInt32(GetConfig("Settings", "Show Explosions Within X Meters", 50));
+            _delRadius = Convert.ToInt32(GetConfig("Settings", "Delete Radius", 50));
+            _maxNamedExplosions = Convert.ToInt32(GetConfig("Settings", "Max Names To Draw", 25));
+            _invokeTime = Convert.ToInt32(GetConfig("Settings", "Time In Seconds To Draw Explosions", 60f));
+            _showExplosionMessages = Convert.ToBoolean(GetConfig("Settings", "Show Explosion Messages To Player", true));
+            _maxMessagesToPlayer = Convert.ToInt32(GetConfig("Settings", "Max Explosion Messages To Player", 10));
+            _outputExplosionMessages = Convert.ToBoolean(GetConfig("Settings", "Print Explosions To Server Console", true));
+            _drawArrows = Convert.ToBoolean(GetConfig("Settings", "Draw Arrows", true));
+            _showMillisecondsTaken = Convert.ToBoolean(GetConfig("Settings", "Print Milliseconds Taken To Track Explosives In Server Console", false));
+            _automateWipes = Convert.ToBoolean(GetConfig("Settings", "Wipe Data When Server Is Wiped (Recommended)", true));
+            _allowManualWipe = Convert.ToBoolean(GetConfig("Settings", "Allow Manual Deletions and Wipe of Explosion Data", true));
+            _colorByWeaponType = Convert.ToBoolean(GetConfig("Settings", "Color By Weapon Type Instead Of By Player Name", false));
+            _daysBeforeDelete = Convert.ToInt32(GetConfig("Settings", "Automatically Delete Each Explosion X Days After Being Logged", 0));
+            _applyInactiveChanges = Convert.ToBoolean(GetConfig("Settings", "Apply Retroactive Deletion Dates When No Date Is Set", true));
+            _applyActiveChanges = Convert.ToBoolean(GetConfig("Settings", "Apply Retroactive Deletion Dates When Days To Delete Is Changed", true));
+            _sendDiscordNotifications = Convert.ToBoolean(GetConfig("Discord", "Send Notifications", false));
+            _sendSlackNotifications = Convert.ToBoolean(GetConfig("Slack", "Send Notifications", false));
+            _slackMessageStyle = Convert.ToString(GetConfig("Slack", "Message Style (FancyMessage, SimpleMessage, Message, TicketMessage)", "FancyMessage"));
+            _slackChannel = Convert.ToString(GetConfig("Slack", "Channel", "general"));
+            _chatCommand = Convert.ToString(GetConfig("Settings", "Explosions Command", "x"));
 
-            trackF1 = Convert.ToBoolean(GetConfig("Additional Tracking", "Track F1 Grenades", false));
-            trackBeancan = Convert.ToBoolean(GetConfig("Additional Tracking", "Track Beancan Grenades", false));
+            _trackF1 = Convert.ToBoolean(GetConfig("Additional Tracking", "Track F1 Grenades", false));
+            _trackBeancan = Convert.ToBoolean(GetConfig("Additional Tracking", "Track Beancan Grenades", false));
 
-            allowPlayerExplosionMessages = Convert.ToBoolean(GetConfig("Players", "Show Explosions", false));
-            allowPlayerDrawing = Convert.ToBoolean(GetConfig("Players", "Allow DDRAW", false));
-            playerPerm = Convert.ToString(GetConfig("Players", "Permission Name", "raidtracker.use"));
-            szPlayerChatCommand = Convert.ToString(GetConfig("Players", "Command Name", "px"));
-            playerDistance = Convert.ToSingle(GetConfig("Players", "Show Explosions Within X Meters", 50f));
-            playerRestrictionTime = Convert.ToSingle(GetConfig("Players", "Limit Command Once Every X Seconds", 60f));
+            _allowPlayerExplosionMessages = Convert.ToBoolean(GetConfig("Players", "Show Explosions", false));
+            _allowPlayerDrawing = Convert.ToBoolean(GetConfig("Players", "Allow DDRAW", false));
+            _playerPerm = Convert.ToString(GetConfig("Players", "Permission Name", "raidtracker.use"));
+            _szPlayerChatCommand = Convert.ToString(GetConfig("Players", "Command Name", "px"));
+            _playerDistance = Convert.ToSingle(GetConfig("Players", "Show Explosions Within X Meters", 50f));
+            _playerRestrictionTime = Convert.ToSingle(GetConfig("Players", "Limit Command Once Every X Seconds", 60f));
 
-            if (playerRestrictionTime < 0f)
+            _messageColor = Convert.ToInt32(GetConfig("DiscordMessages", "Message - Embed Color (DECIMAL)", 3329330));
+            _webhookUrl = Convert.ToString(GetConfig("DiscordMessages", "Message - Webhook URL", "https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks"));
+            _sendDiscordMessages = _webhookUrl != "https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks";
+
+            usePopups = Convert.ToBoolean(GetConfig("PopupNotifications", "Use Popups", false));
+            popupDuration = Convert.ToSingle(GetConfig("PopupNotifications", "Duration", 0f));
+
+            if (_playerRestrictionTime < 0f)
             {
-                allowPlayerDrawing = false;
-                allowPlayerExplosionMessages = false;
+                _allowPlayerDrawing = false;
+                _allowPlayerExplosionMessages = false;
             }
 
-            if ((allowPlayerExplosionMessages || allowPlayerDrawing) && !string.IsNullOrEmpty(szPlayerChatCommand) && !string.IsNullOrEmpty(playerPerm))
+            if ((_allowPlayerExplosionMessages || _allowPlayerDrawing) && !string.IsNullOrEmpty(_szPlayerChatCommand) && !string.IsNullOrEmpty(_playerPerm))
             {
-                if (!permission.PermissionExists(playerPerm))
-                    permission.RegisterPermission(playerPerm, this);
-                
-                cmd.AddChatCommand(szPlayerChatCommand, this, cmdPX);
+                permission.RegisterPermission(_playerPerm, this);
+                cmd.AddChatCommand(_szPlayerChatCommand, this, cmdPX);
             }
 
-            if (sendDiscordNotifications && !Discord)
+            permission.RegisterPermission("raidtracker.see", this);
+
+            if (_sendDiscordNotifications && !Discord)
                 PrintWarning("Discord not loaded correctly, please check your plugin directory for Discord.cs file");
 
-            if (sendSlackNotifications && !Slack)
+            if (_sendSlackNotifications && !Slack)
                 PrintWarning("Slack not loaded correctly, please check your plugin directory for Slack.cs file");
 
-            if (!string.IsNullOrEmpty(szChatCommand))
+            if (_sendDiscordMessages && !DiscordMessages)
+                PrintWarning("DiscordMessages not loaded correctly, please check your plugin directory for DiscordMessages.cs file");
+
+            if (!string.IsNullOrEmpty(_chatCommand))
             {
-                cmd.AddChatCommand(szChatCommand, this, cmdX);
-                cmd.AddConsoleCommand(szChatCommand, this, "ccmdX");
+                cmd.AddChatCommand(_chatCommand, this, cmdX);
+                //cmd.AddConsoleCommand(szChatCommand, this, "ccmdX");
             }
 
-            if (Changed)
+            if (_changed)
             {
                 SaveConfig();
-                Changed = false;
+                _changed = false;
             }
         }
 
@@ -874,27 +1000,36 @@ namespace Oxide.Plugins
             LoadVariables();
         }
 
-        object GetConfig(string menu, string datavalue, object defaultValue)
+        private object GetConfig(string menu, string datavalue, object defaultValue)
         {
             var data = Config[menu] as Dictionary<string, object>;
             if (data == null)
             {
                 data = new Dictionary<string, object>();
                 Config[menu] = data;
-                Changed = true;
+                _changed = true;
             }
             object value;
             if (!data.TryGetValue(datavalue, out value))
             {
                 value = defaultValue;
                 data[datavalue] = value;
-                Changed = true;
+                _changed = true;
             }
             return value;
         }
 
-        string msg(string key, string id = null, params object[] args) => string.Format(id == null ? RemoveFormatting(lang.GetMessage(key, this, id)) : lang.GetMessage(key, this, id), args);
-        string RemoveFormatting(string source) => source.Contains(">") ? System.Text.RegularExpressions.Regex.Replace(source, "<.*?>", string.Empty) : source;
+        public string msg(string key, string id = null, params object[] args)
+        {
+            string message = id == null ? RemoveFormatting(lang.GetMessage(key, this, id)) : lang.GetMessage(key, this, id);
+
+            return args.Length > 0 ? string.Format(message, args) : message;
+        }
+
+        public string RemoveFormatting(string source)
+        {
+            return source.Contains(">") ? Regex.Replace(source, "<.*?>", string.Empty) : source;
+        }
 
         #endregion
     }

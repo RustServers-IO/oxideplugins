@@ -4,34 +4,25 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
+using System.Reflection;
+using System.Text;
 
 namespace Oxide.Plugins
 {
-    /*
-    Changelog 1.0.6
-    
-    Fixed:
-        * Attempt to fix a Null Reference on OnDeathNotice Hook.
-    Added:
-        * 
-    Removed:
-        * 
-    Changed:
-        * 
-    */
-
-
-    [Info("KillCounter", "SouZa", "1.0.6", ResourceId = 18063)]
+    [Info("KillCounter", "SouZa and Mr. Blue", "1.0.7", ResourceId = 18063)]
     [Description("Creates a kill count for each player. Displays on the death notice.")]
-    
+
     class KillCounter : HurtworldPlugin
     {
         #region Plugin References
         [PluginReference("HWClans")]
         private Plugin HWClans;
+        [PluginReference("CustomDeathMessages")]
+        private Plugin CustomDeathMessages;
         #endregion Plugin References
-        
+
         #region Enums
         enum ELogType
         {
@@ -67,7 +58,11 @@ namespace Oxide.Plugins
             {
                 {"no_permission", "You don't have permission to use this command.\nRequired: <color=orange>{perm}</color>."},
                 {"kc_usage", "Type <color=orange>/kc</color> for proper usage."},
-                {"player","[<color=red>DeathNote</color>] <color=silver>{Name} got killed by {Killer}</color>"},
+                {"player","<color=white>{Name} now has {Kills} kills.</color>"},
+                {"playerkills","<color=white>You have {Kills} kill(s)!</color>"},
+                {"playernokills","<color=white>You have no kills!</color>"},
+                {"playertop","<color=white>========Top 5 players========</color>"},
+                {"playertopline","<color=white>{Number}. {Name} has {Kills} kills.</color>"},
                 {"player_offline", "<color=orange>{player}</color> is not online."},
                 {"kc_reset_player", "<color=orange>{player}</color> kill count has been reseted."},
                 {"kc_reset_all", "All players kill count have been reseted."},
@@ -86,7 +81,7 @@ namespace Oxide.Plugins
             {
                 data = new Dictionary<ulong, int>();
                 SaveData();
-            } 
+            }
         }
         void SaveData()
         {
@@ -97,6 +92,7 @@ namespace Oxide.Plugins
         {
             PermissionPrefix = Regex.Replace(Title, "[^0-9a-zA-Z]+", string.Empty).ToLower();
             RegisterPermission("mod");
+            RegisterPermission("use");
         }
 
         void Loaded()
@@ -108,7 +104,7 @@ namespace Oxide.Plugins
         }
 
         //Permissions
-        
+
         public void RegisterPermission(params string[] paramArray)
         {
             var perms = ArrayToString(paramArray, ".");
@@ -156,7 +152,7 @@ namespace Oxide.Plugins
             return String.Join(seperator, list.Skip(first).ToArray());
         }
 
-        
+
         //Ownership
 
         public List<OwnershipStakeServer> GetStakesFromPlayer(PlayerSession session)
@@ -180,9 +176,22 @@ namespace Oxide.Plugins
                    session.WorldPlayerEntity?.transform?.position != null;
         }
 
+        string GetPlayerName(ulong steamid)
+        {
+            foreach (PlayerIdentity identity in GameManager.Instance.GetIdentifierMap().Values)
+            {
+                if (identity.SteamId.m_SteamID.Equals(steamid))
+                {
+                    return identity.Name.ToString();
+                }
+            }
+
+            return "Unknown";
+        }
+
         ulong GetSteamID(string identifier)
         {
-            foreach(PlayerIdentity identity in GameManager.Instance.GetIdentifierMap().Values)
+            foreach (PlayerIdentity identity in GameManager.Instance.GetIdentifierMap().Values)
             {
                 PlayerSession session = identity.ConnectedSession;
                 if (IsValidSession(session) && session.Name.ToLower().Equals(identifier.ToLower()))
@@ -190,7 +199,7 @@ namespace Oxide.Plugins
                     return session.SteamId.m_SteamID;
                 }
             }
-            
+
             return ulong.MinValue;
         }
 
@@ -216,7 +225,7 @@ namespace Oxide.Plugins
             var ManagerInstance = GameManager.Instance;
             return ManagerInstance.GetDescriptionKey(obj);
         }
-        
+
         private bool isValidKill(PlayerIdentity victim, PlayerIdentity killer)
         {
             bool sameStake = GetConfig(false, "Settings", "KillCount_Exclusion", "SameStake");
@@ -227,7 +236,7 @@ namespace Oxide.Plugins
                 List<OwnershipStakeServer> victim_stakes = GetStakesFromPlayer(victim.ConnectedSession);
                 List<OwnershipStakeServer> killer_stakes = GetStakesFromPlayer(killer.ConnectedSession);
 
-                foreach(OwnershipStakeServer killer_stake in killer_stakes)
+                foreach (OwnershipStakeServer killer_stake in killer_stakes)
                 {
                     if (victim_stakes.Contains(killer_stake))
                     {
@@ -242,11 +251,11 @@ namespace Oxide.Plugins
 
                 if (victim_clanID == killer_clanID)
                 {
-                    if(victim_clanID != 0)
+                    if (victim_clanID != 0)
                         return false;
                 }
             }
-            
+
             return true;
         }
 
@@ -254,11 +263,54 @@ namespace Oxide.Plugins
 
         #region Chat Commands
 
+        [ChatCommand("killtop")]
+        void cmdKCKillTop(PlayerSession session, string command, string[] args)
+        {
+            if (!HasPermission(session, "use") && !session.IsAdmin)
+            {
+                hurt.SendChatMessage(session, lang.GetMessage("no_permission", this)
+                        .Replace("{perm}", PermissionPrefix + ".use"));
+                return;
+            }
+
+            hurt.SendChatMessage(session, lang.GetMessage("playertop", this));
+            var top5 = data.OrderByDescending(pair => pair.Value).Take(5);
+            var cycle = 1;
+            foreach (var kills in top5)
+            {
+                string playername = GetPlayerName(kills.Key);
+                hurt.SendChatMessage(session, lang.GetMessage("playertopline", this).Replace("{Number}", cycle.ToString()).Replace("{Name}", playername).Replace("{Kills}", kills.Value.ToString()));
+                cycle++;
+            }
+
+        }
+        [ChatCommand("kills")]
+        void cmdKCKills(PlayerSession session, string command, string[] args)
+        {
+            if (!HasPermission(session, "use") && !session.IsAdmin)
+            {
+                hurt.SendChatMessage(session, lang.GetMessage("no_permission", this)
+                        .Replace("{perm}", PermissionPrefix + ".use"));
+                return;
+            }
+            
+            if (!data.ContainsKey(session.SteamId.m_SteamID))
+                hurt.SendChatMessage(session, lang.GetMessage("playernokills", this));
+            else
+            {
+                var kills = data[session.SteamId.m_SteamID];
+                hurt.SendChatMessage(session, lang.GetMessage("playerkills", this).Replace("{Kills}", kills.ToString()));
+            }
+
+        }
+
+
+
         [ChatCommand("kc")]
         void cmdKC(PlayerSession session, string command, string[] args)
         {
             //Test permission
-            if (!HasPermission(session, "use") && !session.IsAdmin)
+            if (!HasPermission(session, "mod") && !session.IsAdmin)
             {
                 hurt.SendChatMessage(session, lang.GetMessage("no_permission", this)
                         .Replace("{perm}", PermissionPrefix + ".mod"));
@@ -305,28 +357,27 @@ namespace Oxide.Plugins
         #endregion Chat Commands
 
         #region Hooks
-
-        object OnDeathNotice(string name, EntityEffectSourceData source)
+        string AddKill(PlayerSession playerSession, EntityEffectSourceData dataSource)
         {
-            var victim_name = name;
-            var killer_name = GetNameOfObject(source.EntitySource);
-            
+            string victim_name = playerSession.Name;
+            var victim_steamID = GetSteamID(victim_name);
+            var victim_identity = GameManager.Instance.GetIdentity(victim_steamID);
+
+            string killer_name = GetNameOfObject(dataSource.EntitySource);
+
             if (killer_name != "")
             {
-                if(killer_name.Length >=3)
-                    killer_name = killer_name.Substring(0, killer_name.Length-3);
-
-                var victim_steamID = GetSteamID(victim_name);
+                if (killer_name.Length >= 3)
+                    killer_name = killer_name.Substring(0, killer_name.Length - 3);
                 var killer_steamID = GetSteamID(killer_name);
 
-                var victim_identity = GameManager.Instance.GetIdentity(victim_steamID);
                 var killer_identity = GameManager.Instance.GetIdentity(killer_steamID);
-                
-                if(killer_identity == null)
+
+                if (killer_identity == null)
                 {
                     return null;
                 }
-                
+
                 if (!data.ContainsKey(killer_steamID))
                     data.Add(killer_steamID, 0);
 
@@ -335,16 +386,29 @@ namespace Oxide.Plugins
 
                 SaveData();
 
-                killer_name += "(" + data[killer_steamID] + ")";
-                
-                hurt.BroadcastChat(lang.GetMessage("player", this).Replace("{Name}", name).Replace("{Killer}", killer_name));
-                
-                return true;
+                var kills = data[killer_steamID].ToString();
+                return kills;
             }
-
             return null;
         }
 
+        private void OnPlayerDeath(PlayerSession playerSession, EntityEffectSourceData dataSource)
+        {
+            if (CustomDeathMessages == null)
+            {
+                string killer_name = GetNameOfObject(dataSource.EntitySource);
+                if (killer_name.Length >= 3)
+                    killer_name = killer_name.Substring(0, killer_name.Length - 3);
+
+                var killerkills = AddKill(playerSession, dataSource);
+                if (killerkills != null)
+                {
+                    timer.Once(1f, () => {
+                        hurt.BroadcastChat(lang.GetMessage("player", this).Replace("{Name}", killer_name).Replace("{Kills}", killerkills));
+                    });
+                }
+            }
+        }
         #endregion Hooks
     }
 }
