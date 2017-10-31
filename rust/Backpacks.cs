@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.0.8", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.0.9", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -120,7 +120,7 @@ namespace Oxide.Plugins
                 entity = SpawnContainer(Size, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
 
                 foreach (var backpackItem in Inventory.Items)
-                    backpackItem.ToItem().MoveToContainer(container.inventory);
+                    backpackItem.ToItem()?.MoveToContainer(container.inventory);
 
                 PlayerLootContainer(player, entity.GetComponent<StorageContainer>());
                 StorageCloser.Attach(entity, Close);
@@ -166,7 +166,7 @@ namespace Oxide.Plugins
                 if (visualEntity != null || !Configuration.ShowOnBack)
                     return;
 
-                var ent = GameManager.server.CreateEntity("assets/prefabs/weapons/satchelcharge/explosive.satchel.deployed.prefab", new Vector3(0, 0.35F, -0.075F), Quaternion.Euler(0, 90, -90));
+                /*var ent = GameManager.server.CreateEntity("assets/prefabs/weapons/satchelcharge/explosive.satchel.deployed.prefab", new Vector3(0, 0.35F, -0.075F), Quaternion.Euler(0, 90, -90));
 
                 ent.SetParent(player);
 
@@ -188,7 +188,24 @@ namespace Oxide.Plugins
                 explosive.CancelInvoke("Explode");
                 explosive.CancelInvoke("Kill");
                 explosive.SetFlag(BaseEntity.Flags.On, false);
-                explosive.SendNetworkUpdate();
+                explosive.SendNetworkUpdate();*/
+
+                var ent = GameManager.server.CreateEntity("assets/prefabs/misc/item drop/item_drop_backpack.prefab", new Vector3(0, 0.25f, -0.125f), Quaternion.Euler(-90, 90, -90));
+
+                ent.SetParent(player);
+
+                ent.UpdateNetworkGroup();
+                ent.SendNetworkUpdateImmediate();
+
+                ent.SetFlag(BaseEntity.Flags.Locked, true);
+
+                ent.Spawn();
+
+                ent.globalBroadcast = true;
+
+                ent.name = "backpack";
+                ent.creatorEntity = player;
+                ent.OwnerID = player.userID;
 
                 visualEntity = ent;
             }
@@ -237,12 +254,24 @@ namespace Oxide.Plugins
                 public float Condition;
                 public int Ammo;
                 public int AmmoType;
+                public bool IsBlueprint;
+                public int BlueprintTarget;
 
                 public List<BackpackItem> Contents = new List<BackpackItem>();
 
                 public Item ToItem()
                 {
+                    if (Amount == 0)
+                        return null;
+
                     Item item = ItemManager.CreateByItemID(ID, Amount, Skin);
+
+                    if (IsBlueprint)
+                    {
+                        item.blueprintTarget = BlueprintTarget;
+                        return item;
+                    }
+                    
                     BaseProjectile.Magazine magazine = item.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine;
                     FlameThrower flameThrower = item.GetHeldEntity()?.GetComponent<FlameThrower>();
 
@@ -277,7 +306,9 @@ namespace Oxide.Plugins
                     Fuel = item.fuel,
                     Skin = item.skin,
                     Contents = item.contents?.itemList?.Select(FromItem).ToList(),
-                    FlameFuel = item.GetHeldEntity()?.GetComponent<FlameThrower>()?.ammo ?? 0
+                    FlameFuel = item.GetHeldEntity()?.GetComponent<FlameThrower>()?.ammo ?? 0,
+                    IsBlueprint = item.IsBlueprint(),
+                    BlueprintTarget = item.blueprintTarget
                 };
             }
         }
@@ -379,15 +410,25 @@ namespace Oxide.Plugins
             permission.RegisterPermission("backpacks.admin", this);
 
             foreach (var basePlayer in BasePlayer.activePlayerList)
-                OnPlayerInit(basePlayer);
+            {
+                try
+                {
+                    OnPlayerInit(basePlayer);
+                }
+                catch (Exception ex)
+                {
+                    
+                }
+            }
+                
         }
 
-        private void Unloaded()
+        private void Unload()
         {
             foreach (var basePlayer in BasePlayer.activePlayerList)
                 OnPlayerDisconnected(basePlayer);
 
-            foreach (var ent in Resources.FindObjectsOfTypeAll<TimedExplosive>().Where(ent => ent.name == "backpack"))
+            foreach (var ent in Resources.FindObjectsOfTypeAll<BaseEntity>().Where(ent => ent.name == "backpack"))
                 ent.KillMessage();
 
             foreach (var ent in Resources.FindObjectsOfTypeAll<StorageContainer>().Where(cont => cont.name == "droppedbackpack" && cont.inventory.itemList.Count == 0))
