@@ -3,7 +3,11 @@
     "description": "Allows players with permission to use various different custom arrow types",
     "author": "Ryan",
     "version": "2.1.0",
+<<<<<<< HEAD
     "configuration": true,
+=======
+    "configuration": false,
+>>>>>>> 919e49562af4e184669d7b2f55d801d6a3ec71c7
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/advancedarrows.1413",
     "games": [
