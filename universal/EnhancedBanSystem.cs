@@ -1,7 +1,4 @@
-﻿//Reference: Oxide.MySql
-//Reference: Oxide.SQLite
-
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Database;
@@ -15,7 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("EnhancedBanSystem", "Reneb/Slut", "5.1.10", ResourceId = 1951)]
+    [Info("EnhancedBanSystem", "Reneb/Slut", "5.1.11", ResourceId = 1951)]
     class EnhancedBanSystem : CovalencePlugin
     {
         [PluginReference]
@@ -36,7 +33,6 @@ namespace Oxide.Plugins
         ////////////////////////////////////////////////////////////
         // Config fields
         ////////////////////////////////////////////////////////////
-
         private static string Platform = "Steam";
         private static string Server = "1.1.1.1:28015";
         private static string Game = "Rust";
@@ -585,14 +581,13 @@ namespace Oxide.Plugins
         }
         private void OnUserBanned(string name, string id, string address, string reason)
         {
-            timer.Once(5f, () =>
+            timer.Once(5f, () => {
+            if (!isBanned_Check(name, id, address))
             {
-                if (!isBanned_Check(name, id, address))
-                {
-                    Puts("Adding banned player to EnhancedBanSystem");
-                    BanData bd = new BanData("Auto Ban", id, name, address, reason, 0.0);
-                    ExecuteBan("Auto Ban", bd, false);
-                }
+                Puts("Adding banned player to EnhancedBanSystem");
+                BanData bd = new BanData("Auto Ban", id, name, address, reason, 0.0);
+                ExecuteBan("Auto Ban", bd, false);
+            }
             });
         }
         object CanUserLogin(string name, string id, string ip)
@@ -642,8 +637,6 @@ namespace Oxide.Plugins
         class StoredData
         {
             public HashSet<string> Banlist = new HashSet<string>();
-
-            public StoredData() { }
         }
 
         string Files_Load()
@@ -652,9 +645,8 @@ namespace Oxide.Plugins
             {
                 storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
             }
-            catch(Exception ex)
+            catch
             {
-                Puts(ex.Message);
                 storedData = new StoredData();
             }
             foreach (var b in storedData.Banlist)
@@ -668,6 +660,9 @@ namespace Oxide.Plugins
 
         void Save_Files()
         {
+            if (storedData.Banlist == null) {
+                return;
+            }
             Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
         }
 
@@ -1934,8 +1929,10 @@ namespace Oxide.Plugins
         ////////////////////////////////////////////////////////////
         bool isBanned_Check(string name, string steamid, string ip)
         {
+            int count = 0;
             if (BanSystemHasFlag(banSystem, BanSystem.Files))
             {
+                count++;
                 var files = cachedBans.Values.Where(x => x.steamid == steamid).ToList();
                 if (files.Count > 0)
                 {
@@ -1944,6 +1941,7 @@ namespace Oxide.Plugins
             }
             if (BanSystemHasFlag(banSystem, BanSystem.PlayerDatabase))
             {
+                count++;
                 var playerdatabase = PlayerDatabase.Call("GetPlayerDataRaw", steamid, "Banned");
                 if (playerdatabase is string && playerdatabase != null)
                 {
@@ -1952,6 +1950,7 @@ namespace Oxide.Plugins
             }
             if (BanSystemHasFlag(banSystem, BanSystem.MySQL))
             {
+                count++;
                 bool foundMySQL = false;
                 Sql.Query(Core.Database.Sql.Builder.Append("SELECT * from enhancedbansystem WHERE `steamid` = @0", steamid), Sql_conn, list =>
                 {
@@ -1967,6 +1966,7 @@ namespace Oxide.Plugins
             }
             if (BanSystemHasFlag(banSystem, BanSystem.SQLite))
             {
+                count++;
                 bool sqlite = false;
                 Sqlite.Query(Core.Database.Sql.Builder.Append("SELECT * from EnhancedBanSystem WHERE `steamid` == @0", steamid), Sqlite_conn, list =>
                 {
@@ -1982,6 +1982,7 @@ namespace Oxide.Plugins
             }
             if (BanSystemHasFlag(banSystem, BanSystem.WebAPI))
             {
+                count++;
                 bool banned = false;
                 webrequest.Enqueue(FormatOnlineBansystem(WebAPI_IsBanned_Request, new Dictionary<string, string> { { "{id}", null }, { "{steamid}", steamid }, { "{name}", name }, { "{ip}", ip }, { "{source}", "Auto Ban" }, { "{update}", false.ToString() }, { "{time}", LogTime().ToString() } }), null, (code, response) =>
                 {
@@ -2002,13 +2003,13 @@ namespace Oxide.Plugins
                     return banned;
                 }
             }
-            if (BanSystemHasFlag(banSystem, BanSystem.Native))
+            if (BanSystemHasFlag(banSystem, BanSystem.Native) && count > 0)
+            {
+                return false;
+            } else if(BanSystemHasFlag(banSystem, BanSystem.Native) && count == 0)
             {
                 var player = players.FindPlayer(steamid);
-                if (player != null && player.IsBanned)
-                {
-                    return true;
-                }
+                return player != null && player.IsBanned;
             }
             return false;
         }
@@ -2203,6 +2204,7 @@ namespace Oxide.Plugins
         }
         string ExecuteBan(object source, BanData bandata, bool kick)
         {
+            Unsubscribe(nameof(OnUserBanned));
             if (wasBanned.Contains(bandata.id)) return string.Empty;
 
             string returnstring = null;
@@ -2256,7 +2258,7 @@ namespace Oxide.Plugins
                 string json = JsonConvert.SerializeObject(payload);
                 DiscordMessages.Call("API_SendFancyMessage", Discord_Webhook, "Player Ban", 0, json);
             }
-
+            timer.Once(5f, () => { Subscribe(nameof(OnUserBanned)); });
             return returnstring;
         }
 
