@@ -17,7 +17,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiOfflineRaid", "rustservers.io", "0.2.9", ResourceId = 1464)]
+    [Info("AntiOfflineRaid", "rustservers.io", "0.2.10", ResourceId = 1464)]
     [Description("Prevents/reduces offline raiding")]
     public class AntiOfflineRaid : RustPlugin
     {
@@ -978,8 +978,7 @@ namespace Oxide.Plugins
             if (player.net == null) return;
             if (player.net.connection == null) return;
 
-            var obj = new Facepunch.ObjectList?(new Facepunch.ObjectList("AntiOfflineRaidMsg"));
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", obj);
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", "AntiOfflineRaidMsg");
         }
 
         private void ShowMessage(BasePlayer player, int amount = 100)
@@ -989,8 +988,7 @@ namespace Oxide.Plugins
             send = send.Replace("{1}", Oxide.Core.Random.Range(1, 99999).ToString());
             send = send.Replace("{protection_message}", GetMsg("Protection Message", player.UserIDString));
             send = send.Replace("{amount}", amount.ToString());
-            var obj = new Facepunch.ObjectList?(new Facepunch.ObjectList(send));
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", obj);
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", send);
 
             timer.In(3f, delegate()
             {

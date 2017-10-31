@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("InstantCraft", "Vlad-00003", "1.2.1", ResourceId = 2409)]
+    [Info("InstantCraft", "Vlad-00003", "1.2.3", ResourceId = 2409)]
     [Description("Instant craft items(includes normalspeed list and blacklist)")]
 
     class InstantCraft : RustPlugin
@@ -28,8 +28,9 @@ namespace Oxide.Plugins
         {
             PrintWarning("New configuration file created.");
         }
-        void LoadConfigValues()
+        protected override void LoadConfig()
         {
+            base.LoadConfig();
             bool changed = false;
             List<object> blockedItems = new List<object>();
             List<object> normalSpeed = new List<object>() { "Hammer", "Rock" };
@@ -63,13 +64,12 @@ namespace Oxide.Plugins
                 PrintWarning("Oprion \"Randomize item skins if skin is zero\" was added to the config");
                 changed = true;
             }
-            if(changed)
+            if (changed)
                 SaveConfig();
             BlockedItems = blockedItems.Select(i => (string)i).ToList();
             NormalSpeed = normalSpeed.Select(i => (string)i).ToList();
         }
-
-        void LoadMessages()
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
@@ -90,9 +90,7 @@ namespace Oxide.Plugins
 
         void Init()
         {
-            LoadMessages();
-            LoadConfigValues();
-            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", GetWorkshopIDs, this);
+            webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, GetWorkshopIDs, this, Core.Libraries.RequestMethod.GET);
         }
 
         #endregion
@@ -255,8 +253,6 @@ namespace Oxide.Plugins
                 }
                 i = ItemManager.Create(def, amount, skinid);
             }
-            //if (skinid != 0 && SchemaSkins.ContainsKey(skinid) && SchemaSkins[skinid] != 0) { i = ItemManager.Create(def, amount, SchemaSkins[skinid]); }
-            //else { i = ItemManager.Create(def, amount, skinid); }
             if (i != null)
                 player.GiveItem(i, BaseEntity.GiveItemReason.Crafted);
         }
@@ -313,13 +309,6 @@ namespace Oxide.Plugins
         {
             PrintToChat(Player, "<color=" + PrefixColor + ">" + Prefix + "</color> " + Message);
         }
-
-        //Sends the message to the whole chat with prefix
-        private void SendToChat(string Message)
-        {
-            PrintToChat("<color=" + PrefixColor + ">" + Prefix + "</color> " + Message);
-        }
-
         //Get the msg form lang API
         string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID == null ? null : userID.ToString());
         private bool GetConfig<T>(string Key, ref T var)

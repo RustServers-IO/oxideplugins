@@ -1,13 +1,13 @@
 {
     "name": "RealtimeWipeInfo",
-    "description": "Updates title dynamically depending on wipe time as well as preventing wipe chat spam.",
+    "description": "Auto title & description updating, auto wipe schedule, chat filter & more!",
     "author": "Ryan",
-    "version": "1.0.8",
+    "version": "2.1.0",
     "configuration": true,
     "suggest": {
         "BetterChat": "*"
     },
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/realtimewipeinfo.2473",
     "games": [
         "rust"

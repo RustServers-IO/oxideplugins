@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoPurge", "Fujikura/Norn", "1.6.0", ResourceId = 1566)]
+    [Info("AutoPurge", "Fujikura/Norn", "1.6.1", ResourceId = 1566)]
     [Description("Remove entities if the owner becomes inactive.")]
     public class AutoPurge : RustPlugin
     {
@@ -368,8 +368,18 @@ namespace Oxide.Plugins
         {
 			if (freshStart)
 			{
-				if (useClansIO && !clansEnabled) return;
-				if (useFriendsApi && !friendsEnabled) return;
+				if (useClansIO && !clansEnabled) 
+				{
+					PrintWarning("'Clans' support not active - purge on start cancelled");
+					LogToFile("AutoPurge", "'Clans' support not active - purge on start cancelled. Check the plugin or disable 'useClansIO'", this);
+					return;
+				}
+				if (useFriendsApi && !friendsEnabled)
+				{
+					PrintWarning("'Friends' support not active - purge on start cancelled");
+					LogToFile("AutoPurge", "'Friends' support not active - purge on start cancelled. Check the plugin or disable 'useFriendsApi'", this);
+					return;
+				}
 			}
 			if (showMessages && !freshStart)
 			{

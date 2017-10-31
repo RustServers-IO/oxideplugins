@@ -1,0 +1,16 @@
+{
+    "name": "IgnoreCollision",
+    "description": "This plugin allows you to disable collisions between dropped items in world.",
+    "author": "Vlad-00003",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/ignorecollision.2648",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -2,14 +2,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using UnityEngine;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Stack Size Controller", "Canopy Sheep", "1.9.6", ResourceId = 2320)]
+    [Info("Stack Size Controller", "Canopy Sheep", "1.9.9", ResourceId = 2320)]
     [Description("Allows you to set the max stack size of every item.")]
     public class StackSizeController : RustPlugin
     {
-		protected override void LoadDefaultConfig()
+        #region Hooks
+        protected override void LoadDefaultConfig()
         {
 			PrintWarning("Creating a new configuration file.");
 
@@ -59,18 +61,68 @@ namespace Oxide.Plugins
 			SaveConfig();
 		}
 
+        bool hasPermission(BasePlayer player, string perm)
+        {
+            if (player.net.connection.authLevel > 1)
+            {
+                return true;
+            }
+            return permission.UserHasPermission(player.userID.ToString(), perm);
+        }
+        
         object CanMoveItem(Item item, PlayerInventory inventory, uint container, int slot, uint amount)
         {
             if (item.amount < UInt16.MaxValue) { return null; }
-			
-			ItemContainer itemContainer = inventory.FindContainer(container);
+
+            ItemContainer itemContainer = inventory.FindContainer(container);
             if (itemContainer == null) { return null; }
-			
+            
+            ItemContainer playerInventory = inventory.GetContainer(PlayerInventory.Type.Main);
+            BasePlayer player = playerInventory.GetOwnerPlayer();
+
+            if (!(player == null) && !(player.userID == 0) && FurnaceSplitter)
+            {
+                bool success = true;
+                bool enabled = false;
+                bool hasPermission = true;
+                try
+                {
+                    enabled = (bool)FurnaceSplitter?.CallHook("GetEnabled", player);
+                    hasPermission = (bool)FurnaceSplitter?.CallHook("HasPermission", player);
+                }
+                catch
+                {
+                    success = false;
+                }
+                if (success && enabled && hasPermission)
+                {
+                    List<string> CookingContainers = new List<string>()
+                    {
+                        "refinery_small_deployed",
+                        "furnace",
+                        "campfire",
+                        "furnace.large",
+                        "hobobarrel_static"
+                    };
+
+                    BaseEntity baseEntity = itemContainer.entityOwner;
+                    if (!(baseEntity == null))
+                    {
+                        foreach (string CookingContainer in CookingContainers)
+                        {
+                            if (baseEntity.ShortPrefabName.Contains(CookingContainer))
+                            {
+                                return null;
+                            }
+                        }
+                    }
+                }
+            }
+
             bool aboveMaxStack = false;
             int configAmount = (int)Config[item.info.displayName.english];
 
             if (item.amount > configAmount) { aboveMaxStack = true; }
-
             if (amount + item.amount / UInt16.MaxValue == item.amount % UInt16.MaxValue)
             {
                 if (aboveMaxStack)
@@ -85,7 +137,6 @@ namespace Oxide.Plugins
                     inventory.ServerUpdate(0f);
                     return true;
                 }
-
                 item.MoveToContainer(itemContainer, slot, true);
                 return true;
             }
@@ -93,7 +144,7 @@ namespace Oxide.Plugins
             {
                 if (aboveMaxStack)
                 {
-					Item split;
+                    Item split;
 					if (configAmount > item.amount / 2) { split = item.SplitItem(Convert.ToInt32(item.amount) / 2); }
                     else { split = item.SplitItem(configAmount); }
 
@@ -106,7 +157,6 @@ namespace Oxide.Plugins
                     inventory.ServerUpdate(0f);
                     return true;
                 }
-
                 Item item2 = item.SplitItem(item.amount / 2);
 				if (!((item.amount + item2.amount) % 2 == 0)) { item2.amount++; item.amount--; }
 				
@@ -135,7 +185,8 @@ namespace Oxide.Plugins
             }
             return null;
         }
-
+        #endregion
+        #region Commands
         [ChatCommand("stack")]
         private void StackCommand(BasePlayer player, string command, string[] args)
         {
@@ -310,15 +361,10 @@ namespace Oxide.Plugins
 
             Puts("The Stack Size of all stackable items has been set to " + arg.Args[0]);
         }
-
-        bool hasPermission(BasePlayer player, string perm)
-        {
-            if (player.net.connection.authLevel > 1)
-            {
-                return true;
-            }
-
-            return permission.UserHasPermission(player.userID.ToString(), perm);
-        }
+        #endregion
+        #region Plugin References
+        [PluginReference("FurnaceSplitter")]
+        private Plugin FurnaceSplitter;
+        #endregion
     }
 }

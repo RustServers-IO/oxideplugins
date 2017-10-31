@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("KDRGui", "Ankawi/LaserHydra", "1.0.5")]
+    [Info("KDRGui", "Ankawi/LaserHydra", "1.0.6", ResourceId = 2042)]
     [Description("GUI that portrays kills, deaths, player name, and K/D Ratio")]
     class KDRGui : RustPlugin
     {
@@ -63,13 +63,13 @@ namespace Oxide.Plugins
 
             public void Draw(BasePlayer player)
             {
-                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(JsonConvert.SerializeObject(ui).Replace("{NEWLINE}", Environment.NewLine)));
+                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", JsonConvert.SerializeObject(ui).Replace("{NEWLINE}", Environment.NewLine));
             }
 
             public void Destroy(BasePlayer player)
             {
                 foreach (string uiName in objectList)
-                    CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList(uiName));
+                    CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", uiName);
             }
 
             public string AddPanel(string name, double left, double top, double width, double height, UIColor color, bool mouse = false, string parent = "Overlay")

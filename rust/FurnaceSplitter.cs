@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Furnace Splitter", "Skipcast", "2.1.1", ResourceId = 2406)]
+	[Info("Furnace Splitter", "Skipcast", "2.1.2", ResourceId = 2406)]
 	[Description("Splits up resources in furnaces automatically and shows useful furnace information.")]
 	public class FurnaceSplitter : RustPlugin
 	{
@@ -508,8 +508,8 @@ namespace Oxide.Plugins
 			
 			foreach (var fuelItem in playerFuel)
 			{
-				if (oven.inventory.CanAcceptItem(fuelItem) != ItemContainer.CanAcceptResult.CanAccept)
-					break;
+			    if (oven.inventory.CanAcceptItem(fuelItem, -1) != ItemContainer.CanAcceptResult.CanAccept)
+			        break;
 
 				var largestFuelStack = oven.inventory.itemList.Where(item => item.info == oven.fuelType).OrderByDescending(item => item.amount).FirstOrDefault();
 				var toTake = Math.Min(neededFuel, oven.fuelType.stackable - (largestFuelStack?.amount ?? 0));

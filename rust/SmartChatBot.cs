@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Smart Chat Bot", "i_love_code", 1.5, ResourceId = 2435)]
+    [Info("Smart Chat Bot", "i_love_code", 1.6, ResourceId = 2435)]
     [Description("I send chat messages based on some triggers or time.")]
     public class SmartChatBot : RustPlugin
     {
@@ -179,17 +179,21 @@ namespace Oxide.Plugins
             if (messageConfig == null)
                 return null;
 
+            Puts("Automated message found for chat message [" + message + "]. Will display [" + messageConfig.Message + "]");
+
             if (messageConfig.SendToServer)
             {
                 var lastMessage = GetLastServerSend(messageConfig);
 
                 if (lastMessage != null && lastMessage.AddSeconds(PluginConfiguration.BotCooldownInSeconds) >= DateTime.Now)
                 {
+                    Puts("Preventing global automated message due to timed cooldown");
                     return true;
                 }
 
                 NextTick(() =>
                 {
+                    Puts("Displaying [" + messageConfig.Message + "] to server");
                     DisplayMessageToServer(messageConfig.Message);
                     SetLastServerSend(messageConfig);
                 });
@@ -204,6 +208,7 @@ namespace Oxide.Plugins
                 return null;
             }
 
+            Puts("Displaying [" + messageConfig.Message + "] directly to user");
             DisplayMessageToUser(player, $"{messageConfig.Message}");
 
             return true;

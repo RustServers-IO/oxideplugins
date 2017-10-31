@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ArenaWallGenerator", "nivex", "1.0.1", ResourceId = 2589)]
+    [Info("ArenaWallGenerator", "nivex", "1.0.2", ResourceId = 2589)]
     [Description("An easy to use arena wall generator.")]
     public class ArenaWallGenerator : RustPlugin
     {
@@ -348,6 +348,10 @@ namespace Oxide.Plugins
             respawnWalls = Convert.ToBoolean(GetConfig("Settings", "Respawn Zone Walls On Death", false));
 
             cmd.AddChatCommand(chatCommandName, this, CommandWalls);
+
+            if (!Changed) return;
+            SaveConfig();
+            Changed = false;
         }
 
         protected override void LoadDefaultConfig()

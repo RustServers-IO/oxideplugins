@@ -1,4 +1,5 @@
 ﻿// Requires: EventManager
+
 using System.Collections.Generic;
 using UnityEngine;
 using Rust;
@@ -11,7 +12,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("CaptureTheFlag", "k1lly0u", "0.1.62", ResourceId = 2259)]
+    [Info("CaptureTheFlag", "k1lly0u", "0.1.63", ResourceId = 2259)]
     class CaptureTheFlag : RustPlugin
     {
         #region Fields
@@ -26,7 +27,7 @@ namespace Oxide.Plugins
         static CaptureTheFlag ctf;
 
         private List<CTFPlayer> CTFPlayers;
-        private Dictionary<Team, uint> flagIDs;      
+        private Dictionary<Team, uint> flagIDs;
 
         private bool usingCTF;
         private bool hasStarted;
@@ -42,7 +43,7 @@ namespace Oxide.Plugins
         private string Kit;
 
         private CTFFlag FlagA;
-        private CTFFlag FlagB;        
+        private CTFFlag FlagB;
         #endregion
 
         #region Player Class
@@ -61,15 +62,15 @@ namespace Oxide.Plugins
                 hasFlag = false;
             }
             public void ClearInventory()
-            {         
+            {
                 for (int i = 0; i < player.inventory.containerBelt.itemList.Count; i++)
                     player.inventory.containerBelt.itemList[i].Remove(0.01f);
                 for (int i = 0; i < player.inventory.containerMain.itemList.Count; i++)
                     player.inventory.containerMain.itemList[i].Remove(0.01f);
                 player.SendNetworkUpdateImmediate();
-            }            
-        }      
-        
+            }
+        }
+
         class CTFFlag : MonoBehaviour
         {
             private Vector3 homePos;
@@ -86,7 +87,7 @@ namespace Oxide.Plugins
                 enabled = false;
             }
             private void OnDestroy()
-            { 
+            {
                 CancelInvoke();
 
                 carrier = null;
@@ -96,7 +97,7 @@ namespace Oxide.Plugins
                 flag.UpdateNetworkGroup();
                 flag.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
                 flagState = FlagState.Stationary;
-                                
+
                 (flag as BaseCombatEntity).DieInstantly();
             }
             public void InitializeFlag(Team team, Vector3 spawnPoint)
@@ -109,7 +110,7 @@ namespace Oxide.Plugins
                 transform.position = spawnPoint;
                 homePos = spawnPoint;
 
-                flag = GameManager.server.CreateEntity(ctf.configData.GameSettings.FlagType, spawnPoint, new Quaternion(), true);                
+                flag = GameManager.server.CreateEntity(ctf.configData.GameSettings.FlagType, spawnPoint, new Quaternion(), true);
                 flag.enableSaving = false;
                 if (flag.GetComponent<Signage>())
                 {
@@ -119,8 +120,8 @@ namespace Oxide.Plugins
                     flag.OwnerID = 0U;
                 }
                 flag.Spawn();
-                
-                transform.SetParent(flag.transform);                
+
+                transform.SetParent(flag.transform);
 
                 foreach (Collider c in flag.GetComponents<Collider>())
                     c.enabled = false;
@@ -139,7 +140,7 @@ namespace Oxide.Plugins
 
                 InvokeRepeating("ShowLocation", 0f, ctf.configData.GameSettings.FlagMarkerRefreshRate);
             }
-           
+
             void OnTriggerEnter(Collider obj)
             {
                 var player = obj?.GetComponentInParent<BasePlayer>();
@@ -188,7 +189,7 @@ namespace Oxide.Plugins
                                         break;
                                 }
                                 ctf.EventManager.GivePlayerKit(player, ctf.Kit);
-                                ctfPlayer.caps++;                                                               
+                                ctfPlayer.caps++;
                                 ctf.EventManager.AddStats(player, EventManager.StatType.Flags);
                                 ctf.AddCapturePoint(ctfPlayer.player, team);
                                 ctf.SendMessage($"{ctf.configData.Messaging.MainColor}{player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has captured")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(otherTeam)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
@@ -197,7 +198,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-            }          
+            }
             private void ShowLocation()
             {
                 //foreach (var p in ctf.CTFPlayers)
@@ -225,7 +226,7 @@ namespace Oxide.Plugins
                 flag.transform.position = homePos;
                 flag.UpdateNetworkGroup();
                 flag.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                flagState = FlagState.Stationary;                
+                flagState = FlagState.Stationary;
             }
             public void DropFlag(Vector3 position)
             {
@@ -234,14 +235,14 @@ namespace Oxide.Plugins
                 flag.transform.localPosition = Vector3.zero;
                 flag.transform.position = position;
                 flag.UpdateNetworkGroup();
-                flag.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);                
+                flag.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
                 flagState = FlagState.Stationary;
                 Invoke("AutoRestore", 30f);
-            }      
+            }
             private void AutoRestore()
             {
                 RestoreFlag();
-            }      
+            }
         }
         enum FlagState
         {
@@ -257,14 +258,14 @@ namespace Oxide.Plugins
             usingCTF = false;
             CTFPlayers = new List<CTFPlayer>();
             flagIDs = new Dictionary<Team, uint>();
-            lang.RegisterMessages(Messages, this);            
+            lang.RegisterMessages(Messages, this);
         }
 
         void OnServerInitialized()
         {
             ctf = this;
-            LoadVariables();            
-            //RegisterGame();            
+            LoadVariables();
+            //RegisterGame();
 
             ScoreLimit = configData.GameSettings.ScoreLimit;
 
@@ -308,7 +309,7 @@ namespace Oxide.Plugins
                 RequiresMultipleSpawns = true,
                 RequiresSpawns = true,
                 ScoreType = msg("Flag Captures"),
-                SpawnsEnemies = false                
+                SpawnsEnemies = false
             };
             var success = EventManager?.RegisterEventGame(Title, eventSettings, eventData);
             if (success == null)
@@ -378,7 +379,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region UI
-        #region Scoreboard        
+        #region Scoreboard
         private void UpdateScores()
         {
             if (usingCTF && hasStarted && configData.EventSettings.ShowScoreboard)
@@ -397,10 +398,10 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region CTF Functions        
+        #region CTF Functions
         void AddFlag(Team team)
         {
-            string spawnFile = team == Team.A ? TeamASpawns : TeamBSpawns;            
+            string spawnFile = team == Team.A ? TeamASpawns : TeamBSpawns;
 
             var spawnPoint = Spawns.Call("GetSpawn", spawnFile, 0);
             if (spawnPoint is string)
@@ -410,7 +411,7 @@ namespace Oxide.Plugins
             }
             else
             {
-                CTFFlag ctfFlag = new GameObject().gameObject.AddComponent<CTFFlag>();                            
+                CTFFlag ctfFlag = new GameObject().gameObject.AddComponent<CTFFlag>();
                 ctfFlag.InitializeFlag(team, (Vector3)spawnPoint);
                 if (team == Team.A) FlagA = ctfFlag;
                 else FlagB = ctfFlag;
@@ -423,26 +424,26 @@ namespace Oxide.Plugins
             else BCaps++;
             UpdateScores();
             CheckScores();
-        }        
+        }
         void RemovePlayer(CTFPlayer player)
         {
             if (player.hasFlag)
             {
                 CTFFlag flag = player.team == Team.A ? FlagB : FlagA;
-               
+
                 flag.DropFlag(player.transform.position);
                 player.player.SendNetworkUpdate();
                 player.hasFlag = false;
                 SendMessage($"{ctf.configData.Messaging.MainColor}{player.player.displayName}</color>{ctf.configData.Messaging.MSGColor} {msg("has dropped")} </color>{ctf.configData.Messaging.MainColor}{ctf.GetTeamName(flag.team)}'s</color>{ctf.configData.Messaging.MSGColor} {msg("flag")}!</color>");
-            }            
-        }        
+            }
+        }
         #endregion
 
         #region Event Manager Hooks
         void OnSelectEventGamePost(string name)
         {
-            if (Title == name)            
-                usingCTF = true;            
+            if (Title == name)
+                usingCTF = true;
             else usingCTF = false;
         }
         object CanEventOpen()
@@ -482,8 +483,8 @@ namespace Oxide.Plugins
         }
         object OnEventOpenPost()
         {
-            if (usingCTF)  
-                EventManager.BroadcastEvent(msg("description"));            
+            if (usingCTF)
+                EventManager.BroadcastEvent(msg("description"));
             return null;
         }
         object OnEventCancel()
@@ -513,9 +514,9 @@ namespace Oxide.Plugins
         object OnEventEndPost()
         {
             if (usingCTF)
-            {                
+            {
                 hasStarted = false;
-                
+
                 var ctfPlayers = UnityEngine.Object.FindObjectsOfType<CTFPlayer>();
                 if (ctfPlayers != null)
                 {
@@ -533,7 +534,7 @@ namespace Oxide.Plugins
                 hasStarted = true;
                 gameEnding = false;
                 ACaps = 0;
-                BCaps = 0;                
+                BCaps = 0;
             }
             return null;
         }
@@ -555,7 +556,7 @@ namespace Oxide.Plugins
                 return true;
             }
             return null;
-        }       
+        }
         object OnEventJoinPost(BasePlayer player)
         {
             if (usingCTF)
@@ -573,13 +574,13 @@ namespace Oxide.Plugins
             if (usingCTF)
             {
                 if (player.GetComponent<CTFPlayer>())
-                {                    
+                {
                     RemovePlayer(player.GetComponent<CTFPlayer>());
                     CTFPlayers.Remove(player.GetComponent<CTFPlayer>());
                     UnityEngine.Object.Destroy(player.GetComponent<CTFPlayer>());
                     CheckScores();
                 }
-            }            
+            }
             return null;
         }
         void OnEventPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
@@ -606,7 +607,7 @@ namespace Oxide.Plugins
                     if (attacker != null)
                     {
                         if (attacker != victim)
-                        {                            
+                        {
                             AddKill(attacker, victim);
                         }
                     }
@@ -624,8 +625,8 @@ namespace Oxide.Plugins
                     return false;
                 }
                 Team team = player.GetComponent<CTFPlayer>().team;
-                
-                var spawnPos = EventManager.SpawnCount.GetSpawnPoint(team == Team.A ? TeamASpawns : TeamBSpawns, team == Team.A, 1); 
+
+                var spawnPos = EventManager.SpawnCount.GetSpawnPoint(team == Team.A ? TeamASpawns : TeamBSpawns, team == Team.A, 1);
                 if (spawnPos is string)
                 {
                     PrintError((string)spawnPos);
@@ -707,7 +708,7 @@ namespace Oxide.Plugins
             return count;
         }
         private void GiveTeamShirts(BasePlayer player)
-        {            
+        {
             if (player.GetComponent<CTFPlayer>().team == Team.A)
             {
                 foreach(var item in configData.TeamA.ClothingItems)
@@ -715,7 +716,7 @@ namespace Oxide.Plugins
                     Item clothing = ItemManager.CreateByPartialName(item.Key);
                     clothing.skin = item.Value;
                     clothing.MoveToContainer(player.inventory.containerWear);
-                }                            
+                }
             }
             else if (player.GetComponent<CTFPlayer>().team == Team.B)
             {
@@ -765,9 +766,9 @@ namespace Oxide.Plugins
         {
             if (!player.GetComponent<CTFPlayer>())
                 return;
-                        
+
             EventManager.AddTokens(player.userID, configData.EventSettings.TokensOnKill);
-            EventManager.BroadcastEvent(string.Format(msg("killMsg"), player.displayName, victim.displayName));            
+            EventManager.BroadcastEvent(string.Format(msg("killMsg"), player.displayName, victim.displayName));
         }
         void CheckScores(bool timelimit = false)
         {
@@ -810,19 +811,19 @@ namespace Oxide.Plugins
             {
                 if (member.hasFlag)
                 {
-                    CTFFlag flag = member.team == Team.A ? FlagB : FlagA;                    
+                    CTFFlag flag = member.team == Team.A ? FlagB : FlagA;
 
                     flag.DropFlag(member.transform.position);
                     member.player.SendNetworkUpdate();
                     member.hasFlag = false;
-                } 
+                }
                 if (member.team == team)
                     EventManager.AddTokens(member.player.userID, configData.EventSettings.TokensOnWin, true);
             }
             if (team == Team.NONE)
                 EventManager.BroadcastToChat(msg("draw"));
             else EventManager.BroadcastToChat(string.Format(msg("winner"), GetTeamName(team)));
-            timer.In(2, ()=> 
+            timer.In(2, ()=>
             {
                 EventManager.CloseEvent();
                 EventManager.EndEvent();
@@ -830,7 +831,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Config        
+        #region Config
         private ConfigData configData;
         class EventSettings
         {
@@ -848,11 +849,11 @@ namespace Oxide.Plugins
             public float FFDamageModifier { get; set; }
             public int ScoreLimit { get; set; }
             public string FlagType { get; set; }
-            public float FlagMarkerRefreshRate { get; set; }            
+            public float FlagMarkerRefreshRate { get; set; }
         }
         class TeamSettings
         {
-            public Dictionary<string, ulong> ClothingItems { get; set; }           
+            public Dictionary<string, ulong> ClothingItems { get; set; }
             public string Color { get; set; }
             public string Spawnfile { get; set; }
             public string FlagImageURL { get; set; }
@@ -903,7 +904,7 @@ namespace Oxide.Plugins
                     ClothingItems = new Dictionary<string, ulong>
                     {
                         { "tshirt", 0 }
-                    },                   
+                    },
                     Spawnfile = "CTF_ASpawns",
                     FlagImageURL = "https://kienforcefidele.files.wordpress.com/2011/08/green-square-copy.jpg"
                 },
@@ -913,7 +914,7 @@ namespace Oxide.Plugins
                     ClothingItems = new Dictionary<string, ulong>
                     {
                         { "tshirt", 14177 }
-                    },                   
+                    },
                     Spawnfile = "CTF_BSpawns",
                     FlagImageURL = "http://www.polyvore.com/cgi/img-thing?.out=jpg&size=l&tid=19393880"
                 },
@@ -946,7 +947,6 @@ namespace Oxide.Plugins
             const int MaxActiveLoads = 3;
             private Queue<QueueItem> QueueList = new Queue<QueueItem>();
             static byte activeLoads;
-            private MemoryStream stream = new MemoryStream();
 
             private void Awake()
             {
@@ -969,11 +969,6 @@ namespace Oxide.Plugins
                 activeLoads++;
                 StartCoroutine(WaitForRequest(QueueList.Dequeue()));
             }
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
 
             IEnumerator WaitForRequest(QueueItem info)
             {
@@ -987,16 +982,12 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-
-                        ClearStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        uint textureID = FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
-                        ClearStream();
+                        uint textureID = FileStorage.server.Store(www.bytes, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
                         if (!filehandler.flagIDs.ContainsKey(info.team))
                             filehandler.flagIDs.Add(info.team, textureID);
                     }
                     activeLoads--;
-                    if (QueueList.Count > 0) Next();                    
+                    if (QueueList.Count > 0) Next();
                 }
             }
         }

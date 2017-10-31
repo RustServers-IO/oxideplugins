@@ -7,7 +7,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Portals", "LaserHydra", "2.0.3", ResourceId = 1234)]
+    [Info("Portals", "LaserHydra", "2.0.4", ResourceId = 1234)]
     [Description("Create portals and feel like in Star Trek")]
     class Portals : RustPlugin
     {
@@ -428,7 +428,7 @@ namespace Oxide.Plugins
         private void Teleport(BasePlayer player, Vector3 position)
         {
             if (player.net?.connection != null)
-                player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+                player.ClientRPCPlayer(null, player, "StartLoading");
             
             player.StartSleeping();
             player.MovePosition(position);

@@ -16,7 +16,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "Nogrod", "1.0.21", ResourceId = 1832)]
+    [Info("NTeleportation", "Nogrod", "1.0.22", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
         private const string NewLine = "\n";
@@ -2204,7 +2204,7 @@ namespace Oxide.Plugins
             SaveLocation(player);
             teleporting.Add(player.userID);
             if (player.net?.connection != null)
-                player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+                player.ClientRPCPlayer(null, player, "StartLoading");
             StartSleeping(player);
             player.MovePosition(position);
             if (player.net?.connection != null)

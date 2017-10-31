@@ -2,7 +2,7 @@
     "name": "Ingame Clock GUI",
     "description": "Displays ingame and server time",
     "author": "deer_SWAG",
-    "version": "0.0.5",
+    "version": "0.0.7",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/ingame-clock-gui.1245",

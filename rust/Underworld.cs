@@ -9,15 +9,17 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underworld", "nivex", "0.1.6", ResourceId = 25895)]
+    [Info("Underworld", "nivex", "1.0.2", ResourceId = 2518)]
     [Description("Teleports admins/developer under the world when they disconnect.")]
     public class Underworld : RustPlugin
 	{
         [PluginReference]
         Plugin Vanish;
 
+        const string permBlocked = "underworld.blocked";
         StoredData storedData = new StoredData();
         DynamicConfigFile dataFile;
+        bool wipeSavedInventories;
 
         public class StoredData
         {
@@ -111,6 +113,11 @@ namespace Oxide.Plugins
             public UnderworldMod() { }
         }
 
+        void OnNewSave()
+        {
+            wipeSavedInventories = true;
+        }
+
         void Init()
         {
             Unsubscribe(nameof(OnPlayerDisconnected));
@@ -120,6 +127,7 @@ namespace Oxide.Plugins
 
         void Loaded()
         {
+            permission.RegisterPermission(permBlocked, this);
             dataFile = Interface.Oxide.DataFileSystem.GetFile(Title);
 
             try
@@ -139,6 +147,17 @@ namespace Oxide.Plugins
             Subscribe(nameof(OnPlayerDisconnected));
             Subscribe(nameof(OnPlayerInit));
             Subscribe(nameof(OnPlayerSleepEnded));
+
+            if (wipeSaves && wipeSavedInventories)
+            {
+                foreach(var entry in storedData.Users.ToList())
+                {
+                    entry.Value.Items.Clear();
+                }
+
+                wipeSavedInventories = false;
+                SaveData();
+            }
         }
 
         void Unload()
@@ -154,6 +173,10 @@ namespace Oxide.Plugins
                     return;
 
                 var user = GetUser(player);
+
+                if (user == null)
+                    return;
+
                 var userHome = user.Home.ToVector3();
                 var position = userHome != Vector3.zero ? userHome : defaultPos;
 
@@ -170,13 +193,21 @@ namespace Oxide.Plugins
         {
             if (player != null && (player.IsAdmin || player.IsDeveloper))
             {
+                var user = GetUser(player);
+
+                if (user == null)
+                    return;
+
                 if (player.IsDead() || player.IsSleeping())
                 {
                     timer.Once(0.5f, () => OnPlayerInit(player));
                     return;
                 }
 
-                var user = GetUser(player);
+                if (autoVanish)
+                {
+                    Vanish?.Call("Disappear", player);
+                }
 
                 if (user.WakeOnLand)
                 {
@@ -186,11 +217,6 @@ namespace Oxide.Plugins
 
                 if (user.AutoNoClip)
                     player.SendConsoleCommand("noclip");
-
-                if (autoVanish)
-                {
-                    Vanish?.Call("Disappear", player);
-                }
             }
         }
 
@@ -199,6 +225,9 @@ namespace Oxide.Plugins
 			if (player.IsAdmin || player.IsDeveloper)
 			{
                 var user = GetUser(player);
+
+                if (user == null)
+                    return;
 
                 if (maxHHT)
                 {
@@ -241,6 +270,12 @@ namespace Oxide.Plugins
                 return;
 
             var user = GetUser(player);
+
+            if (user == null)
+            {
+                player.ChatMessage(msg("NoPermission", player.UserIDString));
+                return;
+            }
 
             if (args.Length >= 1)
             {
@@ -337,6 +372,9 @@ namespace Oxide.Plugins
 
         UserInfo GetUser(BasePlayer player)
         {
+            if (permission.UserHasPermission(player.UserIDString, permBlocked))
+                return null;
+
             if (!storedData.Users.ContainsKey(player.UserIDString))
                 storedData.Users.Add(player.UserIDString, new UserInfo());
 
@@ -449,6 +487,7 @@ namespace Oxide.Plugins
                     weapon.primaryMagazine.contents = 0; // unload the old ammo
                     weapon.SendNetworkUpdateImmediate(false); // update
                     weapon.primaryMagazine.contents = weapon.primaryMagazine.capacity; // load new ammo
+                    weapon.primaryMagazine.contents = uwi.ammo; // load new ammo
                 }
             }
 
@@ -512,6 +551,7 @@ namespace Oxide.Plugins
         bool maxHHT;
         bool autoVanish;
         List<string> Blacklist = new List<string>();
+        bool wipeSaves;
 
         List<object> DefaultBlacklist
         {
@@ -545,6 +585,7 @@ namespace Oxide.Plugins
                 ["Help4"] = "/uw noclip - toggle auto noclip on reconnect (enabled: {0})",
                 ["Help5"] = "/uw g - teleport to the ground",
                 ["OutOfBounds"] = "The specified coordinates are not within the allowed boundaries of the map.",
+                ["NoPermission"] = "You do not have permission to use this command.",
             }, this);
         }
 
@@ -555,6 +596,7 @@ namespace Oxide.Plugins
             allowSaveInventory = Convert.ToBoolean(GetConfig("Settings", "Allow Save And Strip Admin Inventory On Disconnect", true));
             Blacklist = (GetConfig("Settings", "Blacklist", DefaultBlacklist) as List<object>).Where(o => o != null && o.ToString().Length > 0).Cast<string>().ToList();
             autoVanish = Convert.ToBoolean(GetConfig("Settings", "Auto Vanish On Connect", true));
+            wipeSaves = Convert.ToBoolean(GetConfig("Settings", "Wipe Saved Inventories On Map Wipe", false));
         }
 
         protected override void LoadDefaultConfig()

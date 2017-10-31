@@ -1,11 +1,11 @@
 {
-    "name": "Fort Wars Gamemode",
-    "description": "Never ending Build - Fight phases",
-    "author": "sami37",
-    "version": "1.0.2",
+    "name": "FortWars",
+    "description": "Custom gamemode that changes values of gathering\/smelting\/crafting based on a current phase.",
+    "author": "Ryan",
+    "version": "2.0.0",
     "configuration": true,
-    "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/fort-wars-gamemode.1618",
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/fortwars.1618",
     "games": [
         "rust"
     ],

@@ -1,62 +1,86 @@
 ﻿using System.Collections.Generic;
 using Facepunch;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
-
 namespace Oxide.Plugins
 {
-    [Info("RadtownAnimals", "k1lly0u", "0.2.6", ResourceId = 1561)]
+    [Info("RadtownAnimals", "k1lly0u", "0.2.8", ResourceId = 1561)]
     class RadtownAnimals : RustPlugin
     {
         #region Fields
-        private Dictionary<BaseEntity, Vector3> animalList = new Dictionary<BaseEntity, Vector3>();
-        private List<Timer> refreshTimers = new List<Timer>();
+        private List<BaseCombatEntity> animalList = new List<BaseCombatEntity>();
+
+        const string zombiePrefab = "assets/prefabs/npc/murderer/murderer.prefab";
+        const string scientistPrefab = "assets/prefabs/npc/scientist/scientist.prefab";
         #endregion
 
         #region Oxide Hooks
-        void Loaded()
+        private void Loaded()
         {
             lang.RegisterMessages(messages, this);
         }
-        void OnServerInitialized()
+
+        private void OnServerInitialized()
         {            
             LoadVariables();
             InitializeAnimalSpawns();
         }
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            try
-            {
-                if (entity.GetComponent<BaseNpc>() != null)
-                {
-                    if (animalList.ContainsKey(entity as BaseEntity))
-                    {
-                        UnityEngine.Object.Destroy(entity.GetComponent<RAController>());
-                        InitiateRefresh(entity as BaseEntity);
-                    }
-                }
-            }
-            catch { }
-        }
-        void Unload()
-        {
-            foreach (var time in refreshTimers)
-                time.Destroy();
 
+        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity == null) return;
+
+            if (animalList.Contains(entity))
+            {
+                AnimalController baseNpc = entity.GetComponent<AnimalController>();
+                if (baseNpc != null)
+                {
+                    baseNpc.naturalDeath = true;
+                    timer.In(configData.Settings.Respawn, () => SpawnAnimalEntity(baseNpc.prefabName, baseNpc.homePos));
+                    UnityEngine.Object.Destroy(entity.GetComponent<AnimalController>());  
+                }
+
+                HumanController npcPlayer = entity.GetComponent<HumanController>();
+                if (npcPlayer != null)
+                {
+                    npcPlayer.naturalDeath = true;
+                    timer.In(configData.Settings.Respawn, () => SpawnNpcEntity(npcPlayer.prefabName, npcPlayer.homePos)); 
+                    UnityEngine.Object.Destroy(entity.GetComponent<HumanController>());
+                }
+
+                animalList.Remove(entity);
+            }
+        }
+
+        private void Unload()
+        {            
             foreach (var animal in animalList)
             {
-                if (animal.Key != null)
+                if (animal != null)
                 {
-                    UnityEngine.Object.Destroy(animal.Key.GetComponent<RAController>());
-                    animal.Key.KillMessage();
+                    if (animal.GetComponent<AnimalController>())
+                        UnityEngine.Object.Destroy(animal.GetComponent<AnimalController>());
+                    else UnityEngine.Object.Destroy(animal.GetComponent<HumanController>());
                 }
             }
-            var objects = UnityEngine.Object.FindObjectsOfType<RAController>();
-            if (objects != null)
-                foreach (var gameObj in objects)
+
+            var animals = UnityEngine.Object.FindObjectsOfType<AnimalController>();
+            if (animals != null)
+            {
+                foreach (var gameObj in animals)
                     UnityEngine.Object.Destroy(gameObj);
+            }
+
+            var npcs = UnityEngine.Object.FindObjectsOfType<HumanController>();
+            if (npcs != null)
+            {
+                foreach (var gameObj in npcs)
+                    UnityEngine.Object.Destroy(gameObj);
+            }
+
             animalList.Clear();
         }
         #endregion
@@ -69,99 +93,114 @@ namespace Oxide.Plugins
             {
                 if (gobject.name.Contains("autospawn/monument"))
                 {
-                    var position = gobject.transform.position;
-                    if (gobject.name.ToLower().Contains("lighthouse"))
+                    var pos = gobject.transform.position;                    
+
+                    if (gobject.name.Contains("lighthouse"))
                     {
-                        if (configData.Lighthouses.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.Lighthouses.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Lighthouse.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Lighthouse.Counts));
+                        continue;
                     }
+
                     if (gobject.name.Contains("powerplant_1"))
                     {
-                        if (configData.Powerplant.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.Powerplant.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Powerplant.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Powerplant.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("military_tunnel_1"))
                     {
-                        if (configData.MilitaryTunnels.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.MilitaryTunnels.AnimalCounts));
-                            continue;
-                        }
+                        if(configData.Zone.Tunnels.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Tunnels.Counts));
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("harbor_1"))
+                    {
+                        if (configData.Zone.LargeHarbor.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.LargeHarbor.Counts));
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("harbor_2"))
+                    {
+                        if (configData.Zone.SmallHarbor.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.SmallHarbor.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("airfield_1"))
                     {
-                        if (configData.Airfield.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.Airfield.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Airfield.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Airfield.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("trainyard_1"))
                     {
-                        if (configData.Trainyard.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.Trainyard.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Trainyard.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Trainyard.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("water_treatment_plant_1"))
                     {
-                        if (configData.WaterTreatmentPlant.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.WaterTreatmentPlant.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.WaterTreatment.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.WaterTreatment.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("warehouse"))
                     {
-                        if (configData.Warehouses.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.Warehouses.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Warehouse.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Warehouse.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("satellite_dish"))
                     {
-                        if (configData.Satellite.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.Satellite.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Satellite.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Satellite.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("sphere_tank"))
                     {
-                        if (configData.SphereTank.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.SphereTank.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Dome.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Dome.Counts));
+                        continue;
                     }
 
                     if (gobject.name.Contains("radtown_small_3"))
                     {
-                        if (configData.Radtowns.Enabled)
-                        {
-                            SpawnAnimals(position, GetSpawnList(configData.Radtowns.AnimalCounts));
-                            continue;
-                        }
+                        if (configData.Zone.Radtown.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Radtown.Counts));
+                        continue;
+                    }
+                    if (gobject.name.Contains("launch_site_1"))
+                    {
+                        if (configData.Zone.RocketFactory.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.RocketFactory.Counts));
+                        continue;
+                    }
+                    if (gobject.name.Contains("gas_station_1"))
+                    {
+                        if (configData.Zone.GasStation.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.GasStation.Counts));
+                        continue;
+                    }
+                    if (gobject.name.Contains("supermarket_1"))
+                    {                        
+                        if (configData.Zone.Supermarket.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Supermarket.Counts));
+                        continue;
                     }
                 }               
             }
         }
-        private Dictionary<string, int> GetSpawnList(AnimalCounts counts)
+
+        private Dictionary<string, int> GetSpawnList(ConfigData.Zones.MonumentSettings.AnimalCounts counts)
         {
             var spawnList = new Dictionary<string, int>
             {
@@ -169,61 +208,85 @@ namespace Oxide.Plugins
                 {"boar", counts.Boars },
                 {"chicken", counts.Chickens },
                 {"horse", counts.Horses },
+                {"murderer", counts.Murderers },
+                {"scientist", counts.Scientists },
                 {"stag", counts.Stags },
                 {"wolf", counts.Wolfs },
                 {"zombie", counts.Zombies }
             };
             return spawnList;
         }        
+
         private void SpawnAnimals(Vector3 position, Dictionary<string,int> spawnList)
         {
-            if (animalList.Count >= configData.a_Options.TotalMaximumAmount)
+            if (animalList.Count >= configData.Settings.Total)
             {
                 PrintError(lang.GetMessage("spawnLimit", this));
                 return;
             }
             foreach (var type in spawnList)
-            {                
+            {
                 for (int i = 0; i < type.Value; i++)
                 {
-                    SpawnAnimalEntity(type.Key, position); 
+                    if (type.Key == "murderer")
+                        SpawnNpcEntity(zombiePrefab, position);
+                    else if (type.Key == "scientist")
+                        SpawnNpcEntity(scientistPrefab, position);
+                    else SpawnAnimalEntity(type.Key, position); 
                 }
             }
         }
         #endregion
 
-        #region Spawn Control
-        private void InitiateRefresh(BaseEntity animal)
-        {
-            var position = animal.transform.position;
-            var type = animal.ShortPrefabName.Replace(".prefab", "");
-            refreshTimers.Add(timer.Once(configData.a_Options.RespawnTimer * 60, () => InitializeNewSpawn(type, position)));
-            animalList.Remove(animal);
-        }
-        private void InitializeNewSpawn(string type, Vector3 position) => SpawnAnimalEntity(type, position);          
+        #region Spawn Control   
         private void SpawnAnimalEntity(string type, Vector3 pos)
         {
             Vector3 point;
             if (FindPointOnNavmesh(pos, 50, out point))
             {
-                BaseEntity entity = InstantiateEntity($"assets/rust.ai/agents/{type}/{type}.prefab", point);                
+                BaseCombatEntity entity = InstantiateEntity($"assets/rust.ai/agents/{type}/{type}.prefab", point);
+                entity.enableSaving = false;
                 entity.Spawn();
-                var npc = entity.gameObject.AddComponent<RAController>();
-                npc.SetHome(point);
-                animalList.Add(entity, point);
+
+                entity.InitializeHealth(entity.StartHealth(), entity.StartMaxHealth());
+                entity.lifestate = BaseCombatEntity.LifeState.Alive;
+
+                var npc = entity.gameObject.AddComponent<AnimalController>();
+                npc.SetInfo(type, point);
+                animalList.Add(entity);                
+            }            
+        }
+
+        private void SpawnNpcEntity(string prefabPath, Vector3 pos)
+        {
+            Vector3 point;
+            if (FindPointOnNavmesh(pos, 50, out point))
+            {
+                BaseCombatEntity entity = InstantiateEntity(prefabPath, point);
+                entity.enableSaving = false;
+                entity.Spawn();
+
+                entity.InitializeHealth(entity.StartHealth(), entity.StartMaxHealth());
+
+                var npc = entity.gameObject.AddComponent<HumanController>();
+                npc.SetInfo(prefabPath, point);
+                animalList.Add(entity);                
             }
         }
-        private BaseEntity InstantiateEntity(string type, Vector3 position)
+
+        private BaseCombatEntity InstantiateEntity(string type, Vector3 position)
         {
-            var prefab = GameManager.server.FindPrefab(type);
-            var gameObject = Instantiate.GameObject(prefab, position, new Quaternion());
+            var gameObject = Instantiate.GameObject(GameManager.server.FindPrefab(type), position, new Quaternion());
             gameObject.name = type;
+
             SceneManager.MoveGameObjectToScene(gameObject, Rust.Server.EntityScene);
+
+            UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
+
             if (!gameObject.activeSelf)                                       
-                gameObject.SetActive(true);            
-            if (gameObject.GetComponent<Spawnable>())
-                UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
-            BaseEntity component = gameObject.GetComponent<BaseEntity>();
+                gameObject.SetActive(true);
+
+            BaseCombatEntity component = gameObject.GetComponent<BaseCombatEntity>();
             return component;
         }
 
@@ -231,9 +294,9 @@ namespace Oxide.Plugins
         {
             for (int i = 0; i < 30; i++)
             {
-                Vector3 randomPoint = center + Random.insideUnitSphere * range;
+                Vector3 randomPos = center + new Vector3(Random.insideUnitCircle.x * range, 0, Random.insideUnitCircle.x * range);
                 NavMeshHit hit;
-                if (NavMesh.SamplePosition(randomPoint, out hit, 50f, NavMesh.AllAreas))
+                if (NavMesh.SamplePosition(randomPos, out hit, 50, 1))
                 {
                     if (hit.position.y - TerrainMeta.HeightMap.GetHeight(hit.position) > 3)
                         continue;
@@ -247,31 +310,76 @@ namespace Oxide.Plugins
         #endregion
 
         #region NPCController
-        class RAController : MonoBehaviour
+        class AnimalController : MonoBehaviour
         {
             public BaseNpc npc;
-            private Vector3 homePos;
+            public string prefabName;
+            public Vector3 homePos;
+            public bool naturalDeath = false;
 
             private void Awake()
             {
                 npc = GetComponent<BaseNpc>();
                 enabled = false;
             }
+
             private void OnDestroy()
             {
                 InvokeHandler.CancelInvoke(this, CheckLocation);
+
+                if (npc != null && !npc.IsDestroyed && !naturalDeath)
+                    npc.Kill();
             }
-            public void SetHome(Vector3 homePos)
+
+            public void SetInfo(string prefabName, Vector3 homePos)
             {
+                this.prefabName = prefabName;
                 this.homePos = homePos;
                 InvokeHandler.InvokeRepeating(this, CheckLocation, 1f, 20f);
             }
 
             private void CheckLocation()
             {
-                if (Vector3.Distance(npc.transform.position, homePos) > 100)
+                if (Vector3.Distance(npc.transform.position, homePos) > 40)
                 {
                     npc.UpdateDestination(homePos);
+                }
+            }
+        }
+        class HumanController : MonoBehaviour
+        {
+            public NPCPlayer npc;
+            public string prefabName;
+            public Vector3 homePos;
+            public bool naturalDeath = false;
+
+            private void Awake()
+            {
+                npc = GetComponent<NPCPlayer>();
+                npc.displayName = RandomUsernames.Get(Random.Range(0, RandomUsernames.All.Length - 1));
+                enabled = false;
+            }
+
+            private void OnDestroy()
+            {
+                InvokeHandler.CancelInvoke(this, CheckLocation);
+
+                if (npc != null && !npc.IsDestroyed && !naturalDeath)
+                    npc.Kill();
+            }
+
+            public void SetInfo(string prefabName, Vector3 homePos)
+            {
+                this.prefabName = prefabName;
+                this.homePos = homePos;
+                InvokeHandler.InvokeRepeating(this, CheckLocation, 1f, 20f);
+            }
+
+            private void CheckLocation()
+            {
+                if (Vector3.Distance(npc.transform.position, homePos) > 40)
+                {
+                    npc.SetDestination(homePos);
                 }
             }
         }
@@ -284,8 +392,9 @@ namespace Oxide.Plugins
             if (!player.IsAdmin) return;
             foreach(var animal in animalList)
             {
-                UnityEngine.Object.Destroy(animal.Key.GetComponent<RAController>());
-                animal.Key.KillMessage();
+                if (animal.GetComponent<AnimalController>())
+                    UnityEngine.Object.Destroy(animal.GetComponent<AnimalController>());
+                else UnityEngine.Object.Destroy(animal.GetComponent<HumanController>());
             }
             animalList.Clear();
             SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("killedAll", this, player.UserIDString));
@@ -298,8 +407,9 @@ namespace Oxide.Plugins
             {
                 foreach (var animal in animalList)
                 {
-                    UnityEngine.Object.Destroy(animal.Key.GetComponent<RAController>());
-                    animal.Key.KillMessage();
+                    if (animal.GetComponent<AnimalController>())
+                        UnityEngine.Object.Destroy(animal.GetComponent<AnimalController>());
+                    else UnityEngine.Object.Destroy(animal.GetComponent<HumanController>());
                 }
                 animalList.Clear();
                 SendReply(arg, lang.GetMessage("killedAll", this));
@@ -307,97 +417,63 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Config 
-        #region Options       
-        class AnimalCounts
-        {
-            public int Bears;
-            public int Boars;
-            public int Chickens;
-            public int Horses;
-            public int Stags;
-            public int Wolfs;
-            public int Zombies;
-        }
-        class LightHouses
-        {
-            public AnimalCounts AnimalCounts { get; set; }  
-            public bool Enabled { get; set; }          
-        }
-        class Airfield
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-
-        class Powerplant
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-
-        class Trainyard
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-
-        class WaterTreatmentPlant
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-
-        class Warehouses
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-
-        class Satellite
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-
-        class SphereTank
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-
-        class Radtowns
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-        class MilitaryTunnels
-        {
-            public AnimalCounts AnimalCounts { get; set; }
-            public bool Enabled { get; set; }
-        }
-        class Options
-        {
-            public int RespawnTimer;
-            public float SpawnSpread;
-            public int TotalMaximumAmount;           
-        }
-        #endregion
-
+        #region Config         
         private ConfigData configData;
         class ConfigData
         {
-            public LightHouses Lighthouses { get; set; }
-            public Airfield Airfield { get; set; }
-            public Powerplant Powerplant { get; set; }
-            public Trainyard Trainyard { get; set; }
-            public WaterTreatmentPlant WaterTreatmentPlant { get; set; }
-            public Warehouses Warehouses { get; set; }
-            public Satellite Satellite { get; set; }
-            public SphereTank SphereTank { get; set; }
-            public Radtowns Radtowns { get; set; }
-            public MilitaryTunnels MilitaryTunnels { get; set; }
-            public Options a_Options { get; set; }
+            public Options Settings { get; set; }
+            [JsonProperty(PropertyName = "Zone Settings")]
+            public Zones Zone { get; set; }
+
+            public class Options
+            {
+                [JsonProperty(PropertyName = "Animal respawn timer (seconds)")]
+                public int Respawn;
+                [JsonProperty(PropertyName = "Spawn spread distance from center of monument")]
+                public float Spread;
+                [JsonProperty(PropertyName = "Maximum amount of animals to spawn")]
+                public int Total;
+            }
+
+            public class Zones
+            {
+                public MonumentSettings Airfield { get; set; }
+                public MonumentSettings Dome { get; set; }
+                public MonumentSettings Lighthouse { get; set; }
+                public MonumentSettings LargeHarbor { get; set; }
+                public MonumentSettings GasStation { get; set; }
+                public MonumentSettings Powerplant { get; set; }
+                public MonumentSettings Radtown { get; set; }
+                public MonumentSettings RocketFactory { get; set; }
+                public MonumentSettings Satellite { get; set; }
+                public MonumentSettings SmallHarbor { get; set; }
+                public MonumentSettings Supermarket { get; set; }
+                public MonumentSettings Trainyard { get; set; }
+                public MonumentSettings Tunnels { get; set; }
+                public MonumentSettings Warehouse { get; set; }
+                public MonumentSettings WaterTreatment { get; set; }
+
+                public class MonumentSettings
+                {
+                    [JsonProperty(PropertyName = "Enable spawning at this monument")]
+                    public bool Enabled { get; set; }
+                    [JsonProperty(PropertyName = "Amount of animals to spawn at this monument")]
+                    public AnimalCounts Counts { get; set; }
+
+                    public class AnimalCounts
+                    {
+                        public int Bears;
+                        public int Boars;
+                        public int Chickens;
+                        public int Horses;
+                        public int Murderers;
+                        public int Scientists;
+                        public int Stags;
+                        public int Wolfs;
+                        public int Zombies;
+                    }
+                }
+            }
         }
         private void LoadVariables()
         {
@@ -408,151 +484,254 @@ namespace Oxide.Plugins
         {
             var config = new ConfigData
             {
-                Airfield = new Airfield
+                Settings = new ConfigData.Options
                 {
-                    AnimalCounts = new AnimalCounts
-                    {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
-                    },
-                    Enabled = false
+                    Respawn = 900,
+                    Spread = 100,
+                    Total = 40
                 },
-                Lighthouses = new LightHouses
+                Zone = new ConfigData.Zones
                 {
-                    AnimalCounts = new AnimalCounts
+                    Airfield = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                MilitaryTunnels = new MilitaryTunnels
-                {
-                    AnimalCounts = new AnimalCounts
+                    Dome = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                Powerplant = new Powerplant
-                {
-                    AnimalCounts = new AnimalCounts
+                    GasStation = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                Radtowns = new Radtowns
-                {
-                    AnimalCounts = new AnimalCounts
+                    LargeHarbor = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                Satellite = new Satellite
-                {
-                    AnimalCounts = new AnimalCounts
+                    Lighthouse = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                SphereTank = new SphereTank
-                {
-                    AnimalCounts = new AnimalCounts
+                    Powerplant = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                Trainyard = new Trainyard
-                {
-                    AnimalCounts = new AnimalCounts
+                    Radtown = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                Warehouses = new Warehouses
-                {
-                    AnimalCounts = new AnimalCounts
+                    RocketFactory = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                WaterTreatmentPlant = new WaterTreatmentPlant
-                {
-                    AnimalCounts = new AnimalCounts
+                    Satellite = new ConfigData.Zones.MonumentSettings
                     {
-                        Bears = 0,
-                        Boars = 0,
-                        Chickens = 0,
-                        Horses = 0,
-                        Stags = 0,
-                        Wolfs = 0,
-                        Zombies = 0
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
                     },
-                    Enabled = false
-                },
-                a_Options = new Options
-                {
-                    TotalMaximumAmount = 40,
-                    RespawnTimer = 15,
-                    SpawnSpread = 100
+                    SmallHarbor = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    Supermarket = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    Trainyard = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    Tunnels = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    Warehouse = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    WaterTreatment = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    }
                 }
             };
             SaveConfig(config);
@@ -567,7 +746,7 @@ namespace Oxide.Plugins
             {"nullList", "<color=#939393>Error getting a list of monuments</color>" },
             {"title", "<color=orange>Radtown Animals:</color> " },
             {"killedAll", "<color=#939393>Killed all animals</color>" },
-            {"spawnLimit", "<color=#939393>The animal spawn limit has been hit.</color>" }
+            {"spawnLimit", "The animal spawn limit has been hit." }
         };
         #endregion
     }

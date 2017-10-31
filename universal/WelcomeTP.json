@@ -1,0 +1,16 @@
+{
+    "name": "WelcomeTP",
+    "description": "Teleports new players to a set position",
+    "author": "Ryan",
+    "version": "1.0.6",
+    "configuration": true,
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/welcometp.2604",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

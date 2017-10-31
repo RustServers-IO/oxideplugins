@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Godmode", "Wulf/lukespragg", "4.1.0", ResourceId = 673)]
+    [Info("Godmode", "Wulf/lukespragg", "4.1.1", ResourceId = 673)]
     [Description("Allows players with permission to be invulerable and god-like")]
 
     class Godmode : CovalencePlugin
@@ -299,6 +299,10 @@ namespace Oxide.Plugins
             var player = entity.ToPlayer();
             if (!IsGod(player.UserIDString) || !permission.UserHasPermission(player.UserIDString, permUntiring)) return null;
 
+            var craftLevel = player.currentCraftLevel;
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Workbench1, craftLevel == 1f);
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Workbench2, craftLevel == 2f);
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Workbench3, craftLevel == 3f);
             player.SetPlayerFlag(BasePlayer.PlayerFlags.NoSprint, false);
             return true;
         }

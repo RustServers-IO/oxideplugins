@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Pets", "Nogrod/k1lly0u", "0.6.1", ResourceId = 851)]
+    [Info("Pets", "Nogrod/k1lly0u", "0.6.2", ResourceId = 851)]
     class Pets : RustPlugin
     {
         #region Fields        
@@ -242,7 +242,7 @@ namespace Oxide.Plugins
                 player.inventory.loot.itemSource = null;
                 player.inventory.loot.AddContainer(npcAi.inventory);
                 player.inventory.loot.SendImmediate();
-                player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "smallwoodbox", null, null, null, null);
+                player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "smallwoodbox");
                 player.SendNetworkUpdate();
 
                 UserMessage(player, "openInv");

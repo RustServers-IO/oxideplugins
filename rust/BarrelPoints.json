@@ -2,7 +2,7 @@
     "name": "BarrelPoints",
     "description": "Gives players RewardPoints for destroying barrels",
     "author": "redBDGR",
-    "version": "2.0.6",
+    "version": "2.0.7",
     "configuration": true,
     "require": {
         "Economics": "*",

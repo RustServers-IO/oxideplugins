@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherControl", "CaseMan", "1.4.2", ResourceId = 2477)]
+    [Info("GatherControl", "CaseMan", "1.5.0", ResourceId = 2477)]
     [Description("Control gather rates by day and night with permissions")]
 
     class GatherControl : RustPlugin
@@ -39,44 +39,28 @@ namespace Oxide.Plugins
 
         class PermGroups
         {
-			public float DayRateMultQuarry;
-			public float DayRateMultPickup;
-            public float DayRateMultResource;
-			public float DayRateMultResourceBonus;
+			public float DayRateMultQuarry;			
+			public float DayRateMultPickup;			
+            public float DayRateMultResource;			
+			public float DayRateMultResourceBonus;			
 			public float DayRateMultResourceHQM;
-			public float DayRateMultCropGather;
-			public float NightRateMultQuarry;
-			public float NightRateMultPickup;            
-            public float NightRateMultResource;
-			public float NightRateMultResourceBonus;
+			public float DayRateMultCropGather;			
+			public float NightRateMultQuarry;			
+			public float NightRateMultPickup;			           
+            public float NightRateMultResource;			
+			public float NightRateMultResourceBonus;			
 			public float NightRateMultResourceHQM;
-			public float NightRateMultCropGather;
+			public float NightRateMultCropGather;			
+			public Dictionary<string, string> CustomRateMultQuarry = new Dictionary<string, string>();
+			public Dictionary<string, string> CustomRateMultPickup = new Dictionary<string, string>();
+			public Dictionary<string, string> CustomRateMultResource = new Dictionary<string, string>();
+			public Dictionary<string, string> CustomRateMultResourceBonus = new Dictionary<string, string>();
+			public Dictionary<string, string> CustomRateMultCropGather = new Dictionary<string, string>();
 			public string PermGroup;
 			public PermGroups(){}
         }
-		
+
 		PermData permData;
-		
-		sealed class FinishBonusClass : MonoBehaviour
-		{
-			public List<ItemAmount> finishBonus;
-			BasePlayer hitPlayer;
-						
-			public void OnHit(BasePlayer player)
-			{
-				hitPlayer = player;
-			}
-			
-			public void FinishBonusAssigned()
-			{							
-				foreach (var current in finishBonus)
-				{
-					var item = ItemManager.Create(current.itemDef, Mathf.CeilToInt(current.amount), 0uL);
-					GC.BonusMult(hitPlayer, item);
-					current.amount = (float)item.amount;
-				}
-			}
-		}		
 		#endregion
 		#region Initialization
 		void Init()
@@ -122,17 +106,7 @@ namespace Oxide.Plugins
 		{
 			if(Temp.ContainsKey(player.userID)) Temp.Remove(player.userID);
 		}
-		void Loaded()
-		{
-			GC = this;
-		}
-		void Unload()
-        {
-			var objs = UnityEngine.Object.FindObjectsOfType<FinishBonusClass>().ToList();
-			if (objs.Count > 0)
-				foreach (var obj in objs)
-					GameObject.Destroy(obj);
-        }
+
 		#endregion
 		#region Configuration
         protected override void LoadDefaultConfig()
@@ -226,43 +200,42 @@ namespace Oxide.Plugins
 			if(index==-1 && UseZeroIndexForDefaultGroup) index = 0;
 			return index;			
 		}	
+		private void CustomList(Item item, string str)
+		{
+			float day, night;
+			ParseFromString(str, out day, out night);
+			GatherMultiplier(item, day, night);
+		}	
 		private void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {			
             BasePlayer player = entity.ToPlayer();
 			if(player == null) return;
 			int gr = CheckPlayerPerms(player);
-			if (dispenser.gameObject.GetComponent<FinishBonusClass>())
-				dispenser.gameObject.GetComponent<FinishBonusClass>().OnHit(player);
-			else
-				dispenser.gameObject.AddComponent<FinishBonusClass>().finishBonus = dispenser.finishBonus;
-			if(gr >= 0) GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResource, permData.PermissionsGroups[gr].NightRateMultResource);			
-        }		
-		void BonusMult(BasePlayer player, Item item)
+			if(gr >= 0)
+			{			
+				if(permData.PermissionsGroups[gr].CustomRateMultResource.ContainsKey(item.info.shortname)) CustomList(item, permData.PermissionsGroups[gr].CustomRateMultResource[item.info.shortname]);
+				else GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResource, permData.PermissionsGroups[gr].NightRateMultResource);	
+			}		
+        }
+		private void OnDispenserBonus(ResourceDispenser dispenser, BasePlayer player, Item item) 
 		{
-			int gr0 = CheckPlayerPerms(player);
-			float bonrateday = 1;
-			float bonratenight = 1;
-			if(gr0 >= 0)
+			int gr = CheckPlayerPerms(player);
+			if(gr >= 0)
 			{
-				if(item.info.shortname=="hq.metal.ore")
-				{
-					bonrateday=permData.PermissionsGroups[gr0].DayRateMultResourceHQM;
-					bonratenight=permData.PermissionsGroups[gr0].NightRateMultResourceHQM;
-				}
-				else
-				{
-					bonrateday=permData.PermissionsGroups[gr0].DayRateMultResourceBonus;
-					bonratenight=permData.PermissionsGroups[gr0].NightRateMultResourceBonus;
-				}	
-				if(IsDay) item.amount = (int)(item.amount * bonrateday); 
-				else item.amount = (int)(item.amount * bonratenight); 
+				if(item.info.shortname=="hq.metal.ore") GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResourceHQM, permData.PermissionsGroups[gr].NightRateMultResourceHQM);
+				if(item.info.shortname!="hq.metal.ore" && permData.PermissionsGroups[gr].CustomRateMultResourceBonus.ContainsKey(item.info.shortname)) CustomList(item, permData.PermissionsGroups[gr].CustomRateMultResourceBonus[item.info.shortname]);
+				else GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResourceBonus, permData.PermissionsGroups[gr].NightRateMultResourceBonus);			
 			}		
 		}		
 		void OnCollectiblePickup(Item item, BasePlayer player)
 		{
 			if(player == null) return;
 			int gr = CheckPlayerPerms(player);
-			if(gr >= 0) GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultPickup, permData.PermissionsGroups[gr].NightRateMultPickup);	
+			if(gr >= 0) 
+			{
+				if(permData.PermissionsGroups[gr].CustomRateMultPickup.ContainsKey(item.info.shortname)) CustomList(item, permData.PermissionsGroups[gr].CustomRateMultPickup[item.info.shortname]);
+				else GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultPickup, permData.PermissionsGroups[gr].NightRateMultPickup);
+			}			
 		}
 		void OnQuarryGather(MiningQuarry quarry, Item item)
 		{
@@ -283,13 +256,21 @@ namespace Oxide.Plugins
 			{	
 				gr = CheckPlayerPerms(player);
 			}
-			if(gr >= 0) GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultQuarry, permData.PermissionsGroups[gr].NightRateMultQuarry);
+			if(gr >= 0) 
+			{
+				if(permData.PermissionsGroups[gr].CustomRateMultQuarry.ContainsKey(item.info.shortname)) CustomList(item, permData.PermissionsGroups[gr].CustomRateMultQuarry[item.info.shortname]);
+				else GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultQuarry, permData.PermissionsGroups[gr].NightRateMultQuarry);
+			}	
 		}
 		void OnCropGather(PlantEntity plant, Item item, BasePlayer player)
 		{
 			if(player == null) return;
 			int gr = CheckPlayerPerms(player);
-			if(gr >= 0) GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultCropGather, permData.PermissionsGroups[gr].NightRateMultCropGather);
+			if(gr >= 0) 
+			{	
+				if(permData.PermissionsGroups[gr].CustomRateMultCropGather.ContainsKey(item.info.shortname)) CustomList(item, permData.PermissionsGroups[gr].CustomRateMultCropGather[item.info.shortname]);
+				else GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultCropGather, permData.PermissionsGroups[gr].NightRateMultCropGather);
+			}	
 		}
 		private int CheckPlayerPerms(BasePlayer player)
         {			
@@ -430,10 +411,12 @@ namespace Oxide.Plugins
 			}
 			return message;	
 		}	
-		void Log(string filename, string text)
-        {
-            LogToFile(filename, $"[{DateTime.Now}] {text}", this);
-        }
+		private void ParseFromString(string str, out float day, out float night)
+		{
+			string[] parts = str.Split('/');
+			day = float.Parse(parts[0]);
+			night = float.Parse(parts[1]);
+		}
 		#endregion
     }
 }

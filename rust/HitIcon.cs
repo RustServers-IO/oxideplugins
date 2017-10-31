@@ -9,7 +9,7 @@ using System.IO;
 using System.Linq;
 using Rust;
 namespace Oxide.Plugins {
-	[Info("HitIcon", "serezhadelaet", "1.5.3", ResourceId = 1917)]
+	[Info("HitIcon", "serezhadelaet", "1.5.5", ResourceId = 1917)]
     [Description("Configurable precached icon when you hit player|friend|clanmate")]
     class HitIcon : RustPlugin {
 
@@ -239,11 +239,7 @@ namespace Oxide.Plugins {
                     yield return www;
 
                     if (string.IsNullOrEmpty(www.error))
-                    {
-                        var stream = new MemoryStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        imageFiles.Add(queue.name, FileStorage.server.Store(stream, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString());
-                    }
+                        imageFiles.Add(queue.name, FileStorage.server.Store(www.bytes, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString());
                     else
                     {
                         Debug.LogWarning("\n\n!!!!!!!!!!!!!!!!!!!!!\n\nError downloading image files (death.png and hit.png)\nThey must be in your oxide/data/ !\n\n!!!!!!!!!!!!!!!!!!!!!\n\n");
@@ -344,7 +340,7 @@ namespace Oxide.Plugins {
             LoadVariables();
         }
 
-        void Unloaded()
+        void Unload()
         {
             if (BasePlayer.activePlayerList.Count > 0)
             {

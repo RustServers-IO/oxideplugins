@@ -9,23 +9,22 @@ using CodeHatch.Networking.Events.Players;
 using CodeHatch.UserInterface.Dialogues;
 using CodeHatch.Inventory.Blueprints;
 using CodeHatch.Networking.Events.Entities;
+using CodeHatch.Noise;
 using CodeHatch.Permissions;
 
 namespace Oxide.Plugins
 {
-    [Info("RaceSystem", "D-Kay", "0.1.5", ResourceId = 2287)]
+    [Info("RaceSystem", "D-Kay", "1.0.0", ResourceId = 2287)]
     public class RaceSystem : ReignOfKingsPlugin
     {
         #region Variables
 
         private bool ChangeAppearance { get; set; }
         private bool ChangeRace { get; set; }
-        private bool RaceDamage { get; set; }
-
         private int ChangeTime { get; set; }
 
-        private List<Race> Races { get; set; } = new List<Race>();
-        private List<Race> DefaultRaces { get; } = new List<Race>
+        private HashSet<Race> Races { get; set; } = new HashSet<Race>();
+        private HashSet<Race> DefaultRaces { get; } = new HashSet<Race>
         {
             new Race("Dwarf", "3066c3"),
             new Race("Elf", "f0f029"),
@@ -38,7 +37,9 @@ namespace Oxide.Plugins
         {
             public string Name { get; set; }
             public string Color { get; set; }
-            public string Permission { get; set; }
+            public int Limit { get; set; } = 0;
+            public HashSet<string> Permissions { get; set; } = new HashSet<string>();
+            public HashSet<string> InvulnerableRaces { get; set; } = new HashSet<string>();
             public string Format => $"[[{Color}]{Name}[ffffff]]";
 
             public Race() { }
@@ -47,7 +48,7 @@ namespace Oxide.Plugins
             {
                 Name = name;
                 Color = color;
-                Permission = permission;
+                if (!permission.IsNullEmptyOrWhite()) Permissions.Add(permission);
             }
 
             public void ChangeColor(string color)
@@ -55,9 +56,83 @@ namespace Oxide.Plugins
                 Color = color;
             }
 
-            public void ChangePermission(string permission)
+            public void AddPermission(string permission)
             {
-                Permission = permission;
+                if (Permissions.Any(p => string.Equals(p, permission, StringComparison.CurrentCultureIgnoreCase))) return;
+                Permissions.Add(permission);
+            }
+
+            public void AddPermission(IEnumerable<string> permissions)
+            {
+                foreach (var permission in permissions)
+                {
+                    if (Permissions.Any(p => string.Equals(p, permission, StringComparison.CurrentCultureIgnoreCase))) continue;
+                    Permissions.Add(permission);
+                }
+            }
+
+            public void RemovePermission(string permission)
+            {
+                var p = Permissions.FirstOrDefault(n => string.Equals(permission, n, StringComparison.OrdinalIgnoreCase));
+                if (p.IsNullEmptyOrWhite()) return;
+                Permissions.Remove(p);
+            }
+
+            public void RemovePermission(IEnumerable<string> permissions)
+            {
+                foreach (var permission in permissions)
+                {
+                    var p = Permissions.FirstOrDefault(n => string.Equals(permission, n, StringComparison.OrdinalIgnoreCase));
+                    if (p.IsNullEmptyOrWhite()) continue;
+                    Permissions.Remove(p);
+                }
+            }
+
+            public void AddInvulnerableRace(string race)
+            {
+                if (InvulnerableRaces.Any(r => string.Equals(r, race, StringComparison.CurrentCultureIgnoreCase))) return;
+                Permissions.Add(race);
+            }
+
+            public void AddInvulnerableRace(IEnumerable<string> races)
+            {
+                foreach (var race in races)
+                {
+                    if (InvulnerableRaces.Any(r => string.Equals(r, race, StringComparison.CurrentCultureIgnoreCase))) continue;
+                    InvulnerableRaces.Add(race);
+                }
+            }
+
+            public void RemoveInvulnerableRace(string race)
+            {
+                var p = InvulnerableRaces.FirstOrDefault(r => string.Equals(race, r, StringComparison.OrdinalIgnoreCase));
+                if (p.IsNullEmptyOrWhite()) return;
+                InvulnerableRaces.Remove(p);
+            }
+
+            public void RemoveInvulnerableRace(IEnumerable<string> races)
+            {
+                foreach (var race in races)
+                {
+                    var p = InvulnerableRaces.FirstOrDefault(r => string.Equals(race, r, StringComparison.OrdinalIgnoreCase));
+                    if (p.IsNullEmptyOrWhite()) return;
+                    InvulnerableRaces.Remove(p);
+                }
+            }
+
+            public void AddLimit(int amount)
+            {
+                Limit = amount;
+            }
+
+            public void RemoveLimit()
+            {
+                Limit = 0;
+            }
+
+            public bool CanDamage(string race)
+            {
+                return !InvulnerableRaces.Any(r => string.Equals(r, race, StringComparison.CurrentCultureIgnoreCase));
             }
 
             public override string ToString()
@@ -69,6 +144,7 @@ namespace Oxide.Plugins
         {
             public Race Race { get; set; }
             public bool CanChange { get; set; }
+            public string UsedFormat { get; set; }
 
             public PlayerData()
             {
@@ -83,7 +159,7 @@ namespace Oxide.Plugins
 
             public void Reset(Player player = null)
             {
-                if (player != null) player.DisplayNameFormat = player.DisplayNameFormat.ReplaceFirst($"{Race.Format} ", "");
+                if (player != null) player.DisplayNameFormat = player.DisplayNameFormat.Replace($"{Race.Format} ", "");
                 Race = null;
                 CanChange = true;
             }
@@ -100,17 +176,23 @@ namespace Oxide.Plugins
 
             public void ChangeRace(Player player, Race race)
             {
-                if (Race != null) player.DisplayNameFormat = player.DisplayNameFormat.ReplaceFirst($"{Race.Format} ", "");
                 Race = race;
                 CanChange = false;
-                player.DisplayNameFormat = $"{Race.Format} {player.DisplayNameFormat}";
+                UpdateChatFormat(player);
             }
 
             public void UpdateChatFormat(Player player)
             {
-                if (Race == null) return;
+                if (Race == null)
+                {
+                    if (UsedFormat.IsNullOrEmpty()) return;
+                    player.DisplayNameFormat.Replace($"{UsedFormat} ", "");
+                    UsedFormat = null;
+                    return;
+                }
                 if (player.DisplayNameFormat.Contains(Race.Format)) return;
-                player.DisplayNameFormat = $"{Race.Format} {player.DisplayNameFormat}";
+                player.DisplayNameFormat = UsedFormat.IsNullOrEmpty() ? $"{Race.Format} {player.DisplayNameFormat}" : $"{Race.Format} {player.DisplayNameFormat.Replace($"{UsedFormat} ", "")}";
+                UsedFormat = Race.Format;
             }
 
             public bool HasRace(Race race)
@@ -161,13 +243,13 @@ namespace Oxide.Plugins
         private void LoadRaceData()
         {
             Data = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, PlayerData>>("PlayerRaces");
-            Races = Interface.Oxide.DataFileSystem.ReadObject<List<Race>>("Races");
+            Races = Interface.Oxide.DataFileSystem.ReadObject<HashSet<Race>>("Races");
 
             foreach (var player in Data)
             {
                 if (player.Value.Race != null && !Races.Contains(player.Value.Race))
                 {
-                    player.Value.Race = Races.Find(r => string.Equals(r.Name, player.Value.Race.Name, StringComparison.CurrentCultureIgnoreCase));
+                    player.Value.Race = Races.FirstOrDefault(r => string.Equals(r.Name, player.Value.Race.Name, StringComparison.CurrentCultureIgnoreCase));
                 }
             }
         }
@@ -189,7 +271,6 @@ namespace Oxide.Plugins
             ChangeAppearance = GetConfig("Tunables", "ChangeAppearance", true);
             ChangeRace = GetConfig("Tunables", "ChangeRace", true);
             ChangeTime = GetConfig("Tunables", "ChangeTime", 2);
-            RaceDamage = GetConfig("Tunables", "RaceDamage", true);
         }
 
         private void SaveConfigData()
@@ -197,7 +278,6 @@ namespace Oxide.Plugins
             Config["Tunables", "ChangeAppearance"] = ChangeAppearance;
             Config["Tunables", "ChangeRace"] = ChangeRace;
             Config["Tunables", "ChangeTime"] = ChangeTime;
-            Config["Tunables", "RaceDamage"] = RaceDamage;
             SaveConfig();
         }
 
@@ -209,10 +289,14 @@ namespace Oxide.Plugins
                 { "ToggleChangeRace", "Race changing was turned {0}." },
                 { "ToggleChangeAppearance", "Appearance changing was turned {0}." },
                 { "ToggleRaceDamage", "Damage against player of the same race was turned {0}." },
+                { "ToggleOtherDamage", "Damage against player of a different race was turned {0}." },
                 { "InvalidArgs", "Something went wrong. Please use /rshelp to see if you used the correct format." },
                 { "InvalidAmount", "That is not a valid amount." },
                 { "InvalidColor", "That is not a valid color." },
                 { "InvalidRace", "That race does not excist." },
+                { "LimitReached", "That race is currently full. Please select a different race." },
+                { "LimitAdded", "The new limit for race {0} is {1} players." },
+                { "LimitRemoved", "The limit for race {0} is removed." },
                 { "ChangedTime", "Change time has been set to {0} minutes." },
                 { "NoRace", "Please use the command /rschange to change your race." },
                 { "NoRaceRepeat", "You have not selected a race yet. Please use the command /rschange to change your race." },
@@ -235,23 +319,30 @@ namespace Oxide.Plugins
                 { "HelpRsChange", "[00ff00]/rschange[FFFFFF] - Change your race (only available for {0} minutes after you respawn)." },
                 { "HelpRsList", "[00ff00]/rs.list[FFFFFF] - Show all races and their settings." },
                 { "HelpRsAdd", "[00ff00]/rs.add (racename)[FFFFFF] - Add a new race." },
-                { "HelpRsChangeColor", "[00ff00]/rs.changecolor (racename) (color)[FFFFFF] - Change the color of a race." },
-                { "HelpRsChangePermission", "[00ff00]/rs.changepermission (racename) (permission)[FFFFFF] - Change the needed permission of a race." },
+                { "HelpRsAddPermission", "[00ff00]/rs.addpermission (racename) (permissions)[FFFFFF] - Add a permission to a race. Add more permissions separated by a space to add more than one." },
+                { "HelpRsAddInvulnerableRace", "[00ff00]/rs.addinvulnerablerace (racename) (racenames)[FFFFFF] - Add an undamageable race to a race. Add more undamageable races separated by a space to add more than one." },
+                { "HelpRsAddLimit", "[00ff00]/rs.addlimit (racename) {amount)[FFFFFF] - Set how many people can select this race." },
                 { "HelpRsRemove", "[00ff00]/rs.remove (racename)[FFFFFF] - Remove a race." },
+                { "HelpRsRemovePermission", "[00ff00]/rs.removepermission (racename) (permissions)[FFFFFF] - Remove a permission to a race. Add more permissions separated by a space to remove more than one." },
+                { "HelpRsRemoveInvulnerableRace", "[00ff00]/rs.removeinvulnerablerace (racename) (racenames)[FFFFFF] - Remove an undamageable race to a race. Add more undamageable races separated by a space to remove more than one." },
+                { "HelpRsRemoveLimit", "[00ff00]/rs.removelimit (racename)[FFFFFF] - Remove the limit of how many players can select this race." },
+                { "HelpRsChangeColor", "[00ff00]/rs.changecolor (racename) (color)[FFFFFF] - Change the color of a race." },
                 { "HelpRsPlayer", "[00ff00]/rs.player (playername)[FFFFFF] - Show the race of a player. Use 'all' as playername to show a list of all players and their race." },
                 { "HelpRsRace", "[00ff00]/rs.race[FFFFFF] - Toggle race change." },
                 { "HelpRsAppearance", "[00ff00]/rs.appearance[FFFFFF] - Toggle appearance change after race change." },
                 { "HelpRsTime", "[00ff00]/rs.time (time in minutes)[FFFFFF] - Change time a player can change his race after respawning." },
                 { "HelpRsForce", "[00ff00]/rs.force (racename) (playername)[FFFFFF] - Forces a race to a player." },
                 { "HelpRsReset", "[00ff00]/rs.reset (playername)[FFFFFF] - Forces a player to be able to change his race. Use 'all' as playername to do this for all players (both online and offline)." },
-                { "HelpRsDamage", "[00ff00]/rs.damage[FFFFFF] - Toggle the damage against players of the same race." },
                 { "HelpRsRestore", "[00ff00]/rs.restore[FFFFFF] - Restore the races to the default values." },
                 { "HelpRsConvert", "[00ff00]/rs.convert[FFFFFF] - Takes all old config and race data and converts it to the new format." },
                 { "RaceExists", "That race already exists." },
                 { "RaceNonExisting", "That race does not exist." },
                 { "RaceAdded", "You succesfully added the {0} race." },
                 { "ColorChanged", "You succesfully changed the color for race {0} to [{1}]{1}[ffffff]." },
-                { "PermissionChanged", "You succesfully changed the permission for race {0} to {1}." },
+                { "PermissionAdded", "You succesfully added the permission(s) {1} to race {0}." },
+                { "PermissionRemoved", "You succesfully removed the permission(s) {1} to race {0}." },
+                { "InvulnerableRaceAdded", "You succesfully added the undamageable race(s) {1} to race {0}." },
+                { "InvulnerableRaceRemoved", "You succesfully removed the undamageable race(s) {1} from race {0}." },
                 { "RaceRemoved", "You succesfully removed the race {0}." },
                 { "RaceInfoName", "{0}: " },
                 { "RaceInfoColor", "    Color: [{0}]{0}[ffffff]" },
@@ -289,22 +380,52 @@ namespace Oxide.Plugins
             AddRace(player, input);
         }
 
-        [ChatCommand("rs.changecolor")]
-        private void CmdChangeColor(Player player, string cmd, string[] input)
+        [ChatCommand("rs.addpermission")]
+        private void CmdAddPermission(Player player, string cmd, string[] input)
         {
-            ChangeColor(player, input);
+            AddPermission(player, input);
         }
 
-        [ChatCommand("rs.changepermission")]
-        private void CmdChangePermission(Player player, string cmd, string[] input)
+        [ChatCommand("rs.addinvulnerablerace")]
+        private void CmdAddinvulnerablerace(Player player, string cmd, string[] input)
         {
-            ChangePermission(player, input);
+            AddInvulnerableRace(player, input);
+        }
+
+        [ChatCommand("rs.addlimit")]
+        private void CmdAddLimit(Player player, string cmd, string[] input)
+        {
+            AddLimit(player, input);
         }
 
         [ChatCommand("rs.remove")]
         private void CmdRemoveRace(Player player, string cmd, string[] input)
         {
             RemoveRace(player, input);
+        }
+
+        [ChatCommand("rs.removepermission")]
+        private void CmdRemovePermission(Player player, string cmd, string[] input)
+        {
+            RemovePermission(player, input);
+        }
+
+        [ChatCommand("rs.removeinvulnerablerace")]
+        private void CmdRemoveinvulnerablerace(Player player, string cmd, string[] input)
+        {
+            RemoveInvulnerableRace(player, input);
+        }
+
+        [ChatCommand("rs.removelimit")]
+        private void CmdRemoveLimit(Player player, string cmd, string[] input)
+        {
+            RemoveLimit(player, input);
+        }
+
+        [ChatCommand("rs.changecolor")]
+        private void CmdChangeColor(Player player, string cmd, string[] input)
+        {
+            ChangeColor(player, input);
         }
 
         [ChatCommand("rs.force")]
@@ -343,12 +464,6 @@ namespace Oxide.Plugins
             ToggleChangeables(player, input);
         }
 
-        [ChatCommand("rs.damage")]
-        private void CmdChangeRaceDamage(Player player, string cmd)
-        {
-            ToggleChangeables(player, 3);
-        }
-
         [ChatCommand("rs.restore")]
         private void CmdRestoreDefaultRaces(Player player, string cmd)
         {
@@ -379,11 +494,8 @@ namespace Oxide.Plugins
                     foreach (var data in oldData)
                     {
                         if (data.Value.Race.IsNullOrEmpty()) continue;
-                        var race = Races.Find(r => string.Equals(r.Name, data.Value.Race, StringComparison.CurrentCultureIgnoreCase));
-                        if (race != null)
-                        {
-                            Data.Add(data.Key, new PlayerData(data.Value.CanChange, race));
-                        }
+                        var race = Races.FirstOrDefault(r => string.Equals(r.Name, data.Value.Race, StringComparison.CurrentCultureIgnoreCase));
+                        if (race != null)  Data.Add(data.Key, new PlayerData(data.Value.CanChange, race));
                     }
                 }
             }
@@ -410,30 +522,34 @@ namespace Oxide.Plugins
             }
             else
             {
-                if (Data[player.Id].Race == null)
+                var data = Data[player.Id];
+                if (data.Race == null)
                 {
                     player.SendError(GetMessage("NoRaceRepeat", player));
-                    if (!Data[player.Id].CanChange) Data[player.Id].ChangeReset();
+                    if (!data.CanChange) data.ChangeReset();
                 }
-                else if (Data[player.Id].CanChange) ResetRaceChange(player);
+                else if (data.CanChange) ResetRaceChange(player);
             }
+
+            Data[player.Id].UpdateChatFormat(player);
 
             SaveRaceData();
         }
 
         private void ResetRaceChange(Player player)
         {
+            var data = Data[player.Id];
             if (!ChangeRace)
             {
-                if (Data[player.Id].Race == null) return;
-                if (Data[player.Id].CanChange) Data[player.Id].ChangeExpired();
+                if (data.Race == null) return;
+                if (data.CanChange) data.ChangeExpired();
                 return;
             }
 
             player.SendError(GetMessage("DieChange", player), ChangeTime);
 
-            Data[player.Id].ChangeReset();
-            timer.In(ChangeTime * 60, Data[player.Id].ChangeExpired);
+            data.ChangeReset();
+            timer.In(ChangeTime * 60, data.ChangeExpired);
 
             SaveRaceData();
         }
@@ -442,16 +558,16 @@ namespace Oxide.Plugins
         {
             if (player == null) return null;
             if (!Data.ContainsKey(player.Id)) return null;
-            if (Data[player.Id].Race == null) return null;
-            return Data[player.Id].Race.ToString();
+            var data = Data[player.Id];
+            if (data.Race == null) return null;
+            return data.Race.ToString();
         }
 
-        private bool HasPermission(Player player, string perm = null)
+        private bool HasPermission(Player player, ICollection<string> permissions = null)
         {
-            if (perm.IsNullEmptyOrWhite()) return true;
-
+            if (permissions.IsNullOrEmpty()) return true;
             var user = Server.Permissions.GetUser(player.Name);
-            return user != null && user.HasGroup(perm);
+            return user != null && permissions.Any(p => user.HasGroup(p));
         }
 
         private bool IsHex(IEnumerable<char> chars)
@@ -459,36 +575,48 @@ namespace Oxide.Plugins
             return chars.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
         }
 
+        private bool IsAvailable(Race race)
+        {
+            if (race.Limit == 0) return true;
+
+            var amount = Data.Values.Count(data => data.Race == race);
+            if (race.Limit > amount) return true;
+            return false;
+        }
+
         #region Race change
 
         private void ChangeRacePopup(Player player)
         {
             if (!Data.ContainsKey(player.Id)) Data.Add(player.Id, new PlayerData(true));
+            var data = Data[player.Id];
 
-            if (Data[player.Id].Race != null && !ChangeRace) { player.SendError(GetMessage("NoPermission", player)); return; }
+            if (data.Race != null && !ChangeRace) { player.SendError(GetMessage("NoPermission", player)); return; }
 
-            if (!Data[player.Id].CanChange) { player.SendError(GetMessage("CantChange", player)); return; }
+            if (!data.CanChange) { player.SendError(GetMessage("CantChange", player)); return; }
 
             var message = "";
 
             message += GetMessage("RaceChangeRace", player);
             message += "\n\n";
 
-            message = Races.Where(race => HasPermission(player, race.Permission)).Aggregate(message, (current, race) => current + $"[{race.Color}]{race}[ffffff]\r\n");
+            message = Races.Where(race => HasPermission(player, race.Permissions) && IsAvailable(race)).Aggregate(message, (current, race) => current + $"[{race.Color}]{race}[ffffff]\r\n");
 
             if (ChangeAppearance) message += "\r\n" + GetMessage("RaceChangeFreeSlot", player);
 
-            player.ShowInputPopup(GetMessage("RaceChangeTitle", player), message, "", GetMessage("RaceChangeConfirm", player), GetMessage("RaceChangeCancel", player), (options, dialogue1, data) => ChangeRaceConfirm(player, options, dialogue1));
+            player.ShowInputPopup(GetMessage("RaceChangeTitle", player), message, "", GetMessage("RaceChangeConfirm", player), GetMessage("RaceChangeCancel", player), (options, dialogue, popupData) => ChangeRaceConfirm(player, options, dialogue));
         }
 
         private void ChangeRaceConfirm(Player player, Options selection, Dialogue dialogue)
         {
             if (selection == Options.Cancel) return;
 
-            var race = Races.Find(r => string.Equals(r.Name, dialogue.ValueMessage, StringComparison.CurrentCultureIgnoreCase));
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, dialogue.ValueMessage, StringComparison.CurrentCultureIgnoreCase));
 
             if (race == null) { player.SendError(GetMessage("InvalidRace", player)); return; }
-            if (!HasPermission(player, race.Permission)) { player.SendError(GetMessage("InvalidRace", player)); return; }
+            if (!HasPermission(player, race.Permissions)) { player.SendError(GetMessage("InvalidRace", player)); return; }
+            if (!IsAvailable(race)) { player.SendError(GetMessage("LimitReached", player)); return; }
+
             var message = string.Format(GetMessage("RaceChangeConfirmRace", player), $"[{race.Color}]{race}");
             player.ShowConfirmPopup(GetMessage("RaceChangeTitle", player), message, GetMessage("RaceChangeYes", player), GetMessage("RaceChangeNo", player), (options, dialogue1, data) => ChangeRaceFinish(player, options, race));
         }
@@ -502,7 +630,7 @@ namespace Oxide.Plugins
 
             if (!ChangeAppearance) return;
             var message = GetMessage("RaceChangeAppearance", player);
-            player.ShowConfirmPopup(GetMessage("RaceChangeTitle", player), message, GetMessage("RaceChangeYes", player), GetMessage("RaceChangeNo", player), (options, dialogue1, data) => GivePoa(player, options));
+            player.ShowConfirmPopup(GetMessage("RaceChangeTitle", player), message, GetMessage("RaceChangeYes", player), GetMessage("RaceChangeNo", player), (options, dialogue, data) => GivePoa(player, options));
         }
 
         private void GivePoa(Player player, Options selection)
@@ -512,7 +640,7 @@ namespace Oxide.Plugins
             var inventory = player.GetInventory().Contents;
             var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Potion of appearance", true, true);
             var invGameItemStack = new InvGameItemStack(blueprintForName, 1, null);
-            ItemCollection.AutoMergeAdd(inventory, invGameItemStack);
+            inventory.AddItem(invGameItemStack);
         }
 
         #endregion
@@ -525,9 +653,9 @@ namespace Oxide.Plugins
 
             foreach (var race in Races)
             {
-                player.SendMessage(GetMessage("RaceInfoName", player), race.Name);
+                player.SendMessage(GetMessage("RaceInfoName", player), race);
                 player.SendMessage(GetMessage("RaceInfoColor", player), race.Color);
-                player.SendMessage(GetMessage("RaceInfoPermission", player), race.Permission);
+                player.SendMessage(GetMessage("RaceInfoPermission", player), string.Join(", ", race.Permissions.ToArray()));
             }
         }
 
@@ -539,7 +667,7 @@ namespace Oxide.Plugins
 
             var name = args[0];
 
-            if (Races.Find(r => string.Equals(r.Name, name, StringComparison.CurrentCultureIgnoreCase)) != null) { player.SendError(GetMessage("RaceExists", player)); return; }
+            if (Races.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.CurrentCultureIgnoreCase)) != null) { player.SendError(GetMessage("RaceExists", player)); return; }
 
             Races.Add(new Race(name, "9f0000"));
             player.SendMessage(GetMessage("RaceAdded", player), name);
@@ -547,51 +675,64 @@ namespace Oxide.Plugins
             SaveRaceData();
         }
 
-        private void ChangeColor(Player player, string[] args)
+        private void AddPermission(Player player, string[] args)
         {
             if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
 
-            if (args.Length != 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
-            
-            var race = Races.Find(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
-            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
-            var color = args[1];
-            if (!IsHex(color.ToCharArray())) { player.SendError(GetMessage("InvalidColor", player)); return; }
+            if (args.Length < 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
 
-            race.ChangeColor(color);
-            player.SendMessage(GetMessage("ColorChanged", player), race.Name, color);
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
+
+            var permissions = args.Skip(1);
+            race.AddPermission(permissions);
 
             foreach (var pl in Server.ClientPlayers)
             {
                 CheckPlayerExcists(pl);
-                Data[pl.Id].UpdateChatFormat(pl);
-            }
-
-            SaveRaceData();
-        }
-
-        private void ChangePermission(Player player, string[] args)
-        {
-            if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
-
-            if (args.Length != 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
-            
-            var race = Races.Find(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
-            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
-            var permission = args[1];
-
-            race.ChangePermission(permission);
-            foreach (var pl in Server.ClientPlayers)
-            {
-                CheckPlayerExcists(pl);
-                if (!Data[pl.Id].HasRace(race) || HasPermission(pl, race.Permission)) continue;
+                if (!Data[pl.Id].HasRace(race) || HasPermission(pl, race.Permissions)) continue;
                 Data[pl.Id].Reset();
                 CheckPlayerExcists(pl);
             }
 
-            player.SendMessage(GetMessage("PermissionChanged", player), race.Name, permission);
+            player.SendMessage(GetMessage("PermissionAdded", player), race, string.Join(", ", permissions.ToArray()));
 
             SaveRaceData();
+        }
+
+        private void AddInvulnerableRace(Player player, string[] args)
+        {
+            if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
+
+            if (args.Length < 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
+            
+            var invulnerableRaces = Races.Where(r => string.Equals(r.Name, args[1], StringComparison.CurrentCultureIgnoreCase)).Select(r => r.Name);
+            if (!invulnerableRaces.Any()) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+
+            race.AddInvulnerableRace(invulnerableRaces);
+
+            player.SendMessage(GetMessage("InvulnerableRaceAdded", player), race, string.Join(", ", invulnerableRaces.ToArray()));
+
+            SaveRaceData();
+        }
+
+        private void AddLimit(Player player, string[] args)
+        {
+            if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
+
+            if (args.Length < 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
+
+            int amount;
+            if (!int.TryParse(args[1], out amount)) { player.SendError(GetMessage("InvalidAmount", player)); return; }
+
+            race.AddLimit(amount);
+            player.SendMessage(GetMessage("LimitAdded", player), race, amount);
         }
 
         private void RemoveRace(Player player, string[] args)
@@ -600,12 +741,12 @@ namespace Oxide.Plugins
 
             if (args.Length != 1) { player.SendError(GetMessage("InvalidArgs", player)); return; }
             
-            var race = Races.Find(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
 
             if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
 
             Races.Remove(race);
-            player.SendMessage(GetMessage("RaceRemoved", player), race.Name);
+            player.SendMessage(GetMessage("RaceRemoved", player), race);
 
             foreach (var pl in Server.ClientPlayers)
             {
@@ -618,22 +759,102 @@ namespace Oxide.Plugins
             SaveRaceData();
         }
 
+        private void RemovePermission(Player player, string[] args)
+        {
+            if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
+
+            if (args.Length < 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
+
+            var permissions = args.Skip(1);
+            race.RemovePermission(permissions);
+
+            foreach (var pl in Server.ClientPlayers)
+            {
+                CheckPlayerExcists(pl);
+                if (!Data[pl.Id].HasRace(race) || HasPermission(pl, race.Permissions)) continue;
+                Data[pl.Id].Reset();
+                CheckPlayerExcists(pl);
+            }
+
+            player.SendMessage(GetMessage("PermissionRemoved", player), race, string.Join(", ", permissions.ToArray()));
+
+            SaveRaceData();
+        }
+
+        private void RemoveInvulnerableRace(Player player, string[] args)
+        {
+            if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
+
+            if (args.Length < 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
+            
+            var invulnerableRaces = Races.Where(r => string.Equals(r.Name, args[1], StringComparison.CurrentCultureIgnoreCase)).Select(r => r.Name);
+            if (!invulnerableRaces.Any()) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+
+            race.RemoveInvulnerableRace(invulnerableRaces);
+
+            player.SendMessage(GetMessage("InvulnerableRaceRemoved", player), race, string.Join(", ", invulnerableRaces.ToArray()));
+
+            SaveRaceData();
+        }
+
+        private void RemoveLimit(Player player, string[] args)
+        {
+            if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
+
+            if (args.Length < 1) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args.JoinToString(" "), StringComparison.CurrentCultureIgnoreCase));
+            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
+
+            race.RemoveLimit();
+            player.SendMessage(GetMessage("LimitRemoved", player), race);
+        }
+
+        private void ChangeColor(Player player, string[] args)
+        {
+            if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
+
+            if (args.Length != 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
+            
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            if (race == null) { player.SendError(GetMessage("RaceNonExisting", player)); return; }
+            var color = args[1];
+            if (!IsHex(color.ToCharArray())) { player.SendError(GetMessage("InvalidColor", player)); return; }
+
+            race.ChangeColor(color);
+            player.SendMessage(GetMessage("ColorChanged", player), race, color);
+
+            foreach (var pl in Server.ClientPlayers)
+            {
+                CheckPlayerExcists(pl);
+                Data[pl.Id].UpdateChatFormat(pl);
+            }
+
+            SaveRaceData();
+        }
+
         private void ForcePlayerRace(Player player, string[] args)
         {
             if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
 
             if (args.Length < 2) { player.SendError(GetMessage("InvalidArgs", player)); return; }
 
-            var race = Races.Find(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
+            var race = Races.FirstOrDefault(r => string.Equals(r.Name, args[0], StringComparison.CurrentCultureIgnoreCase));
             if (race == null) { player.SendError(GetMessage("InvalidRace", player)); return; }
 
             var target = Server.GetPlayerByName(args.Skip(1).JoinToString(" "));
             if (target == null) { player.SendError(GetMessage("NoPlayer", player)); return; }
 
             CheckPlayerExcists(target);
-            Data[player.Id].ChangeRace(target, race);
+            Data[target.Id].ChangeRace(target, race);
 
-            player.SendMessage(GetMessage("RaceForced", player), target.Name, race.Name);
+            player.SendMessage(GetMessage("RaceForced", player), target.Name, race);
 
             SaveRaceData();
         }
@@ -691,10 +912,6 @@ namespace Oxide.Plugins
                     if (ChangeAppearance) { ChangeAppearance = false; PrintToChat(player, string.Format(GetMessage("ToggleChangeAppearance", player), "off")); }
                     else { ChangeAppearance = true; PrintToChat(player, string.Format(GetMessage("ToggleChangeAppearance", player), "on")); }
                     break;
-                case 3:
-                    if (RaceDamage) { RaceDamage = false; PrintToChat(player, string.Format(GetMessage("ToggleRaceDamage", player), "off")); }
-                    else { RaceDamage = true; PrintToChat(player, string.Format(GetMessage("ToggleRaceDamage", player), "on")); }
-                    break;
             }
 
             SaveConfigData();
@@ -720,7 +937,9 @@ namespace Oxide.Plugins
             if (!player.HasPermission("RaceSystem.Modify")) { player.SendError(GetMessage("NoPermission", player)); return; }
 
             Races.Clear();
-            Races.AddRange(DefaultRaces);
+            Data.Clear();
+            Server.Permissions.Load();
+            Races.UnionWith(DefaultRaces);
 
             player.SendMessage(GetMessage("DefaultRestored", player), ChangeTime);
 
@@ -735,7 +954,7 @@ namespace Oxide.Plugins
 
         private void OnEntityHealthChange(EntityDamageEvent e)
         {
-            #region Null Checks
+            #region Checks
             if (e == null) return;
             if (e.Cancelled) return;
             if (e.Damage == null) return;
@@ -744,13 +963,23 @@ namespace Oxide.Plugins
             if (e.Damage.DamageSource.Owner == null) return;
             if (e.Entity == null) return;
             if (!e.Entity.IsPlayer) return;
+            if (e.Entity.Owner == null) return;
             if (e.Entity == e.Damage.DamageSource) return;
+            if (e.Damage.Amount < 0) return;
             #endregion
 
-            if (RaceDamage) return;
-            if (e.Damage.Amount < 0) return;
+            var damager = e.Damage.DamageSource.Owner;
+            var victim = e.Entity.Owner;
 
-            if (Data[e.Damage.DamageSource.Owner.Id].Race != Data[e.Entity.Owner.Id].Race) return;
+            CheckPlayerExcists(damager);
+            CheckPlayerExcists(victim);
+
+            var damagerData = Data[damager.Id];
+            var victimData = Data[victim.Id];
+
+            if (damagerData.Race == null || victimData.Race == null) return;
+
+            if (damagerData.Race.CanDamage(victimData.Race.Name)) return;
 
             e.Cancel();
             e.Damage.Amount = 0f;
@@ -759,7 +988,6 @@ namespace Oxide.Plugins
         private void OnPlayerConnected(Player player)
         {
             CheckPlayerExcists(player);
-            Data[player.Id].UpdateChatFormat(player);
         }
 
         private void OnPlayerRespawn(PlayerRespawnEvent respawnEvent)
@@ -771,7 +999,6 @@ namespace Oxide.Plugins
         private void OnPlayerChat(PlayerEvent e)
         {
             CheckPlayerExcists(e.Player);
-            Data[e.Player.Id].UpdateChatFormat(e.Player);
         }
 
         private void SendHelpText(Player player)
@@ -787,15 +1014,19 @@ namespace Oxide.Plugins
             {
                 player.SendMessage(GetMessage("HelpRsList", player));
                 player.SendMessage(GetMessage("HelpRsAdd", player));
-                player.SendMessage(GetMessage("HelpRsChangeColor", player));
-                player.SendMessage(GetMessage("HelpRsChangePermission", player));
+                player.SendMessage(GetMessage("HelpRsAddPermission", player));
+                player.SendMessage(GetMessage("HelpRsAddInvulnerableRace", player));
+                player.SendMessage(GetMessage("HelpRsAddLimit", player));
                 player.SendMessage(GetMessage("HelpRsRemove", player));
+                player.SendMessage(GetMessage("HelpRsRemovePermission", player));
+                player.SendMessage(GetMessage("HelpRsRemoveInvulnerableRace", player));
+                player.SendMessage(GetMessage("HelpRsRemoveLimit", player));
+                player.SendMessage(GetMessage("HelpRsChangeColor", player));
                 player.SendMessage(GetMessage("HelpRsRace", player));
                 player.SendMessage(GetMessage("HelpRsAppearance", player));
                 player.SendMessage(GetMessage("HelpRsTime", player));
                 player.SendMessage(GetMessage("HelpRsForce", player));
                 player.SendMessage(GetMessage("HelpRsReset", player));
-                player.SendMessage(GetMessage("HelpRsDamage", player));
                 player.SendMessage(GetMessage("HelpRsRestore", player));
                 player.SendMessage(GetMessage("HelpRsConvert", player));
             }

@@ -1,16 +1,13 @@
-// Reference: Rust.Workshop
-
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json;
-
 using Facepunch.Steamworks;
 using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Skin Randomizer", "Mughisi", "1.3.1", ResourceId = 1328)]
+    [Info("Item Skin Randomizer", "Mughisi", "1.3.2", ResourceId = 1328)]
     [Description("Simple plugin that will select a random skin for an item when crafting.")]
     class ItemSkinRandomizer : RustPlugin
     {
@@ -42,7 +39,7 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", ReadScheme, this);
+            webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, ReadScheme, this);
             if (config.EnablePermissions) permission.RegisterPermission("itemskinrandomizer.use", this);
         }
 

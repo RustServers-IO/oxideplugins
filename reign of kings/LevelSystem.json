@@ -2,7 +2,7 @@
     "name": "Level System",
     "description": "A simple plugin to add XP and levels in the game",
     "author": "D-Kay",
-    "version": "0.5.4",
+    "version": "1.0.0",
     "configuration": true,
     "suggest": {
         "HelpText": "*"

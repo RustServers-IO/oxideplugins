@@ -4,23 +4,27 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("WipeKits", "Ryan", "1.0.3")]
+    [Info("WipeKits", "Ryan", "1.1.1")]
     [Description("Puts a configurable cooldown on each kit depending on their kitname.")]
     internal class WipeKits : RustPlugin
     {
-        // Credit to Visagalis for finding SaveRestore.SaveCreatedTime
-        private double SecsSinceWipe() => (DateTime.UtcNow.ToLocalTime() - SaveRestore.SaveCreatedTime.ToLocalTime()).TotalSeconds;
+        #region Declaration
 
-        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        private static ConfigFile _cFile;
+        private DateTime _cachedWipeTime;
+        private const string Perm = "wipekits.bypass";
+
+        #endregion
 
         #region Config
 
-        private ConfigFile _Config;
-
-        public class ConfigFile
+        private class ConfigFile
         {
             [JsonProperty(PropertyName = "Kit Names & Cooldowns - Cooldowns (minutes)")]
             public Dictionary<string, float> Kits;
+
+            [JsonProperty(PropertyName = "Use GUI Kits (true/false)")]
+            public bool UseGui { get; set; }
 
             public static ConfigFile DefaultConfig()
             {
@@ -30,24 +34,37 @@ namespace Oxide.Plugins
                     {
                         ["kitname1"] = 5,
                         ["kitname2"] = 5
-                    }
+                    },
+                    UseGui = false
                 };
             }
         }
 
         protected override void LoadDefaultConfig()
         {
-            PrintWarning("Generating default configuration file...");
-            _Config = ConfigFile.DefaultConfig();
+            PrintWarning("Loading default configuration file...");
+            _cFile = ConfigFile.DefaultConfig();
         }
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
-            _Config = Config.ReadObject<ConfigFile>();
+            try
+            {
+                _cFile = Config.ReadObject<ConfigFile>();
+                if (_cFile == null)
+                    Regenerate();
+            }
+            catch { Regenerate(); }
         }
 
-        protected override void SaveConfig() => Config.WriteObject(_Config);
+        protected override void SaveConfig() => Config.WriteObject(_cFile);
+
+        private void Regenerate()
+        {
+            PrintWarning($"Configuration file at 'oxide/config/{Name}.json' seems to be corrupt, regenerating...");
+            LoadDefaultConfig();
+        }
 
         #endregion Config
 
@@ -57,71 +74,83 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                // Message
-                ["Msg_DayFormat"] = "<color=orange>{0}</color> day and <color=orange>{1}</color> hours",
-                ["Msg_DaysFormat"] = "<color=orange>{0}</color> days and <color=orange>{1}</color> hours",
-                ["Msg_HourFormat"] = "<color=orange>{0}</color> hour and <color=orange>{1}</color> minutes",
-                ["Msg_HoursFormat"] = "<color=orange>{0}</color> hours and <color=orange>{1}</color> minutes",
-                ["Msg_MinFormat"] = "<color=orange>{0}</color> minute and <color=orange>{1}</color> seconds",
-                ["Msg_MinsFormat"] = "<color=orange>{0}</color> minutes and <color=orange>{1}</color> seconds",
-                ["Msg_SecsFormat"] = "<color=orange>{0}</color> seconds",
+                // Time formatting
+                ["DayFormat"] = "<color=orange>{0}</color> day and <color=orange>{1}</color> hours",
+                ["DaysFormat"] = "<color=orange>{0}</color> days and <color=orange>{1}</color> hours",
+                ["HourFormat"] = "<color=orange>{0}</color> hour and <color=orange>{1}</color> minutes",
+                ["HoursFormat"] = "<color=orange>{0}</color> hours and <color=orange>{1}</color> minutes",
+                ["MinFormat"] = "<color=orange>{0}</color> minute and <color=orange>{1}</color> seconds",
+                ["MinsFormat"] = "<color=orange>{0}</color> minutes and <color=orange>{1}</color> seconds",
+                ["SecsFormat"] = "<color=orange>{0}</color> seconds",
                 // Can't use command
-                ["Cmd_CantUse"] = "The server's just wiped! Try again in {0}",
+                ["CantUse"] = "The server's just wiped! Try again in {0}",
             }, this);
         }
 
         #endregion Lang
 
-        private string GetFormattedMsg(float cooldown)
-        {
-            TimeSpan timeSpan = GetNextKitTime(cooldown);
+        #region Methods
 
-            if (timeSpan == null) return null;
+        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
+        private string GetFormattedTime(double time)
+        {
+            TimeSpan timeSpan = TimeSpan.FromSeconds(time);
+            if (timeSpan.TotalSeconds < 1) return null;
 
             if (Math.Floor(timeSpan.TotalDays) >= 1)
-                return string.Format(timeSpan.Days > 1 ? Lang("Msg_DaysFormat", null, timeSpan.Days, timeSpan.Hours) : Lang("Msg_DayFormat", null, timeSpan.Days, timeSpan.Hours));
-
-            if (Math.Floor(timeSpan.TotalMinutes) > 60)
-                return string.Format(timeSpan.Hours > 1 ? Lang("Msg_HoursFormat", null, timeSpan.Hours, timeSpan.Minutes) : Lang("Msg_HourFormat", null, timeSpan.Hours, timeSpan.Minutes));
-
-            if (Math.Floor(timeSpan.TotalSeconds) > 60)
-                return string.Format(timeSpan.Minutes > 1 ? Lang("Msg_MinsFormat", null, timeSpan.Minutes, timeSpan.Seconds) : Lang("Msg_MinFormat", null, timeSpan.Minutes, timeSpan.Seconds));
-
-            return Lang("Msg_SecsFormat", null, timeSpan.Seconds);
+                return string.Format(timeSpan.Days > 1 ? Lang("DaysFormat", null, timeSpan.Days, timeSpan.Hours) : Lang("DayFormat", null, timeSpan.Days, timeSpan.Hours));
+            if (Math.Floor(timeSpan.TotalMinutes) >= 60)
+                return string.Format(timeSpan.Hours > 1 ? Lang("HoursFormat", null, timeSpan.Hours, timeSpan.Minutes) : Lang("HourFormat", null, timeSpan.Hours, timeSpan.Minutes));
+            if (Math.Floor(timeSpan.TotalSeconds) >= 60)
+                return string.Format(timeSpan.Minutes > 1 ? Lang("MinsFormat", null, timeSpan.Minutes, timeSpan.Seconds) : Lang("MinFormat", null, timeSpan.Minutes, timeSpan.Seconds));
+            return Lang("SecsFormat", null, timeSpan.Seconds);
         }
 
         private TimeSpan GetNextKitTime(float cooldown)
         {
-            var timeSince = TimeSpan.FromSeconds(SecsSinceWipe());
-
+            var timeSince = TimeSpan.FromSeconds((DateTime.UtcNow.ToLocalTime() - _cachedWipeTime).TotalSeconds);
             if (timeSince.TotalSeconds > cooldown * 60)
                 return TimeSpan.Zero;
-
-            double timeUntil = (cooldown * 60) - Math.Floor(timeSince.TotalSeconds);
+            var timeUntil = cooldown * 60 - Math.Round(timeSince.TotalSeconds);
             return TimeSpan.FromSeconds(timeUntil);
         }
 
-        private object OnPlayerCommand(ConsoleSystem.Arg args)
+        #endregion
+
+        #region Hooks
+
+        private void OnServerInitialized() => _cachedWipeTime = SaveRestore.SaveCreatedTime.ToLocalTime();
+
+        private object OnPlayerCommand(ConsoleSystem.Arg arg)
         {
-            if (args.cmd.FullName.ToLower() == "chat.say")
+            var player = (BasePlayer) arg.Connection.player;
+            if (arg.cmd.FullName.ToLower().Equals("chat.say") && arg.GetString(0).ToLower().StartsWith("/kit"))
             {
-                var player = args.Connection.player as BasePlayer;
-                if (player.IsAdmin) return null;
-                if (args.GetString(0).ToLower().StartsWith("/kit"))
+                var chatArgs = arg.GetString(0).ToLower().Split(' ');
+                if (chatArgs.Length > 1 && _cFile.Kits.ContainsKey(chatArgs[1]))
                 {
-                    foreach (var kitname in _Config.Kits)
+                    var kitCooldown = _cFile.Kits[chatArgs[1]];
+                    if (GetNextKitTime(kitCooldown) != TimeSpan.Zero)
                     {
-                        if (args.GetString(0).ToLower() == "/kit " + kitname.Key.ToLower())
-                        {
-                            if (GetNextKitTime(kitname.Value).TotalSeconds <= 0)
-                                return null;
-                            PrintToChat(player, Lang("Cmd_CantUse", player.UserIDString, GetFormattedMsg(kitname.Value)));
-                            return true;
-                        }
+                        PrintToChat(player, Lang("CantUse", player.UserIDString, GetFormattedTime(GetNextKitTime(kitCooldown).TotalSeconds)));
+                        return true;
                     }
+                }
+            }
+            if (_cFile.UseGui && arg.cmd.FullName.ToLower().StartsWith("kit.gui") && _cFile.Kits.ContainsKey(arg.GetString(0).ToLower()))
+            {
+                var kitCooldown = _cFile.Kits[arg.GetString(0).ToLower()];
+                if (GetNextKitTime(kitCooldown) != TimeSpan.Zero)
+                {
+                    player.SendConsoleCommand("kit.close");
+                    PrintToChat(player, Lang("CantUse", player.UserIDString, GetFormattedTime(GetNextKitTime(kitCooldown).TotalSeconds)));
+                    return true;
                 }
             }
             return null;
         }
+
+        #endregion
     }
 }

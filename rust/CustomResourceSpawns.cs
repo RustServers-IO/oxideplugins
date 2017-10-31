@@ -7,10 +7,12 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Oxide.Core.Configuration;
+using Facepunch;
+using UnityEngine.SceneManagement;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomResourceSpawns", "k1lly0u", "0.2.21", ResourceId = 1783)]
+    [Info("CustomResourceSpawns", "k1lly0u", "0.2.25", ResourceId = 1783)]
     class CustomResourceSpawns : RustPlugin
     {
         #region Fields
@@ -106,17 +108,27 @@ namespace Oxide.Plugins
         }
         private void InitializeNewSpawn(string type, Vector3 position)
         {
-            var newRes = SpawnResourceEntity(type, position);
-            
-            resourceCache.Add(newRes);
-        }
-        private BaseEntity SpawnResourceEntity(string type, Vector3 pos)
-        {
-            BaseEntity entity = GameManager.server.CreateEntity(type, pos, new Quaternion(), true);            
+            var entity = InstantiateEntity(type, position);
+            entity.enableSaving = false;
             entity.Spawn();
-            return entity;
+            resourceCache.Add(entity);
         }
-        
+       
+        private BaseEntity InstantiateEntity(string type, Vector3 position)
+        {
+            var gameObject = Instantiate.GameObject(GameManager.server.FindPrefab(type), position, new Quaternion());
+            gameObject.name = type;
+
+            SceneManager.MoveGameObjectToScene(gameObject, Rust.Server.EntityScene);
+
+            UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
+
+            if (!gameObject.activeSelf)
+                gameObject.SetActive(true);
+
+            BaseEntity component = gameObject.GetComponent<BaseEntity>();
+            return component;
+        }
         #endregion
 
         #region Resource Spawning
@@ -124,7 +136,9 @@ namespace Oxide.Plugins
         {
             string resource = resourceTypes[type];
             var pos = GetSpawnPos(player);
-            BaseEntity entity = SpawnResourceEntity(resource, pos);
+            BaseEntity entity = InstantiateEntity(resource, pos);
+            entity.enableSaving = false;
+            entity.Spawn();
             crsData.resources.Add(new CLResource { Position = entity.transform.position, Type = resource });
             resourceCache.Add(entity);
             SaveData();

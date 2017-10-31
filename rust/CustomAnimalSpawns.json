@@ -2,7 +2,7 @@
     "name": "Custom Animal Spawns",
     "description": "Create additional spawn points for animals of your choosing, that re-spawn on a timer",
     "author": "k1lly0u",
-    "version": "0.1.5",
+    "version": "0.1.55",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/custom-animal-spawns.2015",

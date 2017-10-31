@@ -8,7 +8,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildingBlocker", "Vlad-00003", "2.3.0", ResourceId = 2456)]
+    [Info("BuildingBlocker", "Vlad-00003", "2.4.0", ResourceId = 2456)]
     [Description("Blocks building in the building privilage zone. Deactivates raids update.")]
     //Author info:
     //E-mail: Vlad-00003@mail.ru
@@ -21,6 +21,7 @@ namespace Oxide.Plugins
         private string Prefix = "[BuildingBlocker]";
         private string PrefixColor = "#FF3047";
         private bool LadderBuilding = false;
+        private bool BlockBuildings = true;
         #endregion
 
         #region Vars
@@ -36,7 +37,9 @@ namespace Oxide.Plugins
         private string PrefixCfg = "Chat prefix";
         private string PrefixColorCfg = "Prefix color";
         private string LadderBuildingCfg = "Allow building ladders in the privilage zone";
-        private void LoadMessages()
+        private string BlockBuildingsCfg = "Block building";
+        string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID == null ? null : userID.ToString());
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -49,25 +52,28 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Init
+        #region Config Init
         protected override void LoadDefaultConfig()
         {
             PrintWarning("New configuration file created.");
         }
-        private void LoadConfigValues()
+        protected override void LoadConfig()
         {
-            GetConfig(BypassPrivilageCfg, ref BypassPrivilege);
-            GetConfig(PrefixCfg, ref Prefix);
-            GetConfig(PrefixColorCfg, ref PrefixColor);
-            GetConfig(LadderBuildingCfg, ref LadderBuilding);
-            SaveConfig();
-        }
-        void Loaded()
-        {
-            LoadConfigValues();
-            LoadMessages();
+            base.LoadConfig();
+            bool changed = false;
+            if (GetConfig(BypassPrivilageCfg, ref BypassPrivilege))
+                changed = true;
+            if (GetConfig(PrefixCfg, ref Prefix))
+                changed = true;
+            if (GetConfig(PrefixColorCfg, ref PrefixColor))
+                changed = true;
+            if (GetConfig(LadderBuildingCfg, ref LadderBuilding))
+                changed = true;
+            if (GetConfig(BlockBuildingsCfg, ref BlockBuildings))
+                changed = true;
+            if (changed)
+                SaveConfig();
             permission.RegisterPermission(BypassPrivilege, this);
-
         }
         #endregion
 
@@ -95,6 +101,7 @@ namespace Oxide.Plugins
             if (!player) return null;
             if (permission.UserHasPermission(player.UserIDString, BypassPrivilege)) return null;
             if (LadderBuilding && prefab.fullName.Contains("ladder.wooden")) return null;
+            if (!BlockBuildings && !prefab.fullName.Contains("ladder.wooden")) return null;
 
             var pos = player.ServerPosition;
             //pos.y += player.GetHeight();
@@ -128,7 +135,6 @@ namespace Oxide.Plugins
             /*
              * Switched to IsBuildingBlocked
              */
-
             //int entities = Physics.OverlapSphereNonAlloc(targetLocation, CupRadius, colBuffer, Rust.Layers.Trigger);
             //BuildingPrivlidge FoundCup = null;
             //for (var i = 0; i < entities; i++)
@@ -159,15 +165,16 @@ namespace Oxide.Plugins
         {
             PrintToChat(Player, "<color=" + PrefixColor + ">" + Prefix + "</color> " + Message);
         }
-        private void GetConfig<T>(string Key, ref T var)
+        private bool GetConfig<T>(string Key, ref T var)
         {
             if (Config[Key] != null)
             {
                 var = (T)Convert.ChangeType(Config[Key], typeof(T));
+                return false;
             }
             Config[Key] = var;
+            return true;
         }
-        string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID == null ? null : userID.ToString());
         #endregion
     }
 }

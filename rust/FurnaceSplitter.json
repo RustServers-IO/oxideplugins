@@ -2,7 +2,7 @@
     "name": "Furnace Splitter",
     "description": "Splits up ores into equal stacks when you put them into furnaces.",
     "author": "Skipcast",
-    "version": "2.1.1",
+    "version": "2.1.2",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/furnace-splitter.2406",

@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerChallenges", "k1lly0u", "2.0.2", ResourceId = 1442)]
+    [Info("PlayerChallenges", "k1lly0u", "2.0.21", ResourceId = 1442)]
     class PlayerChallenges : RustPlugin
     {
         #region Fields
@@ -290,13 +290,13 @@ namespace Oxide.Plugins
         }
         void OnRocketLaunched(BasePlayer player, BaseEntity entity)
         {
-            if (player == null || !configData.ChallengeSettings[Challenges.RocketsFired].Enabled) return;            
+            if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.RocketsFired].Enabled) return;            
             AddPoints(player, Challenges.RocketsFired, 1);
         }
         void OnHealingItemUse(HeldEntity item, BasePlayer target)
         {
             var player = item.GetOwnerPlayer();
-            if (player == null) return;
+            if (player == null || player is NPCPlayer) return;
             if (player != target && configData.ChallengeSettings[Challenges.PlayersHealed].Enabled)
             {
                 AddPoints(player, Challenges.PlayersHealed, 1);
@@ -305,7 +305,7 @@ namespace Oxide.Plugins
         void OnItemCraftFinished(ItemCraftTask task, Item item)
         {
             var player = task.owner;
-            if (player == null) return;
+            if (player == null || player is NPCPlayer) return;
 
             if (item.info.category == ItemCategory.Attire && configData.ChallengeSettings[Challenges.ClothesCrafted].Enabled)
                 AddPoints(player, Challenges.ClothesCrafted, 1);
@@ -314,20 +314,20 @@ namespace Oxide.Plugins
         }
         void OnPlantGather(PlantEntity plant, Item item, BasePlayer player)
         {
-            if (player == null || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
+            if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
             AddPoints(player, Challenges.PlantsGathered, 1);
         }
         void OnCollectiblePickup(Item item, BasePlayer player, CollectibleEntity entity)
         {
             if (item == null) return;
-            if (player == null || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
+            if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
             if (plantShortnames.Contains(item?.info?.shortname))
                 AddPoints(player, Challenges.PlantsGathered, 1);
         }
         void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             var player = entity.ToPlayer();
-            if (player == null || dispenser == null) return;
+            if (player == null || player is NPCPlayer || dispenser == null) return;
 
             if (dispenser.gatherType == ResourceDispenser.GatherType.Tree && configData.ChallengeSettings[Challenges.WoodGathered].Enabled)
                 AddPoints(player, Challenges.WoodGathered, item.amount);
@@ -336,15 +336,15 @@ namespace Oxide.Plugins
                 AddPoints(player, Challenges.RocksGathered, item.amount);               
         }
         void OnEntityBuilt(Planner plan, GameObject go)
-        {
+        {           
             var player = plan.GetOwnerPlayer();
-            if (player == null || !configData.ChallengeSettings[Challenges.StructuresBuilt].Enabled) return;
+            if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.StructuresBuilt].Enabled) return;
 
             AddPoints(player, Challenges.StructuresBuilt, 1);
         }
         void CanBeWounded(BasePlayer player, HitInfo hitInfo)
         {
-            if (player == null || hitInfo == null) return;
+            if (player == null || player is NPCPlayer || hitInfo == null) return;
 
             var attacker = hitInfo.InitiatorPlayer;
             if (attacker != null)
@@ -355,56 +355,61 @@ namespace Oxide.Plugins
         }
         void OnPlayerRecover(BasePlayer player)
         {
+            if (player == null || player is NPCPlayer)
+                return;
+
             if (woundedData.ContainsKey(player.userID))
                 woundedData.Remove(player.userID);
         }
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
-            try
+            if (entity == null || info == null)
+                return;
+
+            var attacker = info.InitiatorPlayer;
+            if (attacker == null || attacker is NPCPlayer)
+                return;
+
+            CheckEntry(attacker);
+                      
+            if (entity is BasePlayer)
             {
-                var attacker = info?.InitiatorPlayer;
-                if (attacker == null) return;
-                CheckEntry(attacker);
-                if (entity is BasePlayer)
+                var victim = entity.ToPlayer();
+
+                if (attacker == victim || IsPlaying(attacker) || IsFriend(attacker.userID, victim.userID) || IsClanmate(attacker.userID, victim.userID) || (configData.Options.IgnoreSleepers && victim.IsSleeping())) return;
+
+                var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
+                if (woundedData.ContainsKey(victim.userID))
                 {
-                    var victim = entity.ToPlayer();
-
-                    if (attacker == victim || IsPlaying(attacker) || IsFriend(attacker.userID, victim.userID) || IsClanmate(attacker.userID, victim.userID) || (configData.Options.IgnoreSleepers && victim.IsSleeping())) return;
-
-                    var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
-                    if (woundedData.ContainsKey(victim.userID))
-                    {
-                        var woundData = woundedData[victim.userID];
-                        if (attacker.userID == woundData.attackerId)
-                            distance = woundData.distance;
-                        woundedData.Remove(victim.userID);
-                    }
-                    AddDistance(attacker, Challenges.PVPKillDistance, (int)distance);
-
-                    if (info.isHeadshot && configData.ChallengeSettings[Challenges.Headshots].Enabled)
-                        AddPoints(attacker, Challenges.Headshots, 1);
-                    var weapon = info?.Weapon?.GetItem()?.info?.shortname;
-                    if (!string.IsNullOrEmpty(weapon))
-                    {
-                        if (bladeShortnames.Contains(weapon) && configData.ChallengeSettings[Challenges.BladeKills].Enabled)
-                            AddPoints(attacker, Challenges.BladeKills, 1);
-                        else if (meleeShortnames.Contains(weapon) && configData.ChallengeSettings[Challenges.MeleeKills].Enabled)
-                            AddPoints(attacker, Challenges.MeleeKills, 1);
-                        else if (weapon == "bow.hunting" && configData.ChallengeSettings[Challenges.ArrowKills].Enabled)
-                            AddPoints(attacker, Challenges.ArrowKills, 1);
-                        else if (weapon == "pistol.revolver" && configData.ChallengeSettings[Challenges.RevolverKills].Enabled)
-                            AddPoints(attacker, Challenges.RevolverKills, 1);
-                        else if (configData.ChallengeSettings[Challenges.PlayersKilled].Enabled) AddPoints(attacker, Challenges.PlayersKilled, 1);
-                    }
+                    var woundData = woundedData[victim.userID];
+                    if (attacker.userID == woundData.attackerId)
+                        distance = woundData.distance;
+                    woundedData.Remove(victim.userID);
                 }
-                else if (entity.GetComponent<BaseNpc>() != null)
+                AddDistance(attacker, Challenges.PVPKillDistance, (int)distance);
+
+                if (info.isHeadshot && configData.ChallengeSettings[Challenges.Headshots].Enabled)
+                    AddPoints(attacker, Challenges.Headshots, 1);
+                var weapon = info?.Weapon?.GetItem()?.info?.shortname;
+                if (!string.IsNullOrEmpty(weapon))
                 {
-                    var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
-                    AddDistance(attacker, Challenges.PVEKillDistance, (int)distance);
-                    AddPoints(attacker, Challenges.AnimalKills, 1);
+                    if (bladeShortnames.Contains(weapon) && configData.ChallengeSettings[Challenges.BladeKills].Enabled)
+                        AddPoints(attacker, Challenges.BladeKills, 1);
+                    else if (meleeShortnames.Contains(weapon) && configData.ChallengeSettings[Challenges.MeleeKills].Enabled)
+                        AddPoints(attacker, Challenges.MeleeKills, 1);
+                    else if (weapon == "bow.hunting" && configData.ChallengeSettings[Challenges.ArrowKills].Enabled)
+                        AddPoints(attacker, Challenges.ArrowKills, 1);
+                    else if (weapon == "pistol.revolver" && configData.ChallengeSettings[Challenges.RevolverKills].Enabled)
+                        AddPoints(attacker, Challenges.RevolverKills, 1);
+                    else if (configData.ChallengeSettings[Challenges.PlayersKilled].Enabled) AddPoints(attacker, Challenges.PlayersKilled, 1);
                 }
             }
-            catch { }          
+            else if (entity.GetComponent<BaseNpc>() != null)
+            {
+                var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
+                AddDistance(attacker, Challenges.PVEKillDistance, (int)distance);
+                AddPoints(attacker, Challenges.AnimalKills, 1);
+            }
         }
         void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
@@ -611,8 +616,7 @@ namespace Oxide.Plugins
             var titles = titleCache.OrderByDescending(x => configData.ChallengeSettings[x.Key].Priority).Reverse();
             foreach (var title in titles)
             {
-                if (!configData.ChallengeSettings[title.Key].Enabled) continue;
-                if (title.Value.UserID == 0U) continue;
+                if (!configData.ChallengeSettings[title.Key].Enabled || title.Value.UserID == 0U) continue;
                 if (title.Value.UserID.ToString() == player.Id)
                 {
                     playerTitle += $"{(count > 0 ? " " : "")}{configData.Options.TagFormat.Replace("{TAG}", GetGroupName(title.Key))}";

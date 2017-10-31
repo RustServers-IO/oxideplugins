@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Build", "Reneb & NoGrod", "1.1.8", ResourceId = 715)]
+    [Info("Build", "Reneb & NoGrod", "1.1.9", ResourceId = 715)]
     class Build : RustPlugin
     {
         class BuildPlayer : MonoBehaviour
@@ -57,7 +57,7 @@ namespace Oxide.Plugins
                 if (!useGui) return;
                 Game.Rust.Cui.CuiHelper.DestroyUi(player, "BuildMsg");
                 //Game.Rust.Cui.CuiHelper.AddUi(player, json.Replace("{msg}", Msg));
-                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(json.Replace("{msg}", Msg)));
+                CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", json.Replace("{msg}", Msg));
             }
 
             public void DestroyGui()

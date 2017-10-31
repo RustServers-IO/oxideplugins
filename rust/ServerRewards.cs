@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.4.6", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.4.62", ResourceId = 1751)]
     class ServerRewards : RustPlugin
     {
         #region Fields
@@ -35,6 +35,7 @@ namespace Oxide.Plugins
         private bool isILReady;
         private string color1;
         private string color2;
+        private int blueprintId = -1887162396;
 
         private Dictionary<string, string> uiColors = new Dictionary<string, string>();
         private Dictionary<ulong, int> playerRP = new Dictionary<ulong, int>();
@@ -909,7 +910,7 @@ namespace Oxide.Plugins
                 if (item.amount > 1)
                     UI.CreateLabel(ref container, panelName, $"{color1}x{item.amount}</color>", 16, $"{posMin.x + 0.02} {posMin.y + 0.09}", $"{posMax.x - 0.02} {posMax.y - 0.02}", TextAnchor.LowerLeft);
             }
-            UI.CreateLabel(ref container, panelName, item.displayName, 14, $"{posMin.x} {posMin.y + 0.04}", $"{posMax.x} {posMin.y + 0.09}");
+            UI.CreateLabel(ref container, panelName, $"{item.displayName}{(item.isBp ? " " + msg("isBp") : "")}", 14, $"{posMin.x} {posMin.y + 0.04}", $"{posMax.x} {posMin.y + 0.09}");
             UI.CreateButton(ref container, panelName, uiColors["buttonbg"], $"{msg("storeCost")}: {item.cost}", 14, $"{posMin.x + 0.015} {posMin.y}", $"{posMax.x - 0.015} {posMin.y + 0.04}", $"SRUI_BuyItem {itemId}");
         }
         private void CreateKitCommandEntry(ref CuiElementContainer container, string panelName, string displayName, string name, string description, int cost, int number, bool kit, string icon = null)
@@ -1115,7 +1116,7 @@ namespace Oxide.Plugins
                     if (TakePoints(player.userID, item.cost, item.displayName) != null)
                     {
                         GiveItem(player, itemname);
-                        PopupMessage(player, string.Format(msg("buyItem", player.UserIDString), item.amount, item.displayName));
+                        PopupMessage(player, string.Format(msg("buyItem", player.UserIDString) + $"{(item.isBp ? " " + msg("isBp", player.UserIDString) : "")}", item.amount, item.displayName));
                         return;
                     }
                 }
@@ -1202,7 +1203,7 @@ namespace Oxide.Plugins
                     PopupMessage(player, msg("notEnoughCoins", player.UserIDString));
                     return;
                 }
-                if ((bool)Economics?.Call("Withdraw", player.userID, (double)configData.Exchange.Economics)) ;
+                if ((bool)Economics?.Call("Withdraw", player.userID, (double)configData.Exchange.Economics))
                 {
                     AddPoints(player.userID, configData.Exchange.RP);
                     PopupMessage(player, $"{msg("exchange", player.UserIDString)}{configData.Exchange.Economics} {msg("storeCoins", player.UserIDString)} for {configData.Exchange.RP} {msg("storeRP", player.UserIDString)}");
@@ -1241,7 +1242,7 @@ namespace Oxide.Plugins
             int amount = args.GetInt(1);
             string name = (covalence.Players.FindPlayerById(ID)?.Object as BasePlayer)?.displayName ?? ID;
             var hasPoints = CheckPoints(player.userID);
-            if (hasPoints is int && (int)hasPoints >= amount)
+            if (hasPoints >= amount)
             {
                 if (TakePoints(player.userID, amount) != null)
                 {
@@ -1545,7 +1546,13 @@ namespace Oxide.Plugins
             if (rewardData.items.ContainsKey(itemkey))
             {
                 var entry = rewardData.items[itemkey];
-                Item item = ItemManager.CreateByName(entry.shortname, entry.amount, entry.skinId);
+                Item item = null;
+                if (entry.isBp)
+                {
+                    item = ItemManager.CreateByItemID(blueprintId, entry.amount, entry.skinId);
+                    item.blueprintTarget = ItemManager.itemList.Find(x => x.shortname == entry.shortname)?.itemid ?? 0;
+                }
+                else item = ItemManager.CreateByName(entry.shortname, entry.amount, entry.skinId);
                 player.GiveItem(item, BaseEntity.GiveItemReason.PickedUp);
             }
         }
@@ -1727,7 +1734,7 @@ namespace Oxide.Plugins
             }
             return obj;
         }
-        private bool AddItem(string shortname, ulong skinId, int amount, int cost, string category)
+        private bool AddItem(string shortname, ulong skinId, int amount, int cost, string category, bool isBp = false)
         {
             Category cat = (Category)Enum.Parse(typeof(Category), category, true);
 
@@ -1737,7 +1744,8 @@ namespace Oxide.Plugins
                 cost = cost,
                 shortname = shortname,
                 skinId = skinId,
-                category = cat
+                category = cat,
+                isBp = isBp
             };
             string itemName = $"{newItem.shortname}_{newItem.skinId}";
 
@@ -2229,7 +2237,7 @@ namespace Oxide.Plugins
                 if (isAuth(player))
                 {
                     SendMSG(player, msg("chatAddKit", player.UserIDString), msg("addSynKit", player.UserIDString));
-                    SendMSG(player, msg("chatAddItem", player.UserIDString), msg("addSynItem", player.UserIDString));
+                    SendMSG(player, msg("chatAddItem2", player.UserIDString), msg("addSynItem2", player.UserIDString));
                     SendMSG(player, msg("chatAddCommand", player.UserIDString), msg("addSynCommand", player.UserIDString));
                     SendMSG(player, msg("editSynKit1", player.UserIDString), msg("editSynKit", player.UserIDString));
                     SendMSG(player, msg("editSynItem1", player.UserIDString), msg("editSynItem2", player.UserIDString));
@@ -2342,18 +2350,19 @@ namespace Oxide.Plugins
                                                     displayName = item.info.displayName.english,
                                                     skinId = item.skin,
                                                     shortname = item.info.shortname,
-                                                    category = cat
+                                                    category = cat,
+                                                    isBp = (args.Length >= 4 && args[3].ToLower() == "bp")
                                                 };
                                                 string key = $"{item.info.shortname}_{item.skin}";
                                                 if (rewardData.items.ContainsKey(key))
                                                     key += $"_{UnityEngine.Random.Range(0, 1000)}";
                                                 rewardData.items.Add(key, newItem);
-                                                SendMSG(player, string.Format(msg("addSuccess", player.UserIDString), "item", newItem.displayName, i));
+                                                SendMSG(player, string.Format(msg("addSuccess", player.UserIDString), "item", newItem.displayName + $"{(newItem.isBp ? " " + msg("isBp", player.UserIDString) : "")}", i));
                                                 SaveRewards();
                                             }
                                             else SendMSG(player, "", msg("itemInHand", player.UserIDString));
                                         }
-                                        else SendMSG(player, "", msg("addSynItem", player.UserIDString));
+                                        else SendMSG(player, "", msg("addSynItem2", player.UserIDString));
                                         return;
                                     case "command":
                                         if (args.Length == 5)
@@ -2591,7 +2600,7 @@ namespace Oxide.Plugins
                 SendReply(conArgs, "--- List Rewards ---");
                 SendReply(conArgs, "rewards list <items | kits | commands> - Display a list of rewards for the specified category, which information on each item");
                 SendReply(conArgs, "--- Add Rewards ---");
-                SendReply(conArgs, "rewards add item <shortname> <skinId> <amount> <cost> - Add a new reward item to the store");
+                SendReply(conArgs, "rewards add item <shortname> <skinId> <amount> <cost> <opt:bp> - Add a new reward item to the store (add \"bp\" to add the item as a blueprint)");
                 SendReply(conArgs, "rewards add kit <name> <kitname> <cost> - Add a new reward kit to the store");
                 SendReply(conArgs, "rewards add command <name> <command> <cost> - Add a new reward command to the store");
                 SendReply(conArgs, "--- Editing Rewards ---");
@@ -2649,7 +2658,7 @@ namespace Oxide.Plugins
                             switch (args[1].ToLower())
                             {
                                 case "item":
-                                    if (args.Length == 6)
+                                    if (args.Length >= 6)
                                     {
                                         var shortname = args[2];
                                         ulong skinId;
@@ -2682,13 +2691,14 @@ namespace Oxide.Plugins
                                                 displayName = itemDef.displayName.translated,
                                                 skinId = skinId,
                                                 shortname = shortname,
-                                                category = cat
+                                                category = cat,
+                                                isBp = (args.Length >= 7 && args[6].ToLower() == "bp")
                                             };
                                             string key = $"{shortname}_{skinId}";
                                             if (rewardData.items.ContainsKey(key))
                                                 key += $"_{UnityEngine.Random.Range(0, 1000)}";
                                             rewardData.items.Add(key, newItem);
-                                            SendReply(conArgs, string.Format(msg("addSuccess"), "item", newItem.displayName, cost));
+                                            SendReply(conArgs, string.Format(msg("addSuccess"), "item", newItem.displayName + $"{(newItem.isBp ? " " + msg("isBp") : "")}", cost));
                                             SaveRewards();
                                         }
                                         else SendReply(conArgs, "Invalid item selected!");
@@ -3415,6 +3425,7 @@ namespace Oxide.Plugins
                 public string shortname, displayName, customIcon;
                 public int amount, cost;
                 public ulong skinId;
+                public bool isBp;
                 public Category category;
             }
             public class RewardKit
@@ -3516,8 +3527,8 @@ namespace Oxide.Plugins
             {"noCommandRem", "Unable to find a reward command with that name" },
             {"remSuccess", "You have successfully removed {0} from the rewards list" },
             {"addSynKit", "/rewards add kit <Name> <kitname> <cost>" },
-            {"addSynItem", "/rewards add item <cost>" },
-            {"addSynItemCon", "/rewards add item <shortname> <skinId> <amount> <cost>" },
+            {"addSynItem2", "/rewards add item <cost> <opt:bp>" },
+            {"addSynItemCon", "rewards add item <shortname> <skinId> <amount> <cost> <opt:bp>" },
             {"addSynCommand", "/rewards add command <Name> <command> <cost>" },
             {"editSynItem2", "/rewards edit item <ID> <cost|amount|name|icon> \"info here\"" },
             {"editSynItem1", "- Edit a reward item information" },
@@ -3546,7 +3557,7 @@ namespace Oxide.Plugins
             {"chatListOpt", "/rewards list <items|commands|kits>"},
             {"chatListOpt1", " - Display rewards with their ID numbers and info in F1 console"},
             {"chatAddKit", " - Add a new reward kit"},
-            {"chatAddItem", " - Add a new reward item"},
+            {"chatAddItem2", " - Add a new reward item (add \"bp\" to the end of the command to add a blueprint)"},
             {"chatAddCommand", " - Add a new reward command"},
             {"chatRemove", " - Removes a reward"},
             {"chatRefer", " - Acknowledge your referral from <playername>"},
@@ -3581,16 +3592,7 @@ namespace Oxide.Plugins
             {"exchange", "You have exchanged " },
             {"itemInHand", "You must place the item you wish to add in your hands" },
             {"itemIDHelp", "You must enter the items number. Type /rewards list to see available entries" },
-            {"noProfile", "{0} does not have any saved data" },
-            {"permAdd1", "/rewards permission add <permname> <amount>" },
-            {"permAdd2", " - Add a new permission to give a different amount of playtime points" },
-            {"permRem1", "/rewards permission remove <permname>" },
-            {"permRem2", " - Remove a custom permission" },
-            {"permCreated", "You have created a new permission {0} with a point value of {1}" },
-            {"permRemoved", "You have successfully removed the permission {0}" },
-            {"permList1", "/rewards permission list" },
-            {"permList2", " - Lists all custom permissions and their point value" },
-            {"permListSyn", "Permission: {0}, Value: {1}" },
+            {"noProfile", "{0} does not have any saved data" },           
             {"storeTitle", "Reward Store" },
             {"storeKits", "Kits" },
             {"storeCommands", "Commands" },
@@ -3650,7 +3652,8 @@ namespace Oxide.Plugins
             {"Misc", "Misc" },
             {"Component", "Components" },
             {"imWait", "You must wait until ImageLibrary has finished processing its images" },
-            {"useCustom", "Use Custom Loot" }
+            {"useCustom", "Use Custom Loot" },
+            {"isBp", "(BP)" }
         };
         #endregion
     }

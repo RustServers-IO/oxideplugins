@@ -2,7 +2,7 @@
     "name": "GUI Announcements",
     "description": "Creates announcements with custom messages across the top of every player's screen.",
     "author": "JoeSheep",
-    "version": "1.23.81",
+    "version": "1.23.83",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/gui-announcements.1222",

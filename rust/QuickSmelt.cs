@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("QuickSmelt", "Wulf/Fujikura", "3.0.2", ResourceId = 1067)]
+    [Info("QuickSmelt", "Wulf/Fujikura", "3.0.3", ResourceId = 1067)]
     [Description("Increases the speed of the furnace smelting")]
 
     class QuickSmelt : RustPlugin
@@ -34,7 +34,7 @@ namespace Oxide.Plugins
 		Dictionary<string, object> ovenDefaults()
         {
             var dp = new Dictionary<string, object>();
-            var baseOvens = Resources.FindObjectsOfTypeAll<BaseOven>().Where(c => !c.isActiveAndEnabled).Cast<BaseEntity>().ToList();
+            var baseOvens = Resources.FindObjectsOfTypeAll<BaseOven>().Where(c => !c.isActiveAndEnabled && !(c is BaseFuelLightSource)).Cast<BaseEntity>().ToList();
 			foreach (var oven in baseOvens)
 			{
 				if (!dp.ContainsKey(oven.ShortPrefabName))
@@ -283,8 +283,8 @@ namespace Oxide.Plugins
 					}
 				}				
 			}
-
-			var baseOvens = Resources.FindObjectsOfTypeAll<BaseOven>().Where(c => c.isActiveAndEnabled).Cast<BaseEntity>().ToList();
+			
+			var baseOvens = Resources.FindObjectsOfTypeAll<BaseOven>().Where(c => c.isActiveAndEnabled && !(c is BaseFuelLightSource)).Cast<BaseEntity>().ToList();
 			foreach (var oven in baseOvens)
 			{
 				if (usePermissions && !permission.UserHasPermission(oven.OwnerID.ToString(), permAllow))
@@ -312,7 +312,7 @@ namespace Oxide.Plugins
 		
 		object OnOvenToggle(BaseOven oven, BasePlayer player)
 		{
-			if (expertModeEnabled || (oven.needsBuildingPrivilegeToUse && !player.CanBuild()) || (usePermissions && !permission.UserHasPermission(oven.OwnerID.ToString(), permAllow)))
+			if (expertModeEnabled || oven is BaseFuelLightSource || (oven.needsBuildingPrivilegeToUse && !player.CanBuild()) || (usePermissions && !permission.UserHasPermission(oven.OwnerID.ToString(), permAllow)))
 				return null;
 			if (!oven.HasFlag(BaseEntity.Flags.On))
 			{
@@ -374,8 +374,8 @@ namespace Oxide.Plugins
 		
 		void OnConsumeFuel(BaseOven oven, Item fuel, ItemModBurnable burnable)
         {
-			// Check if furnance is usable
-            if (!expertModeEnabled || oven == null) return;
+			// Check if furnace is usable
+            if (!expertModeEnabled || oven == null || oven is BaseFuelLightSource) return;
 
             // Check if permissions are enabled and player has permission
             if (usePermissions && !permission.UserHasPermission(oven.OwnerID.ToString(), permAllow)) return;

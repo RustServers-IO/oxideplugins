@@ -2,7 +2,7 @@
     "name": "Smart Chat Bot",
     "description": "I send chat messages based on some triggers or time",
     "author": "",
-    "version": "1.5",
+    "version": "1.6",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/smart-chat-bot.2435",

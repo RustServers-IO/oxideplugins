@@ -5,12 +5,10 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-
-    [Info("Tracker", "Maurice", "1.0.2", ResourceId = 1278)]
+    [Info("Tracker", "Maurice", "1.0.3", ResourceId = 1278)]
     [Description("Check the amount of an Item on the Map and where it is stored in")]
     class Tracker : RustPlugin
     {
-
         #region Variables
 
         private bool Changed;
@@ -26,11 +24,10 @@ namespace Oxide.Plugins
             LoadVariables();
         }
 
-        void Loaded()
+        private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-
                 ["CONTAINER_FOUND"] = "{0} has {1} at position {2}",
                 ["FOUND"] = "{0}'s found",
                 ["INVALID_MINIMUM_AMOUNT"] = "Invalid minimum amount! Try again!",
@@ -54,7 +51,6 @@ namespace Oxide.Plugins
                 ["WRONG_SYNTAX"] = "Wrong Syntax! Try again!"
 
             }, this);
-
         }
 
         #endregion
@@ -110,7 +106,6 @@ namespace Oxide.Plugins
 
             Int64 count = 0;
 
-
             foreach (TrackedItem t in items_list)
             {
                 if (t != null)
@@ -118,7 +113,6 @@ namespace Oxide.Plugins
             }
 
             SendReply(arg, string.Format(lang.GetMessage("ITEM_FOUND", this), String.Format("{0:N0}", count), item));
-
         }
 
         /// <summary>
@@ -128,7 +122,6 @@ namespace Oxide.Plugins
         [ConsoleCommand("trackitem")]
         void cmdTrackItem(ConsoleSystem.Arg arg)
         {
-
             if (!CheckAccess(arg))
                 return;
 
@@ -167,7 +160,6 @@ namespace Oxide.Plugins
 
             List<TrackedItem> items_list = new List<TrackedItem>();
 
-
             if (location.Equals("all"))
             {
                 items_list.AddRange(findChestItems(item, min_amount, arg));
@@ -200,7 +192,6 @@ namespace Oxide.Plugins
         [ConsoleCommand("logplayeritem")]
         void cmdLogPlayerItem(ConsoleSystem.Arg arg)
         {
-
             if (!CheckAccess(arg))
                 return;
 
@@ -224,14 +215,8 @@ namespace Oxide.Plugins
             items_list.AddRange(findChestItem(item, 0, arg));
             items_list.AddRange(findPlayerItem(item, 0));
 
-            DateTime dt = DateTime.Now;
-
-            string savefile = $"oxide/logs/tracker-player_{dt.Year}-{dt.Month}-{dt.Day}_{dt.Hour}-{dt.Minute}-{dt.Second}.txt";
-
-            SendReply(arg, string.Format(lang.GetMessage("SAVED_TO", this), savefile));
-
-            ConVar.Server.Log(savefile, $"Logged Item: {item}");
-
+            SendReply(arg, string.Format(lang.GetMessage("SAVED_TO", this), "oxide/logs"));
+            LogToFile("player", $"Logged Item: {item}", this);
 
             var newList = items_list.OrderByDescending(x => x.count)
                   .ThenBy(x => x.steamid)
@@ -239,12 +224,11 @@ namespace Oxide.Plugins
 
             for (int i = 0; i < newList.Count; i++)
             {
-
                 PlayerItem t;
                 t = newList[i];
                 if (t != null)
                 {
-                    ConVar.Server.Log(savefile, string.Format(lang.GetMessage("PLAYER_FOUND_ITEM", this), FindPlayerByID(t.steamid), t.steamid, t.count, item));
+                    LogToFile("player", string.Format(lang.GetMessage("PLAYER_FOUND_ITEM", this), FindPlayerByID(t.steamid), t.steamid, t.count, item), this);
                 }
             }
         }
@@ -273,29 +257,21 @@ namespace Oxide.Plugins
 
             List<TrackedItem> items_list = new List<TrackedItem>();
 
-
             items_list.AddRange(findChestItems(item, 0, arg));
             items_list.AddRange(findPlayerItems(item, 0));
 
-            DateTime dt = DateTime.Now;
-
-            string savefile = $"oxide/logs/tracker_{dt.Year}-{dt.Month}-{dt.Day}_{dt.Hour}-{dt.Minute}-{dt.Second}.txt";
-
-            SendReply(arg, string.Format(lang.GetMessage("SAVED_TO", this), savefile));
-
-            ConVar.Server.Log(savefile, $"Logged Item: {item}");
+            SendReply(arg, string.Format(lang.GetMessage("SAVED_TO", this), "oxide/logs"));
+            LogToFile("item", $"Logged Item: {item}", this);
 
             for (int i = 0; i < items_list.Count; i++)
             {
-                
                 TrackedItem t;
                 t = items_list[i];
                 if (t != null)
                 {
-                    ConVar.Server.Log(savefile, string.Format(lang.GetMessage("CONTAINER_FOUND", this), t.container_name, t.count, t.location));
+                    LogToFile("item", string.Format(lang.GetMessage("CONTAINER_FOUND", this), t.container_name, t.count, t.location), this);
                 }
             }
-
         }
 
         #endregion
@@ -581,7 +557,6 @@ namespace Oxide.Plugins
 
         void LoadVariables()
         {
-
             neededAuthLevel = Convert.ToInt32(GetConfig("Generic", "Needed Auth Level", 1));
 
             if (!Changed) return;
@@ -590,7 +565,5 @@ namespace Oxide.Plugins
         }
 
         #endregion
-
     }
-
 }

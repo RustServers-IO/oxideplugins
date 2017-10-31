@@ -1,0 +1,16 @@
+{
+    "name": "ResearchControl",
+    "description": "This plugin allows you to manage all what can be done with the research table. Speed and cost.",
+    "author": "Vlad-00003",
+    "version": "1.0.3",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/researchcontrol.2659",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

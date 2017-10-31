@@ -1,12 +1,11 @@
 ﻿using System;
 using System.IO;
 using System.Collections.Generic;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.7")]
+    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.10", ResourceId = 2383)]
     [Description("Adds the option to set off C4 manually without a timer")]
     class TriggeredExplosiveCharges : RustPlugin
     {
@@ -73,7 +72,7 @@ namespace Oxide.Plugins
                             else
                                 triggeredExplosives.Add(bn.GetComponent<TimedExplosive>());
                         }
-                            
+
                         else
                             deployedExplosives.RemoveAt(i);
                     }
@@ -109,6 +108,9 @@ namespace Oxide.Plugins
                 for (int i=fakeExplosives.Count-1; i > -1; i--)
                     FakeC4_To_RealC4(fakeExplosives[i]);
 
+                if (configuration.TRIGGER_ONE_TIME_USE && triggeredExplosives.Count > 0)
+                        trigger.Remove();
+                    
                 Instance.timer.Once(0.1f, () =>
                 {
                     foreach (TimedExplosive te in triggeredExplosives)
@@ -118,7 +120,7 @@ namespace Oxide.Plugins
                     saveData.deployedExplosives[player.userID].Clear();
                     SaveDataToFile();
                 });
-                
+
             }
 
             private void RealC4_To_FakeC4(TimedExplosive realC4)
@@ -205,7 +207,7 @@ namespace Oxide.Plugins
                 trigger.RemoveFromContainer();
                 newItem.MoveToContainer(player.inventory.containerBelt, position);
 
-                trigger = newItem; 
+                trigger = newItem;
             }
 
             public void UpdateActiveItem()
@@ -270,7 +272,7 @@ namespace Oxide.Plugins
 
                 else
                     ChatMessage(player, L_CRAFTING_FAILED_RESOURCES, new object[] {
-                        ItemManager.FindItemDefinition(configuration.CRAFTING_ITEM_1_ID).displayName.translated + " (" + 
+                        ItemManager.FindItemDefinition(configuration.CRAFTING_ITEM_1_ID).displayName.translated + " (" +
                         configuration.CRAFTING_ITEM_1_NEEDED + "), " + ItemManager.FindItemDefinition(configuration.CRAFTING_ITEM_2_ID).displayName.translated
                         + " (" + configuration.CRAFTING_ITEM_2_NEEDED + ")" });
             }
@@ -299,7 +301,7 @@ namespace Oxide.Plugins
                     allManagers[playerID].Pickup(entity.GetComponent<DroppedItem>());
                     item.amount = 1;
                 }
-                    
+
             }
 
             private void Pickup(DroppedItem item)
@@ -435,22 +437,20 @@ namespace Oxide.Plugins
                 basecombat = entity.GetComponentInParent<BaseCombatEntity>();
                 basecombat.ChangeHealth(basecombat.MaxHealth());
 
-                Signage sign = entity.GetComponentInParent<Signage>();
-                MemoryStream stream = new MemoryStream();
-                byte[] texture = Convert.FromBase64String(signInfo.texture);
-
-                stream.Write(texture, 0, texture.Length);
-                sign.textureID = FileStorage.server.Store(stream, FileStorage.Type.png, sign.net.ID);
-
-                stream.Position = 0;
-                stream.SetLength(0);
-
-                sign.SetFlag(BaseEntity.Flags.Locked, signInfo.locked);
-                sign.SendNetworkUpdate();
+                ApplySignTexture(entity.GetComponentInParent<Signage>());
 
                 SaveDataToFile();
 
                 return vendingMachine;
+            }
+
+            public static void ApplySignTexture (Signage sign)
+            {
+                byte[] texture = Convert.FromBase64String(signInfo.texture);
+                sign.textureID = FileStorage.server.Store(texture, FileStorage.Type.png, sign.net.ID);
+
+                sign.SetFlag(BaseEntity.Flags.Locked, signInfo.locked);
+                sign.SendNetworkUpdate();
             }
 
             private static BaseEntity CreateEntity(Vector3 placementPos, float placementRotY, Vector3 pos, Vector3 rot, string prefabName, BasePlayer player)
@@ -525,12 +525,17 @@ namespace Oxide.Plugins
                 LayerMask.GetMask(new string[] { "Construction", "Deployed", "Terrain", "World", "Water", "Default"})))
             {
                 VendingMachine vendingMachine = hitinfo.transform.GetComponent<VendingMachine>();
-                if (vendingMachine) 
+                Signage sign = hitinfo.transform.GetComponent<Signage>();
+                if (vendingMachine)
                 {
                     TriggerShop.Refill(vendingMachine);
                     TriggerShop.SetupSellOrder(vendingMachine);
                 }
-                
+                else if (sign)
+                {
+                    TriggerShop.ApplySignTexture(sign);
+                    return;
+                }
                 else
                     vendingMachine = TriggerShop.Place(hitinfo.point, player.GetNetworkRotation().y, player);
 
@@ -547,7 +552,7 @@ namespace Oxide.Plugins
             GiveTrigger(player, args);
         }
 
-        [ConsoleCommand("tec.givetrigger")] 
+        [ConsoleCommand("tec.givetrigger")]
         void GiveTrigger_Console(ConsoleSystem.Arg arg)
         {
             if (arg.Player() != null)
@@ -655,13 +660,12 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PERMISSION_PLACE, this);
             permission.RegisterPermission(PERMISSION_CRAFTING, this);
             permission.RegisterPermission(PERMISSION_NOTRIGGER, this);
-            
+
             Instance = this;
 
-            LoadDefaultMessages();
             LoadDefaultConfig();
         }
-        
+
         void Unload()
         {
             foreach (BasePlayer player in BasePlayer.activePlayerList)
@@ -735,6 +739,8 @@ namespace Oxide.Plugins
             public const string S_C4_BEEP_DURATION = "TRIGGERED C4 | Disable beeping sound after duration (minimum: 5; infinite: -1) [seconds]";
             public const string S_C4_ALLOW_PICKUP = "TRIGGERED C4 | Allow C4 pickup (only after beeping got disabled) [true, false]";
 
+            public const string S_TRIGGER_ONE_TIME_USE = "TRIGGER | Trigger destroys itself after using it once [true, false]";
+
             public readonly int CURRENCY_ID;
             public readonly int CURRENCY_NEEDED;
 
@@ -748,9 +754,11 @@ namespace Oxide.Plugins
             public readonly int C4_BEEP_DURATION;
             public readonly bool C4_ALLOW_PICKUP;
 
-            public Configuration(int currency_id, int currency_needed, bool crafting_enabled, 
+            public readonly bool TRIGGER_ONE_TIME_USE;
+
+            public Configuration(int currency_id, int currency_needed, bool crafting_enabled,
                                  int item_1_id, int item_1_needed, int item_2_id, int item_2_needed,
-                                 int beepDuration, bool allowPickup)
+                                 int beepDuration, bool allowPickup, bool oneTimeUse)
             {
 
                 CURRENCY_ID = currency_id;
@@ -764,6 +772,8 @@ namespace Oxide.Plugins
 
                 C4_BEEP_DURATION = beepDuration;
                 C4_ALLOW_PICKUP = allowPickup;
+
+                TRIGGER_ONE_TIME_USE = oneTimeUse;
             }
         }
 
@@ -780,6 +790,8 @@ namespace Oxide.Plugins
             int beepDuration;
             bool allowPickup;
 
+            bool oneTimeUse;
+
             Config[Configuration.S_CURRENCY_ID] = currency_shortname = GetConfig(Configuration.S_CURRENCY_ID, "techparts");
             Config[Configuration.S_CURRENCY_NEEDED] = currency_needed = GetConfig(Configuration.S_CURRENCY_NEEDED, 5);
 
@@ -791,6 +803,8 @@ namespace Oxide.Plugins
 
             Config[Configuration.S_C4_BEEP_DURATION] = beepDuration = GetConfig(Configuration.S_C4_BEEP_DURATION, 10);
             Config[Configuration.S_C4_ALLOW_PICKUP] = allowPickup = GetConfig(Configuration.S_C4_ALLOW_PICKUP, false);
+
+            Config[Configuration.S_TRIGGER_ONE_TIME_USE] = oneTimeUse = GetConfig(Configuration.S_TRIGGER_ONE_TIME_USE, false);
 
             ItemDefinition item_1_definition = ItemManager.FindItemDefinition(item_1_shortname);
             ItemDefinition item_2_definition = ItemManager.FindItemDefinition(item_2_shortname);
@@ -809,11 +823,11 @@ namespace Oxide.Plugins
 
             if (beepDuration!=-1 && beepDuration < 5.0f) beepDuration = 5;
 
-            configuration = new Configuration(currency_id, currency_needed, 
-                craft, item_1_id, item_1_needed, item_2_id, item_2_needed, 
-                beepDuration, allowPickup);
+            configuration = new Configuration(currency_id, currency_needed,
+                craft, item_1_id, item_1_needed, item_2_id, item_2_needed,
+                beepDuration, allowPickup, oneTimeUse);
 
-            SaveConfig(); 
+            SaveConfig();
         }
 
         public static void SaveDataToFile() { Core.Interface.Oxide.DataFileSystem.WriteObject(Instance.Name, saveData); }
@@ -857,7 +871,7 @@ namespace Oxide.Plugins
         static void ServerMessage(string key) { Instance.Puts(Instance.lang.GetMessage(key, Instance)); }
         static void ServerMessage(string key, object[] args) { Instance.Puts(String.Format(Instance.lang.GetMessage(key, Instance), args)); }
 
-        void LoadDefaultMessages()
+        private new void LoadDefaultMessages()
         {
             // English
             lang.RegisterMessages(new Dictionary<string, string>

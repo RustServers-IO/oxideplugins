@@ -1,4 +1,5 @@
 ﻿// Requires: EMInterface
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,32 +16,32 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("Event Manager", "Reneb / k1lly0u", "3.0.73", ResourceId = 740)]
+    [Info("Event Manager", "Reneb / k1lly0u", "3.0.75", ResourceId = 740)]
     class EventManager : RustPlugin
     {
-        #region Fields        
+        #region Fields
         [PluginReference] EMInterface EMInterface;
         [PluginReference] Plugin Economics;
-        [PluginReference] Plugin FriendlyFire;       
-        [PluginReference] Plugin Kits;        
+        [PluginReference] Plugin FriendlyFire;
+        [PluginReference] Plugin Kits;
         [PluginReference] Plugin ServerRewards;
         [PluginReference] Plugin Spawns;
         [PluginReference] Plugin ZoneManager;
 
         MethodInfo killLifestory;
 
-        static EventManager ins;
-        static List<MessageData> popupQueue;
-        static List<BasePlayer> unnetworkedPlayers;
+        private static EventManager ins;
+        private static List<MessageData> popupQueue;
+        private static List<BasePlayer> unnetworkedPlayers;
 
         private Dictionary<ulong, Timer> KillTimers;
         private RestorationManager Restoration;
 
         private GameTimer _GameTimer;
-        private WaveTimer _WaveTimer;        
+        private WaveTimer _WaveTimer;
         private DynamicConfigFile P_Stats;
         private DynamicConfigFile RestoreData;
-        
+
         private bool _GodEnabled;
         private bool debugEnabled = false;
 
@@ -57,7 +58,7 @@ namespace Oxide.Plugins
         public List<EMInterface.AEConfig> ValidAutoEvents;
         public Dictionary<string, Events> ValidEvents;
         public Events _Event;
-        
+
         public string _EventName;
         public string _CurrentEventConfig;
         public int _AutoEventNum = 0;
@@ -75,7 +76,7 @@ namespace Oxide.Plugins
         public bool _Launched;
         public bool _RandomizeAuto;
         public bool _TimerStarted;
-                
+
         public List<Timer> EventTimers;
         public Dictionary<ulong, Timer> RespawnTimers;
         public Dictionary<string, EventSetting> EventGames;
@@ -83,7 +84,7 @@ namespace Oxide.Plugins
         public SpawnManager SpawnCount;
         public List<EventPlayer> EventPlayers;
         public List<BasePlayer> Joiners;
-        
+
         public Statistics GameStatistics;
         public GameMode EventMode;
         #endregion
@@ -150,7 +151,7 @@ namespace Oxide.Plugins
             }
         }
         private void AddUI(CuiElementContainer element)
-        {            
+        {
             foreach (var player in EventPlayers)
             {
                 if (player.inEvent && player.enabled)
@@ -195,7 +196,7 @@ namespace Oxide.Plugins
             PopupPanels.Clear();
         }
 
-        
+
         #endregion
 
         #region Scoreboards
@@ -219,14 +220,14 @@ namespace Oxide.Plugins
             var type = GameScores.ScoreType;
             var additional = GameScores.Additional;
 
-            var Main = UI.CreateElementContainer(ScoreUI, "0.1 0.1 0.1 0.7", "0.82 0.55", "0.99 0.98", false, "Hud");           
+            var Main = UI.CreateElementContainer(ScoreUI, "0.1 0.1 0.1 0.7", "0.82 0.55", "0.99 0.98", false, "Hud");
 
             int count = 0;
             if (!string.IsNullOrEmpty(additional))
             {
                 UI.CreateLabel(ref Main, ScoreUI, "", additional, 12, $"0.05 {GetHeight(count)}", $"0.95 {GetHeight(count) + 0.06f}");
                 count++;
-            }          
+            }
             if (scores != null)
             {
                 var topScores = scores.Take(11);
@@ -258,7 +259,7 @@ namespace Oxide.Plugins
             foreach (var eventPlayer in EventPlayers)
             {
                 CreateScoreboard(eventPlayer.GetPlayer());
-            }                
+            }
         }
         float GetHeight(int num) => 0.89f - (0.06f * num);
         void DestroyScoreboard(BasePlayer player) => CuiHelper.DestroyUi(player, ScoreUI);
@@ -268,7 +269,7 @@ namespace Oxide.Plugins
 
         #region Oxide Hooks
         void Loaded()
-        {            
+        {
             Unsubscribe(nameof(OnEntityTakeDamage));
             Unsubscribe(nameof(OnPlayerAttack));
             Unsubscribe(nameof(OnItemPickup));
@@ -282,7 +283,7 @@ namespace Oxide.Plugins
             Restoration = new RestorationManager();
 
             killLifestory = typeof(BasePlayer).GetMethod("LifeStoryEnd", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
-        }        
+        }
         void OnServerInitialized()
         {
             lang.RegisterMessages(Messages, this);
@@ -298,7 +299,7 @@ namespace Oxide.Plugins
                 rust.RunServerCommand("oxide.unload", new object[] { "EventManager" });
                 return;
             }
-            if (!Kits)            
+            if (!Kits)
                 PrintError("Kits is not installed! Unable to issue any weapon kits");
             SetVars();
             LoadVariables();
@@ -308,23 +309,23 @@ namespace Oxide.Plugins
             foreach(var player in BasePlayer.activePlayerList)
                 CheckForRestore(player);
 
-            timer.In(5, ()=> 
+            timer.In(5, ()=>
             {
                 Interface.CallHook("RegisterGame");
                 ValidateAllEvents();
-            });                        
-        }                   
+            });
+        }
         void Unload()
         {
             SaveStatistics();
-            SaveRestoreInfo();            
+            SaveRestoreInfo();
             if (_Open) CloseEvent();
             if (_Started)
             {
                 foreach(var eventPlayer in EventPlayers)
                 {
                     eventPlayer?.GetPlayer().DieInstantly();
-                    UnityEngine.Object.DestroyImmediate(eventPlayer);                    
+                    UnityEngine.Object.DestroyImmediate(eventPlayer);
                 }
             }
             else DestroyGame();
@@ -353,12 +354,12 @@ namespace Oxide.Plugins
                 {
                     UnityEngine.Object.DestroyImmediate(eventPlayer);
                     return;
-                }                
+                }
                 if (eventPlayer.inEvent && !eventPlayer.isLeaving)
                     TeleportPlayerToEvent(player);
                 else if (!eventPlayer.isLeaving)
                     Restoration.RestorePlayer(player);
-            }     
+            }
         }
 
         void OnPlayerAttack(BasePlayer player, HitInfo hitinfo)
@@ -373,9 +374,9 @@ namespace Oxide.Plugins
             if (hitinfo.IsProjectile())
                 AddStats(player, StatType.Shots);
             return;
-        }  
+        }
         void OnEntityTakeDamage(BaseEntity entity, HitInfo info)
-        {                        
+        {
             if (entity.GetComponent<EventCorpse>())
             {
                 NullifyDamage(info);
@@ -383,13 +384,13 @@ namespace Oxide.Plugins
             }
             var player = entity.ToPlayer();
             var attacker = info.InitiatorPlayer;
-          
+
             if (player != null)
             {
                 var eventPlayer = GetUser(player);
-                
+
                 if (eventPlayer != null)
-                {     
+                {
                     if (eventPlayer.isLeaving || eventPlayer.isDead)
                     {
                         NullifyDamage(info);
@@ -417,14 +418,14 @@ namespace Oxide.Plugins
                                 damageAmount *= (float)multiply;
                             }
                         }
-                    }                    
+                    }
 
-                    if (info.isHeadshot)                    
+                    if (info.isHeadshot)
                         damageAmount *= 2;
-                    
-                    if (player.health - damageAmount < 1)                    
+
+                    if (player.health - damageAmount < 1)
                     {
-                        NullifyDamage(info);                        
+                        NullifyDamage(info);
                         OnPlayerDeath(player, info);
                         return;
                     }
@@ -452,11 +453,11 @@ namespace Oxide.Plugins
                 var eventPlayer = GetUser(info.HitEntity.ToPlayer());
                 if (eventPlayer != null)
                     return false;
-            }            
+            }
             return null;
         }
         private void OnRunPlayerMetabolism(PlayerMetabolism metabolism, BaseCombatEntity entity, float delta)
-        {            
+        {
             var eventPlayer = GetUser(entity?.ToPlayer());
             if (eventPlayer == null) return;
             if (eventPlayer.isDead)
@@ -467,15 +468,15 @@ namespace Oxide.Plugins
                 metabolism.radiation_poison.value = 0;
                 metabolism.wetness.value = 0;
             }
-            else            
-                metabolism.bleeding.value = 0f;                                       
+            else
+                metabolism.bleeding.value = 0f;
         }
         object CanNetworkTo(BaseEntity entity, BasePlayer target)
         {
             var player = entity as BasePlayer;
             var eventPlayer = GetUser(player ?? (entity as HeldEntity)?.GetOwnerPlayer());
             if (eventPlayer == null || target == null)
-                return null;            
+                return null;
             if (unnetworkedPlayers.Contains(player))
                 return false;
             return null;
@@ -493,7 +494,7 @@ namespace Oxide.Plugins
             if (_Started && GetUser(looter) != null && _Event.DisableItemPickup)
             {
                 SendMsg(looter, "NoLooting");
-                return true;                
+                return true;
             }
             return null;
         }
@@ -527,7 +528,7 @@ namespace Oxide.Plugins
             _RandomizeAuto = false;
             _ForceNextConfig = false;
             _EventName = null;
-            _NextConfigName = null;            
+            _NextConfigName = null;
             _NextEventNum = 0;
             _CurrentEventConfig = null;
             _Event = DefaultConfig;
@@ -627,19 +628,19 @@ namespace Oxide.Plugins
                     UseEconomicsAsTokens = false,
                     UseSpectateMode = true,
                     UseEventPrestart = true
-                }               
+                }
             };
             SaveConfig(config);
         }
         void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
         #endregion
 
-        #region Messaging        
+        #region Messaging
         public void BroadcastEvent(string msg)
         {
             foreach (EventPlayer eventplayer in EventPlayers)
                 SendReply(eventplayer.GetPlayer(), $"<color={configData.Messaging.MainColor}>" + msg + "</color>");
-        }        
+        }
         public void BroadcastToChat(string message) => PrintToChat($"<color={configData.Messaging.MainColor}>{msg("Title")}</color><color={configData.Messaging.MsgColor}>{msg(message)}</color>");
         static string msg(string key, BasePlayer player = null) => ins.lang.GetMessage(key, ins, player?.UserIDString);
         private void SendMsg(BasePlayer player, string langkey, bool title = true)
@@ -651,8 +652,8 @@ namespace Oxide.Plugins
         void AnnounceEvent()
         {
             object success = Interface.Oxide.CallHook("OnEventAnnounce");
-            if (success is string)            
-                BroadcastToChat((string)success);            
+            if (success is string)
+                BroadcastToChat((string)success);
             else BroadcastToChat(string.Format(msg("eventOpen"), _Event.EventType));
         }
         void AnnounceDuringEvent()
@@ -723,7 +724,7 @@ namespace Oxide.Plugins
         {
             public Dictionary<InventoryType, List<EventInvItem>> inventory = new Dictionary<InventoryType, List<EventInvItem>>();
             public float health, hydration, calories, x, y, z;
-        }        
+        }
 
         public class UI
         {
@@ -860,7 +861,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Components        
+        #region Components
         public class EventPlayer : MonoBehaviour
         {
             private BasePlayer player;
@@ -901,7 +902,7 @@ namespace Oxide.Plugins
                         Net.sv.write.UInt8((byte)BaseNetworkable.DestroyMode.None);
                         Net.sv.write.Send(new SendInfo(player.net.group.subscribers.Where(x => x.userid != player.userID).ToList()));
                     }
-                    
+
                     unnetworkedPlayers.Add(player);
                     if (refreshIn > 0)
                         InvokeHandler.Invoke(this, AddToNetwork, refreshIn);
@@ -913,7 +914,7 @@ namespace Oxide.Plugins
                 {
                     unnetworkedPlayers.Remove(player);
                     player.SendFullSnapshot();
-                }               
+                }
             }
         }
         public class EventCorpse : MonoBehaviour
@@ -1142,14 +1143,14 @@ namespace Oxide.Plugins
                     Interface.CallHook("SetSpawnfile", true, _Event.Spawnfile);
                     object count = Spawns.Call("GetSpawnsCount", _Event.Spawnfile);
                     if (count is int)
-                        SpawnCount.SetSpawnCount(true, (int)count);                                     
+                        SpawnCount.SetSpawnCount(true, (int)count);
                 }
                 if (EventGames[_Event.EventType].RequiresMultipleSpawns && !string.IsNullOrEmpty(_Event.Spawnfile2))
                 {
                     Interface.CallHook("SetSpawnfile", false, _Event.Spawnfile2);
                     object count = Spawns.Call("GetSpawnsCount", _Event.Spawnfile2);
                     if (count is int)
-                        SpawnCount.SetSpawnCount(false, (int)count);                    
+                        SpawnCount.SetSpawnCount(false, (int)count);
                 }
                 if (_Event.GameRounds > 0)
                     Interface.CallHook("SetGameRounds", _Event.GameRounds);
@@ -1189,23 +1190,23 @@ namespace Oxide.Plugins
             }
             return "Error setting event details. Please check your settings";
         }
-        
+
         public object OpenEvent()
         {
             if (_Event == null) return msg("noneSelected");
-            if (string.IsNullOrEmpty(_Event.EventType)) return msg("noTypeSelected");            
+            if (string.IsNullOrEmpty(_Event.EventType)) return msg("noTypeSelected");
             if (_Open) return string.Format(msg("isAlreadyOpen"), _Event.EventType);
             if (_Started && !_Open)
             {
                 if (!EventGames[_Event.EventType].ForceCloseOnStart)
-                {                    
+                {
                     _Open = true;
                     return null;
                 }
                 else return msg("cantOpen");
             }
             var success = ValidateEvent(_Event);
-            if (success is string)            
+            if (success is string)
                 return (string)success;
             success = SetEventDetails();
             if (success is string)
@@ -1225,13 +1226,13 @@ namespace Oxide.Plugins
                 _EventName = $"{msg("Battlefield")} - {_EventName}";
 
             if (!string.IsNullOrEmpty(_CurrentEventConfig))
-                _EventName = $"{_CurrentEventConfig} ({_Event.EventType})"; 
+                _EventName = $"{_CurrentEventConfig} ({_Event.EventType})";
 
             BroadcastToChat(string.Format(msg("eventOpen"), _EventName));
             Interface.Oxide.CallHook("OnEventOpenPost");
 
             return true;
-        }       
+        }
         public object CloseEvent()
         {
             if (!_Open) return msg("eventAlreadyClosed");
@@ -1250,20 +1251,20 @@ namespace Oxide.Plugins
         }
 
         public object StartEvent()
-        {            
+        {
             object success = Interface.Oxide.CallHook("CanEventStart");
             if (success is string)
                 return (string)success;
 
             Subscribe(nameof(OnEntityTakeDamage));
-            Subscribe(nameof(OnPlayerAttack));            
+            Subscribe(nameof(OnPlayerAttack));
             Subscribe(nameof(OnRunPlayerMetabolism));
             Subscribe(nameof(OnItemPickup));
             Subscribe(nameof(CanNetworkTo));
             Subscribe(nameof(CanLootPlayer));
             Subscribe(nameof(OnCreateWorldProjectile));
 
-            Interface.Oxide.CallHook("OnEventStartPre");            
+            Interface.Oxide.CallHook("OnEventStartPre");
             BroadcastToChat(string.Format(msg("eventBegin"), _EventName));
             _Started = true;
             _Prestarting = true;
@@ -1275,7 +1276,7 @@ namespace Oxide.Plugins
             else GameStatistics.GamesPlayed[_Event.EventType]++;
 
             DestroyTimers();
-            PreStartEvent();            
+            PreStartEvent();
             return true;
         }
         public void PreStartEvent()
@@ -1288,7 +1289,7 @@ namespace Oxide.Plugins
 
         public object EndEvent()
         {
-            DestroyAllPopups();            
+            DestroyAllPopups();
 
             if (_Ended) return msg("noGamePlaying");
 
@@ -1315,7 +1316,7 @@ namespace Oxide.Plugins
 
                 _Ended = true;
 
-                Restoration.StartRestoration();                
+                Restoration.StartRestoration();
             });
             return true;
         }
@@ -1351,16 +1352,16 @@ namespace Oxide.Plugins
         {
             if (_Launched)
                 _Launched = false;
-                                   
+
             CancelEvent(reason);
         }
         #endregion
 
-        #region Player TP Management  
+        #region Player TP Management
         private void MovePosition(BasePlayer player, Vector3 destination)
         {
             if (player.net?.connection != null)
-                player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+                player.ClientRPCPlayer(null, player, "StartLoading");
             StartSleeping(player);
             player.MovePosition(destination);
             if (player.net?.connection != null)
@@ -1384,7 +1385,7 @@ namespace Oxide.Plugins
         }
         private object GetSpawnPosition(BasePlayer player)
         {
-            var targetpos = SpawnCount.GetSpawnPoint(_Event.Spawnfile);           
+            var targetpos = SpawnCount.GetSpawnPoint(_Event.Spawnfile);
             if (targetpos is string)
                 return null;
             var newpos = Interface.Oxide.CallHook("EventChooseSpawn", player, targetpos);
@@ -1419,7 +1420,7 @@ namespace Oxide.Plugins
                 {
                     eventPlayer.isDead = false;
                     ResetMetabolism(player);
-                    
+
                     if (_Started) Interface.Oxide.CallHook("OnEventPlayerSpawn", player);
                     if (_Event.UseClassSelector && string.IsNullOrEmpty(eventPlayer.currentClass))
                     {
@@ -1439,7 +1440,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Death and Respawn Management 
+        #region Death and Respawn Management
         void NullifyDamage(HitInfo info)
         {
             info.damageTypes = new DamageTypeList();
@@ -1453,7 +1454,7 @@ namespace Oxide.Plugins
             if (eventPlayer == null) return;
 
             eventPlayer.isDead = true;
-            player.RemoveFromTriggers();                      
+            player.RemoveFromTriggers();
 
             Interface.Oxide.CallHook("OnEventPlayerDeath", player, hitinfo);
 
@@ -1477,7 +1478,7 @@ namespace Oxide.Plugins
             }
         }
         string GetAttacker(BasePlayer player, HitInfo hitinfo)
-        {            
+        {
             if (hitinfo?.Initiator == null)
                 return string.Empty;
             if (hitinfo?.InitiatorPlayer != null)
@@ -1500,7 +1501,7 @@ namespace Oxide.Plugins
                 return hitinfo.Initiator.ShortPrefabName;
             return string.Empty;
         }
-        
+
         public void ResetPlayer(BasePlayer player)
         {
             var eventPlayer = GetUser(player);
@@ -1509,7 +1510,7 @@ namespace Oxide.Plugins
             var eventCorpse = eventPlayer.GetCorpse();
             if (eventCorpse != null)
                 UnityEngine.Object.Destroy(eventCorpse);
-                       
+
             if (eventPlayer.inEvent)
             {
                 ResetMetabolism(player);
@@ -1540,16 +1541,16 @@ namespace Oxide.Plugins
 
                 eventPlayer.isRespawning = false;
                 eventPlayer.isDead = false;
-                
+
                 if (_Started && !eventPlayer.isLeaving)
                     Interface.Oxide.CallHook("OnEventPlayerSpawn", player);
 
-                //eventPlayer.RemoveFromNetwork(1.8f);                
+                //eventPlayer.RemoveFromNetwork(1.8f);
             }
             else Restoration.RestorePlayer(player);
         }
         void ResetMetabolism(BasePlayer player)
-        {            
+        {
             player.SetPlayerFlag(BasePlayer.PlayerFlags.Wounded, false);
             player.metabolism.calories.value = player.metabolism.calories.max;
             player.metabolism.hydration.value = player.metabolism.hydration.max;
@@ -1558,7 +1559,7 @@ namespace Oxide.Plugins
             player.metabolism.radiation_poison.value = 0;
             player.metabolism.SendChangesToClient();
         }
-       
+
         #region Death UI
         LootableCorpse SpawnCorpse(BasePlayer player)
         {
@@ -1589,8 +1590,8 @@ namespace Oxide.Plugins
             {
                 var corpse = SpawnCorpse(player);
                 if (corpse != null)
-                    eventPlayer.SetCorpse(corpse.gameObject.AddComponent<EventCorpse>());                
-            }                
+                    eventPlayer.SetCorpse(corpse.gameObject.AddComponent<EventCorpse>());
+            }
 
             if (showMsg)
                 DeathMessageUI(player, message);
@@ -1647,8 +1648,8 @@ namespace Oxide.Plugins
                     timeRemaining--;
                 }));
             }
-            if (configData.Options.AllowClassSelectionOnDeath && _Event.UseClassSelector)            
-                EMInterface.DeathClassSelector(player);            
+            if (configData.Options.AllowClassSelectionOnDeath && _Event.UseClassSelector)
+                EMInterface.DeathClassSelector(player);
         }
         void EndRespawnScreen(BasePlayer player)
         {
@@ -1678,16 +1679,16 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Spectate       
+        #region Spectate
         void StartSpectating(EventPlayer eventPlayer)
         {
             var player = eventPlayer.GetPlayer();
             if (!eventPlayer.isSpectating)
             {
-                eventPlayer.isSpectating = true; 
+                eventPlayer.isSpectating = true;
                 eventPlayer.isRespawning = true;
 
-                player.inventory.Strip();              
+                player.inventory.Strip();
                 player.playerFlags = player.playerFlags | BasePlayer.PlayerFlags.Spectating;
                 player.gameObject.SetLayerRecursive(10);
                 player.CancelInvoke("MetabolismUpdate");
@@ -1721,7 +1722,7 @@ namespace Oxide.Plugins
                     player.parentBone = 0;
                 }
                 player.playerFlags = player.playerFlags & ~BasePlayer.PlayerFlags.Spectating;
-                player.gameObject.SetLayerRecursive(17);                
+                player.gameObject.SetLayerRecursive(17);
                 eventPlayer.isSpectating = false;
                 player.InvokeRepeating("InventoryUpdate", 1f, 0.1f * UnityEngine.Random.Range(0.99f, 1.01f));
                 eventPlayer.isRespawning = false;
@@ -1736,8 +1737,8 @@ namespace Oxide.Plugins
                 eventPlayer.isSpectating = true;
                 eventPlayer.isRespawning = true;
                 eventPlayer.RemoveFromNetwork(0);
-            }            
-        }        
+            }
+        }
         void NetworkPlayer(BasePlayer player)
         {
             var eventPlayer = GetUser(player);
@@ -1745,14 +1746,14 @@ namespace Oxide.Plugins
             if (eventPlayer.isSpectating)
             {
                 eventPlayer.AddToNetwork();
-                eventPlayer.isSpectating = false;                
+                eventPlayer.isSpectating = false;
                 eventPlayer.isRespawning = false;
-            }           
-        }        
+            }
+        }
         #endregion
         #endregion
 
-        #region Kit Management        
+        #region Kit Management
         public void GivePlayerKit(BasePlayer player, string kit)
         {
             player.inventory.Strip();
@@ -1831,7 +1832,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Player Event Management  
+        #region Player Event Management
         void EnableGod() => _GodEnabled = true;
         void DisableGod() => _GodEnabled = false;
 
@@ -1850,7 +1851,7 @@ namespace Oxide.Plugins
             UpdateName(player);
 
             if (_Started)
-            {                
+            {
                 player.inventory.crafting.CancelAll(true);
                 var eventPlayer = player.gameObject.AddComponent<EventPlayer>();
                 EventPlayers.Add(eventPlayer);
@@ -1890,7 +1891,7 @@ namespace Oxide.Plugins
                 BroadcastToChat(string.Format(msg("leftEvent"), player.displayName, Joiners.Count));
             }
             else
-            {                
+            {
                 var eventPlayer = GetUser(player);
                 if (eventPlayer == null || !EventPlayers.Contains(eventPlayer))
                     return msg("notInEvent");
@@ -1902,8 +1903,8 @@ namespace Oxide.Plugins
 
                 if (!_Ended || _Started)
                     BroadcastToChat(string.Format(msg("leftEvent"), player.displayName, (EventPlayers.Count - 1)));
-                                
-                Restoration.LeaveLoop(player);                
+
+                Restoration.LeaveLoop(player);
             }
             return true;
         }
@@ -1932,9 +1933,9 @@ namespace Oxide.Plugins
 
                         Interface.Oxide.CallHook("OnEventJoinPost", player);
 
-                        if (!string.IsNullOrEmpty(_Event.ZoneID))                        
+                        if (!string.IsNullOrEmpty(_Event.ZoneID))
                             ZoneManager?.Call("AddPlayerToZoneWhitelist", _Event.ZoneID, player);
-                        
+
                         TeleportPlayerToEvent(player);
                         AddStats(player, StatType.Played);
                     }
@@ -1950,12 +1951,12 @@ namespace Oxide.Plugins
                 int remaining = configData.Options.EventPrestartTimer;
                 EventTimers.Add(timer.Repeat(1, configData.Options.EventPrestartTimer, () =>
                 {
-                    remaining--;                                       
+                    remaining--;
                     if (remaining < 1)
                     {
                         foreach(var eventPlayer in EventPlayers)
                         {
-                            var player = eventPlayer.GetPlayer();                            
+                            var player = eventPlayer.GetPlayer();
                             ResetMetabolism(player);
 
                             var targetpos = GetSpawnPosition(player);
@@ -2002,8 +2003,8 @@ namespace Oxide.Plugins
             {
                 player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, true);
                 lockInv = true;
-            } 
-            
+            }
+
             if (lockInv is bool && (bool)lockInv)
                 player.inventory.SendSnapshot();
             return true;
@@ -2161,7 +2162,7 @@ namespace Oxide.Plugins
                 };
                 if (!playerData.ContainsKey(player.userID))
                     playerData.Add(player.userID, info);
-                else playerData[player.userID] = info;                
+                else playerData[player.userID] = info;
             }
             public RestoreInfo GetPlayerData(ulong playerId)
             {
@@ -2175,8 +2176,8 @@ namespace Oxide.Plugins
                 //LogInfo("- Removing player restore data");
                 if (playerData.ContainsKey(playerId))
                     playerData.Remove(playerId);
-            }            
-            public bool HasPendingRestore(ulong playerId) => playerData.ContainsKey(playerId);            
+            }
+            public bool HasPendingRestore(ulong playerId) => playerData.ContainsKey(playerId);
             private IEnumerable<EventInvItem> GetItems(ItemContainer container)
             {
                 return container.itemList.Select(item => new EventInvItem
@@ -2218,7 +2219,7 @@ namespace Oxide.Plugins
                     if (attempts > 3)
                     {
                         player.DieInstantly();
-                        var eventPlayer = ins.GetUser(player);                        
+                        var eventPlayer = ins.GetUser(player);
                         if (eventPlayer != null)
                         {
                             ins.EventPlayers.Remove(eventPlayer);
@@ -2307,7 +2308,7 @@ namespace Oxide.Plugins
                 //LogInfo($"Checking conditions for restoration: {player.displayName}");
                 player.inventory.Strip();
                 UnlockInventory(player);
-                DestroyUI(player);                
+                DestroyUI(player);
 
                 var eventPlayer = ins.GetUser(player);
                 if (eventPlayer != null)
@@ -2356,7 +2357,7 @@ namespace Oxide.Plugins
                     if (spawnPos is Vector3)
                         player.RespawnAt((Vector3)spawnPos, new Quaternion());
                     else player.Respawn();
-                    return false;                   
+                    return false;
                 }
 
                 if (player.IsWounded() || player.health < 1)
@@ -2396,13 +2397,13 @@ namespace Oxide.Plugins
                     if (eventPlayer.GetCorpse() != null)
                         UnityEngine.Object.Destroy(eventPlayer.GetCorpse());
                 }
-                
+
                 player.RemoveFromTriggers();
                 RemoveFromZone(player);
                 RestorePlayerStats(player, restoreData.health, restoreData.hydration, restoreData.calories);
 
-                if (!RestoreInventory(player, restoreData))                
-                    return false;                
+                if (!RestoreInventory(player, restoreData))
+                    return false;
 
                 SendPlayerHome(player, new Vector3(restoreData.x, restoreData.y, restoreData.z));
 
@@ -2411,14 +2412,14 @@ namespace Oxide.Plugins
 
                 RemovePlayer(player.userID);
                 return true;
-            }            
+            }
             private void UnlockInventory(BasePlayer player)
             {
                 LogInfo("- Unlocking inventory");
-                if (player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))                
+                if (player.inventory.containerWear.HasFlag(ItemContainer.Flag.IsLocked))
                     player.inventory.containerWear.SetFlag(ItemContainer.Flag.IsLocked, false);
-                
-                if (player.inventory.containerBelt.HasFlag(ItemContainer.Flag.IsLocked))                
+
+                if (player.inventory.containerBelt.HasFlag(ItemContainer.Flag.IsLocked))
                     player.inventory.containerBelt.SetFlag(ItemContainer.Flag.IsLocked, false);
 
                 if (player.inventory.containerMain.HasFlag(ItemContainer.Flag.IsLocked))
@@ -2459,7 +2460,7 @@ namespace Oxide.Plugins
             private void SendPlayerHome(BasePlayer player, Vector3 position)
             {
                 //LogInfo("- Sending player home");
-                ins.MovePosition(player, position);                
+                ins.MovePosition(player, position);
             }
             private bool RestoreInventory(BasePlayer player, RestoreInfo info)
             {
@@ -2476,7 +2477,7 @@ namespace Oxide.Plugins
             private bool RestoreItems(BasePlayer player, RestoreInfo info, InventoryType type)
             {
                 ItemContainer container = type == InventoryType.Belt ? player.inventory.containerBelt : type == InventoryType.Wear ? player.inventory.containerWear : player.inventory.containerMain;
-             
+
                 for (int i = 0; i < container.capacity; i++)
                 {
                     var existingItem = container.GetSlot(i);
@@ -2488,7 +2489,7 @@ namespace Oxide.Plugins
                     if (info.inventory[type].Count > i)
                     {
                         var itemData = info.inventory[type][i];
-                        var item = ItemManager.CreateByItemID(itemData.itemid, itemData.amount, itemData.skin);                        
+                        var item = ItemManager.CreateByItemID(itemData.itemid, itemData.amount, itemData.skin);
                         item.condition = itemData.condition;
                         if (itemData.instanceData != null)
                             item.instanceData = itemData.instanceData;
@@ -2530,10 +2531,11 @@ namespace Oxide.Plugins
             }
             #endregion
         }
+
         static void LogInfo(string info)
         {
             if (ins.debugEnabled)
-                ConVar.Server.Log($"oxide/logs/EM.txt", info);
+                ins.LogToFile("debug", info, ins);
         }
 
         [ChatCommand("restoreme")]
@@ -2553,8 +2555,8 @@ namespace Oxide.Plugins
             else SendMsg(player, "noRestoreSaved");
         }
         #endregion
-        
-        #region AutoEvent Management        
+
+        #region AutoEvent Management
         public object LaunchEvent()
         {
             _Launched = true;
@@ -2592,7 +2594,7 @@ namespace Oxide.Plugins
                 EventTimers.Add(timer.Once(autocfg.AutoCancel_Timer, () => CancelEvent(msg("notEnoughPlayers"))));
             if (configData.Messaging.AnnounceEvent)
                 EventTimers.Add(timer.Repeat(configData.Messaging.AnnounceEvent_Interval, 0, () => AnnounceEvent()));
-        }       
+        }
         object AutoEventNext()
         {
             if (ValidAutoEvents.Count == 0)
@@ -2608,7 +2610,7 @@ namespace Oxide.Plugins
                 _NextConfigName = string.Empty;
             }
             else
-            {                
+            {
                 if (_RandomizeAuto)
                     nextAutoNum = UnityEngine.Random.Range(0, ValidAutoEvents.Count - 1);
                 else
@@ -2633,8 +2635,8 @@ namespace Oxide.Plugins
             EMInterface.EventVoting.OpenEventVoting(true);
             EventTimers.Add(timer.Once(EMInterface.Event_Config.AutoEvent_Config.GameInterval * 60, () => OpenEvent()));
             return null;
-        }  
-        
+        }
+
         public void ValidateAllEvents()
         {
             PrintWarning("--- Validating all event configs and auto events ---");
@@ -2652,12 +2654,12 @@ namespace Oxide.Plugins
                     var success = ValidateEvent(EMInterface.Event_Config.Event_List[eventcfg]);
                     if (success is string)
                     {
-                        PrintError((string)success);                        
+                        PrintError((string)success);
                     }
                     else ValidEvents.Add(eventcfg, EMInterface.Event_Config.Event_List[eventcfg]);
                 }
             }
-            for (int i = 0; i < EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List.Count; i++)            
+            for (int i = 0; i < EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List.Count; i++)
             {
                 var autocfg = EMInterface.Event_Config.AutoEvent_Config.AutoEvent_List[i];
                 var success = ValidateAutoEvent(autocfg, i);
@@ -2667,12 +2669,12 @@ namespace Oxide.Plugins
                 {
                     if (ValidEvents.ContainsKey(autocfg.EventConfig))
                         ValidAutoEvents.Add(autocfg);
-                }                
+                }
             }
             PrintWarning("--- Finished event validation ---");
             if (ValidAutoEvents.Count > 0 && configData.Options.LaunchAutoEventsOnStartup)
                 LaunchEvent();
-        }    
+        }
         private object ValidateAutoEvent(EMInterface.AEConfig autocfg, int number)
         {
             var errorList = new List<string>();
@@ -2726,11 +2728,11 @@ namespace Oxide.Plugins
                             else if (ValidateKit(eventcfg.Kit) != null)
                                 errorList.Add("Invalid kit selected");
                         }
-                    }      
+                    }
 
                     if (eventcfg.MinimumPlayers <= 0)
                         errorList.Add("Minimum Players must be greater than 0");
-                }                
+                }
             }
             else errorList.Add("Invalid event config selected");
 
@@ -2820,7 +2822,7 @@ namespace Oxide.Plugins
             {
                 this.Name = Name;
             }
-        }        
+        }
         public class Statistics
         {
             public Dictionary<ulong, PlayerStatistics> Stats = new Dictionary<ulong, PlayerStatistics>();
@@ -2870,7 +2872,7 @@ namespace Oxide.Plugins
                 return ChoppersKilled.ToString();
             }
             public string GetTotalPlayers() => Stats.Count.ToString();
-            
+
             public Dictionary<string, int> GetGamesPlayed() => GamesPlayed;
         }
         private void HasStats(BasePlayer player)
@@ -2915,7 +2917,7 @@ namespace Oxide.Plugins
                     return;
                 case StatType.Rank:
                     StatsCache[player.userID].Rank = amount;
-                    return;               
+                    return;
             }
         }
         public int GetStats(BasePlayer player, StatType type)
@@ -2943,7 +2945,7 @@ namespace Oxide.Plugins
                     return StatsCache[player.userID].Rank;
             }
             return 0;
-        }        
+        }
         void CalculateRanks()
         {
             foreach (var eplayer in StatsCache)
@@ -2996,7 +2998,7 @@ namespace Oxide.Plugins
                 DataStorage = new RestoreStorage();
             }
         }
-        #endregion     
+        #endregion
 
         #region API
         [HookMethod("isPlaying")]
@@ -3043,7 +3045,7 @@ namespace Oxide.Plugins
         [HookMethod("GetAllStats")]
         public JObject GetAllStats()
         {
-            var obj = new JObject();            
+            var obj = new JObject();
             foreach(var player in StatsCache)
             {
                 var stats = new JObject();
@@ -3069,7 +3071,7 @@ namespace Oxide.Plugins
             var obj = new JObject();
             foreach (var game in GameStatistics.GamesPlayed)
             {
-                obj[game.Key] = game.Value;                
+                obj[game.Key] = game.Value;
             }
             return obj;
         }
@@ -3131,13 +3133,13 @@ namespace Oxide.Plugins
             MaximumPlayers = 0,
             MinimumPlayers = 2,
             Spawnfile = string.Empty,
-            SpawnType = SpawnType.Consecutive,            
+            SpawnType = SpawnType.Consecutive,
             ZoneID = string.Empty,
             RespawnType = RespawnType.None,
             RespawnTimer = 10,
             EnemiesToSpawn = 0,
             GameRounds = 1,
-            ScoreLimit = 10,            
+            ScoreLimit = 10,
             Spawnfile2 = string.Empty,
             WeaponSet = string.Empty
         };
@@ -3147,7 +3149,7 @@ namespace Oxide.Plugins
         {
             { "Title", "Event Manager: "},
             { "reachedMinPlayers", "The event {0} has reached min players and will start in {1} seconds"},
-            { "reachedMaxPlayers", "The event {0} has reached max players. You may not join for the moment"},            
+            { "reachedMaxPlayers", "The event {0} has reached max players. You may not join for the moment"},
             { "eventBegin", "{0} is about to begin!"},
             { "leftEvent", "{0} has left the Event! (Total Players: {1})"},
             { "successJoined", "{0} has joined the Event!  (Total Players: {1})"},
@@ -3172,7 +3174,7 @@ namespace Oxide.Plugins
             { "notInEvent", "You are not currently in the event." },
             { "kitNotExist", "The kit {0} doesn't exist" },
             {"zoneNotExist", "Invalid Zone ID" },
-            { "CancelAuto", "Auto events have been cancelled" },            
+            { "CancelAuto", "Auto events have been cancelled" },
             {"ItemPickup", "Item pickup has been disabled during this event!" },
             {"NoLooting", "Looting has been disabled during this event!" },
             {"noEvent", "Unable to find a event called: {0}" },

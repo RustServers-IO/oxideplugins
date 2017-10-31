@@ -1,97 +1,94 @@
-﻿using System.Collections.Generic;
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiItems", "redBDGR", "1.0.9", ResourceId = 2405)]
+    [Info("AntiItems", "redBDGR", "1.0.10", ResourceId = 2405)]
     [Description("Remove the need for certain items in crafting and repairing")]
-
-    class AntiItems : RustPlugin
+    internal class AntiItems : RustPlugin
     {
-        private bool Changed = false;
+        private bool Changed;
+        private Dictionary<string, object> componentList;
         private string permissionName = "antiitems.use";
-        private bool useActiveRefreshing = true;
         private float refreshTime = 120f;
+        private bool useActiveRefreshing = true;
 
-        Dictionary<string, object> doComponentList()
+        private static Dictionary<string, object> doComponentList()
         {
-            var x = new Dictionary<string, object>();
-            x.Add("propanetank", 1000);
-            x.Add("gears", 1000);
-            x.Add("metalpipe", 1000);
-            x.Add("metalspring", 1000);
-            x.Add("riflebody", 1000);
-            x.Add("roadsigns", 1000);
-            x.Add("rope", 1000);
-            x.Add("semibody", 1000);
-            x.Add("sewingkit", 1000);
-            x.Add("smgbody", 1000);
-            x.Add("tarp", 1000);
-            x.Add("techparts", 1000);
-            x.Add("sheetmetal", 1000);
+            var x = new Dictionary<string, object> {{"propanetank", 1000}, {"gears", 1000}, {"metalpipe", 1000}, {"metalspring", 1000}, {"riflebody", 1000}, {"roadsigns", 1000}, {"rope", 1000}, {"semibody", 1000}, {"sewingkit", 1000}, {"smgbody", 1000}, {"tarp", 1000}, {"techparts", 1000}, {"sheetmetal", 1000}};
             return x;
         }
-        Dictionary<string, object> componentList;
 
-        void OnPlayerInit(BasePlayer player) => timer.Once(5f, () => DoItems(player));
-        void OnPlayerDisconnected(BasePlayer player, string reason) => RemoveItems(player, player.inventory.containerMain);
-        void OnPlayerRespawned(BasePlayer player) => DoItems(player);
+        private void OnPlayerInit(BasePlayer player)
+        {
+            timer.Once(5f, () => DoItems(player));
+        }
 
-        void Init()
+        private void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            RemoveItems(player, player.inventory.containerMain);
+        }
+
+        private void OnPlayerRespawned(BasePlayer player)
+        {
+            DoItems(player);
+        }
+
+        private void Init()
         {
             LoadVariables();
             permission.RegisterPermission(permissionName, this);
-            timer.Repeat(refreshTime, 0, () =>
-            {
-                foreach (BasePlayer player in BasePlayer.activePlayerList)
-                    if (permission.UserHasPermission(player.UserIDString, permissionName))
-                        RefreshItems(player);
-            });
-        }   
-
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            if (!(entity is BasePlayer)) return;
-                RemoveItems(entity as BasePlayer, (entity as BasePlayer).inventory.containerMain);
+            if (useActiveRefreshing)
+                timer.Repeat(refreshTime, 0, () =>
+                {
+                    foreach (var player in BasePlayer.activePlayerList)
+                        if (permission.UserHasPermission(player.UserIDString, permissionName))
+                            RefreshItems(player);
+                });
         }
 
-        void OnItemCraftCancelled(ItemCraftTask task)
+        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (!(entity is BasePlayer)) return;
+            RemoveItems((BasePlayer) entity, ((BasePlayer) entity).inventory.containerMain);
+        }
+
+        private void OnItemCraftCancelled(ItemCraftTask task)
         {
             foreach (var entry in task.takenItems)
                 if (componentList.ContainsKey(entry.info.shortname))
                     timer.Once(0.01f, () => entry.RemoveFromContainer());
         }
 
-        void RefreshItems(BasePlayer player)
+        private void RefreshItems(BasePlayer player)
         {
-            for (int i = 0; i < componentList.Count; i++)
+            for (var i = 0; i < componentList.Count; i++)
                 if (player.inventory.containerMain.GetSlot(24 + i) != null)
                     player.inventory.containerMain.GetSlot(24 + i).RemoveFromContainer();
             DoItems(player);
         }
 
-        void DoItems(BasePlayer player)
+        private void DoItems(BasePlayer player)
         {
             if (!permission.UserHasPermission(player.UserIDString, permissionName)) return;
             player.inventory.containerMain.capacity = 24 + componentList.Count;
-            List<string> y = new List<string>();
-            foreach (var key in componentList)
-                y.Add(key.Key);
-            for (int i = 0; i < componentList.Count; i++)
+            var y = componentList.Select(key => key.Key).ToList();
+            for (var i = 0; i < componentList.Count; i++)
             {
-                Item item = ItemManager.CreateByName(y[i], Convert.ToInt32(componentList[y[i]]));
+                var item = ItemManager.CreateByName(y[i], Convert.ToInt32(componentList[y[i]]));
                 item.MoveToContainer(player.inventory.containerMain, 24 + i, true);
             }
         }
 
-        void RemoveItems(BasePlayer player, ItemContainer container)
+        private void RemoveItems(BasePlayer player, ItemContainer container)
         {
             if (!permission.UserHasPermission(player.UserIDString, permissionName)) return;
-            List<Item> x = new List<Item>();
+            var x = new List<Item>();
 
-            for (int i = 0; i < container.itemList.Count; i++)
+            for (var i = 0; i < container.itemList.Count; i++)
             {
-                Item item = container.itemList[i];
+                var item = container.itemList[i];
                 if (item == null) return;
                 if (componentList.ContainsKey(item.info.shortname))
                     x.Add(item);
@@ -109,9 +106,9 @@ namespace Oxide.Plugins
             LoadVariables();
         }
 
-        void LoadVariables()
+        private void LoadVariables()
         {
-            componentList = (Dictionary<string, object>)GetConfig("Settings", "Components", doComponentList());
+            componentList = (Dictionary<string, object>) GetConfig("Settings", "Components", doComponentList());
             useActiveRefreshing = Convert.ToBoolean(GetConfig("Settings", "Use Active Item Refreshing", true));
             refreshTime = Convert.ToSingle(GetConfig("Settings", "Refresh Time", 120f));
 
@@ -120,7 +117,7 @@ namespace Oxide.Plugins
             Changed = false;
         }
 
-        object GetConfig(string menu, string datavalue, object defaultValue)
+        private object GetConfig(string menu, string datavalue, object defaultValue)
         {
             var data = Config[menu] as Dictionary<string, object>;
             if (data == null)
@@ -130,12 +127,10 @@ namespace Oxide.Plugins
                 Changed = true;
             }
             object value;
-            if (!data.TryGetValue(datavalue, out value))
-            {
-                value = defaultValue;
-                data[datavalue] = value;
-                Changed = true;
-            }
+            if (data.TryGetValue(datavalue, out value)) return value;
+            value = defaultValue;
+            data[datavalue] = value;
+            Changed = true;
             return value;
         }
     }

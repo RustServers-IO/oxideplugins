@@ -2,7 +2,7 @@
     "name": "CapsNoCaps",
     "description": "Converts messages written in caps to sentencecase",
     "author": "PsychoTea",
-    "version": null,
+    "version": "1.3.3",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/capsnocaps.1324",

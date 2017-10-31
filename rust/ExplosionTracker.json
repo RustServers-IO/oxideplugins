@@ -2,7 +2,7 @@
     "name": "Explosion Tracker",
     "description": "This plugin tracks every explosion that happens on the server.",
     "author": "Ryan",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": true,
     "suggest": {
         "Discord": "*",

@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.5", ResourceId = 2585)]
+	[Info("OldSchoolQuarries", "S0N_0F_BISCUIT", "1.0.6", ResourceId = 2585)]
 	[Description("Makes resource output from quarries better")]
 	class OldSchoolQuarries : RustPlugin
 	{
@@ -36,8 +36,26 @@ namespace Oxide.Plugins
 
 		class Deposit
 		{
-			public Vector3 origin = Vector3.zero;
+			public Origin origin = new Origin();
 			public List<DepositEntry> entries = new List<DepositEntry>();
+		}
+
+		class Origin
+		{
+			public float x = 0;
+			public float y = 0;
+			public float z = 0;
+
+			public Origin()
+			{
+				x = y = z = 0;
+			}
+			public Origin(Vector3 vector)
+			{
+				x = vector.x;
+				y = vector.y;
+				z = vector.z;
+			}
 		}
 
 		class StoredData
@@ -98,7 +116,7 @@ namespace Oxide.Plugins
 			ValidateConfig();
 			foreach (Deposit deposit in data.changedDeposits)
 			{
-				ResourceDepositManager.ResourceDeposit rd = ResourceDepositManager.GetOrCreate(deposit.origin);
+				ResourceDepositManager.ResourceDeposit rd = ResourceDepositManager.GetOrCreate(GetVector3(deposit.origin));
 
 				int oreCount = 0;
 				foreach (ResourceDepositManager.ResourceDeposit.ResourceDepositEntry resource in rd._resources)
@@ -246,10 +264,10 @@ namespace Oxide.Plugins
 				OreType ore = OreType.None;
 
 				ResourceDepositManager.ResourceDeposit rd = ResourceDepositManager.GetOrCreate(entity.transform.position);
-
-				if (data.changedDeposits.Exists(d => d.origin == rd.origin))
+				
+				if (data.changedDeposits.Exists(d => GetVector3(d.origin) == rd.origin))
 					return;
-
+				
 				ResourceDepositManager.ResourceDeposit.ResourceDepositEntry originalResource = null;
 				
 				int oreCount = 0;
@@ -276,7 +294,7 @@ namespace Oxide.Plugins
 							break;
 					}
 				}
-
+				
 				if (oreCount > 1)
 					return;
 
@@ -284,11 +302,11 @@ namespace Oxide.Plugins
 				ItemDefinition metal = ItemManager.itemList.Find(x => x.shortname == "metal.ore");
 				ItemDefinition hq = ItemManager.itemList.Find(x => x.shortname == "hq.metal.ore");
 
-				Deposit deposit = new Deposit { origin = rd.origin };
-
+				Deposit deposit = new Deposit { origin =  GetOrigin(rd.origin) };
+				
 				if (originalResource == null && rd._resources.Count != 0)
 					originalResource = rd._resources.ToArray()[0];
-
+				
 				System.Random rng = new System.Random();
 				float workNeeded = (float)(rng.Next(0, 2) + rng.NextDouble());
 				int choice = rng.Next(1, 100);
@@ -374,6 +392,7 @@ namespace Oxide.Plugins
 						}
 						break;
 				}
+				
 				data.changedDeposits.Add(deposit);
 				SaveData();
 			}
@@ -502,6 +521,14 @@ namespace Oxide.Plugins
 		// Get formatted string from the lang file
 		//
 		private string Lang(string key, string userId = null, params object[] args) => string.Format(lang.GetMessage(key, this, userId), args);
+		//
+		// Get Vector3 from Origin
+		//
+		private Vector3 GetVector3(Origin origin) => new Vector3(origin.x, origin.y, origin.z);
+		//
+		// Get Origin from Vector3
+		//
+		private Origin GetOrigin(Vector3 vector) => new Origin(vector);
 		#endregion
 	}
 }

@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -7,7 +6,7 @@ using UnityEngine;
 namespace Oxide.Plugins
 {
 
-    [Info("Gathering Manager", "Mughisi", "2.2.4", ResourceId = 675)]
+    [Info("Gathering Manager", "Mughisi", "2.2.6", ResourceId = 675)]
     class GatherManager : RustPlugin
     {
 
@@ -382,11 +381,17 @@ namespace Oxide.Plugins
 
             var dispenserModifier = GatherDispenserModifiers[gatherType];
 
-            dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount += amount - item.amount / dispenserModifier;
+            try
+            {
+                dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount += amount - item.amount / dispenserModifier;
 
-            if (dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount < 0)
-                item.amount += (int)dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount;
+                if (dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount < 0)
+                    item.amount += (int)dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount;
+            }
+            catch { }
         }
+
+        private void OnDispenserBonus(ResourceDispenser dispenser, BaseEntity entity, Item item) => OnDispenserGather(dispenser, entity, item);
 
         private void OnQuarryGather(MiningQuarry quarry, Item item)
         {

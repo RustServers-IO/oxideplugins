@@ -2,7 +2,7 @@
     "name": "SDonate Donation System",
     "description": "Automatically process donations with SDonate",
     "author": "",
-    "version": "1.7.5",
+    "version": "1.7.7",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/sdonate-donation-system.1965",

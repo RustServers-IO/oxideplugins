@@ -2,11 +2,13 @@
     "name": "Raid Tracker",
     "description": "Log raids in progress by tracking explosions to be later recreated on-screen via drawn methods.",
     "author": "nivex",
-    "version": "0.1.13",
+    "version": "0.1.14",
     "configuration": true,
     "suggest": {
         "Slack": "*",
-        "Discord": "*"
+        "Discord": "*",
+        "DiscordMessages": "*",
+        "PopupNotifications": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/raid-tracker.2458",

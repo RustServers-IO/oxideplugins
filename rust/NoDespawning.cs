@@ -9,7 +9,7 @@ using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("NoDespawning", "Jake_Rich", "1.0.1", ResourceId = 2467)]
+    [Info("NoDespawning", "Jake_Rich", "1.1.0", ResourceId = 2467)]
     [Description("Fuck despawners")]
     class NoDespawning : RustPlugin
     {
@@ -41,7 +41,7 @@ namespace Oxide.Plugins
         public const int GRID_SIZE = 20;
         public const float MovementLoopSpeed = 2f;
         public const float MovementLoopStartDelay = 30f;
-        public const float despawnTimerDelay = 30f;
+        public const float despawnTimerDelay = 1f;
         public static int halfSize;
         public static float drawDelay = 1f;
         public float originalDespawnTime = 180f;
@@ -198,6 +198,11 @@ namespace Oxide.Plugins
                 {
                     modifier = 3600f;
                     time = time.Replace("h", "");
+                }
+                else if (time.Contains("s"))
+                {
+                    modifier = 1f;
+                    time = time.Replace("s", "");
                 }
                 else if (time.Contains("d"))
                 {
@@ -767,18 +772,17 @@ namespace Oxide.Plugins
             return true;
         }
 
-        [ChatCommand("strip")]
-        void StripInventoryCommand(BasePlayer player)
+        [ChatCommand("fixbackpacks")]
+        void FixBackpacksCommand(BasePlayer player)
         {
             if (!player.IsAdmin)
             {
                 return;
             }
-            player.inventory.Strip();
-            player.inventory.containerMain.capacity = 24;
-            player.inventory.GiveItem(ItemManager.CreateByPartialName("longsword", 10));
-            player.inventory.GiveItem(ItemManager.CreateByPartialName("rifle", 100));
-            player.inventory.GiveItem(ItemManager.CreateByPartialName("box.wooden", 100));
+            foreach(var backpack in GameObject.FindObjectsOfType<DroppedItemContainer>())
+            {
+                backpack.ResetRemovalTime();
+            }
         }
 
         public void DespawnLoop()
@@ -931,6 +935,15 @@ namespace Oxide.Plugins
             {
                 itemGrid.OnItemSpawned((DroppedItem)entity);
             }
+            else if (entity is DroppedItemContainer)
+            {
+                var backpack = entity as DroppedItemContainer;
+                float despawnTime = backpack.inventory.itemList.Max(x => settings.Instance.GetDespawnTime(x));
+                timer.In(1f, () => //Time to make sure that despawn time isnt reset by the float.max value
+                {
+                    backpack?.ResetRemovalTime(despawnTime);
+                });
+            }
         }
 
         object OnItemPickup(Item item, BasePlayer player) //Handles dropped items over stacksize limit
@@ -1007,7 +1020,7 @@ namespace Oxide.Plugins
             return true;
         }
 
-        object OnContainerDropItems(ItemContainer inventory) //Prestacks all items in container before dropping, to increase performance
+        /*object OnContainerDropItems(ItemContainer inventory) //Prestacks all items in container before dropping, to increase performance
         {
             Dictionary<int, Item> items = new Dictionary<int, Item>();
             foreach (var item in inventory.itemList.ToList())
@@ -1046,7 +1059,7 @@ namespace Oxide.Plugins
             //inventory.Kill();
             //inventory = null;
             return true;
-        }
+        }*/
 
         #endregion
 

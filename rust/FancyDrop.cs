@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("FancyDrop", "Fujikura", "2.6.20", ResourceId = 1934)]
+	[Info("FancyDrop", "Fujikura", "2.6.24", ResourceId = 1934)]
 	[Description("The Next Level of a fancy airdrop-toolset")]
 	class FancyDrop : RustPlugin
 	{
@@ -275,9 +275,7 @@ namespace Oxide.Plugins
 		Timer _massDropTimer;
 
 		static bool useSupplyDropEffectLanded;
-		bool useSupplyDropEffectNight;
 		static string supplyDropEffect;
-		string supplyDropEffectSpawn;
 		bool disableRandomSupplyPos;
 		bool shootDownDrops;
 		int shootDownCount;
@@ -412,9 +410,7 @@ namespace Oxide.Plugins
 			setupItemList = (Dictionary<string, object>)GetConfig("StaticItems", "DropTypes", defaultItemList());
 
 			useSupplyDropEffectLanded = Convert.ToBoolean(GetConfig("Airdrop", "Use special effect at reaching ground position", true));
-			useSupplyDropEffectNight = Convert.ToBoolean(GetConfig("Airdrop", "Use special effect at spawning by night", true));
 			supplyDropEffect = Convert.ToString(GetConfig("Airdrop", "Prefab effect to use", "assets/bundled/prefabs/fx/survey_explosion.prefab"));
-			supplyDropEffectSpawn = Convert.ToString(GetConfig("Airdrop", "Prefab effect to use at spawn by night", "assets/bundled/prefabs/fx/player/onfire.prefab"));
 			airdropMassdropDefault = Convert.ToInt32(GetConfig("Airdrop", "Massdrop default plane amount", 5));
 			airdropMassdropDelay = Convert.ToSingle(GetConfig("Airdrop", "Delay between Massdrop plane spawns", 0.33));
 			airdropMassdropRadiusDefault = Convert.ToSingle(GetConfig("Airdrop", "Default radius for location based massdrop", 100));
@@ -619,7 +615,7 @@ namespace Oxide.Plugins
 				yield return new WaitForSeconds( (int)cratesettings["despawnMinutes"] * 60 );
 				yield return new WaitWhile(() => GetComponent<BaseEntity>().IsOpen());
 				cratesettings.Clear();
-				GetComponent<BaseEntity>().Kill(BaseNetworkable.DestroyMode.Gib);
+				GetComponent<BaseEntity>().Kill();
 			}
 
 			void OnDestroy()
@@ -806,11 +802,9 @@ namespace Oxide.Plugins
 			}
 			else
 				newDrop.Spawn();
-
 			SupplyDrops.Add(newDrop);
-			//if (useSupplyDropEffectNight && TOD_Sky.Instance.IsNight && (string)cratesettings["droptype"] != "supplysignal")
-			//	Effect.server.Run(supplyDropEffectSpawn, newDrop.transform.position - Vector3.up);
-			if (supplyDropLight) createLantern(newDrop as BaseEntity);
+			if (supplyDropLight)
+				createLantern(newDrop as BaseEntity);
 		}
 
 		void SpawnNetworkable(BaseNetworkable ent)
@@ -822,7 +816,7 @@ namespace Oxide.Plugins
 			Rust.Registry.Entity.Register(ent.GetComponent<UnityEngine.Component>().gameObject, ent);
 			if (ent.net == null)
 				ent.net = Network.Net.sv.CreateNetworkable();
-			ent.net.owner = ent;
+			ent.net.handler = ent;
 			_creationFrame.SetValue(ent, Time.frameCount);
 			ent.PreInitShared();
 			ent.InitShared();
@@ -830,9 +824,10 @@ namespace Oxide.Plugins
 			ent.PostInitShared();
 			ent.UpdateNetworkGroup();
 			_isSpawned.SetValue(ent, true);
+			Interface.CallHook("OnEntitySpawned", ent );
 			ent.SendNetworkUpdateImmediate(true);
 		}
-
+		
 		private static void createLantern(BaseEntity entity)
 		{
 			var lantern = (BaseOven)GameManager.server.CreateEntity("assets/prefabs/deployable/lantern/lantern.deployed.prefab", default(Vector3), default(Quaternion), true);
@@ -2098,8 +2093,7 @@ namespace Oxide.Plugins
 				setup["betterloot"] = false;
 				ALCustom = true;
 			}
-
-			if (slots > 30) slots = 30;
+			if (slots > 36) slots = 36;
 			bool container_init = false;
 			int filled = 0;
 			if ((bool)setup["includeStaticItemList"])
@@ -2157,9 +2151,9 @@ namespace Oxide.Plugins
 
 					if ((bool)setup["includeStaticItemListOnly"])
 					{
-						if (drop.inventory.itemList.Count > 18)
-							drop.panelName = "largewoodbox";
+						drop.panelName = "generic";
 						drop.inventory.capacity = drop.inventory.itemList.Count;
+						drop.inventory.MarkDirty();
 						return;
 					}
 				}
@@ -2169,6 +2163,7 @@ namespace Oxide.Plugins
 			{
 				if (!container_init)
 				{
+					(drop as LootContainer).initialLootSpawn = false;
 					drop.inventory = new ItemContainer();
 					drop.inventory.ServerInitialize(null, slots);
 					container_init = true;
@@ -2180,12 +2175,11 @@ namespace Oxide.Plugins
 					else
 						custom.Remove(0f);
 				}
-				if (drop.inventory.itemList.Count > 18)
-					drop.panelName = "largewoodbox";
+				drop.panelName = "generic";
 				drop.inventory.capacity = drop.inventory.itemList.Count;
+				drop.inventory.MarkDirty();
 				return;
 			}
-
 			if(!(bool)setup["betterloot"] && (bool)setup["useCustomLootTable"] && (dropTable.ItemDefs.Count > 0 || ALCustom))
 			{
 				if (!container_init)
@@ -2212,9 +2206,9 @@ namespace Oxide.Plugins
 				drop.GetComponent<LootContainer>().PopulateLoot();
 			}
 
-			if (drop.inventory.itemList.Count > 18)
-				drop.panelName = "largewoodbox";
+			drop.panelName = "generic";
 			drop.inventory.capacity = drop.inventory.itemList.Count;
+			drop.inventory.MarkDirty();
 	   }
 
 		void SetupLoot()
@@ -2282,13 +2276,13 @@ namespace Oxide.Plugins
 
 			public void Draw(BasePlayer player)
 			{
-				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", new Facepunch.ObjectList(JsonConvert.SerializeObject(ui).Replace("{NEWLINE}", Environment.NewLine)));
+				CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "AddUI", JsonConvert.SerializeObject(ui).Replace("{NEWLINE}", Environment.NewLine));
 			}
 
 			public void Destroy(BasePlayer player)
 			{
 				foreach (string uiName in objectList)
-					CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", new Facepunch.ObjectList(uiName));
+					CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo() { connection = player.net.connection }, null, "DestroyUI", uiName);
 			}
 
 			public string AddText(string name, double left, double top, double width, double height, string color, string text, int textsize = 15, string parent = "Hud", int alignmode = 0, float fadeIn = 0f, float fadeOut = 0f)
@@ -2342,16 +2336,13 @@ namespace Oxide.Plugins
 		{
 			bool replaced = false;
 			float fadeIn = 0.2f;
-
 			Timer playerTimer;
 
 			timers.TryGetValue(player, out playerTimer);
-
 			if (playerTimer != null && !playerTimer.Destroyed)
 			{
 				playerTimer.Destroy();
 				fadeIn = 0.1f;
-
 				replaced = true;
 			}
 
@@ -2367,14 +2358,12 @@ namespace Oxide.Plugins
 				timer.Once(0.1f, () =>
 				{
 					ui.Draw(player);
-
 					timers[player] = timer.Once(SimpleUI_HideTimer, () => ui.Destroy(player));
 				});
 			}
 			else
 			{
 				ui.Draw(player);
-
 				timers[player] = timer.Once(SimpleUI_HideTimer, () => ui.Destroy(player));
 			}
 		}

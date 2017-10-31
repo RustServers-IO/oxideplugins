@@ -2,8 +2,12 @@
     "name": "EasyVote",
     "description": "Making voting super easy and smooth!",
     "author": "Exel80",
-    "version": "1.2.7",
+    "version": "2.0.0",
     "configuration": true,
+    "suggest": {
+        "DiscordMessages": "*",
+        "HelpText": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/easyvote.2102",
     "games": [

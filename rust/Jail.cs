@@ -1,442 +1,279 @@
-﻿using System.Collections.Generic;
-using System;
+﻿using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
 using Oxide.Core;
-using Oxide.Core.Plugins;
 using Oxide.Core.Configuration;
 using Oxide.Game.Rust.Cui;
-using Newtonsoft.Json;
+using Oxide.Core.Plugins;
+using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
-using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Linq;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Jail", "Reneb / k1lly0u", "3.0.32", ResourceId = 794)]
+    [Info("Jail", "Reneb / k1lly0u", "4.0.0", ResourceId = 794)]
     class Jail : RustPlugin
     {
-        [PluginReference] Plugin ZoneManager;
-        [PluginReference] Plugin Spawns;
-        [PluginReference] Plugin Kits;
+        #region Fields
+        [PluginReference] Plugin ZoneManager, Spawns, Kits;
 
-        private bool Changed;
-        private bool Started = false;
+        PrisonData prisonData;
+        PrisonerData prisonerData;
+        RestoreData restoreData;
+        private DynamicConfigFile prisondata, prisonerdata, restoredata;
 
-        JailDataStorage jailData;
-        private DynamicConfigFile JailData;
+        private Dictionary<string, PrisonData.PrisonEntry> prisons = new Dictionary<string, PrisonData.PrisonEntry>();
+        private Dictionary<ulong, PrisonerData.PrisonerEntry> prisoners = new Dictionary<ulong, PrisonerData.PrisonerEntry>();
 
-        private Dictionary<ulong, int> jailTimerList = new Dictionary<ulong, int>();
-        private List<string> prisonIDs = new List<string>();
+        static Jail ins;
 
-        private static LayerMask GROUND_MASKS = LayerMask.GetMask("Terrain", "World", "Construction");
+        private LayerMask layerMask;
 
-        #region UI
-        class UI
-        {
-            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool useCursor)
-            {
-                var NewElement = new CuiElementContainer()
-                {
-                    {
-                        new CuiPanel
-                        {
-                            Image = {Color = color},
-                            RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
-                            CursorEnabled = useCursor
-                        },
-                        new CuiElement().Parent = "Overlay",
-                        panelName
-                    }
-                };
-                return NewElement;
-            }            
-            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
-            {
-                container.Add(new CuiLabel
-                {
-                    Text = { Color = color, FontSize = size, Align = align, Text = text },
-                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
-                },
-                panel);
-
-            }            
-        }
-        private void CreateJailTimer(BasePlayer player)
-        {
-            if (player != null)
-            {
-                CuiHelper.DestroyUi(player, "jailTimer");
-                if (jailData.Prisoners.ContainsKey(player.userID) && jailTimerList.ContainsKey(player.userID))
-                {
-                    TimeSpan dateDifference = TimeSpan.FromSeconds(jailTimerList[player.userID]);
-                    string clock = string.Format("{0:D2}:{1:D2}:{2:D2}", dateDifference.Hours, dateDifference.Minutes, dateDifference.Seconds);
-                    if (jailData.Prisoners[player.userID].expireTime == -99999)
-                        clock = "~";
-
-                    var container = UI.CreateElementContainer("jailTimer", "0.3 0.3 0.3 0.6", "0.42 0.965", "0.58 0.995", false);
-                    UI.CreateLabel(ref container, "jailTimer", "", $"Remaining: {clock}", 18, "0 0", "1 1");
-                    CuiHelper.AddUi(player, container);
-
-                    jailTimerList[player.userID]--;
-                    if (jailTimerList[player.userID] > 0)
-                        timer.Once(1, () => CreateJailTimer(player));
-                    else timer.Once(2, () => CheckPlayerExpireTime(player));
-                }
-            }
-        }
+        const string UIJailTimer = "JailUI_TimeRemaining";
         #endregion
 
-        #region Oxide Hooks        
-        void Loaded()
+        #region Oxide Hooks
+        private void Loaded()
         {
+            prisondata = Interface.Oxide.DataFileSystem.GetFile("Jail/prison_data");
+            prisonerdata = Interface.Oxide.DataFileSystem.GetFile("Jail/prisoner_data");
+            restoredata = Interface.Oxide.DataFileSystem.GetFile("Jail/restoration_data");
+
+            lang.RegisterMessages(Messages, this);
+            permission.RegisterPermission("jail.canenter", this);
             permission.RegisterPermission("jail.admin", this);
-
-            lang.RegisterMessages(messages, this);
-
-            JailData = Interface.Oxide.DataFileSystem.GetFile("jail_data");
-            JailData.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter(), };            
         }
-        void OnServerInitialized()
+
+        private void OnServerInitialized()
         {
-            if (!CheckDependencies()) return;
+            LoadVariables();
             LoadData();
-            LoadVariables();
-            foreach(var player in BasePlayer.activePlayerList)
-                CheckPlayer(player);
+            ins = this;
+
+            layerMask = (1 << 29);
+            layerMask |= (1 << 18);
+            layerMask = ~layerMask;            
+
+            foreach (var player in BasePlayer.activePlayerList)
+                OnPlayerInit(player);
         }
-        private bool CheckDependencies()
+
+        private void OnPlayerInit(BasePlayer player)
         {
-            if (ZoneManager == null)
+            if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
             {
-                PrintWarning($"ZoneManager could not be found!");
-                return false;
+                timer.In(1, () => OnPlayerInit(player));
+                return;
             }
 
-            if (Spawns == null)
+            if (IsPrisoner(player))
             {
-               PrintWarning($"Spawns Database could not be found!");
-                return false;
-            }
-            Started = true;
-            return true;
-        } 
-        protected override void LoadDefaultConfig()
-        {
-            Puts("Creating a new config file");
-            Config.Clear();
-            LoadVariables();
-        }
-        void Unload()
-        {
-            if (Started)
-            {                
-                jailTimerList.Clear();
-                foreach (var player in BasePlayer.activePlayerList)
-                {
-                    foreach(var jail in jailData.prisons)
-                        ZoneManager.Call("RemovePlayerFromZoneKeepinlist", jail.Value.zoneID, player);
-                    CuiHelper.DestroyUi(player, "jailTimer");
-                }
-                SaveData();
-            }
-        }
-        void OnPlayerInit(BasePlayer player) => CheckPlayer(player);
-        void OnPlayerSleepEnded(BasePlayer player) => CheckPlayer(player);
-        private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
-        {
-            if (Started)
-            {
-                try
-                {
-                    if (entity is BasePlayer && hitinfo.Initiator is BasePlayer)
-                    {
-                        var victim = entity.ToPlayer();
-                        var attacker = hitinfo.Initiator.ToPlayer();
-                        if (disableDamage)
-                        {
-                            if (victim.userID != attacker.userID)
-                                if (jailData.Prisoners.ContainsKey(victim.userID) && jailData.Prisoners.ContainsKey(attacker.userID))
-                                {
-                                    hitinfo.damageTypes.ScaleAll(0);
-                                    SendMsg(attacker, lang.GetMessage("ff", this, attacker.UserIDString));
-                                }
-                        }
-                        else if (!jailData.Prisoners.ContainsKey(victim.userID) && jailData.Prisoners.ContainsKey(attacker.userID)) hitinfo.damageTypes.ScaleAll(0);
-                        else if (jailData.Prisoners.ContainsKey(victim.userID) && !jailData.Prisoners.ContainsKey(attacker.userID)) hitinfo.damageTypes.ScaleAll(0);
-                    }
-                }
-                catch (Exception ex)
-                {
-                }
-            }
-        }
-        void OnPlayerRespawned(BasePlayer player) => CheckPlayer(player);
-        void CheckPlayer(BasePlayer player)
-        {
-            if (Started)
-                if (jailData.Prisoners.ContainsKey(player.userID))
-                    CheckInmate(player);
-        }
-        void CheckInmate(BasePlayer player)
-        {
-            if (!CheckPlayerExpireTime(player))
-            {
-                string prisonName = jailData.Prisoners[player.userID].prisonName;
-                string zoneID = jailData.prisons[prisonName].zoneID;
-                if (!isInZone(player, zoneID))
-                {
-                    int cellNum = jailData.Prisoners[player.userID].cellNumber;
-                    object cellPos = FindSpawnPoint(prisonName, cellNum);
-                    if (cellPos == null) { Puts("null cell pos"); return; }
-                    ZoneManager.Call("AddPlayerToZoneKeepinlist", zoneID, player);
-                    TeleportPlayerPosition(player, (Vector3)cellPos);                    
-                }
-                if (!jailTimerList.ContainsKey(player.userID))
-                    jailTimerList.Add(player.userID, (int)(jailData.Prisoners[player.userID].expireTime - GrabCurrentTime()));
-                CreateJailTimer(player);
-            }
-        }
+                var time = prisoners[player.userID].releaseDate - GrabCurrentTime();
                 
-        #endregion
-
-        #region Main Functions        
-        private object FindPlayer(string arg)
-        {
-            var foundPlayers = new List<BasePlayer>();
-            ulong steamid;
-            ulong.TryParse(arg, out steamid);
-            string lowerarg = arg.ToLower();
-
-            foreach (var p in BasePlayer.activePlayerList)
-            {
-                if (steamid != 0L)
-                    if (p.userID == steamid)
-                    {
-                        foundPlayers.Clear();
-                        foundPlayers.Add(p);
-                        return foundPlayers[0];
-                    }
-                string lowername = p.displayName.ToLower();
-                if (lowername.Contains(lowerarg))
+                if (time <= 0)
                 {
-                    foundPlayers.Add(p);
+                    if (configData.AutoReleaseWhenExpired)
+                        FreeFromJail(player);
+                    else SendReply(player, msg("freetoleave", player.userID));
+                }
+                else
+                {        
+                    string prisonName = prisoners[player.userID].prisonName;
+
+                    if (prisons.ContainsKey(prisonName))
+                    {
+                        PrisonData.PrisonEntry entry = prisons[prisonName];
+
+                        if (!IsInZone(player, entry.zoneId) && !configData.AllowBreakouts)
+                        {
+                            object spawnLocation = GetSpawnLocation(prisonName, prisoners[player.userID].cellNumber);
+                            if (spawnLocation is Vector3)
+                            {
+                                MovePosition(player, (Vector3)spawnLocation);                                
+                            }
+                        }
+                        ShowJailTimer(player);
+                    }                    
                 }
             }
-            if (foundPlayers.Count == 0) return lang.GetMessage("noPlayers", this);
-            if (foundPlayers.Count > 1) return lang.GetMessage("multiPlayers", this);
-
-            return foundPlayers[0];
         }
-        private BasePlayer FindPlayerByID(ulong steamid)
+
+        private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            BasePlayer targetplayer = BasePlayer.FindByID(steamid);
-            if (targetplayer != null)
+            if (entity == null || info == null || !configData.DisablePrisonerDamage)
+                return;
+
+            BasePlayer player = info.InitiatorPlayer;
+            if (player != null && IsPrisoner(player))
             {
-                return targetplayer;
+                info.damageTypes = new Rust.DamageTypeList();
+                info.HitEntity = null;
+                info.HitMaterial = 0;
+                info.PointStart = Vector3.zero;
             }
-            targetplayer = BasePlayer.FindSleeping(steamid);
-            if (targetplayer != null)
+        }
+
+        private object OnServerCommand(ConsoleSystem.Arg arg)
+        {
+            BasePlayer player = arg.Player();
+
+            if (player == null || arg.Args == null || player.IsAdmin)
+                return null;
+
+            if (IsPrisoner(player))
             {
-                return targetplayer;
+                string cmd = arg.Args[0].ToLower();
+
+                if (configData.BlockChat && arg.cmd.FullName == "chat.say" && !cmd.StartsWith("/"))
+                {
+                    if (configData.InmateChat)
+                    {
+                        string prisonName = prisoners[player.userID].prisonName;
+                        foreach (var prisoner in prisoners.Where(x => x.Value.prisonName == prisonName))
+                        {
+                            BasePlayer inmate = null;
+                            IPlayer iPlayer = covalence.Players.FindPlayerById(prisoner.Key.ToString());
+                            if (iPlayer != null && iPlayer.IsConnected)
+                                inmate = iPlayer.Object as BasePlayer;
+
+                            inmate.SendConsoleCommand("chat.add", new object[] { player.UserIDString, $"<color={(player.IsAdmin ? "#aaff55" : player.IsDeveloper ? "#fa5" : "#55AAFF")}>[Inmate Chat] {player.displayName}</color>: {string.Join(" ", arg.Args)}" });
+                        }
+                    }
+                    else SendReply(player, msg("chatblocked", player.userID));
+                    return false;
+                }
+
+                if (cmd.Length > 0 && cmd.StartsWith("/") && arg.cmd.FullName == "chat.say")
+                {
+                    if (configData.CommandBlacklist.Any(entry => entry.StartsWith("/") ? cmd.StartsWith(entry) : cmd.Substring(1).StartsWith(entry)))
+                    {
+                        SendReply(player, msg("blacklistcmd", player.userID));
+                        return false;
+                    }
+                }
             }
             return null;
         }
-        private void TPPlayer(BasePlayer player, Vector3 pos)
-        {
-            player.MovePosition(pos);
-            player.ClientRPCPlayer(null, player, "ForcePositionTo", pos);
-            player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
-            player.UpdateNetworkGroup();
-            player.SendNetworkUpdateImmediate(false);
-            player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
-            player.SendFullSnapshot();
-        }
-        private object CheckSpawns(string name)
-        {
-            object success = Spawns.Call("GetSpawnsCount", new object[] { name });
-            if (success is string) return null;
-            return success;
-        }
-        private void AddJail(BasePlayer player, string[] args)
-        {
-            string name = args[1].ToLower();
 
-            Prison data = new Prison();
-            if (CheckSpawns(args[3]) != null)
+        private void OnServerSave() => SavePrisonerData();
+
+        private void Unload()
+        {
+            foreach(var player in BasePlayer.activePlayerList)
+                CuiHelper.DestroyUi(player, UIJailTimer);
+        }
+        #endregion
+
+        #region Functions
+        private void SendToPrison(BasePlayer player, string prisonName, double time)
+        {
+            int cellNumber = GetEmptyCell(prisonName);
+
+            object spawnLocation = GetSpawnLocation(prisonName, cellNumber);
+            if (spawnLocation is Vector3)
             {
-                object zoneid = ZoneManager.Call("CheckZoneID", args[2] );
-                if (zoneid is string && (string)zoneid != "")
+                PrisonerData.PrisonerEntry entry = new PrisonerData.PrisonerEntry
                 {
-                    data.zoneID = (string)zoneid;
+                    cellNumber = cellNumber,
+                    prisonName = prisonName,
+                    releaseDate = time + GrabCurrentTime()
+                };
 
-                    object location = ZoneManager?.Call("GetZoneLocation", (string)zoneid );
-                    if (location != null && location is Vector3)
-                        data.location = (Vector3)location;
-                    else
-                    {
-                        SendMsg(player, lang.GetMessage("invalidZPos", this, player.UserIDString));
-                        return;
-                    }
+                prisoners[player.userID] = entry;
+                restoreData.AddData(player);
+                player.inventory.Strip();
+                NextTick(() =>
+                {                    
+                    MovePosition(player, (Vector3)spawnLocation);
+                    CheckIn(player, prisonName);
+                });
+            }
+            SavePrisonerData();
+        }
 
-                    object radius = ZoneManager?.Call("GetZoneRadius", (string)zoneid );
-                    if (radius != null && radius is float)
-                        data.zoneRadius = float.Parse(radius.ToString());
-                    else
-                    {
-                        SendMsg(player, lang.GetMessage("invalidZRad", this, player.UserIDString));
-                        return;
-                    }
+        private int GetEmptyCell(string prisonName)
+        {
+            int cellNumber = prisons[prisonName].occupiedCells.Where(x => x.Value == false).ToList().GetRandom().Key;
+            prisons[prisonName].occupiedCells[cellNumber] = true;
+            return cellNumber;
+        }
 
-                    data.spawnFile = args[3];
-
-                    int cellCount = (int)CheckSpawns(args[3]);
-                    for (int i = 0; i < cellCount; i++)
-                        data.freeCells.Add(i, false);
-                }
-                else
-                {
-                    SendMsg(player, lang.GetMessage("invalidZID", this, player.UserIDString) + args[2]);
-                    return;
-                }
-
-                jailData.prisons.Add(args[1].ToLower(), data);
-                SendMsg(player, lang.GetMessage("newJailAdd", this, player.UserIDString));
-                SaveData();
+        private void CheckIn(BasePlayer player, string prisonName)
+        {
+            if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+            {
+                timer.In(1, () => CheckIn(player, prisonName));
                 return;
             }
-            SendMsg(player, lang.GetMessage("invalidSF", this, player.UserIDString) + args[3]);
+            PrisonData.PrisonEntry entry = prisons[prisonName];
+            if (configData.GiveInmateKits && !string.IsNullOrEmpty(entry.inmateKit))
+                Kits.Call("GiveKit", player, entry.inmateKit);
+                        
+            ShowJailTimer(player);
         }
-        private void RemoveJail(BasePlayer player, string arg)
-        {
-            if (jailData.prisons.ContainsKey(arg.ToLower()))
-            {
-                EraseJailZone(arg.ToLower());
-                jailData.prisons.Remove(arg.ToLower());
-                SendMsg(player, lang.GetMessage("remJail", this, player.UserIDString) + arg);
-                SaveData();
-            }
-            else SendMsg(player, lang.GetMessage("noJail", this, player.UserIDString));
-        }
-        private void EraseJailZone(string zoneID)
-        {
-            ZoneManager.Call("EraseZone", zoneID);
-            Puts("Jail Zone " + zoneID + " removed.");
-        }
-        private object SendPlayerToJail(BasePlayer player, string prisonName, int time)
-        {
-            object cellNum = FindEmptyCell(prisonName);
-            if (cellNum != null)
-            {
-                string zoneID = jailData.prisons[prisonName].zoneID;
-                object cellPos = FindSpawnPoint(prisonName, (int)cellNum);
-                if (cellPos == null) return "noPos";
-                jailData.prisons[prisonName].freeCells[(int)cellNum] = true;
 
-                double jailTime = -99999;
-
-                if (time != -99999)
-                    jailTime = time + GrabCurrentTime();
-
-                Inmate inmate = new Inmate() { initialPos = player.transform.position, prisonName = prisonName, cellNumber = (int)cellNum, expireTime = jailTime};
-                jailData.Prisoners.Add(player.userID, inmate);
-
-                SendMsg(player, lang.GetMessage("sentPrison", this, player.UserIDString));
-                player.inventory.crafting.CancelAll(true);
-                timer.Once(5, ()=>
-                {
-                    SaveInventory(player);
-                    ZoneManager.Call("AddPlayerToZoneKeepinlist", zoneID, player);
-                    player.inventory.Strip();
-                    
-                    TeleportPlayerPosition(player, (Vector3)cellPos);
-
-                    jailTimerList.Add(player.userID, time);
-                    CreateJailTimer(player);
-
-                    SendMsg(player, lang.GetMessage("checkTime", this, player.UserIDString));
-
-                    if (giveKit)
-                    {
-                        if (kitName == null || kitName == "") return;
-                        Kits?.Call("GiveKit", player, kitName);
-                    }
-                });
-                SaveData();
-                return true;
-            }
-            return "noCells";
-        }       
         private void FreeFromJail(BasePlayer player)
         {
-            string prisonName = jailData.Prisoners[player.userID].prisonName;
-            int cellNum = jailData.Prisoners[player.userID].cellNumber;
-            string zoneID = jailData.prisons[prisonName].zoneID;
-            CuiHelper.DestroyUi(player, "jailTimer");
-            if (jailTimerList.ContainsKey(player.userID))
-                jailTimerList.Remove(player.userID);
+            PrisonerData.PrisonerEntry entry = prisoners[player.userID];
+            prisons[entry.prisonName].occupiedCells[entry.cellNumber] = false;            
+            
+            CuiHelper.DestroyUi(player, UIJailTimer);
+            prisoners.Remove(player.userID);
 
-            jailData.prisons[prisonName].freeCells[cellNum] = false;
-            RestoreInventory(player);
+            restoreData.RestorePlayer(player, configData.ReturnHomeAfterRelease);
 
-            SendMsg(player, lang.GetMessage("relPrison", this, player.UserIDString));
+            if (!configData.ReturnHomeAfterRelease)
+                MovePosition(player, CalculateFreePosition(entry.prisonName));
 
-            Vector3 freePos = CalculateFreePos(prisonName);
-            if (useInitialSpawns) freePos = jailData.Prisoners[player.userID].initialPos;
-
-            jailData.Prisoners.Remove(player.userID);
-            ZoneManager.Call("RemovePlayerFromZoneKeepinlist", zoneID, player);
-            TeleportPlayerPosition(player, freePos);
-            SaveData();
+            SavePrisonerData();
         }
-        private object FindSpawnPoint(string prisonName, int cellNumber)
+        #endregion
+
+        #region Teleportation
+        private object GetSpawnLocation(string prisonName, int cellNumber)
         {
-            object cellPos = Spawns?.Call("GetSpawn", new object[] { jailData.prisons[prisonName].spawnFile, cellNumber });
-            if (cellPos is string)
+            var success = Spawns.Call("GetSpawn", new object[] { prisons[prisonName].spawnFile, cellNumber });
+            if (success is string)
             {
-                Puts((string)cellPos);
+                PrintError($"There was a error retrieving spawn location. Cell #{cellNumber} at prison : {prisonName}");
                 return null;
             }
-            return (Vector3)cellPos;
+            return (Vector3)success;
         }
-        private Vector3 CalculateFreePos(string prisonName)
+
+        private Vector3 CalculateFreePosition(string prisonName)
         {
-            Vector3 zonePos = jailData.prisons[prisonName].location;
-            float zoneRadius = jailData.prisons[prisonName].zoneRadius;
-            Vector3 calcPos = zonePos + new Vector3(zoneRadius + 10, 0, 0);
-            Vector3 finalPos = CalculateGroundPos(calcPos);
-            return finalPos;
-        }
-        static Vector3 CalculateGroundPos(Vector3 sourcePos) // credit Wulf & Nogrod
-        {
+            PrisonData.PrisonEntry entry = prisons[prisonName];
+
+            Vector3 exitPoint = new Vector3(entry.x, entry.y, entry.z) + (UnityEngine.Random.onUnitSphere * (entry.radius * 2));
+
             RaycastHit hitInfo;
+            if (Physics.Raycast(exitPoint + (Vector3.up * 50), Vector3.down, out hitInfo, layerMask))
+                exitPoint.y = hitInfo.point.y;
 
-            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, GROUND_MASKS))
-            {
-                sourcePos.y = hitInfo.point.y;
-            }
-            sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
-            return sourcePos;
+            float terrainHeight = TerrainMeta.HeightMap.GetHeight(exitPoint);
+            if (exitPoint.y < terrainHeight)
+                exitPoint.y = terrainHeight;
+
+            return exitPoint;
         }
-        private bool CheckPlayerExpireTime(BasePlayer player)
+
+        private void PushBack(BasePlayer player, string prisonName)
         {
-            if (!player.IsConnected) return false;
-            if (player.IsDead()) return false;
+            PrisonData.PrisonEntry entry = prisons[prisonName];
 
-            double time = jailData.Prisoners[player.userID].expireTime;
-            if (time == -99999)
-                return false;
-            double timeLeft = time - GrabCurrentTime();
-            if (timeLeft <= 0)
-            {                
-                jailTimerList.Remove(player.userID);
-                FreeFromJail(player);
-                return true;
-            }
-            return false;
+            Vector3 prisonPos = new Vector3(entry.x, entry.y, entry.z);
+
+            var direction = (prisonPos - player.transform.position).y;
+
+            player.MovePosition(player.transform.position + (Quaternion.Euler(0, direction, 0) * (Vector3.back * 5)));
+
         }
-        private void TeleportPlayerPosition(BasePlayer player, Vector3 destination)
+
+        private void MovePosition(BasePlayer player, Vector3 destination)
         {
             if (player.net?.connection != null)
-                player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+                player.ClientRPCPlayer(null, player, "StartLoading");
             StartSleeping(player);
             player.MovePosition(destination);
             if (player.net?.connection != null)
@@ -449,6 +286,7 @@ namespace Oxide.Plugins
             try { player.ClearEntityQueue(null); } catch { }
             player.SendFullSnapshot();
         }
+
         private void StartSleeping(BasePlayer player)
         {
             if (player.IsSleeping())
@@ -458,588 +296,879 @@ namespace Oxide.Plugins
                 BasePlayer.sleepingPlayerList.Add(player);
             player.CancelInvoke("InventoryUpdate");
         }
-        private string FindEmptyPrison()
+        #endregion
+
+        #region UI
+        class UI
         {
-            List<string> emptyPrisons = new List<string>();
-            int num = 0;
-            foreach (var prison in jailData.prisons)
+            static public CuiElementContainer Element(string panelName, string color, string aMin, string aMax)
             {
-                foreach (var cell in prison.Value.freeCells)
-                    if (cell.Value == false)
-                        num++;
-                if (num > 0) return prison.Key;
-            }            
-            return null;
-        }
-        private object FindEmptyCell(string prisonName)
-        {
-            int emptyCell = -1;
-            foreach (var cell in jailData.prisons[prisonName].freeCells)
-            {
-                if (cell.Value == false)
+                var NewElement = new CuiElementContainer()
                 {
-                    emptyCell = cell.Key;
-                    break;
-                }                               
+                    {
+                        new CuiPanel
+                        {
+                            Image = {Color = color},
+                            RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                        },
+                        new CuiElement().Parent = "Hud",
+                        panelName
+                    }
+                };
+                return NewElement;
             }
-            if (emptyCell == -1) return null;
-            return emptyCell;
+
+            static public void Label(ref CuiElementContainer container, string panel, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            {
+                container.Add(new CuiLabel
+                {
+                    Text = { FontSize = size, Align = align, Text = text },
+                    RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
+                },
+                panel);
+
+            }
         }
 
-        static double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
+        private void ShowJailTimer(BasePlayer player)
+        {
+            if (player != null)
+            {
+                CuiHelper.DestroyUi(player, UIJailTimer);
+                PrisonerData.PrisonerEntry entry;
+                if (prisoners.TryGetValue(player.userID, out entry))
+                {
+                    var time = entry.releaseDate - GrabCurrentTime();
+                    if (time > 0)
+                    {
+                        string clock = FormatTime(time);
 
-        private void SendMsg(BasePlayer player, string msg)
-        {
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + msgColor + msg + "</color>");
+                        var container = UI.Element(UIJailTimer, "0.3 0.3 0.3 0.6", "0.4 0.965", "0.6 0.995");
+                        UI.Label(ref container, UIJailTimer, ins.msg("remaining", player.userID) + clock, 14, "0 0", "1 1");
+                        CuiHelper.AddUi(player, container);
+                        timer.In(1, () => ShowJailTimer(player));
+                    }
+                    else
+                    {
+                        if (configData.AutoReleaseWhenExpired)
+                            FreeFromJail(player);
+                        else
+                        {
+                            var container = UI.Element(UIJailTimer, "0.3 0.3 0.3 0.6", "0.35 0.965", "0.65 0.995");
+                            UI.Label(ref container, UIJailTimer, ins.msg("freetoleave", player.userID), 14, "0 0", "1 1");
+                            CuiHelper.AddUi(player, container);
+                        }
+                    }
+
+                }
+            }
         }
-        private bool IsPrisoner(BasePlayer player)
+
+        private string FormatTime(double time)
         {
-            if (jailData.Prisoners.ContainsKey(player.userID)) return true;
-            return false;
+            TimeSpan dateDifference = TimeSpan.FromSeconds((float)time);
+            var days = dateDifference.Days;
+            var hours = dateDifference.Hours;
+            hours += (days * 24);
+            var mins = dateDifference.Minutes;
+            var secs = dateDifference.Seconds;
+            if (hours > 0)
+                return string.Format("{0:00}:{1:00}:{2:00}", hours, mins, secs);
+            else return string.Format("{0:00}:{1:00}", mins, secs);
         }
         #endregion
 
-        #region ZoneManager Hooks       
-        bool isInZone(BasePlayer player, string zoneID)
+        #region Zone Management
+        private bool IsInZone(BasePlayer player, string zoneID)
         {
             if (ZoneManager == null) return false;
             return (bool)ZoneManager.Call("isPlayerInZone", zoneID, player);
         }
-        void OnEnterZone(string ZoneID, BasePlayer player)
+
+        private void OnEnterZone(string zoneID, BasePlayer player)
         {
-            if (Started)
-                if (prisonIDs.Contains(ZoneID))
+            string prisonName = string.Empty;
+
+            foreach(var prison in prisons)
             {
-                if (hasPermission(player)) { SendMsg(player, string.Format(lang.GetMessage("welcomeJail", this, player.UserIDString), player.displayName)); return; }
-                else if (!jailData.Prisoners.ContainsKey(player.userID)) { SendMsg(player, lang.GetMessage("keepOut", this, player.UserIDString)); }
+                if (prison.Value.zoneId == zoneID)
+                    prisonName = prison.Key;
+            }
+
+            if (!string.IsNullOrEmpty(prisonName))
+            {
+                if (!permission.UserHasPermission(player.UserIDString, "jail.canenter") && !IsPrisoner(player) && configData.BlockPublicAccessToPrisons)
+                {
+                    PushBack(player, prisonName);
+                    SendReply(player, msg("trespassing", player.userID));
+                }
+                else SendReply(player, string.Format(msg("welcome", player.userID), prisonName, player.displayName));
             }
         }
-        void OnExitZone(string ZoneID, BasePlayer player)
+
+        private void OnExitZone(string zoneID, BasePlayer player)
         {
-            if (Started)
-                if (prisonIDs.Contains(ZoneID))
-                if (jailData.Prisoners.ContainsKey(player.userID)) { SendMsg(player, lang.GetMessage("keepIn", this, player.UserIDString)); }
+            if (IsPrisoner(player))
+            {
+                PrisonerData.PrisonerEntry entry = prisoners[player.userID];
+
+                if (prisons.ContainsKey(entry.prisonName) && zoneID == prisons[entry.prisonName].zoneId)
+                {
+                    if (configData.AllowBreakouts)
+                    {
+                        SendReply(player, string.Format(msg("escaped", player.userID), entry.prisonName));
+                        prisons[entry.prisonName].occupiedCells[entry.cellNumber] = false;
+
+                        if (configData.ReturnGearOnBreakout)
+                            restoreData.RestorePlayer(player, false);
+
+                        CuiHelper.DestroyUi(player, UIJailTimer);
+
+                        prisoners.Remove(player.userID);
+                    }
+                    else
+                    {
+                        object spawnLocation = GetSpawnLocation(entry.prisonName, entry.cellNumber);
+                        if (spawnLocation is Vector3)
+                        {
+                            MovePosition(player, (Vector3)spawnLocation);
+                            SendReply(player, msg("noescape", player.userID));
+                        }
+                    }
+                }
+            }
         }
         #endregion
 
-        #region Permissions
-        bool isAuth(BasePlayer player)
+        #region Inventory Saving and Restoration
+        public class RestoreData
         {
-            if (player.net.connection != null)
-                if (player.net.connection.authLevel != 2) return false;
-            return true;
-        }
-        bool hasPermission(BasePlayer player)
-        {
-            if (isAuth(player)) return true;
-            else if (permission.UserHasPermission(player.userID.ToString(), "jail.admin")) return true;
-            return false;
+            public Hash<ulong, PlayerData> restoreData = new Hash<ulong, PlayerData>();
+
+            public void AddData(BasePlayer player)
+            {
+                restoreData[player.userID] = new PlayerData(player);
+            }
+
+            public void RemoveData(ulong playerId)
+            {
+                if (HasRestoreData(playerId))
+                    restoreData.Remove(playerId);
+            }
+
+            public bool HasRestoreData(ulong playerId) => restoreData.ContainsKey(playerId);
+
+            public void RestorePlayer(BasePlayer player, bool returnHome)
+            {
+                PlayerData playerData;
+                if (restoreData.TryGetValue(player.userID, out playerData))
+                {
+                    player.inventory.Strip();
+
+                    if (player.IsSleeping() || player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+                    {
+                        ins.timer.Once(1, () => RestorePlayer(player, returnHome));
+                        return;
+                    }
+
+                    ins.NextTick(() =>
+                    {
+                        playerData.SetStats(player);
+                        if (returnHome)
+                            ins.MovePosition(player, playerData.GetPosition());
+                        RestoreAllItems(player, playerData);
+                    });
+                }
+            }
+
+            private void RestoreAllItems(BasePlayer player, PlayerData playerData)
+            {
+                if (player == null || !player.IsConnected)
+                    return;
+
+                if (RestoreItems(player, playerData.containerBelt, "belt") && RestoreItems(player, playerData.containerWear, "wear") && RestoreItems(player, playerData.containerMain, "main"))
+                    RemoveData(player.userID);
+            }
+
+            private bool RestoreItems(BasePlayer player, ItemData[] itemData, string type)
+            {
+                ItemContainer container = type == "belt" ? player.inventory.containerBelt : type == "wear" ? player.inventory.containerWear : player.inventory.containerMain;
+
+                for (int i = 0; i < itemData.Length; i++)
+                {
+                    Item item = CreateItem(itemData[i]);
+                    item.position = itemData[i].position;
+                    item.SetParent(container);
+                }
+                return true;
+            }
+
+            private Item CreateItem(ItemData itemData)
+            {
+                var item = ItemManager.CreateByItemID(itemData.itemid, itemData.amount, itemData.skin);
+                item.condition = itemData.condition;
+                if (itemData.instanceData != null)
+                    item.instanceData = itemData.instanceData;
+
+                var weapon = item.GetHeldEntity() as BaseProjectile;
+                if (weapon != null)
+                {
+                    if (!string.IsNullOrEmpty(itemData.ammotype))
+                        weapon.primaryMagazine.ammoType = ItemManager.FindItemDefinition(itemData.ammotype);
+                    weapon.primaryMagazine.contents = itemData.ammo;
+                }
+                if (itemData.contents != null)
+                {
+                    foreach (var contentData in itemData.contents)
+                    {
+                        var newContent = ItemManager.CreateByItemID(contentData.itemid, contentData.amount);
+                        if (newContent != null)
+                        {
+                            newContent.condition = contentData.condition;
+                            newContent.MoveToContainer(item.contents);
+                        }
+                    }
+                }
+                return item;
+            }
+
+            public class PlayerData
+            {
+                public float[] stats;
+                public float[] position;
+                public ItemData[] containerMain;
+                public ItemData[] containerWear;
+                public ItemData[] containerBelt;
+
+                public PlayerData() { }
+
+                public PlayerData(BasePlayer player)
+                {
+                    stats = GetStats(player);
+                    position = GetPosition(player.transform.position);
+                    containerBelt = GetItems(player.inventory.containerBelt).ToArray();
+                    containerMain = GetItems(player.inventory.containerMain).ToArray();
+                    containerWear = GetItems(player.inventory.containerWear).ToArray();
+                }
+
+                private IEnumerable<ItemData> GetItems(ItemContainer container)
+                {
+                    return container.itemList.Select(item => new ItemData
+                    {
+                        itemid = item.info.itemid,
+                        amount = item.amount,
+                        ammo = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.contents ?? 0,
+                        ammotype = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.ammoType.shortname ?? null,
+                        position = item.position,
+                        skin = item.skin,
+                        condition = item.condition,
+                        instanceData = item.instanceData ?? null,
+                        contents = item.contents?.itemList.Select(item1 => new ItemData
+                        {
+                            itemid = item1.info.itemid,
+                            amount = item1.amount,
+                            condition = item1.condition
+                        }).ToArray()
+                    });
+                }
+
+                private float[] GetStats(BasePlayer player) => new float[] { player.health, player.metabolism.hydration.value, player.metabolism.calories.value };
+
+                public void SetStats(BasePlayer player)
+                {
+                    player.health = stats[0];
+                    player.metabolism.hydration.value = stats[1];
+                    player.metabolism.calories.value = stats[2];
+                    player.metabolism.SendChangesToClient();
+                }
+
+                private float[] GetPosition(Vector3 position) => new float[] { position.x, position.y, position.z };
+
+                public Vector3 GetPosition() => new Vector3(position[0], position[1], position[2]);
+            }
+
+            public class ItemData
+            {
+                public int itemid;
+                public ulong skin;
+                public int amount;
+                public float condition;
+                public int ammo;
+                public string ammotype;
+                public int position;
+                public ProtoBuf.Item.InstanceData instanceData;
+                public ItemData[] contents;
+            }
         }
         #endregion
 
-        #region Chat/Console Commands        
+        #region Helpers
+        private double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
+
+        private bool HasPermission(ulong playerId, string perm) => permission.UserHasPermission(playerId.ToString(), perm);
+
+        private bool IsPrisoner(BasePlayer player) => prisoners.ContainsKey(player.userID);
+
+        private bool HasEmptyCells(string prisonName) => prisons[prisonName].occupiedCells.Where(x => x.Value == false).Count() > 0;
+        #endregion
+
+        #region Commands
+        [ChatCommand("leavejail")]
+        private void cmdLeaveJail(BasePlayer player, string command, string[] args)
+        {
+            if (IsPrisoner(player))
+            {
+                var time = prisoners[player.userID].releaseDate - GrabCurrentTime();
+                if (time <= 0)
+                    FreeFromJail(player);
+                else SendReply(player, string.Format(msg("timeremaining", player.userID), FormatTime(time)));
+            }
+        }
+
         [ChatCommand("jail")]
         private void cmdJail(BasePlayer player, string command, string[] args)
         {
-            if (Started)
-            if (jailData.Prisoners.ContainsKey(player.userID) && !hasPermission(player))
-            {
-                double currentTime = GrabCurrentTime();
-                double expTime = jailData.Prisoners[player.userID].expireTime;
-                if (expTime == -99999)
-                {
-                    SendMsg(player, lang.GetMessage("noRelease", this, player.UserIDString));
-                    return;
-                }
-                double timeLeft = expTime - currentTime;
-                if (timeLeft > 0)
-                {
-                    string msg = lang.GetMessage("mins", this, player.UserIDString);
+            if (!permission.UserHasPermission(player.UserIDString, "jail.admin"))
+                return;
 
-                    if (timeLeft <= 60) msg = lang.GetMessage("secs", this, player.UserIDString);
-                    else timeLeft = timeLeft / 60;
-
-                    SendMsg(player, string.Format(lang.GetMessage("remainJail", this, player.UserIDString), timeLeft, msg));
-                    return;
-                }
-                FreeFromJail(player);
-            }
-            if (!hasPermission(player)) return;
-            if (args == null || args.Length == 0)
+            if (args.Length == 0)
             {
-                SendMsg(player, lang.GetMessage("synSend1", this, player.UserIDString));
-                SendMsg(player, lang.GetMessage("synFree", this, player.UserIDString));
-                SendMsg(player, lang.GetMessage("synAdd", this, player.UserIDString));
-                SendMsg(player, lang.GetMessage("synRem", this, player.UserIDString));
-                SendMsg(player, lang.GetMessage("synList", this, player.UserIDString));
-                SendMsg(player, lang.GetMessage("synPurge", this, player.UserIDString));
-                SendMsg(player, lang.GetMessage("synZone", this, player.UserIDString));
-                SendMsg(player, lang.GetMessage("synWipe", this, player.UserIDString));
+                SendReply(player, msg("help1", player.userID));
+                SendReply(player, msg("help2", player.userID));
+                SendReply(player, msg("help3", player.userID));
+                SendReply(player, msg("help4", player.userID));
+                SendReply(player, msg("help5", player.userID));
+                SendReply(player, msg("help6", player.userID));
                 return;
             }
-            if (!hasPermission(player)) return;
             switch (args[0].ToLower())
             {
-                case "send":
-                    if (args.Length >= 2)
+                case "create":
+                    if (args.Length >= 4)
                     {
-                        object addPlayer = FindPlayer(args[1]);
+                        string name = args[1];                        
+                        string kit = args.Length > 4 ? args[4] : "";
 
-                        if (addPlayer is string) { SendMsg(player, (string)addPlayer); return; }
-
-                        int time = -99999;
-                        string prison = FindEmptyPrison();
-                        if (args.Length >= 5)
-                            if (jailData.prisons.ContainsKey(args[4].ToLower())) prison = args[4].ToLower();
-                        if (string.IsNullOrEmpty(prison)) { SendMsg(player, lang.GetMessage("noPrisons", this, player.UserIDString)); return; }
-
-                        BasePlayer target = (BasePlayer)addPlayer;
-                        if (jailData.Prisoners.ContainsKey(target.userID)) return;
-
-                        if (args.Length >= 3)
-                            int.TryParse(args[2], out time);
-
-                        object success = SendPlayerToJail(target, prison, time);
-
-                        if (success is bool)
+                        if (prisons.ContainsKey(name))
                         {
-                            if ((bool)success)
-                            {
-                                SendMsg(player, string.Format(lang.GetMessage("sentTo", this, player.UserIDString), target.displayName, prison));
-                                if (args.Length >= 4 && broadcastImprisonment)
-                                    PrintToChat(string.Format(lang.GetMessage("sentToBroadcast", this, player.UserIDString), target.displayName, args[3]));
-                            }                          
-                        }
-                        else if (success is string)
-                        {
-                            if ((string)success == "noPos") SendMsg(player, string.Format(lang.GetMessage("noPos", this), prison));
-                            else if ((string)success == "noCells") SendMsg(player, string.Format(lang.GetMessage("noCells", this), prison));
+                            SendReply(player, msg("alreadyexists", player.userID));
                             return;
                         }
-                    }
-                    else SendMsg(player, lang.GetMessage("synSend1", this, player.UserIDString));
-                    return;
 
-                case "free":
-                    if (args.Length == 2)
-                    {
-                        object freePlayer = FindPlayer(args[1]);
-
-                        if (freePlayer is string) { SendMsg(player, (string)freePlayer); return; }
-                        BasePlayer freetarget = (BasePlayer)freePlayer;
-
-                        if (jailData.Prisoners.ContainsKey(freetarget.userID))
+                        if (ValidateSpawnFile(args[2]) != null)
                         {
-                            FreeFromJail(freetarget);
-                            SendMsg(player, string.Format(lang.GetMessage("relFrom", this, player.UserIDString), freetarget.displayName));
+                            SendReply(player, msg("invalidspawns", player.userID));
+                            return;
                         }
+
+                        if (ValidateZoneID(args[3]) != null)
+                        {
+                            SendReply(player, msg("invalidzone", player.userID));
+                            return;
+                        }
+
+                        if (!string.IsNullOrEmpty(kit) && ValidateKit(kit) != null)
+                        {
+                            SendReply(player, msg("invalidkit", player.userID));
+                            return;
+                        }
+
+                        Vector3 location = Vector3.zero;
+                        float radius = 20;
+                        int spawnCount = 1;
+
+                        object success = ZoneManager.Call("GetZoneLocation", args[3]);
+                        if (success != null)
+                            location = (Vector3)success;
+
+                        success = ZoneManager.Call("GetZoneRadius", args[3]);
+                        if (success == null)
+                        {
+                            success = ZoneManager.Call("GetZoneSize", args[3]);
+                            if (success != null)
+                            {
+                                Vector3 v3 = (Vector3)success;
+                                radius = v3.x;
+                            }
+                        }
+                        else radius = Convert.ToSingle(success);
+
+                        success = Spawns?.Call("GetSpawnsCount", args[2]);
+                        if (success is int)
+                            spawnCount = Convert.ToInt32(success);
+
+                        prisons.Add(name, new PrisonData.PrisonEntry(args[3], args[2], kit, location, radius, spawnCount));
+                        SendReply(player, msg("createsuccess", player.userID));
+                        SavePrisonData();
                     }
-                    else SendMsg(player, lang.GetMessage("synFree", this, player.UserIDString));
-                    return;
-                case "add":
-                    if (args.Length == 4)
-                        AddJail(player, args);
-                    else SendMsg(player, lang.GetMessage("synAdd", this, player.UserIDString));                  
+                    else SendReply(player, msg("help1", player.userID));
                     return;
                 case "remove":
                     if (args.Length == 2)
-                        RemoveJail(player, args[1]);
-                    else SendMsg(player, lang.GetMessage("synRem", this, player.UserIDString));
-                    return;
-                case "zone":
-                    int radius = 30;
-                    if (args.Length >= 2)
-                        int.TryParse(args[1], out radius);
-                    string zoneID = "Jail" + (jailData.prisons.Count + 1);
-                    string[] zoneargs = new string[] { "eject", "true", "radius", radius.ToString(), "sleepgod", "true", "undestr", "true", "nobuild", "true", "notp", "true", "nokits", "true", "nodeploy", "true", "nosuicide", "true" };
-                    ZoneManager?.Call("CreateOrUpdateZone", zoneID, zoneargs, player.transform.position);
-                    SendMsg(player, lang.GetMessage("createJail", this, player.UserIDString));
-                    SendMsg(player, string.Format(lang.GetMessage("jailID", this, player.UserIDString), zoneID));
-                    return;
-                case "list":
-                    foreach (var entry in jailData.prisons)
-                        SendReply(player, "Name: " + entry.Key + ", Location: " + entry.Value.location.ToString());
-                    return;
-                case "purge":
-                    List<ulong> RemoveList = new List<ulong>();
-                    List<BasePlayer> FreeList = new List<BasePlayer>();
-                    foreach(var entry in jailData.Prisoners)
                     {
-                        if (entry.Value.expireTime - GrabCurrentTime() < 0)
+                        if (prisons.ContainsKey(args[1]))
                         {
-                            BasePlayer target = FindPlayerByID(entry.Key);
-                            if (target != null)
-                                FreeList.Add(target);
-                            else RemoveList.Add(entry.Key);
+                            FreePrisoners(args[1]);
+                            prisons.Remove(args[1]);
+                            SendReply(player, string.Format(msg("removesuccess", player.userID), args[1]));
+                            SavePrisonData();
                         }
                     }
-                    foreach (var entry in RemoveList)
-                        jailData.Prisoners.Remove(entry);
-                    foreach (var entry in FreeList)
-                        FreeFromJail(entry);
+                    else SendReply(player, msg("help2", player.userID));
                     return;
-                case "wipe":
-                    foreach(var entry in jailData.prisons)
-                        EraseJailZone(entry.Key);
-                    foreach (var entry in jailData.Prisoners)
+                case "list":
+                    SendReply(player, string.Format(msg("list", player.userID), prisons.Count));
+                    foreach (var prison in prisons)
+                        SendReply(player, $"Name: {prison.Key} - Zone: {prison.Value.zoneId}, Location: {prison.Value.x} {prison.Value.y} {prison.Value.z}");
+                    return;
+                case "send":
+                    if (args.Length >= 2)
                     {
-                        BasePlayer inmate = FindPlayerByID(entry.Key);
+                        BasePlayer inmate = null;
+                        IPlayer iPlayer = covalence.Players.FindPlayer(args[1]);
+                        if (iPlayer != null && iPlayer.IsConnected)
+                            inmate = iPlayer.Object as BasePlayer;
+
+                        if (inmate == null)
+                        {
+                            SendReply(player, string.Format(msg("noplayer", player.userID), args[1]));
+                            return;
+                        }
+
+                        int time = int.MaxValue;
+                        string reason = string.Empty;
+                        string prisonName = string.Empty;
+
+                        if (args.Length > 2)
+                        {
+                            if (!int.TryParse(args[2], out time))
+                            {
+                                SendReply(player, msg("notime", player.userID));
+                                return;
+                            }
+                        }
+
+                        if (args.Length > 3)
+                            reason = args[3];
+
+                        if (args.Length >= 4)
+                        {
+                            if (!prisons.ContainsKey(args[4]))
+                            {
+                                SendReply(player, string.Format(msg("invalidprison", player.userID), args[4]));
+                                return;
+                            }
+                            prisonName = args[4];
+                        }
+                        else prisonName = prisons.Keys.ToList().GetRandom();
+
+                        SendToPrison(inmate, prisonName, time);
+                        SavePrisonerData();
+
+                        if (configData.BroadcastImprisonment)
+                            PrintToChat(string.IsNullOrEmpty(reason) ? string.Format(msg("sent1"), inmate.displayName, FormatTime(time)) : string.Format(msg("sent2"), inmate.displayName, time, reason));
+                        else
+                        {
+                            SendReply(inmate, string.IsNullOrEmpty(reason) ? string.Format(msg("sent3", inmate.userID), time) : string.Format(msg("sent4", inmate.userID), time ,reason));
+                            SendReply(player, string.IsNullOrEmpty(reason) ? string.Format(msg("sent5", player.userID), inmate.displayName, time) : string.Format(msg("sent6", player.userID), inmate.displayName, time, reason));
+                        }
+                    }
+                    else SendReply(player, msg("help4", player.userID));
+                    return;
+                case "free":
+                    if (args.Length >= 2)
+                    {
+                        BasePlayer inmate = null;
+                        IPlayer iPlayer = covalence.Players.FindPlayer(args[1]);
+                        if (iPlayer != null && iPlayer.IsConnected)
+                            inmate = iPlayer.Object as BasePlayer;
+
+                        if (inmate == null)
+                        {
+                            SendReply(player, string.Format(msg("noplayer", player.userID), args[1]));
+                            return;
+                        }
+
+                        if (!IsPrisoner(inmate))
+                        {
+                            SendReply(player, string.Format(msg("notinjail", player.userID), inmate.displayName));
+                            return;
+                        }
+
+                        FreeFromJail(inmate);
+                        SendReply(player, string.Format(msg("releasefromjail", player.userID), inmate.displayName));
+                    }
+                    else SendReply(player, msg("help5", player.userID));
+                    return;
+                case "clear":
+                    if (args.Length == 2)
+                    {
+                        if (prisons.ContainsKey(args[1]))
+                        {
+                            FreePrisoners(args[1]);
+                            SendReply(player, string.Format(msg("freedall", player.userID), args[1]));
+                        }
+                    }
+                    else SendReply(player, msg("help6", player.userID));
+                    return;
+                default:
+                    SendReply(player, msg("help1", player.userID));
+                    SendReply(player, msg("help2", player.userID));
+                    SendReply(player, msg("help3", player.userID));
+                    SendReply(player, msg("help4", player.userID));
+                    SendReply(player, msg("help5", player.userID));
+                    SendReply(player, msg("help6", player.userID));
+                    break;
+            }
+        }
+
+        [ConsoleCommand("jail")]
+        private void ccmdJail(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null)
+                return;
+
+            if (arg.Args == null || arg.Args.Length == 0)
+            {                
+                SendReply(arg, "jail list - List all jail names");
+                SendReply(arg, "jail send <name or ID> <opt: time> \"<opt: reason>\" <opt: jailname> - Send a player to jail, with the option to specify time (in seconds), reason for incarceration and which jail to send them to");
+                SendReply(arg, "jail free <name or ID> - Free a player from jail");
+                SendReply(arg, "jail clear <jailname> - Free all inmates from the specified jail");
+                return;
+            }
+            switch (arg.Args[0].ToLower())
+            {                
+                case "list":
+                    SendReply(arg, $"Prison List ({prisons.Count} prison(s))");
+                    foreach (var prison in prisons)
+                        SendReply(arg, $"Name: {prison.Key} - Zone: {prison.Value.zoneId}, Location: {prison.Value.x} {prison.Value.y} {prison.Value.z}");
+                    return;
+                case "send":
+                    if (arg.Args.Length >= 2)
+                    {
+                        BasePlayer inmate = null;
+                        IPlayer iPlayer = covalence.Players.FindPlayer(arg.Args[1]);
+                        if (iPlayer != null && iPlayer.IsConnected)
+                            inmate = iPlayer.Object as BasePlayer;
+
+                        if (inmate == null)
+                        {
+                            SendReply(arg, string.Format("Unable to find a player with the name or ID : {0}", arg.Args[1]));
+                            return;
+                        }
+
+                        int time = int.MaxValue;
+                        string reason = string.Empty;
+                        string prisonName = string.Empty;
+
+                        if (arg.Args.Length > 2)
+                        {
+                            if (!int.TryParse(arg.Args[2], out time))
+                            {
+                                SendReply(arg, "You must enter a number for the amount of time (in seconds)");
+                                return;
+                            }
+                        }
+
+                        if (arg.Args.Length > 3)
+                            reason = arg.Args[3];
+
+                        if (arg.Args.Length >= 4)
+                        {
+                            if (!prisons.ContainsKey(arg.Args[4]))
+                            {
+                                SendReply(arg, string.Format("{0} is not a valid prison name", arg.Args[4]));
+                                return;
+                            }
+                            prisonName = arg.Args[4];
+                        }
+                        else prisonName = prisons.Keys.ToList().GetRandom();
+
+                        SendToPrison(inmate, prisonName, time);
+                        SavePrisonerData();
+
+                        if (configData.BroadcastImprisonment)
+                            PrintToChat(string.IsNullOrEmpty(reason) ? string.Format("{0} is doing {1} in jail", inmate.displayName, FormatTime(time)) : string.Format("{0} is doing {1} in jail for {2}", inmate.displayName, time, reason));
+                        else
+                        {
+                            SendReply(inmate, string.IsNullOrEmpty(reason) ? string.Format("You have been sent to jail for {0}", time) : string.Format("You have been sent to jail for {0} because {1}", time, reason));
+                            SendReply(arg, string.IsNullOrEmpty(reason) ? string.Format("You have sent {0} to jail for {1}", inmate.displayName, time) : string.Format("You have sent {0} to jail for {1} because {2}", inmate.displayName, time, reason));
+                        }
+                    }
+                    else SendReply(arg, "/jail send <name or ID> <opt: time> \"<opt: reason>\" <opt: jailname> - Send a player to jail, with the option to specify time (in seconds), reason for incarceration and which jail to send them to");
+                    return;
+                case "free":
+                    if (arg.Args.Length >= 2)
+                    {
+                        BasePlayer inmate = null;
+                        IPlayer iPlayer = covalence.Players.FindPlayer(arg.Args[1]);
+                        if (iPlayer != null && iPlayer.IsConnected)
+                            inmate = iPlayer.Object as BasePlayer;
+
+                        if (inmate == null)
+                        {
+                            SendReply(arg, string.Format("Unable to find a player with the name or ID : {0}", arg.Args[1]));
+                            return;
+                        }
+
+                        if (!IsPrisoner(inmate))
+                        {
+                            SendReply(arg, string.Format("{0} is not in jail", inmate.displayName));
+                            return;
+                        }
+
+                        FreeFromJail(inmate);
+                        SendReply(arg, string.Format("You have released {0} from jail", inmate.displayName));
+                    }
+                    else SendReply(arg, "/jail free <name or ID> - Free a player from jail");
+                    return;
+                case "clear":
+                    if (arg.Args.Length == 2)
+                    {
+                        if (prisons.ContainsKey(arg.Args[1]))
+                        {
+                            FreePrisoners(arg.Args[1]);
+                            SendReply(arg, string.Format("You have successfully removed the prison: {0}", arg.Args[1]));
+                        }
+                    }
+                    else SendReply(arg, "/jail clear <jailname> - Free all inmates from the specified jail");
+                    return;
+                default:                   
+                    SendReply(arg, "jail list - List all jail names");
+
+                    SendReply(arg, "jail send <name or ID> <opt: time> \"<opt: reason>\" <opt: jailname> - Send a player to jail, with the option to specify time (in seconds), reason for incarceration and which jail to send them to");
+                    SendReply(arg, "jail free <name or ID> - Free a player from jail");
+                    SendReply(arg, "jail clear <jailname> - Free all inmates from the specified jail");
+                    break;
+            }
+        }
+
+        private void FreePrisoners(string prisonName)
+        {
+            if (prisons.ContainsKey(prisonName))
+            {
+                var release = prisoners.Where(x => x.Value.prisonName == prisonName).ToArray();
+                if (release.Length > 0)
+                {
+                    for (int i = release.Length; i >= 0; i--)
+                    {
+                        BasePlayer inmate = null;
+                        IPlayer iPlayer = covalence.Players.FindPlayerById(release[i].Key.ToString());
+                        if (iPlayer != null && iPlayer.IsConnected)                        
+                            inmate = iPlayer.Object as BasePlayer;
+                        
                         if (inmate != null)
                             FreeFromJail(inmate);
-                    }
-                    jailData.Prisoners.Clear();
-                    jailData.prisons.Clear();
-                    SaveData();
-                    return;
-            }
-        }
-        [ConsoleCommand("jail.free")]
-        private void ccmdJailFree(ConsoleSystem.Arg arg)
-        {
-            if (arg.Connection != null)
-                if (arg.Connection.authLevel < 1) return;
-            if (arg.Args.Length != 0)
-            {
-                object freePlayer = FindPlayer(arg.Args[0]);
-                if (freePlayer is string) { SendReply(arg, (string)freePlayer); return; }
-                BasePlayer freetarget = (BasePlayer)freePlayer;
-                if (jailData.Prisoners.ContainsKey(freetarget.userID))
-                {
-                    FreeFromJail(freetarget);
-                    SendReply(arg, string.Format(lang.GetMessage("relFrom", this), freetarget.displayName));
-                }
-            }            
-            else SendReply(arg, lang.GetMessage("synFree", this));
-        }
-        [ConsoleCommand("jail.send")]
-        private void ccmdjailSend(ConsoleSystem.Arg arg)
-        {
-            if (arg.Connection != null)
-                if (arg.Connection.authLevel < 1) return;
-            if (arg.Args.Length >= 1)
-            {
-                object addPlayer = FindPlayer(arg.Args[0]);
 
-                if (addPlayer is string) { SendReply(arg, (string)addPlayer); return; }
-
-                int time = -99999;
-                string prison = FindEmptyPrison();
-                if (arg.Args.Length >= 4)
-                    if (jailData.prisons.ContainsKey(arg.Args[3].ToLower())) prison = arg.Args[3].ToLower();
-                if (string.IsNullOrEmpty(prison)) { lang.GetMessage("noPrisons", this); return; }
-
-                BasePlayer target = (BasePlayer)addPlayer;
-                if (jailData.Prisoners.ContainsKey(target.userID)) return;
-
-                if (arg.Args.Length >= 2)
-                    int.TryParse(arg.Args[1], out time);
-
-                object success = SendPlayerToJail(target, prison, time);
-                if (success is bool)
-                {
-                    if ((bool)success)
-                    {
-                        SendReply(arg, lang.GetMessage("sentTo", this), target.displayName, prison);
-                        if (arg.Args.Length >= 3 && broadcastImprisonment)
-                            PrintToChat(string.Format(lang.GetMessage("sentToBroadcast", this), target.displayName, arg.Args[2]));
+                        else release[i].Value.releaseDate = 0;
                     }
                 }
-                else if (success is string)
-                {
-                    if ((string)success == "noPos") SendReply(arg, string.Format(lang.GetMessage("noPos", this), prison));
-                    else if ((string)success == "noCell") SendReply(arg, string.Format(lang.GetMessage("noCell", this), prison));
-                    return;
-                }
             }
-            else SendReply(arg, lang.GetMessage("synSend1", this));
-            return;
         }
 
+        public object ValidateSpawnFile(string name)
+        {
+            var success = Spawns?.Call("GetSpawnsCount", name);
+            if (success is string)
+                return false;
+            else return null;
+        }
 
+        public object ValidateZoneID(string name)
+        {
+            var success = ZoneManager?.Call("CheckZoneID", name);
+            if (name is string && !string.IsNullOrEmpty((string)name))
+                return null;
+            else return false;
+        }
+
+        public object ValidateKit(string name)
+        {
+            object success = Kits?.Call("isKit", name);
+            if ((success is bool) && !(bool)success)               
+                return false;
+            return null;
+        }
         #endregion
-        
-        #region Config        
-        static bool useInitialSpawns = true;
-        static bool disableDamage = false;
-        static bool giveKit = true;
-        static bool broadcastImprisonment = true;
-        static string kitName = "default";
-        static string msgColor = "<color=#d3d3d3>";
 
+        #region Config        
+        private ConfigData configData;
+        class ConfigData
+        {
+            [JsonProperty(PropertyName = "Return prisoners to the position they were incarcerated at when released")]
+            public bool ReturnHomeAfterRelease { get; set; }
+            [JsonProperty(PropertyName = "Block chat for inmates")]
+            public bool BlockChat { get; set; }
+            [JsonProperty(PropertyName = "Allow chat between inmates (when chat is blocked)")]
+            public bool InmateChat { get; set; }
+            [JsonProperty(PropertyName = "Allow players to escape jail")]
+            public bool AllowBreakouts { get; set; }
+            [JsonProperty(PropertyName = "Return prisoners belongings if they escape jail")]
+            public bool ReturnGearOnBreakout { get; set; }
+            [JsonProperty(PropertyName = "Automatically release prisoners when their sentence has expired")]
+            public bool AutoReleaseWhenExpired { get; set; }
+            [JsonProperty(PropertyName = "Give prisoners a designated kit")]
+            public bool GiveInmateKits { get; set; }
+            [JsonProperty(PropertyName = "Disable damage dealt by prisoners")]
+            public bool DisablePrisonerDamage { get; set; }
+            [JsonProperty(PropertyName = "Broadcast player imprisonment globally")]
+            public bool BroadcastImprisonment { get; set; }
+            [JsonProperty(PropertyName = "Restrict public access to prison zones")]
+            public bool BlockPublicAccessToPrisons { get; set; }
+            [JsonProperty(PropertyName = "Blacklisted commands for prisoners")]
+            public string[] CommandBlacklist { get; set; }
+        }
         private void LoadVariables()
         {
             LoadConfigVariables();
             SaveConfig();
         }
-        private void LoadConfigVariables()
+        protected override void LoadDefaultConfig()
         {
-            CheckCfg("Inmates - Release - Return to initial position when released", ref useInitialSpawns);
-            CheckCfg("Inmates - Disable damage inside the Jail", ref disableDamage);
-            CheckCfg("Inmates - Kits - Give kit to Inmates", ref giveKit);
-            CheckCfg("Inmates - Kits - Kitname", ref kitName);
-            CheckCfg("Messages - Message color", ref msgColor);
-            CheckCfg("Messages - Broadcast imprisonment", ref broadcastImprisonment);
-        }
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-        private void CheckCfgFloat(string Key, ref float var)
-        {
-
-            if (Config[Key] != null)
-                var = Convert.ToSingle(Config[Key]);
-            else
-                Config[Key] = var;
-        }
-        object GetConfig(string menu, string datavalue, object defaultValue)
-        {
-            var data = Config[menu] as Dictionary<string, object>;
-            if (data == null)
+            var config = new ConfigData
             {
-                data = new Dictionary<string, object>();
-                Config[menu] = data;
-                Changed = true;
-            }
-            object value;
-            if (!data.TryGetValue(datavalue, out value))
-            {
-                value = defaultValue;
-                data[datavalue] = value;
-                Changed = true;
-            }
-            return value;
+                AllowBreakouts = false,
+                BlockChat = false,
+                InmateChat = true,
+                AutoReleaseWhenExpired = true,
+                BlockPublicAccessToPrisons = true,
+                BroadcastImprisonment = true,
+                DisablePrisonerDamage = true,
+                GiveInmateKits = true,
+                ReturnHomeAfterRelease = true,
+                ReturnGearOnBreakout = true,
+                CommandBlacklist = new string[] { "tp", "event", "tpa", "tpr", "s" }
+            };
+            SaveConfig(config);
         }
-        #endregion        
+        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
+        private void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
 
-        #region Classes and Data
-        class JailDataStorage
+        #region Data Management
+        private void SavePrisonData()
         {
-            public Dictionary<ulong, Inmate> Prisoners = new Dictionary<ulong, Inmate>();
-            public Dictionary<string, Prison> prisons = new Dictionary<string, Prison>();
+            prisonData.prisons = prisons;
+            prisondata.WriteObject(prisonData);
         }
-        void SaveData()
+
+        private void SavePrisonerData()
         {
-            JailData.WriteObject(jailData);
+            prisonerData.prisoners = prisoners;
+            prisonerdata.WriteObject(prisonerData);
+            restoredata.WriteObject(restoreData);
         }
-        void LoadData()
+
+        private void LoadData()
         {
             try
             {
-                jailData = Interface.GetMod().DataFileSystem.ReadObject<JailDataStorage>("jail_data");
-                foreach (var entry in jailData.prisons)
-                    prisonIDs.Add(entry.Value.zoneID);
+                prisonData = prisondata.ReadObject<PrisonData>();
+                prisons = prisonData.prisons;
             }
             catch
             {
-                jailData = new JailDataStorage();
-            }            
-        }
-        class Inmate
-        {
-            public Vector3 initialPos;
-            public string prisonName;
-            public int cellNumber;
-            public double expireTime;
-            public List<InvItem> savedInventory = new List<InvItem>();            
-        }
-        public class Prison
-        {
-            public string zoneID;
-            public float zoneRadius;
-            public string spawnFile;
-            public Dictionary<int, bool> freeCells = new Dictionary<int, bool>();
-            public Vector3 location;
-        }
-        class InvItem
-        {
-            public int itemid;
-            public ulong skinid;
-            public string container;
-            public int amount;
-            public bool weapon;
-            public int ammo;
-            public string ammotype;
-            public List<int> mods;
-            public float condition;
-
-            public InvItem()
+                prisonData = new PrisonData();
+            }
+            try
             {
+                prisonerData = prisonerdata.ReadObject<PrisonerData>();
+                prisoners = prisonerData.prisoners;
+            }
+            catch
+            {
+                prisonerData = new PrisonerData();
+            }
+            try
+            {
+                restoreData = restoredata.ReadObject<RestoreData>();
+            }
+            catch
+            {
+                restoreData = new RestoreData();
             }
         }
-        class JailTimer
-        {
-            public Timer time;
-            public int timeLeft;
-        }
-        private class UnityVector3Converter : JsonConverter
-        {
-            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-            {
-                var vector = (Vector3)value;
-                writer.WriteValue($"{vector.x} {vector.y} {vector.z}");
-            }
 
-            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        class PrisonData
+        {
+            public Dictionary<string, PrisonEntry> prisons = new Dictionary<string, PrisonEntry>();
+
+            public class PrisonEntry
             {
-                if (reader.TokenType == JsonToken.String)
+                public string zoneId, spawnFile, inmateKit;
+                public float x, y, z, radius;
+                public Dictionary<int, bool> occupiedCells = new Dictionary<int, bool>();
+
+                public PrisonEntry() { }
+
+                public PrisonEntry(string zoneId, string spawnFile, string inmateKit, Vector3 position, float radius, int spawnCount)
                 {
-                    var values = reader.Value.ToString().Trim().Split(' ');
-                    return new Vector3(Convert.ToSingle(values[0]), Convert.ToSingle(values[1]), Convert.ToSingle(values[2]));
-                }
-                var o = JObject.Load(reader);
-                return new Vector3(Convert.ToSingle(o["x"]), Convert.ToSingle(o["y"]), Convert.ToSingle(o["z"]));
-            }
+                    this.zoneId = zoneId;
+                    this.spawnFile = spawnFile;
+                    this.inmateKit = inmateKit;
+                    x = position.x;
+                    y = position.y;
+                    z = position.z;
+                    this.radius = radius;
 
-            public override bool CanConvert(Type objectType)
-            {
-                return objectType == typeof(Vector3);
-            }
-        } // borrowed from ZoneManager
-        #endregion
-
-        #region Inventory Saving and Restoration
-        public void SaveInventory(BasePlayer player)
-        {
-            jailData.Prisoners[player.userID].savedInventory.Clear();
-            List<InvItem> kititems = new List<InvItem>();
-            foreach (Item item in player.inventory.containerWear.itemList)
-            {
-                if (item != null)
-                {
-                    var iteminfo = AddItemToSave(item, "wear");
-                    kititems.Add(iteminfo);
+                    for (int i = 0; i < spawnCount; i++)                    
+                        occupiedCells.Add(i, false);                    
                 }
             }
-            foreach (Item item in player.inventory.containerMain.itemList)
-            {
-                if (item != null)
-                {
-                    var iteminfo = AddItemToSave(item, "main");
-                    kititems.Add(iteminfo);
-                }
-            }
-            foreach (Item item in player.inventory.containerBelt.itemList)
-            {
-                if (item != null)
-                {
-                    var iteminfo = AddItemToSave(item, "belt");
-                    kititems.Add(iteminfo);
-                }
-            }
-            jailData.Prisoners[player.userID].savedInventory = kititems;            
         }
-        private InvItem AddItemToSave(Item item, string container)
-        {
-            InvItem iItem = new InvItem();
-            iItem.ammo = 0;
-            iItem.amount = item.amount;
-            iItem.mods = new List<int>();
-            iItem.skinid = item.skin;
-            iItem.container = container;
-            iItem.condition = item.condition;
-            iItem.itemid = item.info.itemid;
-            iItem.weapon = false;
 
-            if (item.info.category.ToString() == "Weapon")
-            {
-                BaseProjectile weapon = item.GetHeldEntity() as BaseProjectile;
-                if (weapon != null)
-                {
-                    if (weapon.primaryMagazine != null)
-                    {
-                        iItem.weapon = true;
-                        iItem.ammo = weapon.primaryMagazine.contents;
-                        if (item.contents != null)
-                            foreach (var mod in item.contents.itemList)
-                            {
-                                if (mod.info.itemid != 0)
-                                    iItem.mods.Add(mod.info.itemid);
-                            }
-                    }
-                }
-            }
-            return iItem;
-        }
-        public void RestoreInventory(BasePlayer player)
+        class PrisonerData
         {
-            player.inventory.Strip();
-            foreach (InvItem kitem in jailData.Prisoners[player.userID].savedInventory)
-            {
-                if (kitem.weapon)
-                    player.inventory.GiveItem(BuildWeapon(kitem.itemid, kitem.ammo, kitem.skinid, kitem.mods, kitem.condition), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
-                else player.inventory.GiveItem(BuildItem(kitem.itemid, kitem.amount, kitem.skinid, kitem.condition), kitem.container == "belt" ? player.inventory.containerBelt : kitem.container == "wear" ? player.inventory.containerWear : player.inventory.containerMain);
-            }
-        }
-        private Item BuildItem(int itemid, int amount, ulong skin, float cond)
-        {
-            if (amount < 1) amount = 1;
-            Item item = ItemManager.CreateByItemID(itemid, amount, skin);
-            item.conditionNormalized = cond;
-            return item;
-        }
-        private Item BuildWeapon(int id, int ammo, ulong skin, List<int> mods, float cond)
-        {
-            Item item = ItemManager.CreateByItemID(id, 1, skin);
-            item.conditionNormalized = cond;
-            var weapon = item.GetHeldEntity() as BaseProjectile;
-            if (weapon != null)
-            {
-                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = ammo;
-            }
-            if (mods != null)
-                foreach (var mod in mods)
-                {
-                    item.contents.AddItem(BuildItem(mod, 1, 0, cond).info, 1);
-                }
+            public Dictionary<ulong, PrisonerEntry> prisoners = new Dictionary<ulong, PrisonerEntry>();
 
-            return item;
-        }
+            public class PrisonerEntry
+            {
+                public string prisonName;
+                public int cellNumber;
+                public double releaseDate;
+            }
+        }        
         #endregion
 
         #region Localization
-        Dictionary<string, string> messages = new Dictionary<string, string>()
+        string msg(string key, ulong playerId = 0U) => lang.GetMessage(key, this, playerId == 0U ? null : playerId.ToString());
+
+        Dictionary<string, string> Messages = new Dictionary<string, string>
         {
-            {"title", "<color=#afff00>Jail</color> : " },
-            {"noPlayers", "No players found." },
-            {"multiPlayers", "Multiple players found." },
-            {"invalidZID", "Invalid zone ID : " },
-            {"invalidZPos", "Unable to retrieve the zone location" },
-            {"invalidZRad", "Unable to retrieve the zone radius" },
-            {"newJailAdd", "New Jail added!" },
-            {"invalidSF", "Invalid spawnfile : " },
-            {"remJail", "Removed Jail : " },
-            {"noJail", "No prison found with that name" },
-            {"sentPrison", "You are being sent to prison!" },
-            {"checkTime", "Use /jail to check how much time you have left to serve" },
-            {"relPrison", "You are being released from prison!" },
-            {"welcomeJail", "Welcome to prison {0}" },
-            {"keepOut", "Keep Out! No visitors allowed in prison" },
-            {"keepIn", "You are not allowed to leave the prison" },
-            {"noRelease", "You are stuck in prison until a admin releases you" },
-            {"mins", "Minutes" },
-            {"secs", "Seconds" },
-            {"remainJail", "You have {0} {1} remaining of your prison sentence" },
-            {"synSend1", "/jail send <playername> <opt:time> <opt:reason> <opt:prisonname> - Send a player to Jail, time and prison name are optional" },
-            {"synFree", "/jail free <playername> - Free a player from Jail" },
-            {"synAdd", "/jail add <prisonname> <zoneID> <spawnfile> - Create a new prison" },
-            {"synRem", "/jail remove <prisonname> - Remove a prison" },
-            {"synZone", "/jail zone <radius> - Create a prison zone with required flags" },
-            {"synList", "/jail list - Lists all prison's" },
-            {"synWipe", "/jail wipe - Wipe's all prison data" },
-            {"synPurge", "/jail purge - Remove inactive players from prison" },
-            {"noPrisons", "The are no prisons available!" },
-            {"sentTo", "{0} has been sent to {1}" },
-            {"sentToBroadcast", "{0} has been sent to jail for: {1}" },
-            {"noCells", "The are no free cells available at {0}" },
-            {"noPos", "Unable to find a valid spawn point at {0}" },
-            {"relFrom", "{0} has been released from prison" },
-            {"ff", "You can not hurt other inmates" },
-            {"createJail", "You have successfully created a new prison zone, you can edit this zone with /zone_edit" },
-            {"jailID", "Zone ID: {0}" }
+            ["freetoleave"] = "You are free to leave jail! Type /leavejail when ready",
+            ["remaining"] = "Remaining: ",
+            ["trespassing"] = "You are trespassing on prison property!",
+            ["welcome"] = "Welcome to {0} {1}",
+            ["escaped"] = "You have broken out of {0} and are now on the run!",
+            ["noescape"] = "There is no escape from this prison!",
+            ["timeremaining"] = "You still have another {0} remaining on your sentence",
+            ["help1"] = "/jail create <name> <spawnfile> <zoneId> <opt:kit> - Create a new jail",
+            ["help2"] = "/jail remove <name> - Remove a jail",
+            ["help3"] = "/jail list - List all jail names",
+            ["help4"] = "/jail send <name or ID> <opt: time> \"<opt: reason>\" <opt: jailname> - Send a player to jail, with the option to specify time (in seconds), reason for incarceration and which jail to send them to",
+            ["help5"] = "/jail free <name or ID> - Free a player from jail",
+            ["help6"] = "/jail clear <jailname> - Free all inmates from the specified jail",
+            ["alreadyexists"] = "There is already a jail with that name",
+            ["invalidspawns"] = "Invalid spawnfile selected",
+            ["invalidzone"] = "Invalid zone ID selected",
+            ["invalidkit"] = "Invalid kit selected",
+            ["createsuccess"] = "You have successfully created a new prison!",
+            ["removesuccess"] = "You have successfully removed the prison: {0}",
+            ["list"] = "Prison List ({0} prison(s))",
+            ["noplayer"] = "Unable to find a player with the name or ID : {0}",
+            ["notime"] = "You must enter a number for the amount of time (in seconds)",
+            ["invalidprison"] = "{0} is not a valid prison name",
+            ["sent1"] = "{0} is doing {1} in jail",
+            ["sent2"] = "{0} is doing {1} in jail for {2}",
+            ["sent3"] = "You have been sent to jail for {0}",
+            ["sent4"] = "You have been sent to jail for {0} because {1}",
+            ["sent5"] = "You have sent {0} to jail for {1}",
+            ["sent6"] = "You have sent {0} to jail for {1} because {2}",
+            ["notinjail"] = "{0} is not in jail",
+            ["releasefromjail"] = "You have released {0} from jail",
+            ["freedall"] = "You have successfully freed all the prisoners from : {0}",
+            ["blacklistcmd"] = "You can not use that command whilst in jail",
+            ["chatblocked"] = "Chat is blocked for inmates"
         };
         #endregion
     }

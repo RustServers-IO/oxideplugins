@@ -1,0 +1,16 @@
+{
+    "name": "PresentLoot",
+    "description": "Modify the loot tables for unwrapping presents",
+    "author": "redBDGR",
+    "version": "1.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/presentloot.2599",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

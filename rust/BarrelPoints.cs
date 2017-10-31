@@ -8,7 +8,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("BarrelPoints", "redBDGR", "2.0.6", ResourceId = 2182)]
+    [Info("BarrelPoints", "redBDGR", "2.0.7", ResourceId = 2182)]
     [Description("Gives players extra rewards for destroying barrels")]
 
     class BarrelPoints : RustPlugin
@@ -80,7 +80,7 @@ namespace Oxide.Plugins
                     LoadingQue = true;
                     timer.Once(3f, () =>
                     {
-                        rust.RunServerCommand("reload BarrelPoints");
+                        rust.RunServerCommand("o.reload BarrelPoints");
                         LoadingQue = false;
                     });
                 }
@@ -115,10 +115,17 @@ namespace Oxide.Plugins
                 return;
             if (entity.ShortPrefabName == "loot-barrel-1" || entity.ShortPrefabName == "loot-barrel-2" || entity.ShortPrefabName == "loot_barrel_1" || entity.ShortPrefabName == "loot_barrel_2" || entity.ShortPrefabName == "oil_barrel")
             {
-                if (!info.Initiator) return;
-                if (!(info.Initiator is BasePlayer)) return;
+                if (info == null)
+                    return;
+                if (!info.Initiator)
+                    return;
+                if (!(info.Initiator is BasePlayer))
+                    return;
                 BasePlayer player = info.InitiatorPlayer;
-                if (player == null) return;
+                if (player == null)
+                    return;
+                if (!player.IsValid())
+                    return;
                 string userPermission = GetPermissionName(player);
                 if (userPermission == null) return;
 
@@ -149,6 +156,8 @@ namespace Oxide.Plugins
 
         void OnEntityKill(BaseNetworkable entity)
         {
+            if (entity == null)
+                return;
             if (!useCrates)
                 return;
             if (entity.ShortPrefabName == "crate_mine" || entity.ShortPrefabName == "crate_normal" || entity.ShortPrefabName == "crate_normal_2" || entity.ShortPrefabName == "crate_normal_2_food" || entity.ShortPrefabName == "crate_normal_2_medical" || entity.ShortPrefabName == "crate_tools" || entity.ShortPrefabName == "heli_crate")

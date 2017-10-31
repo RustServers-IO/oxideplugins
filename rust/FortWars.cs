@@ -7,7 +7,7 @@ using Random = Oxide.Core.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("FortWars", "Sami37 - Naleen", "1.0.1", ResourceId = 1618)]
+    [Info("FortWars", "Sami37 - Naleen", "1.0.5", ResourceId = 1618)]
     class FortWars : RustPlugin
     {
 
@@ -40,6 +40,7 @@ namespace Oxide.Plugins
         Dictionary<string, string> LangMessages = new Dictionary<string, string>
         {
             {"NotEnabled", "Fort Wars is disabled." },
+            {"Enabled", "Fort Wars is enabled." },
             {"NoConfig", "Creating a new config file." },
             {"Title", "<color=orange>Fort Wars</color> : "},
             {"NoPerms", "You are not authorized to use this command."},
@@ -207,7 +208,7 @@ namespace Oxide.Plugins
             UpdateCraftingRate();
 
             //Timers
-            PhaseStart = DateTime.Now.AddMinutes(TimeBuild / 60d);
+            PhaseStart = DateTime.Now.AddMinutes(TimeFight / 60d);
             AutoTimers.Add(timer.Once(TimeFight, StartBuildPhase));
 
         }
@@ -239,14 +240,7 @@ namespace Oxide.Plugins
         {
             if (!entity.ToPlayer()) return;
 
-            var amount = item.amount;
-
             item.amount = (int)(item.amount * GatherPC);
-
-            dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount = (int)(amount * 1.5);
-
-            if (dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount < 0)
-                item.amount += (int)dispenser.containedItems.Single(x => x.itemid == item.info.itemid).amount;
         }
 
         ////////////////////////////////////////////////////////////
@@ -462,6 +456,7 @@ namespace Oxide.Plugins
             if (rate == 1)
             {
                 FWEnabled = true;
+                arg.ReplyWith(lang.GetMessage("Enabled", this));
                 StartBuildPhase();
                 return;
             }
@@ -501,7 +496,7 @@ namespace Oxide.Plugins
 
         bool IsAllowed(BasePlayer player, string perm, bool bmsg = true)
         {
-            if (permission.UserHasPermission(player.userID.ToString(), perm)) return true;
+            if (permission.UserHasPermission(player.UserIDString, perm)) return true;
             if (bmsg)
                 SendReply(player, lang.GetMessage("NoPerms", this, player.UserIDString));
             return false;
@@ -509,9 +504,10 @@ namespace Oxide.Plugins
 
         bool IsAllowed(ConsoleSystem.Arg arg, string perm, bool bmsg = true)
         {
-            if (permission.UserHasPermission(arg.Player().userID.ToString(), perm)) return true;
+            if (arg.IsAdmin)
+                return true;
             if(bmsg)
-                SendReply(arg, lang.GetMessage("NoPerms", this, arg.Player().UserIDString));
+                arg.ReplyWith(lang.GetMessage("NoPerms", this));
             return false;
         }
 
@@ -531,7 +527,6 @@ namespace Oxide.Plugins
         ////////////////////////////////////////////////////////////
         void BroadcastToChat(string msg)
         {
-            Puts(msg);
             rust.BroadcastChat(msg);
         }
 

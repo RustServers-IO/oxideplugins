@@ -2,7 +2,7 @@
     "name": "QueueLimit",
     "description": "Limits the amount of people allowed to be in a queue at any one time",
     "author": "Ryan",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/queuelimit.2550",

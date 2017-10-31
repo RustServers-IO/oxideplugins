@@ -1,214 +1,343 @@
 using System.Collections.Generic;
-using Oxide.Core.Plugins;
+using System.Linq;
 using Oxide.Core;
-using UnityEngine;
 using System;
 
+// CRIADOR: MCNOVINHO08
+// CREATOR: MCNOVINHO08
+// VERSION : 1.0.7
+// DESCRIPTION: A SMALL BUT VERY EFFECTIVE SYSTEM OF WARNINGS, INVESTING BANIR THE DIRECT PLAYER WHY NOT SAY IT.
+
 namespace Oxide.Plugins{
-        [Info("AdminWarn", "mcnovinho08", "1.0.1")]
+        [Info("AdminWarn", "mcnovinho08", "1.0.7")]
         class AdminWarn : RustLegacyPlugin{
 
-	    string ativado = "Actived";
-	    string desativado = "Disabled";
-		
-		static string chatPrefix = "AdminWarn";
-		
-		static bool AdminSystem = true;
-		
-		static int MaxWarn = 3;
-		
-		const string permiAdmin = "adminwarn.use";		
-	  
-        void OnServerInitialized(){
-		CheckCfg<string>("Settings: Chat Prefix:", ref chatPrefix);
-		CheckCfg<int>("Settings: Max Warn:", ref MaxWarn);
-		CheckCfg<bool>("Settings: System Status:", ref AdminSystem);
-		CheckCfg<string>("Settings: ChatPrefix Enabled:", ref ativado);
-		CheckCfg<string>("Settings: ChatPrefix Disabled:", ref desativado);
-	    Lang();
-		SaveConfig();
+
+        static string chatPrefix;
+        static bool WarnSystem;
+
+        static int WarnMax;
+
+        static string permissionWarn;
+        static string permissionAdministration;
+        static string permissionVerification;
+
+        static bool commandWarn;
+        static bool commandAdmin;
+        static bool commandCheck;
+
+        void OnServerInitialized()
+        {
+            SetupConfig();
+            SetupPermissions();
+            Lang();
+            SetupChatCommands();
+
+            return;
         }
 
-		protected override void LoadDefaultConfig(){} 
-		private void CheckCfg<T>(string Key, ref T var){
+        void SetupConfig()
+        {
+            permissionWarn = Config.Get<string>("Settings", "permissionWarn");
+            permissionAdministration = Config.Get<string>("Settings", "permissionAdministration");
+            permissionVerification = Config.Get<string>("Settings", "permissionVerification");
+
+            chatPrefix = Config.Get<string>("Settings", "chatPrefix");
+            WarnSystem = Config.Get<bool>("Settings", "WarnSystem");
+
+            WarnMax = Config.Get<int>("Settings", "WarnMax");
+            commandWarn = Config.Get<bool>("Settings", "commandWarn");
+            commandAdmin = Config.Get<bool>("Settings", "commandAdmin");
+            commandCheck = Config.Get<bool>("Settings", "commandCheck");
+
+        }
+
+        void SetupPermissions()
+        {
+            permission.RegisterPermission(permissionAdministration, this);
+            permission.RegisterPermission(permissionVerification, this);
+            permission.RegisterPermission(permissionWarn, this);
+            return;
+        }
+
+        protected override void LoadDefaultConfig()
+        {
+            Config["Settings"] = new Dictionary<string, object>
+            {
+                {"permissionWarn", "adminwarn.warn"},
+                {"permissionAdministration", "adminwarn.all"},
+                {"permissionVerification", "adminwarn.verification"},
+
+                {"chatPrefix", "AdminWarn"},
+                {"WarnMax", 3},
+                {"WarnSystem", true},
+                {"commandWarn", true},
+                {"commandAdmin", true},
+                {"commandCheck", true}
+            };
+        }
+
+        void SetupChatCommands()
+        {
+            if (commandWarn)
+                cmd.AddChatCommand("warn", this, "cmdWarnPlayer");
+
+            if (commandAdmin)
+                cmd.AddChatCommand("awad", this, "cmdAdminCommands");
+
+            if (commandCheck)
+                cmd.AddChatCommand("wplayer", this, "cmdVerificarPlayer");
+        }
+
+        private void CheckCfg<T>(string Key, ref T var){
 			if(Config[Key] is T)
 			var = (T)Config[Key];  
 			else
 			Config[Key] = var;
 		}
-	
+
+        string GetMessage(string key, string steamid = null) => lang.GetMessage(key, this, steamid);
         void Lang(){
-			
-			// english
-			lang.RegisterMessages(new Dictionary<string, string>
+
+            // english
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+
+                {"FailIcon", "✘"},
+                {"SucessIcon", "✔"},
+
+                {"Online", "Online"},
+                {"Offline", "Offline"},
+
+                {"NoPermission", "You are not allowed to use this command!"},
+                {"InvalidPlayer", "Invalid player!"},
+                {"SystemStatus", "The warning system is {0}"},
+                {"Space", "=-=-=-=-=-=-=-= AdminWarn =-=-=-=-=-=-=-=" },
+
+                {"WarnYou", "You can not tell yourself."},
+                {"WarnPlayer", "[color orange]{0} [color clear] was warned by the administrator [color orange] {1}"},
+                {"WarnPlayerPrivate", "You have been warned by the administrator, {0} / {1}"},
+                {"WarnPunition", "[color orange]{0}[color clear] was banned for reaching the maximum limit of notices!"},
+                {"WarnInformations", "PlayerName: [color orange]{0}[color clear], PlayerID:[color orange] {1}[color clear], PlayerIP: [color orange]{2}[color clear], Warns: [color orange]{3}[color clear]/[color orange]{4}"},
+                {"WarnsInvalid", "{0} Could not be found in the database!"},
+                {"WarnClear", "All player warnings have been removed!"},
+                {"WarnClearPlayer", "All warnings from player {0} have been removed!"},
+                {"WarnsNull", "The player has no warnings!"},
+
+                {"AdminCommands", "Use: /warn < playerName > - To warn the player"},
+                {"AdminCommands2", "Use: /wplayer < playerName > - To check the player's warnings"},
+                {"AdminCommands3", "Use: /awad <onof | player | clearall > - Admin commands "}
+
+            }, this);
+
+            // pt-br
+            lang.RegisterMessages(new Dictionary<string, string>
 			{
-				{"NoPermission", "You are not allowed to use this command!"},
-				{"SystemOFF", "The System is currently off!"},
-				{"AdminWarnMSG", "Wrong Command, Use /adw - to see commands!"},
-				{"AdminWarnMSG1", "Player not found, or not online!"},
-				{"AdminWarnMSG2", "Prefix changed to {0} successfully!"},
-				{"AdminWarnMSG3", "The system is currently: {0}!"},
-				{"AdminWarnMSG4", "Player [color orange] {0} [color clear] was [color red] Warned [color clear] administrator [color orange] {1}!"},
-				{"AdminWarnMSG5", "You cleared everyone's warnings!"},
-				{"AdminWarnMSG6", "You have successfully wiped warnings from {0}!"},
 				
-				{"AdminWarnBan", "Player [color orange] {0} [color clear] was banned, for raising the warning limit!"},
-				
-				{"DadosNull", "There are no Admin Warn data!"},
-				{"AdminP", "Player: {0}, ID: {1}, Warns: {2}/{3"},
-				{"AdminP1", "Player: [color orange]{0} [color clear]has no warnings"},
-				{"AdminP2", "You can not tell yourself"},
-				
-				{"AdminHelp", "=-=-=-=-=-=-=-=-= Commands =-=-=-=-=-=-=-=-="},
-				{"AdminHelp1", "Use /warn <playername> - To warn the player"},
-				{"AdminHelp2", "Use /awad <chattag> <new prefix> - To change the Plugin Prefix"},
-				{"AdminHelp3", "Use /awad <onof> - To turn the system on or off"},
-				{"AdminHelp4", "Use /awad <clear all> - To clear the plugin data!"},
-				{"AdminHelp5", "Use /awad <clear player <playername>> - To clear player prompts!"},
-				{"AdminHelp6", "Use /awad <wlog> - Check players with warnings!"},
-				{"AdminHelp7", "Use /wplayer <playername> - Check if the player has warnings, and if so how many!"},
-				{"AdminHelp8", "Use /adw - To view the plugin commands!"}
+                {"FailIcon", "✘"},
+                {"SucessIcon", "✔"},
 
+                {"Online", "Online"},
+                {"Offline", "Offline"},
 
-			}, this);
+                {"NoPermission", "Você não tem permissão para usar este comando!"},
+                {"InvalidPlayer", "Jogador invalido!"},
+                {"SystemStatus", "O sistema de avisos esta {0}"},
+                {"Space", "=-=-=-=-=-=-=-= AdminWarn =-=-=-=-=-=-=-=" },
 
-			// brazilian
-			lang.RegisterMessages(new Dictionary<string, string>
-			{
-				{"NoPermission", "Você não tem permissão para usar este comando!"},
-				{"SystemOFF", "O Sistema se encontra atualmente desligado!"},
-				{"AdminWarnMSG", "Comando Errado, Use /adw - para ver os comandos!"},
-				{"AdminWarnMSG1", "Jogador não encontrado, ou não esta online!"},
-				{"AdminWarnMSG2", "Prefix alterado para {0} com sucesso!"},
-				{"AdminWarnMSG3", "O sistema se encontra atualmente: {0}!"},
-				{"AdminWarnMSG4", "Player [color orange]{0} [color clear]foi [color red]Avisado [color clear]pelo administrador [color orange]{1}!"},
-				{"AdminWarnMSG5", "Você limpou os avisos de todo mundo!"},
-				{"AdminWarnMSG6", "Você limpou os avisos de {0} com sucesso!"},
-				
-				{"AdminWarnBan", "Player [color orange]{0} [color clear]foi banido, por alçancar o limite de avisos!"},
-				
-				{"DadosNull", "Não existe dados do AdminWarn!"},
-				{"AdminP", "Player: {0}, ID: {1}, Warns: {2}/{3"},
-				{"AdminP1", "Player: [color orange]{0} [color clear]não possui avisos"},
-				{"AdminP2", "Você não pode avisar a si proprio"},
-				
-				{"AdminHelp", "=-=-=-=-=-=-=-=-= Commands =-=-=-=-=-=-=-=-="},
-				{"AdminHelp1", "Use /warn <playername> - para avisar o jogador"},
-				{"AdminHelp2", "Use /awad <chattag> <new prefix> - Para alterar o Prefix do Plugin"},
-				{"AdminHelp3", "Use /awad <onof> - para ligar ou desligar o sistema"},
-				{"AdminHelp4", "Use /awad <clearall> - para limpar os dados do plugin!"},
-				{"AdminHelp5", "Use /awad <player <playername>> - para limpar os avisos do jogador!"},
-				{"AdminHelp6", "Use /awad <wlog> - verificar os jogadores com avisos!"},
-				{"AdminHelp7", "Use /wplayer <playername> - verificar se o jogador possui avisos, e se sim quantos!"},
-				{"AdminHelp8", "Use /adw - Para ver os comandos do plugin!"}
+                {"WarnYou", "Você não pode avisar a si proprio."},
+                {"WarnPlayer", "[color orange]{0}[color clear] foi avisado pelo administrador [color orange]{1}"},
+                {"WarnPlayerPrivate", "Você foi avisado pelo administrador, {0}/{1}"},
+                {"WarnPunition", "[color orange]{0}[color clear] foi banido, por chegar ao limite maximo de avisos!"},
+                {"WarnInformations", "PlayerName: [color orange]{0}[color clear], PlayerID:[color orange] {1}[color clear], PlayerIP: [color orange]{2}[color clear], Warns: [color orange]{3}[color clear]/[color orange]{4}"},
+                {"WarnsInvalid", "{0} não foi encontrado no banco de dados!"},
+                {"WarnClear", "Todos os avisos dos jogadores foram removidos!"},
+                {"WarnClearPlayer", "Todos os avisos do jogador {0} foram removidos!"},
+                {"WarnsNull", "O jogador não possui avisos!"},
 
-			}, this, "pt-br");
+                {"AdminCommands", "Use: /warn < playerName > - para avisar o jogador"},
+                {"AdminCommands2", "Use: /wplayer < playerName > - para verificar os avisos do jogador"},
+                {"AdminCommands3", "Use: /awad <onof | player | clearall > - comandos de administrador "}
+
+            }, this, "pt_br");
 			return;
-        }		
-	  
-		private Core.Configuration.DynamicConfigFile Data;
-		void LoadData(){PlayerD = Interface.GetMod().DataFileSystem.ReadObject<PlayerData>("AdminWarn.Players");}
-		void SaveData(){Interface.GetMod().DataFileSystem.WriteObject("AdminWarn.Players", PlayerD);}
-		void OnServerSave(){SaveData();}
-		void Unload(){SaveData();}
-		void Loaded(){LoadData();}
+        }
 
-		PlayerData PlayerD;
-		class PlayerData
-		{
-			public List<string> PlayerInfo = new List<string>();
-			public Dictionary<ulong, int> Warns = new Dictionary<ulong, int>();
-		}  		
-		
-		[ChatCommand("warn")]
-		void cmdWarn(NetUser netuser, string command, string[] args)
-		{
-		 string ID = netuser.userID.ToString();
-		 if (!AcessAdmin(netuser)) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("NoPermission", this, ID)); return; }
-		 if (!AdminSystem) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("SystemOFF", this, ID)); return; }
-		 if (args.Length == 0) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminWarnMSG", this, ID)); return; }
-		 
-		 NetUser targetuser = rust.FindPlayer(args[0]);
-		 if (targetuser == null) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminWarnMSG1", this, ID)); return; }
-		 if (netuser == targetuser) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminP2", this, ID)); return; }
-		 
-		 string Name = targetuser.displayName;
-		 string NameAdmin = netuser.displayName;
-		 
-		 AddWarn(targetuser);
-		 MensagemWarn(Name, NameAdmin);
-		 Punir(targetuser);
-		}
-		
-		[ChatCommand("wplayer")]
-		void cmdWPlayer(NetUser netuser, string command, string[] args)
-		{
-		 string ID = netuser.userID.ToString();
-          NetUser target = rust.FindPlayer(args[0]);
-		  if (target == null) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminWarnMSG1", this, ID)); return; }		
-		
-		 string NameT = target.displayName;
-		 string IDT = target.userID.ToString();
-		 
-		 if (PlayerD.Warns.ContainsKey(target.userID)) 
-	     {
-	     int Avisos = Convert.ToInt32(PlayerD.Warns[target.userID]);
-		 rust.SendChatMessage(netuser, chatPrefix, string.Format(lang.GetMessage("AdminP", this, ID), NameT, IDT, Avisos, MaxWarn));		 
-		 }
-		 else{
-		 rust.SendChatMessage(netuser, chatPrefix, string.Format(lang.GetMessage("AdminP1", this, ID), NameT)); }
-						
-		}
-		
-		
+        Dictionary<string, PlayerWarns> WarnsPlayers = new Dictionary<string, PlayerWarns>();
+
+        void Loaded() { WarnsPlayers = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, PlayerWarns>>("AdminWarn"); }
+        void SaveData() { Interface.Oxide.DataFileSystem.WriteObject("AdminWarn", WarnsPlayers); }
+
+        PlayerWarns PlayerW;
+        public class PlayerWarns
+        {
+            public string playerName { get; set; }
+            public string playerID { get; set; }
+            public string playerIP { get; set; }
+            public int playerWarns { get; set; }
+        }
+
+        PlayerWarns GetPlayerData(string ID)
+        {
+            if (!WarnsPlayers.TryGetValue(ID, out PlayerW))
+            {
+                PlayerW = new PlayerWarns();
+                WarnsPlayers.Add(ID, PlayerW);
+            }
+            return PlayerW;
+        }
+
+        void ADDWarn(NetUser netuser, NetUser target)
+        {
+            string ID = target.userID.ToString();
+            var Ip = target.networkPlayer.externalIP;
+
+            PlayerW = GetPlayerData(ID);
+            
+            if (PlayerW.playerID == null)
+            {
+                PlayerW.playerName = target.displayName;
+                PlayerW.playerID = ID;
+                PlayerW.playerIP = Ip;
+                PlayerW.playerWarns++;
+                rust.BroadcastChat(chatPrefix, string.Format(GetMessage("WarnPlayer"), target.displayName, netuser.displayName));
+                rust.Notice(target, string.Format(GetMessage("WarnPlayerPrivate", ID), PlayerW.playerWarns, WarnMax), GetMessage("SucessIcon", ID));
+            }
+            else
+            {
+                PlayerW.playerWarns++;
+                CheckWarns(target);
+                rust.Notice(target, string.Format(GetMessage("WarnPlayerPrivate", ID), PlayerW.playerWarns, WarnMax), GetMessage("SucessIcon", ID));
+                rust.BroadcastChat(chatPrefix, string.Format(GetMessage("WarnPlayer"), target.displayName, netuser.displayName));
+            }
+            SaveData();
+        }
+
+
+        void CheckWarns(NetUser netuser)
+        {
+            string ID = netuser.userID.ToString();
+            var PlayerW = GetPlayerData(ID);
+
+            if (PlayerW.playerWarns == WarnMax)
+            {
+                rust.BroadcastChat(chatPrefix, string.Format(GetMessage("WarnPunition"), netuser.displayName));
+                timer.Once(0.1f, () =>
+                {
+                    netuser.Ban();
+                    netuser.Kick(NetError.Facepunch_Kick_Ban, true);
+                });
+                SaveData();
+            }
+        }
+
+        [ChatCommand("warn")]
+        void cmdWarnPlayer(NetUser netuser, string command, string[] args)
+        {
+            string ID = netuser.userID.ToString();
+            if (!WarnSystem) { rust.SendChatMessage(netuser, chatPrefix, string.Format(GetMessage("SystemStatus", ID), GetMessage("Offline", ID))); return; }
+
+            ulong netUserID = netuser.userID;
+            if (!(netuser.CanAdmin() || permission.UserHasPermission(netUserID.ToString(), permissionWarn) || permission.UserHasPermission(netUserID.ToString(), permissionAdministration)))
+            {
+                rust.Notice(netuser, GetMessage("NoPermission", ID), GetMessage("FailIcon", ID));
+                return;
+            }
+
+            NetUser target = rust.FindPlayer(args[0]);
+            string IDt = target.userID.ToString();
+            string targetName = target.displayName;
+
+            if (IDt == null || targetName == null) { rust.SendChatMessage(netuser, chatPrefix, GetMessage("InvalidPlayer", ID)); return; }
+            if (netuser == target) { rust.SendChatMessage(netuser, chatPrefix, GetMessage("WarnYou", ID)); return; }
+
+            ADDWarn(netuser, target);
+        }
+
+        void CheckInformations(NetUser netuser, NetUser target)
+        {
+            string ID = netuser.userID.ToString();
+
+            ulong netUserID = netuser.userID;
+            if (!(netuser.CanAdmin() || permission.UserHasPermission(netUserID.ToString(), permissionVerification) || permission.UserHasPermission(netUserID.ToString(), permissionAdministration)))
+            {
+                rust.Notice(netuser, GetMessage("NoPermission", ID), GetMessage("FailIcon", ID));
+                return;
+            }
+
+            string IDt = target.userID.ToString();
+            string targetName = target.displayName;
+            if (target == null || IDt == null) { rust.SendChatMessage(netuser, chatPrefix, GetMessage("InvalidPlayer", ID)); return; }
+
+            var data = IDt;
+            if (WarnsPlayers.ContainsKey(IDt))
+            {
+                var informations = GetPlayerData(data);
+                rust.SendChatMessage(netuser, chatPrefix, GetMessage("Space", ID));
+                rust.SendChatMessage(netuser, chatPrefix, string.Format(GetMessage("WarnInformations", ID), informations.playerName, informations.playerID, informations.playerIP, informations.playerWarns, WarnMax));
+                rust.SendChatMessage(netuser, chatPrefix, GetMessage("Space", ID));
+
+            }
+            else
+            {
+                rust.SendChatMessage(netuser, chatPrefix, string.Format(GetMessage("WarnsInvalid", ID), targetName));
+            }
+        }
+
+        [ChatCommand("wplayer")]
+        void cmdVerificarPlayer(NetUser netuser, string command, string[] args)
+        {
+            string ID = netuser.userID.ToString();
+            if (!WarnSystem) { rust.SendChatMessage(netuser, chatPrefix, string.Format(GetMessage("SystemStatus", ID), GetMessage("Offline", ID))); return; }
+            NetUser target = rust.FindPlayer(args[0]);
+            CheckInformations(netuser, target);
+        }
+    		
 		[ChatCommand("awad")]
 		void cmdAdminCommands(NetUser netuser, string command, string[] args){
-			string ID = netuser.userID.ToString();
-			ulong netuserid = netuser.userID;
-            if (!AcessAdmin(netuser)) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("NoPermission", this, ID)); return; }
-		    if(args.Length == 0) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminWarnMSG", this, ID)); return; }
+            string ID = netuser.userID.ToString();
+            ulong netUserID = netuser.userID;
+
+            if (!(netuser.CanAdmin() || permission.UserHasPermission(netUserID.ToString(), permissionAdministration)))
+            {
+                rust.Notice(netuser, GetMessage("NoPermission", ID), GetMessage("FailIcon", ID));
+                return;
+            }
+
+            if (args.Length == 0) { HelpAdmins(netuser); }
 			switch(args[0].ToLower()){
-				case "chattag":
-					if (args.Length < 2) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminWarnMSG", this, ID)); return; }
-					chatPrefix = args[1].ToString();
-					Config["Settings: Chat Prefix:"] = chatPrefix;
-					rust.Notice(netuser, string.Format(lang.GetMessage("AdminWarnMSG2", this, ID), chatPrefix));
-					break;
 				case "onof":
-					if(AdminSystem){
-						AdminSystem = false;
-						rust.BroadcastChat(chatPrefix, string.Format(lang.GetMessage("AdminWarnMSG3", this), desativado));
+					if(WarnSystem){
+						WarnSystem = false;
+						rust.BroadcastChat(chatPrefix, string.Format(GetMessage("SystemStatus", ID), GetMessage("Offline", ID)));
 					}
 					else{
-						AdminSystem = true;
-						rust.BroadcastChat(chatPrefix, string.Format(lang.GetMessage("AdminWarnMSG3", this), ativado));
-					}
-					Config["Settings: System Warns"] = AdminSystem;
+						WarnSystem = true;
+                        rust.BroadcastChat(chatPrefix, string.Format(GetMessage("SystemStatus", ID), GetMessage("Online", ID)));
+                    }
 					break;
 				 case "clearall":
-				 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminWarnMSG5", this, ID));
-				 ClearAll();
-				 break;	
-				 case "wlog":
-				  string m = "";
-			      foreach (string pr in PlayerD.PlayerInfo){
-				  m = pr;
-			      }
-				  if (m == ""){
-					rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("DadosNull", this, ID));
-				  }
-				  else {
-				  rust.SendChatMessage(netuser, chatPrefix, string.Format(lang.GetMessage("{0}", this, ID), m)); }
-				 break;
+				 rust.SendChatMessage(netuser, chatPrefix, GetMessage("WarnClear", ID));
+                    WarnsPlayers.Clear();
+                    SaveData();
+                 break;	
 				 case "player":
 		         NetUser targetuser = rust.FindPlayer(args[1]);
-		         if (targetuser == null) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminWarnMSG1", this, ID)); return; }
-				 //
-				 Playering(targetuser, false);
-				 PlayerD.Warns.Remove(targetuser.userID);
-				 SaveData();
-				 //
-				 rust.SendChatMessage(netuser, chatPrefix, string.Format(lang.GetMessage("AdminWarnMSG6", this, ID), targetuser.displayName));
+		         if (targetuser == null) { rust.SendChatMessage(netuser, chatPrefix, GetMessage("InvalidPlayer", ID)); return; }
+                    //
+                    string tarID = targetuser.userID.ToString();
+
+                    if (WarnsPlayers.ContainsKey(tarID))
+                    {
+                        WarnsPlayers.Remove(tarID);
+                        rust.SendChatMessage(netuser, chatPrefix, string.Format(GetMessage("WarnClearPlayer", ID), targetuser.displayName));
+                        SaveData();
+                    }
+                    else
+                    {
+                        rust.SendChatMessage(netuser, chatPrefix, GetMessage("WarnsNull", ID));
+                    }
+                    //
 				 break;
 				default:{
 					HelpAdmins(netuser);
@@ -218,99 +347,14 @@ namespace Oxide.Plugins{
 			SaveConfig();
 		}
 		
-		[ChatCommand("adw")]
-		void ComandoAdmin2(NetUser netuser, string command, string[] args)
-		{
-		string ID = netuser.userID.ToString();
-        if (!AcessAdmin(netuser)) { rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("NoPermission", this, ID)); return; }
-		HelpAdmins(netuser);
-		}
-		
 		void HelpAdmins(NetUser netuser)
 		{
 		 string ID = netuser.userID.ToString();
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp1", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp2", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp3", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp4", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp5", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp6", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp7", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp7", this, ID));
-		 rust.SendChatMessage(netuser, chatPrefix, lang.GetMessage("AdminHelp", this, ID));
-		}
-		
-			
-		void MensagemWarn(string P, string PI)
-		{
-		  rust.BroadcastChat(chatPrefix, string.Format(lang.GetMessage("AdminWarnMSG4", this), P, PI));
-		}
-		
-				
-		void AddWarn(NetUser netuser) 
-		{
-			string ID = netuser.userID.ToString();	
-			ulong userLong = netuser.userID;
-			string Name = netuser.displayName;
-			//
-		    if(PlayerD.Warns.ContainsKey(userLong)) {
-			Playering(netuser, false);
-			PlayerD.Warns[userLong] += 1;
-			Playering(netuser, true);
-			}
-			else {
-        	PlayerD.Warns[userLong] = 1;
-            Playering(netuser, false);
-            Playering(netuser, true);
-			}
-			//
-			SaveData();
-		}
-		
-		void Playering(NetUser netuser, bool ff)
-		{
-			string ID = netuser.userID.ToString();
-		    int Avisos = Convert.ToInt32(PlayerD.Warns[netuser.userID]);
-			//
-			string f = "";
-		    f = string.Format("PlayerName: [color red]"+netuser.displayName+"[color clear] ID: [color red]"+ID+ "[color clear] Warns: [color red]"+Avisos+"[color clear]/[color red]"+MaxWarn);
-			if (ff)
-            PlayerD.PlayerInfo.Add(f);
-            else
-            PlayerD.PlayerInfo.Remove(f); 			
-		}
-		
-		void ClearAll()
-		{
-			PlayerD.PlayerInfo.Clear();
-			PlayerD.Warns.Clear();
-			SaveData();
-		}
-		
-		void Punir(NetUser netuser)
-		{
-		  int Avisos = Convert.ToInt32(PlayerD.Warns[netuser.userID]);
-		  string Name = netuser.displayName;
-		  if (Avisos == MaxWarn)
-		  {
-			  rust.BroadcastChat(chatPrefix, string.Format(lang.GetMessage("AdminWarnBan", this), Name));
-			  timer.Once(1f, () => {
-			  netuser.Ban();
-			  netuser.Kick(NetError.Facepunch_Kick_Ban, true);
-              Playering(netuser, false);
-		      PlayerD.Warns.Remove(netuser.userID);
-			  SaveData();
-			  });
-		  }
+            rust.SendChatMessage(netuser, chatPrefix, GetMessage("AdminCommands", ID));
+            rust.SendChatMessage(netuser, chatPrefix, GetMessage("AdminCommands2", ID));
+            rust.SendChatMessage(netuser, chatPrefix, GetMessage("AdminCommands3", ID));
 
-		}
-			
-	 	bool AcessAdmin(NetUser netuser){
-		if(netuser.CanAdmin())return true; 
-		if(permission.UserHasPermission(netuser.userID.ToString(), permiAdmin))return true;
-		return false;
-		}	
+        }
 
     }
 }		

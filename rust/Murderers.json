@@ -1,0 +1,19 @@
+{
+    "name": "Murderers",
+    "description": "Spawn halloween murders saved points",
+    "author": "Shadow 8",
+    "version": "1.0.1",
+    "configuration": true,
+    "suggest": {
+        "Kits": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/murderers.2666",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

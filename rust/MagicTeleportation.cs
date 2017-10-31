@@ -4,9 +4,10 @@ using Oxide.Core;
 using UnityEngine;
 using Oxide.Core.Plugins;
 using Rust;
+
 namespace Oxide.Plugins
 {
-    [Info("MagicTeleportation", "Norn", "1.1.2", ResourceId = 1404)]
+    [Info("MagicTeleportation", "Norn", "1.1.3", ResourceId = 1404)]
     [Description("Teleportation system.")]
     public class MagicTeleportation : RustPlugin
     {
@@ -875,11 +876,11 @@ namespace Oxide.Plugins
 				player.CancelInvoke("InventoryUpdate");
 				player.inventory.crafting.CancelAll(true);
 				player.MovePosition(pos);
-				player.ClientRPCPlayer(null, player, "ForcePositionTo", pos, null, null, null, null);
+				player.ClientRPCPlayer(null, player, "ForcePositionTo", pos);
 				player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
 				player.UpdateNetworkGroup();
 				player.SendNetworkUpdateImmediate(false);
-				player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+				player.ClientRPCPlayer(null, player, "StartLoading");
 				player.SendFullSnapshot();
 				timer.Once(Convert.ToInt32(Config["HomeSettings", "Cooldown"]), () => UnfreezePlayer(player.userID));
 				TELEPORT_QUEUE[player.userID].Destroy();

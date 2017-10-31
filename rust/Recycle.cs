@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Recycle", "Calytic", "2.0.7", ResourceId = 1296)]
+    [Info("Recycle", "Calytic", "2.0.8", ResourceId = 1296)]
     [Description("Recycle crafted items to base resources")]
     class Recycle : RustPlugin
     {
@@ -495,8 +495,7 @@ namespace Oxide.Plugins
             this.HideNotification(player);
             string send = jsonNotify.Replace("{msg}", msg);
 
-            var obj = new Facepunch.ObjectList?(new Facepunch.ObjectList(send));
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", obj);
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "AddUI", send);
             timer.Once(3f, delegate()
             {
                 this.HideNotification(player);
@@ -505,8 +504,7 @@ namespace Oxide.Plugins
 
         public void HideNotification(BasePlayer player)
         {
-            var obj = new Facepunch.ObjectList?(new Facepunch.ObjectList("NotifyMsg"));
-            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", obj);
+            CommunityEntity.ServerInstance.ClientRPCEx(new Network.SendInfo { connection = player.net.connection }, null, "DestroyUI", "NotifyMsg");
         }
 
         #endregion

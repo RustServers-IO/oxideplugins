@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Oxide.Core;
@@ -12,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lottery", "Sami37", "1.1.7", ResourceId = 2145)]
+    [Info("Lottery", "Sami37", "1.2.0", ResourceId = 2145)]
     internal class Lottery : RustPlugin
     {
         #region Economy Support
@@ -79,7 +78,7 @@ namespace Oxide.Plugins
         #region general_variable
         private bool newConfig, UseSR, UseNPC, AutoCloseAfterPlaceingBet;
         public Dictionary<ulong, playerinfo> Currentbet = new Dictionary<ulong, playerinfo>();
-        private string container, containerwin, BackgroundUrl, BackgroundColor, WinBackgroundUrl, WinBackgroundColor;
+        private string container, containerwin, BackgroundUrl, BackgroundColor, WinBackgroundUrl, WinBackgroundColor, anchorMin, anchorMax;
         private DynamicConfigFile data;
         private List<object> NPCID = new List<object>();
         private double jackpot, SRMinBet, SRjackpot, MinBetjackpot, MinBetjackpotEco;
@@ -157,6 +156,8 @@ namespace Oxide.Plugins
                 "http://wac.450f.edgecastcdn.net/80450F/kool1079.com/files/2016/05/RS2397_126989085.jpg");
             WinBackgroundColor = GetConfigValue("UI", "BackgroundWinColor",
                 "0.1 0.1 0.1 1");
+            anchorMin = GetConfigValue("CUI", "anchorMin", "0.8 0.2");
+            anchorMax = GetConfigValue("CUI", "anchorMax", "1 0.8");
 		    if (!newConfig) return;
 		    SaveConfig();
 		    newConfig = false;
@@ -233,6 +234,8 @@ namespace Oxide.Plugins
                 {"NoServerRewards", "Server Rewards isn't installed."},
                 {"NotEnoughMoney", "You don't have enough money."},
                 {"AddedNPC", "You successfully added the npc to the usable list."},
+                {"NotInList", "The npc you are looking is not in the list."},
+                {"RemovedNPC", "You successfully removed the npc to the usable list."},
                 {"Win", "You roll {0} and won {1}$"},
                 {"WinPoints", "You roll {0} and won {1} point(s)"},
                 {"NoBet", "You must bet before."},
@@ -355,7 +358,7 @@ namespace Oxide.Plugins
 
             if(Economy != null && Economy.IsLoaded && !UseSR)
                 ShowLotery(player, args);
-            else if(ServerRewards.IsLoaded)
+            else if(ServerRewards != null && ServerRewards.IsLoaded)
                 ShowSrLotery(player,  args);
         }
 
@@ -370,14 +373,16 @@ namespace Oxide.Plugins
         
         void ShowLotery(BasePlayer player, string[] args)
         {
-            if (!Economy.IsLoaded)
+            if (Economy == null || !Economy.IsLoaded)
             {
                 SendReply(player, lang.GetMessage("NoEconomy", this, player.UserIDString));
                 return;
             }
             int from = 0;
-            double currentBalance = (double)Economy?.Call("GetPlayerMoney", player.userID.ToString());
+            var currentBalance = Economy.Call("GetPlayerMoney", player.userID);
             playerinfo playerbet;
+            if(Currentbet == null)
+                Currentbet = new Dictionary<ulong, playerinfo>();
             if (Currentbet.ContainsKey(player.userID))
             {
                 Currentbet.TryGetValue(player.userID, out playerbet);
@@ -393,7 +398,7 @@ namespace Oxide.Plugins
                 {
                     if (args[0].Contains("plus"))
                     {
-                        if (currentBalance >= playerbet.currentbet*(playerbet.multiplicator + 1))
+                        if ((double)currentBalance >= playerbet.currentbet*(playerbet.multiplicator + 1))
                         {
                             int multiplier;
                             int.TryParse(args[1], out multiplier);
@@ -410,7 +415,7 @@ namespace Oxide.Plugins
                 {
                     int bet;
                     int.TryParse(args[1], out bet);
-                    if(currentBalance < (playerbet.currentbet+bet)*playerbet.multiplicator)
+                    if((double)currentBalance < (playerbet.currentbet+bet)*playerbet.multiplicator)
                         SendReply(player, lang.GetMessage("NotEnoughMoney", this, player.UserIDString));
                     else
                         playerbet.currentbet += bet;
@@ -432,8 +437,8 @@ namespace Oxide.Plugins
                 },
                 RectTransform =
                 {
-                    AnchorMin = "0.8 0.2",
-                    AnchorMax = "1 0.8"
+                    AnchorMin = anchorMin,
+                    AnchorMax = anchorMax
                 },
                 CursorEnabled = true
             }, "Hud", "containerwinLotery");
@@ -546,7 +551,7 @@ namespace Oxide.Plugins
             {
                 Text =
                 {
-                    Text = string.Format(lang.GetMessage("Balance", this, player.UserIDString), currentBalance.ToString(CultureInfo.CurrentCulture)),
+                    Text = string.Format(lang.GetMessage("Balance", this, player.UserIDString), currentBalance),
                     FontSize = 18,
                     Align = TextAnchor.MiddleCenter
                 },
@@ -901,8 +906,8 @@ namespace Oxide.Plugins
                     },
                     RectTransform =
                     {
-                        AnchorMin = "0.8 0.2",
-                        AnchorMax = "1 0.8"
+                        AnchorMin = anchorMin,
+                        AnchorMax = anchorMax
                     },
                     CursorEnabled = true
                 }, "Hud", "containerwinLotery");
@@ -1332,7 +1337,7 @@ namespace Oxide.Plugins
         private object FindReward(BasePlayer player, int bet, int reference, int multiplicator = 1)
         {
             object findReward = 0;
-            int reward = 0;
+            double reward = 0;
             int[] number = GetIntArray(reference);
             string newreference;
             if (UseSR && ServerRewards.IsLoaded)
@@ -1470,7 +1475,7 @@ namespace Oxide.Plugins
                     if (bet*multiplicator >= MinBetjackpotEco)
                     {
                         int jackpots = (int) Math.Round(Currentbet.Sum(v => v.Value.totalbet));
-                        return bet*multiplicator + jackpots + Convert.ToInt32(jackpot);
+                        return bet + bet*multiplicator + jackpots + Convert.ToInt32(jackpot);
                     }
                     SendReply(player, string.Format(lang.GetMessage("BetMore", this, player.UserIDString), MinBetjackpotEco));
                 }
@@ -1480,8 +1485,8 @@ namespace Oxide.Plugins
 
                 if (IndividualRates.ContainsKey(reference.ToString()))
                 {
-                    IndividualRates.TryGetValue(number.ToString(), out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    IndividualRates.TryGetValue(reference.ToString(), out rws);
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
 
@@ -1492,28 +1497,28 @@ namespace Oxide.Plugins
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference = number[0].ToString() + number[1].ToString() + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference = number[0].ToString() + "x" + number[2].ToString() + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference =  "x" + number[1].ToString() + number[2].ToString() + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 #endregion
@@ -1523,42 +1528,42 @@ namespace Oxide.Plugins
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference = number[0].ToString() + "x" + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference =  "x" + "x" + number[2].ToString() + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference = number[0].ToString() + "x" + number[2].ToString() + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference = "x" + number[1].ToString() + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference =  "x" + number[1].ToString() + number[2].ToString() + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
 
@@ -1569,28 +1574,28 @@ namespace Oxide.Plugins
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference =  "x" + number[1].ToString() + "x" + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference =  "x" + "x" + number[2].ToString() + "x";
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
                 newreference = "x" + "x" + "x" + number[3].ToString();
                 if(IndividualRates.ContainsKey(newreference))
                 {
                     IndividualRates.TryGetValue(newreference, out rws);
-                    reward = bet*(Convert.ToInt32(rws)/100) * multiplicator;
+                    reward = (bet+bet*(Convert.ToInt32(rws)/100.0d)) * multiplicator;
                     return reward;
                 }
 
@@ -1631,6 +1636,30 @@ namespace Oxide.Plugins
                         return;
                     }
                 }
+                if (args[0].ToLower() == "remove")
+                {
+                    if (!permission.UserHasPermission(player.UserIDString, "Lottery.canconfig"))
+                    {
+                        SendReply(player, string.Format(lang.GetMessage("NoPerm", this, player.UserIDString)));
+                        return;
+                    }
+                    var input = serverinput.GetValue(player) as InputState;
+                    var currentRot = Quaternion.Euler(input.current.aimAngles) * Vector3.forward;
+                    var target = DoRay(player.transform.position + eyesAdjust, currentRot);
+                    if (!(target is bool) && target is BasePlayer)
+                    {
+                        var bases = target as BasePlayer;
+                        if (NPCID.Contains(bases.UserIDString))
+                        {
+                            NPCID.Remove(bases.UserIDString);
+                            SetConfigValue("HumanNPC", "npcID", NPCID);
+                            SendReply(player, lang.GetMessage("RemovedNPC", this, player.UserIDString));
+                        }
+                        else
+                            SendReply(player, lang.GetMessage("NotInList", this, player.UserIDString));
+                        return;
+                    }
+                }
             }
             if (UseNPC)
             {
@@ -1648,8 +1677,8 @@ namespace Oxide.Plugins
                     },
                     RectTransform =
                     {
-                        AnchorMin = "0.8 0.2",
-                        AnchorMax = "1 0.8"
+                        AnchorMin = anchorMin,
+                        AnchorMax = anchorMax
                     },
                     CursorEnabled = true
                 }, "Hud", MainContainer);
@@ -1667,8 +1696,8 @@ namespace Oxide.Plugins
                     },
                     RectTransform =
                     {
-                        AnchorMin = "0.8 0.2",
-                        AnchorMax = "1 0.8"
+                        AnchorMin = anchorMin,
+                        AnchorMax = anchorMax
                     },
                     CursorEnabled = true
                 }, "Hud", MainContainer);
@@ -1748,9 +1777,9 @@ namespace Oxide.Plugins
                 return;
             }
             int random = UnityEngine.Random.Range(DefaultMinRange, DefaultMaxRange);
-            int rwd;
             if (UseSR && ServerRewards.IsLoaded)
             {
+                int rwd;
                 if (playerbet != null)
                 {
                     var reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
@@ -1822,7 +1851,7 @@ namespace Oxide.Plugins
                     var reward = FindReward(arg.Player(), (int)playerbet.currentbet, random, playerbet.multiplicator);
                     if (reward != null && Convert.ToInt32(reward) != 0)
                     {
-                        rwd = (int) reward;
+                        var rwd = (double) reward;
                         if (playerbet.currentbet*playerbet.multiplicator >= MinBetjackpotEco)
                             if (random == JackpotNumber)
                             {

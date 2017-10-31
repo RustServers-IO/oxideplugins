@@ -4,25 +4,31 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("ChatClear", "Rick De Kikker", "1.0.0")]
-    [Description("Clears the chat from one simple command")]
+    [Info("ChatClear", "Rick De Kikker", "1.0.2 ")]
+    [Description("Clear Chat")]
 
-    class ChatClear : CovalencePlugin
+    class ChatClear : HurtworldPlugin
     {
+		
+		private const string perm = "ChatClear.use";
+
+		private void Init()
+        {
+            permission.RegisterPermission(perm, this);
+			
+        }
+
         [Command("clear")]
         void TestCommand(IPlayer player, string command, string[] args)
         {
+			if (!player.HasPermission(perm))
 			{
-				player.Reply("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n<color=orange>------> Chat Cleared <------</color>");
-				foreach(PlayerSession session in GameManager.Instance.GetSessions().Values)
-				{
-					if(session != null && session.IsLoaded)
-					{
-						ChatManagerClient cmc = session.WorldPlayerEntity.gameObject.GetComponent<ChatManagerClient>();
-						cmc.ClearChat();
-					}
-				}
+			player.Reply("<color=#DCFF66>You need the permission ChatClear.use to get access to this command!</color>");
 			}
-		}
+			else{
+            server.Broadcast("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n<color=orange>----> Chat Cleared <----</color>");
+			}
+			
+        }
     }
 }

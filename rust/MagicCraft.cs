@@ -1,5 +1,4 @@
-﻿// Reference: Rust.Workshop
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Rust;
@@ -10,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("MagicCraft", "Norn", "0.3.0", ResourceId = 1347)]
+    [Info("MagicCraft", "Norn", "0.3.1", ResourceId = 1347)]
     [Description("An alternative crafting system.")]
     public class MagicCraft : RustPlugin
     {
@@ -61,7 +60,7 @@ namespace Oxide.Plugins
         {
             storedData = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(this.Title);
             ConfigurationCheck();
-            webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", PullWorkshopIDS, this);
+            webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, PullWorkshopIDS, this);
             if (Config["Messages", "ItemFailed"] == null) { Puts("Updating configuration..."); LoadDefaultConfig(); }
             GenerateItems();
         }

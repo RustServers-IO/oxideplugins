@@ -1,11 +1,11 @@
 {
-    "name": "Building Restriction",
+    "name": "BuildingRestriction",
     "description": "Restricts building height, building in water, and number of foundations",
     "author": "Wulf",
-    "version": "1.3.1",
+    "version": "1.5.1",
     "configuration": true,
-    "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/building-restriction.2124",
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/buildingrestriction.2124",
     "games": [
         "rust"
     ],

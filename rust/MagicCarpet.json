@@ -1,0 +1,16 @@
+{
+    "name": "MagicCarpet",
+    "description": "Usable magic carpets!",
+    "author": "redBDGR",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/magiccarpet.2609",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

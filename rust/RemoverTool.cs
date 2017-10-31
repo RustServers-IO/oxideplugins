@@ -15,7 +15,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.1.9", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.1.11", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -45,8 +45,8 @@ namespace Oxide.Plugins
         static int authAdmin = 2;
         static int authAll = 2;
         static int authOverride = 1;
-
-        static int removeDistanceNormal = 2;
+		
+        static int removeDistanceNormal = 3;
         static int removeDistanceAdmin = 20;
         static int removeDistanceAll = 100;
 
@@ -54,7 +54,7 @@ namespace Oxide.Plugins
         static bool removeGibsAdmin = true;
         static bool removeGibsAll = false;
 
-		static bool removeUnequipStart = false;
+		static bool removeUnequipStart = true;
 		static bool removeUnequipUpdate = false;
 		
         static int RemoveDefaultTime = 30;
@@ -317,11 +317,11 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            InitializeRustIO();
+            LoadConfigs();
+			
+			InitializeRustIO();
             InitializeItems();
             InitializeConstruction();
-
-            LoadConfigs();
 
             permission.RegisterPermission(permissionNormal, this);
             permission.RegisterPermission(permissionAdmin, this);
@@ -792,6 +792,9 @@ namespace Oxide.Plugins
 
             public BaseEntity TargetEntity { get; set; }
             
+			uint currentItemID;
+			HeldEntity heldEntity;
+			
 			RaycastHit RayHit;
 
             float lastUpdate { get; set; }
@@ -802,6 +805,11 @@ namespace Oxide.Plugins
                 player = GetComponent<BasePlayer>();
                 lastUpdate = UnityEngine.Time.realtimeSinceStartup;
                 lastRemove = UnityEngine.Time.realtimeSinceStartup;
+				if (removeUnequipStart || removeUnequipUpdate)
+				{
+					currentItemID = player.svActiveItemID;
+					UnEquip();
+				}
             }
 
             public void Start()
@@ -809,7 +817,6 @@ namespace Oxide.Plugins
                 CreateGUI(player, removetype);
                 CancelInvoke("RemoveUpdate");
                 InvokeRepeating("RemoveUpdate", 0f, 1f);
-				if (removeUnequipStart && player.GetActiveItem()?.GetHeldEntity()) UnEquip();
             }
 
             void RemoveUpdate()
@@ -821,12 +828,27 @@ namespace Oxide.Plugins
                 if (removetype == RemoveType.Normal && GUIAuthorizations) GUIAuthorizationUpdate(player, removetype, TargetEntity, Pay);
                 if (removetype == RemoveType.Normal && GUIPrices) GUIPricesUpdate(player, Pay, TargetEntity);
                 if (removetype == RemoveType.Normal && GUIRefund) GUIRefundUpdate(player, Refund, TargetEntity);
-            }
+            }			
 
             void FixedUpdate()
             {
                 if (player.IsSleeping() || !player.IsConnected) { Destroy(); return; }
-				if (removeUnequipUpdate && player.GetActiveItem()?.GetHeldEntity()) UnEquip();
+				
+				if (player.svActiveItemID != currentItemID && (removeUnequipStart || removeUnequipUpdate))
+				{
+					currentItemID = player.svActiveItemID;
+					if (currentItemID > 0u)
+					{
+						if (!removeUnequipUpdate)
+						{
+							Destroy();
+							return;
+						}
+						else
+							UnEquip();	
+					}
+				}
+				
                 float currentTime = UnityEngine.Time.realtimeSinceStartup;
                 if (currentTime - lastUpdate >= 0.5f)
                 {
@@ -849,10 +871,12 @@ namespace Oxide.Plugins
 			void UnEquip()
 			{
 				var item = player.GetActiveItem();
+				if (item == null || item.GetHeldEntity() == null)
+					return;
 				var slot = item.position;
 				item.SetParent(null);
 				item.MarkDirty();
-				rt.timer.Once(0.1f, () =>
+				rt.timer.Once(0.15f, () =>
 				{
 					if (item == null) return;
 					item.SetParent(player.inventory.containerBelt);
@@ -863,7 +887,7 @@ namespace Oxide.Plugins
 
             public void Destroy()
             {
-                CancelInvoke("RemoveUpdate");
+				CancelInvoke("RemoveUpdate");
                 DestroyGUI(player);
 				if (CoolDownEnabled)
 					cooldownTimes[player.UserIDString + "-box"] = DateTime.UtcNow;

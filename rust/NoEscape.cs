@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Game.Rust.Cui;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -16,7 +17,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.0.5", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.0.9", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -88,6 +89,9 @@ namespace Oxide.Plugins
         private bool zoneEnter;
         private bool zoneLeave;
 
+        internal bool sendUINotification;
+        internal bool sendChatNotification;
+
         private Dictionary<string, RaidZone> zones = new Dictionary<string, RaidZone>();
         private Dictionary<string, List<string>> memberCache = new Dictionary<string, List<string>>();
         private Dictionary<string, string> clanCache = new Dictionary<string, string>();
@@ -97,7 +101,7 @@ namespace Oxide.Plugins
         private Dictionary<string, DateTime> lastFriendCheck = new Dictionary<string, DateTime>();
         Dictionary<string, bool> prefabBlockCache = new Dictionary<string, bool>();
 
-        public static PluginTimers timer;
+        public static NoEscape plugin;
 
         [PluginReference]
         Plugin Clans;
@@ -113,8 +117,7 @@ namespace Oxide.Plugins
 
         List<string> prefabs = new List<string>()
         {
-            "door.hinged",
-            "door.double.hinged",
+            "door",
             "window.bars",
             "floor.ladder.hatch",
             "floor.frame",
@@ -153,6 +156,7 @@ namespace Oxide.Plugins
 
         protected override void LoadDefaultConfig()
         {
+                
             Config["VERSION"] = Version.ToString();
 
             Config["raidBlock"] = true;
@@ -198,6 +202,9 @@ namespace Oxide.Plugins
             Config["raidBlockNotify"] = true;
             Config["combatBlockNotify"] = false;
 
+            Config["sendUINotification"] = true;
+            Config["sendChatNotification"] = true;
+
             Config["blockingPrefabs"] = prefabs;
 
             Config["VERSION"] = Version.ToString();
@@ -237,6 +244,8 @@ namespace Oxide.Plugins
                 {"Combat Block Complete", "You are no longer combat blocked."},
                 {"Raid Block Notifier", "You are raid blocked for {time}"},
                 {"Combat Block Notifier", "You are combat blocked for {time}"},
+                {"Combat Block UI Message", "COMBAT BLOCK"},
+                {"Raid Block UI Message", "RAID BLOCK"},
                 {"Unit Seconds", "second(s)"},
                 {"Unit Minutes", "minute(s)"},
                 {"Prefix", string.Empty}
@@ -273,8 +282,8 @@ namespace Oxide.Plugins
             Config["blockUnowned"] = GetConfig("blockUnowned", false);
 
             Config["raidBlock"] = GetConfig("raidBlock", true);
-            Config["raidDuration"] = GetConfig("duration", 300f); // 5 minutes
-            Config["raidDistance"] = GetConfig("distance", 100f);
+            Config["raidDuration"] = GetConfig("raidDuration", 300f); // 5 minutes
+            Config["raidDistance"] = GetConfig("raidDistance", 100f);
 
             Config["combatBlock"] = GetConfig("combatBlock", false);
             Config["combatDuration"] = GetConfig("combatDuration", 180f); // 3 minutes
@@ -300,6 +309,9 @@ namespace Oxide.Plugins
             Config["raidDamageTypes"] = GetConfig("raidDamageTypes", GetDefaultRaidDamageTypes());
             Config["combatDamageTypes"] = GetConfig("combatDamageTypes", GetDefaultCombatDamageTypes());
 
+            Config["sendUINotification"] = GetConfig("sendUINotification", true);
+            Config["sendChatNotification"] = GetConfig("sendChatNotification", true);
+
             Config["cacheMinutes"] = GetConfig("cacheMinutes", 1f);
             // END NEW CONFIGURATION OPTIONS
 
@@ -309,7 +321,7 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            NoEscape.timer = new PluginTimers(this);
+            NoEscape.plugin = this;
 
             foreach (string command in blockTypes)
             {
@@ -361,6 +373,9 @@ namespace Oxide.Plugins
 
             raidBlockNotify = GetConfig("raidBlockNotify", true);
             combatBlockNotify = GetConfig("combatBlockNotify", false);
+
+            sendUINotification = GetConfig("sendUINotification", true);
+            sendChatNotification = GetConfig("sendChatNotification", true);
 
             if (clanShare || clanCheck || raiderClanShare)
             {
@@ -456,13 +471,23 @@ namespace Oxide.Plugins
 
         public abstract class BlockBehavior : MonoBehaviour
         {
-            BasePlayer player;
+            protected BasePlayer player;
             public DateTime lastBlock = DateTime.MinValue;
             public DateTime lastNotification = DateTime.MinValue;
+            internal DateTime lastUINotification = DateTime.MinValue;
             internal Timer timer;
             internal Action notifyCallback;
 
             internal abstract float Duration { get; }
+            internal abstract CuiRectTransformComponent NotificationWindow { get; }
+            internal abstract string notifyMessage { get; }
+            internal string BlockName
+            {
+                get
+                {
+                    return GetType().Name;
+                }
+            }
 
             public bool Active
             {
@@ -493,6 +518,43 @@ namespace Oxide.Plugins
                 Stop();
             }
 
+            void Update()
+            {
+                if (!plugin.sendUINotification) return;
+                bool send = false;
+                if (lastUINotification == DateTime.MinValue)
+                {
+                    lastUINotification = DateTime.Now;
+                    send = true;
+                }
+                else
+                {
+                    TimeSpan ts = DateTime.Now - lastUINotification;
+                    if (ts.TotalSeconds > 2)
+                    {
+                        send = true;
+                    }
+                    else
+                    {
+                        send = false;
+                    }
+                }
+
+                if (player is BasePlayer && player.IsConnected)
+                {
+                    if (!Active)
+                    {
+                        CuiHelper.DestroyUi(player, "BlockMsg" + BlockName);
+                    }
+
+                    if (send && Active)
+                    {
+                        lastUINotification = DateTime.Now;
+                        SendGUI();
+                    }
+                }
+            }
+
             public void Stop()
             {
                 if (notifyCallback is Action)
@@ -501,21 +563,132 @@ namespace Oxide.Plugins
                 if (timer is Timer && !timer.Destroyed)
                     timer.Destroy();
 
+                if (plugin.sendUINotification && player is BasePlayer && player.IsConnected)
+                {
+                    CuiHelper.DestroyUi(player, "BlockMsg" + BlockName);
+                }
+
                 GameObject.Destroy(this);
             }
 
             public void Notify(Action callback)
             {
+                if (plugin.sendUINotification)
+                {
+                    SendGUI();
+                }
                 notifyCallback = callback;
                 if (timer is Timer && !timer.Destroyed)
                 {
-                    timer.Reset();
+                    timer.Reset(Duration);
                 }
                 else
                 {
-                    NoEscape.timer.In(Duration, callback);
+                    plugin.timer.In(Duration, callback);
                 }
             }
+
+            private string FormatTime(TimeSpan ts)
+            {
+                if (ts.Days > 0)
+                {
+                    return string.Format("{0}D, {1}H", ts.Days, ts.Hours);
+                }
+
+                if (ts.Hours > 0)
+                {
+                    return string.Format("{0}H {1}M", ts.Hours, ts.Minutes);
+                }
+
+                return string.Format("{0}M {1}S", ts.Minutes, ts.Seconds);
+            }
+
+            void SendGUI()
+            {
+                TimeSpan ts = lastBlock.AddSeconds(Duration) - DateTime.Now;
+
+                string countDown = FormatTime(ts);
+                CuiHelper.DestroyUi(player, "BlockMsg" + BlockName);
+                var elements = new CuiElementContainer();
+                var BlockMsg = elements.Add(new CuiPanel
+                {
+                    Image =
+                    {
+                        Color = "0.95 0 0.02 0.67"
+                    },
+                    RectTransform =
+                    {
+                        AnchorMax = NotificationWindow.AnchorMax,
+                        AnchorMin = NotificationWindow.AnchorMin
+                    }
+                }, "Hud", "BlockMsg" + BlockName);
+                elements.Add(new CuiElement
+                {
+                    Parent = BlockMsg,
+                    Components =
+                    {
+                        new CuiRawImageComponent
+                        {
+                            Sprite = "assets/icons/explosion.png",
+                            Color = "0.95 0 0.02 0.67"
+                        },
+                        new CuiRectTransformComponent
+                        {
+                            AnchorMin = "0 0",
+                            AnchorMax = "0.13 1"
+                        }
+                    }
+                });
+                elements.Add(new CuiLabel
+                {
+                    RectTransform =
+                    {
+                        AnchorMin = "0.15 0",
+                        AnchorMax = "0.82 1"
+                    },
+                    Text =
+                    {
+                        Text = notifyMessage,
+                        FontSize = 11,
+                        Align = TextAnchor.MiddleLeft,
+                    }
+                }, BlockMsg);
+                elements.Add(new CuiElement
+                {
+                    Name = "TimerPanel",
+                    Parent = BlockMsg,
+                    Components =
+                        {
+                        new CuiImageComponent
+                        {
+                            Color = "0 0 0 0.64",
+                            ImageType = UnityEngine.UI.Image.Type.Filled
+                        },
+                        new CuiRectTransformComponent
+                        {
+                            AnchorMin = "0.73 0",
+                            AnchorMax = "1 1"
+                        }
+                    }
+                });
+                elements.Add(new CuiLabel
+                {
+                    RectTransform =
+                    {
+                        AnchorMin = "0 0",
+                        AnchorMax = "1 1"
+                    },
+                    Text =
+                    {
+                        Text = countDown,
+                        FontSize = 12,
+                        Align = TextAnchor.MiddleCenter,
+                    }
+                }, "TimerPanel");
+                CuiHelper.AddUi(player, elements);
+            }
+
+            
         }
 
         public class CombatBlock : BlockBehavior
@@ -527,6 +700,25 @@ namespace Oxide.Plugins
                     return combatDuration;
                 }
             }
+
+            internal override string notifyMessage
+            {
+                get { return NoEscape.GetMsg("Combat Block UI Message", player); }
+            }
+
+            private CuiRectTransformComponent _notificationWindow = null;
+            internal override CuiRectTransformComponent NotificationWindow
+            {
+                get
+                {
+                    if (_notificationWindow != null) { return _notificationWindow; }
+                    return _notificationWindow = new CuiRectTransformComponent()
+                    {
+                        AnchorMin = "0.87 0.35",
+                        AnchorMax = "0.99 0.38"
+                    };
+                }
+            }
         }
 
         public class RaidBlock : BlockBehavior
@@ -536,6 +728,25 @@ namespace Oxide.Plugins
                 get
                 {
                     return raidDuration;
+                }
+            }
+
+            internal override string notifyMessage
+            {
+                get { return NoEscape.GetMsg("Raid Block UI Message", player); }
+            }
+
+            private CuiRectTransformComponent _notificationWindow = null;
+            internal override CuiRectTransformComponent NotificationWindow
+            {
+                get
+                {
+                    if (_notificationWindow != null) { return _notificationWindow; }
+                    return _notificationWindow = new CuiRectTransformComponent()
+                    {
+                        AnchorMin = "0.87 0.39",
+                        AnchorMax = "0.99 0.42"
+                    };
                 }
             }
         }
@@ -877,8 +1088,23 @@ namespace Oxide.Plugins
             return true;
         }
 
+        //[ChatCommand("bblocked")]
+        //void cmdBBlocked(BasePlayer player, string command, string[] args)
+        //{
+        //    StartCombatBlocking(player);
+        //    StartRaidBlocking(player);
+        //}
+
+        void StartRaidBlocking(BasePlayer target, bool createZone = true)
+        {
+            StartRaidBlocking(target, target.transform.position, createZone);
+        }
+
         void StartRaidBlocking(BasePlayer target, Vector3 position, bool createZone = true)
         {
+            if (position == null) {
+                position = target.transform.position;
+            }
             if (target.gameObject == null) return;
             var raidBlocker = target.gameObject.GetComponent<RaidBlock>();
             if(raidBlocker == null) {
@@ -1376,14 +1602,22 @@ namespace Oxide.Plugins
 
             if (send)
             {
-                SendReply(target, GetPrefix(target.UserIDString) + GetMsg(langMessage, target.UserIDString).Replace("{time}", GetCooldownTime(blocker.Duration, target.UserIDString)));
+                if (sendChatNotification)
+                {
+                    SendReply(target, GetPrefix(target.UserIDString) + GetMsg(langMessage, target.UserIDString).Replace("{time}", GetCooldownTime(blocker.Duration, target.UserIDString)));
+                }
                 blocker.lastNotification = DateTime.Now;
 
                 blocker.Notify(delegate()
                 {
                     blocker.notifyCallback = null;
                     if (target.IsConnected)
-                        SendReply(target, GetPrefix(target.UserIDString) + GetMsg(completeMessage, target.UserIDString));
+                    {
+                        if (sendChatNotification)
+                        {
+                            SendReply(target, GetPrefix(target.UserIDString) + GetMsg(completeMessage, target.UserIDString));
+                        }
+                    }
                 });
             }
         }
@@ -1469,6 +1703,8 @@ namespace Oxide.Plugins
             if (prefabBlockCache.TryGetValue(prefabName, out result))
                 return result;
 
+            result = false;
+
             foreach (string p in prefabs)
             {
                 if (prefabName.IndexOf(p) != -1)
@@ -1478,7 +1714,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            result = false;
+            
             prefabBlockCache.Add(prefabName, result);
             return result;
         }
@@ -1538,9 +1774,13 @@ namespace Oxide.Plugins
             }
         }
 
-        string GetMsg(string key, object userID = null)
+        static string GetMsg(string key, object user = null)
         {
-            return lang.GetMessage(key, this, userID == null ? null : userID.ToString());
+            if (user is BasePlayer)
+            {
+                user = ((BasePlayer)user).UserIDString;
+            }
+            return plugin.lang.GetMessage(key, plugin, user == null ? null : user.ToString());
         }
 
         #endregion

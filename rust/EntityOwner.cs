@@ -4,14 +4,15 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using Facepunch;
+using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Owner", "rustservers.io", "3.1.2", ResourceId = 1255)]
-    [Description("Modify entity ownership and cupboard/turret authorization")]
+    [Info("Entity Owner", "rustservers.io", "3.1.4", ResourceId = 1255)]
+    [Description("Modify entity ownership and cupboard/turret authorization")]      
     class EntityOwner : RustPlugin
     {
         #region Data & Config
@@ -137,7 +138,6 @@ namespace Oxide.Plugins
             {
                 LoadConfig();
 
-
                 debug = GetConfig("Debug", false);
                 EntityLimit = GetConfig("EntityLimit", 8000);
                 DistanceThreshold = GetConfig("DistanceThreshold", 3f);
@@ -253,13 +253,13 @@ namespace Oxide.Plugins
 
                     string msg = string.Format(messages["Owner: {0}"], owner) + "\n<color=lightgrey>" + targetEntity.ShortPrefabName + "</color>";
 
-                    if (prodKeyCode) {
-                        if (target is Door) {
+                    if(prodKeyCode) {
+                        if(target is Door) {
                             Door door = (Door)target;
                             BaseLock baseLock = door.GetSlot(BaseEntity.Slot.Lock) as BaseLock;
-                            if (baseLock is CodeLock) {
+                            if(baseLock is CodeLock) {
                                 CodeLock codeLock = (CodeLock)baseLock;
-                                string keyCode = codeLock.code.ToString();
+                                string keyCode = codeLock.code;
                                 msg += "\n" + string.Format(messages["Code: {0}"], keyCode);
                             }
                         }
@@ -682,39 +682,51 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (args.Length == 1)
+            bool highlight = false;
+            if (args.Length > 0)
             {
+                if(args[0] == "highlight") {
+                    highlight = true;
+                    args = args.Skip(1).ToArray();
+                }
+                if (args.Length == 0)
+                {
+                    massProd<BaseEntity>(player, highlight);
+                    return;
+                }
+
                 switch (args[0])
                 {
                     case "all":
-                        massProd<BaseEntity>(player);
+                        args = args.Skip(1).ToArray();
+                        massProd<BaseEntity>(player, highlight, args);
                         break;
                     case "block":
-                        massProd<BuildingBlock>(player);
+                        massProd<BuildingBlock>(player, highlight);
                         break;
                     case "storage":
-                        massProd<StorageContainer>(player);
+                        massProd<StorageContainer>(player, highlight);
                         break;
                     case "sign":
-                        massProd<Signage>(player);
+                        massProd<Signage>(player, highlight);
                         break;
                     case "sleepingbag":
-                        massProd<SleepingBag>(player);
+                        massProd<SleepingBag>(player, highlight);
                         break;
                     case "plant":
-                        massProd<PlantEntity>(player);
+                        massProd<PlantEntity>(player, highlight);
                         break;
                     case "oven":
-                        massProd<BaseOven>(player);
+                        massProd<BaseOven>(player, highlight);
                         break;
                     case "turret":
-                        massProdTurret(player);
-                        break;
-                    case "door":
-                        massProd<Door>(player);
+                        massProdTurret(player, highlight);
                         break;
                     case "cupboard":
-                        massProdCupboard(player);
+                        massProdCupboard(player, highlight);
+                        break;
+                    default:
+                        massProd<BaseEntity>(player, highlight, args);
                         break;
                 }
             }
@@ -850,7 +862,7 @@ namespace Oxide.Plugins
                     Pool.FreeList(ref hits);
                 }
 
-                if (target == 0) {
+                if(target == 0) {
                     SendReply(player, string.Format(messages["New owner of all around is: {0}"], "No one"));
                 } else {
                     BasePlayer targetPlayer = BasePlayer.FindByID(target);
@@ -869,7 +881,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void massProd<T>(BasePlayer player) where T : BaseEntity
+        private void massProd<T>(BasePlayer player, bool highlight = false, params string[] filter) where T : BaseEntity
         {
             object entityObject = false;
 
@@ -893,29 +905,43 @@ namespace Oxide.Plugins
                 var entityList = new HashSet<T>();
                 var checkFrom = new List<Vector3>();
 
-                if (entity is T)
-                {
+                if (entity is T) {
                     entityList.Add((T)entity);
                 }
-                checkFrom.Add(entity.transform.position);
 
                 var total = 0;
+                var skip = false;
                 if (entity is T)
                 {
-                    prodOwners.Add(entity.OwnerID, 1);
-                    total++;
+                    if(filter.Length > 0) {
+                        skip = true;
+                        foreach(var f in filter) {
+                            if(entity.name.ToLower().Contains(f.ToLower())) {
+                                skip = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if(!skip) {
+                        prodOwners.Add(entity.OwnerID, 1);
+                        total++;
+                    }
                 }
 
-                var current = 0;
+                var current = -1;
+                var distanceThreshold = DistanceThreshold;
+                if (typeof(T) != typeof(BuildingBlock) && typeof(T) != typeof(BaseEntity))
+                    distanceThreshold += 30;
+
                 while (true)
                 {
                     current++;
                     if (current > EntityLimit)
                     {
                         if (debug)
-                        {
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        }
+
                         SendReply(player, $"Count ({total})");
                         break;
                     }
@@ -925,37 +951,43 @@ namespace Oxide.Plugins
                         break;
                     }
 
-                    var distanceThreshold = DistanceThreshold;
-                    if (typeof(T) != typeof(BuildingBlock) && typeof(T) != typeof(BaseEntity))
-                    {
-                        distanceThreshold += 30;
-                    }
-
-                    var hits = FindEntities<T>(checkFrom[current - 1], distanceThreshold);
-
+                    var hits = FindEntities<T>(checkFrom.Count > 0 ? checkFrom[current-1] : entity.transform.position, distanceThreshold);
+                    skip = false;
                     foreach (var fentity in hits)
                     {
-                        if (!entityList.Add(fentity)) continue;
-                        if (fentity.name == "player/player")
-                        {
+                        if (fentity.transform == null || !entityList.Add(fentity) || fentity.name == "player/player")
                             continue;
+
+                        if(filter.Length > 0) {
+                            skip = true;
+                            foreach(var f in filter) {
+                                if(fentity.name.ToLower().Contains(f.ToLower())) {
+                                    skip = false;
+                                    break;
+                                }
+                            }
                         }
-                        if (fentity.transform == null)
-                        {
-                            continue;
-                        }
-                        total++;
+
                         checkFrom.Add(fentity.transform.position);
-                        var pid = fentity.OwnerID;
-                        if (prodOwners.ContainsKey(pid))
-                        {
-                            prodOwners[pid]++;
-                        }
-                        else
-                        {
-                            prodOwners.Add(pid, 1);
+
+                        if(!skip) {
+                            total++;
+                            if(highlight) {
+                                SendHighlight(player, fentity.transform.position);
+                            }
+
+                            var pid = fentity.OwnerID;
+                            if (prodOwners.ContainsKey(pid))
+                            {
+                                prodOwners[pid]++;
+                            }
+                            else
+                            {
+                                prodOwners.Add(pid, 1);
+                            }
                         }
                     }
+
                     Pool.FreeList(ref hits);
                 }
 
@@ -978,57 +1010,47 @@ namespace Oxide.Plugins
                 }
 
                 if (unknown > 0)
-                {
                     SendReply(player, string.Format(messages["Unknown: {0}%"], unknown));
-                }
+
             }
+        }
+
+        void SendHighlight(BasePlayer player, Vector3 position) {
+            player.SendConsoleCommand("ddraw.sphere",  30f, Color.magenta, position, 2f);
+            player.SendNetworkUpdateImmediate();
         }
 
         private void ProdCupboard(BasePlayer player, BuildingPrivlidge cupboard)
         {
-            var authorizedUsers = GetToolCupboardUserNames(cupboard);
-
+            List<string> authorizedUsers;
             var sb = new StringBuilder();
-
-            if (authorizedUsers.Count == 0)
-            {
-                sb.Append(string.Format(messages["({0}) Authorized"], 0));
-            }
-            else
-            {
+            if(TryGetCupboardUserNames(cupboard, out authorizedUsers)) {
                 sb.AppendLine(string.Format(messages["({0}) Authorized"], authorizedUsers.Count));
                 foreach (var n in authorizedUsers)
-                {
                     sb.AppendLine(n);
-                }
-            }
+
+            } else
+                sb.Append(string.Format(messages["({0}) Authorized"], 0));
 
             SendReply(player, sb.ToString());
         }
 
         private void ProdTurret(BasePlayer player, AutoTurret turret)
         {
-            var authorizedUsers = GetTurretUserNames(turret);
-
+            List<string> authorizedUsers;
             var sb = new StringBuilder();
-
-            if (authorizedUsers.Count == 0)
-            {
+            if(TryGetTurretUserNames(turret, out authorizedUsers)) {
                 sb.Append(string.Format(messages["({0}) Authorized"], 0));
-            }
-            else
-            {
+            } else {
                 sb.AppendLine(string.Format(messages["({0}) Authorized"], authorizedUsers.Count));
                 foreach (var n in authorizedUsers)
-                {
                     sb.AppendLine(n);
-                }
             }
 
             SendReply(player, sb.ToString());
         }
 
-        private void massProdCupboard(BasePlayer player)
+        private void massProdCupboard(BasePlayer player, bool highlight = false)
         {
             object entityObject = false;
 
@@ -1056,9 +1078,8 @@ namespace Oxide.Plugins
                     if (current > EntityLimit)
                     {
                         if (debug)
-                        {
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        }
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1072,19 +1093,18 @@ namespace Oxide.Plugins
 
                     foreach (var e in entities)
                     {
-                        if (!entityList.Add(e)) continue;
-                            checkFrom.Add(e.transform.position);
+                        if (!entityList.Add(e)) { continue; }
+                        if(highlight) {
+                            SendHighlight(player, e.transform.position);
+                        }
+                        checkFrom.Add(e.transform.position);
 
                         foreach (var pnid in e.authorizedPlayers)
                         {
                             if (prodOwners.ContainsKey(pnid.userid))
-                            {
                                 prodOwners[pnid.userid]++;
-                            }
                             else
-                            {
                                 prodOwners.Add(pnid.userid, 1);
-                            }
                         }
 
                         total++;
@@ -1110,14 +1130,12 @@ namespace Oxide.Plugins
                     }
 
                     if (unknown > 0)
-                    {
                         SendReply(player, string.Format(messages["Unknown: {0}%"], unknown));
-                    }
                 }
             }
         }
 
-        private void massProdTurret(BasePlayer player)
+        private void massProdTurret(BasePlayer player, bool highlight = false)
         {
             object entityObject = false;
 
@@ -1145,9 +1163,8 @@ namespace Oxide.Plugins
                     if (current > EntityLimit)
                     {
                         if (debug)
-                        {
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        }
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1161,27 +1178,47 @@ namespace Oxide.Plugins
 
                     foreach (var e in entities)
                     {
-                        if (!entityList.Add(e)) continue;
-                            checkFrom.Add(e.transform.position);
+                        if (!entityList.Add(e)) { continue; }
+                        if(highlight) {
+                            SendHighlight(player, e.transform.position);
+                        }
+                        checkFrom.Add(e.transform.position);
 
-                        var turret = e as AutoTurret;
-                        if (turret == null) continue;
-                        foreach (var pnid in turret.authorizedPlayers)
-                        {
-                            if (prodOwners.ContainsKey(pnid.userid))
-                            {
-                                prodOwners[pnid.userid]++;
+                        if(e is AutoTurret) {
+                            var turret = e as AutoTurret;
+                            if(turret.OwnerID.IsSteamId()) {
+                                if (prodOwners.ContainsKey(turret.OwnerID))
+                                    prodOwners[turret.OwnerID]++;
+                                else
+                                    prodOwners.Add(turret.OwnerID, 1);
                             }
-                            else
+
+                            foreach (var pnid in turret.authorizedPlayers)
                             {
-                                prodOwners.Add(pnid.userid, 1);
+                                if (prodOwners.ContainsKey(pnid.userid))
+                                    prodOwners[pnid.userid]++;
+                                else
+                                    prodOwners.Add(pnid.userid, 1);
                             }
+                        } else if(e is FlameTurret) {
+                            var turret = e as FlameTurret;
+                            if(turret.OwnerID.IsSteamId()) {
+                                if (prodOwners.ContainsKey(turret.OwnerID))
+                                    prodOwners[turret.OwnerID]++;
+                                else
+                                    prodOwners.Add(turret.OwnerID, 1);
+                            }
+                        } else {
+                            continue;
                         }
 
-                            total++;
-                        }
-                        Pool.FreeList(ref entities);
+
+
+                        total++;
                     }
+
+                    Pool.FreeList(ref entities);
+                }
 
                 var percs = new Dictionary<ulong, int>();
                 var unknown = 100;
@@ -1201,9 +1238,7 @@ namespace Oxide.Plugins
                     }
 
                     if (unknown > 0)
-                    {
                         SendReply(player, string.Format(messages["Unknown: {0}%"], unknown));
-                    }
                 }
             }
         }
@@ -1235,9 +1270,8 @@ namespace Oxide.Plugins
                     if (current > EntityLimit)
                     {
                         if (debug)
-                        {
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        }
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1261,9 +1295,8 @@ namespace Oxide.Plugins
                         });
 
                         priv.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                        if (priv.CheckEntity(target)) {
+                        if(priv.CheckEntity(target))
                             target.SetInsideBuildingPrivilege(priv, true);
-                        }
 
                         total++;
                     }
@@ -1301,9 +1334,8 @@ namespace Oxide.Plugins
                     if (current > EntityLimit)
                     {
                         if (debug)
-                        {
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        }
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1327,9 +1359,8 @@ namespace Oxide.Plugins
                             {
                                 priv.authorizedPlayers.Remove(p);
                                 priv.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                                if (priv.CheckEntity(target)) {
+                                if(priv.CheckEntity(target))
                                     target.SetInsideBuildingPrivilege(priv, false);
-                                }
                             }
                         }
 
@@ -1369,9 +1400,8 @@ namespace Oxide.Plugins
                     if (current > EntityLimit)
                     {
                         if (debug)
-                        {
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        }
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1434,9 +1464,8 @@ namespace Oxide.Plugins
                     if (current > EntityLimit)
                     {
                         if (debug)
-                        {
                             SendReply(player, messages["Exceeded entity limit."] + " " + EntityLimit);
-                        }
+
                         SendReply(player, string.Format(messages["Count ({0})"], total));
                         break;
                     }
@@ -1473,36 +1502,32 @@ namespace Oxide.Plugins
             }
         }
 
-        private List<string> GetToolCupboardUserNames(BuildingPrivlidge cupboard)
+        private bool TryGetCupboardUserNames(BuildingPrivlidge cupboard, out List<string> names)
         {
-            var names = new List<string>();
+            names = new List<string>();
+            if(cupboard.authorizedPlayers == null)
+                return false;
             if (cupboard.authorizedPlayers.Count == 0)
-            {
-                return names;
-            }
+                return false;
 
             foreach (var pnid in cupboard.authorizedPlayers)
-            {
                 names.Add($"{FindPlayerName(pnid.userid)} - {pnid.userid}");
-            }
 
-            return names;
+            return true;
         }
 
-        private List<string> GetTurretUserNames(AutoTurret turret)
+        private bool TryGetTurretUserNames(AutoTurret turret, out List<string> names)
         {
-            var names = new List<string>();
+            names = new List<string>();
+            if (turret.authorizedPlayers == null)
+                return false;
             if (turret.authorizedPlayers.Count == 0)
-            {
-                return names;
-            }
+                return false;
 
             foreach (var pnid in turret.authorizedPlayers)
-            {
                 names.Add($"{FindPlayerName(pnid.userid)} - {pnid.userid}");
-            }
 
-            return names;
+            return true;
         }
 
         private bool HasCupboardAccess(BuildingPrivlidge cupboard, BasePlayer player)
@@ -1515,11 +1540,6 @@ namespace Oxide.Plugins
             return turret.IsAuthed(player);
         }
 
-        ulong GetOwnerID(BaseEntity entity)
-        {
-            return entity.OwnerID;
-        }
-
         string GetOwnerName(BaseEntity entity)
         {
             return FindPlayerName(entity.OwnerID);
@@ -1527,7 +1547,19 @@ namespace Oxide.Plugins
 
         BasePlayer GetOwnerPlayer(BaseEntity entity)
         {
-            return BasePlayer.FindByID(entity.OwnerID);
+            if(entity.OwnerID.IsSteamId()) {
+                return BasePlayer.FindByID(entity.OwnerID);
+            }
+
+            return null;
+        }
+
+        IPlayer GetOwnerIPlayer(BaseEntity entity) {
+            if(entity.OwnerID.IsSteamId()) {
+                return covalence.Players.FindPlayerById(entity.OwnerID.ToString());
+            }
+
+            return null;
         }
 
         void RemoveOwner(BaseEntity entity)
@@ -1535,18 +1567,37 @@ namespace Oxide.Plugins
             entity.OwnerID = 0;
         }
 
-        void ChangeOwner(BaseEntity entity, BasePlayer player)
+        bool ChangeOwner(BaseEntity entity, object player)
         {
-            entity.OwnerID = player.userID;
-        }
+            if(player is BasePlayer) {
+                entity.OwnerID = ((BasePlayer)player).userID;
+                return true;
+            } if(player is IPlayer) {
+                entity.OwnerID = Convert.ToUInt64(((IPlayer)player).Id);
+                return true;
+            } else if(player is ulong && ((ulong)player).IsSteamId()) {
+                entity.OwnerID = (ulong)player;
+                return true;
+            } else if(player is string) {
+                ulong id;
+                if(ulong.TryParse((string)player, out id) && id.IsSteamId()) {
+                    entity.OwnerID = (ulong)player;
+                    return true;
+                } else {
+                    var basePlayer = BasePlayer.Find((string)player);
+                    if(basePlayer is BasePlayer) {
+                        entity.OwnerID = basePlayer.userID;
+                        return true;
+                    }
+                }
+            }
 
-        void ChangeOwner(BaseEntity entity, ulong player) {
-            entity.OwnerID = player;
+            return false;
         }
 
         object FindEntityData(BaseEntity entity)
         {
-            if (entity.OwnerID == 0)
+            if (!entity.OwnerID.IsSteamId())
             {
                 return false;
             }
@@ -1608,9 +1659,9 @@ namespace Oxide.Plugins
             return false;
         }
 
-        object FindEntity(Vector3 position, float distance = 3f)
+        object FindEntity(Vector3 position, float distance = 3f, params string[] filter)
         {
-            var hit = FindEntity<BaseEntity>(position, distance);
+            var hit = FindEntity<BaseEntity>(position, distance, filter);
 
             if (hit != null)
             {
@@ -1620,16 +1671,25 @@ namespace Oxide.Plugins
             return false;
         }
 
-        T FindEntity<T>(Vector3 position, float distance = 3f) where T : BaseEntity
+        T FindEntity<T>(Vector3 position, float distance = 3f, params string[] filter) where T : BaseEntity
         {
             var list = Pool.GetList<T>();
             Vis.Entities(position, distance, list, layerMasks);
 
             if (list.Count > 0)
             {
-                var entity = list[0];
+                foreach(var e in list) {
+                    if(filter.Length > 0) {
+                        foreach(var f in filter) {
+                            if(e.name.Contains(f)) {
+                                return e;
+                            }
+                        }
+                    } else {
+                        return e;
+                    }
+                }
                 Pool.FreeList(ref list);
-                return entity;
             }
 
             return null;
@@ -1691,22 +1751,24 @@ namespace Oxide.Plugins
 
         private string FindPlayerName(ulong playerID)
         {
-            var player = FindPlayerByPartialName(playerID.ToString());
-            if (player)
-            {
-                if (player.IsSleeping())
+            if(playerID.IsSteamId()) {
+                var player = FindPlayerByPartialName(playerID.ToString());
+                if (player)
                 {
-                    return $"{player.displayName} [<color=lightblue>Sleeping</color>]";
+                    if (player.IsSleeping())
+                    {
+                        return $"{player.displayName} [<color=lightblue>Sleeping</color>]";
+                    }
+                    else {
+                        return $"{player.displayName} [<color=lime>Online</color>]";
+                    }
                 }
-                else {
-                    return $"{player.displayName} [<color=lime>Online</color>]";
-                }
-            }
 
-            var p = covalence.Players.FindPlayerById(playerID.ToString());
-            if (p != null)
-            {
-                return $"{p.Name} [<color=red>Offline</color>]";
+                var p = covalence.Players.FindPlayerById(playerID.ToString());
+                if (p != null)
+                {
+                    return $"{p.Name} [<color=red>Offline</color>]";
+                }
             }
 
             return $"Unknown : {playerID}";
@@ -1736,13 +1798,13 @@ namespace Oxide.Plugins
                 return 0;
 
             ulong userID;
-            if (ulong.TryParse(name, out userID)) {
+            if(ulong.TryParse(name, out userID)) {
                 return userID;
             }
 
             IPlayer player = covalence.Players.FindPlayer(name);
 
-            if (player != null) {
+            if(player != null) {
                 return Convert.ToUInt64(player.Id);
             }
 
@@ -1756,7 +1818,7 @@ namespace Oxide.Plugins
 
             IPlayer player = covalence.Players.FindPlayer(name);
 
-            if (player != null) {
+            if(player != null) {
                 return (BasePlayer)player.Object;
             }
 

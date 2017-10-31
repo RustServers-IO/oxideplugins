@@ -3,13 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Oxide.Core;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-
-    [Info("Sign Artist", "Bombardir", "0.3.2", ResourceId = 992)]
+    [Info("Sign Artist", "Nogrod / Bombardir", "0.3.3", ResourceId = 992)]
     class SignArtist : RustPlugin
     {
         GameObject WebObject;
@@ -39,7 +37,6 @@ namespace Oxide.Plugins
             private Queue<QueueItem> QueueList = new Queue<QueueItem>();
             private byte ActiveLoads;
             private SignArtist SignArtist;
-            private MemoryStream stream = new MemoryStream();
 
             private void Awake()
             {
@@ -79,12 +76,6 @@ namespace Oxide.Plugins
                 return img;
             }
 
-            private void ClearStream()
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
-
             IEnumerator WaitForRequest(QueueItem info)
             {
                 using (var www = new WWW(info.url))
@@ -114,10 +105,7 @@ namespace Oxide.Plugins
                             var sign = info.sign;
                             if (sign.textureID > 0U)
                                 FileStorage.server.Remove(sign.textureID, FileStorage.Type.png, sign.net.ID);
-                            ClearStream();
-                            stream.Write(img, 0, img.Length);
-                            sign.textureID = FileStorage.server.Store(stream, FileStorage.Type.png, sign.net.ID);
-                            ClearStream();
+                            sign.textureID = FileStorage.server.Store(img, FileStorage.Type.png, sign.net.ID);
                             sign.SendNetworkUpdate();
                             Interface.Oxide.CallHook("OnSignUpdated", sign, player);
                             player.ChatMessage(SignArtist.Loaded);

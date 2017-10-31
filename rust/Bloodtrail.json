@@ -2,8 +2,8 @@
     "name": "Bloodtrail",
     "description": "Leaves a Bloodtrail behind you while bleeding",
     "author": "hoppel",
-    "version": "1.0.2",
-    "configuration": false,
+    "version": "1.0.3",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/bloodtrail.2558",
     "games": [

@@ -1,14 +1,16 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
+using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.0.5", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.0", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
@@ -17,15 +19,6 @@ namespace Oxide.Plugins
 		Plugin Clans, Vanish;
 
 		public enum TargetMode { all, players, heli, lightshow };
-
-		public class SecurityLight
-		{
-			public uint id;
-			public SearchLight light { get; set; } = null;
-			public BasePlayer owner { get; set; } = null;
-			public TargetMode mode { get; set; } = TargetMode.all;
-			public BaseCombatEntity target;
-		}
 
 		class ConfigData
 		{
@@ -43,14 +36,413 @@ namespace Oxide.Plugins
 
 		class StoredData
 		{
-			public Dictionary<uint, SecurityLight> LightList { get; set; } = new Dictionary<uint, SecurityLight>();
+			public Dictionary<uint, TargetMode> Security_Lights { get; set; } = new Dictionary<uint, TargetMode>();
 		}
 
+		class SecurityLight : MonoBehaviour
+		{
+			#region Variables
+			private uint id;
+			private SearchLight light { get; set; } = null;
+			private TargetMode mode { get; set; } = TargetMode.all;
+			public BaseCombatEntity target;
+			#endregion
+
+			#region Initialization
+			//
+			// Initialize security light
+			//
+			private void Awake()
+			{
+				light = GetComponent<SearchLight>();
+				id = light.net.ID;
+				if (!instance.data.Security_Lights.ContainsKey(id))
+					instance.data.Security_Lights.Add(id, mode);
+				mode = instance.data.Security_Lights[id];
+				instance.securityLights.Add(this);
+				instance.SaveData();
+
+				gameObject.layer = (int)Layer.Reserved1;
+				var collider = gameObject.GetComponent<SphereCollider>();
+				if (collider != null)
+					Destroy(collider);
+				collider = gameObject.AddComponent<SphereCollider>();
+				collider.center = Vector3.zero;
+				collider.radius = instance.config.allDetectionRadius;
+				collider.isTrigger = true;
+				collider.enabled = true;
+
+				ResetTarget();
+			}
+			#endregion
+
+			#region Functionality
+			//
+			// New entity in range
+			//
+			private void OnTriggerEnter(Collider range)
+			{
+				BaseCombatEntity entity = range.GetComponentInParent<BaseCombatEntity>();
+
+				// Check if entity is valid
+				if (!IsValid(entity))
+					return;
+				// Check for current target
+				if (target != null)
+					return;
+				// Acquire new target
+				if (ShouldTarget(entity))
+					SetTarget(entity);
+			}
+			//
+			// Update entities within range
+			//
+			private void OnTriggerStay(Collider range)
+			{
+				BaseCombatEntity entity = range.GetComponentInParent<BaseCombatEntity>();
+				
+				// Check if entity is valid
+				if (!IsValid(entity))
+					return;
+				// Check for current target
+				if (target != null)
+					return;
+
+				if (ShouldTarget(entity))
+					SetTarget(entity);
+			}
+			//
+			// Entity leaving range
+			//
+			private void OnTriggerExit(Collider range)
+			{
+				BaseCombatEntity entity = range.GetComponentInParent<BaseCombatEntity>();
+
+				// Check if entity is valid
+				if (!IsValid(entity))
+					return;
+
+				if (IsTargeting(entity))
+					ResetTarget();
+			}
+			//
+			// Update the target if in lightshow mode also make sure current target is valid
+			//
+			private void Update()
+			{
+				if (mode == TargetMode.lightshow)
+				{
+					BaseCombatEntity owner = instance.GetPlayer(OwnerID()) as BaseCombatEntity;
+					if (!ShouldTarget(owner))
+						return;
+					if (!IsTargeting(owner))
+						SetTarget(owner);
+					else
+						UpdateTarget();
+				}
+				else if (target != null)
+				{
+					if (ShouldTarget(target))
+						UpdateTarget();
+					else
+						ResetTarget();
+				}
+			}
+			//
+			// Destroy the the security light
+			//
+			public void OnDestroy()
+			{
+				if (!instance.unloading)
+				{
+					if (instance.data.Security_Lights.ContainsKey(id))
+						instance.data.Security_Lights.Remove(id);
+					if (instance.securityLights.Contains(this))
+						instance.securityLights.Remove(this);
+				}
+
+				instance.SaveData();
+				
+				Destroy(this);
+			}
+			#endregion
+
+			#region Targeting
+			//
+			// Check if entity should be targeted
+			//
+			private bool ShouldTarget(BaseCombatEntity entity)
+			{
+				// If fuel is required, check if light has fuel
+				if (instance.config.requireFuel && light.inventory.GetSlot(0) == null)
+					return false;
+				// Check if in lightshow mode
+				if (mode == TargetMode.lightshow && entity == instance.GetPlayer(OwnerID()) as BaseCombatEntity)
+					return true;
+				// Check if auto-lights are enabled
+				if (!instance.lightsEnabled)
+					return false;
+				// Check if light is mounted
+				if (light.IsMounted())
+					return false;
+				// Check if light has line of sight
+				if (!HasLoS(entity) && mode != TargetMode.heli)
+					return false;
+				// Check if owner already targeting entity
+				if (!IsTargeting(entity) && mode != TargetMode.heli)
+					if (instance.IsOwnerTargeting(OwnerID(), entity))
+						return false;
+					// Check if light is the closest valid light
+					else if (!instance.IsClosest(entity, id))
+						return false;
+				if (entity is BasePlayer)
+				{
+					BasePlayer player = entity as BasePlayer;
+					// Check if player is authorized on the light
+					if (instance.IsAuthorized(player, light))
+						return false;
+					// Make sure player is not NPC
+					if (instance.GetPlayer(player.userID) == null)
+						return false;
+					// Check if player has building privlege
+					if (player.HasPlayerFlag(BasePlayer.PlayerFlags.HasBuildingPrivilege))
+						return false;
+					// Check if player is crouched
+					if (player.IsDucked() && player != light.lastAttacker)
+						return false;
+					// Check if player is invisible
+					if (instance.IsInvisible(player))
+						return false;
+				}
+				return true;
+			}
+			//
+			// Set the lights target
+			//
+			private void SetTarget(BaseCombatEntity entity)
+			{
+				if (entity == null)
+					return;
+				target = entity;
+
+				if (entity is BasePlayer)
+					light.SetTargetAimpoint(entity.transform.position + Vector3.up);
+				else
+					light.SetTargetAimpoint(entity.transform.position);
+
+				if (instance.config.acquisitionSound)
+					Effect.server.Run("assets/prefabs/npc/autoturret/effects/targetacquired.prefab", light.eyePoint.transform.position);
+
+				if (!instance.config.requireFuel)
+				{
+					if (light.inventory.GetSlot(0) == null && !light.IsOn())
+						light.inventory.AddItem(light.inventory.onlyAllowedItem, 1);
+					if (light.inventory.GetSlot(0) != null)
+						light.SetFlag(BaseEntity.Flags.On, true);
+				}
+				else if (instance.config.requireFuel && light.inventory.GetSlot(0) != null)
+					light.SetFlag(BaseEntity.Flags.On, true);
+				light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+
+				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
+				collider.radius = GetTrackingRadius();
+			}
+			//
+			// Update the lights target
+			//
+			private void UpdateTarget()
+			{
+				if (target is BasePlayer || target is NPCPlayer)
+					light.SetTargetAimpoint(target.transform.position + Vector3.up);
+				else
+					light.SetTargetAimpoint(target.transform.position);
+
+				if (instance.config.requireFuel && light.inventory.GetSlot(0) == null)
+					ResetTarget();
+
+				light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+			}
+			//
+			// Reset the lights target
+			//
+			public void ResetTarget()
+			{
+				target = null;
+				light.SetTargetAimpoint(light.eyePoint.transform.position + Vector3.down * 3);
+				light.SetFlag(BaseEntity.Flags.On, false);
+				light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
+				collider.radius = GetDetectionRadius();
+			}
+			#endregion
+
+			#region Helpers
+			//
+			// Check if the light is targeting an entity
+			//
+			public bool IsTargeting(BaseCombatEntity entity = null)
+			{
+				if (entity != null && target != null)
+					if (target == entity)
+						return true;
+				if (target != null && entity == null)
+					return true;
+				return false;
+			}
+			//
+			// Check if entity is a valid target
+			//
+			private bool IsValid(BaseCombatEntity entity)
+			{
+				if (!entity)
+					return false;
+				if (mode == TargetMode.all && (entity is BasePlayer || entity is BaseHelicopter || entity.GetType().IsSubclassOf(typeof(BaseNpc)) || entity is NPCPlayer))
+					return true;
+				if (mode == TargetMode.players && entity is BasePlayer)
+					return true;
+				if (mode == TargetMode.heli && entity is BaseHelicopter)
+					return true;
+				return false;
+			}
+			//
+			// Find first object in line of sight
+			//
+			private object RaycastAll<T>(Ray ray, float distance)
+			{
+				var hits = Physics.RaycastAll(ray, distance, Layers.Solid);
+				GamePhysics.Sort(hits);
+				object target = false;
+				foreach (var hit in hits)
+				{
+					var ent = hit.GetEntity();
+					if (ent is T)
+					{
+						target = ent;
+						break;
+					}
+				}
+				return target;
+			}
+			//
+			// Check if light has line of sight to entity
+			//
+			public bool HasLoS(BaseCombatEntity entity)
+			{
+				if (!IsValid(entity))
+					return false;
+				if (entity is BaseHelicopter)
+					return true;
+
+				Ray ray = new Ray((entity is BasePlayer ? (light.eyePoint.transform.position + Vector3.up) : light.eyePoint.transform.position), (entity is BasePlayer ? ((entity.transform.position + Vector3.up) - (light.eyePoint.transform.position + Vector3.up)) : (entity.transform.position - light.eyePoint.transform.position)));
+				float distance = 0;
+
+				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
+				distance = collider.radius;
+
+				var foundEntity = RaycastAll<BaseNetworkable>(ray, distance);
+
+				if (foundEntity is BaseCombatEntity)
+				{
+					if (entity == foundEntity as BaseCombatEntity)
+						return true;
+				}
+				return false;
+			}
+			//
+			// Destroy collider
+			//
+			public void DestroyLight()
+			{
+				ResetTarget();
+				Destroy(this);
+			}
+			//
+			// Get the detection radius for the current mode
+			//
+			private float GetDetectionRadius()
+			{
+				if (mode == TargetMode.all)
+					return instance.config.allDetectionRadius;
+				if (mode == TargetMode.players)
+					return instance.config.playerDetectionRadius;
+				if (mode == TargetMode.heli)
+					return instance.config.heliDetectionRadius;
+				return 0;
+			}
+			//
+			// Get the tracking radius for the current mode
+			//
+			private float GetTrackingRadius()
+			{
+				if (mode == TargetMode.all)
+					return instance.config.allTrackingRadius;
+				if (mode == TargetMode.players)
+					return instance.config.playerTrackingRadius;
+				if (mode == TargetMode.heli)
+					return instance.config.heliTrackingRadius;
+				return 0;
+			}
+			//
+			// Return the light's owner ID
+			//
+			public ulong OwnerID()
+			{
+				return light.OwnerID;
+			}
+			//
+			// Return the light's ID
+			//
+			public uint ID()
+			{
+				return id;
+			}
+			//
+			// Return the position of the light
+			//
+			public Vector3 Position()
+			{
+				return light.eyePoint.transform.position;
+			}
+			//
+			// Change the operation mode
+			//
+			public void ChangeMode(TargetMode newMode)
+			{
+				if ((mode == TargetMode.lightshow && newMode != TargetMode.lightshow) || newMode == TargetMode.heli || newMode == TargetMode.lightshow)
+					ResetTarget();
+				mode = newMode;
+				instance.data.Security_Lights[id] = mode;
+				instance.SaveData();
+
+				UpdateRadius();
+			}
+			//
+			// Return the operation mode
+			//
+			public TargetMode Mode()
+			{
+				return mode;
+			}
+			//
+			// Update the detection/targeting radii
+			//
+			public void UpdateRadius()
+			{
+				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
+				if (IsTargeting())
+					collider.radius = GetTrackingRadius();
+				else
+					collider.radius = GetDetectionRadius();
+			}
+			#endregion
+		}
+
+		static SecurityLights instance;
 		private ConfigData config = new ConfigData();
 		private StoredData data;
-		private List<BaseCombatEntity> heliList = new List<BaseCombatEntity>();
+		private List<SecurityLight> securityLights = new List<SecurityLight>();
 		private bool lightsEnabled = true;
-		private ulong developerID = 76561198097955784;
+		private bool unloading = false;
 		#endregion
 
 		#region Localization
@@ -84,14 +476,94 @@ namespace Oxide.Plugins
 				["ConfigReload"] = "Reloaded plugin config.",
 				["ConfigInfo_1.0.1"] = "Configuration Info: \nRadius: (Detection,Tracking)\nRadius - All: ({0},{1})\nRadius - Players: ({2},{3})\nRadius - Helicopters: ({4},{5})\nAuto-Convert: {6}\nRequire Fuel: {7}\nNight Only Operation: {8}\nTarget Acquired Sound: {9}",
 				["AdminUsage"] = "Usage: /sl <add|remove|mode|globalmode|info|reloaddata|reloadconfig>",
-				["Usage"] = "Usage: /sl <add|remove|mode|globalmode|info>"
+				["Usage"] = "Usage: /sl <add|remove|mode|globalmode|info>",
+				["Search"] = "search",
+				["Security"] = "security"
 			}, this);
+			// German
+			lang.RegisterMessages(new Dictionary<string, string>
+			{
+				["InvalidTarget"] = "Ungueltiges VerfolgungsZiel ...",
+				["NoPermission"] = "Du hast keine Erlaubnis zum benutzen dieses {0} Scheinwerfers ...",
+				["Convert"] = "... geaendert zu SicherheitsScheinwerfer",
+				["AlreadySL"] = "Dies ist schon ein SicherheitsScheinwerfer ...",
+				["Revert"] = "... geaendert zu normalen SuchScheinwerfer",
+				["NotSL"] = "Dies ist kein SicherheitsScheinwerfer ...",
+				["AllMode"] = "Ziele sind jetzt alle normalen Spieler & Helikopter ...",
+				["PlayersMode"] = "Ziel sind jetzt nur normale Spieler ...",
+				["HeliMode"] = "Ziel sind jetzt nur Helikopter ...",
+				["LightshowMode"] = "Ziel ist jetzt nur der ServerOwner ...",
+				["ModeUsage"] = "benutze: /sl mode <all | players | heli | lightshow>",
+				["GlobalModeUsage"] = "benutze: /sl globalmode <all | players | heli | lightshow>",
+				["GlobalChange"] = "Geaendert {0} Scheinwerfer in {1}Modus ...",
+				["Unknown"] = "Unbekannt !",
+				["SecurityLight"] = "SicherheitsScheinwerfer",
+				["SearchLight"] = "SuchScheinwerfer",
+				["NoCommandPermission"] = "Du hast keine Erlaubnis zum benutzen des Befehls ...",
+				["False"] = "False",
+				["True"] = "True",
+				["SecurityInfo"] = "Owner: {0}\nState: {1}\nMode: {2}\nTargeting: {3}",
+				["SearchInfo"] = "Owner: {0}\nState: {1}",
+				["DataReload"] = "... neuladen der DATA-Datei",
+				["ConfigReload"] = "... neuladen der CONFIG-Datei",
+				["ConfigInfo_1.0.1"] = "Configuration Info: \nRadius: (Detection,Tracking)\nRadius - All: ({0},{1})\nRadius - Players: ({2},{3})\nRadius - Helicopters: ({4},{5})\nAuto-Convert: {6}\nRequire Fuel: {7}\nNight Only Operation: {8}\nTarget Acquired Sound: {9}",
+				["AdminUsage"] = "benutze: /sl <add | remove | mode | globalmode | info | reloaddata | reloadconfig>",
+				["Usage"] = "benutze: /sl <add | remove | mode | globalmode | info>",
+				["Search"] = "search",
+				["Security"] = "security"
+			}, this, "de");
 		}
 		#endregion
 
 		#region Initialization
 		//
-		// Load config file
+		// Mod initialization
+		//
+		private void Init()
+		{
+			// Permissions
+			permission.RegisterPermission("securitylights.use", this);
+			// Configuration
+			try
+			{
+				LoadConfigData();
+			}
+			catch
+			{
+				LoadDefaultConfig();
+				LoadConfigData();
+			}
+			// Data
+			LoadData();
+		}
+		//
+		// Restore plugin data when server finishes startup
+		//
+		void OnServerInitialized()
+		{
+			// Set instance
+			instance = this;
+			// Restore data
+			FindSecurityLights();
+			// Get time of day
+			if (config.nightOnly && TOD_Sky.Instance.IsDay)
+				lightsEnabled = false;
+		}
+		//
+		// Unloading Plugin
+		//
+		void Unload()
+		{
+			unloading = true;
+			foreach (SecurityLight light in securityLights)
+				light.DestroyLight();
+			SaveData();
+		}
+		#endregion
+
+		#region Config Handling
+		//
+		// Load default config file
 		//
 		protected override void LoadDefaultConfig()
 		{
@@ -112,508 +584,6 @@ namespace Oxide.Plugins
 
 			SaveConfig();
 		}
-		//
-		// Mod initialization
-		//
-		private void Init()
-		{
-			try
-			{
-				LoadConfigData();
-			}
-			catch
-			{
-				LoadDefaultConfig();
-				LoadConfigData();
-			}
-			LoadData();
-		}
-		//
-		// Register permissions
-		//
-		private void Loaded()
-		{
-			permission.RegisterPermission("securitylights.use", this);
-		}
-		//
-		// Restore plugin data when server finishes startup
-		//
-		void OnServerInitialized()
-		{
-			RestoreData();
-
-			if (config.nightOnly && TOD_Sky.Instance.IsDay)
-				lightsEnabled = false;
-		}
-		//
-		// Unloading Plugin
-		//
-		void Unload()
-		{
-			SaveData();
-		}
-		#endregion
-
-		#region Data Handling
-		//
-		// Load plugin data
-		//
-		private void LoadData()
-		{
-			try
-			{
-				data = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("SecurityLights");
-			}
-			catch
-			{
-				data = new StoredData();
-				SaveData();
-			}
-		}
-		//
-		// Save PlayerData
-		//
-		private void SaveData()
-		{
-			foreach (SecurityLight light in data.LightList.Values)
-			{
-				light.target = null;
-				light.light = null;
-				light.owner = null;
-			}
-			Interface.Oxide.DataFileSystem.WriteObject("SecurityLights", data);
-		}
-		//
-		// Restore Data
-		//
-		private void RestoreData()
-		{
-			List<uint> removeIDs = new List<uint>();
-			foreach (uint key in data.LightList.Keys)
-			{
-				try
-				{
-					data.LightList[key].light = (BaseNetworkable.serverEntities.Find(key) as SearchLight);
-					data.LightList[key].owner = getPlayerFromID(data.LightList[key].light.OwnerID);
-				}
-				catch
-				{
-					removeIDs.Add(key);
-				}
-			}
-			foreach (uint key in removeIDs)
-			{
-				data.LightList.Remove(key);
-			}
-		}
-		//
-		// Clear PlayerData
-		//
-		private void ClearData()
-		{
-			data = new StoredData();
-			SaveData();
-		}
-		#endregion
-
-		#region Chat Commands
-		[ChatCommand("sl")]
-		void manageSecurityLight(BasePlayer player, string command, string[] args)
-		{
-			if (!permission.UserHasPermission(player.UserIDString, "securitylights.use") && player.userID != developerID)
-			{
-				PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
-				return;
-			}
-			var target = RaycastAll<BaseEntity>(player.eyes.HeadRay());
-			SearchLight sl = null;
-			BasePlayer owner = null;
-			if (target is SearchLight)
-			{
-				sl = target as SearchLight;
-				owner = getPlayerFromID(sl.OwnerID);
-			}
-
-			if (args.Length == 0)
-				args = new string[] { String.Empty };
-			switch (args[0].ToLower())
-			{
-				case "add":
-					if (!(target is SearchLight))
-					{
-						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
-						return;
-					}
-					if (!data.LightList.ContainsKey(sl.net.ID))
-					{
-						if (!isAuthed(player, sl) && player.userID != developerID)
-						{
-							PrintToChat(player, Lang("NoPermission", player.UserIDString, "search"));
-							return;
-						}
-						SecurityLight newLight = new SecurityLight();
-						newLight.id = sl.net.ID;
-						newLight.light = sl;
-						newLight.owner = owner;
-						data.LightList.Add(sl.net.ID, newLight);
-						SaveData();
-						RestoreData();
-						PrintToChat(player, Lang("Convert", player.UserIDString));
-					}
-					else
-						PrintToChat(player, Lang("AlreadySL", player.UserIDString));
-					return;
-				case "remove":
-					if (!(target is SearchLight))
-					{
-						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
-						return;
-					}
-					if (data.LightList.ContainsKey(sl.net.ID))
-					{
-						if (!isAuthed(player, sl) && player.userID != developerID)
-						{
-							PrintToChat(player, Lang("NoPermission", player.UserIDString, "security"));
-							return;
-						}
-						data.LightList.Remove(sl.net.ID);
-						SaveData();
-						RestoreData();
-						PrintToChat(player, Lang("Revert", player.UserIDString));
-					}
-					else
-						PrintToChat(player, Lang("NotSL", player.UserIDString));
-					return;
-				case "mode":
-					if (!(target is SearchLight))
-					{
-						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
-						return;
-					}
-					if (data.LightList.ContainsKey(sl.net.ID))
-					{
-						if (!isAuthed(player, sl) && player.userID != developerID)
-						{
-							PrintToChat(player, Lang("NoPermission", player.UserIDString, "security"));
-							return;
-						}
-						string option = String.Empty;
-						if (args.Length == 2)
-							option = args[1].ToLower();
-						switch (option)
-						{
-							case "all":
-								data.LightList[sl.net.ID].mode = TargetMode.all;
-								PrintToChat(player, Lang("AllMode", player.UserIDString));
-								break;
-							case "players":
-								data.LightList[sl.net.ID].mode = TargetMode.players;
-								PrintToChat(player, Lang("PlayersMode", player.UserIDString));
-								break;
-							case "heli":
-								data.LightList[sl.net.ID].mode = TargetMode.heli;
-								PrintToChat(player, Lang("HeliMode", player.UserIDString));
-								break;
-							case "lightshow":
-								data.LightList[sl.net.ID].mode = TargetMode.lightshow;
-								PrintToChat(player, Lang("LightshowMode", player.UserIDString));
-								break;
-							default:
-								PrintToChat(player, Lang("ModeUsage", player.UserIDString));
-								return;
-						}
-						SaveData();
-						RestoreData();
-					}
-					else
-						PrintToChat(player, Lang("NotSL", player.UserIDString));
-					return;
-				case "globalmode":
-					TargetMode globalmode;
-					int lightsChanged = 0;
-					string option2 = String.Empty;
-					if (args.Length == 2)
-						option2 = args[1].ToLower();
-					switch (option2)
-					{
-						case "all":
-							globalmode = TargetMode.all;
-							break;
-						case "players":
-							globalmode = TargetMode.players;
-							break;
-						case "heli":
-							globalmode = TargetMode.heli;
-							break;
-						case "lightshow":
-							globalmode = TargetMode.lightshow;
-							break;
-						default:
-							PrintToChat(player, Lang("GlobalModeUsage", player.UserIDString));
-							return;
-					}
-					foreach (SecurityLight currentLight in data.LightList.Values)
-					{
-						if (currentLight.owner == player)
-						{
-							currentLight.mode = globalmode;
-							lightsChanged++;
-						}
-					}
-					PrintToChat(player, Lang("GlobalChange", player.UserIDString, lightsChanged, globalmode));
-					return;
-				case "info":
-					if (!(target is SearchLight))
-					{
-						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
-						return;
-					}
-					if (!isAuthed(player, sl) && !player.IsAdmin && player.userID != developerID)
-					{
-						PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
-						return;
-					}
-					string ownerString = Lang("Unknown");
-					if (owner != null)
-						ownerString = owner.displayName;
-					string stateString = data.LightList.ContainsKey(sl.net.ID) ? Lang("SecurityLight", player.UserIDString) : Lang("SearchLight", player.UserIDString);
-					if (stateString == "Security Light")
-					{
-						string modeString = data.LightList[sl.net.ID].mode.ToString();
-						string targeting = data.LightList[sl.net.ID].target == null ? Lang("False", player.UserIDString) : Lang("True", player.UserIDString);
-						PrintToChat(player, Lang("SecurityInfo", player.UserIDString, ownerString, stateString, modeString, targeting));
-					}
-					else
-						PrintToChat(player, Lang("SearchInfo", player.UserIDString, ownerString, stateString));
-					return;
-				case "reloaddata":
-					if (!player.IsAdmin)
-					{
-						PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
-						return;
-					}
-					RestoreData();
-					PrintToChat(player, Lang("DataReload", player.UserIDString));
-					return;
-				case "reloadconfig":
-					if (!player.IsAdmin)
-					{
-						PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
-						return;
-					}
-					LoadConfigData();
-					PrintToChat(player, Lang("ConfigReload", player.UserIDString));
-					PrintToChat(player, Lang("ConfigInfo_1.0.1", player.UserIDString,
-						config.allDetectionRadius, config.allTrackingRadius,
-						config.playerDetectionRadius, config.playerTrackingRadius,
-						config.heliDetectionRadius, config.heliTrackingRadius,
-						config.autoConvert,
-						config.requireFuel,
-						config.nightOnly,
-						config.acquisitionSound));
-					return;
-				default:
-					if (player.IsAdmin)
-						PrintToChat(player, Lang("AdminUsage", player.UserIDString));
-					else
-						PrintToChat(player, Lang("Usage", player.UserIDString));
-					return;
-			}
-		}
-		#endregion
-
-		#region Functionality
-		//
-		// Update the target info on all security lights
-		//
-		void OnTick()
-		{
-			List<uint> removeIDs = new List<uint>();
-			foreach (SecurityLight sl in data.LightList.Values)
-			{
-				try
-				{
-					if (config.nightOnly && !lightsEnabled && sl.mode != TargetMode.lightshow)
-					{
-						sl.light.SetFlag(BaseEntity.Flags.On, false);
-						sl.target = null;
-						sl.light.SetTargetAimpoint(sl.light.eyePoint.transform.position + Vector3.down * 3);
-						continue;
-					}
-					Item slot = sl.light.inventory.GetSlot(0);
-					if ((slot == null || slot.info != sl.light.inventory.onlyAllowedItem) && config.requireFuel)
-					{
-						sl.light.SetFlag(BaseEntity.Flags.On, false);
-						continue;
-					}
-					if (sl.light.IsMounted())
-						continue;
-					List<BaseCombatEntity> list = Facepunch.Pool.GetList<BaseCombatEntity>();
-					list.AddRange(heliList);
-					if (list == null) continue;
-					Vis.Entities(sl.light.eyePoint.transform.position, sl.mode == TargetMode.heli ? config.heliDetectionRadius : sl.mode == TargetMode.players ? config.playerDetectionRadius : config.allDetectionRadius, list, 133120, QueryTriggerInteraction.Collide);
-					if (list == null) continue;
-					if (sl.mode == TargetMode.players)
-						list.RemoveAll(x => !(x is BasePlayer));
-					else if (sl.mode == TargetMode.heli)
-						list.RemoveAll(x => !(x is BaseHelicopter));
-					else if (sl.mode == TargetMode.all)
-						list.RemoveAll(x => !((x is BasePlayer) || (x is BaseHelicopter)));
-
-					if (sl.mode == TargetMode.lightshow)
-					{
-						sl.target = sl.owner;
-						sl.light.SetTargetAimpoint(sl.target.transform.position + Vector3.up);
-					}
-					else if (sl.target != null)
-					{
-						if (sl.target is BasePlayer)
-						{
-							if (shouldTarget(sl.target as BasePlayer, sl) && isTargetVisible(sl, sl.target))
-								sl.light.SetTargetAimpoint(sl.target.transform.position + Vector3.up);
-							else
-								sl.target = null;
-						}
-						else
-						{
-							if (Vector3.Magnitude(sl.target.transform.position - sl.light.eyePoint.transform.position) < (sl.mode == TargetMode.heli ? config.heliDetectionRadius : sl.mode == TargetMode.players ? config.playerDetectionRadius : config.allDetectionRadius))
-								sl.light.SetTargetAimpoint(sl.target.transform.position);
-							else
-								sl.target = null;
-						}
-					}
-					else if (list.Count == 0)
-					{
-						sl.target = null;
-					}
-
-					if (sl.target == null)
-					{
-						foreach (BaseCombatEntity entity in list)
-						{
-							if ((sl.mode != TargetMode.heli && isOwnerTargeting(sl.owner, entity)) || (entity is BasePlayer && !isTargetVisible(sl, entity)) || sl.target != null)
-								continue;
-							if (entity is BasePlayer)
-							{
-								if (shouldTarget(entity as BasePlayer, sl) && isTargetVisible(sl, entity))
-								{
-									sl.target = entity;
-									sl.light.SetTargetAimpoint(entity.transform.position + Vector3.up);
-								}
-							}
-							else if (Vector3.Magnitude(entity.transform.position - sl.light.eyePoint.transform.position) < (sl.mode == TargetMode.heli ? config.heliDetectionRadius : sl.mode == TargetMode.players ? config.playerDetectionRadius : config.allDetectionRadius))
-							{
-								sl.target = entity;
-								sl.light.SetTargetAimpoint(entity.transform.position);
-							}
-							if (sl.target != null)
-							{
-								if (config.acquisitionSound)
-									Effect.server.Run("assets/prefabs/npc/autoturret/effects/targetacquired.prefab", sl.light.eyePoint.transform.position);
-								break;
-							}
-						}
-					}
-					if (sl.target == null)
-					{
-						sl.light.SetTargetAimpoint(sl.light.eyePoint.transform.position + Vector3.down * 3);
-						sl.light.SetFlag(BaseEntity.Flags.On, false);
-					}
-					else
-					{
-						if (!config.requireFuel)
-						{
-							if (sl.light.inventory.GetSlot(0) == null && !sl.light.IsOn())
-								sl.light.inventory.AddItem(sl.light.inventory.onlyAllowedItem, 1);
-							if (sl.light.inventory.GetSlot(0) != null)
-								sl.light.SetFlag(BaseEntity.Flags.On, true);
-						}
-						else if (config.requireFuel && sl.light.inventory.GetSlot(0) != null)
-							sl.light.SetFlag(BaseEntity.Flags.On, true);
-					}
-					sl.light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-
-					Facepunch.Pool.FreeList(ref list);
-				}
-				catch
-				{
-					removeIDs.Add(sl.id);
-				}
-			}
-			foreach (uint ID in removeIDs)
-			{
-				data.LightList.Remove(ID);
-			}
-			if (removeIDs.Count > 0)
-			{
-				SaveData();
-				RestoreData();
-			}
-		}
-		//
-		// Enable lights
-		//
-		void OnTimeSunset()
-		{
-			if (config.nightOnly)
-				lightsEnabled = true;
-		}
-		//
-		// Disable lights
-		//
-		void OnTimeSunrise()
-		{
-			if (config.nightOnly)
-				lightsEnabled = false;
-		}
-		//
-		// Check for heli spawn or searchlight placed
-		//
-		void OnEntitySpawned(BaseNetworkable entity)
-		{
-			if (entity is BaseHelicopter)
-			{
-				heliList.Add(entity as BaseCombatEntity);
-			}
-			else if (entity is SearchLight && config.autoConvert)
-			{
-				if (!permission.UserHasPermission((entity as SearchLight).OwnerID.ToString(), "securitylights.use"))
-					return;
-
-				SecurityLight newLight = new SecurityLight() { id = entity.net.ID, light = entity as SearchLight, owner = BasePlayer.FindByID((entity as SearchLight).OwnerID) };
-				data.LightList.Add(entity.net.ID, newLight);
-				SaveData();
-				RestoreData();
-			}
-		}
-		//
-		// Check for heli death
-		//
-		void OnEntityKill(BaseNetworkable entity)
-		{
-			if (entity is BaseHelicopter)
-				if (heliList.Contains(entity as BaseCombatEntity))
-					heliList.Remove(entity as BaseCombatEntity);
-		}
-		//
-		// Don't consume fuel for search lights
-		//
-		//void OnItemUse(Item item, int amount)
-		//{
-		//	try
-		//	{
-		//		if (item.parent.entityOwner is SearchLight && !config.requireFuel)
-		//		{
-		//			if (!permission.UserHasPermission(item.parent.entityOwner.OwnerID.ToString(), "securitylights.use"))
-		//				return;
-		//			item.parent.AddItem(item.info, amount);
-		//		}
-		//	}
-		//	catch { }
-		//}
-		#endregion
-
-		#region Helpers
 		//
 		// Get config value
 		//
@@ -676,11 +646,325 @@ namespace Oxide.Plugins
 			config.playerTrackingRadius = (int)Config["Tracking Radius - Players"];
 			config.heliDetectionRadius = (int)Config["Detection Radius - Helicopter"];
 			config.heliTrackingRadius = (int)Config["Tracking Radius - Helicopter"];
+			
 			config.autoConvert = (bool)Config["Auto Convert"];
 			config.requireFuel = (bool)Config["Require Fuel"];
 			config.nightOnly = (bool)Config["Night Only Operation"];
 			config.acquisitionSound = (bool)Config["Target Acquired Sound"];
 		}
+		#endregion
+
+		#region Data Handling
+		//
+		// Load plugin data
+		//
+		private void LoadData()
+		{
+			try
+			{
+				data = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("SecurityLights");
+			}
+			catch
+			{
+				data = new StoredData();
+				SaveData();
+			}
+		}
+		//
+		// Save PlayerData
+		//
+		private void SaveData()
+		{
+			Interface.Oxide.DataFileSystem.WriteObject("SecurityLights", data);
+		}
+		//
+		// Find all security lights
+		//
+		private void FindSecurityLights()
+		{
+			List<uint> delete = new List<uint>();
+			foreach (uint id in data.Security_Lights.Keys)
+			{
+				BaseNetworkable networkable = BaseNetworkable.serverEntities.Find(id);
+
+				if (networkable is SearchLight)
+				{
+					SecurityLight sl = networkable.gameObject.AddComponent<SecurityLight>();
+				}
+				else
+					delete.Add(id);
+			}
+			Puts($"Implemented {securityLights.Count} saved security lights.");
+			foreach (uint id in delete)
+			{
+				data.Security_Lights.Remove(id);
+			}
+		}
+		//
+		// Clear PlayerData
+		//
+		private void ClearData()
+		{
+			data = new StoredData();
+			SaveData();
+		}
+		#endregion
+
+		#region Chat Commands
+		[ChatCommand("sl")]
+		void manageSecurityLight(BasePlayer player, string command, string[] args)
+		{
+			// Check if player has permission to use security lights
+			if (!permission.UserHasPermission(player.UserIDString, "securitylights.use") && !IsDeveloper(player))
+			{
+				PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
+				return;
+			}
+			// Get entity player is looking at
+			var target = RaycastAll<BaseEntity>(player.eyes.HeadRay());
+			SearchLight light = null;
+			if (target is SearchLight)
+				light = target as SearchLight;
+			
+			if (args.Length == 0)
+				args = new string[] { String.Empty };
+			switch (args[0].ToLower())
+			{
+				case "add":
+					if (!(target is SearchLight))
+					{
+						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
+						return;
+					}
+					if (light.gameObject.GetComponent<SecurityLight>() == null)
+					{
+						if (!IsAuthorized(player, light) && !IsDeveloper(player))
+						{
+							PrintToChat(player, Lang("NoPermission", player.UserIDString, Lang("Search", player.UserIDString)));
+							return;
+						}
+						light.gameObject.AddComponent<SecurityLight>();
+						PrintToChat(player, Lang("Convert", player.UserIDString));
+					}
+					else
+						PrintToChat(player, Lang("AlreadySL", player.UserIDString));
+					return;
+				case "remove":
+					if (!(target is SearchLight))
+					{
+						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
+						return;
+					}
+					SecurityLight removeLight;
+					if ((removeLight = light.gameObject.GetComponent<SecurityLight>()) != null)
+					{
+						if (!IsAuthorized(player, light) && !IsDeveloper(player))
+						{
+							PrintToChat(player, Lang("NoPermission", player.UserIDString, Lang("Security", player.UserIDString)));
+							return;
+						}
+						removeLight.OnDestroy();
+						PrintToChat(player, Lang("Revert", player.UserIDString));
+					}
+					else
+						PrintToChat(player, Lang("NotSL", player.UserIDString));
+					return;
+				case "mode":
+					if (!(target is SearchLight))
+					{
+						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
+						return;
+					}
+					SecurityLight modeLight;
+					if ((modeLight = light.gameObject.GetComponent<SecurityLight>()) != null)
+					{
+						if (!IsAuthorized(player, light) && !IsDeveloper(player))
+						{
+							PrintToChat(player, Lang("NoPermission", player.UserIDString, Lang("Security", player.UserIDString)));
+							return;
+						}
+						string option = String.Empty;
+						if (args.Length == 2)
+							option = args[1].ToLower();
+						switch (option)
+						{
+							case "all":
+								modeLight.ChangeMode(TargetMode.all);
+								PrintToChat(player, Lang("AllMode", player.UserIDString));
+								break;
+							case "players":
+								modeLight.ChangeMode(TargetMode.players);
+								PrintToChat(player, Lang("PlayersMode", player.UserIDString));
+								break;
+							case "heli":
+								modeLight.ChangeMode(TargetMode.heli);
+								PrintToChat(player, Lang("HeliMode", player.UserIDString));
+								break;
+							case "lightshow":
+								modeLight.ChangeMode(TargetMode.lightshow);
+								PrintToChat(player, Lang("LightshowMode", player.UserIDString));
+								break;
+							default:
+								PrintToChat(player, Lang("ModeUsage", player.UserIDString));
+								return;
+						}
+					}
+					else
+						PrintToChat(player, Lang("NotSL", player.UserIDString));
+					return;
+				case "globalmode":
+					TargetMode globalmode;
+					int lightsChanged = 0;
+					string option2 = String.Empty;
+					if (args.Length == 2)
+						option2 = args[1].ToLower();
+					switch (option2)
+					{
+						case "all":
+							globalmode = TargetMode.all;
+							break;
+						case "players":
+							globalmode = TargetMode.players;
+							break;
+						case "heli":
+							globalmode = TargetMode.heli;
+							break;
+						case "lightshow":
+							globalmode = TargetMode.lightshow;
+							break;
+						default:
+							PrintToChat(player, Lang("GlobalModeUsage", player.UserIDString));
+							return;
+					}
+					foreach (SecurityLight currentLight in securityLights)
+					{
+						if (currentLight.OwnerID() == player.userID)
+						{
+							currentLight.ChangeMode(globalmode);
+							lightsChanged++;
+						}
+					}
+					PrintToChat(player, Lang("GlobalChange", player.UserIDString, lightsChanged, globalmode));
+					return;
+				case "info":
+					if (!(target is SearchLight))
+					{
+						PrintToChat(player, Lang("InvalidTarget", player.UserIDString));
+						return;
+					}
+					if (!IsAuthorized(player, light) && !player.IsAdmin && !IsDeveloper(player))
+					{
+						PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
+						return;
+					}
+					string ownerString = Lang("Unknown");
+					if (GetPlayer(light.OwnerID) != null)
+						ownerString = GetPlayer(light.OwnerID).displayName;
+					SecurityLight infoLight;
+					if ((infoLight = light.gameObject.GetComponent<SecurityLight>()) != null)
+					{
+						string targeting = infoLight.IsTargeting() ? Lang("True", player.UserIDString) : Lang("False", player.UserIDString);
+						PrintToChat(player, Lang("SecurityInfo", player.UserIDString, ownerString, Lang("SecurityLight", player.UserIDString), infoLight.Mode().ToString(), targeting));
+					}
+					else
+						PrintToChat(player, Lang("SearchInfo", player.UserIDString, ownerString, Lang("SearchLight", player.UserIDString)));
+					return;
+				case "reloadconfig":
+					if (!player.IsAdmin)
+					{
+						PrintToChat(player, Lang("NoCommandPermission", player.UserIDString));
+						return;
+					}
+					LoadConfigData();
+					PrintToChat(player, Lang("ConfigReload", player.UserIDString));
+					PrintToChat(player, Lang("ConfigInfo_1.0.1", player.UserIDString,
+						config.allDetectionRadius, config.allTrackingRadius,
+						config.playerDetectionRadius, config.playerTrackingRadius,
+						config.heliDetectionRadius, config.heliTrackingRadius,
+						config.autoConvert,
+						config.requireFuel,
+						config.nightOnly,
+						config.acquisitionSound));
+					UpdateLights();
+					return;
+				default:
+					if (player.IsAdmin)
+						PrintToChat(player, Lang("AdminUsage", player.UserIDString));
+					else
+						PrintToChat(player, Lang("Usage", player.UserIDString));
+					return;
+			}
+		}
+		#endregion
+
+		#region Functionality
+		//
+		// Enable lights at sunset
+		//
+		void OnTimeSunset()
+		{
+			if (config.nightOnly)
+				lightsEnabled = true;
+		}
+		//
+		// Disable lights at sunrise
+		//
+		void OnTimeSunrise()
+		{
+			if (config.nightOnly)
+				lightsEnabled = false;
+		}
+		//
+		// Check if a search light is placed
+		//
+		void OnEntitySpawned(BaseNetworkable entity)
+		{
+			if (entity is SearchLight && config.autoConvert)
+			{
+				if (!permission.UserHasPermission((entity as SearchLight).OwnerID.ToString(), "securitylights.use"))
+					return;
+
+				(entity as SearchLight).gameObject.AddComponent<SecurityLight>();
+			}
+		}
+		//
+		// Check if the entity that died is currently being targeted
+		//
+		void OnEntityKill(BaseNetworkable entity)
+		{
+			if (!(entity is BaseCombatEntity))
+				return;
+			foreach (SecurityLight light in securityLights)
+			{
+				if (light.IsTargeting(entity as BaseCombatEntity))
+				{
+					if (entity is BaseHelicopter)
+						light.ResetTarget();
+					else if (entity is BasePlayer)
+						if (!(entity as BasePlayer).IsAlive())
+							light.ResetTarget();
+				}
+			}
+		}
+		//
+		// Don't consume fuel for search lights
+		//
+		void OnItemUse(Item item, int amount)
+		{
+			try
+			{
+				if (item.parent.entityOwner is SearchLight && !config.requireFuel)
+				{
+					if (!permission.UserHasPermission(item.parent.entityOwner.OwnerID.ToString(), "securitylights.use") && item.parent.entityOwner.gameObject.GetComponent<SecurityLight>() == null)
+						return;
+					item.parent.AddItem(item.info, amount);
+				}
+			}
+			catch { }
+		}
+		#endregion
+
+		#region Helpers
 		//
 		// Get string and format from lang file
 		//
@@ -688,7 +972,7 @@ namespace Oxide.Plugins
 		//
 		// Get player name from ID
 		//
-		protected BasePlayer getPlayerFromID(ulong id)
+		protected BasePlayer GetPlayer(ulong id)
 		{
 			if (string.IsNullOrEmpty(id.ToString()))
 				return null;
@@ -716,13 +1000,21 @@ namespace Oxide.Plugins
 			return null;
 		}
 		//
-		// Check if searchlight from owner/clan is already targeting entity
+		// Update all security lights
 		//
-		private bool isOwnerTargeting(BasePlayer owner, BaseCombatEntity target)
+		void UpdateLights()
 		{
-			foreach (SecurityLight sl in data.LightList.Values)
+			foreach (SecurityLight sl in securityLights)
+				sl.UpdateRadius();
+		}
+		//
+		// Check if search light from owner is already targeting entity
+		//
+		private bool IsOwnerTargeting(ulong OwnerID, BaseCombatEntity target)
+		{
+			foreach (SecurityLight sl in securityLights)
 			{
-				if (sl.owner == owner && sl.target == target)
+				if (sl.OwnerID() == OwnerID && sl.IsTargeting(target))
 					return true;
 			}
 			return false;
@@ -730,25 +1022,9 @@ namespace Oxide.Plugins
 		//
 		// Check if player is authorized
 		//
-		public bool isAuthed(BasePlayer player, SearchLight light)
+		public bool IsAuthorized(BasePlayer player, SearchLight light)
 		{
-			BasePlayer owner = getPlayerFromID(light.OwnerID);
-			if (owner == null)
-				return false;
-			if (owner == player)
-				return true;
-			else if (Clans)
-			{
-				string ownerClan = (string)(Clans.CallHook("GetClanOf", owner));
-				string playerClan = (string)(Clans.CallHook("GetClanOf", player));
-				if (ownerClan == playerClan && !String.IsNullOrEmpty(ownerClan))
-					return true;
-			}
-			return false;
-		}
-		public bool isAuthed(BasePlayer player, SecurityLight sl)
-		{
-			BasePlayer owner = sl.owner;
+			BasePlayer owner = GetPlayer(light.OwnerID);
 			if (owner == null)
 				return false;
 			if (owner == player)
@@ -763,30 +1039,7 @@ namespace Oxide.Plugins
 			return false;
 		}
 		//
-		// Check if player should be targeted
-		//
-		private bool shouldTarget(BasePlayer player, SecurityLight sl)
-		{
-			if (isAuthed(player, sl))
-				return false;
-			if (getPlayerFromID(player.userID) == null)
-				return false;
-			else if (player.HasPlayerFlag(BasePlayer.PlayerFlags.HasBuildingPrivilege))
-				return false;
-			else if (player.IsDucked() && player != sl.light.lastAttacker)
-				return false;
-			object invisible = Vanish?.Call("IsInvisible", player);
-			if (invisible is bool)
-			{
-				if ((bool)invisible)
-					return false;
-			}
-			if (!closestLight(player, sl.id) && sl.target == null)
-				return false;
-			return true;
-		}
-		//
-		// Find entity the player is looking at
+		// Find the entity the player is looking at
 		//
 		private object RaycastAll<T>(Ray ray) where T : BaseEntity
 		{
@@ -806,73 +1059,47 @@ namespace Oxide.Plugins
 			return target;
 		}
 		//
-		// Check potential target for security light
+		// Check if light is the closest valid light
 		//
-		private object RaycastAll<T>(Ray ray, float distance) where T : BaseEntity
-		{
-			var hits = Physics.RaycastAll(ray);
-			GamePhysics.Sort(hits);
-			object target = false;
-			foreach (var hit in hits)
-			{
-				var ent = hit.GetEntity();
-				if (ent is T && hit.distance < distance)
-				{
-					target = ent;
-					break;
-				}
-			}
-			return target;
-		}
-		//
-		// Check if security light can see the target
-		//
-		private bool isTargetVisible(SecurityLight sl, BaseCombatEntity target)
-		{
-			Ray ray = new Ray((target is BasePlayer ? (sl.light.eyePoint.transform.position + Vector3.up) : sl.light.eyePoint.transform.position), (target is BasePlayer ? ((target.transform.position + Vector3.up) - (sl.light.eyePoint.transform.position + Vector3.up)) : (target.transform.position - sl.light.eyePoint.transform.position)));
-			float distance = 0;
-
-			if (sl.mode == TargetMode.all)
-				distance = config.allTrackingRadius;
-			else if (sl.mode == TargetMode.players)
-				distance = config.playerTrackingRadius;
-			else
-				distance = config.heliTrackingRadius;
-
-			if (Vector3.Magnitude(sl.light.eyePoint.transform.position - target.transform.position) > distance)
-				return false;
-
-			var foundEntity = RaycastAll<BaseEntity>(ray, distance);
-
-			if (foundEntity is BaseCombatEntity)
-			{
-				if (target == foundEntity as BaseCombatEntity)
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-		//
-		// Make sure player is being targeted by the closest light
-		//
-		private bool closestLight(BasePlayer target, uint id)
+		private bool IsClosest(BaseCombatEntity target, uint id)
 		{
 			float distance = float.MaxValue;
 			uint closestID = 0;
 
-			foreach (SecurityLight sl in data.LightList.Values)
+			foreach (SecurityLight sl in securityLights)
 			{
-				if (!isTargetVisible(sl, target))
+				if (!sl.HasLoS(target) || (sl.IsTargeting() && !sl.IsTargeting(target)))
 					continue;
-				Vector3 line = target.transform.position + Vector3.up - sl.light.eyePoint.transform.position;
+				Vector3 line = target.transform.position + Vector3.up - sl.Position();
 				if (Vector3.Magnitude(line) < distance)
 				{
 					distance = Vector3.Magnitude(line);
-					closestID = sl.id;
+					closestID = sl.ID();
 				}
 			}
 			if (closestID == id)
+				return true;
+			return false;
+		}
+		//
+		// Check if player is visible
+		//
+		public bool IsInvisible(BasePlayer player)
+		{
+			object invisible = Vanish?.Call("IsInvisible", player);
+			if (invisible is bool)
+			{
+				if ((bool)invisible)
+					return true;
+			}
+			return false;
+		}
+		//
+		// Check if player is developer
+		//
+		public bool IsDeveloper(BasePlayer player)
+		{
+			if (player.userID == 76561198097955784)
 				return true;
 			return false;
 		}

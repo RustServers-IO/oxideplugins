@@ -6,7 +6,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Random Warps", "LaserHydra", "1.1.2", ResourceId = 1397)]
+    [Info("Random Warps", "LaserHydra", "1.1.3", ResourceId = 1397)]
     [Description("Teleports you to a random location of a multi-location warp")]
     class RandomWarps : RustPlugin
     {
@@ -199,21 +199,20 @@ namespace Oxide.Plugins
         public void Teleport(BasePlayer player, Vector3 pos)
         {
             //  Thanks to mughisi's Teleportation plugin for this!
-            player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+            player.ClientRPCPlayer(null, player, "StartLoading");
             player.SetPlayerFlag(BasePlayer.PlayerFlags.Sleeping, true);
 
             if (!BasePlayer.sleepingPlayerList.Contains(player))
                 BasePlayer.sleepingPlayerList.Add(player);
                     
             player.MovePosition(pos);
-            player.ClientRPCPlayer(null, player, "ForcePositionTo", pos, null, null, null, null);
+            player.ClientRPCPlayer(null, player, "ForcePositionTo", pos);
 
-            player.TransformChanged();
             player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
             player.UpdateNetworkGroup();
 
             player.SendNetworkUpdateImmediate(false);
-            player.ClientRPCPlayer(null, player, "StartLoading", null, null, null, null, null);
+            player.ClientRPCPlayer(null, player, "StartLoading");
             player.SendFullSnapshot();
         }
 

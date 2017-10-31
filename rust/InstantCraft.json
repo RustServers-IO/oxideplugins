@@ -2,7 +2,7 @@
     "name": "Instant Craft",
     "description": "Makes crafting of items instant and prevents items being dropped after. Can randomise items skin!",
     "author": "Vlad-00003",
-    "version": "1.2.1",
+    "version": "1.2.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/instant-craft.2409",

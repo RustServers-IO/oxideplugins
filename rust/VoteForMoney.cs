@@ -1,14 +1,15 @@
 ﻿using System;
+using System.Linq;
+using System.Collections;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+
 using Oxide.Core;
 using Oxide.Core.Plugins;
-using System.Collections;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Vote For Money", "Frenk92", "0.5.3", ResourceId = 2086)]
+    [Info("Vote For Money", "Frenk92", "0.6.1", ResourceId = 2086)]
     class VoteForMoney : RustPlugin
     {
         [PluginReference]
@@ -23,7 +24,7 @@ namespace Oxide.Plugins
         const string site2 = "TopRustServers";
         const string site3 = "BeancanIO";
         const string link1 = "http://rust-servers.net/server/";
-        const string link2 = "http://toprustservers.com/server/";
+        const string link2 = "http://toprustservers.com/";
         const string link3 = "http://beancan.io/server/";
         public bool edit = false;
 
@@ -123,7 +124,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void LoadDefaultMessages()
+        void DefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>            {
                 ["NoAnswer"] = "No answer from {0}. Try later.",
@@ -196,12 +197,17 @@ namespace Oxide.Plugins
 
         private void LoadData() { Users = Interface.GetMod().DataFileSystem.ReadObject<Collection<PlayerVote>>("VoteForMoney"); }
         private void SaveData() { Interface.Oxide.DataFileSystem.WriteObject("VoteForMoney", Users); }
+
+        public Dictionary<ulong, List<string>> DataKits = new Dictionary<ulong, List<string>>(); //kits not claimed
+
+        private void LoadKits() { DataKits = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, List<string>>>("VoteForMoney-Kits"); }
+        private void SaveKits() { Interface.Oxide.DataFileSystem.WriteObject("VoteForMoney-Kits", DataKits); }
         #endregion
 
         #region Hooks
         void Init()
         {
-            LoadDefaultMessages();
+            DefaultMessages();
 
             permission.RegisterPermission(permAdmin, this);
         }
@@ -555,6 +561,37 @@ namespace Oxide.Plugins
                 edit = false;
             }
         }
+
+        [ChatCommand("claimkit")]
+        private void cmdClaimKit(BasePlayer player, string command, string[] args)
+        {
+            if (!DataKits.ContainsKey(player.userID))
+            {
+                MessageChat(player, Lang("AlreadyClaim", player.UserIDString));
+                return;
+            }
+
+            var error = false;
+            foreach (var kit in DataKits[player.userID])
+            {
+                var flag = Kits?.Call("CanRedeemKit", player, kit, true);
+                if (flag is string || flag == null)
+                {
+                    error = true;
+                    break;
+                }
+                Kits?.Call("GiveKit", player, kit);
+                DataKits[player.userID].Remove(kit);
+            }
+
+            if (!error)
+            {
+                MessageChat(player, Lang("KitsClaimed", player.UserIDString));
+                DataKits.Remove(player.userID);
+            }
+            else
+                MessageChat(player, Lang("ErrorKits", player.UserIDString));
+        }
         #endregion
 
         #region Methods
@@ -592,17 +629,17 @@ namespace Oxide.Plugins
 
             if (rustServersKey != "" && rustServersKey != null)
             {
-                webrequest.EnqueueGet("http://rust-servers.net/api/?action=custom&object=plugin&element=reward&key=" + rustServersKey + "&steamid=" + steamid, (code, response) => GetCallback(code, response, player, site1), this);
+                webrequest.Enqueue("http://rust-servers.net/api/?action=custom&object=plugin&element=reward&key=" + rustServersKey + "&steamid=" + steamid, null, (code, response) => GetCallback(code, response, player, site1), this);
             }
 
             if (topRustKey != "" && topRustKey != null)
             {
-                webrequest.EnqueueGet("http://api.toprustservers.com/api/get?plugin=voter&key=" + topRustKey + "&uid=" + steamid, (code, response) => GetCallback(code, response, player, site2), this);
+                webrequest.Enqueue("http://api.toprustservers.com/api/get?plugin=voter&key=" + topRustKey + "&uid=" + steamid, null, (code, response) => GetCallback(code, response, player, site2), this);
             }
 
             if (beancanKey != "" && beancanKey != null)
             {
-                webrequest.EnqueueGet("http://beancan.io/vote/get/" + beancanKey + "/" + steamid, (code, response) => GetCallback(code, response, player, site3), this);
+                webrequest.Enqueue("http://beancan.io/vote/get/" + beancanKey + "/" + steamid, null, (code, response) => GetCallback(code, response, player, site3), this);
             }
         }
 
@@ -637,12 +674,12 @@ namespace Oxide.Plugins
                     }
                 case site2:
                     {
-                        webrequest.EnqueueGet("http://api.toprustservers.com/api/put?plugin=voter&key=" + topRustKey + "&uid=" + steamid, (code, response) => ClaimCheck(code, response, player, site2, data), this);
+                        webrequest.Enqueue("http://api.toprustservers.com/api/put?plugin=voter&key=" + topRustKey + "&uid=" + steamid, null, (code, response) => ClaimCheck(code, response, player, site2, data), this);
                         break;
                     }
                 case site3:
                     {
-                        webrequest.EnqueueGet("http://beancan.io/vote/put/" + beancanKey + "/" + steamid, (code, response) => ClaimCheck(code, response, player, site3, data), this);
+                        webrequest.Enqueue("http://beancan.io/vote/put/" + beancanKey + "/" + steamid, null, (code, response) => ClaimCheck(code, response, player, site3, data), this);
                         break;
                     }
             }
@@ -737,60 +774,87 @@ namespace Oxide.Plugins
 
             if (useEconomics)
             {
-                var total = 0;
-                foreach(var m in money)
+                if (Economics)
                 {
-                    if (m.Key != "default" && permission.GetUserGroups(player.UserIDString).Contains(m.Key))
+                    var total = 0;
+                    foreach (var m in money)
                     {
-                        Economics?.Call("Deposit", player.userID, m.Value);
-                        total += Convert.ToInt32(m.Value);
+                        if (m.Key != "default" && permission.GetUserGroups(player.UserIDString).Contains(m.Key))
+                        {
+                            var eco = Convert.ToDouble(m.Value);
+                            Economics.Call("Deposit", player.userID, eco);
+                            total += Convert.ToInt32(m.Value);
+                        }
                     }
+                    if (total == 0 && money.ContainsKey("default"))
+                    {
+                        var eco = Convert.ToDouble(money["default"]);
+                        Economics.Call("Deposit", player.userID, eco);
+                        total = Convert.ToInt32(money["default"]);
+                    }
+                    if (total != 0)
+                        MessageChat(player, Lang("RewardCoins", player.UserIDString, total));
                 }
-                if (total == 0 && money.ContainsKey("default"))
-                {
-                    Economics?.Call("Deposit", player.userID, money["default"]);
-                    total = Convert.ToInt32(money["default"]);
-                }
-                if(total != 0)
-                    MessageChat(player, Lang("RewardCoins", player.UserIDString, total));
+                else PrintWarning("Error: Plugin \"Economics\" not found.");
             }
             
             if(useRP)
             {
-                var total = 0;
-                foreach (var r in rp)
+                if (ServerRewards)
                 {
-                    if (r.Key != "default" && permission.GetUserGroups(player.UserIDString).Contains(r.Key))
+                    var total = 0;
+                    foreach (var r in rp)
                     {
-                        ServerRewards?.Call("AddPoints", new object[] { player.userID, r.Value });
-                        total += Convert.ToInt32(r.Value);
+                        if (r.Key != "default" && permission.GetUserGroups(player.UserIDString).Contains(r.Key))
+                        {
+                            var p = Convert.ToInt32(r.Value);
+                            ServerRewards?.Call("AddPoints", new object[] { player.userID, p });
+                            total += Convert.ToInt32(r.Value);
+                        }
                     }
+                    if (total == 0 && rp.ContainsKey("default"))
+                    {
+                        var p = Convert.ToInt32(rp["default"]);
+                        ServerRewards?.Call("AddPoints", new object[] { player.userID, p });
+                        total = Convert.ToInt32(rp["default"]);
+                    }
+                    if (total != 0)
+                        MessageChat(player, Lang("RewardRP", player.UserIDString, total));
                 }
-                if (total == 0 && rp.ContainsKey("default"))
-                {
-                    ServerRewards?.Call("AddPoints", new object[] { player.userID, rp["default"] });
-                    total = Convert.ToInt32(rp["default"]);
-                }
-                if (total != 0)
-                    MessageChat(player, Lang("RewardRP", player.UserIDString, total));
+                else PrintWarning("Error: Plugin \"ServerRewards\" not found.");
             }
 
             if(useKits)
             {
-                var group = false;
-                foreach(var kit in kits)
+                if (Kits)
                 {
-                    if(kit.Key != "default" && permission.GetUserGroups(player.UserIDString).Contains(kit.Key))
+                    var group = false;
+                    var error = false;
+                    foreach (var kit in kits)
                     {
-                        Kits?.Call("GiveKit", player, kit.Value);
-                        if (!group)
-                            group = true;
+                        if (kit.Key != "default" && permission.GetUserGroups(player.UserIDString).Contains(kit.Key))
+                        {
+                            var flag = Kits?.Call("CanRedeemKit", player, kit.Value, true);
+                            if (flag is string || flag == null || error)
+                            {
+                                if (!error) error = true;
+                                if (!DataKits.ContainsKey(player.userID)) DataKits.Add(player.userID, new List<string>());
+                                DataKits[player.userID].Add(kit.Value);
+                            }
+                            else Kits?.Call("GiveKit", player, kit.Value);
+                            if (!group) group = true;
+                        }
                     }
+                    if (error)
+                        DataKits[player.userID].Add(kits["default"]);
+                    else if (!group && kits.ContainsKey("default"))
+                        Kits?.Call("GiveKit", player, kits["default"]);
+                    if (error)
+                        MessageChat(player, Lang("ErrorKits", player.UserIDString));
+                    else if ((!group && kits.ContainsKey("default")) || group)
+                        MessageChat(player, Lang("RewardKit", player.UserIDString));
                 }
-                if(!group && kits.ContainsKey("default"))
-                    Kits?.Call("GiveKit", player, kits["default"]);
-                if((!group && kits.ContainsKey("default")) || group)
-                    MessageChat(player, Lang("RewardKit", player.UserIDString));
+                else PrintWarning("Error: Plugin \"Kits\" not found.");
             }
 
             var tmp = Users.Where(d => d.UserId == player.userID).FirstOrDefault();

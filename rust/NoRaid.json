@@ -1,14 +1,14 @@
 {
     "name": "NoRaid",
-    "description": "Prevents players destroying buildings of those they're not associated with",
+    "description": "Prevents players from destroying buildings they're not associated with",
     "author": "Ryan",
-    "version": "1.0.1",
+    "version": "1.1.8",
     "configuration": true,
     "suggest": {
         "Friends": "*",
         "Clans": "*"
     },
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/noraid.2530",
     "games": [
         "rust"

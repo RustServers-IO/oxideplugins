@@ -1,0 +1,16 @@
+{
+    "name": "NoCraft",
+    "description": "Blacklist craft items or disable crafting altogether",
+    "author": "Ryan",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/nocraft.2602",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

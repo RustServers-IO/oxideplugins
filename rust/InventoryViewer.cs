@@ -2,33 +2,25 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Inventory Viewer", "Mughisi", "2.0.3", ResourceId = 871)]
+    [Info("Inventory Viewer", "Mughisi", "2.0.6", ResourceId = 871)]
     public class InventoryViewer : RustPlugin
     {
-
         private string prefix = "Inspector";
-
         private string prefixColor = "#008000ff";
 
         private const string Permission = "inventoryviewer.allowed";
-
         private static InventoryViewer instance;
-
         private readonly Dictionary<BasePlayer, List<BasePlayer>> activeMatches = new Dictionary<BasePlayer, List<BasePlayer>>();
 
         public class Inspector : MonoBehaviour
         {
             private BasePlayer player;
-
             private BasePlayer target;
-
             private LootableCorpse view;
-
             private int ticks;
 
             private readonly MethodInfo markDirty = typeof(PlayerLoot).GetMethod("MarkDirty", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -79,6 +71,7 @@ namespace Oxide.Plugins
                     StopInspecting();
                 }
                 if (!player.IsConnected) return;
+
                 player.inventory.loot.SendImmediate();
                 player.SendNetworkUpdate();
             }
@@ -96,12 +89,12 @@ namespace Oxide.Plugins
             private void BeginLooting()
             {
                 if (target.IsDead()) return;
+
                 player.inventory.loot.Clear();
                 positionChecks.SetValue(player.inventory.loot, false);
                 player.inventory.loot.entitySource = view;
                 player.inventory.loot.itemSource = null;
                 markDirty.Invoke(player.inventory.loot, null);
-
                 view.SetFlag(BaseEntity.Flags.Open, true);
 
                 foreach (var container in view.containers)
@@ -110,7 +103,6 @@ namespace Oxide.Plugins
                 player.inventory.loot.SendImmediate();
                 view.ClientRPCPlayer(null, player, "RPC_ClientLootCorpse");
                 player.SendNetworkUpdate();
-
                 ticks = 0;
             }
 
@@ -136,11 +128,10 @@ namespace Oxide.Plugins
             }
         }
 
-        private void Loaded()
+        private void Init()
         {
             instance = this;
             LoadConfigValues();
-            LoadDefaultMessages();
             permission.RegisterPermission(Permission, this);
         }
 
@@ -152,7 +143,7 @@ namespace Oxide.Plugins
             prefixColor = GetConfig("PrefixColor", prefixColor);
         }
 
-        private void LoadDefaultMessages()
+        private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -180,8 +171,12 @@ namespace Oxide.Plugins
 
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
+            if (info == null) return;
+
             var view = entity as LootableCorpse;
             if (view == null) return;
+            if (view.playerName == null) return;
+
             if (!view.playerName.StartsWith("Inspecting")) return;
             info.damageTypes.ScaleAll(0f);
         }
@@ -308,6 +303,5 @@ namespace Oxide.Plugins
         {
             PrintToChat(player, $"<color={prefixColor}>{prefix}</color>: {message}");
         }
-
     }
 }

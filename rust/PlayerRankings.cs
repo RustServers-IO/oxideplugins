@@ -1,4 +1,4 @@
-// Requires: ConnectionDB
+﻿// Requires: ConnectionDB
 using System.Collections.Generic;
 using Oxide.Core.Plugins;
 using System.Linq;
@@ -6,7 +6,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerRankings", "Ankawi", "2.0.2")]
+    [Info("PlayerRankings", "Ankawi", "2.0.3", ResourceId = 1469)]
     [Description("Gives players ranks based on playtime on a server")]
     class PlayerRankings : RustPlugin
     {
@@ -26,7 +26,7 @@ namespace Oxide.Plugins
             if (!BetterChat)
                 PrintWarning("Its recommended to have BetterChat installed, to grant titles for playtime. Get it here: http://oxidemod.org/plugins/979/");
 
-            LoadConfig();
+            SaveConfig();
 
             foreach (BasePlayer player in BasePlayer.activePlayerList)
                 UpdateGroups(player);
@@ -89,6 +89,7 @@ namespace Oxide.Plugins
 
         protected override void LoadDefaultConfig()
         {
+            LoadConfig();
             PrintWarning("Creating a new configuration file...");
         }
 
