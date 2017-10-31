@@ -2,19 +2,24 @@
 using System.Collections.Generic;
 using System.Linq;
 using Facepunch;
+using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
 using Rust;
 using UnityEngine;
 
+// Removed Y coordinate from positions
+// Added marker support for private Map plugin
+// Added timer to remove markers
+
 namespace Oxide.Plugins
 {
-    [Info("Dangerous Treasures", "nivex", "0.1.23", ResourceId = 2479)]
+    [Info("Dangerous Treasures", "nivex", "1.0.0", ResourceId = 2479)]
     [Description("Event with treasure chests.")]
     public class DangerousTreasures : RustPlugin
     {
-        [PluginReference] Plugin LustyMap, ZoneManager, Economics, ServerRewards;
+        [PluginReference] Plugin LustyMap, ZoneManager, Economics, ServerRewards, Map;
 
         static DangerousTreasures ins;
         static bool unloading = false;
@@ -31,7 +36,7 @@ namespace Oxide.Plugins
         const string fireballPrefab = "assets/bundled/prefabs/oilfireballsmall.prefab";
         static string rocketResourcePath;
         DynamicConfigFile dataFile;
-        StoredData storedData;
+        StoredData storedData = new StoredData();
 
         static int playerMask = LayerMask.GetMask("Player (Server)");
         static int blockedMask = LayerMask.GetMask(new[] { "Player (Server)", "Trigger", "Prevent Building" });
@@ -47,11 +52,21 @@ namespace Oxide.Plugins
         List<ulong> drawGrants = new List<ulong>(); // limit draw to once every 15 seconds by default
         Dictionary<Vector3, float> managedZones = new Dictionary<Vector3, float>();
 
-        Dictionary<string, PlayerInfo> eventPlayers = new Dictionary<string, PlayerInfo>();
+        static Dictionary<uint, MapInfo> mapMarkers = new Dictionary<uint, MapInfo>();
         static Dictionary<uint, string> lustyMarkers = new Dictionary<uint, string>();
         Dictionary<string, List<ulong>> skinsCache = new Dictionary<string, List<ulong>>();
+        Dictionary<string, List<ulong>> workshopskinsCache = new Dictionary<string, List<ulong>>();
         static Dictionary<uint, TreasureChest> treasureChests = new Dictionary<uint, TreasureChest>();
         static Dictionary<uint, string> treasureLooters = new Dictionary<uint, string>();
+
+        class MapInfo
+        {
+            public string Url;
+            public string IconName;
+            public Vector3 Position;
+
+            public MapInfo() { }
+        }
 
         class TreasureItem
         {
@@ -70,10 +85,10 @@ namespace Oxide.Plugins
 
         class StoredData
         {
-            public double SecondsUntilEvent { get; set; } = double.MinValue;
-            public bool Restarting { get; set; } = false;
-            public int TotalEvents { get; set; } = 0;
-            public Dictionary<string, PlayerInfo> Players { get; set; } = new Dictionary<string, PlayerInfo>();
+            public double SecondsUntilEvent = double.MinValue;
+            public int TotalEvents = 0;
+            public readonly Dictionary<string, PlayerInfo> Players = new Dictionary<string, PlayerInfo>();
+            public List<uint> Markers = new List<uint>();
             public StoredData() { }
         }
 
@@ -418,7 +433,8 @@ namespace Oxide.Plugins
 
             void OnDestroy()
             {
-                ins.RemoveMarker(uid);
+                ins.RemoveLustyMarker(uid);
+                ins.RemoveMapMarker(uid);
                 DestroyLauncher();
                 DestroySphere();
                 DestroyFire();
@@ -717,7 +733,7 @@ namespace Oxide.Plugins
             }
             catch { }
 
-            if (storedData == null)
+            if (storedData?.Players == null)
                 storedData = new StoredData();
 
             LoadVariables();
@@ -729,20 +745,6 @@ namespace Oxide.Plugins
                 return;
             }
 
-            /*if (storedData.Restarting)
-            {
-                if (!ConVar.Admin.ServerInfo().Restarting) {
-                    storedData.Restarting = false;
-
-                    if (storedData.SecondsUntilEvent != double.MinValue && storedData.SecondsUntilEvent <= 0)
-                    {
-                        storedData.SecondsUntilEvent = TimeStamp() + 600; // give players 10 minutes to reconnect before starting event again.
-                        Puts(msg(szRestartDetected, null, 10)); // notify server console - this message will scroll by fast when server is restarted
-                    }
-                    SaveData();
-                }
-            }*/
-
             if (automatedEvents)
             {
                 if (storedData.SecondsUntilEvent != double.MinValue)
@@ -752,18 +754,14 @@ namespace Oxide.Plugins
                 eventTimer = timer.Repeat(1f, 0, () => CheckSecondsUntilEvent());
             }
 
-            if (recordStats && storedData.Players.Count > 0)
-                foreach (var kvp in storedData.Players)
-                    eventPlayers.Add(kvp.Key, kvp.Value);
-
-            if (wipeChestsSeed && eventPlayers.Count > 0)
+            if (wipeChestsSeed && storedData.Players.Count > 0)
             {
-                var ladder = eventPlayers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.StolenChestsSeed).ToList<KeyValuePair<string, int>>();
+                var ladder = storedData.Players.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.StolenChestsSeed).ToList<KeyValuePair<string, int>>();
 
                 if (AssignTreasureHunters(ladder))
                 {
-                    foreach (var kvp in eventPlayers.ToList())
-                        eventPlayers[kvp.Key].StolenChestsSeed = 0;
+                    foreach (var kvp in storedData.Players.ToList())
+                        storedData.Players[kvp.Key].StolenChestsSeed = 0;
 
                     SaveData();
                     wipeChestsSeed = false;
@@ -835,7 +833,12 @@ namespace Oxide.Plugins
             }
 
             monuments = UnityEngine.Object.FindObjectsOfType<MonumentInfo>().Select(monument => monument.transform.position).ToList();
+
+            if (includeWorkshopBox || includeWorkshopTreasure)
+                webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", GetWorkshopIDs, this);
+
             init = true;
+            RemoveAllTemporaryMarkers();
         }
 
         void Unload()
@@ -879,7 +882,11 @@ namespace Oxide.Plugins
 
             if (lustyMarkers.Count > 0)
                 foreach (var entry in lustyMarkers.ToList())
-                    RemoveMarker(entry.Key);
+                    RemoveLustyMarker(entry.Key);
+
+            if (mapMarkers.Count > 0)
+                foreach (var entry in mapMarkers.ToList())
+                    RemoveMapMarker(entry.Key);
 
             BlockedLayers.Clear();
             chestLoot?.Clear();
@@ -887,6 +894,8 @@ namespace Oxide.Plugins
             indestructibleWarnings.Clear();
             countdownTimes.Clear();
             skinsCache.Clear();
+            workshopskinsCache.Clear();
+            RemoveAllTemporaryMarkers();
         }
 
         void OnEntitySpawned(BaseNetworkable entity)
@@ -977,11 +986,11 @@ namespace Oxide.Plugins
                     {
                         if (recordStats)
                         {
-                            if (!eventPlayers.ContainsKey(looter.UserIDString))
-                                eventPlayers.Add(looter.UserIDString, new PlayerInfo());
+                            if (!storedData.Players.ContainsKey(looter.UserIDString))
+                                storedData.Players.Add(looter.UserIDString, new PlayerInfo());
 
-                            eventPlayers[looter.UserIDString].StolenChestsTotal++;
-                            eventPlayers[looter.UserIDString].StolenChestsSeed++;
+                            storedData.Players[looter.UserIDString].StolenChestsTotal++;
+                            storedData.Players[looter.UserIDString].StolenChestsSeed++;
                             SaveData();
                         }
 
@@ -1014,7 +1023,8 @@ namespace Oxide.Plugins
                         }
                     }
 
-                    ins.RemoveMarker(box.net.ID);
+                    ins.RemoveLustyMarker(box.net.ID);
+                    ins.RemoveMapMarker(box.net.ID);
 
                     if (!box.IsDestroyed)
                         box.Kill();
@@ -1057,9 +1067,6 @@ namespace Oxide.Plugins
         {
             if (storedData != null)
             {
-                if (recordStats)
-                    storedData.Players = eventPlayers;
-
                 dataFile.WriteObject(storedData);
             }
         }
@@ -1255,6 +1262,25 @@ namespace Oxide.Plugins
 
         static long TimeStamp() => (DateTime.Now.Ticks - DateTime.Parse("01/01/1970 00:00:00").Ticks) / 10000000;
 
+        void GetWorkshopIDs(int code, string response)
+        {
+            if (response != null && code == 200)
+            {
+                var items = JsonConvert.DeserializeObject<Rust.Workshop.ItemSchema>(response).items;
+
+                foreach (var item in items)
+                {
+                    if (string.IsNullOrEmpty(item.itemshortname) || string.IsNullOrEmpty(item.workshopdownload))
+                        continue;
+
+                    if (!workshopskinsCache.ContainsKey(item.itemshortname))
+                        workshopskinsCache.Add(item.itemshortname, new List<ulong>());
+
+                    workshopskinsCache[item.itemshortname].Add(Convert.ToUInt64(item.workshopdownload));
+                }
+            }
+        }
+
         List<ulong> GetItemSkins(ItemDefinition def)
         {
             if (!skinsCache.ContainsKey(def.shortname))
@@ -1263,7 +1289,13 @@ namespace Oxide.Plugins
                 skins.AddRange(def.skins.Select(skin => Convert.ToUInt64(skin.id)));
 
                 if ((def.shortname == boxShortname && includeWorkshopBox) || (def.shortname != boxShortname && includeWorkshopTreasure))
-                    skins.AddRange(Rust.Workshop.Approved.All.Where(skin => !string.IsNullOrEmpty(skin.Skinnable.ItemName) && skin.Skinnable.ItemName == def.shortname).Select(skin => skin.WorkshopdId));
+                {
+                    if (workshopskinsCache.ContainsKey(def.shortname))
+                    {
+                        skins.AddRange(workshopskinsCache[def.shortname]);
+                        workshopskinsCache.Remove(def.shortname);
+                    }
+                }
 
                 if (skins.Contains(0uL))
                     skins.Remove(0uL);
@@ -1276,14 +1308,14 @@ namespace Oxide.Plugins
 
         public Vector3 GetNewEvent()
         {
-            var position = Vector3.zero;
-            if (TryOpenEvent(out position))
+            var position = TryOpenEvent();
+            if (position != Vector3.zero)
                 Puts(msg(szEventAt, null, FormatPosition(position)));
 
             return position;
         }
 
-        public bool TryOpenEvent(out Vector3 position, BasePlayer player = null)
+        public Vector3 TryOpenEvent(BasePlayer player = null)
         {
             var eventPos = Vector3.zero;
 
@@ -1293,8 +1325,7 @@ namespace Oxide.Plugins
 
                 if (!Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity, heightMask))
                 {
-                    position = Vector3.zero;
-                    return false;
+                    return Vector3.zero;
                 }
 
                 eventPos = hit.point;
@@ -1305,8 +1336,7 @@ namespace Oxide.Plugins
 
                 if (randomPos == Vector3.zero)
                 {
-                    position = randomPos;
-                    return false;
+                    return Vector3.zero;
                 }
 
                 eventPos = randomPos;
@@ -1316,8 +1346,8 @@ namespace Oxide.Plugins
 
             if (!container)
             {
-                position = eventPos;
-                return false;
+                Puts(msg(szInvalidConstant, null, boxPrefab));
+                return Vector3.zero;
             }
 
             if (presetSkin != 0uL)
@@ -1423,14 +1453,20 @@ namespace Oxide.Plugins
                     DrawText(target, container.transform.position, msg(szTreasureChest, target.UserIDString, distance));
             }
 
-            position = container.transform.position;
+            var position = container.transform.position;
             storedData.TotalEvents++;
             SaveData();
 
             if (useLustyMap)
-                AddMarker(position, uid);
+                AddLustyMarker(position, uid);
 
-            return true;
+            if (Map)
+                AddMapMarker(position, uid);
+
+            timer.Once(unlockTime + destructTime, () => RemoveMapMarker(uid));
+            timer.Once(unlockTime + destructTime, () => RemoveLustyMarker(uid));
+
+            return position;
         }
 
         void CheckSecondsUntilEvent()
@@ -1449,17 +1485,6 @@ namespace Oxide.Plugins
 
             if (storedData.SecondsUntilEvent - stamp <= 0)
             {
-                /*if (ConVar.Admin.ServerInfo().Restarting)
-                {
-                    if (!storedData.Restarting)
-                    {
-                        storedData.Restarting = true;
-                        SaveData();
-                    }
-
-                    return;
-                }*/
-
                 if (BasePlayer.activePlayerList.Count >= playerLimit)
                 {
                     var eventPos = GetNewEvent();
@@ -1483,11 +1508,10 @@ namespace Oxide.Plugins
 
         static string FormatPosition(Vector3 position)
         {
-            var x = Math.Round(position.x, 2).ToString();
-            var y = Math.Round(position.y, 2).ToString();
-            var z = Math.Round(position.z, 2).ToString();
+            var x = position.x.ToString("N2");
+            var z = position.z.ToString("N2");
 
-            return x + " " + y + " " + z;
+            return x + " " + z;
         }
 
         string FormatTime(double seconds, string id = null)
@@ -1569,21 +1593,70 @@ namespace Oxide.Plugins
             return true;
         }
 
-        void AddMarker(Vector3 pos, uint uid)
+        void AddMapMarker(Vector3 position, uint uid)
+        {
+            var mapInfo = new MapInfo();
+            mapInfo.IconName = lustyMapIconName;
+            mapInfo.Position = position;
+            mapInfo.Url = lustyMapIconFile;
+            mapMarkers[uid] = mapInfo;
+            Map?.Call("ApiAddPointUrl", mapInfo.Url, mapInfo.IconName, mapInfo.Position);
+            storedData.Markers.Add(uid);
+        }
+
+        void RemoveMapMarker(uint uid)
+        {
+            if (!mapMarkers.ContainsKey(uid))
+                return;
+
+            var mapInfo = mapMarkers[uid];
+            Map?.Call("ApiRemovePointUrl", mapInfo.Url, mapInfo.IconName, mapInfo.Position);
+            mapMarkers.Remove(uid);
+            storedData.Markers.Remove(uid);
+        }
+
+        void AddLustyMarker(Vector3 pos, uint uid)
         {
             string name = string.Format("{0}_{1}", lustyMapIconName, storedData.TotalEvents).ToLower();
 
             LustyMap?.Call("AddTemporaryMarker", pos.x, pos.z, name, lustyMapIconFile, lustyMapRotation);
             lustyMarkers[uid] = name;
+            storedData.Markers.Add(uid);
         }
 
-        void RemoveMarker(uint uid)
+        void RemoveLustyMarker(uint uid)
         {
             if (!lustyMarkers.ContainsKey(uid))
                 return;
 
             LustyMap?.Call("RemoveTemporaryMarker", lustyMarkers[uid]);
             lustyMarkers.Remove(uid);
+            storedData.Markers.Remove(uid);
+        }
+
+        void RemoveAllTemporaryMarkers()
+        {
+            if (storedData.Markers.Count == 0)
+                return;
+
+            if (LustyMap)
+            {
+                foreach (uint marker in storedData.Markers)
+                {
+                    LustyMap?.Call("RemoveMarker", marker.ToString());
+                }
+            }
+
+            if (Map)
+            {
+                foreach(uint marker in storedData.Markers.ToList())
+                {
+                    RemoveMapMarker(marker);
+                }
+            }
+
+            storedData.Markers.Clear();
+            SaveData();
         }
 
         void RemoveAllMarkers()
@@ -1600,8 +1673,12 @@ namespace Oxide.Plugins
                 }
             }
 
+            storedData.Markers.Clear();
+
             if (removed > 0)
+            {
                 Puts("Removed {0} existing markers", removed);
+            }
             else
                 Puts("No markers found");
         }
@@ -1705,18 +1782,18 @@ namespace Oxide.Plugins
 
             if (args.Length >= 1 && (args[0].ToLower() == "ladder" || args[0].ToLower() == "lifetime") && recordStats)
             {
-                if (eventPlayers == null || eventPlayers.Count == 0)
+                if (storedData.Players.Count == 0)
                 {
                     player.ChatMessage(msg(szLadderInsufficient, player.UserIDString));
                     return;
                 }
 
                 if (args.Length == 2 && args[1] == "resetme")
-                    if (eventPlayers.ContainsKey(player.UserIDString))
-                        eventPlayers[player.UserIDString].StolenChestsSeed = 0;
+                    if (storedData.Players.ContainsKey(player.UserIDString))
+                        storedData.Players[player.UserIDString].StolenChestsSeed = 0;
 
                 int rank = 0;
-                var ladder = eventPlayers.ToDictionary(k => k.Key, v => args[0].ToLower() == "ladder" ? v.Value.StolenChestsSeed : v.Value.StolenChestsTotal).Where(kvp => kvp.Value > 0).ToList<KeyValuePair<string, int>>();
+                var ladder = storedData.Players.ToDictionary(k => k.Key, v => args[0].ToLower() == "ladder" ? v.Value.StolenChestsSeed : v.Value.StolenChestsTotal).Where(kvp => kvp.Value > 0).ToList<KeyValuePair<string, int>>();
                 ladder.Sort((x, y) => y.Value.CompareTo(x.Value));
 
                 player.ChatMessage(msg(args[0].ToLower() == "ladder" ? szLadder : szLadderTotal, player.UserIDString));
@@ -1736,7 +1813,7 @@ namespace Oxide.Plugins
             }
 
             if (recordStats)
-                player.ChatMessage(msg(szEventWins, player.UserIDString, eventPlayers.ContainsKey(player.UserIDString) ? eventPlayers[player.UserIDString].StolenChestsSeed : 0, szDistanceChatCommand));
+                player.ChatMessage(msg(szEventWins, player.UserIDString, storedData.Players.ContainsKey(player.UserIDString) ? storedData.Players[player.UserIDString].StolenChestsSeed : 0, szDistanceChatCommand));
 
             if (args.Length >= 1 && player.IsAdmin)
             {
@@ -1861,18 +1938,17 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var position = Vector3.zero;
-            if (TryOpenEvent(out position, args.Length == 1 && args[0] == "me" && player.IsAdmin ? player : null))
+            var position = TryOpenEvent(args.Length == 1 && args[0] == "me" && player.IsAdmin ? player : null);
+            if (position != Vector3.zero)
             {
                 if (args.Length == 1 && args[0].ToLower() == "tp" && player.IsAdmin)
+                {
                     player.Teleport(position);
+                }
             }
             else
             {
-                if (position == Vector3.zero)
-                    player.ChatMessage(msg(szEventFail, player.UserIDString));
-                else
-                    ins.Puts(ins.msg(szInvalidConstant, null, boxPrefab));
+                player.ChatMessage(msg(szEventFail, player.UserIDString));
             }
         }
 
@@ -2340,9 +2416,7 @@ namespace Oxide.Plugins
 
             useRandomBoxSkin = Convert.ToBoolean(GetConfig("Skins", "Use Random Skin", true));
             presetSkin = Convert.ToUInt64(GetConfig("Skins", "Preset Skin", 0uL));
-
-            if (useRandomBoxSkin)
-                includeWorkshopBox = Convert.ToBoolean(GetConfig("Skins", "Include Workshop Skins", true));
+            includeWorkshopBox = Convert.ToBoolean(GetConfig("Skins", "Include Workshop Skins", true));
 
             automatedEvents = Convert.ToBoolean(GetConfig("Events", "Automated", true));
             eventIntervalMin = Convert.ToSingle(GetConfig("Events", "Every Min Seconds", 3600f).ToString());
