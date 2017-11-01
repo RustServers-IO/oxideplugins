@@ -13,7 +13,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Murderers", "Shadow", "1.0.1")]
+    [Info("Murderers", "Shadow", "1.0.2")]
     [Description("Murderers")]
     class Murderers : RustPlugin
     {
@@ -25,7 +25,7 @@ namespace Oxide.Plugins
 
         public static List<BasePlayer> fakePlayers = new List<BasePlayer>();    
         public static List<BaseNetworkable> fakeEntities = new List<BaseNetworkable>();
-        public string Kit => Config.Get<string>("Kit");
+        public string Kit;
         private bool changed;
         public bool Turret_Safe;
         public bool Animal_Safe;
@@ -47,13 +47,30 @@ namespace Oxide.Plugins
         {
             //
             npcCoolDown = Convert.ToInt32(GetVariable("NPC", "Time to respawn after death", "80"));
-            Config["Kit"] = Config.Get<string>("Kit");
+            Kit = Convert.ToString(GetConfig("Kit", "Kits what bots use", "default"));
             Turret_Safe = true;
             Animal_Safe = true;
            
             if (!changed) return;
             SaveConfig();
             changed = true;
+        }
+
+        private object GetConfig(string menu, string datavalue, object defaultValue)
+        {
+            var data = Config[menu] as Dictionary<string, object>;
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[menu] = data;
+                changed = true;
+            }
+            object value;
+            if (data.TryGetValue(datavalue, out value)) return value;
+            value = defaultValue;
+            data[datavalue] = value;
+            changed = true;
+            return value;
         }
 
         void Init()
@@ -66,7 +83,7 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>
 
             {
-                ["Remove"] = "Removing all Murderers", 
+                ["Remove"] = "Removing all Murderers",   
                 ["Delete"] = "Removing all Murderers Points",
                 ["StartSpawn"] = "Start spawning all Murderers on their points",
                 ["EndSpawn"] = "All Murderers spawned on their points",
@@ -90,7 +107,6 @@ namespace Oxide.Plugins
 
             foreach (var check in npcCreated)
             BaseNetworkable.serverEntities.Find(check.Key).Kill();
-            Puts(msg("Remove"));
             Interface.Oxide.ReloadPlugin("Murderers");           
         }
 
@@ -239,7 +255,7 @@ namespace Oxide.Plugins
           
             startSpawn();
               {
-               player.ChatMessage(msg("Scientist ReSpawning", player.UserIDString));
+               player.ChatMessage(msg("Murderers ReSpawning", player.UserIDString));
               }
            }
         }
@@ -285,7 +301,7 @@ namespace Oxide.Plugins
                 npcCreated.Remove(player.net.ID);
            Kill();
               {
-            player.ChatMessage(msg("Scientist its Dead", player.UserIDString));
+            player.ChatMessage(msg("Remove", player.UserIDString));
               }
            }
         }
