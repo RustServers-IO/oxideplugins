@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.0.6", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.0.7", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
@@ -19,13 +19,15 @@ namespace Oxide.Plugins
         int lastGridTested = 0;
         List<SpawnPosition> spawnGrid = new List<SpawnPosition>();
         List<Cooldown> coolDowns = new List<Cooldown>();
+        List<RustUser> rustUsers = new List<RustUser>();
 
         class GrTeleportData
         {
             public int CooldownInSeconds { get; set; }
             public bool AvoidWater { get; set; }
-
             public bool AllowBuildingBlocked { get; set; }
+            public int LimitPerDay { get; set; }
+            public string RestrictedZones { get; set; }
         }
 
         class SpawnPosition
@@ -79,6 +81,13 @@ namespace Oxide.Plugins
             }
 
         }
+
+        class RustUser
+        {
+            public BasePlayer Player { get; set; }
+            public int TeleportsRemaining { get; set; }
+            public DateTime ResetDateTime { get; set; }
+        }
         #endregion
 
         #region events
@@ -91,7 +100,7 @@ namespace Oxide.Plugins
         }
 
         void Loaded()
-        {
+        {            
             try
             {
                 permission.RegisterPermission(adminPermission, this);
@@ -102,20 +111,34 @@ namespace Oxide.Plugins
                 lang.RegisterMessages(new Dictionary<string, string>
                 {
                     { "buildingblocked", "You cannot grTeleport into or out from a building blocked area." },
-                    { "nosquares", "Admin must configure set the grid width using setgridwidth ##" },
                     { "noinit", "spawnGrid was not initialized. 0 spawn points available." },
-                    { "teleported", "You have GrTeleported to {gridreference}" }, // {playerPosition}
+                    { "teleported", "You have GrTeleported to {gridreference}." }, // {gridreference}
+                    { "teleportlimit", "You have {teleportsremaining} remaining." }, // {teleportsremaining}
+                    { "teleportminutesexhauseted", "You have exhausted your remaining grTeleports for today. You can use grTeleport in {minutesleft} minutes." },  // minutesleft hoursleft
+                    { "teleporthoursexhauseted", "You have exhausted your remaining grTeleports for today. You can use grTeleport in {hoursleft} hours." },  // minutesleft hoursleft
                     { "overwater", "That refernce point is above water." },
                     { "cmdusage", "usage ex: /grt n10  (where n = a-zz and 10=0-60" },
                     { "noaccess", "You do not have sufficient access to execute this command." },
                     { "sgerror", "Error creating spawnpoints, too much water? contact dev." },
-                    { "cooldown", "Sorry, your are currently in a {cooldownperiod} second cooldown, you have another {secondsleft} seconds remaining." },
+                    { "cooldown", "Sorry, your are currently in a {cooldownperiod} second cooldown, you have another {secondsleft} seconds remaining." }, // {cooldownperiod} {secondsleft}
                     { "cooldownreply", "Cooldown has been set to {cooldownperiod} seconds" },
                     { "gridwidthreply", "Gridwidth has been set to {gridwidth}x{gridwidth}" },
                     { "cuboardreply", "Buidling block teleportation is {togglebuildingblocked}" },
                     { "avoidwaterreplay", "Avoid water has been set tp {avoidwater}" },
-                    { "cupboard", "Sorry, you cannot teleport within {distance}f of a cupboard." }
+                    { "dailylimitreply", "Daily limit has been set to {dailylimit}." },
+                    { "cupboard", "Sorry, you cannot teleport within {distance}f of a cupboard." },
+                    { "zoneadded", "Restricted Zone ({zone}) has been added, you now have {zones}." },
+                    { "zonenotadded", "You need to enter a zone (or a comma seperated list of zones) as well." },
+                    { "restrictedzone", "You cannot teleport her, {zone} is restricted." },
+                    { "zonecomma", "You need to supply a commaseperated list of zones." },
+                    { "zonesadded", "Restricted Zones ({zone}) have been added, you now have {zones}." },
+                    { "zonenotremoved", "Restricted Zone ({zone}) has not been removed, you now have {zones}." },
+                    { "zoneremoved", "Restricted Zone ({zone}) have been removed, you now have {zones}." },
+                    { "zonesremoved", "Restricted Zones ({zone}) have been removed, you now have {zones}." },
+                    { "nozones", "There are no zones to remove." }
                 }, this, "en");
+
+                PrintToChat("grtLoaded..");
             }
             catch (Exception ex)
             {
@@ -129,7 +152,9 @@ namespace Oxide.Plugins
             {
                 CooldownInSeconds = 30,
                 AvoidWater = true,
-                AllowBuildingBlocked = false
+                AllowBuildingBlocked = false,
+                LimitPerDay = -1, // -1 = unlim
+                RestrictedZones = "ZZZ123,YYY666"
             };
             Config.WriteObject(data, true);
         }
@@ -158,7 +183,13 @@ namespace Oxide.Plugins
                     var gr = args[0];
                     var index = GridIndexFromReference(gr);
 
-                    
+                    if (TestRestrictedZone(gr))
+                    {
+                        PrintToChat(player, lang.GetMessage("restrictedzone", this, player.UserIDString).Replace("{zone}", gr.ToUpper()));
+                        return;
+                    }
+
+
                     if (player.IsBuildingBlocked(spawnGrid[index].GroundPosition, new Quaternion(0, 0, 0, 0), new Bounds(Vector3.zero, Vector3.zero)) && !grTeleportData.AllowBuildingBlocked) 
                     {
                         PrintToChat(player, lang.GetMessage("buildingblocked", this, player.UserIDString));
@@ -170,15 +201,33 @@ namespace Oxide.Plugins
                         PrintToChat(player, lang.GetMessage("overwater", this, player.UserIDString));
                         return;
                     }
-                    else
+
+                    var user = GetOrCreateUser(player);
+                    if (user.TeleportsRemaining == 0) // none left
                     {
-                        if (TeleportToGridReference(player, gr, grTeleportData.AvoidWater))                    
-                        {
-                            PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{playerPosition}", player.transform.position.ToString()).Replace("{gridreference}", gr.ToUpper()));
-                            AddToCoolDown(player.displayName, grTeleportData.CooldownInSeconds);
-                            return;
-                        }
+
+                        if ((user.ResetDateTime - DateTime.Now).TotalHours < 1) 
+                            PrintToChat(player, lang.GetMessage("teleportminutesexhauseted", this, player.UserIDString).Replace("{minutesleft}", (user.ResetDateTime - DateTime.Now).TotalMinutes.ToString("0")).Replace("{hoursleft}", (user.ResetDateTime - DateTime.Now).TotalHours.ToString("0")));
+                        else
+                            PrintToChat(player, lang.GetMessage("teleporthoursexhauseted", this, player.UserIDString).Replace("{minutesleft}", (user.ResetDateTime - DateTime.Now).TotalMinutes.ToString("0")).Replace("{hoursleft}", (user.ResetDateTime - DateTime.Now).TotalHours.ToString("0")));
+                        
+                        return;
                     }
+
+
+                    if (TeleportToGridReference(player, gr, grTeleportData.AvoidWater))                    
+                    {
+                        if (user.TeleportsRemaining != -1)
+                            user.TeleportsRemaining--;
+                            
+                        PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{playerPosition}", player.transform.position.ToString()).Replace("{gridreference}", gr.ToUpper()));
+                        if (user.TeleportsRemaining != -1)  
+                            PrintToChat(player, lang.GetMessage("teleportlimit", this, player.UserIDString).Replace("{teleportsremaining}", user.TeleportsRemaining.ToString()));
+
+                        AddToCoolDown(player.displayName, grTeleportData.CooldownInSeconds);
+                        return;
+                    }
+                    
                 }
             }
             catch (Exception ex)
@@ -239,6 +288,124 @@ namespace Oxide.Plugins
 
         }
 
+        [ChatCommand("setdailylimit")]
+        void chmSetDailyLimit(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "setdailylimit", adminPermission)) return;
+                if (args.Length > 0)
+                    grTeleportData.LimitPerDay = int.Parse(args[0]);
+
+                rustUsers.Clear();
+                Config.WriteObject(grTeleportData, true);
+                PrintToChat(player, lang.GetMessage("dailylimitreply", this, player.UserIDString).Replace("{dailylimit}", grTeleportData.LimitPerDay.ToString()));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetCooldown {ex.Message}");
+            }
+        }
+
+        [ChatCommand("addzone")]
+        void chmAddzone(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "chmAddzone", adminPermission)) return;
+                if (args.Length > 0)
+                {
+                    if (string.IsNullOrEmpty(grTeleportData.RestrictedZones))
+                        grTeleportData.RestrictedZones = "";
+
+                    if (args[0].Contains(","))
+                    {
+                        foreach (var z in args[0].ToUpper().Split(','))
+                        {
+                            if (grTeleportData.RestrictedZones.Length > 0)
+                                grTeleportData.RestrictedZones += $",{z}";
+                            else
+                                grTeleportData.RestrictedZones += $"{z}";
+                        }
+                        Config.WriteObject(grTeleportData, true);
+                        PrintToChat(player, lang.GetMessage("zoneadded", this, player.UserIDString).Replace("{zone}", args[0].ToUpper()).Replace("{zones}", grTeleportData.RestrictedZones));
+                    }
+                    else
+                    {
+                        if (grTeleportData.RestrictedZones.Length > 0)
+                            grTeleportData.RestrictedZones += $",{args[0].ToUpper()}";
+                        else
+                            grTeleportData.RestrictedZones += $"{args[0].ToUpper()}";
+
+                        Config.WriteObject(grTeleportData, true);
+                        PrintToChat(player, lang.GetMessage("zonesadded", this, player.UserIDString).Replace("{zone}", args[0].ToUpper()).Replace("{zones}", grTeleportData.RestrictedZones));
+                    }
+                }
+                else
+                {
+                    PrintToChat(player, lang.GetMessage("zonenotadded", this, player.UserIDString).Replace("{zones}", grTeleportData.RestrictedZones));
+                }
+
+
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetCooldown {ex.Message}");
+            }
+        }
+
+        [ChatCommand("removezone")]
+        void chmRemoveZone(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "chmRemovezone", adminPermission)) return;
+                if (args.Length > 0)
+                {
+                    if (string.IsNullOrEmpty(grTeleportData.RestrictedZones))
+                    {
+                        PrintToChat(player, lang.GetMessage("nozones", this, player.UserIDString));
+                        return;
+                    }
+                    List<string> tmpZoneList = new List<string>(grTeleportData.RestrictedZones.Split(','));
+
+                    if (args[0].Contains(","))
+                    {
+                        foreach (var z in args[0].ToUpper().Split(','))
+                        {
+                            if (tmpZoneList.Contains(z))
+                                tmpZoneList.Remove(z);                            
+                        }
+
+                        grTeleportData.RestrictedZones = string.Join(",", tmpZoneList.ToArray());
+                        Config.WriteObject(grTeleportData, true);
+                        PrintToChat(player, lang.GetMessage("zonesremoved", this, player.UserIDString).Replace("{zone}", args[0].ToUpper()).Replace("{zones}", grTeleportData.RestrictedZones));
+                    }
+                    else
+                    {
+                        if (tmpZoneList.Contains(args[0].ToUpper()))
+                            tmpZoneList.Remove(args[0].ToUpper());
+
+                        grTeleportData.RestrictedZones = string.Join(",", tmpZoneList.ToArray());
+                        Config.WriteObject(grTeleportData, true);
+                        PrintToChat(player, lang.GetMessage("zoneremoved", this, player.UserIDString).Replace("{zone}", args[0].ToUpper()).Replace("{zones}", grTeleportData.RestrictedZones));
+                    }
+                }
+                else
+                {
+                    PrintToChat(player, lang.GetMessage("zonenotremoved", this, player.UserIDString).Replace("{zones}", grTeleportData.RestrictedZones));
+                }
+
+
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetCooldown {ex.Message}");
+            }
+        }
+
         [ChatCommand("togglebuildingblocked")]
         void chmtogglebuildingblocked(BasePlayer player, string command, string[] args)
         {
@@ -256,14 +423,13 @@ namespace Oxide.Plugins
 
         }
 
-        [ChatCommand("avoidwater")]
+        [ChatCommand("toggleavoidwater")]
         void chmSetAvoidWater(BasePlayer player, string command, string[] args)
         {
             try
             {
-                if (!CheckAccess(player, "avoidwater", adminPermission)) return;
-                if (args.Length > 0)
-                    grTeleportData.AvoidWater = bool.Parse(args[0]);
+                if (!CheckAccess(player, "toggleavoidwater", adminPermission)) return;
+                grTeleportData.AvoidWater = !grTeleportData.AvoidWater;
                 Config.WriteObject(grTeleportData, true);
                 PrintToChat(player, lang.GetMessage("avoidwaterreplay", this, player.UserIDString).Replace("{avoidwater}", grTeleportData.AvoidWater.ToString()));
             }
@@ -327,6 +493,30 @@ namespace Oxide.Plugins
                 throw new Exception($"GridIndexFromReference {ex.Message}");
             }
 
+        }
+
+        bool TestRestrictedZone(string gridReference)
+        {
+            if (string.IsNullOrEmpty(grTeleportData.RestrictedZones)) return false;
+
+            if (grTeleportData.RestrictedZones.Length > 0)
+            {
+                if (grTeleportData.RestrictedZones.Contains(","))
+                {
+                    var zones = grTeleportData.RestrictedZones.Split(',');
+                    foreach(var z in zones)
+                    {
+                        if (z.ToUpper() == gridReference.ToUpper())
+                            return true;
+                    }                    
+                }
+                else // only one
+                {
+                    if (grTeleportData.RestrictedZones.ToUpper() == gridReference.ToUpper())
+                        return true;
+                }               
+            }
+            return false;
         }
 
         Cooldown GetCooldown(string playerName)
@@ -475,6 +665,26 @@ namespace Oxide.Plugins
             }
         }
 
+        RustUser GetOrCreateUser(BasePlayer player)
+        {
+            var index = rustUsers.FindIndex(x => x.Player== player);
+
+            if (index == -1)
+            {
+                var user = new RustUser { Player = player, TeleportsRemaining = grTeleportData.LimitPerDay, ResetDateTime = DateTime.Now.AddHours(24) };
+                rustUsers.Add(user);
+
+                return rustUsers[rustUsers.IndexOf(user)];
+            } 
+
+            if (rustUsers[index].ResetDateTime <= DateTime.Now) // reset daily limit 
+            {
+                rustUsers[index].ResetDateTime = DateTime.Now.AddHours(24);
+                rustUsers[index].TeleportsRemaining = grTeleportData.LimitPerDay;
+            }
+
+            return rustUsers[index];
+        }
         
         #endregion
 
