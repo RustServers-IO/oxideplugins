@@ -16,8 +16,8 @@ namespace Oxide.Plugins
 			permission.RegisterPermission(permBS, this);
         }
 		
-		int HeightBlock = 20;
-		int WaterBlock = -5;
+		double HeightBlock = 20;
+		double WaterBlock = -5;
 		int AuthLvl = 3;
 		bool ConfigChanged;
 		bool usePermissions = true;

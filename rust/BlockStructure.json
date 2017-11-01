@@ -2,7 +2,7 @@
     "name": "BlockStructure",
     "description": "Building blocks in the rocks, terrain and icebergs. Sets a limit build in height and depth in water.",
     "author": "",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/blockstructure.2092",
