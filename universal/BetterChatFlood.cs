@@ -6,9 +6,9 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterChatFlood", "Ryan", "1.0.2")]
+    [Info("BetterChatFlood", "Ryan", "1.0.3", ResourceId = 2484)]
     [Description("Puts a cooldown on peoples messages preventing them flooding the chat.")]
-    internal class BetterChatFlood : RustPlugin
+    public class BetterChatFlood : CovalencePlugin
     {
         private ConfigFile _Config;
         [PluginReference] private Plugin BetterChat;

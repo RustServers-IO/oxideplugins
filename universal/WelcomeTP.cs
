@@ -4,14 +4,14 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("WelcomeTP", "Ryan", "1.1.0", ResourceId = 2604)]
+    [Info("WelcomeTP", "Ryan", "1.1.1", ResourceId = 2604)]
     [Description("Teleports players to a position if they're new")]
-
-    class WelcomeTP : CovalencePlugin
+    public class WelcomeTP : CovalencePlugin
     {
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        public List<GenericPosition> Positions = new List<GenericPosition>();
+        private List<GenericPosition> Positions = new List<GenericPosition>();
+        private System.Random random = new System.Random();
 
         private const string UsedPerm = "welcometp.used";
         private const string SetPerm = "welcometp.set";
@@ -46,7 +46,7 @@ namespace Oxide.Plugins
             if (!player.HasPermission(UsedPerm))
             {
                 if (Positions.Count < 1) return;
-                player.Teleport(Positions.GetRandom());
+                player.Teleport(Positions[random.Next(Positions.Count)]);
                 permission.GrantUserPermission(player.Id, UsedPerm, this);
                 timer.Once(2f, () =>
                 {
