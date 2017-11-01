@@ -2,7 +2,7 @@
     "name": "Prevent Looting",
     "description": "Plugin provides protection for entity of player from looting by other players.",
     "author": "CaseMan",
-    "version": "1.4.3",
+    "version": "1.4.4",
     "configuration": true,
     "suggest": {
         "ZoneManager": "*",
