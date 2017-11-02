@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.9", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.10", ResourceId = 2193)]
     class ImageLibrary : RustPlugin
     {
         #region Fields
@@ -240,9 +240,7 @@ namespace Oxide.Plugins
         }
         private void CheckForRefresh()
         {
-            if (assets == null)
-                assets = new GameObject("WebObject").AddComponent<ImageAssets>();
-
+            if (assets == null) assets = new GameObject("WebObject").AddComponent<ImageAssets>();
             if (imageIdentifiers.lastCEID != CommunityEntity.ServerInstance.net.ID || imageUrls.URLs.Count == 0)                            
                 RefreshImagery();                        
         }
@@ -655,6 +653,16 @@ namespace Oxide.Plugins
             }
         }
 
+        [HookMethod("GetImageURL")]
+        public string GetImageURL(string imageName, ulong imageId = 0)
+        {
+            string identifier = $"{imageName}_{imageId}";
+            string value;
+            if (imageUrls.URLs.TryGetValue(identifier, out value))
+                return value;
+            return imageIdentifiers.imageIds["NONE_0"];
+        }
+
         [HookMethod("GetImage")]
         public string GetImage(string imageName, ulong imageId = 0, bool returnUrl = false)
         {
@@ -1001,6 +1009,12 @@ namespace Oxide.Plugins
             {
                 imageUrls = new ImageURLs();                               
             }
+            if (skinInformation == null)
+                skinInformation = new SkinInformation();
+            if (imageIdentifiers == null)
+                imageIdentifiers = new ImageIdentifiers();
+            if (imageUrls == null)
+                imageUrls = new ImageURLs();
             if (imageUrls.URLs.Count == 0)
             {
                 foreach (var item in defaultUrls)
