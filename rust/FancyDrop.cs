@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("FancyDrop", "Fujikura", "2.6.24", ResourceId = 1934)]
+	[Info("FancyDrop", "Fujikura", "2.6.25", ResourceId = 1934)]
 	[Description("The Next Level of a fancy airdrop-toolset")]
 	class FancyDrop : RustPlugin
 	{
@@ -1138,7 +1138,6 @@ namespace Oxide.Plugins
 			LoadDefaultMessages();
 			msgConsoleDropSpawn = lang.GetMessage("msgConsoleDropSpawn", this);
 			msgConsoleDropLanded = lang.GetMessage("msgConsoleDropLanded", this);
-			GameManager.server.FindPrefab("assets/prefabs/tools/supply signal/grenade.smoke.deployed.prefab").GetComponent<TimedExplosive>().stickEffect = GameManager.server.FindPrefab("assets/prefabs/tools/supply signal/grenade.smoke.deployed.prefab").GetComponent<TimedExplosive>().bounceEffect;
 
 			bool saveNeeded = false;
 			foreach ( var defaults in setupItemList)
@@ -1607,11 +1606,11 @@ namespace Oxide.Plugins
 			if(arg.Connection != null && arg.Connection.authLevel < neededAuthLvl) return;
 			if (_massDropTimer != null && !_massDropTimer.Destroyed)
 				_massDropTimer.Destroy();
-			var planes = Resources.FindObjectsOfTypeAll<CargoPlane>().Where(lt => lt.gameObject.activeSelf).ToList();
+			var planes = Resources.FindObjectsOfTypeAll<CargoPlane>().Where(lt => lt.isActiveAndEnabled).ToList();
 			SendReply(arg, $"...killing {planes.Count} Planes");
 			foreach(var plane in planes)
 				plane.KillMessage();
-			var drops = Resources.FindObjectsOfTypeAll<SupplyDrop>().Where(lt => lt.gameObject.activeSelf).ToList();
+			var drops = Resources.FindObjectsOfTypeAll<SupplyDrop>().Where(lt => lt.isActiveAndEnabled).ToList();
 			SendReply(arg,$"...killing {drops.Count} SupplyDrops");
 			foreach(var drop in drops)
 				drop.KillMessage();
@@ -1622,7 +1621,7 @@ namespace Oxide.Plugins
 
 		private void airdropCleanUp()
 		{
-			var drops = Resources.FindObjectsOfTypeAll<SupplyDrop>().Where(lt => lt.gameObject.activeSelf).ToList();
+			var drops = Resources.FindObjectsOfTypeAll<SupplyDrop>().Where(lt => lt.isActiveAndEnabled).ToList();
 			Puts($"...killing {drops.Count} SupplyDrops");
 			foreach(var drop in drops)
 				drop.KillMessage();
@@ -2218,9 +2217,8 @@ namespace Oxide.Plugins
 			dropLoot = Interface.GetMod().DataFileSystem.ReadObject<ExportData>(this.Title);
 			if (dropLoot.Categories.Count == 0)
 			{
-				var loot = GameManager.server.CreateEntity("assets/prefabs/misc/supply drop/supply_drop.prefab", new Vector3(), new Quaternion(), false).GetComponent<LootContainer>();
+				var loot = GameManager.server.FindPrefab("assets/prefabs/misc/supply drop/supply_drop.prefab").GetComponent<LootContainer>();
 				ExportLootSpawn(loot.lootDefinition, 1);
-				loot.KillMessage();
 				Interface.GetMod().DataFileSystem.WriteObject(this.Title, dropLoot);
 			}
 			if (dropLoot.Items.Count > 0)
