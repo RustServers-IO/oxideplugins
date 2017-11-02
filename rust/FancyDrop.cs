@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("FancyDrop", "Fujikura", "2.6.25", ResourceId = 1934)]
+	[Info("FancyDrop", "Fujikura", "2.6.26", ResourceId = 1934)]
 	[Description("The Next Level of a fancy airdrop-toolset")]
 	class FancyDrop : RustPlugin
 	{
@@ -1239,7 +1239,7 @@ namespace Oxide.Plugins
 			if((airdropCleanupAtStart && UnityEngine.Time.realtimeSinceStartup < 60) || BasePlayer.activePlayerList.Count == 1 ) airdropCleanUp();
 			if (airdropRemoveInBuilt) removeBuiltInAirdrop();
 			if (airdropTimerEnabled) airdropTimerNext();
-			NextTick(() => SetupLoot());
+			//NextTick(() => SetupLoot());
 			object value;
 			var checkdefaults = defaultDrop();
 			foreach( var pair in checkdefaults)
@@ -1630,6 +1630,7 @@ namespace Oxide.Plugins
 		[ConsoleCommand("ad.lootreload")]
 		void dropLootReload(ConsoleSystem.Arg arg)
 		{
+			return;
 			if (arg.Connection != null && arg.Connection.authLevel < neededAuthLvl) return;
 			SendReply(arg, "Custom loot reloading...");
 			SetupLoot();
@@ -2084,6 +2085,7 @@ namespace Oxide.Plugins
 
 	   void SetupContainer(StorageContainer drop, Dictionary<string,object> setup)
 	   {
+			try { setup["useCustomLootTable"] = false; } catch {}
 			int slots = Mathf.RoundToInt(UnityEngine.Random.Range(Convert.ToSingle(setup["minItems"])*100f, Convert.ToSingle(setup["maxItems"])*100f) / 100f);
 			bool ALCustom = false;
 			if (setup.ContainsKey("AlCustom"))
