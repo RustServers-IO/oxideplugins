@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Survey Info", "Diesel_42o", "0.1.5", ResourceId = 2463)]
+    [Info("Survey Info", "Diesel_42o", "0.1.6", ResourceId = 2463)]
     [Description("Displays Loot from Survey Charges")]
 
     class SurveyInfo : RustPlugin
@@ -190,13 +190,13 @@ namespace Oxide.Plugins
         private void DisplaySurveyLoot(BasePlayer player, SurveyData data)
         {
             if (BroadcastScore)
-                rust.BroadcastChat("<color=" + GetConfig("Colors", "PrefixColor", player) + ">" + Lang("Prefix", player.UserIDString) + "</color>" + "<color=" + GetConfig("Colors", "ServerBroadcastColor", player) + ">" + Lang("Broadcast", player.UserIDString, "<color=" + GetConfig("Colors", "PlayerColor", player) + ">" + player.displayName + "</color>", "<color=" + GetConfig("Colors", "ScoreColor", player) + ">" + data.Score + "</color>") + "</color>", null, Icon);
+                PrintToChat("<color=" + GetConfig("Colors", "PrefixColor", player) + ">" + Lang("Prefix", player.UserIDString) + "</color>" + "<color=" + GetConfig("Colors", "ServerBroadcastColor", player) + ">" + Lang("Broadcast", player.UserIDString, "<color=" + GetConfig("Colors", "PlayerColor", player) + ">" + player.displayName + "</color>", "<color=" + GetConfig("Colors", "ScoreColor", player) + ">" + data.Score + "</color>") + "</color>", null, Icon);
 
-            rust.SendChatMessage(player, "<color=" + GetConfig("Colors", "SeperatorColor", player) + ">" + Lang("Seperator", player.UserIDString) + "</color>\n" + "<color=" + GetConfig("Colors", "PrefixColor", player) + ">" + Lang("Prefix", player.UserIDString) + "</color>" + "<color=" + GetConfig("Colors", "ScoreChatColor", player) + ">" + Lang("Score", player.UserIDString, "<color=" + GetConfig("Colors", "ScoreColor", player) + ">" + data.Score + "</color>") + "</color>\n" + "<color=" + GetConfig("Colors", "SeperatorColor", player) + ">" + Lang("Seperator", player.UserIDString) + "</color>", null, Icon);
+            SendReply(player, "<color=" + GetConfig("Colors", "SeperatorColor", player) + ">" + Lang("Seperator", player.UserIDString) + "</color>\n" + "<color=" + GetConfig("Colors", "PrefixColor", player) + ">" + Lang("Prefix", player.UserIDString) + "</color>" + "<color=" + GetConfig("Colors", "ScoreChatColor", player) + ">" + Lang("Score", player.UserIDString, "<color=" + GetConfig("Colors", "ScoreColor", player) + ">" + data.Score + "</color>") + "</color>\n" + "<color=" + GetConfig("Colors", "SeperatorColor", player) + ">" + Lang("Seperator", player.UserIDString) + "</color>", null, Icon);
 
             foreach (KeyValuePair<int, SurveyItem> item in data.Items)
             {
-                rust.SendChatMessage(player, "<color=" + GetConfig("Colors", "ResultsAmountColor", player) + ">" + item.Value.Amount + " x</color>" + " <color=" + GetConfig("Colors", "ResultResourseNameColor", player) + ">" + item.Value.DisplayName + "</color>", null, Icon);
+                SendReply(player, "<color=" + GetConfig("Colors", "ResultsAmountColor", player) + ">" + item.Value.Amount + " x</color>" + " <color=" + GetConfig("Colors", "ResultResourseNameColor", player) + ">" + item.Value.DisplayName + "</color>", null, Icon);
             }
         }
 
