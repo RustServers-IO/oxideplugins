@@ -10,7 +10,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.5.7", ResourceId = 777)]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.5.8", ResourceId = 777)]
     [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
@@ -729,8 +729,12 @@ namespace Oxide.Plugins
 
         void DestroyLeaveEvent()
         {
-            Runlog("Player " + runningman.displayName + " got scared and ran away!");
-            BroadcastChat(string.Format(lang.GetMessage("RunnerLeaved", this), (string) Config["Default", "ChatName"], runningman.displayName));
+            if (runningman != null)
+            {
+                Runlog("Player " + runningman.displayName + " got scared and ran away!");
+                BroadcastChat(string.Format(lang.GetMessage("RunnerLeaved", this),
+                    (string) Config["Default", "ChatName"], runningman.displayName));
+            }
             if (eventpause != null)
             {
                 eventpause.Destroy();
