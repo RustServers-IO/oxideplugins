@@ -4,7 +4,7 @@ using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 namespace Oxide.Plugins
 {
-    [Info("VIP Trial", "Maik8", "1.2", ResourceId = 2563)]
+    [Info("VIP Trial", "Maik8", "1.3.3", ResourceId = 2563)]
     [Description("Plugin that lets Users try VIP functions.")]
     public class VIPTrial : CovalencePlugin
     {
@@ -19,31 +19,56 @@ namespace Oxide.Plugins
         [Command("viptrial")]
         void VIPtrialCommand(IPlayer player, string command, string[] args)
         {
-            if (checkTrialAllowed(player))
+            if (args == null || args.Length <= 0)
             {
-                if (!checkAlreadyUsed(player))
+                if (checkTrialAllowed(player))
                 {
-                    if (!checkPlayerForGroup(player))
+                    if (!checkAlreadyUsed(player))
                     {
-                        addUserForTrial(player);
+                        if (!checkPlayerForGroup(player))
+                        {
+                            addUserForTrial(player);
+                        }
+                        else
+                        {
+                            Reply(player, "VIPStillRunning", getDaysLeft(player));
+                        }
+                    }
+                    else if (checkPlayerForGroup(player))
+                    {
+                        Reply(player, "VIPStillRunning", getDaysLeft(player));
                     }
                     else
                     {
-                        Reply(player, "VIPStillRunning");
+                        Reply(player, "VIPAlreadyUsed");
                     }
-                }
-                else if (checkPlayerForGroup(player))
-                {
-                    Reply(player, "VIPStillRunning");
                 }
                 else
                 {
-                    Reply(player, "VIPAlreadyUsed");
+                    Reply(player, "NoPermission");
                 }
             }
-            else
+            else if ("list".Equals(args[0]))
             {
-                Reply(player, "NoPermission");
+                if (checkTrialAdmin(player) || player.Id == "server_console")
+                {
+                    listActiveTrials(player);
+                }
+                else
+                {
+                    Reply(player, "NoPermission");
+                }
+            }
+            else if ("clean_group".Equals(args[0]))
+            {
+                if (checkTrialAdmin(player) || player.Id == "server_console")
+                {
+                    cleanGroup(player);
+                }
+                else
+                {
+                    Reply(player, "NoPermission");
+                }
             }
         }
         #endregion
@@ -53,16 +78,68 @@ namespace Oxide.Plugins
         void Init()
         {
             permission.RegisterPermission("viptrial.allowed", this);
+            permission.RegisterPermission("viptrial.admin", this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Name);
             LoadDefaultConfig();
             checkGroup();
+			cleanGroup();
         }
-
+		
+		void cleanGroup(IPlayer player)
+		{
+			bool usersremoved = false;
+                    foreach (string elm in permission.GetUsersInGroup(groupName))
+                    {
+                        string id = elm.Substring(0, elm.LastIndexOf('('));
+						id = id.TrimEnd();
+                        if (checkExpired(id))
+                        {
+                            string name = elm.Substring(elm.LastIndexOf('(') + 1, (elm.Substring(elm.LastIndexOf('(')).Length - 2));
+                            permission.RemoveUserGroup(id, groupName);
+                            if (!usersremoved)
+                            {
+                                usersremoved = true;
+                               Reply(player, "CleanGroupFirstFeed");
+                            }
+                            Reply(player, "CleanGroupGiveBackRemovedUser", id, name);
+                        }
+                    }
+                    if (!usersremoved)
+                    {
+                        Reply(player, "CleanGroupNobodyRemoved");
+                    }
+		}
+		
+		void cleanGroup()
+		{
+			bool usersremoved = false;
+                    foreach (string elm in permission.GetUsersInGroup(groupName))
+                    {
+                        string id = elm.Substring(0, elm.LastIndexOf('('));
+						id = id.TrimEnd();
+                        if (checkExpired(id))
+                        {
+                            string name = elm.Substring(elm.LastIndexOf('(') + 1, (elm.Substring(elm.LastIndexOf('(')).Length - 2));
+                            permission.RemoveUserGroup(id, groupName);
+                            if (!usersremoved)
+                            {
+                               usersremoved = true;
+                               Puts("Removed users:");
+                            }
+                            Puts(String.Format("{0} | {1}", id, name));
+                        }
+                    }
+                    if (!usersremoved)
+                    {
+                        Puts("Nobody needs to be removed.");
+                    }
+		}
+		
         void OnUserConnected(IPlayer player)
         {
             if (permission.UserHasGroup(player.Id, groupName))
             {
-                if (checkExpired(player))
+                if (checkExpired(player.Id))
                 {
                     permission.RemoveUserGroup(player.Id, groupName);
                     Reply(player, "VIPExpired");
@@ -74,6 +151,18 @@ namespace Oxide.Plugins
             }
         }
         #endregion
+
+        void listActiveTrials(IPlayer player)
+        {
+            Reply(player, "ListActiveVIPStart");
+            foreach (VIPDataSaveFile elm in storedData.VIPDataHash)
+            {
+                if (!checkExpired(elm.userId))
+                {
+                    Reply(player, "ListActiveVIPUser2", elm.now, elm.userId, players.FindPlayerById(elm.userId).Name);
+                }
+            }
+        }
         void checkGroup()
         {
             if (!permission.GroupExists(groupName))
@@ -127,14 +216,16 @@ namespace Oxide.Plugins
         private void addUserForTrial(IPlayer player)
         {
             permission.AddUserGroup(player.Id, groupName);
-            storedData.VIPDataHash.Add( new VIPDataSaveFile( player, DateTime.Now.AddDays( days) ) );
+            storedData.VIPDataHash.Add( new VIPDataSaveFile( player, DateTime.Now.AddDays( days ) ) );
             Interface.Oxide.DataFileSystem.WriteObject(this.Name, storedData);
-            Reply(player, "VIPStarted", DateTime.Now.Date.AddDays( days).ToShortDateString() );
+            Reply(player, "VIPStarted", DateTime.Now.Date.AddDays( days ).ToShortDateString() );
         }
 
         private bool checkPlayerForGroup(IPlayer player) => permission.UserHasGroup(player.Id, groupName);
 
         private bool checkTrialAllowed(IPlayer player) => permission.UserHasPermission(player.Id, "viptrial.allowed");
+
+       private bool checkTrialAdmin(IPlayer player) => permission.UserHasPermission(player.Id, "viptrial.admin");
 
         bool checkAlreadyUsed(IPlayer player)
         {
@@ -147,12 +238,12 @@ namespace Oxide.Plugins
             }
             return false;
         }
-        bool checkExpired(IPlayer player)
+        bool checkExpired(string Id)
         {
             DateTime usedate = DateTime.Now.Date.AddDays(-1);
             foreach (VIPDataSaveFile elm in storedData.VIPDataHash)
             {
-                if (elm.userId.Equals(player.Id))
+                if (elm.userId.Equals(Id))
                 {
                      usedate = Convert.ToDateTime(elm.now);
                 }
@@ -191,12 +282,24 @@ namespace Oxide.Plugins
             // English
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                { "VIPStillRunning", "Your VIP trial is still running!" },
+                { "VIPStillRunning", "Your VIP trial is still running. ({0} days left)" },
                 { "VIPAlreadyUsed", "You have already used your VIP trial." },
                 { "NoPermission", "You are not allowed to use this command!" },
                 { "VIPExpired", "Your VIP trial is expired." },
                 { "VIPEndsIn", "Your VIP trial ends in {0} days." },
-                { "VIPStarted", "Your VIP trial started, lasting till: {0}" }
+                { "VIPStarted", "Your VIP trial started, lasting till: {0}" },
+                { "ListActiveVIPStart", "Currently active VIP trials:" },
+                { "ListActiveVIPUser2", "{0} | {1} | {2}" },
+                { "RemoveVIP", "Removed {0} from the VIP trial system."},
+                { "RemoveVIPFail", "Player {0} could not be found in the VIP list."},
+                { "RemoveVIPTarget", "You have been removed from the VIP trial database." },
+                { "EndVIP", "The VIP trial of {0} is now over."},
+                { "EndVIPFail", "Failed to end the VIP trial of {0}"},
+                { "ENDVIPTarget", "You have been removed from the VIP trial."},
+                { "ENDVIPTargetNotInGroupAnymore", "The player {0} is not in the VIP trial group."},
+                { "CleanGroupGiveBackRemovedUser", "{0} | {1}"},
+                { "CleanGroupFirstFeed", "Removed users:"},
+                { "CleanGroupNobodyRemoved", "Nobody needs to be removed."}
             }, this);
         }
 
