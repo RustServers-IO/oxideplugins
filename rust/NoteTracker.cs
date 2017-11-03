@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoteTracker", "PsychoTea", "1.0.1")]
+    [Info("NoteTracker", "PsychoTea", "1.0.2")]
 
     class NoteTracker : RustPlugin
     {
@@ -45,11 +45,14 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>()
             {
                 { "NoPermission", "You don't have permission to use this." },
+                { "NoteInfo-Tp-Usage", "Incorrect usage! /noteinfo tp {{UID}}" },
                 { "NoNoteFound", "Please hold the note in the first slot of your hotbar :)" },
                 { "NoteInfoTitle", "Info for note {NoteID}:" },
                 { "NoteInfoItem", "[{TimeStamp}] {Name} ({UserID}): {Text}" },
                 { "NoteInfoNone", "No updates to show." },
-                { "ConsoleLogMessage", "[{TimeStamp}] {Name} ({UserID}): {Text}" }
+                { "CouldntFindNote", "The note #{UID} could not be found." },
+                { "TeleportedToNote", "You have been teleported to note #{UID}." },
+                { "ConsoleLogMessage", "[{TimeStamp}] {Name} ({UserID}) ID {UID}: {Text}" }
             }, this);
 
             ReadData();
@@ -103,6 +106,30 @@ namespace Oxide.Plugins
                 return;
             }
 
+            if (args != null && args.Length > 1 && args[0].ToLower() == "tp")
+            {
+                uint noteID;
+                if (!uint.TryParse(args[1], out noteID))
+                {
+                    SendReply(player, GetMessage("NoteInfo-Tp-Usage", player));
+                    return;
+                }
+
+                var items = UnityEngine.Object.FindObjectsOfType(typeof(StorageContainer))?.Cast<StorageContainer>().Select(x => x.inventory.FindItemByUID(noteID)).Where(x => x != null);
+                items.Concat(UnityEngine.Object.FindObjectsOfType(typeof(PlayerInventory))?.Cast<PlayerInventory>().Select(x => x.FindItemUID(noteID)).Where(x => x != null));
+                if (items.Count() == 0)
+                {
+                    SendReply(player, GetMessage("CouldntFindNote", player).Replace("{UID}", noteID.ToString()));
+                    return;
+                }
+                var item = items.First();
+
+                var container = item.GetRootContainer();
+                Teleport(player, container.dropPosition);
+                SendReply(player, GetMessage("TeleportedToNote", player).Replace("{UID}", noteID.ToString()));
+                return;
+            }
+
             var slotZero = player.inventory.containerBelt.GetSlot(0);
             
             if (slotZero == null || slotZero.info.displayName.english != "Note")
@@ -134,21 +161,49 @@ namespace Oxide.Plugins
             item.text = str.Truncate(1024, null);
             item.MarkDirty();
             NoteList.Add(new NoteInfo(arg.Player(), item.text, item.uid));
-            LogToConsole(arg.Player(), item.text);
+            LogToConsole(arg.Player(), item.text, item.uid);
         }
 
         #endregion
 
         #region Functions
 
-        void LogToConsole(BasePlayer player, string text)
+        void LogToConsole(BasePlayer player, string text, uint uid)
         {
             if (!config.LogToConsole) return;
             Puts(GetMessage("ConsoleLogMessage", null)
                     .Replace("{TimeStamp}", DateTime.UtcNow.ToString())
                     .Replace("{Name}", player.displayName)
                     .Replace("{UserID}", player.UserIDString)
+                    .Replace("{UID}", uid.ToString())
                     .Replace("{Text}", text.TrimEnd('\n')));
+        }
+
+        void Teleport(BasePlayer player, Vector3 position)
+        {
+            if (player.net?.connection != null)
+                player.ClientRPCPlayer(null, player, "StartLoading");
+            StartSleeping(player);
+            player.MovePosition(position);
+            if (player.net?.connection != null)
+                player.ClientRPCPlayer(null, player, "ForcePositionTo", position);
+            if (player.net?.connection != null)
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
+            player.UpdateNetworkGroup();
+            player.SendNetworkUpdateImmediate(false);
+            if (player.net?.connection == null) return;
+            try { player.ClearEntityQueue(null); } catch { }
+            player.SendFullSnapshot();
+        }
+
+        void StartSleeping(BasePlayer player)
+        {
+            if (player.IsSleeping())
+                return;
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Sleeping, true);
+            if (!BasePlayer.sleepingPlayerList.Contains(player))
+                BasePlayer.sleepingPlayerList.Add(player);
+            player.CancelInvoke("InventoryUpdate");
         }
 
         #endregion
