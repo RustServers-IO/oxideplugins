@@ -7,7 +7,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("MagicLoot", "Norn / Kunazai", "0.1.23", ResourceId = 2212)]
+    [Info("MagicLoot", "Norn / Kunazai", "0.1.24", ResourceId = 2212)]
     [Description("Basic loot multiplier.")]
     class MagicLoot : RustPlugin
     {
@@ -359,10 +359,14 @@ namespace Oxide.Plugins
 		
 		private void SpawnItem(LootContainer container, int itemsToSpawn = 1)
 		{
-			for (int i = 0; i < itemsToSpawn; i++)
+			if (container.lootDefinition != null)
 			{
-				container.lootDefinition.SpawnIntoContainer(container.inventory);
+				for (int i = 0; i < itemsToSpawn; i++) 
+				{
+					container.lootDefinition.SpawnIntoContainer(container.inventory);
+				}
 			}
+			
 			if (container.SpawnType == LootContainer.spawnType.ROADSIDE || container.SpawnType == LootContainer.spawnType.TOWN)
 			{
 				foreach (Item item in container.inventory.itemList)
