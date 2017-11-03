@@ -15,10 +15,7 @@ using Facepunch;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.2.6", ResourceId = 2580)]
-// melee farming prevention mvoed to peacekeepr mode only.
-//cull option covers default murderers
-//murderers wont attack scientists
+    [Info("BotSpawn", "Steenamaroo", "1.2.7", ResourceId = 2580)]
 
     [Description("Spawn Bots with kits at monuments.")]
     
@@ -116,9 +113,34 @@ namespace Oxide.Plugins
                     return false;
                     return true;
         }
-        
+    
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
+            if (entity as NPCPlayer != null)
+            {
+                NPCPlayerApex botapex = entity as NPCPlayerApex;
+                
+                if (TempRecord.NPCPlayers.ContainsKey(botapex))
+                {
+                    if (TempRecord.NPCPlayers[botapex].healthSurplus > 100)
+                    {
+                    TempRecord.NPCPlayers[botapex].healthSurplus = TempRecord.NPCPlayers[botapex].healthSurplus - (info.damageTypes.Total() / 2);
+                    info.damageTypes.ScaleAll(0);
+                    }
+                    
+                    NextTick(() =>
+                    {
+                        if (botapex == null)return;
+                        if (info.damageTypes.Total() > entity.health && !configData.Options.Bots_Drop_Weapons)
+                        {
+                            botapex.svActiveItemID = 0u;
+                            botapex.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+                            return;
+                        }
+                    });
+                }
+            }
+                            
             //bool chute;                       //commented awaiting changes in Rust.
             //NPCPlayerApex botapex;
             //if (entity is NPCPlayer)
@@ -224,17 +246,6 @@ namespace Oxide.Plugins
             return Facepunch.RandomUsernames.Get((int)(v % 2147483647uL));
         }
 
-		void OnPlayerDie(BasePlayer player, HitInfo info) 
-		{
-            if (!configData.Options.Bots_Drop_Weapons)
-            {
-                if (player == null || player.svActiveItemID == 0u)
-                    return;
-                player.svActiveItemID = 0u;
-                player.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-            }
-		}
-		
 		BaseEntity InstantiateSci(Vector3 position, Quaternion rotation, bool murd) // Spawn population spam fix - credit Fuji
         {
             string prefabname = "assets/prefabs/npc/scientist/scientist.prefab";
@@ -289,8 +300,10 @@ namespace Oxide.Plugins
                 damage = zone.Bot_Damage,
                 botID = entity.userID,
                 bot = entity,
+                healthSurplus = zone.BotHealth,
                 monumentName = name,
                 });
+
             
                 no_of_AI++;
                 
@@ -299,7 +312,7 @@ namespace Oxide.Plugins
                     entity.inventory.Strip(); 
                     Kits?.Call($"GiveKit", entity, zone.Kit);
                 }
-                entity.health = zone.BotHealth;
+                
                 if (zone.BotName == "randomname")
                 {
                 entity.displayName = Get(entity.userID);
@@ -308,7 +321,6 @@ namespace Oxide.Plugins
                 {
                 entity.displayName = zone.BotName;
                 }
-                    
                 SetFiringRange(botapex, zone.Bot_Firing_Range);
                 //if (zone.Chute)                   //commented awaiting changes in Rust.
                 //{
@@ -342,14 +354,19 @@ namespace Oxide.Plugins
         void SetFiringRange(NPCPlayerApex botapex, int range)
         {
             if (botapex == null)
-            {       
+            {        
                 TempRecord.NPCPlayers.Remove(botapex);
                 return;
             }                
             AttackEntity heldEntity = botapex.GetHeldEntity() as AttackEntity;
             if (heldEntity != null)
             {
-            heldEntity.effectiveRange = range;
+                    var heldMelee = heldEntity as BaseMelee;
+                    var heldTorchWeapon = heldEntity as TorchWeapon;
+                    if (heldMelee != null || heldTorchWeapon != null)
+                       heldEntity.effectiveRange = 1; 
+                    else
+                        heldEntity.effectiveRange = range;
             return;
             }
             else
@@ -1322,6 +1339,7 @@ namespace Oxide.Plugins
             public ulong botID;
             public BasePlayer bot;
             public string monumentName;
+            public float healthSurplus;
         }
         class CustomSettings
         {

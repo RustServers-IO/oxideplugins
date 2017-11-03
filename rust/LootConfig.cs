@@ -7,17 +7,20 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using Newtonsoft.Json;
+
 using Oxide.Core;
+
 using Rust;
+
 using UnityEngine;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.23", ResourceId = 861)]
+    [Info("LootConfig", "Nogrod", "1.0.24")]
     internal class LootConfig : RustPlugin
     {
-        private const int VersionConfig = 11;
+        private const int VersionConfig = 12;
         private readonly FieldInfo ParentSpawnGroupField = typeof (SpawnPointInstance).GetField("parentSpawnGroup", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnGroupsField = typeof (SpawnHandler).GetField("SpawnGroups", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnPointsField = typeof(SpawnGroup).GetField("spawnPoints", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -118,7 +121,7 @@ namespace Oxide.Plugins
                 PrintLootSpawn(unwrap.revealList, 1, sb, 1);
             }
             LogToFile("loot", sb.ToString(), this);
-            Puts("Stats written to '{0}'", "oxide/logs");
+            Puts("Stats written to 'oxide/logs'");
         }
 
         private bool CreateDefaultConfig()
@@ -203,6 +206,7 @@ namespace Oxide.Plugins
                         new LootSpawnEntryConverter(),
                         new LootContainerConverter(),
                         new LootSpawnConverter(),
+                        new LootSpawnSlotConverter(),
                         new ItemModRevealConverter(),
                         new ItemModUnwrapConverter()
                     }
@@ -417,6 +421,21 @@ namespace Oxide.Plugins
             container.lootDefinition = GetLootSpawn(containerConfig.LootDefinition, lootSpawns);
             container.inventorySlots = containerConfig.InventorySlots;
             container.SpawnType = containerConfig.SpawnType;
+            container.LootSpawnSlots = new LootContainer.LootSpawnSlot[containerConfig.LootSpawnSlots.Length];
+            for (var i = 0; i < containerConfig.LootSpawnSlots.Length; i++)
+            {
+                var lootSpawnSlot = containerConfig.LootSpawnSlots[i];
+                container.LootSpawnSlots[i] = new LootContainer.LootSpawnSlot
+                {
+                    definition = GetLootSpawn(lootSpawnSlot.Definition, lootSpawns),
+                    numberToSpawn = lootSpawnSlot.NumberToSpawn,
+                    probability = lootSpawnSlot.Probability
+                };
+            }
+            foreach (var lootSpawnSlot in containerConfig.LootSpawnSlots)
+            {
+
+            }
             if (!container.gameObject.activeInHierarchy || container.inventory == null) return;
             container.inventory.capacity = containerConfig.InventorySlots;
             container.CancelInvoke("SpawnLoot");
@@ -741,6 +760,8 @@ namespace Oxide.Plugins
                 writer.WriteValue(container.SpawnType.ToString());
                 writer.WritePropertyName("InventorySlots");
                 writer.WriteValue(container.inventorySlots);
+                writer.WritePropertyName("LootSpawnSlots");
+                serializer.Serialize(writer, container.LootSpawnSlots);
                 writer.WriteEndObject();
             }
 
@@ -768,6 +789,7 @@ namespace Oxide.Plugins
             public float MaxSecondsBetweenRefresh { get; set; } = 7200f;
             public LootContainer.spawnType SpawnType { get; set; }
             public int InventorySlots { get; set; }
+            public LootSpawnSlotData[] LootSpawnSlots { get; set; }
         }
 
         #endregion
@@ -808,6 +830,49 @@ namespace Oxide.Plugins
         {
             public ItemAmountRangedData[] Items { get; set; } = new ItemAmountRangedData[0];
             public LootSpawnEntryData[] SubSpawn { get; set; } = new LootSpawnEntryData[0];
+        }
+
+        #endregion
+
+        #region Nested type: LootSpawnSlotConverter
+
+        private class LootSpawnSlotConverter : JsonConverter
+        {
+            public override bool CanRead => false;
+
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                var lootSpawnSlot = (LootContainer.LootSpawnSlot)value;
+                writer.WriteStartObject();
+                writer.WritePropertyName("Definition");
+                serializer.Serialize(writer, lootSpawnSlot.definition.name);
+                writer.WritePropertyName("NumberToSpawn");
+                serializer.Serialize(writer, lootSpawnSlot.numberToSpawn);
+                writer.WritePropertyName("Probability");
+                serializer.Serialize(writer, lootSpawnSlot.probability);
+                writer.WriteEndObject();
+            }
+
+            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+            {
+                return null;
+            }
+
+            public override bool CanConvert(Type objectType)
+            {
+                return typeof(LootContainer.LootSpawnSlot).IsAssignableFrom(objectType);
+            }
+        }
+
+        #endregion
+
+        #region Nested type: LootSpawnSlotData
+
+        public class LootSpawnSlotData
+        {
+            public string Definition { get; set; }
+            public int NumberToSpawn { get; set; }
+            public float Probability { get; set; }
         }
 
         #endregion

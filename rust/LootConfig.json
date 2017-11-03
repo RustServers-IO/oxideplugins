@@ -2,7 +2,7 @@
     "name": "LootConfig",
     "description": "Allows you to adjust the server's loot list",
     "author": "Nogrod",
-    "version": "1.0.23",
+    "version": "1.0.24",
     "configuration": true,
     "suggest": {
         "SpawnConfig": "*"

@@ -2,7 +2,7 @@
     "name": "BotSpawn",
     "description": "Spawns new AI bots around monuments, supply drops, and custom locations.",
     "author": "=BBUK= Steenamaroo",
-    "version": "1.2.6",
+    "version": "1.2.7",
     "configuration": true,
     "suggest": {
         "Kits": "*"
