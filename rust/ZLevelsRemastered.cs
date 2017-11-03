@@ -12,9 +12,10 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.0", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.1", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
+	
     class ZLevelsRemastered : RustPlugin
     {
 		#region Variables
@@ -590,7 +591,7 @@ namespace Oxide.Plugins
 			pointsPerHitCurrent = pointsPerHitAtNight;
 			resourceMultipliersCurrent = resourceMultipliersAtNight;
 			if (broadcastEnabledBonus)
-				rust.BroadcastChat(pluginPrefix + " "+ msg("NightBonusOn"));			
+				Server.Broadcast(pluginPrefix + " "+ msg("NightBonusOn"));			
 			if (logEnabledBonusConsole)
 				Puts("Nightbonus points enabled");
 		}
@@ -602,7 +603,7 @@ namespace Oxide.Plugins
 			pointsPerHitCurrent = pointsPerHit;
 			resourceMultipliersCurrent = resourceMultipliers;
 			if (broadcastEnabledBonus)
-				rust.BroadcastChat(pluginPrefix + " "+ msg("NightBonusOff"));
+				Server.Broadcast(pluginPrefix + " "+ msg("NightBonusOff"));
 			if (logEnabledBonusConsole)
 				Puts("Nightbonus points disabled");
 		}
@@ -1051,7 +1052,7 @@ namespace Oxide.Plugins
 			text += "\nTime alive: " + ReadableTimeSpan(timeAlive);
 			if (playerPrefs.PlayerInfo[player.userID].XPM.ToString() != "100")
 				text += "XP rates for you are " + playerPrefs.PlayerInfo[player.userID].XPM + "%";
-			rust.SendChatMessage(player, text);
+			player.ChatMessage(text);
         }
 
 		[ChatCommand("statinfo")]
@@ -1090,7 +1091,7 @@ namespace Oxide.Plugins
 			messagesText += "XP gain: <color=" + colors[Skills.SKINNING] + ">You get " + craftingDetails["XPPerTimeSpent"] + " XP per " + craftingDetails["TimeSpent"] + "s spent crafting.</color>\n";
 			messagesText += "Bonus: <color=" + colors[Skills.SKINNING] + ">Crafting time is decreased by " + craftingDetails["PercentFasterPerLevel"] + "% per every level.</color>\n";
 
-			PrintToChat(player, messagesText);
+			player.ChatMessage(messagesText);
         }
 
         [ChatCommand("statsui")]
@@ -1400,7 +1401,7 @@ namespace Oxide.Plugins
 
         double getGathMult(long skillLevel, string skill)
         {
-			return Convert.ToDouble(defaultMultipliers[skill]) + Convert.ToDouble(resourceMultipliers[skill]) * 0.1 * (skillLevel - 1);
+			return Convert.ToDouble(defaultMultipliers[skill]) + Convert.ToDouble(resourceMultipliersCurrent[skill]) * 0.1 * (skillLevel - 1);
         }
 
         bool IsSkillDisabled(string skill)
