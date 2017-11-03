@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.4.4", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.4.5", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -169,26 +169,26 @@ namespace Oxide.Plugins
 			}
 			if(entity is SupplyDrop) return;
 			if(entity is LootableCorpse)
-			{			
+			{		
+				if(IsFriend((entity as LootableCorpse).playerSteamID, player.userID)) return;
 				if(UsePermission && !permission.UserHasPermission((entity as LootableCorpse).playerSteamID.ToString(), CorpsePerm)) return;
 				if((entity as LootableCorpse).playerSteamID < 76561197960265728L || CanLootCorpse || player.userID == (entity as LootableCorpse).playerSteamID) return;
-				if(IsFriend((entity as LootableCorpse).playerSteamID.ToString(), player.userID.ToString())) return;
 				StopLooting(player, "OnTryLootCorpse");
 				return;
 			}
 			if(entity is BasePlayer)
 			{
+				if(IsFriend((entity as BasePlayer).userID, player.userID)) return;
 				if(UsePermission && !permission.UserHasPermission((entity as BasePlayer).userID.ToString(), PlayerPerm)) return;
 				if(player.userID == (entity as BasePlayer).userID || CanLootPlayer) return;
-				if(IsFriend((entity as BasePlayer).userID.ToString(), player.userID.ToString())) return;
 				StopLooting(player, "OnTryLootPlayer");
 				return;
 			}	
 			if((entity is DroppedItemContainer) && entity.name.Contains("item_drop_backpack"))
 			{
+				if(IsFriend((entity as DroppedItemContainer).playerSteamID, player.userID)) return;
 				if(UsePermission && !permission.UserHasPermission((entity as DroppedItemContainer).playerSteamID.ToString(), BackpackPerm)) return;
 				if((entity as DroppedItemContainer).playerSteamID < 76561197960265728L || CanLootBackpack || player.userID == (entity as DroppedItemContainer).playerSteamID) return;
-				if(IsFriend((entity as DroppedItemContainer).playerSteamID.ToString(), player.userID.ToString())) return;
 				StopLooting(player, "OnTryLootBackpack");	
 				return;
 			}
@@ -212,7 +212,7 @@ namespace Oxide.Plugins
 					}	
 				}
 			}
-			if(IsFriend(entity.OwnerID.ToString(), player.userID.ToString())) return;			
+			if(IsFriend(entity.OwnerID, player.userID)) return;			
 			if(UsePermission && !permission.UserHasPermission(entity.OwnerID.ToString(), StoragePerm)) return;		
 			if(UseExcludeEntities)
 			{
@@ -259,11 +259,11 @@ namespace Oxide.Plugins
 			}
 			return false;
 		}		
-		bool IsFriend(string playerid, string friend)
+		bool IsFriend(ulong playerid, ulong friend)
 		{
 			if (UseFriendsAPI && Friends != null)	
 			{
-				var fr = Friends.CallHook("AreFriendsS", playerid, friend);
+				var fr = Friends.CallHook("AreFriends", playerid, friend);
                 if (fr != null && (bool)fr) return true;
 			}
 			return false;
