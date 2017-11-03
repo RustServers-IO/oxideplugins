@@ -2,7 +2,7 @@
     "name": "SkullCrusher",
     "description": "Add some extra features to the crushing of human skulls",
     "author": "redBDGR",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "configuration": true,
     "suggest": {
         "Economics": "*",

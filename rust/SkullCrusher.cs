@@ -1,42 +1,41 @@
 ﻿using System;
+using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Configuration;
-using System.Collections.Generic;
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("SkullCrusher", "redBDGR", "1.0.4", ResourceId = 2412)]
+    [Info("SkullCrusher", "redBDGR", "1.0.5", ResourceId = 2412)]
     [Description("Add some extra features to the crushing of human skulls")]
-
     class SkullCrusher : RustPlugin
     {
-        [PluginReference] Plugin Economics;
-        [PluginReference] Plugin ServerRewards;
+        private Dictionary<string, int> cacheDic = new Dictionary<string, int>();
+
+        private bool Changed;
+        [PluginReference] private Plugin Economics;
+
+        private bool giveItemsOnCrush = true;
+        private double moneyPerSkullCrush = 20.0;
+        private bool normalCrusherMessage = true;
+        private bool nullCrusherMessage = true;
+        private bool ownCrusherMessage = true;
+        private int RPPerSkullCrush = 20;
+        private bool sendNotificaitionMessage = true;
+        [PluginReference] private Plugin ServerRewards;
 
         private DynamicConfigFile SkullCrusherData;
-        StoredData storedData;
-        class StoredData { public Dictionary<string, int> PlayerInformation = new Dictionary<string, int>(); }
+        private StoredData storedData;
+        private bool useEconomy;
+        private bool useServerRewards;
 
-        bool Changed = false;
-
-        bool giveItemsOnCrush = true;
-        bool useEconomy = false;
-        bool useServerRewards = false;
-        int RPPerSkullCrush = 20;
-        double moneyPerSkullCrush = 20.0;
-        bool sendNotificaitionMessage = true;
-        bool nullCrusherMessage = true;
-        bool ownCrusherMessage = true;
-        bool normalCrusherMessage = true;
-
-        void SaveData()
+        private void SaveData()
         {
             storedData.PlayerInformation = cacheDic;
             SkullCrusherData.WriteObject(storedData);
         }
 
-        void LoadData()
+        private void LoadData()
         {
             try
             {
@@ -50,14 +49,27 @@ namespace Oxide.Plugins
             }
         }
 
-        Dictionary<string, int> cacheDic = new Dictionary<string, int>();
+        private void OnServerInitialized()
+        {
+            LoadData();
+        }
 
-        void OnServerInitialized() => LoadData();
-        void Unload() => SaveData();
-        void OnServerSave() => SaveData();
-        void Init() => LoadVariables();
+        private void Unload()
+        {
+            SaveData();
+        }
 
-        void Loaded()
+        private void OnServerSave()
+        {
+            SaveData();
+        }
+
+        private void Init()
+        {
+            LoadVariables();
+        }
+
+        private void Loaded()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -67,7 +79,7 @@ namespace Oxide.Plugins
                 ["Default Crush Message"] = "{0}'s skull was crushed by {1}",
                 ["Skulls chat command reply"] = "You have crushed a total of {0} skulls",
                 ["Economy Notice"] = "You received ${0} for crushing an enemies skull!",
-                ["ServerRewards Notice"] = "You received {0} RP for crushing an enemies skull!",
+                ["ServerRewards Notice"] = "You received {0} RP for crushing an enemies skull!"
             }, this);
 
             SkullCrusherData = Interface.Oxide.DataFileSystem.GetFile("SkullCrusher");
@@ -92,7 +104,7 @@ namespace Oxide.Plugins
             LoadVariables();
         }
 
-        void LoadVariables()
+        private void LoadVariables()
         {
             giveItemsOnCrush = Convert.ToBoolean(GetConfig("Settings", "Give items on crush", true));
 
@@ -111,70 +123,67 @@ namespace Oxide.Plugins
             Changed = false;
         }
 
-        object OnItemAction(Item item, string action)
+        private object OnItemAction(Item item, string action)
         {
             if (action != "crush") return null;
             if (item.info.shortname != "skull.human") return null;
             string skullName = null;
             if (item.name != null)
                 skullName = item.name.Substring(10, item.name.Length - 11);
-            if (skullName == null || skullName == "") return DecideReturn(item);
+            if (string.IsNullOrEmpty(skullName)) return DecideReturn(item);
 
             if (item.GetOwnerPlayer() == null)
             {
                 if (nullCrusherMessage)
-                    rust.BroadcastChat(string.Format(msg("Null Crusher"), skullName));
+                    rust.BroadcastChat(null, string.Format(msg("Null Crusher"), skullName));
                 return DecideReturn(item);
             }
-            BasePlayer ownerPlayer = item.GetOwnerPlayer();
+            var ownerPlayer = item.GetOwnerPlayer();
             if (ownerPlayer.displayName == skullName)
             {
                 if (ownCrusherMessage)
-                    rust.BroadcastChat(string.Format(msg("Crushed own skull"), ownerPlayer.displayName));
+                    rust.BroadcastChat(null, string.Format(msg("Crushed own skull"), ownerPlayer.displayName));
                 return DecideReturn(item);
             }
-            else
-            {
-                if (!cacheDic.ContainsKey(ownerPlayer.UserIDString))
-                    cacheDic.Add(ownerPlayer.UserIDString, 0);
-                cacheDic[ownerPlayer.UserIDString]++;
-                if (useEconomy)
-                    if (Economics)
-                    {
-                        if (sendNotificaitionMessage)
-                            ownerPlayer.ChatMessage(string.Format(msg("Economy Notice", ownerPlayer.UserIDString), moneyPerSkullCrush));
-                        Economics.CallHook("Deposit", ownerPlayer.userID, moneyPerSkullCrush);
-                    }
-                if (useServerRewards)
-                    if (ServerRewards)
-                    {
-                        if (sendNotificaitionMessage)
-                            ownerPlayer.ChatMessage(string.Format(msg("ServerRewards Notice", ownerPlayer.UserIDString), RPPerSkullCrush));
-                        ServerRewards.Call("AddPoints", new object[] { ownerPlayer.userID, RPPerSkullCrush });
-                    }
-                if (normalCrusherMessage)
-                    rust.BroadcastChat(string.Format(msg("Default Crush Message"), skullName, ownerPlayer.displayName));
-                return DecideReturn(item);
-            }
+            if (!cacheDic.ContainsKey(ownerPlayer.UserIDString))
+                cacheDic.Add(ownerPlayer.UserIDString, 0);
+            cacheDic[ownerPlayer.UserIDString]++;
+            if (useEconomy)
+                if (Economics)
+                {
+                    if (sendNotificaitionMessage)
+                        ownerPlayer.ChatMessage(string.Format(msg("Economy Notice", ownerPlayer.UserIDString), moneyPerSkullCrush));
+                    Economics.CallHook("Deposit", ownerPlayer.userID, moneyPerSkullCrush);
+                }
+            if (useServerRewards)
+                if (ServerRewards)
+                {
+                    if (sendNotificaitionMessage)
+                        ownerPlayer.ChatMessage(string.Format(msg("ServerRewards Notice", ownerPlayer.UserIDString), RPPerSkullCrush));
+                    ServerRewards.Call("AddPoints", ownerPlayer.userID, RPPerSkullCrush);
+                }
+            if (normalCrusherMessage)
+                rust.BroadcastChat(null, string.Format(msg("Default Crush Message"), skullName, ownerPlayer.displayName));
+            return DecideReturn(item);
         }
 
-        object DecideReturn(Item item)
+        private object DecideReturn(Item item)
         {
             if (giveItemsOnCrush)
                 return null;
-            item.UseItem(1);
+            item.UseItem();
             return true;
         }
 
         [ChatCommand("skulls")]
-        void skullsCMD(BasePlayer player, string command, string[] args)
+        private void skullsCMD(BasePlayer player, string command, string[] args)
         {
             if (!cacheDic.ContainsKey(player.UserIDString))
                 cacheDic.Add(player.UserIDString, 0);
-            player.ChatMessage(string.Format(msg("Skulls chat command reply", player.UserIDString), cacheDic[player.UserIDString].ToString()));
+            player.ChatMessage(string.Format(msg("Skulls chat command reply", player.UserIDString), cacheDic[player.UserIDString]));
         }
 
-        object GetConfig(string menu, string datavalue, object defaultValue)
+        private object GetConfig(string menu, string datavalue, object defaultValue)
         {
             var data = Config[menu] as Dictionary<string, object>;
             if (data == null)
@@ -193,6 +202,14 @@ namespace Oxide.Plugins
             return value;
         }
 
-        string msg(string key, string id = null) => lang.GetMessage(key, this, id);
+        private string msg(string key, string id = null)
+        {
+            return lang.GetMessage(key, this, id);
+        }
+
+        private class StoredData
+        {
+            public Dictionary<string, int> PlayerInformation = new Dictionary<string, int>();
+        }
     }
 }
