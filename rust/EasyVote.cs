@@ -15,7 +15,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "2.0.0", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "2.0.1", ResourceId = 2102)]
     [Description("Simple and smooth voting start by activating one scirpt.")]
     class EasyVote : RustPlugin
     {
@@ -183,7 +183,6 @@ namespace Oxide.Plugins
         [ChatCommand("vote")]
         void cmdVote(BasePlayer player, string command, string[] args)
         {
-            RewardHandler(player, "Testing");
             if (!hasPermission(player, permUse))
                 return;
 
@@ -600,11 +599,11 @@ namespace Oxide.Plugins
                     ["oxiderevokegroup"] = "oxide.usergroup remove {playerid} {value}",
                     ["tempaddgroup"] = "addgroup {playerid} {value} {value2}",
                     ["tempgrantperm"] = "grantperm {playerid} {value} {value2}",
-                    ["zlvl-c"] = "zlvl {playername} C +{value}",
-                    ["zlvl-wc"] = "zlvl {playername} WC +{value}",
-                    ["zlvl-m"] = "zlvl {playername} M +{value}",
-                    ["zlvl-s"] = "zlvl {playername} S +{value}",
-                    ["zlvl-*"] = "zlvl {playername} * +{value}",
+                    ["zlvl-c"] = "zl.lvl {playername} C +{value}",
+                    ["zlvl-wc"] = "zl.lvl {playername} WC +{value}",
+                    ["zlvl-m"] = "zl.lvl {playername} M +{value}",
+                    ["zlvl-s"] = "zl.lvl {playername} S +{value}",
+                    ["zlvl-*"] = "zl.lvl {playername} * +{value}",
                 }
             };
             return defaultConfig;
