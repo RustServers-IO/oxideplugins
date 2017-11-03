@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.1", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.2", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -497,7 +497,7 @@ namespace Oxide.Plugins
 					UIMessage(player, msg);
 				}
 			else
-				rust.BroadcastChat(msg);
+				Server.Broadcast(msg);
 		}
 
 		void DoSmoothRestart(int timer, bool unitMinutes = true)
@@ -519,7 +519,7 @@ namespace Oxide.Plugins
 					UIMessage(player, msg);
 				}
 			else
-				rust.BroadcastChat(msg);
+				Server.Broadcast(msg);
 		}
 
 		class UIColor
