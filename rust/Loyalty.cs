@@ -1,12 +1,12 @@
+using Oxide.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Loyalty", "Bamabo", "1.3.3", ResourceId = 1978)]
+    [Info("Loyalty", "Bamabo", "1.3.4", ResourceId = 1978)]
     [Description("Reward your players for play time with new permissions/usergroups")]
     public class Loyalty : RustPlugin
     {
@@ -439,7 +439,6 @@ namespace Oxide.Plugins
                         permission.RevokeUserPermission(player.id.ToString(), reward.permission.Replace('-', ' ').Trim());
                     else
                         permission.GrantUserPermission(player.id.ToString(), reward.permission.Replace('-', ' ').Trim(), null);
-
                 }
                 else
                 {
@@ -468,10 +467,8 @@ namespace Oxide.Plugins
                 }
             }
 
-
             data.players[player.id].loyalty = newLoy;
             SendMessage(sender, "successSet", player.name, newLoy);
-
         }
         void CmdLookup(BasePlayer sender, string player)
         {
@@ -578,7 +575,7 @@ namespace Oxide.Plugins
             {
                 message = String.Format(lang.GetMessage(messageID, this), Config["colorHighlight"].ToString());
             }
-            rust.SendChatMessage(receiver, "<color=" + Config["colorText"] + ">" + message + "</color>", null, Config["serverIconID"].ToString());
+            rust.SendChatMessage(receiver, null, "<color=" + Config["colorText"] + ">" + message + "</color>", Config["serverIconID"].ToString());
         }
         void SendErrorMessage(BasePlayer receiver, string messageID, params object[] args)
         {
@@ -595,7 +592,7 @@ namespace Oxide.Plugins
             {
                 message = String.Format(lang.GetMessage(messageID, this), Config["colorHighlight"].ToString());
             }
-            rust.SendChatMessage(receiver, "<color=" + Config["colorError"] + ">" + message + "</color>", null, Config["serverIconID"].ToString());
+            rust.SendChatMessage(receiver, null, "<color=" + Config["colorError"] + ">" + message + "</color>", Config["serverIconID"].ToString());
         }
         void SendMessageFromID(BasePlayer receiver, string messageID, ulong senderID, params object[] args)
         {
@@ -612,7 +609,7 @@ namespace Oxide.Plugins
             {
                 message = String.Format(lang.GetMessage(messageID, this), Config["colorHighlight"].ToString());
             }
-            rust.SendChatMessage(receiver, "<color=" + Config["colorText"] + ">" + message + "</color>", null, senderID.ToString());
+            rust.SendChatMessage(receiver, null, "<color=" + Config["colorText"] + ">" + message + "</color>", senderID.ToString());
         }
         string FormatMessage(string messageID, params object[] args)
         {
