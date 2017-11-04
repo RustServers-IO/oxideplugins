@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("Death Notes", "LaserHydra", "5.2.18", ResourceId = 819)]
+    [Info("Death Notes", "LaserHydra", "5.2.19", ResourceId = 819)]
     [Description("Broadcast deaths with many details")]
     class DeathNotes : RustPlugin
     {
@@ -1237,9 +1237,7 @@ namespace Oxide.Plugins
             if (data.victim.type == VictimType.Player && data.victim.entity?.ToPlayer() != null && data.victim.entity.ToPlayer().IsSleeping())
             {
                 if (SleepingDeaths.Contains(data.reason))
-                {
                     reason = data.reason + " Sleeping";
-                }
                 else
                     reason = data.reason.ToString();
             }
@@ -1445,7 +1443,10 @@ namespace Oxide.Plugins
 
         #region Messages
 
-        void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg, uid?.ToString() ?? "0");
+        void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null)
+        {
+            rust.SendChatMessage(player, prefix == null ? msg : msg, "<color=#C4FF00>" + prefix + "</color>", uid?.ToString() ?? "0");
+        }
 
         void PopupMessage(string message) => PopupNotifications?.Call("CreatePopupNotification", message);
 
