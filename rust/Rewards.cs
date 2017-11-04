@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace Oxide.Plugins
 {
-    [Info("Rewards", "Tarek", "1.3.10", ResourceId = 1961)]
+    [Info("Rewards", "Tarek", "1.3.11", ResourceId = 1961)]
     [Description("Reward players for activities using Economic and/or ServerRewards")]
     class Rewards : RustPlugin
     {
@@ -384,7 +384,7 @@ namespace Oxide.Plugins
                             {
                                 HappyHourActive = true;
                                 Puts("Happy hour started. Ending at " + rewardrates.HappyHour_EndHour);
-                                BroadcastMessage(Lang("Prefix"), Lang("HappyHourStart"));
+                                BroadcastMessage(Lang("HappyHourStart"), Lang("Prefix"));
                             }
                         }
                         else
@@ -393,7 +393,7 @@ namespace Oxide.Plugins
                             {
                                 HappyHourActive = false;
                                 Puts("Happy hour ended");
-                                BroadcastMessage(Lang("Prefix"), Lang("HappyHourEnd"));
+                                BroadcastMessage(Lang("HappyHourEnd"), Lang("Prefix"));
                             }
                         }
                     }
@@ -404,7 +404,6 @@ namespace Oxide.Plugins
         }
         bool checktime(float gtime, double cfgtime)
         {
-
             return false;
         }
         void OnPlayerInit(BasePlayer player)
@@ -421,8 +420,8 @@ namespace Oxide.Plugins
         }
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
         bool HasPerm(BasePlayer p, string pe) => permission.UserHasPermission(p.userID.ToString(), pe);
-        void SendChatMessage(BasePlayer player, string prefix, string msg = null, object uid = null) => rust.SendChatMessage(player, msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg, null, uid?.ToString() ?? "0");
-        void BroadcastMessage(string prefix, string msg = null, object uid = null) => rust.BroadcastChat(msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg, null);
+        void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : msg, "<color=#C4FF00>" + prefix + "</color>: ", uid?.ToString() ?? "0");
+        void BroadcastMessage(string msg, string prefix = null, object uid = null) => rust.BroadcastChat(prefix == null ? msg : msg, "<color=#C4FF00>" + prefix + "</color>: ");
         void OnKillNPC(BasePlayer victim, HitInfo info)
         {
 
@@ -502,14 +501,14 @@ namespace Oxide.Plugins
                     ServerRewards?.Call("AddPoints", new object[] { player.userID, amount });
                 if (!isWelcomeReward)
                 {
-                    SendChatMessage(player, Lang("Prefix"), reason == null ? Lang("ActivityReward", player.UserIDString, amount) : Lang("KillReward", player.UserIDString, amount, reason));
+                    SendChatMessage(player, reason == null ? Lang("ActivityReward", player.UserIDString, amount) : Lang("KillReward", player.UserIDString, amount, reason), Lang("Prefix"));
                     LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason), this);
                     if (options.PrintToConsole)
                         Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason));
                 }
                 else
                 {
-                    SendChatMessage(player, Lang("Prefix"), Lang("WelcomeReward", player.UserIDString, amount));
+                    SendChatMessage(player, Lang("WelcomeReward", player.UserIDString, amount), Lang("Prefix"));
                     LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " as a welcome reward", this);
                     if (options.PrintToConsole)
                         Puts(player.displayName + " got " + amount + " as a welcome reward");
@@ -542,7 +541,7 @@ namespace Oxide.Plugins
                         {
                             if (!(bool)Economics?.Call("Transfer", victim.userID, player.userID, rewardrates.human * multiplier))
                             {
-                                SendChatMessage(player, Lang("Prefix"), Lang("VictimNoMoney", player.UserIDString, victim.displayName));
+                                SendChatMessage(player,  Lang("VictimNoMoney", player.UserIDString, victim.displayName), Lang("Prefix"));
                                 success = false;
                             }
                         }
@@ -558,7 +557,7 @@ namespace Oxide.Plugins
                     }
                     if (success) //Send message if transaction was successful
                     {
-                        SendChatMessage(player, Lang("Prefix"), Lang("KillReward", player.UserIDString, rewardrates.human * multiplier, victim.displayName));
+                        SendChatMessage(player, Lang("KillReward", player.UserIDString, rewardrates.human * multiplier, victim.displayName), Lang("Prefix"));
                         LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName, this);
                         if (options.PrintToConsole)
                             Puts(player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName);
@@ -612,16 +611,16 @@ namespace Oxide.Plugins
                     {
                         FixConfig();
                     }
-                    SendChatMessage(player, Lang("Prefix"), Lang("RewardSet", player.UserIDString));
+                    SendChatMessage(player, Lang("RewardSet", player.UserIDString), Lang("Prefix"));
                 }
-                catch { SendChatMessage(player, Lang("Prefix"), Lang("SetRewards", player.UserIDString) + " 'human', 'horse', 'wolf', 'chicken', 'bear', 'boar', 'stag', 'helicopter', 'autoturret', 'ActivityReward', 'ActivityRewardRate_minutes', 'WelcomeMoney'"); }
+                catch { SendChatMessage(player, Lang("SetRewards", player.UserIDString) + " 'human', 'horse', 'wolf', 'chicken', 'bear', 'boar', 'stag', 'helicopter', 'autoturret', 'ActivityReward', 'ActivityRewardRate_minutes', 'WelcomeMoney'", Lang("Prefix")); }
             }
         }
         [ChatCommand("showrewards")]
         private void showrewardsCommand(BasePlayer player, string command, string[] args)
         {
             if (HasPerm(player, "rewards.showrewards"))
-                SendChatMessage(player, Lang("Prefix"), String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, autoturret = {8} Activity Reward Rate (minutes) = {9}, Activity Reward = {10}, WelcomeMoney = {11}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney));
+                SendChatMessage(player, String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, autoturret = {8} Activity Reward Rate (minutes) = {9}, Activity Reward = {10}, WelcomeMoney = {11}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney), Lang("Prefix"));
         }
         class StoredData
         {
