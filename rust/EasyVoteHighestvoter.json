@@ -1,0 +1,19 @@
+{
+    "name": "EasyVote HighestVoter",
+    "description": "Monthly check highest voter and reward him",
+    "author": "Exel80",
+    "version": null,
+    "configuration": true,
+    "require": {
+        "EasyVote": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/easyvote-highestvoter.2671",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,10 +1,10 @@
 {
     "name": "Respawner",
-    "description": "Automatically respawns players after they die",
+    "description": "Automatically respawns players with permission and optionally wakes them up",
     "author": "Wulf",
-    "version": "0.2.1",
+    "version": "1.0.0",
     "configuration": true,
-    "language": "lua",
+    "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/respawner.669",
     "games": [
         "rust"
