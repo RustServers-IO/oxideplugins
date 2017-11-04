@@ -13,19 +13,21 @@ using Oxide.Core;
 using Rust;
 
 using UnityEngine;
+
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.24")]
+    [Info("LootConfig", "Nogrod", "1.0.25")]
     internal class LootConfig : RustPlugin
     {
-        private const int VersionConfig = 12;
+        private const int VersionConfig = 13;
         private readonly FieldInfo ParentSpawnGroupField = typeof (SpawnPointInstance).GetField("parentSpawnGroup", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnGroupsField = typeof (SpawnHandler).GetField("SpawnGroups", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnPointsField = typeof(SpawnGroup).GetField("spawnPoints", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        private readonly Regex _findLoot = new Regex(@"(crate[\-_](elite|mine|normal|tools)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed|minecart|bradley[\-_]crate[\-_\d\w]*)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private readonly Regex _findLoot = new Regex(@"(crate[\-_](basic|elite|mine|normal|tools)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed|minecart|bradley[\-_]crate[\-_\d\w]*)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private ConfigData _config;
         private Dictionary<string, ItemDefinition> _itemsDict;
 
@@ -187,7 +189,7 @@ namespace Oxide.Plugins
             foreach (var strPrefab in allPrefabs)
             {
                 var container = GameManager.server.FindPrefab(strPrefab)?.GetComponent<LootContainer>();
-                if (container?.lootDefinition == null) continue;
+                if (container == null || container.lootDefinition == null && (container.LootSpawnSlots == null || container.LootSpawnSlots.Length <= 0 )) continue;
                 containerData[strPrefab] = container;
             }
             /*foreach (var container in containers)
@@ -208,7 +210,8 @@ namespace Oxide.Plugins
                         new LootSpawnConverter(),
                         new LootSpawnSlotConverter(),
                         new ItemModRevealConverter(),
-                        new ItemModUnwrapConverter()
+                        new ItemModUnwrapConverter(),
+                        new StringEnumConverter(),
                     }
                 };
                 Config.WriteObject(new ExportData
@@ -420,6 +423,9 @@ namespace Oxide.Plugins
             container.destroyOnEmpty = containerConfig.DestroyOnEmpty;
             container.lootDefinition = GetLootSpawn(containerConfig.LootDefinition, lootSpawns);
             container.inventorySlots = containerConfig.InventorySlots;
+            container.initialLootSpawn = containerConfig.InitialLootSpawn;
+            container.BlockPlayerItemInput = containerConfig.BlockPlayerItemInput;
+            container.scrapAmount = containerConfig.ScrapAmount;
             container.SpawnType = containerConfig.SpawnType;
             container.LootSpawnSlots = new LootContainer.LootSpawnSlot[containerConfig.LootSpawnSlots.Length];
             for (var i = 0; i < containerConfig.LootSpawnSlots.Length; i++)
@@ -432,18 +438,18 @@ namespace Oxide.Plugins
                     probability = lootSpawnSlot.Probability
                 };
             }
-            foreach (var lootSpawnSlot in containerConfig.LootSpawnSlots)
-            {
-
-            }
-            if (!container.gameObject.activeInHierarchy || container.inventory == null) return;
+            if (container.inventory == null) return;
+            container.CancelInvoke(new Action(container.SpawnLoot));
             container.inventory.capacity = containerConfig.InventorySlots;
-            container.CancelInvoke("SpawnLoot");
-            container.SpawnLoot();
+            container.inventory.SetFlag(ItemContainer.Flag.NoItemInput, container.BlockPlayerItemInput);
+            container.inventory.Clear();
+            if (container.gameObject.activeInHierarchy && container.initialLootSpawn)
+                container.SpawnLoot();
         }
 
         private LootSpawn GetLootSpawn(string lootSpawnName, Dictionary<string, LootSpawn> lootSpawns)
         {
+            if (string.IsNullOrEmpty(lootSpawnName)) return null;
             LootSpawn lootSpawn;
             if (lootSpawns.TryGetValue(lootSpawnName, out lootSpawn)) return lootSpawn;
             LootSpawnData lootSpawnData;
@@ -747,7 +753,7 @@ namespace Oxide.Plugins
                 writer.WritePropertyName("DestroyOnEmpty");
                 writer.WriteValue(container.destroyOnEmpty);
                 writer.WritePropertyName("LootDefinition");
-                writer.WriteValue(container.lootDefinition.name);
+                writer.WriteValue(container.lootDefinition?.name ?? string.Empty);
                 writer.WritePropertyName("MaxDefinitionsToSpawn");
                 writer.WriteValue(container.maxDefinitionsToSpawn);
                 writer.WritePropertyName("MinSecondsBetweenRefresh");
@@ -756,8 +762,13 @@ namespace Oxide.Plugins
                 writer.WriteValue(container.maxSecondsBetweenRefresh);
                 writer.WritePropertyName("InitialLootSpawn");
                 writer.WriteValue(container.initialLootSpawn);
+                writer.WritePropertyName("BlockPlayerItemInput");
+                writer.WriteValue(container.BlockPlayerItemInput);
+                writer.WritePropertyName("ScrapAmount");
+                writer.WriteValue(container.scrapAmount);
                 writer.WritePropertyName("SpawnType");
-                writer.WriteValue(container.SpawnType.ToString());
+                serializer.Serialize(writer, container.SpawnType);
+                //writer.WriteValue(container.SpawnType.ToString());
                 writer.WritePropertyName("InventorySlots");
                 writer.WriteValue(container.inventorySlots);
                 writer.WritePropertyName("LootSpawnSlots");
@@ -787,6 +798,9 @@ namespace Oxide.Plugins
             public int MaxDefinitionsToSpawn { get; set; }
             public float MinSecondsBetweenRefresh { get; set; } = 3600f;
             public float MaxSecondsBetweenRefresh { get; set; } = 7200f;
+            public bool InitialLootSpawn { get; set; } = true;
+            public bool BlockPlayerItemInput { get; set; }
+            public int ScrapAmount { get; set; }
             public LootContainer.spawnType SpawnType { get; set; }
             public int InventorySlots { get; set; }
             public LootSpawnSlotData[] LootSpawnSlots { get; set; }
