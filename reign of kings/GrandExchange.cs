@@ -6,6 +6,7 @@ using CodeHatch.Engine.Networking;
 using CodeHatch.Inventory.Blueprints;
 using CodeHatch.Inventory.Blueprints.Components;
 using CodeHatch.ItemContainer;
+using CodeHatch.Networking.Events;
 using CodeHatch.Networking.Events.Entities;
 using CodeHatch.Thrones.Weapons.Salvage;
 using CodeHatch.UserInterface.Dialogues;
@@ -17,57 +18,143 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.2.3", ResourceId = 1145)]
+    [Info("Grand Exchange", "D-Kay && Scorpyon", "2.3.0", ResourceId = 1145)]
     public class GrandExchange : ReignOfKingsPlugin
     {
         #region Variables
 
         private const int MaxPossibleGold = int.MaxValue;
-        private static double SellPercentage = 50;
-        private static double Inflation = 1; // This is the inflation modifier. More means bigger jumps in price changes (Currently raises at approx 1%
-        private static double MaxDeflation = 5; // This is the deflation modifier. This is the most that a price can drop below its average price to buy and above it's price to sell(Percentage)
-        private int PriceDeflationTime = 3600; // This dictates the number of seconds for each tick which brings the prices back towards their original values
-        private double GoldStealPercentage = 20; // This is the maximum percentage of gold that can be stolen from a player
-        private int GoldRewardForPve = 20; // This is the maximum amount rewarded to a player for killing monsters, etc. (When harvesting the dead body)
-        private bool PvpGold = true; // Turns on/off gold for PVP
-        private bool PveGold = true; // Turns on/off gold for PVE
-        private bool SafeTrade = false; // Determines whether the marked safe area is Safe against being attacked / PvP
-        private static int PlayerShopStackLimit = 5; // Determines the maximum number of stacks of an item a player can have in their shop
-        private static int PlayerShopMaxSlots = 10; // Determines the maximum number of individual items the player can stock (Prevents using this as a 'Bag of Holding' style Chest!!)
-        private bool CanUseGE = true;
-        private bool UseDeflation = true;
+        private static double BankCosts { get; set; } = 10; // Costs of depositing gold into your bank account as percentage.
+        private static double SellPercentage { get; set; } = 50;
+        private static double Inflation { get; set; } = 1; // This is the inflation modifier. More means bigger jumps in price changes (Currently raises at approx 1%
+        private static double MaxDeflation { get; set; } = 5; // This is the deflation modifier. This is the most that a price can drop below its average price to buy and above it's price to sell(Percentage)
+        private int PriceDeflationTime { get; set; } = 3600; // This dictates the number of seconds for each tick which brings the prices back towards their original values
+        private double GoldStealPercentage { get; set; } = 20; // This is the maximum percentage of gold that can be stolen from a player
+        private int GoldRewardForPve { get; set; } = 20; // This is the maximum amount rewarded to a player for killing monsters, etc. (When harvesting the dead body)
+        private bool PvpGold { get; set; } = true; // Turns on/off gold for PVP
+        private bool PveGold { get; set; } = true; // Turns on/off gold for PVE
+        private bool SafeTrade { get; set; } = false; // Determines whether the marked safe area is Safe against being attacked / PvP
+        private static int PlayerShopStackLimit { get; set; } = 5; // Determines the maximum number of stacks of an item a player can have in their shop
+        private static int PlayerShopMaxSlots { get; set; } = 10; // Determines the maximum number of individual items the player can stock (Prevents using this as a 'Bag of Holding' style Chest!!)
+        private bool CanUseGe { get; set; } = true;
+        private bool UseDeflation { get; set; } = true;
+        private bool UseRopingProtection { get; set; } = true;
 
+        private class Bank
+        {
+            public Dictionary<ulong, BankAccount> Accounts { get; set; } = new Dictionary<ulong, BankAccount>();
+            public Area Area { get; set; } = new Area();
+
+            public Bank() { }
+
+            public void Reset()
+            {
+                Accounts.Clear();
+                Area.Reset();
+            }
+
+            public void RemoveMarks()
+            {
+                Area = new Area();
+            }
+
+            public void ClearAccounts()
+            {
+                Accounts = new Dictionary<ulong, BankAccount>();
+            }
+
+            public int GetGold(ulong player)
+            {
+                return !Accounts.ContainsKey(player) ? 0 : Convert.ToInt32(Accounts[player].Gold);
+            }
+
+            public int GetGold(Player player)
+            {
+                return !Accounts.ContainsKey(player.Id) ? 0 : Convert.ToInt32(Accounts[player.Id].Gold);
+            }
+
+            public double AddGold(Player player, int amount)
+            {
+                if (!Accounts.ContainsKey(player.Id)) Accounts.Add(player.Id, new BankAccount(player.Name));
+                
+                return Accounts[player.Id].Add(amount);
+            }
+
+            public int RemoveGold(Player player, int amount)
+            {
+                if (!Accounts.ContainsKey(player.Id)) return -1;
+                var data = Accounts[player.Id];
+                if (!data.CanRemove(amount)) return -2;
+
+                Accounts[player.Id].Remove(amount);
+                return 0;
+            }
+        }
+        private class BankAccount
+        {
+            public string Name { get; set; } = "";
+            public double Gold { get; set; } = 0;
+
+            public BankAccount() { }
+
+            public BankAccount(string name)
+            {
+                Name = name;
+            }
+
+            public double Add(int amount)
+            {
+                var gold = (100 - BankCosts) / 100 * amount;
+                Gold += gold;
+                return gold;
+            }
+
+            public void Remove(int amount)
+            {
+                Gold -= amount;
+            }
+
+            public bool CanRemove(int amount)
+            {
+                return Gold >= amount;
+            }
+        }
         private class GrandExchangeData
         {
-            public float X1 { get; set; } = 0f;
-            public float Z1 { get; set; } = 0f;
-            public float X2 { get; set; } = 0f;
-            public float Z2 { get; set; } = 0f;
+            public Area Area { get; set; } = new Area();
             public SortedDictionary<string, TradeData> TradeList { get; set; } = new SortedDictionary<string, TradeData>();
 
             public GrandExchangeData() { }
 
             public GrandExchangeData(Vector3 pos1, Vector3 pos2)
             {
-                X1 = pos1.x;
-                Z1 = pos1.z;
-                X2 = pos2.x;
-                Z2 = pos2.z;
+                Area = new Area(pos1, pos2);
             }
 
-            public void AddPosition(Vector3 position, int type)
+            public void Reset()
             {
-                switch (type)
-                {
-                    case 1:
-                        X1 = position.x;
-                        Z1 = position.z;
-                        break;
-                    case 2:
-                        X2 = position.x;
-                        Z2 = position.z;
-                        break;
-                }
+                Area.Reset();
+                TradeList.Clear();
+            }
+
+            public void RemoveMarks()
+            {
+                Area = new Area();
+            }
+
+            public void ClearItems()
+            {
+                TradeList.Clear();
+            }
+
+            public bool CanUse(Player player)
+            {
+                return Area.GetPositions() != 2 || Area.IsInArea(player.Entity.Position);
+            }
+
+            public bool HasItem(string resource)
+            {
+                return TradeList.ContainsKey(resource);
             }
 
             public void AddItem(string resource, int price)
@@ -75,31 +162,11 @@ namespace Oxide.Plugins
                 TradeList.Add(resource, new TradeData(price));
             }
 
-            public int HasPosition()
+            public int RemoveItem(string resource)
             {
-                if (X1 == 0f || Z1 == 0f) return 0;
-                if (X2 == 0f || Z2 == 0f) return 1;
-                return 2;
-            }
-
-            public void RemoveGEMarks()
-            {
-                X1 = 0f;
-                Z1 = 0f;
-                X2 = 0f;
-                Z2 = 0f;
-            }
-
-            public bool IsInTradeArea(Vector3 position)
-            {
-                if (HasPosition() != 2) return true;
-
-                if ((position.x < X1 && position.x > X2) && (position.z > Z1 && position.z < Z2)) return true;
-                if ((position.x < X1 && position.x > X2) && (position.z < Z1 && position.z > Z2)) return true;
-                if ((position.x > X1 && position.x < X2) && (position.z < Z1 && position.z > Z2)) return true;
-                if ((position.x > X1 && position.x < X2) && (position.z > Z1 && position.z < Z2)) return true;
-
-                return false;
+                if (!TradeList.ContainsKey(resource)) return -1;
+                TradeList.Remove(resource);
+                return 0;
             }
         }
         private class TradeData
@@ -172,6 +239,12 @@ namespace Oxide.Plugins
                 BuyPrice = newBuyPrice;
                 SellPrice = newSellPrice;
             }
+
+            public void ForcePriceAdjustment()
+            {
+                BuyPrice = OriginalPrice;
+               SellPrice = (int)(OriginalPrice * (SellPercentage / 100));
+            }
         }
         private class PlayerData
         {
@@ -186,20 +259,22 @@ namespace Oxide.Plugins
                 Name = name;
             }
 
-            public PlayerData(string name, int gold)
+            public PlayerData(string name, long gold)
             {
                 Name = name;
                 Gold = gold;
+            }
+
+            public void ResetShop()
+            {
+                Shop = new ShopData();
             }
         }
         private class ShopData
         {
             public string Name { get; set; } = "Local Store";
             public SortedDictionary<string, ItemData> ItemList { get; set; } = new SortedDictionary<string, ItemData>();
-            public float X1 { get; set; } = 0f;
-            public float Z1 { get; set; } = 0f;
-            public float X2 { get; set; } = 0f;
-            public float Z2 { get; set; } = 0f;
+            public Area Area { get; set; } = new Area();
 
             public ShopData() { }
 
@@ -215,64 +290,14 @@ namespace Oxide.Plugins
                 ItemList = itemList;
             }
 
-            public int HasPosition()
-            {
-                if (X1 == 0 || Z1 == 0) return 0;
-                if (X2 == 0f || Z2 == 0f) return 1;
-                return 2;
-            }
-
-            public void AddPosition(Vector3 position, int type)
-            {
-                switch (type)
-                {
-                    case 1:
-                        X1 = position.x;
-                        Z1 = position.z;
-                        break;
-                    case 2:
-                        X2 = position.x;
-                        Z2 = position.z;
-                        break;
-                }
-            }
-
-            public Vector3 GetPosition(int type)
-            {
-                switch (type)
-                {
-                    case 1:
-                        return new Vector3(X1, 0, Z1);
-                    case 2:
-                        return new Vector3(X2, 0, Z2);
-                }
-                return new Vector3();
-            }
-
             public void RemoveShop()
             {
-                X1 = 0f;
-                Z1 = 0f;
-                X2 = 0f;
-                Z2 = 0f;
+                Area = new Area();
             }
 
-            public bool IsInShopArea(Vector3 position)
+            public bool HasItem(string resource)
             {
-                if (HasPosition() != 2) return false;
-
-                if ((position.x < X1 && position.x > X2) && (position.z > Z1 && position.z < Z2)) return true;
-                if ((position.x < X1 && position.x > X2) && (position.z < Z1 && position.z > Z2)) return true;
-                if ((position.x > X1 && position.x < X2) && (position.z < Z1 && position.z > Z2)) return true;
-                if ((position.x > X1 && position.x < X2) && (position.z > Z1 && position.z < Z2)) return true;
-
-                return false;
-            }
-
-            public void RemoveItem(string item, int amount)
-            {
-                if (ItemList[item].Amount == amount) ItemList.Remove(item);
-                else ItemList[item].Amount -= amount;
+                return ItemList.ContainsKey(resource);
             }
 
             public int AddItem(string resource, int price, int amount)
@@ -291,6 +316,12 @@ namespace Oxide.Plugins
 
                 ItemList.Add(resource, new ItemData(price, amount));
                 return 2;
+            }
+
+            public void RemoveItem(string item, int amount)
+            {
+                if (ItemList[item].Amount == amount) ItemList.Remove(item);
+                else ItemList[item].Amount -= amount;
             }
         }
         private class ItemData
@@ -321,15 +352,148 @@ namespace Oxide.Plugins
                 Amount += amount;
             }
         }
+        private class PlayerTrade
+        {
+            public ulong IdTrader { get; set; }
+            public ulong IdTarget { get; set; }
+            public bool Accepted { get; set; }
+            public string ItemTrader { get; set; }
+            public string ItemTarget { get; set; }
+        }
+        private class Area
+        {
+            public Position FirstPosition { get; set; }
+            public Position SecondPosition { get; set; }
 
-        private GrandExchangeData _GEData = new GrandExchangeData();
-        private Dictionary<ulong, PlayerData> _PlayerData = new Dictionary<ulong, PlayerData>();
-        //private static SortedDictionary<string, int> _ItemList = new SortedDictionary<string, int>();
+            public Vector3 Center()
+            {
+                var center = default(Vector3);
+                if (GetPositions() == 2) center = Vector3.Lerp(FirstPosition.Point(), SecondPosition.Point(), 0.5f);
+                return center;
+            }
 
-        private readonly System.Random _Random = new System.Random();
+            public Area() { }
+
+            public Area(Vector3 position)
+            {
+                FirstPosition = new Position(position);
+            }
+
+            public Area(Vector3 position1, Vector3 position2)
+            {
+                FirstPosition = new Position(position1);
+                SecondPosition = new Position(position2);
+            }
+
+            public void Reset()
+            {
+                FirstPosition = null;
+                SecondPosition = null;
+            }
+
+            public int GetPositions()
+            {
+                if (FirstPosition == null) return 0;
+                if (SecondPosition == null) return 1;
+                return 2;
+            }
+
+            public int SetPosition(int type, Vector3 position)
+            {
+                if (GetPositions() == 2) return -2;
+                switch (type)
+                {
+                    case 1:
+                        if (GetPositions() == 1) return -1;
+                        FirstPosition = new Position(position);
+                        break;
+                    case 2:
+                        SecondPosition = new Position(position);
+                        break;
+                }
+                return 1;
+            }
+
+            public bool IsInArea(Vector3 position)
+            {
+                if (GetPositions() != 2) return false;
+
+                if ((position.x < FirstPosition.X && position.x > SecondPosition.X) && (position.z > FirstPosition.Z && position.z < SecondPosition.Z)) return true;
+                if ((position.x < FirstPosition.X && position.x > SecondPosition.X) && (position.z < FirstPosition.Z && position.z > SecondPosition.Z)) return true;
+                if ((position.x > FirstPosition.X && position.x < SecondPosition.X) && (position.z < FirstPosition.Z && position.z > SecondPosition.Z)) return true;
+                if ((position.x > FirstPosition.X && position.x < SecondPosition.X) && (position.z > FirstPosition.Z && position.z < SecondPosition.Z)) return true;
+
+                return false;
+            }
+        }
+        private class Position
+        {
+            public float X { get; set; }
+            public float Y { get; set; }
+            public float Z { get; set; }
+
+            public Vector3 Point() => new Vector3(X, Y, Z);
+
+            public Position() { }
+
+            public Position(Vector3 position)
+            {
+                X = position.x;
+                Y = position.y;
+                Z = position.z;
+            }
+        }
+
+        private class OldGrandExchangeData
+        {
+            public float X1 { get; set; } = 0f;
+            public float Z1 { get; set; } = 0f;
+            public float X2 { get; set; } = 0f;
+            public float Z2 { get; set; } = 0f;
+            public SortedDictionary<string, TradeData> TradeList { get; set; } = new SortedDictionary<string, TradeData>();
+        }
+        private class OldPlayerData
+        {
+            public string Name { get; set; } = "";
+            public long Gold { get; set; } = 0;
+            public OldShopData Shop { get; set; } = new OldShopData();
+
+            public OldPlayerData() { }
+
+            public OldPlayerData(string name)
+            {
+                Name = name;
+            }
+
+            public OldPlayerData(string name, int gold)
+            {
+                Name = name;
+                Gold = gold;
+            }
+
+            public void ResetShop()
+            {
+                Shop = new OldShopData();
+            }
+        }
+        private class OldShopData
+        {
+            public string Name { get; set; } = "Local Store";
+            public SortedDictionary<string, ItemData> ItemList { get; set; } = new SortedDictionary<string, ItemData>();
+            public float X1 { get; set; } = 0f;
+            public float Z1 { get; set; } = 0f;
+            public float X2 { get; set; } = 0f;
+            public float Z2 { get; set; } = 0f;
+        }
+
+        private GrandExchangeData GeData { get; set; } = new GrandExchangeData();
+        private Bank BData { get; set; } = new Bank();
+        private Dictionary<ulong, PlayerData> Data { get; set; } = new Dictionary<ulong, PlayerData>();
+
+        private System.Random Random { get; } = new System.Random();
         
         #region Default Trade List
-        private SortedDictionary<string, int> _DefaultTradeList = new SortedDictionary<string, int>()
+        private SortedDictionary<string, int> _defaultTradeList = new SortedDictionary<string, int>()
         {
             { "Apple", 25 },
             { "Bear Hide", 6250 },
@@ -367,11 +531,10 @@ namespace Oxide.Plugins
 
         #region Save and Load Data
 
-        void Loaded()
+        private void Loaded()
         {
             LoadTradeData();
             LoadConfigData();
-            LoadDefaultMessages();
 
             timer.Repeat(PriceDeflationTime, 0, DeflatePrices);
 
@@ -386,14 +549,16 @@ namespace Oxide.Plugins
 
         private void LoadTradeData()
         {
-            _GEData = Interface.Oxide.DataFileSystem.ReadObject<GrandExchangeData>("GrandExchangeData");
-            _PlayerData = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, PlayerData>>("GrandExchangePlayerData");
+            GeData = Interface.Oxide.DataFileSystem.ReadObject<GrandExchangeData>("GrandExchange");
+            BData = Interface.Oxide.DataFileSystem.ReadObject<Bank>("GrandExchangeBank");
+            Data = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, PlayerData>>("GrandExchangePlayer");
         }
 
         private void SaveTradeData()
         {
-            Interface.Oxide.DataFileSystem.WriteObject("GrandExchangeData", _GEData);
-            Interface.Oxide.DataFileSystem.WriteObject("GrandExchangePlayerData", _PlayerData);
+            Interface.Oxide.DataFileSystem.WriteObject("GrandExchange", GeData);
+            Interface.Oxide.DataFileSystem.WriteObject("GrandExchangeBank", BData);
+            Interface.Oxide.DataFileSystem.WriteObject("GrandExchangePlayer", Data);
         }
 
         protected override void LoadDefaultConfig()
@@ -408,7 +573,8 @@ namespace Oxide.Plugins
             PveGold = GetConfig("Gold", "PveGold", true);
             GoldRewardForPve = GetConfig("Gold", "GoldRewardForPve", 75);
             GoldStealPercentage = GetConfig("Gold", "GoldStealPercentage", 30);
-            CanUseGE = GetConfig("Trading", "CanUseGE", true);
+            PriceDeflationTime = GetConfig("Trading", "PriceDeflationTime", 3600);
+            CanUseGe = GetConfig("Trading", "CanUseGE", true);
             SafeTrade = GetConfig("Trading", "SafeTrade", true);
             UseDeflation = GetConfig("Trading", "UseDeflation", true);
             PlayerShopStackLimit = GetConfig("Trading", "PlayerShopStackLimit", 5);
@@ -416,6 +582,8 @@ namespace Oxide.Plugins
             SellPercentage = GetConfig("Trading", "SellPercentage", 50);
             Inflation = GetConfig("Trading", "Inflation", 1);
             MaxDeflation = GetConfig("Trading", "MaxDeflation", 5);
+            UseRopingProtection = GetConfig("Trading", "UseRopingProtection", true);
+            BankCosts = GetConfig("Bank", "BankCosts", 10);
         }
 
         private void SaveConfigData()
@@ -424,7 +592,8 @@ namespace Oxide.Plugins
             Config["Gold", "PveGold"] = PveGold;
             Config["Gold", "GoldRewardForPve"] = GoldRewardForPve;
             Config["Gold", "GoldStealPercentage"] = GoldStealPercentage;
-            Config["Trading", "CanUseGE"] = CanUseGE;
+            Config["Trading", "PriceDeflationTime"] = PriceDeflationTime;
+            Config["Trading", "CanUseGE"] = CanUseGe;
             Config["Trading", "SafeTrade"] = SafeTrade;
             Config["Trading", "UseDeflation"] = UseDeflation;
             Config["Trading", "PlayerShopStackLimit"] = PlayerShopStackLimit;
@@ -432,11 +601,13 @@ namespace Oxide.Plugins
             Config["Trading", "SellPercentage"] = SellPercentage;
             Config["Trading", "Inflation"] = Inflation;
             Config["Trading", "MaxDeflation"] = MaxDeflation;
+            Config["Trading", "UseRopingProtection"] = UseRopingProtection;
+            Config["Bank", "BankCosts"] = BankCosts;
 
             SaveConfig();
         }
 
-        private void LoadDefaultMessages()
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
@@ -454,6 +625,7 @@ namespace Oxide.Plugins
                 { "Toggle Deflation", "Price deflation over time was turned {0}" },
 
                 { "Trade Defense", "You cannot attack people in a designated trade area, scoundrel!" },
+                { "Trade No Roping", "You cannot rope people in a designated trade area, scoundrel!" },
 
                 { "Default Itemlist", "{0}: {1}." },
 
@@ -482,7 +654,7 @@ namespace Oxide.Plugins
                 { "Gold Kill Global", "[FF00FF]{0}[FFFFFF] has stolen [00FF00]{1}[FFFF00] gold [FFFFFF] from the dead body of [00FF00]{2}[FFFFFF]!" },
                 { "Gold Guild", "There is no honor (or more importantly, gold) in killing a member of your own guild!" },
                 { "Gold Send Steal", "Don't try to steal gold from others!" },
-                { "Gold Send Not Enough", "You can't send more gold then you have!" },
+                { "Gold Send Not Enough", "You can't send more gold than you have!" },
                 { "Gold Send", "Sending {0} gold to {1}." },
                 { "Gold Received", "You received {0} gold from {1}." },
 
@@ -493,6 +665,7 @@ namespace Oxide.Plugins
 
                 { "Shop Empty", "The shop is currently empty." },
                 { "No Store", "You cannot trade outside of the designated trade area."},
+                { "No Bank", "You need to be inside the bank if you want to acces it."},
                 { "No Shop", "There is no shop here."},
                 { "No Shop Own", "You need to be in your shop to do this."},
 
@@ -534,6 +707,11 @@ namespace Oxide.Plugins
                 { "Store Mark Second", "Added the second and final position for the Grand Exchange."},
                 { "Store Mark Removed", "All marks for the Grand Exchange have been removed."},
 
+                { "Bank Mark Exists", "You have already marked two locations. Please use /ge.removebankmarks to start again."},
+                { "Bank Mark First", "Added the first corner position for the bank."},
+                { "Bank Mark Second", "Added the second and final position for the bank."},
+                { "Bank Mark Removed", "All marks for the bank have been removed."},
+
                 { "Shop Mark Occupied", "There already exists a shop in this area."},
                 { "Shop Mark Limit", "This area is too big for your shop. It can only be a maximum size of 13x13 blocks."},
                 { "Shop Mark Exists", "You have already marked two locations. Please use /ge.removemarks to start again."},
@@ -560,44 +738,79 @@ namespace Oxide.Plugins
                 { "Shop No Inventory Space", "You don't have enough space in your inventory. Please make sure you have at least {0} free slots." },
                 { "Shop Full", "You cannot stock any more items in your shop."},
 
+                { "Shop All Removed", "You have removed all player shops."},
+                { "Shop All Restored", "All shop positions have been reset."},
+
+                { "Bank No Gold", "You don't have enough gold to make this transaction." },
+                { "Bank Empty", "You don't have enough gold in your bank to make this transaction." },
+
+                { "Bank Title", "The National Bank"},
+                { "Bank Welcome", "Welcome to {0}. \nHere you can safely store your gold without having to worry about others stealing it. \nGold that is put on your bank account can't be used to pay in shops or at the store. \nUse /deposit to deposit gold in your bank account and use /withdraw to withdraw gold from your bank account."},
+                { "Bank Deposit", "How much gold do you want to deposit? \n\nWe will subtract a fee of {0}% as payment for keeping your gold save."},
+                { "Bank Deposited", "[FF0000]{0} [FFFF00]gold[FFFFFF] has been added to your bank account."},
+                { "Bank Withdraw", "How much gold do you want to withdraw?"},
+                { "Bank Withdrawn", "[FF0000]{0} [FFFF00]gold[FFFFFF] was withdrawn from your bank account."},
+                { "Bank Balance", "You currently have [FF0000]{0} [FFFF00]gold[FFFFFF] on your bank account."},
+
                 { "Item Non-Existing", "{0} does not appear in our item database."}
             }, this);
-
-            //GetMessage("Chat Title", player) + ;
-            //GetMessage("Popup Title", player);
-            //GetMessage("No Permission", player);
-            //GetMessage("Invalid Args", player);
-            //GetMessage("Invalid Amount", player);
-            //GetMessage("Invalid Player", player);
-            //GetMessage("", player);
-            //string.Format(GetMessage("", player), )
         }
 
         #endregion
 
         #region Commands
 
+        [ChatCommand("ge.convert")]
+        private void CmdConvertOldData(Player player, string cmd)
+        {
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+
+            var oldGeData = Interface.Oxide.DataFileSystem.ReadObject<OldGrandExchangeData>("GrandExchangeData");
+            var oldData = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, OldPlayerData>>("GrandExchangePlayerData");
+
+            GeData.Area.SetPosition(1, new Vector3(oldGeData.X1, 0f, oldGeData.Z1));
+            GeData.Area.SetPosition(2, new Vector3(oldGeData.X2, 0f, oldGeData.Z2));
+            GeData.TradeList = oldGeData.TradeList;
+
+            Data.Clear();
+            foreach (var data in oldData)
+            {
+                var oldPlayerData = oldData[data.Key];
+                var playerData = new PlayerData(data.Value.Name, data.Value.Gold);
+                if (oldPlayerData.Shop.X1 != 0f || oldPlayerData.Shop.Z1 != 0f) playerData.Shop.Area.SetPosition(1, new Vector3(oldPlayerData.Shop.X1, 0f, oldPlayerData.Shop.Z1));
+                if (oldPlayerData.Shop.X2 != 0f || oldPlayerData.Shop.Z2 != 0f) playerData.Shop.Area.SetPosition(2, new Vector3(oldPlayerData.Shop.X2, 0f, oldPlayerData.Shop.Z2));
+                playerData.Shop.Name = oldPlayerData.Shop.Name;
+                playerData.Shop.ItemList = oldPlayerData.Shop.ItemList;
+
+                Data.Add(data.Key, playerData);
+            }
+
+            player.SendMessage("done");
+            SaveTradeData();
+        }
+
         [ChatCommand("gehelp")]
-        private void SendPlayerHelpText(Player player, string cmd)
+        private void CmdSendHelpText(Player player, string cmd)
         {
             SendHelpText(player);
         }
 
         [ChatCommand("wallet")]
-        private void CheckOwnGold(Player player, string cmd)
+        private void CmdCheckWallet(Player player, string cmd)
         {
             CheckWallet(player);
         }
 
         [ChatCommand("topgold")]
-        private void ShowTopPlayerGold(Player player, string cmd, string[] input)
+        private void CmdShowTopPlayerGold(Player player, string cmd, string[] input)
         {
             CheckPlayerExists(player);
 
             if (input.Length > 0)
             {
                 if (input[0].ToLower() != "all") return;
-                var topPlayers = new Dictionary<ulong, PlayerData>(_PlayerData);
+                var topPlayers = new Dictionary<ulong, PlayerData>(Data);
                 var topListMax = 10;
                 if (topPlayers.Keys.Count < 10) topListMax = topPlayers.Keys.Count;
                 for (var i = 0; i < topListMax; i++)
@@ -606,11 +819,12 @@ namespace Oxide.Plugins
                     var target = new KeyValuePair<ulong, PlayerData>();
                     foreach (var data in topPlayers)
                     {
-                        if (data.Value.Gold < topGoldAmount) continue;
+                        var totalGold = data.Value.Gold + BData.GetGold(data.Key);
+                        if (totalGold < topGoldAmount) continue;
                         target = data;
-                        topGoldAmount = data.Value.Gold;
+                        topGoldAmount = totalGold;
                     }
-                    PrintToChat(player, $"{i + 1}. {target.Value.Name} : {target.Value.Gold} gold");
+                    PrintToChat(player, $"{i + 1}. {target.Value.Name} : {topGoldAmount} gold");
                     topPlayers.Remove(target.Key);
                 }
             }
@@ -626,9 +840,11 @@ namespace Oxide.Plugins
 
                     foreach (var oPlayer in onlinePlayers)
                     {
+                        var data = Data[oPlayer.Id];
+                        var totalGold = data.Gold + BData.GetGold(oPlayer);
                         CheckPlayerExists(oPlayer);
-                        if (_PlayerData[oPlayer.Id].Gold < topGoldAmount) continue;
-                        topGoldAmount = _PlayerData[oPlayer.Id].Gold;
+                        if (totalGold < topGoldAmount) continue;
+                        topGoldAmount = totalGold;
                         topPlayer = oPlayer;
                     }
 
@@ -640,26 +856,44 @@ namespace Oxide.Plugins
             }
         }
 
+        [ChatCommand("bank")]
+        private void CmdViewBank(Player player, string cmd)
+        {
+            ShowBank(player);
+        }
+
+        [ChatCommand("deposit")]
+        private void CmdDepositBank(Player player, string cmd)
+        {
+            DepositBank(player);
+        }
+
+        [ChatCommand("withdraw")]
+        private void CmdWithdrawBank(Player player, string cmd)
+        {
+            WithdrawBank(player);
+        }
+
         [ChatCommand("store")]
-        private void ViewTExchangeStore(Player player, string cmd)
+        private void CmdViewExchangeStore(Player player, string cmd)
         {
             ShowExchangeStore(player);
         }
 
         [ChatCommand("buy")]
-        private void BuyItem(Player player, string cmd)
+        private void CmdBuyItem(Player player, string cmd)
         {
             BuyItemExchange(player);
         }
 
         [ChatCommand("sell")]
-        private void SellItem(Player player, string cmd)
+        private void CmdSellItem(Player player, string cmd)
         {
             SellItemExchange(player);
         }
 
         [ChatCommand("sendgold")]
-        private void SendCredits(Player player, string cmd, string[] input)
+        private void CmdSendCredits(Player player, string cmd, string[] input)
         {
             CheckPlayerExists(player);
 
@@ -670,7 +904,7 @@ namespace Oxide.Plugins
             
             if (amount < 1) { PrintToChat(player, GetMessage("Gold Send Steal", player)); return; }
 
-            if (_PlayerData[player.Id].Gold < amount) { PrintToChat(player, GetMessage("Gold Send Not Enough", player)); return; }
+            if (Data[player.Id].Gold < amount) { PrintToChat(player, GetMessage("Gold Send Not Enough", player)); return; }
             
             var playerName = input.Skip(1).JoinToString(" ");
 
@@ -690,193 +924,211 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("ge.addmark")]
-        private void AddExchangeMark(Player player, string cmd, string[] input)
+        private void CmdAddExchangeMark(Player player, string cmd, string[] input)
         {
             AddExchangeMark(player);
         }
 
-        [ChatCommand("ge.removemarks")]
-        private void RemoveTheExchangeMarks(Player player, string cmd, string[] input)
+        [ChatCommand("ge.addbankmark")]
+        private void CmdAddBankMark(Player player, string cmd, string[] input)
         {
-            RemoveExchangeMarks(player, input);
+            AddBankMark(player);
+        }
+
+        [ChatCommand("ge.removemarks")]
+        private void CmdRemoveExchangeMarks(Player player, string cmd, string[] input)
+        {
+            RemoveExchangeMarks(player);
+        }
+
+        [ChatCommand("ge.removebankmarks")]
+        private void CmdRemoveBankMarks(Player player, string cmd, string[] input)
+        {
+            RemoveBankMarks(player);
         }
 
         [ChatCommand("ge.additem")]
-        private void AddAnExchangeItem(Player player, string cmd, string[] input)
+        private void CmdAddExchangeItem(Player player, string cmd, string[] input)
         {
             AddExchangeItem(player, input);
         }
 
         [ChatCommand("ge.removeitem")]
-        private void RemoveANExchangeItem(Player player, string cmd, string[] input)
+        private void CmdRemoveExchangeItem(Player player, string cmd, string[] input)
         {
             RemoveExchangeItem(player, input);
         }
 
         [ChatCommand("ge.removeallitems")]
-        private void RemoveAllTheExchangeItems(Player player, string cmd, string[] input)
+        private void CmdRemoveAllExchangeItems(Player player, string cmd, string[] input)
         {
             RemoveAllExchangeItems(player, input);
         }
 
         [ChatCommand("ge.setprice")]
-        private void SetTheExchangeItemPrice(Player player, string cmd, string[] input)
+        private void CmdSetExchangeItemPrice(Player player, string cmd, string[] input)
         {
             SetExchangeItemPrice(player, input);
         }
 
         [ChatCommand("ge.defaultitems")]
-        private void ShowTheDefaultTradeList(Player player, string cmd, string[] input)
+        private void CmdShowDefaultTradeList(Player player, string cmd, string[] input)
         {
             ShowDefaultTradeList(player, input);
         }
 
+        [ChatCommand("ge.removeshops")]
+        private void CmdRemoveShops(Player player, string cmd)
+        {
+            RemoveShops(player);
+        }
+
         [ChatCommand("ge.restoredefaultitems")]
-        private void RestoreDefaultGEItems(Player player, string cmd)
+        private void CmdRestoreDefaultItems(Player player, string cmd)
         {
             RestoreDefaultItems(player);
         }
 
         [ChatCommand("ge.restoredefaultprices")]
-        private void RestoreDefaultGEPrices(Player player, string cmd)
+        private void CmdRestoreDefaultPrices(Player player, string cmd)
         {
             RestoreDefaultPrices(player);
         }
 
         [ChatCommand("ge.restoreshops")]
-        private void RestoreThePlayerShops(Player player, string cmd)
+        private void CmdRestorePlayerShops(Player player, string cmd)
         {
             RestoreShops(player);
         }
 
         [ChatCommand("ge.pvp")]
-        private void TogglePvpGoldGain(Player player, string cmd)
+        private void CmdTogglePvpGold(Player player, string cmd)
         {
             TogglePvpGold(player);
         }
 
         [ChatCommand("ge.pve")]
-        private void TogglePveGoldGain(Player player, string cmd)
+        private void CmdTogglePveGold(Player player, string cmd)
         {
             TogglePveGold(player);
         }
 
         [ChatCommand("ge.safetrade")]
-        private void ToggleSafeTradingProtection(Player player, string cmd)
+        private void CmdToggleSafeTrading(Player player, string cmd)
         {
             ToggleSafeTrading(player);
         }
 
         [ChatCommand("ge.toggle")]
-        private void TogglePlayerAccessGE(Player player, string cmd)
+        private void CmdToggleAccessGe(Player player, string cmd)
         {
-            ToggleAccessGE(player);
+            ToggleAccessGe(player);
         }
 
         [ChatCommand("ge.deflation")]
-        private void ToggleDeflationModifier(Player player, string cmd)
+        private void CmdToggleDeflationModifier(Player player, string cmd)
         {
             ToggleDeflation(player);
         }
 
         [ChatCommand("ge.setinflation")]
-        private void SetInflation(Player player, string cmd, string[] input)
+        private void CmdSetInflation(Player player, string cmd, string[] input)
         {
             SetInflationModifier(player, input);
         }
 
         [ChatCommand("ge.setmaxdeflation")]
-        private void SetMaxDeflation(Player player, string cmd, string[] input)
+        private void CmdSetMaxDeflation(Player player, string cmd, string[] input)
         {
             SetMaxDeflationModifier(player, input);
         }
 
         [ChatCommand("ge.setsellpercentage")]
-        private void SetTheSellPercentage(Player player, string cmd, string[] input)
+        private void CmdSetSellPercentage(Player player, string cmd, string[] input)
         {
             SetSellPercentage(player, input);
         }
 
         [ChatCommand("loc")]
-        private void GetPlayerLocation(Player player, string cmd, string[] input)
+        private void CmdGetLocation(Player player, string cmd, string[] input)
         {
             GetLocation(player, input);
         }
 
         [ChatCommand("setgold")]
-        private void SetThePlayerGold(Player player, string cmd, string[] input)
+        private void CmdSetPlayerGold(Player player, string cmd, string[] input)
         {
             SetPlayerGold(player, input);
         }
 
         [ChatCommand("resetgold")]
-        private void RemoveAllTheGold(Player player, string cmd)
+        private void CmdRemoveAllGold(Player player, string cmd)
         {
             RemoveAllGold(player);
         }
 
         [ChatCommand("givegold")]
-        private void GiveAPlayerGold(Player player, string cmd, string[] input)
+        private void CmdGivePlayerGold(Player player, string cmd, string[] input)
         {
             GivePlayerGold(player, input);
         }
 
         [ChatCommand("removegold")]
-        private void AdminRemoveCredits(Player player, string cmd, string[] input)
+        private void CmdRemoveCredits(Player player, string cmd, string[] input)
         {
             RemovePlayerGold(player, input);
         }
 
         [ChatCommand("checkgold")]
-        private void AdminCheckPlayerCredits(Player player, string cmd, string[] input)
+        private void CmdCheckPlayerCredits(Player player, string cmd, string[] input)
         {
             CheckPlayerGold(player, input);
         }
 
         [ChatCommand("shop")]
-        private void ViewThisShop(Player player, string cmd)
+        private void CmdViewShop(Player player, string cmd)
         {
             ViewShop(player);
         }
 
         [ChatCommand("myshop")]
-        private void ViewMyShopItems(Player player, string cmd)
+        private void CmdViewShopItems(Player player, string cmd)
         {
             ViewMyShop(player);
         }
 
         [ChatCommand("addshopmark")]
-        private void AddAShopMarker(Player player, string cmd)
+        private void CmdAddShopMarker(Player player, string cmd)
         {
             AddShopMarker(player);
         }
 
         [ChatCommand("removeshopmarks")]
-        private void RemoveAShopMarker(Player player, string cmd)
+        private void CmdRemoveShopMarker(Player player, string cmd)
         {
             RemoveShopMarker(player);
         }
 
         [ChatCommand("addshopitem")]
-        private void AddAShopItem(Player player, string cmd, string[] input)
+        private void CmdAddShopItem(Player player, string cmd, string[] input)
         {
             AddShopItem(player, input);
         }
 
         [ChatCommand("removeshopitem")]
-        private void RemoveAShopItem(Player player, string cmd, string[] input)
+        private void CmdRemoveShopItem(Player player, string cmd, string[] input)
         {
             RemoveShopItem(player, input);
         }
 
         [ChatCommand("setitemprice")]
-        private void SetTheShopItemPrice(Player player, string cmd, string[] input)
+        private void CmdSetShopItemPrice(Player player, string cmd, string[] input)
         {
             SetShopItemPrice(player, input);
         }
 
         [ChatCommand("setshopname")]
-        private void SetPlayerShopName(Player player, string cmd, string[] input)
+        private void CmdSetShopName(Player player, string cmd, string[] input)
         {
             SetShopName(player, input);
         }
@@ -891,33 +1143,33 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            foreach (KeyValuePair<string, int> item in _DefaultTradeList) PrintToChat(player, string.Format(GetMessage("Default Itemlist", player), item.Key, item.Value)); 
+            foreach (KeyValuePair<string, int> item in _defaultTradeList) PrintToChat(player, string.Format(GetMessage("Default Itemlist", player), item.Key, item.Value)); 
         }
 
         private void ShowExchangeStore(Player player)
         {
             CheckPlayerExists(player);
 
-            if (!CanUseGE && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
+            if (!CanUseGe && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
 
-            if (_GEData.TradeList.Count == 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Closed", player)); return; }
+            if (GeData.TradeList.Count == 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Closed", player)); return; }
 
             string buyIcon = "";
             string sellIcon = "";
             string itemText = "";
             int itemsPerPage = 25;
             bool singlePage = false;
-            if (itemsPerPage > _GEData.TradeList.Count)
+            if (itemsPerPage > GeData.TradeList.Count)
             {
                 singlePage = true;
-                itemsPerPage = _GEData.TradeList.Count;
+                itemsPerPage = GeData.TradeList.Count;
             }
 
             for (int i = 0; i < itemsPerPage; i++)
             {
                 buyIcon = "[008888]";
                 sellIcon = "[008888]";
-                KeyValuePair<string, TradeData> resource = _GEData.TradeList.GetAt(i);
+                KeyValuePair<string, TradeData> resource = GeData.TradeList.GetAt(i);
                 int originalSellPrice = (int)(resource.Value.OriginalPrice * (SellPercentage / 100));
 
                 if (resource.Value.BuyPrice >= resource.Value.OriginalPrice) buyIcon = "[00FF00]";
@@ -931,11 +1183,48 @@ namespace Oxide.Plugins
                 itemText += "\n";
             }
 
-            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), Data[player.Id].Gold);
 
             if (singlePage) { player.ShowPopup(GetMessage("Popup Title", player), itemText, "Exit"); return; }
 
-            player.ShowConfirmPopup(GetMessage("Popup Title", player), itemText, "Next Page", "Exit", (selection, dialogue, data) => ContinueWithTradeList(player, selection, dialogue, data, itemsPerPage, itemsPerPage));
+            player.ShowConfirmPopup(GetMessage("Popup Title", player), itemText, "Next Page", "Exit", (selection, dialogue, data) => ContinueWithTradeList(player, selection, itemsPerPage, itemsPerPage));
+        }
+
+        private void ShowBank(Player player)
+        {
+            CheckPlayerExists(player);
+
+            var title = GetMessage("Bank Title", player);
+            var balance = string.Format(GetMessage("Bank Balance", player), BData.GetGold(player));
+            var msg = string.Format(GetMessage("Bank Welcome", player), title) + "\n\n" + balance;
+
+            player.ShowPopup(title, msg);
+        }
+
+        private void DepositBank(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!BData.Area.IsInArea(player.Entity.Position)) { player.SendError(GetMessage("Chat Title", player) + GetMessage("No Bank", player)); return; }
+
+            var title = GetMessage("Bank Title", player);
+            var balance = string.Format(GetMessage("Bank Balance", player), BData.GetGold(player));
+            var msg = string.Format(GetMessage("Bank Deposit", player), BankCosts) + "\n\n" + balance;
+
+            player.ShowInputPopup(title, msg, "", "Confirm", "Cancel", (options, dialogue, data) => DepositGold(player, options, dialogue));
+        }
+
+        private void WithdrawBank(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!BData.Area.IsInArea(player.Entity.Position)) { player.SendError(GetMessage("Chat Title", player) + GetMessage("No Bank", player)); return; }
+
+            var title = GetMessage("Bank Title", player);
+            var balance = string.Format(GetMessage("Bank Balance", player), BData.GetGold(player));
+            var msg = GetMessage("Bank Withdraw", player) + "\n\n" + balance;
+            
+            player.ShowInputPopup(title, msg, "", "Confirm", "Cancel", (options, dialogue, data) => WithdrawGold(player, options, dialogue));
         }
 
         private void ViewShop(Player player)
@@ -958,9 +1247,9 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
-            if (!CanUseGE && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
+            if (!CanUseGe && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
 
-            if (!_GEData.IsInTradeArea(player.Entity.Position))
+            if (!GeData.CanUse(player))
             {
                 PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Store", player));
                 return;
@@ -973,9 +1262,9 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
-            if (!CanUseGE && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
+            if (!CanUseGe && !player.HasPermission("GrandExchange.Show")) { PrintToChat(player, GetMessage("Store Closed", player)); return; }
 
-            if (!_GEData.IsInTradeArea(player.Entity.Position)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Store", player)); return; }
+            if (!GeData.CanUse(player)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Store", player)); return; }
 
             player.ShowInputPopup(GetMessage("Popup Title", player), GetMessage("Store Sell Item", player), "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeItem(player, options, dialogue1, 2));
         }
@@ -984,7 +1273,7 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(player);
 
-            PrintToChat(player, string.Format(GetMessage("Wallet Own", player), _PlayerData[player.Id].Gold));
+            PrintToChat(player, string.Format(GetMessage("Wallet Own", player), Data[player.Id].Gold));
         }
 
         private void CheckPlayerGold(Player player, string[] input)
@@ -997,11 +1286,11 @@ namespace Oxide.Plugins
             Player target = Server.GetPlayerByName(playerName);
             if (target == null)
             {
-                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                foreach (KeyValuePair<ulong, PlayerData> data in Data)
                 {
                     if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
                     {
-                        PrintToChat(player, string.Format(GetMessage("Wallet Other", player), data.Value.Name, _PlayerData[data.Key].Gold));
+                        PrintToChat(player, string.Format(GetMessage("Wallet Other", player), data.Value.Name, Data[data.Key].Gold));
                         return;
                     }
                 }
@@ -1011,7 +1300,7 @@ namespace Oxide.Plugins
             else
             {
                 CheckPlayerExists(target);
-                PrintToChat(player, string.Format(GetMessage("Wallet Other", player), target.DisplayName, _PlayerData[target.Id].Gold));
+                PrintToChat(player, string.Format(GetMessage("Wallet Other", player), target.DisplayName, Data[target.Id].Gold));
             }
         }
 
@@ -1034,7 +1323,7 @@ namespace Oxide.Plugins
                 playerName = input.JoinToString(" ");
                 playerName = playerName.Substring(playerName.IndexOf(' ') + 1);
 
-                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                foreach (KeyValuePair<ulong, PlayerData> data in Data)
                 {
                     if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
                     {
@@ -1079,7 +1368,7 @@ namespace Oxide.Plugins
                 playerName = input.JoinToString(" ");
                 playerName = playerName.Substring(playerName.IndexOf(' ') + 1);
 
-                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                foreach (KeyValuePair<ulong, PlayerData> data in Data)
                 {
                     if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
                     {
@@ -1111,17 +1400,40 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (_GEData.HasPosition() == 2) { PrintToChat(player, GetMessage("Store Mark Exists", player)); return; }
+            if (GeData.Area.GetPositions() == 2) { PrintToChat(player, GetMessage("Store Mark Exists", player)); return; }
 
-            if (_GEData.HasPosition() == 0)
+            if (GeData.Area.GetPositions() == 0)
             {
-                _GEData.AddPosition(player.Entity.Position, 1);
+                GeData.Area.SetPosition(1, player.Entity.Position);
                 PrintToChat(player, GetMessage("Store Mark First", player));
             }
             else
             {
-                _GEData.AddPosition(player.Entity.Position, 2);
+                GeData.Area.SetPosition(2, player.Entity.Position);
                 PrintToChat(player, GetMessage("Store Mark Second", player));
+            }
+
+            PrintToChat(player, string.Format(GetMessage("Position Mark", player), player.Entity.Position.x, player.Entity.Position.z));
+            SaveTradeData();
+        }
+
+        private void AddBankMark(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (BData.Area.GetPositions() == 2) { PrintToChat(player, GetMessage("Bank Mark Exists", player)); return; }
+
+            if (BData.Area.GetPositions() == 0)
+            {
+                BData.Area.SetPosition(1, player.Entity.Position);
+                PrintToChat(player, GetMessage("Bank Mark First", player));
+            }
+            else
+            {
+                BData.Area.SetPosition(2, player.Entity.Position);
+                PrintToChat(player, GetMessage("Bank Mark Second", player));
             }
 
             PrintToChat(player, string.Format(GetMessage("Position Mark", player), player.Entity.Position.x, player.Entity.Position.z));
@@ -1134,20 +1446,20 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (_PlayerData[player.Id].Shop.HasPosition() == 2) { PrintToChat(player, GetMessage("Shop Mark Exists", player)); return; }
+            if (Data[player.Id].Shop.Area.GetPositions() == 2) { PrintToChat(player, GetMessage("Shop Mark Exists", player)); return; }
 
             if (GetShopOwner(player.Entity.Position) != 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Mark Occupied", player)); return; }
 
-            if (_PlayerData[player.Id].Shop.HasPosition() != 1)
+            if (Data[player.Id].Shop.Area.GetPositions() == 0)
             {
-                _PlayerData[player.Id].Shop.AddPosition(player.Entity.Position, 1);
+                Data[player.Id].Shop.Area.SetPosition(1, player.Entity.Position);
                 PrintToChat(player, GetMessage("Shop Mark First", player));
             }
             else
             {
-                if (BlocksAreTooFarApart(_PlayerData[player.Id].Shop.GetPosition(1), player.Entity.Position)) { PrintToChat(player, GetMessage("Shop Mark Limit", player)); return; }
+                if (BlocksAreTooFarApart(Data[player.Id].Shop.Area.FirstPosition.Point(), player.Entity.Position)) { PrintToChat(player, GetMessage("Shop Mark Limit", player)); return; }
 
-                _PlayerData[player.Id].Shop.AddPosition(player.Entity.Position, 2);
+                Data[player.Id].Shop.Area.SetPosition(2, player.Entity.Position);
                 PrintToChat(player, GetMessage("Shop Mark Second", player));
             }
 
@@ -1164,7 +1476,7 @@ namespace Oxide.Plugins
 
             string resource = Capitalise(input[0]);
 
-            if (_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Store Item Exists", player), resource)); return; }
+            if (GeData.HasItem(resource)) { PrintToChat(player, string.Format(GetMessage("Store Item Exists", player), resource)); return; }
             var stackLimit = GetStackLimit(resource);
             if (stackLimit < 1) { PrintToChat(player, string.Format(GetMessage("Item Non-Existing", player), resource)); return; }
 
@@ -1172,7 +1484,7 @@ namespace Oxide.Plugins
             if (!int.TryParse(input[1], out price)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
             if (price < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
-            _GEData.TradeList.Add(resource, new TradeData(price));
+            GeData.AddItem(resource, price);
 
             PrintToChat(player, string.Format(GetMessage("Store Item Added", player), resource));
 
@@ -1185,7 +1497,7 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
+            if (Data[player.Id].Shop.Area.GetPositions() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
             if (input.Length < 2 || input.Length > 3) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
 
@@ -1202,7 +1514,7 @@ namespace Oxide.Plugins
 
             if (!CanRemoveResource(player, resource, amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop No Inventory Resources", player)); return; }
 
-            switch (_PlayerData[player.Id].Shop.AddItem(resource, price, amount))
+            switch (Data[player.Id].Shop.AddItem(resource, price, amount))
             {
                 case 0:
                     PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Full", player));
@@ -1218,19 +1530,35 @@ namespace Oxide.Plugins
 
             RemoveItemsFromInventory(player.GetInventory().Contents, resource, stackLimit, amount);
 
+            Log($"Player {player.Name} ({player.Id}) has added {amount} of {resource} with a stacklimit of {stackLimit} to his shop with a price of {price} per item.");
+
             SaveTradeData();
         }
 
-        private void RemoveExchangeMarks(Player player, string[] input)
+        private void RemoveExchangeMarks(Player player)
         {
             CheckPlayerExists(player);
 
             if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (_GEData.HasPosition() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
+            if (GeData.Area.GetPositions() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
 
-            _GEData.RemoveGEMarks();
+            GeData.RemoveMarks();
             PrintToChat(player, GetMessage("Store Mark Removed", player));
+
+            SaveTradeData();
+        }
+
+        private void RemoveBankMarks(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            if (BData.Area.GetPositions() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
+
+            BData.RemoveMarks();
+            PrintToChat(player, GetMessage("Bank Mark Removed", player));
 
             SaveTradeData();
         }
@@ -1241,9 +1569,9 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (_PlayerData[player.Id].Shop.HasPosition() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
+            if (Data[player.Id].Shop.Area.GetPositions() == 0) { PrintToChat(player, GetMessage("No Marks", player)); return; }
 
-            _PlayerData[player.Id].Shop.RemoveShop();
+            Data[player.Id].Shop.RemoveShop();
             PrintToChat(player, GetMessage("Shop Mark Removed", player));
 
             SaveTradeData();
@@ -1255,7 +1583,7 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+            foreach (KeyValuePair<ulong, PlayerData> data in Data)
             {
                 data.Value.Gold = 0;
             }
@@ -1273,9 +1601,9 @@ namespace Oxide.Plugins
 
             var resource = Capitalise(input.JoinToString(" "));
 
-            if (!_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Store No Item", player), resource)); return; }
+            if (!GeData.HasItem(resource)) { PrintToChat(player, string.Format(GetMessage("Store No Item", player), resource)); return; }
 
-            _GEData.TradeList.Remove(resource);
+            GeData.RemoveItem(resource);
             PrintToChat(player, string.Format(GetMessage("Store Item Removed", player), resource));
 
             SaveTradeData();
@@ -1289,18 +1617,18 @@ namespace Oxide.Plugins
 
             if (input.Length > 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
             
-            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
+            if (Data[player.Id].Shop.Area.GetPositions() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
             var resource = Capitalise(input[0]);
 
-            if (!_PlayerData[player.Id].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Shop No Item Text", player), resource)); return; }
+            if (!Data[player.Id].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Shop No Item Text", player), resource)); return; }
 
             int amount;
 
-            if (input.Length < 2) amount = _PlayerData[player.Id].Shop.ItemList[resource].Amount;
+            if (input.Length < 2) amount = Data[player.Id].Shop.ItemList[resource].Amount;
             else if (!int.TryParse(input[1], out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
-            if (_PlayerData[player.Id].Shop.ItemList[resource].Amount < amount) { PrintToChat(player, GetMessage("Shop No Resources", player)); return; }
+            if (Data[player.Id].Shop.ItemList[resource].Amount < amount) { PrintToChat(player, GetMessage("Shop No Resources", player)); return; }
 
             var inventory = player.GetInventory().Contents;
             var stackLimit = GetStackLimit(resource);
@@ -1310,7 +1638,9 @@ namespace Oxide.Plugins
 
             AddItemsToInventory(inventory, resource, stackLimit, amount);
 
-            _PlayerData[player.Id].Shop.ItemList.Remove(resource);
+            Data[player.Id].Shop.ItemList.Remove(resource);
+
+            Log($"Player {player.Name} ({player.Id}) has removed {amount} of {resource} with a stacklimit of {stackLimit} from his shop.");
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Shop Item Removed", player), resource));
             SaveTradeData();
@@ -1322,7 +1652,7 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            _GEData.TradeList = new SortedDictionary<string, TradeData>();
+            GeData.ClearItems();
 
             PrintToChat(player, GetMessage("Store Wipe", player));
 
@@ -1344,8 +1674,8 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            _GEData.TradeList = new SortedDictionary<string, TradeData>();
-            foreach (KeyValuePair<string, int> item in _DefaultTradeList) _GEData.AddItem(item.Key, item.Value);
+            GeData.ClearItems();
+            _defaultTradeList.Foreach(i => GeData.AddItem(i.Key, i.Value));
 
             PrintToChat(player, GetMessage("Store Reset", player));
 
@@ -1365,17 +1695,35 @@ namespace Oxide.Plugins
             SaveTradeData();
         }
 
+        private void RemoveShops(Player player)
+        {
+            CheckPlayerExists(player);
+
+            if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
+
+            foreach (var data in Data)
+            {
+                data.Value.ResetShop();
+            }
+
+            player.SendMessage(GetMessage("Shop All Removed", player));
+
+            SaveTradeData();
+        }
+
         private void RestoreShops(Player player)
         {
             CheckPlayerExists(player);
 
             if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+            foreach (var data in Data)
             {
                 data.Value.Shop.Name = "Local Store";
                 data.Value.Shop.RemoveShop();
             }
+
+            player.SendMessage(GetMessage("Shop All Restored", player));
 
             SaveTradeData();
         }
@@ -1399,7 +1747,7 @@ namespace Oxide.Plugins
                 playerName = input.JoinToString(" ");
                 playerName = playerName.Substring(playerName.IndexOf(' ') + 1);
 
-                foreach (KeyValuePair<ulong, PlayerData> data in _PlayerData)
+                foreach (KeyValuePair<ulong, PlayerData> data in Data)
                 {
                     if (data.Value.Name.ToLower().Contains(playerName.ToLower()))
                     {
@@ -1416,7 +1764,7 @@ namespace Oxide.Plugins
                 playerId = player.Id;
             }
 
-            _PlayerData[playerId].Gold = amount;
+            Data[playerId].Gold = amount;
             PrintToChat(player, string.Format(GetMessage("Gold Set", player), playerName, amount));
 
             SaveTradeData();
@@ -1428,8 +1776,10 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (!double.TryParse(input[0], out Inflation)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+            double inflation;
+            if (!double.TryParse(input[0], out inflation)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
 
+            Inflation = inflation;
             PrintToChat(player, string.Format(GetMessage("Inflation Set", player), Inflation));
 
             SaveConfigData();
@@ -1441,8 +1791,10 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Modify.Itemlist")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (!double.TryParse(input[0], out MaxDeflation)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
+            double maxDeflation;
+            if (!double.TryParse(input[0], out maxDeflation)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
 
+            MaxDeflation = maxDeflation;
             PrintToChat(player, string.Format(GetMessage("Max Deflation Set", player), MaxDeflation));
 
             SaveConfigData();
@@ -1475,13 +1827,13 @@ namespace Oxide.Plugins
 
             string resource = Capitalise(input[0]);
 
-            if (!_GEData.TradeList.ContainsKey(resource)) { PrintToChat(player, GetMessage("Item Non-Existing", player)); return; }
+            if (!GeData.HasItem(resource)) { PrintToChat(player, GetMessage("Item Non-Existing", player)); return; }
 
             int price = 0;
             if (!int.TryParse(input[1], out price)) { PrintToChat(player, GetMessage("Invalid Amount", player)); return; }
             if (price < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
-            _GEData.TradeList[resource].SetPrice(price);
+            GeData.TradeList[resource].SetPrice(price);
 
             PrintToChat(player, string.Format(GetMessage("Store Item Price Changed", player), resource, price));
 
@@ -1494,19 +1846,21 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
+            if (Data[player.Id].Shop.Area.GetPositions() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
             if (input.Length != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
 
             string resource = Capitalise(input[0]);
 
-            if (!_PlayerData[player.Id].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, string.Format(GetMessage("Shop No Item", player), resource)); return; }
+            if (!Data[player.Id].Shop.HasItem(resource)) { PrintToChat(player, string.Format(GetMessage("Shop No Item", player), resource)); return; }
 
             int amount = 0;
             if (!int.TryParse(input[1], out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
             if (amount < 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
-            _PlayerData[player.Id].Shop.ItemList[resource].Price = amount;
+            Data[player.Id].Shop.ItemList[resource].Price = amount;
+
+            Log($"Player {player.Name} ({player.Id}) has changed the price of {resource} in his shop to {amount} per item.");
 
             SaveTradeData();
             PrintToChat(player, GetMessage("Shop Prices updated", player));
@@ -1518,11 +1872,15 @@ namespace Oxide.Plugins
 
             if (!player.HasPermission("GrandExchange.Shop")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (_PlayerData[player.Id].Shop.HasPosition() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
+            if (Data[player.Id].Shop.Area.GetPositions() != 2) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop Own", player)); return; }
 
             if (input.Length < 1) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Args", player)); return; }
 
-            _PlayerData[player.Id].Shop.Name = input.JoinToString(" ");
+            Data[player.Id].Shop.Name = input.JoinToString(" ");
+
+            Log($"Player {player.Name} ({player.Id}) has changed the name of his shop into {Data[player.Id].Shop.Name}.");
+
+            SaveTradeData();
         }
 
         private void TogglePveGold(Player player)
@@ -1561,14 +1919,14 @@ namespace Oxide.Plugins
             SaveConfigData();
         }
 
-        private void ToggleAccessGE(Player player)
+        private void ToggleAccessGe(Player player)
         {
             CheckPlayerExists(player);
 
             if (!player.HasPermission("GrandExchange.Modify.Settings")) { PrintToChat(player, GetMessage("No Permission", player)); return; }
 
-            if (CanUseGE) { CanUseGE = false; PrintToChat(player, string.Format(GetMessage("Toggle Grand Exchange", player), "[FF0000]OFF")); }
-            else { CanUseGE = true; PrintToChat(player, string.Format(GetMessage("Toggle Grand Exchange", player), "[00FF00]ON")); }
+            if (CanUseGe) { CanUseGe = false; PrintToChat(player, string.Format(GetMessage("Toggle Grand Exchange", player), "[FF0000]OFF")); }
+            else { CanUseGe = true; PrintToChat(player, string.Format(GetMessage("Toggle Grand Exchange", player), "[00FF00]ON")); }
 
             SaveConfigData();
         }
@@ -1589,11 +1947,49 @@ namespace Oxide.Plugins
 
         #region System Functions
 
-        private void ContinueWithTradeList(Player player, Options selection, Dialogue dialogue, object contextData, int itemsPerPage, int currentItemCount)
+        private void DepositGold(Player player, Options selection, Dialogue dialogue)
+        {
+            if (selection != Options.OK) return;
+
+            int amount;
+            if (!int.TryParse(dialogue.ValueMessage, out amount)) { player.SendError(GetMessage("Invalid Amount", player)); return; }
+            if (amount < 1) { player.SendError(GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
+            if (Data[player.Id].Gold < amount) { player.SendError(GetMessage("Chat Title", player) + GetMessage("Bank No Gold", player)); return; }
+            
+            player.SendMessage(GetMessage("Chat Title", player) + GetMessage("Bank Deposited", player), BData.AddGold(player, amount));
+            RemoveGold(player, amount);
+
+            SaveTradeData();
+        }
+
+        private void WithdrawGold(Player player, Options selection, Dialogue dialogue)
+        {
+            if (selection != Options.OK) return;
+
+            int amount;
+            if (!int.TryParse(dialogue.ValueMessage, out amount)) { player.SendError(GetMessage("Invalid Amount", player)); return; }
+            if (amount < 1) { player.SendError(GetMessage("Chat Title", player) + GetMessage("Bank Empty", player)); return; }
+            if (BData.GetGold(player) < amount) { player.SendError(GetMessage("Chat Title", player) + GetMessage("Bank Empty", player)); return; }
+
+            switch (BData.RemoveGold(player, amount))
+            {
+                case -2:
+                    player.SendError(GetMessage("Chat Title", player) + GetMessage("Bank Empty", player));
+                    return;
+                case -1:
+                    return;
+            }
+            player.SendMessage(GetMessage("Chat Title", player) + GetMessage("Bank Withdrawn", player), amount);
+            GiveGold(player, amount);
+
+            SaveTradeData();
+        }
+
+        private void ContinueWithTradeList(Player player, Options selection, int itemsPerPage, int currentItemCount)
         {
             if (selection != Options.Yes) return;
 
-            if ((currentItemCount + itemsPerPage) > _GEData.TradeList.Count) itemsPerPage = _GEData.TradeList.Count - currentItemCount;
+            if ((currentItemCount + itemsPerPage) > GeData.TradeList.Count) itemsPerPage = GeData.TradeList.Count - currentItemCount;
 
             string buyIcon = "";
             string sellIcon = "";
@@ -1603,7 +1999,7 @@ namespace Oxide.Plugins
             {
                 buyIcon = "[008888]";
                 sellIcon = "[008888]";
-                KeyValuePair<string, TradeData> resource = _GEData.TradeList.GetAt(i);
+                KeyValuePair<string, TradeData> resource = GeData.TradeList.GetAt(i);
                 int originalSellPrice = (int)(resource.Value.OriginalPrice * (SellPercentage / 100));
 
                 if (resource.Value.BuyPrice >= resource.Value.OriginalPrice) buyIcon = "[00FF00]";
@@ -1618,13 +2014,13 @@ namespace Oxide.Plugins
                 itemText += "\n";
             }
 
-            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), Data[player.Id].Gold);
 
             currentItemCount = currentItemCount + itemsPerPage;
 
-            if (currentItemCount < _GEData.TradeList.Count)
+            if (currentItemCount < GeData.TradeList.Count)
             {
-                player.ShowConfirmPopup(GetMessage("Popup Title", player), itemText, "Next Page", "Exit", (options, dialogue1, data) => ContinueWithTradeList(player, options, dialogue1, data, itemsPerPage, currentItemCount));
+                player.ShowConfirmPopup(GetMessage("Popup Title", player), itemText, "Next Page", "Exit", (options, dialogue1, data) => ContinueWithTradeList(player, options, itemsPerPage, currentItemCount));
             }
             else
             {
@@ -1638,7 +2034,7 @@ namespace Oxide.Plugins
 
             var resource = Capitalise(dialogue.ValueMessage);
 
-            if (!_GEData.TradeList.ContainsKey(resource))
+            if (!GeData.HasItem(resource))
             {
                 switch (type)
                 {
@@ -1652,17 +2048,17 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (_GEData.TradeList[resource] == null) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
+            if (GeData.TradeList[resource] == null) { PrintToChat(player, GetMessage("Invalid Args", player)); return; }
 
             string message;
             switch (type)
             {
                 case 1:
-                    message = string.Format(GetMessage("Store Buy Amount", player), resource, _GEData.TradeList[resource].BuyPrice);
+                    message = string.Format(GetMessage("Store Buy Amount", player), resource, GeData.TradeList[resource].BuyPrice);
                     player.ShowInputPopup(GetMessage("Popup Title", player), message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeAmount(player, options, dialogue1, resource, 1));
                     break;
                 case 2:
-                    message = string.Format(GetMessage("Store Sell Amount", player), resource, _GEData.TradeList[resource].SellPrice);
+                    message = string.Format(GetMessage("Store Sell Amount", player), resource, GeData.TradeList[resource].SellPrice);
                     player.ShowInputPopup(GetMessage("Popup Title", player), message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectExchangeAmount(player, options, dialogue1, resource, 2));
                     break;
             }
@@ -1697,21 +2093,21 @@ namespace Oxide.Plugins
             switch (type)
             {
                 case 1:
-                    totalValue = _GEData.TradeList[resource].GetPrice(amount, 1);
+                    totalValue = GeData.TradeList[resource].GetPrice(amount, 1);
                     message = string.Format(GetMessage("Store Buy Confirm", player), amount, resource, totalValue);
-                    message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
-                    player.ShowConfirmPopup(GetMessage("Popup Title", player), message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, options, dialogue, resource, totalValue, amount));
+                    message += "\n\n" + string.Format(GetMessage("Gold Available", player), Data[player.Id].Gold);
+                    player.ShowConfirmPopup(GetMessage("Popup Title", player), message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, options, resource, totalValue, amount));
                     break;
                 case 2:
-                    totalValue = _GEData.TradeList[resource].GetPrice(amount, 2);
+                    totalValue = GeData.TradeList[resource].GetPrice(amount, 2);
                     message = string.Format(GetMessage("Store Sell Confirm", player), amount, resource, totalValue);
-                    message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
-                    player.ShowConfirmPopup(GetMessage("Popup Title", player), message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerHasTheResourceToSell(player, options, dialogue, resource, totalValue, amount));
+                    message += "\n\n" + string.Format(GetMessage("Gold Available", player), Data[player.Id].Gold);
+                    player.ShowConfirmPopup(GetMessage("Popup Title", player), message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerHasTheResourceToSell(player, options, resource, totalValue, amount));
                     break;
             }
         }
 
-        private void CheckIfThePlayerCanAffordThis(Player player, Options selection, Dialogue dialogue, string resource, int totalValue, int amount)
+        private void CheckIfThePlayerCanAffordThis(Player player, Options selection, string resource, int totalValue, int amount)
         {
             if (selection != Options.Yes) return;
 
@@ -1726,7 +2122,9 @@ namespace Oxide.Plugins
             AddItemsToInventory(inventory, resource, stackLimit, amount);
             RemoveGold(player, totalValue);
 
-            _GEData.TradeList[resource].UpdatePrices(stackLimit, amount, 1);
+            Log($"Player {player.Name} ({player.Id}) has bought {amount} of {resource} with a stacklimit of {stackLimit} for {totalValue} gold.");
+
+            GeData.TradeList[resource].UpdatePrices(stackLimit, amount, 1);
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Store Buy Complete", player), amount, resource));
             PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Buy Finish", player));
@@ -1734,7 +2132,7 @@ namespace Oxide.Plugins
             SaveTradeData();
         }
 
-        private void CheckIfThePlayerHasTheResourceToSell(Player player, Options selection, Dialogue dialogue, string resource, int totalValue, int amount)
+        private void CheckIfThePlayerHasTheResourceToSell(Player player, Options selection, string resource, int totalValue, int amount)
         {
             if (selection != Options.Yes) return;
 
@@ -1742,10 +2140,11 @@ namespace Oxide.Plugins
             
             var stackLimit = GetStackLimit(resource);
             RemoveItemsFromInventory(player.GetInventory().Contents, resource, stackLimit, amount);
-
             GiveGold(player, totalValue);
 
-            _GEData.TradeList[resource].UpdatePrices(stackLimit, amount, 2);
+            Log($"Player {player.Name} ({player.Id}) has sold {amount} of {resource} with a stacklimit of {stackLimit} for {totalValue} gold.");
+
+            GeData.TradeList[resource].UpdatePrices(stackLimit, amount, 2);
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Store Sell Complete", player), amount, resource));
             PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Store Sell Finish", player));
@@ -1759,14 +2158,14 @@ namespace Oxide.Plugins
 
             if (shopOwner == 0) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("No Shop", player)); return; }
             
-            if (_PlayerData[shopOwner].Shop == null || _PlayerData[shopOwner].Shop.ItemList == null) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Closed", player)); return; }
+            if (Data[shopOwner].Shop == null || Data[shopOwner].Shop.ItemList == null) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Closed", player)); return; }
             
-            if (_PlayerData[shopOwner].Shop.ItemList.Count < 1) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage(type == 1? "Shop Closed": "Shop Empty", player)); return; }
+            if (Data[shopOwner].Shop.ItemList.Count < 1) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage(type == 1? "Shop Closed": "Shop Empty", player)); return; }
 
             string buyIcon = "[008888]";
             string itemText = "";
 
-            foreach (KeyValuePair<string, ItemData> item in _PlayerData[shopOwner].Shop.ItemList)
+            foreach (KeyValuePair<string, ItemData> item in Data[shopOwner].Shop.ItemList)
             {
                 buyIcon = "[00FF00]";
 
@@ -1774,16 +2173,16 @@ namespace Oxide.Plugins
                 itemText += "\n";
             }
 
-            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+            itemText += "\n\n" + string.Format(GetMessage("Gold Available", player), Data[player.Id].Gold);
 
-            player.ShowConfirmPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, itemText, "Buy", "Exit", (selection, dialogue, data) => BuyItemFromPlayerShop(player, shopOwner, selection));
+            player.ShowConfirmPopup(Data[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : Data[shopOwner].Shop.Name, itemText, "Buy", "Exit", (selection, dialogue, data) => BuyItemFromPlayerShop(player, shopOwner, selection));
         }
 
         private void BuyItemFromPlayerShop(Player player, ulong shopOwner, Options selection)
         {
             if (selection != Options.Yes) return;
             
-            player.ShowInputPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, GetMessage("Shop Buy Item", player), "", "Submit", "Cancel", (options, dialogue1, data) => SelectItemToBeBoughtFromPlayer(player, shopOwner, options, dialogue1));
+            player.ShowInputPopup(Data[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : Data[shopOwner].Shop.Name, GetMessage("Shop Buy Item", player), "", "Submit", "Cancel", (options, dialogue1, data) => SelectItemToBeBoughtFromPlayer(player, shopOwner, options, dialogue1));
         }
 
         private void SelectItemToBeBoughtFromPlayer(Player player, ulong shopOwner, Options selection, Dialogue dialogue)
@@ -1792,13 +2191,13 @@ namespace Oxide.Plugins
 
             string resource = Capitalise(dialogue.ValueMessage);
 
-            if (!_PlayerData[shopOwner].Shop.ItemList.ContainsKey(resource)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Item", player)); return; }
+            if (!Data[shopOwner].Shop.HasItem(resource)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Item", player)); return; }
 
-            string message = string.Format(GetMessage("Shop Buy Amount", player), resource, _PlayerData[shopOwner].Shop.ItemList[resource].Price, _PlayerData[shopOwner].Shop.ItemList[resource].GetAmount());
+            string message = string.Format(GetMessage("Shop Buy Amount", player), resource, Data[shopOwner].Shop.ItemList[resource].Price, Data[shopOwner].Shop.ItemList[resource].GetAmount());
 
-            message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+            message += "\n\n" + string.Format(GetMessage("Gold Available", player), Data[player.Id].Gold);
 
-            player.ShowInputPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectAmountToBeBoughtFromPlayerStore(player, shopOwner, options, dialogue1, resource));
+            player.ShowInputPopup(Data[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : Data[shopOwner].Shop.Name, message, "", "Submit", "Cancel", (options, dialogue1, data) => SelectAmountToBeBoughtFromPlayerStore(player, shopOwner, options, dialogue1, resource));
         }
 
         private void SelectAmountToBeBoughtFromPlayerStore(Player player, ulong shopOwner, Options selection, Dialogue dialogue, string resource)
@@ -1810,15 +2209,15 @@ namespace Oxide.Plugins
             int amount;
             if (!int.TryParse(amountText, out amount)) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Invalid Amount", player)); return; }
 
-            if (amount < 1 || amount > _PlayerData[shopOwner].Shop.ItemList[resource].GetAmount()) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy Amount Wrong", player)); return; }
+            if (amount < 1 || amount > Data[shopOwner].Shop.ItemList[resource].GetAmount()) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy Amount Wrong", player)); return; }
 
-            var totalValue = _PlayerData[shopOwner].Shop.ItemList[resource].GetPrice(amount);
+            var totalValue = Data[shopOwner].Shop.ItemList[resource].GetPrice(amount);
 
             var message = string.Format(GetMessage("Shop Buy Confirm", player), amount, resource, totalValue);
 
-            message += "\n\n" + string.Format(GetMessage("Gold Available", player), _PlayerData[player.Id].Gold);
+            message += "\n\n" + string.Format(GetMessage("Gold Available", player), Data[player.Id].Gold);
 
-            player.ShowConfirmPopup(_PlayerData[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : _PlayerData[shopOwner].Shop.Name, message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, options, shopOwner, resource, totalValue, amount));
+            player.ShowConfirmPopup(Data[shopOwner].Shop.Name.IsNullEmptyOrWhite() ? "Local Store" : Data[shopOwner].Shop.Name, message, "Submit", "Cancel", (options, dialogue1, data) => CheckIfThePlayerCanAffordThis(player, options, shopOwner, resource, totalValue, amount));
         }
 
         private void CheckIfThePlayerCanAffordThis(Player player, Options selection, ulong shopOwner, string resource, long totalValue, int amount)
@@ -1834,10 +2233,11 @@ namespace Oxide.Plugins
             if (inventory.FreeSlotCount < stacks) { PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy No Inventory Space", player)); return; }
 
             AddItemsToInventory(inventory, resource, stackLimit, amount);
-
             RemoveGold(player, totalValue);
             GiveGold(shopOwner, totalValue);
-            _PlayerData[shopOwner].Shop.RemoveItem(resource, amount);
+            Data[shopOwner].Shop.RemoveItem(resource, amount);
+            
+            Log($"Player {player.Name} ({player.Id}) has bought {amount} of {resource} with a stacklimit of {stackLimit} for {totalValue} gold from {Data[shopOwner].Name}s shop.");
 
             PrintToChat(player, GetMessage("Chat Title", player) + string.Format(GetMessage("Shop Buy Complete", player), amount, resource));
             PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Shop Buy Finish", player));
@@ -1854,19 +2254,19 @@ namespace Oxide.Plugins
 
         private void CheckPlayerExists(Player player)
         {
-            if (!_PlayerData.ContainsKey(player.Id)) _PlayerData.Add(player.Id, new PlayerData(player.DisplayName));
+            if (!Data.ContainsKey(player.Id)) Data.Add(player.Id, new PlayerData(player.DisplayName));
             else
             {
-                if (_PlayerData[player.Id].Name.IsNullOrEmpty()) _PlayerData[player.Id].Name = player.Name;
-                if (_PlayerData[player.Id].Name != player.Name) _PlayerData[player.Id].Name = player.Name;
+                if (Data[player.Id].Name.IsNullOrEmpty()) Data[player.Id].Name = player.Name;
+                if (Data[player.Id].Name != player.Name) Data[player.Id].Name = player.Name;
             }
-            if (_PlayerData[player.Id].Shop == null) _PlayerData[player.Id].Shop = new ShopData();
+            if (Data[player.Id].Shop == null) Data[player.Id].Shop = new ShopData();
             SaveTradeData();
         }
 
         private bool CanRemoveGold(Player player, long amount)
         {
-            if (_PlayerData[player.Id].Gold - amount < 0) return false;
+            if (Data[player.Id].Gold - amount < 0) return false;
             return true;
         }
 
@@ -1897,12 +2297,12 @@ namespace Oxide.Plugins
 
         private ulong GetShopOwner(Vector3 position)
         {
-            if (_PlayerData.Count < 1) return 0;
+            if (Data.Count < 1) return 0;
 
-            foreach (KeyValuePair<ulong, PlayerData> shop in _PlayerData)
+            foreach (KeyValuePair<ulong, PlayerData> shop in Data)
             {
                 if (shop.Value.Shop == null) continue;
-                if (shop.Value.Shop.IsInShopArea(position)) return shop.Key;
+                if (shop.Value.Shop.Area.IsInArea(position)) return shop.Key;
             }
 
             return 0;
@@ -1910,36 +2310,48 @@ namespace Oxide.Plugins
 
         private void GiveGold(Player player, long amount)
         {
-            if (_PlayerData[player.Id].Gold + amount > MaxPossibleGold)
+            var data = Data[player.Id];
+            var bank = BData.GetGold(player);
+            if (data.Gold + bank + amount > MaxPossibleGold)
             {
-                PrintToChat(player, GetMessage("Chat Title", player) + GetMessage("Gold Maxed", player));
-                _PlayerData[player.Id].Gold = MaxPossibleGold;
+                player.SendMessage(GetMessage("Chat Title", player) + GetMessage("Gold Maxed", player));
+                data.Gold = MaxPossibleGold - bank;
             }
-            else _PlayerData[player.Id].Gold += amount;
+            else data.Gold += amount;
 
             SaveTradeData();
         }
 
         private void GiveGold(ulong playerId, long amount)
         {
-            if (_PlayerData[playerId].Gold + amount > MaxPossibleGold) _PlayerData[playerId].Gold = MaxPossibleGold;
-            else _PlayerData[playerId].Gold += amount;
+            var player = Server.GetPlayerById(playerId);
+            var data = Data[playerId];
+            var bank = BData.GetGold(playerId);
+
+            if (data.Gold + bank + amount > MaxPossibleGold)
+            {
+                player?.SendMessage(GetMessage("Chat Title", player) + GetMessage("Gold Maxed", player));
+                data.Gold = MaxPossibleGold - bank;
+            }
+            else data.Gold += amount;
 
             SaveTradeData();
         }
 
         private void RemoveGold(Player player, long amount)
         {
-            _PlayerData[player.Id].Gold -= amount;
+            var data = Data[player.Id];
+            data.Gold -= amount;
 
-            if (_PlayerData[player.Id].Gold < 0L) _PlayerData[player.Id].Gold = 0L;
+            if (data.Gold < 0L) data.Gold = 0L;
         }
 
         private void RemoveGold(ulong playerId, long amount)
         {
-            _PlayerData[playerId].Gold -= amount;
+            var data = Data[playerId];
+            data.Gold -= amount;
 
-            if (_PlayerData[playerId].Gold < 0L) _PlayerData[playerId].Gold = 0L;
+            if (data.Gold < 0L) data.Gold = 0L;
         }
 
         private void AddItemsToInventory(ItemCollection inventory, string resource, int stackLimit, int amount)
@@ -1979,22 +2391,13 @@ namespace Oxide.Plugins
         private void DeflatePrices()
         {
             if (!UseDeflation) return;
-
-            foreach (KeyValuePair<string, TradeData> item in _GEData.TradeList)
-            {
-                item.Value.DeflatePrice();
-            }
-
+            GeData.TradeList.Foreach(i => i.Value.DeflatePrice());
             SaveTradeData();
         }
 
         private void ForcePriceAdjustment()
         {
-            foreach (KeyValuePair<string, TradeData> item in _GEData.TradeList)
-            {
-                item.Value.BuyPrice = item.Value.OriginalPrice;
-                item.Value.SellPrice = (int)(item.Value.OriginalPrice * (SellPercentage / 100));
-            }
+            GeData.TradeList.Foreach(i => i.Value.ForcePriceAdjustment());
             SaveTradeData();
         }
 
@@ -2047,10 +2450,10 @@ namespace Oxide.Plugins
                 var entity = e.Entity;
                 if (IsAnimal(entity) && PveGold)
                 {
-                    goldReward = _Random.Next(2, GoldRewardForPve);
+                    goldReward = Random.Next(2, GoldRewardForPve);
                     GiveGold(killer, goldReward);
 
-                    PrintToChat(killer, string.Format(GetMessage("Gold Collected", killer), goldReward));
+                    killer.SendMessage(GetMessage("Gold Collected", killer), goldReward);
                 }
             }
             else
@@ -2065,9 +2468,9 @@ namespace Oxide.Plugins
                 if (victim.GetGuild() == null || killer.GetGuild() == null) return;
                 if (victim.GetGuild().Name == killer.GetGuild().Name) { PrintToChat(killer, GetMessage("Chat Title", killer) + GetMessage("Gold Guild", killer)); return; }
 
-                var victimGold = _PlayerData[victim.Id].Gold;
+                var victimGold = Data[victim.Id].Gold;
                 goldReward = (int)(victimGold * (GoldStealPercentage / 100));
-                var goldAmount = (long)_Random.Next(0, goldReward);
+                var goldAmount = (long)Random.Next(0, goldReward);
                 if (goldAmount > victimGold) goldAmount = victimGold;
 
                 if (goldAmount == 0) PrintToChat(killer, string.Format(GetMessage("Gold Kill", killer), victim.Name));
@@ -2096,8 +2499,8 @@ namespace Oxide.Plugins
             if (e.Entity == e.Damage.DamageSource) return;
             #endregion
             if (!SafeTrade) return;
-            if (_GEData.HasPosition() != 2) return;
-            if (!_GEData.IsInTradeArea(e.Entity.Position)) return;
+            if (!GeData.Area.IsInArea(e.Entity.Position)) return;
+            if (IsAnimal(e.Entity)) return;
 
             e.Cancel();
             e.Damage.Amount = 0f;
@@ -2109,7 +2512,6 @@ namespace Oxide.Plugins
             #region Null Checks
             if (e == null) return;
             if (e.Cancelled) return;
-            if (e.Position == null) return;
             if (e.Damage == null) return;
             if (e.Damage.DamageSource == null) return;
             if (!e.Damage.DamageSource.IsPlayer) return;
@@ -2119,7 +2521,7 @@ namespace Oxide.Plugins
             SalvageModifier component = null;
             if (centralPrefabAtLocal != null) component = centralPrefabAtLocal.GetComponent<SalvageModifier>();
 
-            if (!SafeTrade || _GEData.HasPosition() != 2 || !_GEData.IsInTradeArea(ConvertPosCube(e.Position)))
+            if (!SafeTrade || !GeData.Area.IsInArea(ConvertPosCube(e.Position)))
             {
                 if (component != null) component.info.NotSalvageable = false;
                 return;
@@ -2128,6 +2530,31 @@ namespace Oxide.Plugins
             if (component != null) component.info.NotSalvageable = true;
             e.Cancel();
             e.Damage.Amount = 0f;
+        }
+
+        private void OnPlayerCapture(PlayerCaptureEvent captureEvent)
+        {
+            #region Checks
+            if (!UseRopingProtection) return;
+            if (captureEvent == null) return;
+            if (captureEvent.Cancelled) return;
+            if (captureEvent.Captor == null) return;
+            if (captureEvent.TargetEntity == null) return;
+            if (captureEvent.Captor == captureEvent.TargetEntity) return;
+            if (!captureEvent.Captor.IsPlayer) return;
+            if (!captureEvent.TargetEntity.IsPlayer) return;
+            #endregion
+
+            var captor = captureEvent.Captor.Owner;
+            CheckPlayerExists(captor);
+
+            var target = captureEvent.TargetEntity.Owner;
+            CheckPlayerExists(target);
+            
+            if (!GeData.Area.IsInArea(target.Entity.Position)) return;
+
+            captor.SendError(GetMessage("Trade No Roping", captor));
+            captureEvent.Cancel();
         }
 
         private void SendHelpText(Player player)
@@ -2141,6 +2568,11 @@ namespace Oxide.Plugins
             PrintToChat(player, "[00ff00]/buy[FFFFFF] - Buy an item from the Grand Exchange,");
             PrintToChat(player, "[00ff00]/sell[FFFFFF] - Sell and item to the Grand Exchange.");
             PrintToChat(player, "[00ff00]/sendgold <amount> <player name>[FFFFFF] - Send an amount of gold from your account to another player.");
+            
+            PrintToChat(player, "[00ff00]/bank[FFFFFF] - Give information about the bank.");
+            PrintToChat(player, "[00ff00]/deposit[FFFFFF] - Deposit gold in your bank account.");
+            PrintToChat(player, "[00ff00]/withdraw[FFFFFF] - Withdraw gold from your bank account.");
+
             if (player.HasPermission("GrandExchange.Modify.Itemlist"))
             {
                 PrintToChat(player, "[00ff00]/ge.additem <item name> <price>[FFFFFF] - Add an item to the Grand Exchange (must excist in the item database in the config file).");
@@ -2158,6 +2590,8 @@ namespace Oxide.Plugins
             {
                 PrintToChat(player, "[00ff00]/ge.addmark[FFFFFF] - Set a mark for the Grand Exchange area.");
                 PrintToChat(player, "[00ff00]/ge.removemarks[FFFFFF] - Remove the marks for the Grand Exchange area.");
+                PrintToChat(player, "[00ff00]/ge.addbankmark[FFFFFF] - Set a mark for the bank area.");
+                PrintToChat(player, "[00ff00]/ge.removebankmarks[FFFFFF] - Remove the marks for the bank area.");
                 PrintToChat(player, "[00ff00]/ge.pvp[FFFFFF] - Toggle the pvp gold stealing.");
                 PrintToChat(player, "[00ff00]/ge.pve[FFFFFF] - Toggle the pve gold gain.");
                 PrintToChat(player, "[00ff00]/ge.safetrade[FFFFFF] - Toggle whether the trading areas are safe or not.");
@@ -2216,7 +2650,9 @@ namespace Oxide.Plugins
             return (T)Convert.ChangeType(value, typeof(T));
         }
 
-        private string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, (player?.Id.ToString()));
+        private string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, player?.Id.ToString());
+
+        private void Log(string msg) => LogFileUtil.LogTextToFile($"..\\oxide\\logs\\GE_{DateTime.Now:yyyy-MM-dd}.txt", $"[{DateTime.Now:h:mm:ss tt}] {msg}\r\n");
 
         #endregion
     }
