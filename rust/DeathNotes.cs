@@ -1,15 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Plugins;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("Death Notes", "LaserHydra", "5.2.17", ResourceId = 819)]
+    [Info("Death Notes", "LaserHydra", "5.2.18", ResourceId = 819)]
     [Description("Broadcast deaths with many details")]
     class DeathNotes : RustPlugin
     {
@@ -870,7 +870,7 @@ namespace Oxide.Plugins
             if (args.Length == 0)
             {
                 SendChatMessage(player, "/deaths set <field> <value> - set a value");
-                SendChatMessage(player, "Fields", Environment.NewLine + ListToString(GetSettingValues(player), 0, Environment.NewLine));
+                SendChatMessage(player, Environment.NewLine + ListToString(GetSettingValues(player), 0, Environment.NewLine), "Fields");
 
                 return;
             }
@@ -912,7 +912,7 @@ namespace Oxide.Plugins
 
                 default:
                     SendChatMessage(player, "/deaths set <field> <value> - set a value");
-                    SendChatMessage(player, "Fields", Environment.NewLine + ListToString(GetSettingValues(player), 0, Environment.NewLine));
+                    SendChatMessage(player, Environment.NewLine + ListToString(GetSettingValues(player), 0, Environment.NewLine), "Fields");
                     break;
             }
         }
@@ -1445,9 +1445,7 @@ namespace Oxide.Plugins
 
         #region Messages
 
-        void BroadcastChat(string prefix, string msg = null) => rust.BroadcastChat(msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg);
-
-        void SendChatMessage(BasePlayer player, string prefix, string msg = null, object uid = null) => rust.SendChatMessage(player, msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg, null, uid?.ToString() ?? "0");
+        void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg, uid?.ToString() ?? "0");
 
         void PopupMessage(string message) => PopupNotifications?.Call("CreatePopupNotification", message);
 
