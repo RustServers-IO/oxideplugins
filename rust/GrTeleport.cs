@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.0.7", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.0.8", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
@@ -28,27 +28,31 @@ namespace Oxide.Plugins
             public bool AllowBuildingBlocked { get; set; }
             public int LimitPerDay { get; set; }
             public string RestrictedZones { get; set; }
+            public int DistanceToWarnConstructions { get; set; }
         }
 
         class SpawnPosition
         {
             public Vector3 Position;
             public Vector3 GroundPosition;
-            public bool aboveWater;
             public string GridReference;
 
             public SpawnPosition(Vector3 position)
             {
                 Position = position;
-                aboveWater = PositionAboveWater(Position);
                 GroundPosition = GetGroundPosition(new Vector3(position.x, 0, position.z));
             }
 
-            bool PositionAboveWater(Vector3 Position)
+            public bool isPositionAboveWater()
             {
                 if ((TerrainMeta.HeightMap.GetHeight(Position) - TerrainMeta.WaterMap.GetHeight(Position)) >= 0)
                     return false;
                 return true;
+            }
+
+            public float WaterDepthAtPosition()
+            {
+                return (TerrainMeta.HeightMap.GetHeight(Position) - TerrainMeta.WaterMap.GetHeight(Position));
             }
 
             Vector3 GetGroundPosition(Vector3 sourcePos)
@@ -126,7 +130,7 @@ namespace Oxide.Plugins
                     { "cuboardreply", "Buidling block teleportation is {togglebuildingblocked}" },
                     { "avoidwaterreplay", "Avoid water has been set tp {avoidwater}" },
                     { "dailylimitreply", "Daily limit has been set to {dailylimit}." },
-                    { "cupboard", "Sorry, you cannot teleport within {distance}f of a cupboard." },
+                    { "cupboard", "Sorry, you cannot teleport within {distance} of a cupboard." },
                     { "zoneadded", "Restricted Zone ({zone}) has been added, you now have {zones}." },
                     { "zonenotadded", "You need to enter a zone (or a comma seperated list of zones) as well." },
                     { "restrictedzone", "You cannot teleport her, {zone} is restricted." },
@@ -135,7 +139,9 @@ namespace Oxide.Plugins
                     { "zonenotremoved", "Restricted Zone ({zone}) has not been removed, you now have {zones}." },
                     { "zoneremoved", "Restricted Zone ({zone}) have been removed, you now have {zones}." },
                     { "zonesremoved", "Restricted Zones ({zone}) have been removed, you now have {zones}." },
-                    { "nozones", "There are no zones to remove." }
+                    { "nozones", "There are no zones to remove." },
+                    { "buildonref", "Your construction is within the vicinty of a grTransport reference. You may want to reconsider building here within {amount}m. your are now {distance}." },
+                    { "constructionreply", "Construction/Grid Reference distance has been set to {DistanceToWarnConstructions}m." }
                 }, this, "en");
 
                 PrintToChat("grtLoaded..");
@@ -146,15 +152,39 @@ namespace Oxide.Plugins
             }
         }
 
+        void OnEntityBuilt(Planner plan, GameObject go)
+        {
+            try
+            {
+                var amount = grTeleportData.DistanceToWarnConstructions;
+                foreach (SpawnPosition sp in spawnGrid)
+                {
+                    var distance = Vector3.Distance(sp.GroundPosition, GetGroundPosition(plan.GetOwnerPlayer().transform.position));
+
+                    if (distance <= amount)
+                    {
+                        PrintToChat(plan.GetOwnerPlayer(), lang.GetMessage("buildonref", this, plan.GetOwnerPlayer().UserIDString).Replace("{amount}", amount.ToString()).Replace("{distance}", distance.ToString("0.0")));
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PrintError($"{ex.Message}");
+            }
+
+        }
+
         protected override void LoadDefaultConfig()
         {
             var data = new GrTeleportData
             {
-                CooldownInSeconds = 30,
+                CooldownInSeconds = 15,
                 AvoidWater = true,
                 AllowBuildingBlocked = false,
                 LimitPerDay = -1, // -1 = unlim
-                RestrictedZones = "ZZZ123,YYY666"
+                RestrictedZones = "ZZZ123,YYY666",
+                DistanceToWarnConstructions = 15
             };
             Config.WriteObject(data, true);
         }
@@ -196,7 +226,7 @@ namespace Oxide.Plugins
                         return;
                     }
 
-                    if (spawnGrid[index].aboveWater && grTeleportData.AvoidWater)
+                    if (spawnGrid[index].isPositionAboveWater() && grTeleportData.AvoidWater)
                     {
                         PrintToChat(player, lang.GetMessage("overwater", this, player.UserIDString));
                         return;
@@ -253,7 +283,7 @@ namespace Oxide.Plugins
 
                 if (!CheckAccess(player, "grt.nextspawn", adminPermission)) return;
 
-                while (spawnGrid[++lastGridTested].aboveWater)
+                while (spawnGrid[++lastGridTested].isPositionAboveWater())
                     if (lastGridTested > 1000) // endless loop               
                         throw new Exception(lang.GetMessage("sgerror", this, player.UserIDString));
 
@@ -286,6 +316,26 @@ namespace Oxide.Plugins
                 throw new Exception($"chmSetCooldown {ex.Message}");
             }
 
+        }
+
+        [ChatCommand("setconstruction")]
+        void chmSetconstruction(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "setconstruction", adminPermission)) return;
+                if (args.Length > 0)
+                    grTeleportData.DistanceToWarnConstructions = int.Parse(args[0]);
+
+                coolDowns.Clear();
+
+                Config.WriteObject(grTeleportData, true);
+                PrintToChat(player, lang.GetMessage("constructionreply", this, player.UserIDString).Replace("{DistanceToWarnConstructions}",grTeleportData.DistanceToWarnConstructions.ToString()));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetconstruction {ex.Message}");
+            }
         }
 
         [ChatCommand("setdailylimit")]
@@ -448,7 +498,7 @@ namespace Oxide.Plugins
             try
             {
                 var index = GridIndexFromReference(gridReference);
-                if (avoidWater && spawnGrid[index].aboveWater) return false;
+                if (avoidWater && spawnGrid[index].isPositionAboveWater()) return false;
                 Teleport(player, spawnGrid[index].GroundPosition);
                 return true;
             }
@@ -465,7 +515,7 @@ namespace Oxide.Plugins
             try
             {
                 var index = GridIndexFromReference(gridReference);
-                return spawnGrid[index].aboveWater;
+                return spawnGrid[index].isPositionAboveWater();
             }
             catch (Exception ex)
             {
@@ -685,7 +735,19 @@ namespace Oxide.Plugins
 
             return rustUsers[index];
         }
-        
+
+        Vector3 GetGroundPosition(Vector3 sourcePos)
+        {
+            LayerMask GROUND_MASKS = LayerMask.GetMask("Terrain", "World", "Construction");  // TODO: mountain? wtf?
+            RaycastHit hitInfo;
+
+            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, GROUND_MASKS))
+                sourcePos.y = hitInfo.point.y;
+            sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
+
+            return sourcePos;
+        }
+
         #endregion
 
     }
