@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("DiscordMessages", "Slut", "1.6.2", ResourceId = 2486)]
+    [Info("DiscordMessages", "Slut", "1.6.4", ResourceId = 2486)]
     class DiscordMessages : CovalencePlugin
     {
 
@@ -347,7 +347,7 @@ namespace Oxide.Plugins
         private void SendPOST(string url, string payload)
         {
             bool exists = savedmessages.Exists(x => x.payload == payload);
-            webrequest.EnqueuePost(url, payload, (code, response) =>
+            webrequest.Enqueue(url, payload, (code, response) =>
             {
                 if (response == null || ((code != 200) && (code != 204)))
                 {
@@ -380,7 +380,7 @@ namespace Oxide.Plugins
                         savedmessages.RemoveAt(0);
                     }
                 }
-            }, this);
+            }, this, Core.Libraries.RequestMethod.POST);
         }
 
         #endregion
@@ -492,8 +492,6 @@ namespace Oxide.Plugins
 
                 return;
             }
-            if (player == null)
-                return;
             if (args.Length < 2)
             {
                 SendMessage(player, GetLang("ReportSyntax", player.Id));
@@ -523,7 +521,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-                if (reason.Count < 2)
+                if (reason.Count < 1)
                 {
                     SendMessage(player, GetLang("ReportTooShort", player.Id));
                     return;
@@ -571,6 +569,8 @@ namespace Oxide.Plugins
         private void SendMute(IPlayer target, IPlayer player, TimeSpan expireDate, bool timed, Action<bool> callback = null)
         {
             if (!MuteEnabled)
+                return;
+            if (target == null || player == null)
                 return;
             List<Fields> fields = new List<Fields>();
             fields.Add(new Fields(GetLang("Embed_MuteTarget"), $"[{target.Name}](https://steamcommunity.com/profiles/{target.Id})", true));

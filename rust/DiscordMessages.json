@@ -2,7 +2,7 @@
     "name": "DiscordMessages",
     "description": "Report and Ban plugin with messages sent straight to discord!",
     "author": "Slut",
-    "version": "1.6.3",
+    "version": "1.6.4",
     "configuration": true,
     "suggest": {
         "BetterChatMute": "*"
