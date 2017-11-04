@@ -1,7 +1,7 @@
 {
     "name": "Death Notes",
     "description": "Broadcasts players and animals deaths to chat",
-    "author": "Wulf",
+    "author": "LaserHydra",
     "version": "5.2.18",
     "configuration": true,
     "suggest": {
