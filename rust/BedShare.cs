@@ -11,16 +11,17 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-	[Info("BedShare", "ignignokt84", "0.0.4", ResourceId = 2343)]
+	[Info("BedShare", "ignignokt84", "0.0.5", ResourceId = 2343)]
 	[Description("Bed sharing plugin")]
 	class BedShare : RustPlugin
 	{
 		#region Variables
 
+		static BedShare Instance;
+
 		BagData data = new BagData();
 		Dictionary<ulong, string> playerNameCache = new Dictionary<ulong, string>();
 		Dictionary<uint, ulong> dummyBags = new Dictionary<uint, ulong>();
-		Dictionary<uint, ulong> guiCache = new Dictionary<uint, ulong>();
 
 		const string PermCanUse = "bedshare.use";
 		const string PermNoShare = "bedshare.noshare";
@@ -29,11 +30,17 @@ namespace Oxide.Plugins
 		const string PermCanClear = "bedshare.canclear";
 
 		const string BedPrefabName = "bed_deployed";
+		
+		const string UIElementPrefix = "BSUI";
 
-		CuiElementContainer SharedBagGUI;
-		const string SharedBagGUIName = "SharedBagOverlay";
+		// list of PlayerUI for lookup
+		List<PlayerUI> playerUIs = new List<PlayerUI>();
+		// empty guid for validation
+		readonly Guid EmptyGuid = new Guid(new byte[16]);
 
-		enum Command { clear, killgui, share, sharewith, status, unshare, unsharewith };
+		const string GUIRespawnCommand = "BSUICmd_Respawn";
+
+		enum Command { clear, share, sharewith, status, unshare, unsharewith };
 
 		#endregion
 
@@ -73,6 +80,7 @@ namespace Oxide.Plugins
 		// on load
 		void Loaded()
 		{
+			Instance = this;
 			LoadDefaultMessages();
 			// register both /bag and /bed since they're really ambiguous
 			cmd.AddChatCommand("bag", this, "CommandDelegator");
@@ -90,19 +98,19 @@ namespace Oxide.Plugins
 		{
 			DestroyAllDummyBags();
 			DestroyAllGUI();
+			SaveData();
 		}
 
 		// server initialized
 		void OnServerInitialized()
 		{
 			ValidateSharedBags();
-			InitGUI();
 		}
 
-		// initialize GUI elements
-		void InitGUI()
+		// save data when server saves
+		void OnServerSave()
 		{
-			SharedBagGUI = new CuiElementContainer();
+			timer.In(5f, () => SaveData());
 		}
 
 		#endregion
@@ -167,15 +175,64 @@ namespace Oxide.Plugins
 
 		#region Command Handling
 
+		[ConsoleCommand(GUIRespawnCommand)]
+		void BSUI_Respawn(ConsoleSystem.Arg arg)
+		{
+			if (arg == null || !arg.HasArgs(2)) return;
+			if (!CheckGUID(arg)) return;
+			
+			BasePlayer player = arg.Player();
+			if (player == null) return;
+
+			PlayerUI ui = FindPlayerUI(player);
+
+			uint bagId;
+			if (!uint.TryParse(arg.Args[1], out bagId))
+			{
+				PrintWarning("UI Error: Could not parse bagId for respawn");
+				return;
+			}
+			if (!SleepingBag.SpawnPlayer(player, bagId))
+			{
+				BagUIInfo bag = ui.FindBagInfo(bagId);
+				bag.message = "Failed to spawn at bag/bed";
+				RefreshUI(ui, bagId);
+				return;
+			}
+			ui.DestroyUI();
+		}
+
+		// validate guid
+		bool CheckGUID(ConsoleSystem.Arg arg)
+		{
+			string msg = "Missing GUID";
+			if (arg.Args != null && arg.Args[0] != null)
+			{
+				Guid g = new Guid(arg.Args[0]);
+				if (g == EmptyGuid)
+				{
+					msg = "Empty GUID";
+					goto end;
+				}
+				if (!playerUIs.Any(ui => ui.guid == g))
+				{
+					msg = "Invalid GUID";
+					goto end;
+				}
+				return true;
+			}
+			// log guid validation failure as console warning
+			// * this shouldn't get hit unless a player attempts to manually run a UI command, or the plugin breaks
+			end:
+			PrintWarning($"Invalid call to {arg.cmd.Name} by {arg.Player()?.displayName ?? "Unknown"}: {msg}");
+			return false;
+		}
+
 		// command delegator
 		void CommandDelegator(BasePlayer player, string command, string[] args)
 		{
-			if (!hasPermission(player, PermCanUse))
-			{
-				if (Enum.IsDefined(typeof(Command), command) && (Command)Enum.Parse(typeof(Command), command) == Command.killgui)
-					DestroyGUI(player);
-				return;
-			}
+			if (!hasPermission(player, PermCanUse)) return;
+
 			string message = "InvalidCommand";
 			// assume args[0] is the command (beyond /bed)
 			if (args != null && args.Length > 0)
@@ -301,7 +358,6 @@ namespace Oxide.Plugins
 						if (!data.RemoveOrUpdateBag(bag.net.ID, players, all))
 							message = "NotShared";
 					}
-					SaveData();
 				}
 			}
 			else
@@ -351,7 +407,7 @@ namespace Oxide.Plugins
 		{
 			if (!data.HasSharedBags() || hasPermission(player, PermNoShare, false))
 				return null;
-			BuildGUIForPlayerRespawn(player);
+			// after 1 second, send player updated respawn info
 			timer.Once(1f, () => {
 				using (RespawnInformation respawnInformation = Pool.Get<RespawnInformation>())
 				{
@@ -371,9 +427,10 @@ namespace Oxide.Plugins
 					}
 					respawnInformation.previousLife = SingletonComponent<ServerMgr>.Instance.persistance.GetLastLifeStory(player.userID);
 					respawnInformation.fadeIn = (respawnInformation.previousLife == null ? false : respawnInformation.previousLife.timeDied > (Epoch.Current - 5));
-					player.ClientRPCPlayer(null, player, "OnRespawnInformation", respawnInformation, null, null, null, null);
+					player.ClientRPCPlayer(null, player, "OnRespawnInformation", respawnInformation);
 				}
 			});
+			// after 6 seconds, build/display shared bag/bed UI
 			if (data.HasSharedBags())
 				timer.Once(6f, () => ShowGUI(player));
 			return null;
@@ -391,9 +448,18 @@ namespace Oxide.Plugins
 
 		#region GUI
 
-		// build respawn GUI for a player
-		void BuildGUIForPlayerRespawn(BasePlayer player)
+		// find or create a PlayerUI
+		PlayerUI FindPlayerUI(BasePlayer player)
 		{
+			PlayerUI ui = playerUIs.FirstOrDefault(u => u.UserId == player.userID);
+			if (ui == null)
+				playerUIs.Add(ui = new PlayerUI(player));
+			return ui;
+		}
+
+		void ShowGUI(BasePlayer player)
+		{
+			PlayerUI ui = FindPlayerUI(player);
 			bool dirty = false;
 			int counter = 0;
 			foreach (SharedBagInfo entry in data.sharedBags.Where(i => i.isPublic || i.sharedWith.Contains(player.userID)))
@@ -411,8 +477,7 @@ namespace Oxide.Plugins
 					if (!entry.isPublic)
 						messageName = "SharedBagNameTextPrivate";
 					string bagName = string.Format(GetMessage(messageName, player.UserIDString), new object[] { sleepingBag.niceName, GetPlayerName(sleepingBag.deployerUserID) });
-					if(RegisterGUIElement(bagId, player.userID))
-						CreateRespawnButton(bagId, bagName, player.UserIDString, counter++);
+					CreateRespawnButton(ui, bagId, bagName, counter++);
 				}
 			}
 			// save changes to shared mappings
@@ -420,159 +485,94 @@ namespace Oxide.Plugins
 				ValidateSharedBags();
 		}
 
-		// build respawn button
-		void CreateRespawnButton(uint bagId, string bagName, string userID, int counter)
+		void RefreshUI(PlayerUI ui, uint bagId)
 		{
+			BagUIInfo bag = ui.FindBagInfo(bagId);
+			if (bag == null || !ui.IsPanelOpen(bagId)) return;
+
+			CreateRespawnButton(ui, bag.id, bag.name, bag.index);
+		}
+
+		// build respawn button
+		void CreateRespawnButton(PlayerUI ui, uint bagId, string bagName, int index)
+		{
+			BagUIInfo bag = new BagUIInfo()
+			{
+				id = bagId,
+				index = index,
+				name = bagName
+			};
 			// set up button position
 			float xPosMin = data.ui.screenMarginX;
-			float yPosMin = data.ui.screenMarginY + ((data.ui.verticalSpacer + data.ui.buttonHeight) * counter);
+			float yPosMin = data.ui.screenMarginY + ((data.ui.verticalSpacer + data.ui.buttonHeight) * index);
 			float xPosMax = xPosMin + data.ui.buttonWidth;
 			float yPosMax = yPosMin + data.ui.buttonHeight;
 
-			string buttonAnchorMin = String.Format("{0} {1}", new object[] { xPosMin, yPosMin });
-			string buttonAnchorMax = String.Format("{0} {1}", new object[] { xPosMax, yPosMax });
+			Vector2 buttonAnchorMin = new Vector2(xPosMin, yPosMin);
+			Vector2 buttonAnchorMax = new Vector2(xPosMax, yPosMax);
 
 			// set up icon layout
 			float iconXMin = data.ui.iconPaddingX - data.ui.iconWidth;
 			float iconYMin = data.ui.iconPaddingY;
 			float iconXMax = data.ui.iconPanelWidth - data.ui.iconWidth;
 			float iconYMax = 1f - iconYMin;
-			
-			string iconPosMin = String.Format("{0} {1}", new object[] { iconXMin, iconYMin });
-			string iconPosMax = String.Format("{0} {1}", new object[] { iconXMax, iconYMax });
+
+			Vector2 iconPosMin = new Vector2(iconXMin, iconYMin);
+			Vector2 iconPosMax = new Vector2(iconXMax, iconYMax);
 
 			// set up text layout
 			float spawnTextYMin = data.ui.spawnTextPaddingY;
 
-			string spawnTextPosMin = String.Format("{0} {1}", new object[] { iconXMax, spawnTextYMin });
-			string spawnTextPosMax = String.Format("{0} {1}", new object[] { 1f, 1f });
+			Vector2 spawnTextPosMin = new Vector2(iconXMax, spawnTextYMin);
+			Vector2 spawnTextPosMax = Vector2.one;
 
 			float bagNameTextYMin = data.ui.bagNameTextPaddingY;
-		
-			string bagNameTextPosMin = String.Format("{0} {1}", new object[] { iconXMax, bagNameTextYMin });
-			string bagNameTextPosMax = String.Format("{0} {1}", new object[] { 1f, spawnTextYMin });
 
-			string headerText = GetMessage("SharedHeaderText", userID);
+			Vector2 bagNameTextPosMin = new Vector2(iconXMax, bagNameTextYMin);
+			Vector2 bagNameTextPosMax = new Vector2(1f, spawnTextYMin);
+
+			string headerText = GetMessage("SharedHeaderText", ui.Player?.UserIDString);
 
 			// build GUI elements
 
-			CuiElement icon = new CuiElement() {
-				Name = "Icon" + bagId,
-				Parent = SharedBagGUIName + bagId,
-				Components = {
-					new CuiImageComponent() {
-						Sprite = "assets/icons/sleepingbag.png",
-						Color = "1 1 1 0.6"
-					},
-					new CuiRectTransformComponent() {
-						AnchorMin = iconPosMin,
-						AnchorMax = iconPosMax
-					}
-				}
-			};
+			string elementName = UIElementPrefix + bagId;
+			string message = ui.Message(bagId);
 
-			CuiElement spawnText = new CuiElement() {
-				Name = "SpawnText" + bagId,
-				Parent = SharedBagGUIName + bagId,
-				Components = {
-					new CuiTextComponent() {
-						Text = headerText,
-						Align = TextAnchor.MiddleLeft,
-						FontSize = 16,
-						Font = "robotocondensed-bold.ttf"
-					},
-					new CuiRectTransformComponent() {
-						AnchorMin = spawnTextPosMin,
-						AnchorMax = spawnTextPosMax
-					}
-				}
-			};
+			CuiElementContainer container = UI.CreateElementContainer(elementName, data.ui.buttonColor, buttonAnchorMin, buttonAnchorMax);
+			UI.CreateLabel(ref container, elementName, headerText, 16, spawnTextPosMin, spawnTextPosMax, TextAnchor.MiddleLeft);
+			UI.CreateLabel(ref container, elementName, bagName, 12, bagNameTextPosMin, bagNameTextPosMax, TextAnchor.UpperLeft, "RobotoCondensed-Regular.ttf");
+			UI.CreateImage(ref container, elementName, data.ui.bagIcon, data.ui.bagIconColor, iconPosMin, iconPosMax);
+			UI.CreateButton(ref container, elementName, new Color(1f, 1f, 1f, 0.05f), string.Empty, 1, Vector2.zero, Vector2.one, ui.BuildCommand(GUIRespawnCommand, bagId));
 
-			CuiElement bagNameText = new CuiElement() {
-				Name = "BagNameText" + bagId,
-				Parent = SharedBagGUIName + bagId,
-				Components = {
-					new CuiTextComponent() {
-						Text = bagName,
-						Align = TextAnchor.UpperLeft,
-						FontSize = 12,
-						Font = "robotocondensed-regular.ttf",
-						Color = "1 1 1 0.6"
-					},
-					new CuiRectTransformComponent() {
-						AnchorMin = bagNameTextPosMin,
-						AnchorMax = bagNameTextPosMax
-					}
-				}
-			};
-
-			CuiElement buttonOverlay = new CuiElement() {
-				Name = "ButtonOverlay" + bagId,
-				Parent = SharedBagGUIName + bagId,
-				Components = {
-					new CuiButtonComponent() {
-						Command = "respawn_sleepingbag " + bagId,
-						Close = SharedBagGUIName,
-						Color = "1 1 1 0.05"
-					},
-					new CuiRectTransformComponent() {
-						AnchorMin = "0 0",
-						AnchorMax = "1 1"
-					}
-				}
-			};
-			
-			SharedBagGUI.Add(new CuiElement() {
-				Name = SharedBagGUIName+bagId,
-				Parent = "Hud",
-				Components = {
-					new CuiImageComponent() {
-						Color = "0.5 0.4 0.2 0.9",
-						FadeIn = 0.5f
-					},
-					new CuiRectTransformComponent() {
-						AnchorMin = buttonAnchorMin,
-						AnchorMax = buttonAnchorMax
-					}
-				}
-			});
-
-			// add elements to GUI container
-
-			SharedBagGUI.Add(spawnText);
-			SharedBagGUI.Add(bagNameText);
-			SharedBagGUI.Add(icon);
-			SharedBagGUI.Add(buttonOverlay);
+			ui.CreateUI(bag, container);
+			if (!string.IsNullOrEmpty(message))
+				OverlayMessageUI(ui, bagId, message, buttonAnchorMin, buttonAnchorMax);
 		}
 
-		// register a GUI element
-		bool RegisterGUIElement(uint id, ulong playerId)
+		// create a message overlay on a button
+		void OverlayMessageUI(PlayerUI ui, uint id, string message, Vector2 aMin, Vector2 aMax, float displayTime = 5f)
 		{
-			if (guiCache.ContainsKey(id))
-				return false;
-			guiCache[id] = playerId;
-			return true;
-		}
-
-		// show GUI for a player
-		void ShowGUI(BasePlayer player)
-		{
-			DestroyGUI(player);
-			CuiHelper.AddUi(player, SharedBagGUI);
+			string panelName = UIElementPrefix + id + "_Message";
+			CuiElementContainer container = UI.CreateElementContainer(panelName, new Color(0.7f, 0.3f, 0.3f, 0.9f), aMin, aMax, fadeIn: 0f);
+			UI.CreateLabel(ref container, panelName, $"<color=white>{message}</color>", 14, Vector2.zero, Vector2.one, fadeIn: 0f);
+			ui.CreateMessageUI(id, container);
+			timer.In(displayTime, () => ui.DestroyMessageUI(id));
 		}
 
 		// destroy a player's GUI elements
-		void DestroyGUI(BasePlayer player)
+		void DestroyGUI(BasePlayer player, bool kill = false)
 		{
-			foreach(uint id in guiCache.Where(x => x.Value == player.userID).Select(pair => pair.Key).ToArray())
-				CuiHelper.DestroyUi(player, SharedBagGUIName+id);
+			if (kill)
+				FindPlayerUI(player).Kill();
+			else
+				FindPlayerUI(player).DestroyUI();
 		}
 
 		// destroy all player GUI elements
 		void DestroyAllGUI()
 		{
 			foreach (BasePlayer player in BasePlayer.activePlayerList)
-				DestroyGUI(player);
+				DestroyGUI(player, true);
 		}
 
 		#endregion
@@ -711,6 +711,7 @@ namespace Oxide.Plugins
 
 		#region Subclasses
 
+		// config data
 		class BagData
 		{
 			public HashSet<SharedBagInfo> sharedBags = new HashSet<SharedBagInfo>();
@@ -746,6 +747,7 @@ namespace Oxide.Plugins
 			}
 		}
 
+		// shared bag details
 		class SharedBagInfo
 		{
 			public uint bagId;
@@ -760,8 +762,10 @@ namespace Oxide.Plugins
 			}
 		}
 
+		// ui config
 		class UIConfig
 		{
+			// note: any precision beyond 3 is likely visually insignificant
 			public float buttonWidth = 0.25f;
 			public float buttonHeight = 0.09722222222222222222222222222222f;
 			public float screenMarginX = 0.025f;
@@ -773,6 +777,216 @@ namespace Oxide.Plugins
 			public float iconPaddingY = 0.16190476190476190476190476190476f;
 			public float spawnTextPaddingY = 0.57142857142857142857142857142857f;
 			public float bagNameTextPaddingY = 0.3047619047619047619047619047619f;
+			public string buttonColor = UI.FormatRGBA(new Color(0.5f, 0.4f, 0.2f, 0.9f));
+			public string bagIconColor = UI.FormatRGBA(new Color(1f, 1f, 1f, 0.6f));
+			public string bagIcon = "assets/icons/sleepingbag.png";
+		}
+
+		// bag ui details (for refresh)
+		class BagUIInfo
+		{
+			public uint id;
+			public string name;
+			public int index = -1;
+			public string message = string.Empty;
+		}
+
+		// per-player UI manager
+		class PlayerUI
+		{
+			// use GUID to manage console commands for the UI (to prevent players from being able to execute commands directly)
+			internal Guid guid = Guid.NewGuid();
+			// player reference
+			BasePlayer _player;
+			// player id/name container (for lookup)
+			internal PlayerNameID nameId;
+			// player reference delegator
+			internal BasePlayer Player { get { TryResolvePlayer(); return _player; } }
+			// user ID delegator
+			internal ulong UserId { get { return nameId != null ? nameId.userid : 0UL; } }
+			// map of panels and child element names
+			Dictionary<uint, List<string>> elements = new Dictionary<uint, List<string>>();
+			List<BagUIInfo> bags = new List<BagUIInfo>();
+
+			// constructor
+			public PlayerUI(BasePlayer player)
+			{
+				_player = player;
+				nameId = new PlayerNameID()
+				{
+					userid = player.userID,
+					username = player.displayName
+				};
+			}
+
+			// basic player resolution
+			void TryResolvePlayer()
+			{
+				if (_player == null && nameId != null)
+					_player = BasePlayer.FindByID(nameId.userid);
+			}
+			// handle UI creation
+			internal void CreateUI(BagUIInfo bag, CuiElementContainer container)
+			{
+				DestroyUI(bag.id);
+				bags.Add(bag);
+				UI.RenameComponents(container);
+				elements[bag.id] = container.Select(e => e.Name).ToList();
+				CuiHelper.AddUi(Player, container);
+			}
+			internal void CreateMessageUI(uint id, CuiElementContainer container)
+			{
+				UI.RenameComponents(container);
+				elements[id].AddRange(container.Select(e => e.Name).ToList());
+				CuiHelper.AddUi(Player, container);
+			}
+			// destroy all UI elements
+			internal void DestroyUI()
+			{
+				foreach (uint bagId in elements.Keys.ToList())
+					DestroyUI(bagId);
+			}
+			// destroy a specific UI panel
+			internal void DestroyUI(uint bagId)
+			{
+				List<string> children;
+				if (elements.TryGetValue(bagId, out children))
+					foreach (string child in children)
+						CuiHelper.DestroyUi(Player, child);
+				CuiHelper.DestroyUi(Player, UIElementPrefix + bagId.ToString());
+				elements.Remove(bagId);
+				bags.RemoveAll(b => b.id == bagId);
+			}
+			internal void DestroyMessageUI(uint bagId)
+			{
+				string elementName = UIElementPrefix + bagId + "_Message";
+				CuiHelper.DestroyUi(Player, elementName);
+				if(elements.ContainsKey(bagId))
+					elements[bagId].RemoveAll(e => e == elementName);
+			}
+			// is UI open
+			public bool IsOpen => elements.Count > 0;
+			// is panel open
+			public bool IsPanelOpen(uint bagId) => elements.ContainsKey(bagId);
+			public List<uint> BagIds => elements.Keys.ToList();
+			public BagUIInfo FindBagInfo(uint bagId) => bags.FirstOrDefault(b => b.id == bagId);
+			public bool HasMessage(uint bagId) => !string.IsNullOrEmpty(Message(bagId));
+			public string Message(uint bagId) => FindBagInfo(bagId)?.message ?? string.Empty;
+			// destroy this
+			internal void Kill()
+			{
+				DestroyUI();
+				_player = null;
+				Instance.playerUIs.Remove(this);
+			}
+			// build UI command by inserting GUID as first parameter
+			internal string BuildCommand(params object[] command)
+			{
+				if (command == null || command.Length == 0) return null;
+				List<string> split = command.Where(o => o != null).Select(o => o.ToString()).ToList();
+				if (split.Count == 0) return null;
+				split.Insert(1, guid.ToString());
+				return string.Join(" ", split.ToArray());
+			}
+		}
+
+		// UI build helper
+		class UI
+		{
+			const string format = "F4";
+			static string Format(float f) => f.ToString(format);
+			static string Format(Vector2 v) => $"{Format(v.x)} {Format(v.y)}";
+			public static string FormatRGBA(Color color) => $"{Format(color.r)} {Format(color.g)} {Format(color.b)} {Format(color.a)}";
+			public static string FormatHex(Color color) => $"#{ColorUtility.ToHtmlStringRGBA(color)}";
+			
+			internal static string AsString(object o)
+			{
+				if (o is string) return (string)o;
+				if (o is Color) return FormatRGBA((Color)o);
+				if (o is Vector2) return Format((Vector2)o);
+				if (o is float) return Format((float)o);
+				return o.ToString();
+			}
+
+			public static CuiElementContainer CreateElementContainer(string panelName, object color, object aMin, object aMax, bool useCursor = true, float fadeOut = 0f, float fadeIn = 0.25f)
+			{
+				return CreateElementContainer(panelName, "", color, aMin, aMax, useCursor, fadeOut, fadeIn);
+			}
+			public static CuiElementContainer CreateElementContainer(string panelName, string background, object color, object aMin, object aMax, bool useCursor = true, float fadeOut = 0f, float fadeIn = 0.25f)
+			{
+				return CreateElementContainer("Overlay", panelName, background, color, aMin, aMax, useCursor, fadeOut, fadeIn);
+			}
+			public static CuiElementContainer CreateElementContainer(string parent, string panelName, string background, object color, object aMin, object aMax, bool useCursor = true, float fadeOut = 0f, float fadeIn = 0.25f)
+			{
+				return new CuiElementContainer()
+				{
+					{
+						new CuiPanel
+						{
+							Image = { Color = AsString(color), Sprite = string.IsNullOrEmpty(background) ? "assets/content/ui/ui.background.tile.psd" : background, FadeIn = fadeIn },
+							RectTransform = { AnchorMin = AsString(aMin), AnchorMax = AsString(aMax) },
+							CursorEnabled = useCursor, FadeOut = fadeOut
+						},
+						new CuiElement().Parent = parent,
+						panelName
+					}
+				};
+			}
+			public static void CreatePanel(ref CuiElementContainer container, string panelName, object color, object aMin, object aMax, bool cursor = false)
+			{
+				container.Add(new CuiPanel
+				{
+					Image = { Color = AsString(color), FadeIn = 0.25f },
+					RectTransform = { AnchorMin = AsString(aMin), AnchorMax = AsString(aMax) },
+					CursorEnabled = cursor
+				},
+				panelName);
+			}
+			public static void CreateLabel(ref CuiElementContainer container, string panelName, string text, int size, object aMin, object aMax, TextAnchor align = TextAnchor.MiddleCenter, string font = "RobotoCondensed-Bold.ttf", float fadeIn = 0.25f)
+			{
+				container.Add(new CuiLabel
+				{
+					Text = { FontSize = size, Align = align, Text = text, Font = font, FadeIn = fadeIn },
+					RectTransform = { AnchorMin = AsString(aMin), AnchorMax = AsString(aMax) }
+				},
+				panelName);
+
+			}
+			public static void CreateButton(ref CuiElementContainer container, string panelName, object color, string text, int size, object aMin, object aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
+			{
+				container.Add(new CuiButton
+				{
+					Button = { Color = AsString(color), Command = command, FadeIn = 0.25f },
+					RectTransform = { AnchorMin = AsString(aMin), AnchorMax = AsString(aMax) },
+					Text = { Text = text, FontSize = size, Align = align, FadeIn = 0.25f }
+				},
+				panelName);
+			}
+			public static void CreateImage(ref CuiElementContainer container, string panelName, string png, object color, object aMin, object aMax, float fadeIn = 0.25f)
+			{
+				container.Add(new CuiElement
+				{
+					Name = CuiHelper.GetGuid(),
+					Parent = panelName,
+					Components =
+					{
+						new CuiImageComponent() {
+							Sprite = png,
+							Color = AsString(color),
+							FadeIn = fadeIn
+						},
+						new CuiRectTransformComponent { AnchorMin = AsString(aMin), AnchorMax = AsString(aMax) }
+					}
+				});
+			}
+			public static void RenameComponents(CuiElementContainer container)
+			{
+				foreach (var element in container)
+				{
+					if (element.Name == "AddUI CreatedPanel")
+						element.Name = CuiHelper.GetGuid();
+				}
+			}
 		}
 
 		#endregion

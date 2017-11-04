@@ -2,7 +2,7 @@
     "name": "BedShare",
     "description": "Allow beds to be shared with other players",
     "author": "ignignokt84",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/bedshare.2343",
