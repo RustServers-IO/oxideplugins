@@ -9,7 +9,7 @@ using Emotes;
 
 namespace Oxide.Plugins
 {
-    [Info("Teleportation", "LaserHydra", "1.5.1", ResourceId = 1519)]
+    [Info("Teleportation", "LaserHydra", "1.5.2", ResourceId = 1519)]
     [Description("Teleportation plugin with many different teleportation features")]
     class Teleportation : HurtworldPlugin
     {
@@ -1039,8 +1039,6 @@ namespace Oxide.Plugins
         ////////////////////////////////////////
         ///     Chat Handling
         ////////////////////////////////////////
-
-        void BroadcastChat(string prefix = null, string msg) => hurt.BroadcastChat(prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: " + msg);
 
         void SendChatMessage(PlayerSession player, string msg, string prefix = null) => hurt.SendChatMessage(player, prefix == null ? msg : msg, "<color=#C4FF00>" + prefix + "</color>");
         #endregion
