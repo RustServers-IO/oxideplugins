@@ -2,26 +2,60 @@
 using Newtonsoft.Json.Linq;
 using Oxide.Core.Plugins;
 using UnityEngine;
-using System.Reflection;
+using Oxide.Core;
+using Oxide.Core.Configuration;
+using Oxide.Core.Libraries.Covalence;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutomaticAuthorization", "k1lly0u", "0.1.8", ResourceId = 2063)]
+    [Info("AutomaticAuthorization", "k1lly0u", "0.2.0", ResourceId = 2063)]
     class AutomaticAuthorization : RustPlugin
     {
         #region Fields
-        [PluginReference] Plugin Clans;
-        [PluginReference] Plugin Friends;
+        [PluginReference] Plugin Clans, Friends;
 
+        ShareData shareData;
+        private DynamicConfigFile data;
+
+        private List<ulong> automatedClans = new List<ulong>();
+        private List<ulong> automatedFriends = new List<ulong>();
         #endregion
 
         #region Oxide Hooks        
-        void OnServerInitialized()
+        private void Loaded()
         {
+            data = Interface.Oxide.DataFileSystem.GetFile("automaticauthorization_data");
             permission.RegisterPermission("automaticauthorization.use", this);
             lang.RegisterMessages(Messages, this);
+            LoadData();
         }
 
+        private void OnEntitySpawned(BaseNetworkable entity)
+        {
+            if (entity != null && (entity is BuildingPrivlidge || entity is AutoTurret))
+            {
+                ulong ownerId = entity.GetComponent<BaseEntity>().OwnerID;
+
+                BasePlayer player = null;
+                IPlayer iPlayer = covalence.Players.FindPlayerById(ownerId.ToString());
+                if (iPlayer != null && iPlayer.IsConnected)
+                    player = iPlayer.Object as BasePlayer;
+
+                if (automatedClans.Contains(ownerId))
+                {
+                    List<ulong> friends = GetClanMembers(ownerId);
+                    SortAuthList(entity as BaseEntity, friends, player); 
+                }
+                if (automatedFriends.Contains(ownerId))
+                {
+                    List<ulong> friends = GetFriends(ownerId);
+                    SortAuthList(entity as BaseEntity, friends, player);
+                }
+            }
+        }
+
+        private void OnServerSave() => SaveData();
         #endregion
 
         #region Functions
@@ -57,13 +91,14 @@ namespace Oxide.Plugins
             }
             return target;
         }
-        void RegisterClanmates(BasePlayer player, BaseEntity entity)
+
+        private List<ulong> GetClanMembers(ulong ownerId)
         {
             List<ulong> authList = new List<ulong>();
-            var clanName = Clans?.Call("GetClanOf", player.userID);            
+            var clanName = Clans?.Call("GetClanOf", ownerId);
             if (clanName != null)
             {
-                var clan = GetClan((string)clanName);
+                var clan = Clans?.Call("GetClan", (string)clanName);
                 if (clan != null && clan is JObject)
                 {
                     var members = (clan as JObject).GetValue("members");
@@ -72,70 +107,47 @@ namespace Oxide.Plugins
                         foreach (var member in (JArray)members)
                         {
                             ulong ID;
-                            if (!ulong.TryParse(member.ToString(), out ID))                            
-                                continue;                            
+                            if (!ulong.TryParse(member.ToString(), out ID))
+                                continue;
                             authList.Add(ID);
                         }
-                        SortAuthList(player, entity, authList);
                     }
-                    else
-                    {
-                        SendReply(player, msg("noClanMembers"));
-                        return;
-                    }
-                }
-                else
-                {
-                    SendReply(player, msg("noClanMembers"));
-                    return;
                 }
             }
-            else
-            {
-                SendReply(player, msg("noClan"));
-                return;
-            }            
+            return authList;
         }
-        void RegisterFriends(BasePlayer player, BaseEntity entity)
+
+        private List<ulong> GetFriends(ulong ownerId)
         {
-            List<ulong> authList = new List<ulong>();
-            var friends = GetFriends(player.userID);
-            if (friends is ulong[])
-            {
-                authList.Add(player.userID);
-                foreach (var member in (ulong[])friends)                                   
-                    authList.Add(member);                
-                SortAuthList(player, entity, authList);
-            }
-            else
-            {
-                SendReply(player, msg("noFriendsList"));
-                return;
-            }            
+            var friends = Friends?.Call("IsFriendOf", ownerId);
+            if (friends is ulong[])            
+                return (friends as ulong[]).ToList();
+            return new List<ulong>();
         }
-        void SortAuthList(BasePlayer player,  BaseEntity entity, List<ulong> authList)
+        
+        private void SortAuthList(BaseEntity entity, List<ulong> authList, BasePlayer player = null)
         {
             Dictionary<ulong, string> friendData = new Dictionary<ulong, string>();
             for (int i = 0; i < authList.Count; i++)
             {
-                var foundPlayer = BasePlayer.FindByID(authList[i]);
-                if (foundPlayer == null)
-                    foundPlayer = BasePlayer.FindSleeping(authList[i]);                
+                var foundPlayer = covalence.Players.FindPlayerById(authList[i].ToString());
                 if (foundPlayer != null)
-                    friendData.Add(foundPlayer.userID, foundPlayer.displayName);                
-                else
-                    friendData.Add(authList[i], "");
-                
+                    friendData.Add(authList[i], foundPlayer.Name);                
+                else friendData.Add(authList[i], "");                
             }
             if (entity is BuildingPrivlidge)
-                AuthToCupboard(player, entity as BuildingPrivlidge, friendData);
-            else AuthToTurret(player, entity as AutoTurret, friendData);
+                AuthToCupboard(entity as BuildingPrivlidge, friendData, player);
+            else AuthToTurret(entity as AutoTurret, friendData, player);
         }
-        void AuthToCupboard(BasePlayer player, BuildingPrivlidge cupboard, Dictionary<ulong, string> authList)
+
+        private void AuthToCupboard(BuildingPrivlidge cupboard, Dictionary<ulong, string> authList, BasePlayer player = null)
         {
-            cupboard.authorizedPlayers.Clear();
+            IEnumerable<ulong> currentAuth = cupboard.authorizedPlayers.Select(x => x.userid);
             foreach (var friend in authList)
             {
+                if (currentAuth.Contains(friend.Key))
+                    continue;
+
                 cupboard.authorizedPlayers.Add(new ProtoBuf.PlayerNameID
                 {
                     userid = friend.Key,
@@ -144,11 +156,15 @@ namespace Oxide.Plugins
                 });
             }           
             cupboard.SendNetworkUpdateImmediate();
-            player.SendNetworkUpdateImmediate();
-            SendReply(player, string.Format(msg("cupboardSuccess"), authList.Count));
-            return;
+            cupboard.UpdateAllPlayers();
+            if (player != null)
+            {
+                player.SendNetworkUpdateImmediate();
+                SendReply(player, string.Format(msg("cupboardSuccess"), authList.Count));
+            }
         }
-        void AuthToTurret(BasePlayer player, AutoTurret turret, Dictionary<ulong, string> authList)
+
+        private void AuthToTurret(AutoTurret turret, Dictionary<ulong, string> authList, BasePlayer player = null)
         {
             bool isOnline = false;
             if (turret.IsOnline())
@@ -156,60 +172,128 @@ namespace Oxide.Plugins
                 turret.SetIsOnline(false);
                 isOnline = true;
             }
-            turret.authorizedPlayers.Clear();
+
+            IEnumerable<ulong> currentAuth = turret.authorizedPlayers.Select(x => x.userid);
             foreach (var friend in authList)
             {
+                if (currentAuth.Contains(friend.Key))
+                    continue;
+
                 turret.authorizedPlayers.Add(new ProtoBuf.PlayerNameID
                 {
                     userid = friend.Key,
                     username = friend.Value
                 });
             }
+
             turret.SendNetworkUpdateImmediate();
-            player.SendNetworkUpdateImmediate();
             if (isOnline)
                 turret.SetIsOnline(true);
-            SendReply(player, string.Format(msg("turretSuccess"), authList.Count));
-            return;
+
+            if (player != null)
+            {
+                player.SendNetworkUpdateImmediate();
+                SendReply(player, string.Format(msg("turretSuccess"), authList.Count));
+            }
         }
         #endregion
 
         #region Chat Commands
         [ChatCommand("autoauth")]
-        void cmdAuth(BasePlayer player, string command, string[] args)
+        private void cmdAuth(BasePlayer player, string command, string[] args)
         {
             if (player.IsAdmin || permission.UserHasPermission(player.UserIDString, "automaticauthorization.use"))
             {
                 if (args == null || args.Length == 0)
                 {
-                    if (Clans) SendReply(player, msg("clanSyn1"));
-                    if (Friends) SendReply(player, msg("friendSyn1"));
-                    if (!Clans && !Friends) return;
-                    SendReply(player, msg("options"));
+                    if (Clans)
+                    {
+                        SendReply(player, msg("clanSyn0", player.UserIDString));
+                        SendReply(player, msg("clanSyn2", player.UserIDString));
+                        SendReply(player, $"{msg("autoShareClans", player.UserIDString)} {(automatedClans.Contains(player.userID) ? msg("enabled", player.UserIDString) : msg("disabled", player.UserIDString))}");
+                    }
+                    if (Friends)
+                    {
+                        SendReply(player, msg("friendSyn0", player.UserIDString));
+                        SendReply(player, msg("friendSyn2", player.UserIDString));
+                        SendReply(player, $"{msg("autoShareFriends", player.UserIDString)} {(automatedFriends.Contains(player.userID) ? msg("enabled", player.UserIDString) : msg("disabled", player.UserIDString))}");
+                    }
+                    if (!Clans && !Friends)
+                    {
+                        SendReply(player, msg("noSharePlugin", player.UserIDString));
+                        return;
+                    }
                     return;
                 }
-                var entity = FindEntity(player);                
-                if (entity == null || (!entity.GetComponent<AutoTurret>() && !entity.GetComponent<BuildingPrivlidge>()))
-                {
-                    SendReply(player, msg("noEntity"));
-                    return;
-                }
-                if (entity.OwnerID != player.userID)
-                {
-                    SendReply(player, msg("noOwner"));
-                    return;
-                }
+                var entity = FindEntity(player);               
+                
                 switch (args[0].ToLower())
                 {
                     case "clan":
                         if (Clans)
-                            RegisterClanmates(player, entity);
+                        {
+                            if (entity == null || (!entity.GetComponent<AutoTurret>() && !entity.GetComponent<BuildingPrivlidge>()))
+                            {
+                                SendReply(player, msg("noEntity", player.UserIDString));
+                                return;
+                            }
+                            if (entity.OwnerID != player.userID)
+                            {
+                                SendReply(player, msg("noOwner", player.UserIDString));
+                                return;
+                            }
+
+                            List<ulong> friends = GetClanMembers(player.userID);
+                            if (friends.Count == 0)
+                                SendReply(player, msg("noClanMembers"));
+                            else SortAuthList(entity, friends, player);
+                        }
                         else SendReply(player, msg("noClanPlugin", player.UserIDString));
                         return;
                     case "friends":
                         if (Friends)
-                            RegisterFriends(player, entity);
+                        {
+                            if (entity == null || (!entity.GetComponent<AutoTurret>() && !entity.GetComponent<BuildingPrivlidge>()))
+                            {
+                                SendReply(player, msg("noEntity", player.UserIDString));
+                                return;
+                            }
+                            if (entity.OwnerID != player.userID)
+                            {
+                                SendReply(player, msg("noOwner", player.UserIDString));
+                                return;
+                            }
+
+                            List<ulong> friends = GetFriends(player.userID);
+                            if (friends.Count == 0)
+                                SendReply(player, msg("noFriendsList"));
+                            else SortAuthList(entity, friends, player);
+                        }
                         else SendReply(player, msg("noFriendPlugin", player.UserIDString));
+                        return;
+                    case "autoclan":
+                        if (automatedClans.Contains(player.userID))
+                        {
+                            automatedClans.Remove(player.userID);
+                            SendReply(player, msg("autoClansDisabled", player.UserIDString));
+                        }
+                        else
+                        {
+                            automatedClans.Add(player.userID);
+                            SendReply(player, msg("autoClansEnabled", player.UserIDString));
+                        }
+                        return;
+                    case "autofriends":
+                        if (automatedFriends.Contains(player.userID))
+                        {
+                            automatedFriends.Remove(player.userID);
+                            SendReply(player, msg("autoFriendsDisabled", player.UserIDString));
+                        }
+                        else
+                        {
+                            automatedFriends.Add(player.userID);
+                            SendReply(player, msg("autoFriendsEnabled", player.UserIDString));
+                        }
                         return;
                     default:
                         break;
@@ -219,9 +303,32 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Helpers
-        private object GetClan(string name) => Clans?.Call("GetClan", name);
-        private object GetFriends(ulong playerID) => Friends?.Call("IsFriendOf", playerID);
+        #region Data Management
+        void SaveData()
+        {
+            shareData.shareClans = automatedClans;
+            shareData.shareFriends = automatedFriends;
+            data.WriteObject(shareData);
+        }
+        void LoadData()
+        {
+            try
+            {
+                shareData = data.ReadObject<ShareData>();
+                automatedClans = shareData.shareClans;
+                automatedFriends = shareData.shareFriends;
+            }
+            catch
+            {
+                shareData = new ShareData();
+            }
+        }  
+        
+        class ShareData
+        {
+            public List<ulong> shareFriends = new List<ulong>();
+            public List<ulong> shareClans = new List<ulong>();
+        }
         #endregion
 
         #region Messaging
@@ -229,17 +336,27 @@ namespace Oxide.Plugins
         Dictionary<string, string> Messages = new Dictionary<string, string>
         {
             {"noEntity", "You need to look at either a Autoturret or a Tool Cupboard" },
-            {"turretSuccess", "Successfully added {0} friends/clan members to the turret auth list" },
-            {"cupboardSuccess", "Successfully added {0} friends/clan members to the cupboard auth list" },
+            {"turretSuccess", "Successfully added <color=#ce422b>{0}</color> friends/clan members to the turret auth list" },
+            {"cupboardSuccess", "Successfully added <color=#ce422b>{0}</color> friends/clan members to the cupboard auth list" },
             {"noOwner", "You can not authorize on something you do not own" },
-            { "noFriendsList", "Unable to find your friends list" },
+            {"noFriendsList", "Unable to find your friends list" },
             {"noClan", "Unable to find your clan" },
             {"noClanMembers", "Unable to find your clan members" },
-            {"clanSyn1", "/autoauth clan - Authorizes your clan mates to the object your looking at (RustIO Clans)" },
-            {"friendSyn1", "/autoauth friends - Authorizes your friends to the object your looking at (Friends API)" },
-            {"options", "This works for Tool Cupboards and Autoturrets\nTo use look at the cupboard/turret you want to authorize your friends on. You must be the owner of the cupboard/turret!" },
+            {"clanSyn0", "<color=#ce422b>/autoauth clan</color> - Authorizes your clan mates to the object your looking at" },
+            {"clanSyn2", "<color=#ce422b>/autoauth autoclan</color> - Automatically authorizes your clan mates to objects when you place them" },
+            {"friendSyn0", "<color=#ce422b>/autoauth friends</color> - Authorizes your friends to the object your looking at" },
+            {"friendSyn2", "<color=#ce422b>/autoauth autofriends</color> - Automatically authorizes your friends to objects when you place them" },            
             {"noClanPlugin", "Unable to find the Clans plugin" },
-            {"noFriendPlugin", "Unable to find the Friends plugin" }
+            {"noFriendPlugin", "Unable to find the Friends plugin" },
+            {"noSharePlugin", "Clans and Friends is not installed on this server. Unable to automatically authorize other players" },
+            {"autoClansDisabled", "You have disabled automatic authorization for clan members" },
+            {"autoClansEnabled", "You have enabled automatic authorization for clan members" },
+            {"autoFriendsDisabled", "You have disabled automatic authorization for friends" },
+            {"autoFriendsEnabled", "You have enabled automatic authorization for friends" },
+            {"enabled", "<color=#8ee700>Enabled</color>" },
+            {"disabled", "<color=#ce422b>Disabled</color>" },
+            {"autoShareClans", "Auto share for clans is: " },
+            {"autoShareFriends", "Auto share for friends is: " },
         };
         #endregion
     }
