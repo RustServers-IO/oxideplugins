@@ -1,7 +1,7 @@
 {
     "name": "Rewards",
     "description": "Reward players for activities using Economic and\/or ServerRewards",
-    "author": "",
+    "author": "Wulf",
     "version": "1.3.11",
     "configuration": true,
     "suggest": {
