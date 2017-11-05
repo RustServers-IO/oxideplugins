@@ -2,7 +2,7 @@
     "name": "EasyVote HighestVoter",
     "description": "Monthly check highest voter and reward him",
     "author": "Exel80",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": true,
     "require": {
         "EasyVote": "*"

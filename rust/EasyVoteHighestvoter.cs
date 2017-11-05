@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote-HighestVoter", "Exel80", "1.0.0")]
+    [Info("EasyVote-HighestVoter", "Exel80", "1.0.1", ResourceId = 2671)]
     class EasyVoteHighestvoter : RustPlugin
     {
         // EasyVote is life and <3
@@ -29,13 +29,13 @@ namespace Oxide.Plugins
             // Logging data to oxide/logs/EasyVoteHighestvoter
             if (config.logEnabled)
             {
-                switch (RewardData["RewardType"])
+                switch (RewardData["RewardType"].ToString())
                 {
                     case "item":
                         {
                             LogToFile("Highestvoter",
-                                $"[{DateTime.UtcNow.ToString()}] [HighestPlayer: {RewardData["HighestPlayerName"]} Id: {RewardData["HighestPlayerID"]}] " +
-                                $"Voter received his reward item(s) => {RewardData["Reward"]}", this);
+                                $"[{DateTime.UtcNow.ToString()}] [HighestPlayer: {RewardData["HighestPlayerName"].ToString()} Id: {RewardData["HighestPlayerID"].ToString()}] " +
+                                $"Voter received his reward item(s) => {RewardData["Reward"].ToString()}", this);
                         }
                         break;
                     default:
@@ -43,14 +43,14 @@ namespace Oxide.Plugins
                         {
                             // New
                             LogToFile("Highestvoter",
-                                $"[{DateTime.UtcNow.ToString()}] [HighestPlayer: {RewardData["HighestPlayerName"]} Id: {RewardData["HighestPlayerID"]}] " +
-                                $"Voter has been added to his reward group => {RewardData["Reward"]}", this);
+                                $"[{DateTime.UtcNow.ToString()}] [HighestPlayer: {RewardData["HighestPlayerName"].ToString()} Id: {RewardData["HighestPlayerID"].ToString()}] " +
+                                $"Voter has been added to his reward group => {RewardData["Reward"].ToString()}", this);
                             // Old
                             if (!string.IsNullOrEmpty(RewardData["OldHighestPlayerID"].ToString()))
                             {
                                 LogToFile("Highestvoter",
                                 $"[{DateTime.UtcNow.ToString()}] [OldHighestPlayerID: {RewardData["OldHighestPlayerID"]}] " +
-                                $"Removed from his reward group => {RewardData["Reward"]}", this);
+                                $"Removed from his reward group => {RewardData["Reward"].ToString()}", this);
                             }
                         }
                         break;
