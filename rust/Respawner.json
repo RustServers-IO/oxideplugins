@@ -2,7 +2,7 @@
     "name": "Respawner",
     "description": "Automatically respawns players with permission and optionally wakes them up",
     "author": "Wulf",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/respawner.669",

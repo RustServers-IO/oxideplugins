@@ -8,7 +8,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Respawner", "Wulf/lukespragg", "1.0.0", ResourceId = 669)]
+    [Info("Respawner", "Wulf/lukespragg", "1.0.1", ResourceId = 669)]
     [Description("Automatically respawns players with permission and optionally wakes them up")]
     public class Respawner : CovalencePlugin
     {
@@ -31,7 +31,7 @@ namespace Oxide.Plugins
             public bool ShowMessages;
 
             [JsonProperty(PropertyName = "Use sleeping bags if available (true/false)")]
-            public bool SleepingBags;
+            public bool SleepingBags; // TODO: #if RUST check
 
             public static Configuration DefaultConfig()
             {
@@ -41,7 +41,7 @@ namespace Oxide.Plugins
                     //CustomLocation = false,
                     SameLocation = true,
                     ShowMessages = true,
-                    SleepingBags = true,
+                    SleepingBags = true, // TODO: #if RUST check
                 };
             }
         }
@@ -108,7 +108,6 @@ namespace Oxide.Plugins
                 var bag = bags[random.Next(0, bags.Length - 1)];
                 # if DEBUG
                 LogWarning($"Original location for {player.Name}: {player.Position()}");
-                LogWarning($"Target sleeping bag for {player.Name}: {bag}");
                 LogWarning($"Target location for {player.Name}: {bag.transform.position}");
                 #endif
                 spawnPoint.pos = bag.transform.position;
@@ -121,7 +120,7 @@ namespace Oxide.Plugins
             }
             /*else if (config.CustomLocation)
             {
-                // TODO: Implement custom spawn location(s)
+                // TODO: Implement custom spawn location(s) (universal)
             }*/
 
             return spawnPoint;
@@ -130,16 +129,16 @@ namespace Oxide.Plugins
         private void OnEntityDeath(BaseEntity entity)
         {
             var basePlayer = entity.ToPlayer();
-            if (!permission.UserHasPermission(basePlayer.UserIDString, permUse)) return;
+            if (basePlayer == null || !permission.UserHasPermission(basePlayer.UserIDString, permUse)) return;
 
-            NextTick(() => { if (basePlayer != null && basePlayer.IsDead() && basePlayer.IsConnected) basePlayer.Respawn(); });
+            NextTick(() => { if (basePlayer.IsDead() && basePlayer.IsConnected) basePlayer.Respawn(); }); // TODO: #if RUST check
         }
 
-        private BasePlayer.SpawnPoint OnPlayerRespawn(BasePlayer basePlayer) => FindSpawnPoint(basePlayer);
+        private BasePlayer.SpawnPoint OnPlayerRespawn(BasePlayer basePlayer) => FindSpawnPoint(basePlayer); // TODO: Switch to IPlayer.Teleport
 
         private void OnPlayerRespawned(BasePlayer basePlayer)
         {
-            if (permission.UserHasPermission(basePlayer.UserIDString, permUse) && basePlayer.IsSleeping()) basePlayer.EndSleeping();
+            if (permission.UserHasPermission(basePlayer.UserIDString, permUse) && basePlayer.IsSleeping()) basePlayer.EndSleeping(); // TODO: #if RUST check
         }
 
         #endregion Respawn Handling
@@ -148,7 +147,7 @@ namespace Oxide.Plugins
 
         //private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        private SleepingBag[] FindSleepingBags(BasePlayer basePlayer)
+        private SleepingBag[] FindSleepingBags(BasePlayer basePlayer) // TODO: #if RUST check
         {
             var bags = SleepingBag.FindForPlayer(basePlayer.userID, true);
             foreach (var bag in bags) LogWarning(bag.deployerUserID.ToString());
