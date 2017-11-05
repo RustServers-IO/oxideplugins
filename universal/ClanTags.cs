@@ -7,7 +7,7 @@ using System.Collections;
 using Newtonsoft.Json;
 namespace Oxide.Plugins
 {
-    [Info("Clan Tags", "GreenArrow", "0.4")]
+    [Info("Clan Tags", "GreenArrow", "0.5", ResourceId = 2450)]
     [Description("Adding support for Clan tags in Better Chat. ")]
 
     class ClanTags : CovalencePlugin
@@ -79,7 +79,7 @@ namespace Oxide.Plugins
         void ChangeClanCol(IPlayer player, string command, string[] args)
         {
 		    
-			if (permission.UserHasPermission(player.Id, "clantagcolors.allowed") && args.Length == 2)
+			if (permission.UserHasPermission(player.Id, "clantags.admin") && args.Length == 2)
             {
 			
 			if (perClanColor.ContainsKey(args[0]))
@@ -92,7 +92,7 @@ namespace Oxide.Plugins
 
 			
 			} else
-			if (!permission.UserHasPermission(player.Id, "clantagcolors.allowed"))
+			if (!permission.UserHasPermission(player.Id, "clantags.admin"))
 			player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> You don't have permission!");
             
             else if (args.Length <= 1)
@@ -108,7 +108,7 @@ namespace Oxide.Plugins
             before = Config["BeforeTag"];
 		    after = Config["AfterTag"];
     		perClanColor = JsonConvert.DeserializeObject<Dictionary<string, string>>(JsonConvert.SerializeObject(Config["PerClanColor"]));
-            permission.RegisterPermission("clantagcolors.allowed", this);
+            permission.RegisterPermission("clantags.admin", this);
 						
     		BetterChat?.CallHook("API_RegisterThirdPartyTitle", this, new Func<IPlayer, string>(GetClanTagFormatted));
 
