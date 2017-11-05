@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Search", "Jacob", "1.0.0")]
+    [Info("Item Search", "Jacob", "1.0.1")]
     class ItemSearch : RustPlugin
     {
         #region Chat Command
@@ -24,7 +24,7 @@ namespace Oxide.Plugins
             }
 
             ItemDefinition item;
-            var name = string.Join(" ", args.Skip(1).ToArray());
+            var name = string.Join(" ", args.Skip(1).ToArray()).ToLower();
             switch (args[0].ToLower())
             {
                 case "name":
