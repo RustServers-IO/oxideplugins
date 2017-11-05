@@ -8,7 +8,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Respawner", "Wulf/lukespragg", "1.0.1", ResourceId = 669)]
+    [Info("Respawner", "Wulf/lukespragg", "1.0.2", ResourceId = 669)]
     [Description("Automatically respawns players with permission and optionally wakes them up")]
     public class Respawner : CovalencePlugin
     {
@@ -150,7 +150,6 @@ namespace Oxide.Plugins
         private SleepingBag[] FindSleepingBags(BasePlayer basePlayer) // TODO: #if RUST check
         {
             var bags = SleepingBag.FindForPlayer(basePlayer.userID, true);
-            foreach (var bag in bags) LogWarning(bag.deployerUserID.ToString());
             return bags.Where((SleepingBag b) => b.deployerUserID == basePlayer.userID).ToArray();
         }
 
