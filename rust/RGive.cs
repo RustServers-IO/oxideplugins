@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RGive", "LaserHydra", "2.1.1", ResourceId = 929)]
+    [Info("RGive", "LaserHydra", "2.1.2", ResourceId = 929)]
     [Description("Random item giving")]
     internal class RGive : RustPlugin
     {
@@ -185,7 +185,7 @@ namespace Oxide.Plugins
                         if (amount == 1 || item.info.displayName.english.EndsWith("s"))
                             SendMessage(randomTarget, "RGive", $"You have been randomly chosen to recieve {amount} {item.info.displayName.english}");
                         else
-                            SendMessage(randomTarget, "RGive", "You have been randomly chosen to recieve {amount} {item.info.displayName.english}s");
+                            SendMessage(randomTarget, "RGive", $"You have been randomly chosen to recieve {amount} {item.info.displayName.english}s");
 
                         break;
 
@@ -396,14 +396,14 @@ namespace Oxide.Plugins
 
         private string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID?.ToString());
 
-        private void BroadcastChat(string prefix, string msg = null) => rust.BroadcastChat(msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg);
+        private void BroadcastChat(string prefix, string msg = null) => covalence.Server.Broadcast(msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg);
 
         private void SendMessage(BasePlayer player, string prefix, string msg = null)
         {
             if (player == null)
                 Puts(msg == null ? StripTags(prefix) : StripTags(msg));
             else
-                rust.SendChatMessage(player, msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg);
+                player.ChatMessage(msg == null ? prefix : "<color=#C4FF00>" + prefix + "</color>: " + msg);
         }
 
         #endregion

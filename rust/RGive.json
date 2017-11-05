@@ -2,7 +2,7 @@
     "name": "RGive (Random Item Give)",
     "description": "Give players a random item",
     "author": "LaserHydra",
-    "version": "2.1.1",
+    "version": "2.1.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/rgive-random-item-give.929",
