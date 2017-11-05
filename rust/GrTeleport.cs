@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.0.8", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.0.9", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
@@ -40,7 +40,7 @@ namespace Oxide.Plugins
             public SpawnPosition(Vector3 position)
             {
                 Position = position;
-                GroundPosition = GetGroundPosition(new Vector3(position.x, 0, position.z));
+                GroundPosition = GetGroundPosition(new Vector3(position.x, 50, position.z));
             }
 
             public bool isPositionAboveWater()
@@ -62,8 +62,9 @@ namespace Oxide.Plugins
 
                 if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, GROUND_MASKS))
                     sourcePos.y = hitInfo.point.y;
+
                 sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
-                
+
                 return sourcePos;
             }
 
@@ -116,7 +117,7 @@ namespace Oxide.Plugins
                 {
                     { "buildingblocked", "You cannot grTeleport into or out from a building blocked area." },
                     { "noinit", "spawnGrid was not initialized. 0 spawn points available." },
-                    { "teleported", "You have GrTeleported to {gridreference}." }, // {gridreference}
+                    { "teleported", "You have GrTeleported to {gridreference}, {postion}." }, // {gridreference}
                     { "teleportlimit", "You have {teleportsremaining} remaining." }, // {teleportsremaining}
                     { "teleportminutesexhauseted", "You have exhausted your remaining grTeleports for today. You can use grTeleport in {minutesleft} minutes." },  // minutesleft hoursleft
                     { "teleporthoursexhauseted", "You have exhausted your remaining grTeleports for today. You can use grTeleport in {hoursleft} hours." },  // minutesleft hoursleft
@@ -283,13 +284,43 @@ namespace Oxide.Plugins
 
                 if (!CheckAccess(player, "grt.nextspawn", adminPermission)) return;
 
-                while (spawnGrid[++lastGridTested].isPositionAboveWater())
-                    if (lastGridTested > 1000) // endless loop               
-                        throw new Exception(lang.GetMessage("sgerror", this, player.UserIDString));
+                do
+                {
+                    if (++lastGridTested >= spawnGrid.Count) lastGridTested = 0;
+                } while (spawnGrid[lastGridTested].isPositionAboveWater());
 
                 Teleport(player, spawnGrid[lastGridTested].GroundPosition, false);
 
-                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{playerPosition}", player.transform.position.ToString()));
+                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{gridreference}", spawnGrid[lastGridTested].GridReference).Replace("{postion}", player.transform.position.ToString()) );
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"ccGrtNextspawn {ex.Message}");
+            }
+        }
+
+        [ConsoleCommand("grt.prevspawn")]
+        void ccGrtPrevspawn(ConsoleSystem.Arg arg)
+        {
+            try
+            {
+                if (arg.Player() == null) return;
+
+                BasePlayer player = arg.Player();
+
+                if (spawnGrid.Count <= 0)
+                    throw new Exception(lang.GetMessage("noinit", this, player.UserIDString));
+
+                if (!CheckAccess(player, "grt.prevspawn", adminPermission)) return;
+
+                do
+                {
+                    if (--lastGridTested < 0) lastGridTested = spawnGrid.Count-1;
+                } while (spawnGrid[lastGridTested].isPositionAboveWater());
+
+                Teleport(player, spawnGrid[lastGridTested].GroundPosition, false);
+
+                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{gridreference}", spawnGrid[lastGridTested].GridReference).Replace("{postion}", player.transform.position.ToString()));
             }
             catch (Exception ex)
             {
