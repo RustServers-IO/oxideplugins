@@ -21,10 +21,10 @@ namespace Oxide.Plugins
         private const string StoredDataName = "HighestVoter";
 
         #region Hooks
-        void onUserReceiveHighestVoterReward(Dictionary<string, string> RewardData)
+        void onUserReceiveHighestVoterReward(Dictionary<string, object> RewardData)
         {
             // Convert to bool
-            bool ReceivedReward = RewardData["ReceivedReward"] == "true";
+            bool ReceivedReward = (bool)RewardData["ReceivedReward"];
 
             // Logging data to oxide/logs/EasyVoteHighestvoter
             if (config.logEnabled)
@@ -46,7 +46,7 @@ namespace Oxide.Plugins
                                 $"[{DateTime.UtcNow.ToString()}] [HighestPlayer: {RewardData["HighestPlayerName"]} Id: {RewardData["HighestPlayerID"]}] " +
                                 $"Voter has been added to his reward group => {RewardData["Reward"]}", this);
                             // Old
-                            if (!string.IsNullOrEmpty(RewardData["OldHighestPlayerID"]))
+                            if (!string.IsNullOrEmpty(RewardData["OldHighestPlayerID"].ToString()))
                             {
                                 LogToFile("Highestvoter",
                                 $"[{DateTime.UtcNow.ToString()}] [OldHighestPlayerID: {RewardData["OldHighestPlayerID"]}] " +
@@ -126,7 +126,7 @@ namespace Oxide.Plugins
         #region Localization
         string _lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        void LoadDefaultMessages()
+        protected void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -211,7 +211,7 @@ namespace Oxide.Plugins
         private void GaveRewards(string HighestPlayer)
         {
             // For callhooks
-            Dictionary<string, string> RewardData = new Dictionary<string, string>();
+            Dictionary<string, object> RewardData = new Dictionary<string, object>();
             RewardData.Add("HighestPlayerName", string.Empty);
             RewardData.Add("HighestPlayerID", HighestPlayer);
 
@@ -227,7 +227,7 @@ namespace Oxide.Plugins
             RewardData.Add("OldHighestPlayerID", OldHighestPlayer);
             RewardData.Add("RewardType", (config.rewardIs.ToLower() != "item" ? "group" : "item"));
             RewardData.Add("Reward", string.Empty);
-            RewardData.Add("ReceivedReward", "false");
+            RewardData.Add("ReceivedReward", false);
 
             // Try found player
             BasePlayer player = FindPlayer(HighestPlayer).FirstOrDefault();
@@ -262,7 +262,7 @@ namespace Oxide.Plugins
 
                                     tempItems.Append($"{amount}x {itemToReceive.info.displayName.translated}, ");
 
-                                    RewardData["ReceivedReward"] = "true";
+                                    RewardData["ReceivedReward"] = true;
 
                                     //If the item does not end up in the inventory
                                     //Drop it on the ground for them
@@ -286,7 +286,7 @@ namespace Oxide.Plugins
 
                                 RewardData["Reward"] = $"{amount}x {itemToReceive.info.displayName.translated}";
 
-                                RewardData["ReceivedReward"] = "true";
+                                RewardData["ReceivedReward"] = true;
 
                                 //If the item does not end up in the inventory
                                 //Drop it on the ground for them
@@ -300,15 +300,20 @@ namespace Oxide.Plugins
                 // Group reward
                 else if (config.rewardIs.ToLower() == "group")
                 {
-                    // Execute console command
-                    rust.RunServerCommand($"oxide.usergroup add {HighestPlayer} {config.group}");
+                    // Add user to group
+                    permission.AddUserGroup(HighestPlayer, config.group);
+                    //rust.RunServerCommand($"oxide.usergroup add {HighestPlayer} {config.group}");
 
                     RewardData["Reward"] = config.group;
 
-                    RewardData["ReceivedReward"] = "true";
+                    RewardData["ReceivedReward"] = true;
 
+                    // If there was old highest player, remove his from group
                     if (!string.IsNullOrEmpty(OldHighestPlayer))
-                        rust.RunServerCommand($"oxide.usergroup remove {OldHighestPlayer} {config.group}");
+                    {
+                        permission.AddUserGroup(OldHighestPlayer, config.group);
+                        //rust.RunServerCommand($"oxide.usergroup remove {OldHighestPlayer} {config.group}");
+                    }
                 }
                 else
                     PrintWarning($"{config.rewardIs.ToLower()} cant be detected. Please, use \"group\" or \"item\" only!");
@@ -319,18 +324,23 @@ namespace Oxide.Plugins
             // Group reward
             else if (config.rewardIs.ToLower() == "group")
             {
-                // Execute console command
-                rust.RunServerCommand($"oxide.usergroup add {HighestPlayer} {config.group}");
+                // Add user to group
+                permission.AddUserGroup(HighestPlayer, config.group);
+                //rust.RunServerCommand($"oxide.usergroup add {HighestPlayer} {config.group}");
 
                 RewardData["Reward"] = config.group;
 
-                RewardData["ReceivedReward"] = "true";
+                RewardData["ReceivedReward"] = true;
 
                 // Congrats msg <3
                 Congrats(HighestPlayer);
 
+                // If there was old highest player, remove his from group
                 if (!string.IsNullOrEmpty(OldHighestPlayer))
-                    rust.RunServerCommand($"oxide.usergroup remove {OldHighestPlayer} {config.group}");
+                {
+                    permission.AddUserGroup(OldHighestPlayer, config.group);
+                    //rust.RunServerCommand($"oxide.usergroup remove {OldHighestPlayer} {config.group}");
+                }
             }
             else
                 PrintWarning($"{config.rewardIs.ToLower()} cant be detected. Please, use \"group\" or \"item\" only!");
