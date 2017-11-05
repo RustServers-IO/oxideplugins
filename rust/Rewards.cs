@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace Oxide.Plugins
 {
-    [Info("Rewards", "Tarek", "1.3.11", ResourceId = 1961)]
+    [Info("Rewards", "Tarek", "1.3.12", ResourceId = 1961)]
     [Description("Reward players for activities using Economic and/or ServerRewards")]
     class Rewards : RustPlugin
     {
@@ -102,10 +102,6 @@ namespace Oxide.Plugins
         {
             Interface.Oxide.DataFileSystem.WriteObject<StoredData>("Rewards", storedData);
             Puts("Data saved");
-        }
-        void Loaded()
-        {
-            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("Rewards");
         }
         private void SetDefaultConfigValues()
         {
@@ -198,7 +194,6 @@ namespace Oxide.Plugins
         {
             try
             {
-
                 Dictionary<string, object> temp;
                 Dictionary<string, object> temp2;
                 Dictionary<string, object> temp3;
@@ -342,12 +337,13 @@ namespace Oxide.Plugins
             permission.RegisterPermission("rewards.admin", this);
             permission.RegisterPermission("rewards.vip", this);
             permission.RegisterPermission("rewards.showrewards", this);
+            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Title);
             Loadcfg();
+
             if (options.HappyHour_Enabled)
             {
                 hhstart = new TimeSpan(Convert.ToInt32(rewardrates.HappyHour_BeginHour), 0, 0);
                 hhend = new TimeSpan(Convert.ToInt32(rewardrates.HappyHour_EndHour), 0, 0);
-
             }
             #region Activity Check
             if (options.ActivityReward_Enabled || options.HappyHour_Enabled)
@@ -397,7 +393,6 @@ namespace Oxide.Plugins
                             }
                         }
                     }
-
                 });
             }
             #endregion
@@ -420,11 +415,10 @@ namespace Oxide.Plugins
         }
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
         bool HasPerm(BasePlayer p, string pe) => permission.UserHasPermission(p.userID.ToString(), pe);
-        void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : msg, "<color=#C4FF00>" + prefix + "</color>: ", uid?.ToString() ?? "0");
-        void BroadcastMessage(string msg, string prefix = null, object uid = null) => rust.BroadcastChat(prefix == null ? msg : msg, "<color=#C4FF00>" + prefix + "</color>: ");
+        void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg, uid?.ToString() ?? "0");
+        void BroadcastMessage(string msg, string prefix = null, object uid = null) => rust.BroadcastChat(prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg);
         void OnKillNPC(BasePlayer victim, HitInfo info)
         {
-
             if (options.NPCReward_Enabled)
             {
                 if (info?.Initiator?.ToPlayer() == null)
@@ -491,7 +485,6 @@ namespace Oxide.Plugins
         }
         private void RewardPlayer(BasePlayer player, double amount, double multiplier = 1, string reason = null, bool isWelcomeReward = false)
         {
-
             if (amount > 0)
             {
                 amount = amount * multiplier;
@@ -789,9 +782,6 @@ namespace Oxide.Plugins
                     return this.StoneSpear;
                 else if (wn == "Wooden Spear")
                     return this.WoodenSpear;
-
-
-                //
                 else
                     return 1;
             }
@@ -893,7 +883,6 @@ namespace Oxide.Plugins
                 else
                     return 0;
             }
-
         }
         class Options
         {
