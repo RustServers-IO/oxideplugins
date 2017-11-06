@@ -11,7 +11,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminRadar", "nivex", "4.1.2", ResourceId = 978)]
+    [Info("AdminRadar", "nivex", "4.1.3", ResourceId = 978)]
     [Description("ESP tool for Admins and Developers.")]
     public class AdminRadar: RustPlugin
     {
@@ -42,6 +42,7 @@ namespace Oxide.Plugins
         static List<BasePlayer> npcCache = new List<BasePlayer>();
         static List<BradleyAPC> bradleyCache = new List<BradleyAPC>();
         static List<SupplyDrop> airdropCache = new List<SupplyDrop>();
+        static List<Zombie> zombieCache = new List<Zombie>();
 
         const float flickerDelay = 0.05f;
 
@@ -697,6 +698,7 @@ namespace Oxide.Plugins
             public float maxDistance;
             public float invokeTime;
             private float inactiveTime;
+            private int inactiveMins;
             private Vector3 position;
 
             public bool showAll;
@@ -720,7 +722,7 @@ namespace Oxide.Plugins
                 source = player;
                 position = player.transform.position;
 
-                if (inactiveTimeLimit > 0f)
+                if (inactiveTimeLimit > 0f || deactiveTimeLimit > 0)
                     InvokeHandler.InvokeRepeating(this, Activity, 0f, 1f);
             }
 
@@ -733,7 +735,7 @@ namespace Oxide.Plugins
                     guiInfo.Remove(player.UserIDString);
                 }
 
-                if (inactiveTimeLimit > 0f)
+                if (inactiveTimeLimit > 0f || deactiveTimeLimit > 0)
                     InvokeHandler.CancelInvoke(this, Activity);
 
                 activeRadars.Remove(this);
@@ -765,8 +767,19 @@ namespace Oxide.Plugins
                 inactiveTime = position == player.transform.position ? inactiveTime + 1f : 0f;
                 position = player.transform.position;
 
-                if (inactiveTime > inactiveTimeLimit)
+                if (inactiveTimeLimit > 0f && inactiveTime > inactiveTimeLimit)
                     GameObject.Destroy(this);
+
+                if (deactiveTimeLimit > 0)
+                {
+                    if (inactiveTime > 0f && inactiveTime % 60 == 0)
+                        inactiveMins++;
+                    else
+                        inactiveMins = 0;
+
+                    if (inactiveMins >= deactiveTimeLimit)
+                        GameObject.Destroy(this);
+                }
             }
 
             void DoESP()
@@ -1159,6 +1172,25 @@ namespace Oxide.Plugins
 
                     if (showNPC || showAll)
                     {
+                        error = "ZOMBIECACHE";
+                        foreach(var zombie in zombieCache)
+                        {
+                            double currDistance = Math.Floor(Vector3.Distance(zombie.transform.position, source.transform.position));
+
+                            if (currDistance > maxDistance)
+                                continue;
+
+                            if (currDistance < playerDistance)
+                            {
+                                if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, zombie.transform.position.y + 10), zombie.transform.position, 1);
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", ins.msg("Zombie", player.UserIDString), Math.Floor(zombie.health), currDistance));
+                                if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, 1f, 0f), GetScale(currDistance));
+                            }
+                            else player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, 1f, 0f), 5f);
+
+                            if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
+                        }
+
                         error = "NPCCACHE";
                         foreach (var target in npcCache)
                         {
@@ -1288,6 +1320,10 @@ namespace Oxide.Plugins
             if (!init || entity == null)
                 return;
 
+            if (entity is Zombie && zombieCache.Contains(entity as Zombie))
+            {
+                zombieCache.Remove(entity as Zombie);
+            }
             if (cachedBackpacks.ContainsKey(entity.transform.position))
             {
                 cachedBackpacks.Remove(entity.transform.position);
@@ -1360,6 +1396,16 @@ namespace Oxide.Plugins
                 if (!player.userID.IsSteamId() && !npcCache.Contains(player))
                 {
                     npcCache.Add(player);
+                    return true;
+                }
+            }
+            else if (entity is Zombie)
+            {
+                var zombie = entity as Zombie;
+
+                if (!zombieCache.Contains(zombie))
+                {
+                    zombieCache.Add(zombie);
                     return true;
                 }
             }
@@ -1515,15 +1561,16 @@ namespace Oxide.Plugins
                         {
                             int drops = 0;
 
-                            foreach (var drop in BaseNetworkable.serverEntities.Where(e => e is DroppedItem).Cast<DroppedItem>())
+                            foreach (var entity in BaseNetworkable.serverEntities.Where(e => e is DroppedItem || e is Landmine || e is BearTrap))
                             {
-                                if (drop.item == null) continue;
-                                double currDistance = Math.Floor(Vector3.Distance(drop.transform.position, player.transform.position));
-
+                                var drop = entity as DroppedItem;
+                                string shortname = drop?.item?.info.shortname ?? entity.ShortPrefabName;
+                                double currDistance = Math.Floor(Vector3.Distance(entity.transform.position, player.transform.position));
+                                
                                 if (currDistance < lootDistance)
                                 {
-                                    if (drawText) player.SendConsoleCommand("ddraw.text", 30f, Color.red, drop.transform.position, string.Format("{0} <color=yellow>{1}</color>", drop.item.info.shortname, currDistance));
-                                    if (drawBox) player.SendConsoleCommand("ddraw.box", 30f, Color.red, drop.transform.position, 0.25f);
+                                    if (drawText) player.SendConsoleCommand("ddraw.text", 30f, Color.red, entity.transform.position, string.Format("{0} <color=yellow>{1}</color>", shortname, currDistance));
+                                    if (drawBox) player.SendConsoleCommand("ddraw.box", 30f, Color.red, entity.transform.position, 0.25f);
                                     drops++;
                                 }
                             }
@@ -1724,34 +1771,37 @@ namespace Oxide.Plugins
             esp.showTC = args.Any(arg => arg.Contains("tc"));
             esp.showTurrets = args.Any(arg => arg.Contains("turret"));
 
-            string gui;
-            if (guiInfo.TryGetValue(player.UserIDString, out gui))
+            if (showUI)
             {
-                CuiHelper.DestroyUi(player, gui);
-                guiInfo.Remove(player.UserIDString);
-            }
+                string gui;
+                if (guiInfo.TryGetValue(player.UserIDString, out gui))
+                {
+                    CuiHelper.DestroyUi(player, gui);
+                    guiInfo.Remove(player.UserIDString);
+                }
 
-            if (!storedData.Hidden.Contains(player.UserIDString))
-            {
-                string espUI = uiJson;
+                if (!storedData.Hidden.Contains(player.UserIDString))
+                {
+                    string espUI = uiJson;
 
-                espUI = espUI.Replace("{anchorMin}", alignTopLeft ? anchorMinTopLeft : anchorMinBottomRight);
-                espUI = espUI.Replace("{anchorMax}", alignTopLeft ? anchorMaxTopLeft : anchorMaxBottomRight);
-                espUI = espUI.Replace("{colorAll}", esp.showAll ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorBags}", esp.showBags ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorBox}", esp.showBox ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorCol}", esp.showCollectible ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorDead}", esp.showDead ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorLoot}", esp.showLoot ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorNPC}", esp.showNPC ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorOre}", esp.showOre ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorSleepers}", esp.showSleepers ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorStash}", esp.showStash ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorTC}", esp.showTC ? "255 0 0 1" : "1 1 1 1");
-                espUI = espUI.Replace("{colorTurrets}", esp.showTurrets ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{anchorMin}", alignTopLeft ? anchorMinTopLeft : anchorMinBottomRight);
+                    espUI = espUI.Replace("{anchorMax}", alignTopLeft ? anchorMaxTopLeft : anchorMaxBottomRight);
+                    espUI = espUI.Replace("{colorAll}", esp.showAll ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorBags}", esp.showBags ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorBox}", esp.showBox ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorCol}", esp.showCollectible ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorDead}", esp.showDead ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorLoot}", esp.showLoot ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorNPC}", esp.showNPC ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorOre}", esp.showOre ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorSleepers}", esp.showSleepers ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorStash}", esp.showStash ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorTC}", esp.showTC ? "255 0 0 1" : "1 1 1 1");
+                    espUI = espUI.Replace("{colorTurrets}", esp.showTurrets ? "255 0 0 1" : "1 1 1 1");
 
-                guiInfo[player.UserIDString] = CuiHelper.GetGuid();
-                CuiHelper.AddUi(player, espUI.Replace("{guid}", guiInfo[player.UserIDString]));
+                    guiInfo[player.UserIDString] = CuiHelper.GetGuid();
+                    CuiHelper.AddUi(player, espUI.Replace("{guid}", guiInfo[player.UserIDString]));
+                }
             }
 
             esp.invokeTime = invokeTime;
@@ -1814,6 +1864,8 @@ namespace Oxide.Plugins
         static float groupRange;
         static float groupCountHeight;
         static float inactiveTimeLimit;
+        static int deactiveTimeLimit;
+        static bool showUI;
 
         static string szChatCommand;
         static List<object> authorized;
@@ -1863,6 +1915,7 @@ namespace Oxide.Plugins
                 ["npc"] = "npc",
                 ["NoDrops"] = "No item drops found within {0}m",
                 ["Help9"] = "<color=orange>/{0} drops</color> - Show all dropped items within {1}m.",
+                ["Zombie"] = "<color=red>Zombie</color>",
             }, this);
         }
 
@@ -1887,6 +1940,8 @@ namespace Oxide.Plugins
             itemExceptions = (GetConfig("Settings", "Dropped Item Exceptions", ItemExceptions) as List<object>).Cast<string>().ToList();
             alignTopLeft = Convert.ToBoolean(GetConfig("Settings", "Align GUI Top Left", false));
             inactiveTimeLimit = Convert.ToSingle(GetConfig("Settings", "Deactivate Radar After X Seconds Inactive", 300f));
+            deactiveTimeLimit = Convert.ToInt32(GetConfig("Settings", "Deactivate Radar After X Minutes", 0));
+            showUI = Convert.ToBoolean(GetConfig("Settings", "User Interface Enabled", true));
 
             showLootContents = Convert.ToBoolean(GetConfig("Options", "Show Barrel And Crate Contents", false));
             showAirdropContents = Convert.ToBoolean(GetConfig("Options", "Show Airdrop Contents", false));
