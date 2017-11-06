@@ -1,0 +1,111 @@
+#if REIGNOFKINGS
+using CodeHatch;
+using CodeHatch.Engine.Networking;
+#endif
+using Oxide.Core.Libraries.Covalence;
+using System.Collections.Generic;
+using System.Linq;
+#if HURTWORLD || REIGNOFKINGS || RUST
+using UnityEngine;
+#endif
+#if HURTWORLD
+using uLink;
+#endif
+
+namespace Oxide.Plugins
+{
+    [Info("Portgun", "Wulf/lukespragg", "3.1.0", ResourceId = 664)]
+    [Description("Teleports players with permission to object or terrain they are looking at")]
+    public class Portgun : CovalencePlugin
+    {
+        #region Localization
+
+        private new void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>()
+            {
+                ["CommandPort"] = "port",
+                ["NoDestination"] = "Could not find a valid destination to port to",
+                ["NotAllowed"] = "You are not allowed to use the '{0}' command"
+            }, this);
+        }
+
+        #endregion Localization
+
+        #region Initialization
+
+        private const string permUse = "portgun.use";
+        private int layers;
+
+        private void OnServerInitialized()
+        {
+            AddCovalenceCommand("portgun", "PortCommand");
+            AddLocalizedCommand("CommandPort", "PortCommand");
+            permission.RegisterPermission(permUse, this);
+
+#if HURTWORLD
+            layers = LayerMask.GetMask("Constructions", "Terrain");
+#elif REIGNOFKINGS
+            layers = LayerMask.GetMask("Cubes", "Environment", "Terrain");
+#elif RUST
+            layers = LayerMask.GetMask("Construction", "Default", "Deployed", "Resource", "Terrain", "Tree", "Water", "World");
+#endif
+        }
+
+        #endregion Initialization
+
+        #region Port Command
+
+        private void PortCommand(IPlayer player, string command, string[] args)
+        {
+            if (!player.HasPermission(permUse))
+            {
+                player.Reply(Lang("NotAllowed", player.Id, command));
+                return;
+            }
+
+            var pos = new GenericPosition();
+#if HURTWORLD
+            RaycastHit hit;
+            var entity = (player.Object as PlayerSession).WorldPlayerEntity;
+            var thirdPerson = entity.GetComponentInChildren<Assets.Scripts.Core.CamPosition>().transform;
+            var rotation = thirdPerson.rotation * Vector3.forward;
+            if (!Physics.Raycast(entity.transform.position + new Vector3(0f, 1.5f, 0f), rotation, out hit, float.MaxValue, layers))
+#elif REIGNOFKINGS
+            RaycastHit hit;
+            var entity = (player.Object as Player).Entity;
+            if (!Physics.Raycast(entity.Position, entity.GetOrCreate<LookBridge>().Forward, out hit, UnityEngine.Mathf.Infinity, layers))
+#elif RUST
+            RaycastHit hit;
+            var basePlayer = player.Object as BasePlayer;
+            if (!Physics.Raycast(basePlayer.eyes.HeadRay(), out hit, UnityEngine.Mathf.Infinity, layers))
+#endif
+            {
+                player.Reply(Lang("NoDestination", player.Id));
+                return;
+            }
+
+#if HURTWORLD || REIGNOFKINGS || RUST
+            pos = new GenericPosition(hit.point.x, hit.point.y, hit.point.z);
+#endif
+            player.Teleport(pos.X, pos.Y, pos.Z);
+        }
+
+        #endregion Port Command
+
+        #region Helpers
+
+        private void AddLocalizedCommand(string key, string command)
+        {
+            foreach (var language in lang.GetLanguages(this))
+            {
+                var messages = lang.GetMessages(language, this);
+                foreach (var message in messages.Where(m => m.Key.Equals(key))) AddCovalenceCommand(message.Value, command);
+            }
+        }
+
+        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
+        #endregion Helpers
+    }
+}

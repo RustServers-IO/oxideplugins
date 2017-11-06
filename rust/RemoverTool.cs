@@ -7,7 +7,6 @@ using Facepunch;
 using Oxide.Core;
 using Oxide.Core.Libraries;
 using Oxide.Core.Plugins;
-
 using System.Linq;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Game.Rust.Cui;
@@ -15,14 +14,11 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.1.11", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.1.12", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
-        Plugin Friends;
-		
-		[PluginReference]
-        Plugin Clans;
+        Plugin Friends, Clans, Economics;
 
         static RemoverTool rt = new RemoverTool();
 
@@ -913,9 +909,9 @@ namespace Oxide.Plugins
                         player.inventory.Take(collect, itemid, amount);
                         player.Command("note.inv", itemid, -amount);
                     }
-                    else if (priceName == "withdraw")
+                    else if (priceName == "withdraw" && rt.Economics)
                     {
-                        var w = Interface.Oxide.CallHook("Withdraw", player.userID, (double)amount);
+                        var w = rt.Economics.CallHook("Withdraw", player.userID, (double)amount);
                         if (w == null || !(bool)w) return false;
                     }
                 }

@@ -1,18 +1,18 @@
 {
     "name": "Portgun",
-    "description": "Teleports a player to where they are looking at",
+    "description": "Teleports players with permission to object or terrain they are looking at",
     "author": "Wulf",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "configuration": false,
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/portgun.664",
     "games": [
-        "rust",
-        "hurtworld"
+        "hurtworld",
+        "reignofkings"
     ],
     "keywords": [
         "oxide",
-        "rust",
-        "hurtworld"
+        "hurtworld",
+        "reignofkings"
     ]
 }
