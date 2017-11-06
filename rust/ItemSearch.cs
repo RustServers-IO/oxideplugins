@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Search", "Jacob", "1.0.1")]
+    [Info("Item Search", "Jacob", "1.0.2", ResourceId = 2679)]
     class ItemSearch : RustPlugin
     {
         #region Chat Command
@@ -17,7 +17,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (args.Length < 2 && args[0].ToLower() != "help")
+            if (args.Length == 0)
             {
                 PrintToChat(player, lang.GetMessage("SyntaxError", this, player.UserIDString));
                 return;
@@ -28,6 +28,12 @@ namespace Oxide.Plugins
             switch (args[0].ToLower())
             {
                 case "name":
+                    if (args.Length < 2)
+                    {
+                        PrintToChat(player, lang.GetMessage("SyntaxError", this, player.UserIDString));
+                        return;
+                    }
+
                     item = ItemManager.itemList.FirstOrDefault(x => x.displayName.english.ToLower().Contains(name));
                     if (item == null)
                     {
@@ -44,6 +50,12 @@ namespace Oxide.Plugins
                     break;
 
                 case "shortname":
+                    if (args.Length < 2)
+                    {
+                        PrintToChat(player, lang.GetMessage("SyntaxError", this, player.UserIDString));
+                        return;
+                    }
+
                     item = ItemManager.itemList.FirstOrDefault(x => x.shortname.Contains(name));
                     if (item == null)
                     {
@@ -60,6 +72,12 @@ namespace Oxide.Plugins
                     break;
 
                 case "help":
+                    if (args.Length < 1)
+                    {
+                        PrintToChat(player, lang.GetMessage("SyntaxError", this, player.UserIDString));
+                        return;
+                    }
+
                     PrintToChat(player, lang.GetMessage("Help", this, player.UserIDString));
                     break;
                 

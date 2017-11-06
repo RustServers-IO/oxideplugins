@@ -2,7 +2,7 @@
     "name": "Item Search",
     "description": "Search items by proper name or shortname.",
     "author": "Kappasaurus",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/item-search.2679",
