@@ -1,0 +1,16 @@
+{
+    "name": "CarCommanderLite",
+    "description": "Car spawner with added features",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/carcommanderlite.2680",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
