@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutomaticAuthorization", "k1lly0u", "0.2.0", ResourceId = 2063)]
+    [Info("AutomaticAuthorization", "k1lly0u", "0.2.02", ResourceId = 2063)]
     class AutomaticAuthorization : RustPlugin
     {
         #region Fields
@@ -36,11 +36,30 @@ namespace Oxide.Plugins
             if (entity != null && (entity is BuildingPrivlidge || entity is AutoTurret))
             {
                 ulong ownerId = entity.GetComponent<BaseEntity>().OwnerID;
-
+                  
                 BasePlayer player = null;
                 IPlayer iPlayer = covalence.Players.FindPlayerById(ownerId.ToString());
                 if (iPlayer != null && iPlayer.IsConnected)
                     player = iPlayer.Object as BasePlayer;
+
+                if (entity is BuildingPrivlidge)
+                {
+                    (entity as BuildingPrivlidge).authorizedPlayers.Add(new ProtoBuf.PlayerNameID
+                    {
+                        userid = ownerId,
+                        username = player == null ? "" : player.displayName,
+                        ShouldPool = true
+                    });
+                }
+                else
+                {
+                    (entity as AutoTurret).authorizedPlayers.Add(new ProtoBuf.PlayerNameID
+                    {
+                        userid = ownerId,
+                        username = player == null ? "" : player.displayName,
+                        ShouldPool = true
+                    });
+                }
 
                 if (automatedClans.Contains(ownerId))
                 {
