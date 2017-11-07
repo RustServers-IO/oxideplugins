@@ -10,7 +10,7 @@ using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("RunningMan", "sami37 - Мизантроп", "1.5.8", ResourceId = 777)]
+    [Info("RunningMan", "sami37 - Мизантроп", "1.5.9", ResourceId = 777)]
     [Description("Get reward by killing runner or just survive as runner.")]
     class RunningMan : RustPlugin
     {
@@ -425,7 +425,13 @@ namespace Oxide.Plugins
             time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
         }
 
-        void BroadcastChat(string msg = null) => rust.BroadcastChat(msg ?? " ") ;
+        void BroadcastChat(string msg = null)
+        {
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                rust.SendChatMessage(player, msg ?? " ", "");
+            }
+        }
 
         private void Runlog(string text)
         {
@@ -631,38 +637,13 @@ namespace Oxide.Plugins
                     string.Format(lang.GetMessage("NoPerm", this, player.UserIDString), Config["Default", "ChatName"]));
                 return;
             }
-            if (eventpause != null)
-            {
-                eventpause.Destroy();
-                eventpause = null;
-                runningman = null;
-                Runlog("timer eventpause stopped");
-            }
-            if (eventstart != null)
-            {
-                eventstart.Destroy();
-                eventstart = null;
-                runningman = null;
-                Runlog("timer eventstart stopped");
-            }
-            List<BasePlayer> onlineplayers = BasePlayer.activePlayerList;
-            if (onlineplayers == null)
-            {
-                SendReply(player,
-                    string.Format(lang.GetMessage("NobodyOnline", this, player.UserIDString),
-                        Config["Default", "ChatName"]));
-                return;
-            }
-            var randI = rnd.Next(0, onlineplayers.Count);
-            runningman = onlineplayers[randI];
-            Runlog("Running man: " + runningman.displayName);
-            BroadcastChat(string.Format(lang.GetMessage("StartEventRunner", this),
-                (string) Config["Default", "ChatName"], runningman.displayName));
             if ((string) Config["IngameTime", "Use ingame timer"] == "true")
+            {
                 ingameTimer = timer.Once(20, CheckTime);
+            }
             else
             {
-                eventstart = timer.Once(60*(int) Config["Default", "StarteventTime"], Runningstop);
+                Startevent();
                 time1 = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
             }
         }
