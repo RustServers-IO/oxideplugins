@@ -9,7 +9,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Vote For Money", "Frenk92", "0.6.1", ResourceId = 2086)]
+    [Info("Vote For Money", "Frenk92", "0.6.2", ResourceId = 2086)]
     class VoteForMoney : RustPlugin
     {
         [PluginReference]
@@ -160,6 +160,9 @@ namespace Oxide.Plugins
                 ["EditUseRP"] = "Use RP edited in: {0}",
                 ["EditUseKits"] = "Use Kits edited in: {0}",
                 ["ErrorBool"] = "Error. Only 'true' or 'false'.",
+                ["AlreadyClaim"] = "You have already claimed all kits.",
+                ["KitsClaimed"] = "All kits have been claimed.",
+                ["ErrorKits"] = "Not all kits have been redeemed. Empty the inventory and redeem them with \"/claimkit\".",
                 ["Help"] = "\n============== VOTE HELP =============\n/vote <money|rp|kit> true/false - to use <Economics|RP|Kits> or not.\n/vote <money|rp|kit> add \"GROUP\" \"VALUE\" - to add a group for a different reward.\n/vote <money|rp|kit> remove \"GROUP\" - to remove a group.\n/vote <money|rp|kit> edit \"GROUP\" \"VALUE\" - to edit a group reward.\n/vote type day/hour - edit vote type.\n/vote interval AMOUNT - edit vote interval.\n/vote <rservers|toprust|beancan> <id \"SERVERID\"|key \"APIKEY\"> - edit <Rust-Servers|TopRustServers|BeancanIO> <ID|ApiKey>.\n/vote <rservers|toprust|beancan> false - disable <Rust-Servers|TopRustServers|BeancanIO>.\n============== VOTE HELP =============",
             }, this);
         }
@@ -218,9 +221,25 @@ namespace Oxide.Plugins
             LoadConfigData();
         }
 
+        List<ulong> Join = new List<ulong>();
+
         void OnPlayerInit(BasePlayer player)
         {
-            GetRequest(player);
+            if (!Join.Contains(player.userID)) Join.Add(player.userID);
+        }
+
+        void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            if (Join.Contains(player.userID)) Join.Remove(player.userID);
+        }
+
+        void OnPlayerSleepEnded(BasePlayer player)
+        {
+            if (Join.Contains(player.userID))
+            {
+                GetRequest(player);
+                Join.Remove(player.userID);
+            }
         }
         #endregion
 
