@@ -1,6 +1,6 @@
 {
     "name": "Weapon Damage Scaler",
-    "description": "Allows scaling of player damage per weapon\/ammo",
+    "description": "Allows scaling of player damage per weapon\/ammo\/skin\/prefab",
     "author": "Shady757",
     "version": "1.1.0",
     "configuration": true,
