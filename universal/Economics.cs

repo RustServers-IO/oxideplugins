@@ -8,7 +8,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.0.0", ResourceId = 717)]
+    [Info("Economics", "Wulf/lukespragg", "3.1.0", ResourceId = 717)]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -167,6 +167,8 @@ namespace Oxide.Plugins
             return !storedData.balances.TryGetValue(playerId, out playerData) ? config.StartAmount : playerData;
         }
 
+        private double Balance(ulong playerId) => Balance(playerId.ToString());
+
         private void Deposit(string playerId, double amount)
         {
             if (amount < 0) return;
@@ -175,11 +177,15 @@ namespace Oxide.Plugins
             SetMoney(playerId, amount >= 0 ? amount : double.MaxValue);
         }
 
+        private void Deposit(ulong playerId, double amount) => Deposit(playerId.ToString(), amount);
+
         private void SetMoney(string playerId, double amount)
         {
             storedData.balances[playerId] = amount >= 0 ? amount : 0;
             changed = true;
         }
+
+        private void SetMoney(ulong playerId, double amount) => SetMoney(playerId.ToString(), amount);
 
         private bool Transfer(string playerId, string targetId, double amount)
         {
@@ -191,6 +197,8 @@ namespace Oxide.Plugins
 
             return false;
         }
+
+        private bool Transfer(ulong playerId, ulong targetId, double amount) => Transfer(playerId.ToString(), targetId.ToString(), amount);
 
         private bool Withdraw(string playerId, double amount)
         {
@@ -205,6 +213,8 @@ namespace Oxide.Plugins
 
             return false;
         }
+
+        private bool Withdraw(ulong playerId, double amount) => Withdraw(playerId.ToString(), amount);
 
         #endregion API Methods
 
