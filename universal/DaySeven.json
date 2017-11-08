@@ -1,0 +1,16 @@
+{
+    "name": "",
+    "description": "",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/day-7.2390",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}
