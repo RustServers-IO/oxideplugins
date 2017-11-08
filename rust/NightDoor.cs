@@ -1,4 +1,3 @@
-using ConVar;
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
@@ -6,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Night Door", "Slydelix", 1.1)]
+    [Info("Night Door", "Slydelix", 1.2, ResourceId = 2684)]
     class NightDoor : RustPlugin
     {
         int layers = LayerMask.GetMask("Construction");
@@ -24,7 +23,7 @@ namespace Oxide.Plugins
 
         protected override void LoadDefaultMessages()
         {
-            lang.RegisterMessages(new Dictionary <string, string>()
+            lang.RegisterMessages(new Dictionary<string, string>()
             {
                 {"serverWipe", "Server wipe detected, wiping data file"},
                 {"NotOpenable", "This door cannot be opened at this time"},
@@ -60,6 +59,7 @@ namespace Oxide.Plugins
 
         void Init()
         {
+            LoadDefaultConfig();
             permission.RegisterPermission("nightdoor.use", this);
             permission.RegisterPermission("nightdoor.bypass", this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("NightDoor");
@@ -90,10 +90,10 @@ namespace Oxide.Plugins
         {
             if (storedData.IDlist.Contains(door.net.ID))
             {
-                float ctime = Env.time;
+                float ctime = ConVar.Env.time;
                 if (player.IsAdmin && BypassAdmin) return;
                 if (permission.UserHasPermission(player.UserIDString, "nightdoor.bypass") && BypassPerm) return;
-                if (Env.time >= startTime && Env.time <= endTime) return;
+                if (ConVar.Env.time >= startTime && ConVar.Env.time <= endTime) return;
                 door.CloseRequest();
                 SendReply(player, lang.GetMessage("NotOpenable", this, player.UserIDString));
                 return;
