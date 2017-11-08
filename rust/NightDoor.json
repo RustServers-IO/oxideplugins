@@ -1,6 +1,6 @@
 {
     "name": "Night Door",
-    "description": "Allows opening of selected door(s) during set time period",
+    "description": "Allows opening of selected door(s) only during set time period",
     "author": "",
     "version": "1.2",
     "configuration": true,
