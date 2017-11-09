@@ -7,16 +7,42 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AngryTime", "Tori1157", "1.0.4")]
-    [Description("Check, add & set time via commands")]
+    [Info("AngryTime", "Tori1157", "1.0.5")]
+    [Description("Check & set time via commands")]
 
     class AngryTime : CovalencePlugin
     {
         #region Loading
 
+        private bool Changed;
+
+        private string MessagePrefix;
+        private string MessagePrefixColor;
+
         private void Init()
         {
             permission.RegisterPermission("angrytime.admin", this);
+
+            LoadVariables();
+        }
+
+        private void LoadVariables()
+        {
+            MessagePrefix = Convert.ToString(GetConfig("Options", "Message Prefix", "Angry Time"));
+            MessagePrefixColor = Convert.ToString(GetConfig("Options", "Message Prefix Color", "#ffa500"));
+
+            if (Changed)
+            {
+                SaveConfig();
+                Changed = false;
+            }
+        }
+
+        protected override void LoadDefaultConfig()
+        {
+            PrintWarning("Creating a new config file");
+            Config.Clear();
+            LoadVariables();
         }
 
         protected override void LoadDefaultMessages()
@@ -86,11 +112,11 @@ namespace Oxide.Plugins
             {
                 if (!player.IsServer)
                 {
-                    SendChatMessage(player, "Angry Time", Lang("Current Game Time Chat", player.Id, server.Time));
+                    SendChatMessage(player, MessagePrefix, Lang("Current Game Time Chat", player.Id, server.Time));
                     return;
                 }
 
-                SendConsoleMessage(player, "Angry Time", Lang("Current Game Time Console", player.Id, server.Time));
+                SendConsoleMessage(player, MessagePrefix, Lang("Current Game Time Console", player.Id, server.Time));
                 return;
             }
             
@@ -106,11 +132,11 @@ namespace Oxide.Plugins
             {
                 if (!player.IsServer)
                 {
-                    SendChatMessage(player, "Angry Time", lang.GetMessage("Incorrect Parameter Chat", this, player.Id).Replace("{parameter}", CommandArg));
+                    SendChatMessage(player, MessagePrefix, lang.GetMessage("Incorrect Parameter Chat", this, player.Id).Replace("{parameter}", CommandArg));
                     return;
                 }
 
-                SendConsoleMessage(player, "Angry Time", lang.GetMessage("Incorrect Parameter Console", this, player.Id).Replace("{parameter}", CommandArg));
+                SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Incorrect Parameter Console", this, player.Id).Replace("{parameter}", CommandArg));
                 return;
             }
             #endregion
@@ -122,7 +148,7 @@ namespace Oxide.Plugins
 
                     if (!HasPerm && !player.IsServer)
                     {
-                        SendChatMessage(player, "Angry Time", lang.GetMessage("No Permission", this, player.Id).Replace("{player}", player.Name).Replace("{command}", command));
+                        SendChatMessage(player, MessagePrefix, lang.GetMessage("No Permission", this, player.Id).Replace("{player}", player.Name).Replace("{command}", command));
                         return;
                     }
 
@@ -130,11 +156,11 @@ namespace Oxide.Plugins
                     {
                         if (!player.IsServer)
                         {
-                            SendChatMessage(player, "Angry Time", lang.GetMessage("Invalid Syntax Set Chat", this, player.Id));
+                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Syntax Set Chat", this, player.Id));
                             return;
                         }
 
-                        SendConsoleMessage(player, "Angry Time", lang.GetMessage("Invalid Syntax Set Console", this, player.Id));
+                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Syntax Set Console", this, player.Id));
                         return;
                     }
 
@@ -145,11 +171,11 @@ namespace Oxide.Plugins
                     {
                         if (!player.IsServer)
                         {
-                            SendChatMessage(player, "Angry Time", lang.GetMessage("Invalid Time Set Chat", this, player.Id).Replace("{time}", TimeParameter1));
+                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Chat", this, player.Id).Replace("{time}", TimeParameter1));
                             return;
                         }
 
-                        SendConsoleMessage(player, "Angry Time", lang.GetMessage("Invalid Time Set Console", this, player.Id).Replace("{time}", TimeParameter1));
+                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Console", this, player.Id).Replace("{time}", TimeParameter1));
                         return;
                     }
 
@@ -159,11 +185,11 @@ namespace Oxide.Plugins
                     {
                         if (!player.IsServer)
                         {
-                            SendChatMessage(player, "Angry Time", lang.GetMessage("Invalid Time Length Chat", this, player.Id).Replace("{time}", TimeParameter1));
+                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Length Chat", this, player.Id).Replace("{time}", TimeParameter1));
                             return;
                         }
 
-                        SendConsoleMessage(player, "Angry Time", lang.GetMessage("Invalid Time Length Console", this, player.Id).Replace("{time}", TimeParameter1));
+                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Length Console", this, player.Id).Replace("{time}", TimeParameter1));
                         return;
                     }
 
@@ -179,11 +205,11 @@ namespace Oxide.Plugins
                     {
                         if (!player.IsServer)
                         {
-                            SendChatMessage(player, "Angry Time", lang.GetMessage("Invalid Time Set Chat", this, player.Id).Replace("{time}", TimeParameter1));
+                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Chat", this, player.Id).Replace("{time}", TimeParameter1));
                             return;
                         }
 
-                        SendConsoleMessage(player, "Angry Time", lang.GetMessage("Invalid Time Set Console", this, player.Id).Replace("{time}", TimeParameter1));
+                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Console", this, player.Id).Replace("{time}", TimeParameter1));
                         return;
                     }
 
@@ -192,11 +218,11 @@ namespace Oxide.Plugins
 
                     if (!player.IsServer)
                     {
-                        SendChatMessage(player, "Angry Time", lang.GetMessage("Time Changed Chat", this, player.Id).Replace("{time}", ClockInText));
+                        SendChatMessage(player, MessagePrefix, lang.GetMessage("Time Changed Chat", this, player.Id).Replace("{time}", ClockInText));
                         return;
                     }
 
-                    SendConsoleMessage(player, "Angry Time", lang.GetMessage("Time Changed Console", this, player.Id).Replace("{time}", ClockInText));
+                    SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Time Changed Console", this, player.Id).Replace("{time}", ClockInText));
 
                 return;
                 #endregion
@@ -261,15 +287,15 @@ namespace Oxide.Plugins
                     {
                         if (!HasPerm)
                         {
-                            SendInfoMessage(player, "Angry Time", lang.GetMessage("Time Help Command Chat Player", this, player.Id));
+                            SendInfoMessage(player, MessagePrefix, lang.GetMessage("Time Help Command Chat Player", this, player.Id));
                             return;
                         }
 
-                        SendInfoMessage(player, "Angry Time", lang.GetMessage("Time Help Command Chat Admin", this, player.Id));
+                        SendInfoMessage(player, MessagePrefix, lang.GetMessage("Time Help Command Chat Admin", this, player.Id));
                         return;
                     }
 
-                    SendConsoleMessage(player, "Angry Time", lang.GetMessage("Time Help Command Console", this, player.Id));
+                    SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Time Help Command Console", this, player.Id));
 
                 return;
                 #endregion
@@ -282,6 +308,29 @@ namespace Oxide.Plugins
 
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
+
+        private object GetConfig(string menu, string datavalue, object defaultValue)
+        {
+            var data = Config[menu] as Dictionary<string, object>;
+
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[menu] = data;
+                Changed = true;
+            }
+
+            object value;
+
+            if (!data.TryGetValue(datavalue, out value))
+            {
+                value = defaultValue;
+                data[datavalue] = value;
+                Changed = true;
+            }
+            return value;
+        }
+
         #endregion
 
         #region Messages
@@ -293,12 +342,12 @@ namespace Oxide.Plugins
 
         private void SendChatMessage(IPlayer player, string prefix, string msg)
         {
-            player.Reply("[#ffa500]" + prefix + "[/#]: " + msg);
+            player.Reply("[" + MessagePrefixColor + "]" + prefix + "[/#]: " + msg);
         }
 
         private void SendInfoMessage(IPlayer player, string prefix, string msg)
         {
-            player.Reply("[+18][#ffa500]" + prefix + "[/#][/+]\n\n" + msg);
+            player.Reply("[+18][" + MessagePrefixColor + "]" + prefix + "[/#][/+]\n\n" + msg);
         }
 
         #endregion
