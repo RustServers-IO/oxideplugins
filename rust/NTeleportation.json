@@ -1,7 +1,7 @@
 {
     "name": "N Teleportation",
     "description": "Multiple teleportation systems for admins and players.",
-    "author": "Wulf",
+    "author": "Nogrod",
     "version": "1.0.23",
     "configuration": true,
     "suggest": {
