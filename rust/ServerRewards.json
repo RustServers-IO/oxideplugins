@@ -1,7 +1,7 @@
 {
     "name": "ServerRewards",
     "description": "Earn reward points in various ways and spend them on many different options in the GUI reward store",
-    "author": "Wulf",
+    "author": "k1lly0u",
     "version": "0.4.63",
     "configuration": true,
     "suggest": {
