@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.4.62", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.4.63", ResourceId = 1751)]
     class ServerRewards : RustPlugin
     {
         #region Fields
@@ -701,7 +701,7 @@ namespace Oxide.Plugins
             string message = $"{color1}{msg("storeRP", player.UserIDString)}: {playerPoints}</color>";
             if (Economics && configData.Tabs.Exchange)
             {
-                var amount = Economics?.Call("GetPlayerMoney", player.userID);
+                var amount = Economics?.Call("Balance", player.userID);
                 message = message + $"  {color2}||</color> {color1}Economics: {amount}</color>";
             }
             if (configData.UIOptions.ShowPlaytime && PlaytimeTracker)
@@ -1197,7 +1197,7 @@ namespace Oxide.Plugins
             }
             else
             {
-                double amount = (double)Economics?.Call("GetPlayerMoney", player.userID);
+                double amount = (double)Economics?.Call("Balance", player.userID);
                 if (amount < configData.Exchange.Economics)
                 {
                     PopupMessage(player, msg("notEnoughCoins", player.UserIDString));
