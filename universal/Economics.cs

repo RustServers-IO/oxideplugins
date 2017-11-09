@@ -8,7 +8,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.1.0", ResourceId = 717)]
+    [Info("Economics", "Wulf/lukespragg", "3.1.1", ResourceId = 717)]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -67,7 +67,8 @@ namespace Oxide.Plugins
 
         private class StoredData
         {
-            public Dictionary<string, double> balances = new Dictionary<string, double>();
+            public Dictionary<string, double> Balances = new Dictionary<string, double>();
+            public Dictionary<ulong, double> balances = new Dictionary<ulong, double>();
         }
 
         #endregion Stored Data
@@ -130,12 +131,24 @@ namespace Oxide.Plugins
             AddLocalizedCommand("CommandWipe", "WipeCommand");
 
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+            if (storedData.balances != null)
+            {
+                foreach (var p in storedData.balances.ToList())
+                {
+                    var id = p.Key.ToString();
+                    if (!storedData.Balances.Keys.Contains(id)) storedData.Balances.Add(id, p.Value);
+                    storedData.balances.Remove(p.Key);
+                }
+                //if (storedData.balances.Length == 0) // TODO: Remove old, empty balances
+                changed = true;
+                SaveData();
+            }
 
             if (config.RemoveUnused)
             {
-                var playerData = storedData.balances.Keys.ToArray();
-                foreach (var p in playerData.Where(p => storedData.balances[p].Equals(config.StartAmount))) storedData.balances.Remove(p);
-                if (playerData.Length != storedData.balances.Count) changed = true;
+                var playerData = storedData.Balances.Keys.ToArray();
+                foreach (var p in playerData.Where(p => storedData.Balances[p].Equals(config.StartAmount))) storedData.Balances.Remove(p);
+                if (playerData.Length != storedData.Balances.Count) changed = true;
                 SaveData();
             }
         }
@@ -164,7 +177,7 @@ namespace Oxide.Plugins
         private double Balance(string playerId)
         {
             double playerData;
-            return !storedData.balances.TryGetValue(playerId, out playerData) ? config.StartAmount : playerData;
+            return !storedData.Balances.TryGetValue(playerId, out playerData) ? config.StartAmount : playerData;
         }
 
         private double Balance(ulong playerId) => Balance(playerId.ToString());
@@ -181,7 +194,7 @@ namespace Oxide.Plugins
 
         private void SetMoney(string playerId, double amount)
         {
-            storedData.balances[playerId] = amount >= 0 ? amount : 0;
+            storedData.Balances[playerId] = amount >= 0 ? amount : 0;
             changed = true;
         }
 
