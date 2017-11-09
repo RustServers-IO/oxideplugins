@@ -2,7 +2,7 @@
     "name": "Night Door",
     "description": "Allows opening of selected door(s) only during set time period",
     "author": "",
-    "version": "1.2",
+    "version": "1.4",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/night-door.2684",

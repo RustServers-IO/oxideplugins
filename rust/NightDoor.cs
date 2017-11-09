@@ -5,19 +5,27 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Night Door", "Slydelix", 1.2, ResourceId = 2684)]
+    [Info("Night Door", "Slydelix", 1.4, ResourceId = 2684)]
     class NightDoor : RustPlugin
     {
         int layers = LayerMask.GetMask("Construction");
-        bool BypassAdmin, BypassPerm;
-        float startTime, endTime;
+        bool BypassAdmin, BypassPerm, UseRealTime, AutoDoor;
+        string startTime, endTime;
 
         protected override void LoadDefaultConfig()
         {
+            if (Config["End time (if you want to be able to open doors until 20:30 you would put 20.5)"] != null)
+            {
+                Config.Save(Config.Filename + ".old");
+                PrintWarning("New config was created because old config version was detected (sorry :/)");
+                Config.Clear();
+            }
             Config["Allow admins to open time-limited door"] = BypassAdmin = GetConfig("Allow admins to open time-limited door", false);
             Config["Allow players with bypass permission to open time-limited door"] = BypassPerm = GetConfig("Allow players with bypass permission to open time-limited door", false);
-            Config["Start time (if you want to be able to open doors from 16:30 you would put 16.5)"] = startTime = GetConfig("Start time (if you want to be able to open doors from 16:30 you would put 16.5)", 0f);
-            Config["End time (if you want to be able to open doors until 20:30 you would put 20.5)"] = endTime = GetConfig("End time (if you want to be able to open doors until 20:30 you would put 20.5)", 0f);
+            Config["Beginning time (HH:mm)"] = startTime = GetConfig("Beginning time (HH:mm)", "00:00");
+            Config["End time (HH:mm)"] = endTime = GetConfig("End time (HH:mm)", "00:00");
+            Config["Use system (real) time"] = UseRealTime = GetConfig("Use system (real) time", false);
+            Config["Automatic door closing/opening"] = AutoDoor = GetConfig("Automatic door closing/opening", false);
             SaveConfig();
         }
 
@@ -25,19 +33,23 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
-                {"serverWipe", "Server wipe detected, wiping data file"},
-                {"NotOpenable", "This door cannot be opened at this time"},
-                {"CantPlace", "That codelock cannot be placed on this door"},
-                {"ManualWipe", "Manually wiped Night Door data file"},
-                {"NoPerm", "You don't have permission to use this command"},
-                {"WrongSyntax", "Wrong syntax! /nd help for more info"},
-                {"NotDoor", "The object you are looking at is not a door" },
-                {"AlreadyOnList", "That door is already on the locked door list"},
-                {"AddedDoor", "Added door to the night door list"},
-                {"NotOnList", "That door isn't on the locked door list"},
-                {"RemovedDoor", "Removed door from night door list"},
-                {"HelpMsg", "To make a door openable during certain time period type\n<color=silver>/nd add</color> while looking at it\nIf you want to make the door normal again type\n<color=silver>/nd remove</color> while looking at it\nCurrent time period: {0} - {1}"},
-            }, this, "en");
+                {"serverWipe1", "Server wipe detected, wiping data file"},
+                {"NotOpenable1", "This door/hatch/gate cannot be opened at this time"},
+                {"CantPlace1", "The code lock cannot be placed on this door/hatch/gate"},
+                {"ManualWipe1", "Manually wiped Night Door data file"},
+                {"NoPerm1", "You don't have permission to use this command"},
+                {"WrongSyntax1", "Wrong syntax! /nd help for more info"},
+                {"NotDoor1", "The object you are looking at is not a door/hatch/gate" },
+                {"AlreadyOnList1", "That door/hatch/gate is already time locked"},
+                {"Start>End1", "Config seems to be set up incorrectly! (Start time value is bigger than end time value)"},
+                {"Start&EndValIs01", "Detected 00:00 as both end and start time! Change this to values you want"},
+                {"NoDoorsCurrently1", "No time locked doors/hatches/gates set up yet"},
+                {"ShowingDoor1", "Showing all time locked doors/hatches/gates"},
+                {"AddedDoor1", "This door/hatch/gate is now time locked"},
+                {"NotOnList1", "That door/hatch/gate isn't time locked"},
+                {"RemovedDoor1", "This door/hatch/gate is not time locked anymore"},
+                {"HelpMsg1", "To make a door/hatch/gate openable during certain time period type\n<color=silver>/nd add</color> while looking at it\nIf you want to make the door normal again type\n<color=silver>/nd remove</color> while looking at it\nTo see all doors/hatches/gates that are time locked type\n<color=silver>/nd show</color>\nCurrent time period: {0} - {1}"},
+            }, this);
         }
 
         T GetConfig<T>(string name, T defaultValue)
@@ -60,9 +72,12 @@ namespace Oxide.Plugins
         void Init()
         {
             LoadDefaultConfig();
+            CheckDoors();
             permission.RegisterPermission("nightdoor.use", this);
             permission.RegisterPermission("nightdoor.bypass", this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("NightDoor");
+            if (GetDateTime(startTime) > GetDateTime(endTime)) PrintWarning(lang.GetMessage("Start>End1", this));
+            if(startTime == "00:00" && endTime == "00:00") PrintWarning(lang.GetMessage("Start&EndValIs01", this));
         }
 
         void Unload() => SaveFile();
@@ -71,7 +86,7 @@ namespace Oxide.Plugins
 
         void OnNewSave(string filename)
         {
-            Puts(lang.GetMessage("serverWipe", this));
+            Puts(lang.GetMessage("serverWipe1", this));
             storedData.IDlist.Clear();
             SaveFile();
         }
@@ -86,16 +101,107 @@ namespace Oxide.Plugins
             }
         }
 
+        float GetFloat(string input)
+        {
+            float final = 0f;
+            string[] parts = input.Split(':');
+            string h, m;
+            h = parts[0];
+            m = parts[1];
+            int minInt = Convert.ToInt32(m);
+            int hourInt = Convert.ToInt32(h);
+            float min = minInt / 60;
+            final = hourInt + min;
+            return final;
+        }
+
+        DateTime GetDateTime(string input)
+        {
+            DateTime final = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 0, 0, 0);
+            string[] parts = input.Split(':');
+            string h, m;
+            h = parts[0].ToString();
+            m = parts[1].ToString();
+            int mInt = Convert.ToInt32(m);
+            int hInt = Convert.ToInt32(h);
+            final = final.AddHours(hInt);
+            final = final.AddMinutes(mInt);
+            return final;
+        }
+
+        void CheckDoors()
+        {
+
+            if (!AutoDoor) return;
+
+            DateTime start = GetDateTime(startTime);
+            DateTime end = GetDateTime(endTime);
+            float time;
+
+            timer.Every(5f, () =>
+            {
+                time = ConVar.Env.time;
+                foreach (var entry in storedData.IDlist)
+                {
+                    BaseEntity ent = BaseNetworkable.serverEntities.Find(entry) as BaseEntity;
+
+                    if (ent == null || ent.IsDestroyed)
+                    {
+                        storedData.IDlist.Remove(entry);
+                        continue;
+                    }
+
+                    if (UseRealTime)
+                    {
+                        if ((DateTime.Now >= start) && (DateTime.Now <= end))
+                        {
+                            ent.SetFlag(BaseEntity.Flags.Open, true);
+                            ent.SendNetworkUpdateImmediate();
+                        }
+
+                        else
+                        {
+                            ent.SetFlag(BaseEntity.Flags.Open, false);
+                            ent.SendNetworkUpdateImmediate();
+                        }
+
+                        continue;
+                    }
+
+                    if (time >= GetFloat(startTime) && time <= GetFloat(endTime))
+                    {
+                        ent.SetFlag(BaseEntity.Flags.Open, true);
+                        ent.SendNetworkUpdateImmediate();
+                    }
+
+                    else
+                    {
+                        ent.SetFlag(BaseEntity.Flags.Open, false);
+                        ent.SendNetworkUpdateImmediate();
+                    }
+                } 
+            });
+        }
+
         void OnDoorOpened(Door door, BasePlayer player)
         {
             if (storedData.IDlist.Contains(door.net.ID))
             {
-                float ctime = ConVar.Env.time;
+                float time = ConVar.Env.time;
                 if (player.IsAdmin && BypassAdmin) return;
                 if (permission.UserHasPermission(player.UserIDString, "nightdoor.bypass") && BypassPerm) return;
-                if (ConVar.Env.time >= startTime && ConVar.Env.time <= endTime) return;
+
+                if (UseRealTime)
+                {
+                    DateTime start = GetDateTime(startTime);
+                    DateTime end = GetDateTime(endTime);
+
+                    if ((DateTime.Now >= start) && (DateTime.Now <= end)) return;
+                }
+
+                if (time >= GetFloat(startTime) && time <= GetFloat(endTime)) return;
                 door.CloseRequest();
-                SendReply(player, lang.GetMessage("NotOpenable", this, player.UserIDString));
+                SendReply(player, lang.GetMessage("NotOpenable1", this, player.UserIDString));
                 return;
             }
         }
@@ -110,10 +216,12 @@ namespace Oxide.Plugins
 
                 if (storedData.IDlist.Contains(entity.net.ID))
                 {
-                    Item codelck = ItemManager.CreateByItemID(-975723312, 1);
-                    player.GiveItem(codelck);
+                    Item codelock;
+                    if (codelockent.PrefabName == "assets/prefabs/locks/keypad/lock.code.prefab") codelock = ItemManager.CreateByName("lock.code", 1);
+                    else codelock = ItemManager.CreateByName("lock.key", 1);
+                    player.GiveItem(codelock);
                     codelockent.Kill();
-                    SendReply(player, lang.GetMessage("CantPlace", this, player.UserIDString));
+                    SendReply(player, lang.GetMessage("CantPlace1", this, player.UserIDString));
                     return;
                 }
             }
@@ -125,11 +233,7 @@ namespace Oxide.Plugins
             else return true;
         }
 
-        void SaveFile()
-        {
-            //storedData.IDlist.RemoveAll(p => !BaseEntity.saveList.Any(x =>
-            Interface.Oxide.DataFileSystem.WriteObject("NightDoor", storedData);
-        }
+        void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject("NightDoor", storedData);
 
         [ConsoleCommand("wipedoordata")]
         void nightdoorwipeccmd(ConsoleSystem.Arg arg)
@@ -137,7 +241,7 @@ namespace Oxide.Plugins
             if (arg.Connection != null) return;
             storedData.IDlist.Clear();
             SaveFile();
-            Puts(lang.GetMessage("ManualWipe", this));
+            Puts(lang.GetMessage("ManualWipe1", this));
         }
 
         [ChatCommand("nd")]
@@ -145,13 +249,13 @@ namespace Oxide.Plugins
         {
             if (!permission.UserHasPermission(player.UserIDString, "nightdoor.use"))
             {
-                SendReply(player, lang.GetMessage("NoPerm", this, player.UserIDString));
+                SendReply(player, lang.GetMessage("NoPerm1", this, player.UserIDString));
                 return;
             }
 
             if (args.Length < 1)
             {
-                SendReply(player, lang.GetMessage("WrongSyntax", this, player.UserIDString));
+                SendReply(player, lang.GetMessage("WrongSyntax1", this, player.UserIDString));
                 return;
             }
 
@@ -165,18 +269,18 @@ namespace Oxide.Plugins
 
                         if (!(ent is Door))
                         {
-                            SendReply(player, lang.GetMessage("NotDoor", this, player.UserIDString));
+                            SendReply(player, lang.GetMessage("NotDoor1", this, player.UserIDString));
                             return;
                         }
 
                         if (storedData.IDlist.Contains(ent.net.ID))
                         {
-                            SendReply(player, lang.GetMessage("AlreadyOnList", this, player.UserIDString));
+                            SendReply(player, lang.GetMessage("AlreadyOnList1", this, player.UserIDString));
                             return;
                         }
 
                         storedData.IDlist.Add(ent.net.ID);
-                        SendReply(player, lang.GetMessage("AddedDoor", this, player.UserIDString));
+                        SendReply(player, lang.GetMessage("AddedDoor1", this, player.UserIDString));
                         SaveFile();
                         return;
                     }
@@ -189,43 +293,53 @@ namespace Oxide.Plugins
 
                         if (!(ent is Door))
                         {
-                            SendReply(player, lang.GetMessage("NotDoor", this, player.UserIDString));
+                            SendReply(player, lang.GetMessage("NotDoor1", this, player.UserIDString));
                             return;
                         }
 
                         if (!storedData.IDlist.Contains(ent.net.ID))
                         {
-                            SendReply(player, lang.GetMessage("NotOnList", this, player.UserIDString));
+                            SendReply(player, lang.GetMessage("NotOnList1", this, player.UserIDString));
                             return;
                         }
 
                         storedData.IDlist.Remove(ent.net.ID);
-                        SendReply(player, lang.GetMessage("RemovedDoor", this, player.UserIDString));
+                        SendReply(player, lang.GetMessage("RemovedDoor1", this, player.UserIDString));
                         SaveFile();
+                        return;
+                    }
+
+                case "show":
+                    {
+                        if(storedData.IDlist.Count == 0)
+                        {
+                            SendReply(player, lang.GetMessage("NoDoorsCurrently1", this, player.UserIDString));
+                            return;
+                        }
+
+                        SendReply(player, lang.GetMessage("ShowingDoor1", this, player.UserIDString));
+                        foreach(var entry in storedData.IDlist)
+                        {
+                            BaseNetworkable ent = BaseNetworkable.serverEntities.Find(entry);
+                            Vector3 pos = ent.transform.position;
+                            pos.y += 1f;
+                            player.SendConsoleCommand("ddraw.sphere", 10f, Color.green, pos, 1f);
+                        }
                         return;
                     }
 
                 case "help":
                     {
-                        int iTimeStart = (int)startTime;
-                        float dTimeStart = (startTime - iTimeStart) * 60;
-                        string sTimeStart = iTimeStart + ":" + dTimeStart;
-
-                        int iTimeEnd = (int)endTime;
-                        float dTimeEnt = (endTime - iTimeEnd) * 60;
-                        string sTimeEnd = iTimeEnd + ":" + dTimeEnt;
-                        SendReply(player, lang.GetMessage("HelpMsg", this, player.UserIDString), sTimeStart, sTimeEnd);
+                        SendReply(player, lang.GetMessage("HelpMsg1", this, player.UserIDString), startTime, endTime);
                         return;
                     }
 
                 default:
                     {
-                        SendReply(player, lang.GetMessage("WrongSyntax", this, player.UserIDString));
+                        SendReply(player, lang.GetMessage("WrongSyntax1", this, player.UserIDString));
                         return;
                     }
             }
-
-
         }
     }
 }
