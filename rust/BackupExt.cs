@@ -10,7 +10,7 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("BackupExt", "Fujikura", "0.4.0", ResourceId = 2137 )]
+    [Info("BackupExt", "Fujikura", "1.0.0", ResourceId = 2137 )]
     class BackupExt : RustPlugin
     {
 		bool Changed;
@@ -18,7 +18,9 @@ namespace Oxide.Plugins
 		int currentRetry;
 		bool wasShutDown;
 		string [] backupFolders;
+		string [] backupFoldersOxide;
 		string [] backupFoldersShutdown;
+		string [] backupFoldersShutdownOxide;
 
 		int numberOfBackups;
 		bool backupBroadcast;
@@ -32,6 +34,7 @@ namespace Oxide.Plugins
 		int maxRetry;
 		int delayRetrySeconds;
 		string currentIdentity;
+		bool includeOxideInBackups;
 	
 		object GetConfig(string menu, string datavalue, object defaultValue)
 		{
@@ -55,6 +58,7 @@ namespace Oxide.Plugins
 		void LoadVariables()
 		{
 			numberOfBackups = Convert.ToInt32(GetConfig("Settings", "numberOfBackups", 8));
+			includeOxideInBackups = Convert.ToBoolean(GetConfig("Settings", "includeOxideInBackups", true));
 			backupBroadcast = Convert.ToBoolean(GetConfig("Notification", "backupBroadcast", false));
 			backupDelay = Convert.ToInt32(GetConfig("Notification", "backupDelay", 5));
 			useBroadcastDelay = Convert.ToBoolean(GetConfig("Notification", "useBroadcastDelay", true));
@@ -103,6 +107,11 @@ namespace Oxide.Plugins
 				currentIdentity = Interface.Oxide.CommandLine.GetVariable("server.identity");
 			backupFolders = BackupFolders();
 			backupFoldersShutdown = BackupFoldersShutdown();
+			if (includeOxideInBackups)
+			{
+				backupFoldersOxide = BackupFoldersOxide();
+				backupFoldersShutdownOxide = BackupFoldersShutdownOxide();
+			}
 			currentRetry = 0;
 			if (useTimer)
 			{
@@ -116,7 +125,11 @@ namespace Oxide.Plugins
 			if (Interface.Oxide.IsShuttingDown && !wasShutDown)
 			{
 				wasShutDown = true;
-				try { DirectoryEx.Backup(BackupFoldersShutdown()); } catch {}
+				try { 
+					DirectoryEx.Backup(BackupFoldersShutdown());
+					if (includeOxideInBackups)
+						DirectoryEx.Backup(BackupFoldersShutdownOxide());
+					} catch {}
 			}
 		}		
 
@@ -124,6 +137,8 @@ namespace Oxide.Plugins
 		{
 			DirectoryEx.Backup(BackupFolders());
 			DirectoryEx.CopyAll(ConVar.Server.rootFolder, backupFolders[0]);
+			if (includeOxideInBackups)
+				DirectoryEx.CopyAll("oxide", backupFoldersOxide[0]);
 			if (!manual)
 				Puts(lang.GetMessage("backupfinish", this));
 		}
@@ -188,12 +203,28 @@ namespace Oxide.Plugins
 				dp[i] = $"backup/{i}/"+ currentIdentity;
 			return dp;
 		}
+
+		string [] BackupFoldersOxide()
+		{
+			string [] dp = new string[numberOfBackups];
+			for (int i = 0; i < numberOfBackups; i++)
+				dp[i] = $"backup/{i}/oxide";
+			return dp;
+		}
 		
 		string [] BackupFoldersShutdown()
 		{
 			string [] dp = new string[numberOfBackups];
 			for (int i = 3; i < numberOfBackups; i++)
 				dp[i] = $"backup/{i}/" + currentIdentity;
+			return dp;
+		}
+		
+		string [] BackupFoldersShutdownOxide()
+		{
+			string [] dp = new string[numberOfBackups];
+			for (int i = 3; i < numberOfBackups; i++)
+				dp[i] = $"backup/{i}/oxide";
 			return dp;
 		}
 		

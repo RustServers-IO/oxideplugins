@@ -8,7 +8,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("NoRaid", "Ryan", "1.1.9", ResourceId = 2530)]
+    [Info("NoRaid", "Ryan", "1.2.0", ResourceId = 2530)]
     [Description("Prevents players destroying buildings of those they're not associated with")]
 
     class NoRaid : RustPlugin
@@ -502,14 +502,17 @@ namespace Oxide.Plugins
 
         private void OnPlayerInit(BasePlayer player)
         {
-            timer.Once(3f, () =>
+            if(cFile.WipeRaiding.Enabled && _cachedWipeTime.AddMinutes(cFile.WipeRaiding.MinsFromWipe) > DateTime.UtcNow && cFile.Ui.Enabled)
             {
-                if (!_uiPlayers.Contains(player.userID))
+                timer.Once(3f, () =>
                 {
-                    CuiHelper.AddUi(player, _cachedContainer);
-                    _uiPlayers.Add(player.userID);
-                }
-            });
+                    if (!_uiPlayers.Contains(player.userID))
+                    {
+                        CuiHelper.AddUi(player, _cachedContainer);
+                        _uiPlayers.Add(player.userID);
+                    }
+                });
+            }
         }
 
         private void OnPlayerDisconnected(BasePlayer player, string reason)

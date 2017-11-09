@@ -2,7 +2,7 @@
     "name": "Portgun",
     "description": "Teleports players with permission to object or terrain they are looking at",
     "author": "Wulf",
-    "version": "3.1.0",
+    "version": "3.1.1",
     "configuration": false,
     "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/portgun.664",

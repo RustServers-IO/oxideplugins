@@ -2,7 +2,6 @@
  * TODO: Add queue for old member removal
  */
 
-using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
@@ -11,7 +10,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Steam Groups", "Wulf/lukespragg", "0.3.7", ResourceId = 2085)]
+    [Info("Steam Groups", "Wulf/lukespragg", "0.3.8", ResourceId = 2085)]
     [Description("Automatically adds members of Steam group(s) to a permissions group")]
     public class SteamGroups : CovalencePlugin
     {
@@ -83,7 +82,7 @@ namespace Oxide.Plugins
                 if (!permission.GroupExists(group.Oxide)) permission.CreateGroup(group.Oxide, group.Oxide, 0);
                 AddGroup(group.Steam, group.Oxide);
             }
-            QueueWorkerThread(worker => GetMembers());
+            GetMembers();
         }
 
         #endregion
@@ -102,14 +101,11 @@ namespace Oxide.Plugins
 
         private void ProcessQueue()
         {
-            QueueWorkerThread(worker =>
-            {
-                var member = membersQueue.Dequeue();
-                if (permission.UserHasGroup(member.Id, groups[member.Group])) return;
+            var member = membersQueue.Dequeue();
+            if (permission.UserHasGroup(member.Id, groups[member.Group])) return;
 
-                permission.AddUserGroup(member.Id, groups[member.Group]);
-                //Puts($"{member.Id} from {member.Group} added to '{groups[member.Group]}' group");
-            });
+            permission.AddUserGroup(member.Id, groups[member.Group]);
+            //Puts($"{member.Id} from {member.Group} added to '{groups[member.Group]}' group");
         }
 
         private void OnTick()
@@ -146,8 +142,7 @@ namespace Oxide.Plugins
 
         private void GetMembers()
         {
-            foreach (var group in steamGroups)
-                QueueWorkerThread(worker => GetMembers(group.Value, group.Key));
+            foreach (var group in steamGroups) GetMembers(group.Value, group.Key);
         }
 
         private void GetMembers(string url, string group, int page = 1)
@@ -160,7 +155,7 @@ namespace Oxide.Plugins
                 {
                     Puts($"Steam is currently not allowing connections from your server. ({code})");
                     Puts("Trying again in 10 minutes...");
-                    timer.Once(600f, () => QueueWorkerThread(worker => GetMembers(url, group, page)));
+                    timer.Once(600f, () => GetMembers(url, group, page));
                     return;
                 }
 
@@ -168,7 +163,7 @@ namespace Oxide.Plugins
                 {
                     Puts($"Checking for Steam group members failed! ({code})");
                     Puts("Trying again in 10 minutes...");
-                    timer.Once(600f, () => QueueWorkerThread(worker => GetMembers(url, group, page)));
+                    timer.Once(600f, () => GetMembers(url, group, page));
                     return;
                 }
 
@@ -188,9 +183,9 @@ namespace Oxide.Plugins
                 int.TryParse(pagesRegex.Match(response)?.Groups[1]?.Value, out totalPages);
 
                 if (currentPage != 0 && totalPages != 0 && currentPage < totalPages)
-                    QueueWorkerThread(worker => GetMembers(url, group, currentPage + 1));
+                    GetMembers(url, group, currentPage + 1);
                 else
-                    timer.Once(config.UpdateInterval, () => QueueWorkerThread(worker => GetMembers(url, group)));
+                    timer.Once(config.UpdateInterval, () => GetMembers(url, group));
             }, this);
         }
 
@@ -198,7 +193,7 @@ namespace Oxide.Plugins
         private void MembersCommand(IPlayer player, string command, string[] args)
         {
             player.Reply("Checking for new Steam group members...");
-            QueueWorkerThread(worker => GetMembers());
+            GetMembers();
         }
 
         #endregion

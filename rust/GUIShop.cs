@@ -1,17 +1,15 @@
-using System.Collections.Generic;
-using System;
-using System.Linq;
-
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
-
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("GUIShop", "Reneb", "1.4.1", ResourceId = 1319)]
-    class GUIShop : RustPlugin
+    [Info("GUIShop", "Nogrod / Reneb", "1.4.3", ResourceId = 1319)]
+    public class GUIShop : RustPlugin
     {
         private const string ShopOverlayName = "ShopOverlay";
         private const string ShopContentName = "ShopContent";
@@ -24,15 +22,9 @@ namespace Oxide.Plugins
         //////////////////////////////////////////////////////////////////////////////////////
 
         [PluginReference]
-        Plugin Economics;
+        Plugin Economics, Kits, ImageCache;
 
-        [PluginReference]
-        Plugin Kits;
-
-        [PluginReference]
-        Plugin ImageCache;
-
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             displaynameToShortname.Clear();
             foreach (var itemdef in ItemManager.itemList)
@@ -99,7 +91,7 @@ namespace Oxide.Plugins
         // Configs Manager ///////////////////////////////////////////////////////////////////
         //////////////////////////////////////////////////////////////////////////////////////
 
-        void LoadDefaultConfig() { }
+        private void LoadDefaultConfig() { }
 
         private void CheckCfg<T>(string Key, ref T var)
         {
@@ -152,7 +144,7 @@ namespace Oxide.Plugins
         string MessageErrorNPCRange = "You may not use the chat shop. You might need to find the NPC Shops.";
         string MessageErrorBuildingBlocked = "You cannot shop while in building blocked area.";
 
-        void Init()
+        private void Init()
         {
             CheckCfg("Shop - Shop Icon Url", ref IconUrl);
             CheckCfg("Shop - Shop List", ref Shops);
@@ -184,14 +176,14 @@ namespace Oxide.Plugins
             LoadData();
         }
 
-        void LoadData()
+        private void LoadData()
         {
             cooldowns = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, Dictionary<string, double>>>(nameof(GUIShop));
             buyed = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, ulong>>(nameof(GUIShop) + "Buyed");
             selled = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, ulong>>(nameof(GUIShop) + "Selled");
         }
 
-        void SaveData()
+        private void SaveData()
         {
             if (cooldowns != null)
                 Interface.Oxide.DataFileSystem.WriteObject(nameof(GUIShop), cooldowns);
@@ -201,25 +193,25 @@ namespace Oxide.Plugins
                 Interface.Oxide.DataFileSystem.WriteObject(nameof(GUIShop) + "Selled", selled);
         }
 
-        void Unload()
+        private void Unload()
         {
             SaveData();
         }
-        void OnServerSave()
+        private void OnServerSave()
         {
             SaveData();
         }
-        void OnServerShutdown()
+        private void OnServerShutdown()
         {
             SaveData();
         }
 
-        static int CurrentTime() { return Facepunch.Math.Epoch.Current; }
+        private static int CurrentTime() { return Facepunch.Math.Epoch.Current; }
 
         //////////////////////////////////////////////////////////////////////////////////////
         // Default Shops for Tutorial purpoise ///////////////////////////////////////////////
         //////////////////////////////////////////////////////////////////////////////////////
-        static Dictionary<string, object> DefaultShops()
+        private static Dictionary<string, object> DefaultShops()
         {
             var shops = new Dictionary<string, object>
             {
@@ -252,7 +244,7 @@ namespace Oxide.Plugins
             };
             return shops;
         }
-        static Dictionary<string, object> DefaultShopCategories()
+        private static Dictionary<string, object> DefaultShopCategories()
         {
             var dsc = new Dictionary<string, object>
             {
@@ -311,12 +303,12 @@ namespace Oxide.Plugins
         // Oxide Hooks ///////////////////////////////////////////////////////////////////////
         //////////////////////////////////////////////////////////////////////////////////////
 
-        void Loaded()
+        private void Loaded()
         {
             playersMask = LayerMask.GetMask("Player (Server)");
         }
 
-        void OnUseNPC(BasePlayer npc, BasePlayer player)
+        private void OnUseNPC(BasePlayer npc, BasePlayer player)
         {
             if (!Shops.ContainsKey(npc.UserIDString)) return;
             ShowShop(player, npc.UserIDString, 0);
@@ -509,7 +501,7 @@ namespace Oxide.Plugins
         private Dictionary<string, ulong> selled;
         private bool configChanged;
 
-        void ShowShop(BasePlayer player, string shopid, int from = 0, bool fullPaint = true, bool refreshMoney = false)
+        private void ShowShop(BasePlayer player, string shopid, int from = 0, bool fullPaint = true, bool refreshMoney = false)
         {
             shopPage[player.userID] = from;
             object shopObj;
@@ -523,7 +515,7 @@ namespace Oxide.Plugins
                 SendReply(player, MessageShowNoEconomics);
                 return;
             }
-            var playerCoins = (double) Economics.CallHook("GetPlayerMoney", player.userID);
+            var playerCoins = (double) Economics.CallHook("Balance", player.userID);
 
             var shop = (Dictionary<string, object>) shopObj;
 
@@ -752,9 +744,9 @@ namespace Oxide.Plugins
                         .Replace("$player.y", player.transform.position.y.ToString())
                         .Replace("$player.z", player.transform.position.z.ToString());
                     if (c.StartsWith("shop.show close", StringComparison.OrdinalIgnoreCase))
-                        NextTick(() => ConsoleSystem.Run.Server.Normal(c));
+                        NextTick(() => ConsoleSystem.Run(ConsoleSystem.Option.Server, c));
                     else
-                        ConsoleSystem.Run.Server.Normal(c);
+                        ConsoleSystem.Run(ConsoleSystem.Option.Server, c);
                 }
                 Puts("Player: {0} Buyed command: {1}", player.displayName, item);
             }
@@ -771,7 +763,7 @@ namespace Oxide.Plugins
             if (stack < 1) stack = 1;
             var freeSlots = player.inventory.containerMain.capacity - player.inventory.containerMain.itemList.Count;
             var slotAmount = freeSlots*stack;
-            var balanceAmount = (int)((double)Economics.CallHook("GetPlayerMoney", player.userID) / GetBuyPrice(data));
+            var balanceAmount = (int)((double)Economics.CallHook("Balance", player.userID) / GetBuyPrice(data));
             return slotAmount < balanceAmount ? slotAmount : balanceAmount;
         }
 
@@ -804,7 +796,7 @@ namespace Oxide.Plugins
             if (data.Cmd != null && amount > 1) return MessageErrorBuyCmd;
             var buyprice = GetBuyPrice(data);
 
-            var playerCoins = (double) Economics.CallHook("GetPlayerMoney", player.userID);
+            var playerCoins = (double) Economics.CallHook("Balance", player.userID);
             if (playerCoins < buyprice*amount)
                 return string.Format(MessageErrorNotEnoughMoney, buyprice*amount, amount, item);
             if (data.Cooldown > 0)
@@ -913,7 +905,7 @@ namespace Oxide.Plugins
             return true;
         }
 
-        void DestroyUi(BasePlayer player, bool full = false)
+        private void DestroyUi(BasePlayer player, bool full = false)
         {
             CuiHelper.DestroyUi(player, ShopContentName);
             CuiHelper.DestroyUi(player, "ButtonForward");
@@ -926,7 +918,7 @@ namespace Oxide.Plugins
         // Chat Commands /////////////////////////////////////////////////////////////////////
         //////////////////////////////////////////////////////////////////////////////////////
         [ChatCommand("shop")]
-        void cmdShop(BasePlayer player, string command, string[] args)
+        private void cmdShop(BasePlayer player, string command, string[] args)
         {
             if(!Shops.ContainsKey("chat"))
             {
@@ -945,7 +937,7 @@ namespace Oxide.Plugins
         // Console Commands //////////////////////////////////////////////////////////////////
         //////////////////////////////////////////////////////////////////////////////////////
         [ConsoleCommand("shop.show")]
-        void ccmdShopShow(ConsoleSystem.Arg arg)
+        private void ccmdShopShow(ConsoleSystem.Arg arg)
         {
             if (!arg.HasArgs(2)) return;
             var shopid = arg.GetString(0).Replace("'", "");
@@ -962,7 +954,7 @@ namespace Oxide.Plugins
         }
 
         [ConsoleCommand("shop.buy")]
-        void ccmdShopBuy(ConsoleSystem.Arg arg)
+        private void ccmdShopBuy(ConsoleSystem.Arg arg)
         {
             if (!arg.HasArgs(3)) return;
             var player = arg.Player();
@@ -987,7 +979,7 @@ namespace Oxide.Plugins
             ShowShop(player, shop, shopPage[player.userID], false, true);
         }
         [ConsoleCommand("shop.sell")]
-        void ccmdShopSell(ConsoleSystem.Arg arg)
+        private void ccmdShopSell(ConsoleSystem.Arg arg)
         {
             if (!arg.HasArgs(3)) return;
             var player = arg.Player();
