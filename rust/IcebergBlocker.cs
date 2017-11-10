@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Iceberg Blocker", "Slut", "1.1.1")]
+    [Info("Iceberg Blocker", "Slut", "1.1.2")]
     class IcebergBlocker : RustPlugin
     {
         private void Loaded()
@@ -48,7 +48,7 @@ namespace Oxide.Plugins
                 Vis.Colliders(pos, 5f, list);
                 for (int x = 0; x < list.Count; x++)
                 {
-                    if (list[x].name.Contains("iceberg") || (blockIceSheet && list[x].name.Contains("icesheet")))
+                    if ((list[x].name.Contains("iceberg") | list[x].name.Contains("ice_berg")) || (blockIceSheet && (list[x].name.Contains("icesheet") | list[x].name.Contains("ice_sheet"))))
                     {
                         if (asBlacklist && listOfPrefabs.Contains(prefab.fullName))
                         {
