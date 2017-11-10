@@ -1,7 +1,7 @@
 {
     "name": "Friends",
     "description": "Universal friends plugin. Compatible with BattleLink.",
-    "author": "dcode",
+    "author": "Wulf",
     "version": "2.5.4",
     "configuration": true,
     "language": "cs",
