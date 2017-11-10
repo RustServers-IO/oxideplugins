@@ -12,7 +12,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("Quests", "k1lly0u", "2.2.2", ResourceId = 1084)]
+    [Info("Quests", "k1lly0u", "2.2.4", ResourceId = 1084)]
     public class Quests : RustPlugin
     {
         #region Fields
@@ -64,7 +64,7 @@ namespace Oxide.Plugins
         static string UIEntry = "UIEntry";
 
         private string textPrimary;
-        private string textSecondary;    
+        private string textSecondary;
 
         #endregion
 
@@ -76,7 +76,7 @@ namespace Oxide.Plugins
             public ActiveDelivery CurrentDelivery = new ActiveDelivery();
         }
         class PlayerQuestInfo
-        {            
+        {
             public QuestStatus Status;
             public QuestType Type;
             public int AmountCollected = 0;
@@ -93,7 +93,7 @@ namespace Oxide.Plugins
             public int Cooldown;
             public bool ItemDeduction;
             public List<RewardItem> Rewards;
-        }          
+        }
         class NPCInfo
         {
             public float x;
@@ -118,7 +118,7 @@ namespace Oxide.Plugins
         {
             public string ShortName;
             public QuestType Type;
-        }      
+        }
         class RewardItem
         {
             public bool isRP = false;
@@ -137,8 +137,8 @@ namespace Oxide.Plugins
             public QuestEntry entry;
             public DeliveryInfo deliveryInfo;
             public RewardItem item;
-            public string oldEntry;            
-            public int partNum;  
+            public string oldEntry;
+            public int partNum;
         }
         class ItemNames
         {
@@ -146,7 +146,7 @@ namespace Oxide.Plugins
         }
 
         enum QuestType
-        {            
+        {
             Kill,
             Craft,
             Gather,
@@ -158,7 +158,7 @@ namespace Oxide.Plugins
             Pending,
             Completed,
             Open
-        }        
+        }
         #endregion
 
         #region UI Creation
@@ -241,7 +241,7 @@ namespace Oxide.Plugins
 
             }
             static public string Color(string hexColor, float alpha)
-            {                
+            {
                 if (hexColor.StartsWith("#"))
                     hexColor = hexColor.TrimStart('#');
                 int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
@@ -249,7 +249,7 @@ namespace Oxide.Plugins
                 int blue = int.Parse(hexColor.Substring(4, 2), NumberStyles.AllowHexSpecifier);
                 return $"{(double)red / 255} {(double)green / 255} {(double)blue / 255} {alpha}";
             }
-        }       
+        }
         #endregion
 
         #region Oxide Hooks
@@ -269,7 +269,7 @@ namespace Oxide.Plugins
             QUI.disableFade = configData.DisableUI_FadeIn;
             textPrimary = $"<color={configData.Colors.TextColor_Primary}>";
             textSecondary = $"<color={configData.Colors.TextColor_Secondary}>";
-            
+
             ItemDefs = ItemManager.itemList.ToDictionary(i => i.shortname);
             FillObjectiveList();
             serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
@@ -280,7 +280,7 @@ namespace Oxide.Plugins
         {
             foreach (var player in BasePlayer.activePlayerList)
                 DestroyUI(player);
-            SavePlayerData();           
+            SavePlayerData();
         }
         void OnPlayerInit(BasePlayer player)
         {
@@ -292,10 +292,10 @@ namespace Oxide.Plugins
                 }
             }
         }
-        #region Objective Hooks        
+        #region Objective Hooks
         //Kill
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {            
+        {
             try
             {
                 if (entity == null || info == null) return;
@@ -319,7 +319,7 @@ namespace Oxide.Plugins
             }
         }
         void OnEntityTakeDamage(BaseCombatEntity victim, HitInfo info)
-        {            
+        {
             if (victim.GetComponent<BaseHelicopter>() != null && info?.Initiator?.ToPlayer() != null)
             {
                 var heli = victim.GetComponent<BaseHelicopter>();
@@ -379,7 +379,7 @@ namespace Oxide.Plugins
                             Looters.Remove(item.uid);
                         }
                     }
-                }                
+                }
             }
             else if (container.playerOwner != null) Looters.Add(item.uid, container.playerOwner.userID);
         }
@@ -401,21 +401,21 @@ namespace Oxide.Plugins
             CheckPlayerEntry(player);
             var npcID = npc.UserIDString;
             if (vendors.QuestVendors.ContainsKey(npcID) && configData.UseNPCVendors)
-            {                
+            {
                 CreateMenu(player);
                 return;
             }
             if (vendors.DeliveryVendors.ContainsKey(npcID))
             {
-                if (hasQuests(player.userID) && PlayerProgress[player.userID].CurrentDelivery.TargetID == npc.UserIDString)                
+                if (hasQuests(player.userID) && PlayerProgress[player.userID].CurrentDelivery.TargetID == npc.UserIDString)
                     AcceptDelivery(player, npcID, 1);
-                
-                if (hasQuests(player.userID) && string.IsNullOrEmpty(PlayerProgress[player.userID].CurrentDelivery.TargetID))                
-                    AcceptDelivery(player, npcID);                
-                else SendMSG(player, LA("delInprog", player.UserIDString), LA("Quests", player.UserIDString));                
-            }            
+
+                if (hasQuests(player.userID) && string.IsNullOrEmpty(PlayerProgress[player.userID].CurrentDelivery.TargetID))
+                    AcceptDelivery(player, npcID);
+                else SendMSG(player, LA("delInprog", player.UserIDString), LA("Quests", player.UserIDString));
+            }
         }
-        #endregion    
+        #endregion
         object OnPlayerChat(ConsoleSystem.Arg arg)
         {
             if (BetterChat) return null;
@@ -427,20 +427,22 @@ namespace Oxide.Plugins
             if (ActiveEditors.ContainsKey(player.userID) || ActiveCreations.ContainsKey(player.userID) || AddVendor.ContainsKey(player.userID))
             {
                 QuestChat(player,arg.Args);
+
                 return false;
             }
             return null;
         }
-        object OnBetterChat(IPlayer iplayer, string message)
+        object OnBetterChat(Dictionary<string, object> dict)
         {
-            var player = iplayer.Object as BasePlayer;
-            if (player == null) return message;
+            var player = (dict["Player"] as IPlayer).Object as BasePlayer;
+            if (player == null) return null;
+            string message = dict["Text"].ToString();
             if (ActiveEditors.ContainsKey(player.userID) || ActiveCreations.ContainsKey(player.userID) || AddVendor.ContainsKey(player.userID))
             {
                 QuestChat(player, message.Split(' '));
-                return true;
+                return false;
             }
-            return message;
+            return dict;
         }
         void QuestChat(BasePlayer player, string[] arg)
         {
@@ -609,7 +611,7 @@ namespace Oxide.Plugins
                     return;
                 default:
                     break;
-            }            
+            }
         }
         #endregion
 
@@ -621,15 +623,15 @@ namespace Oxide.Plugins
                 var inEvent = EventManager?.Call("isPlaying", player);
                 if (inEvent is bool && (bool)inEvent)
                     return true;
-            }          
+            }
             return false;
         }
         private void CloseMap(BasePlayer player)
         {
             if (LustyMap)
             {
-                LustyMap.Call("DisableMaps", player);                
-            }                
+                LustyMap.Call("DisableMaps", player);
+            }
         }
         private void OpenMap(BasePlayer player)
         {
@@ -640,8 +642,8 @@ namespace Oxide.Plugins
         }
         private void AddMapMarker(float x, float z, string name, string icon = "special", float r = 0)
         {
-            if (LustyMap)            
-                LustyMap.Call("AddMarker", x, z, name, icon); 
+            if (LustyMap)
+                LustyMap.Call("AddMarker", x, z, name, icon);
         }
         private void RemoveMapMarker(string name)
         {
@@ -663,7 +665,7 @@ namespace Oxide.Plugins
 
         #region Objective Lists
         private void FillObjectiveList()
-        {            
+        {
             AllObjectives.Add(QuestType.Loot, new List<string>());
             AllObjectives.Add(QuestType.Craft, new List<string>());
             AllObjectives.Add(QuestType.Kill, new List<string>());
@@ -720,7 +722,7 @@ namespace Oxide.Plugins
                 "bearmeat",
                 "humanmeat.raw",
                 "wolfmeat.raw"
-            };            
+            };
         }
         private void GetAllKillables()
         {
@@ -745,8 +747,8 @@ namespace Oxide.Plugins
             DisplayNames.Add("autoturret_deployed", "Auto-Turret");
             DisplayNames.Add("patrolhelicopter", "Helicopter");
             DisplayNames.Add("player", "Player");
-        }        
-       
+        }
+
         #endregion
 
         #region Functions
@@ -794,7 +796,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-            }           
+            }
         }
         private void TakeQuestItem(BasePlayer player, string item, int amount)
         {
@@ -803,7 +805,7 @@ namespace Oxide.Plugins
                 var itemDef = ItemDefs[item];
                 NextTick(() => player.inventory.Take(null, itemDef.itemid, amount));
             }
-            else PrintWarning($"Unable to find definition for: {item}.");           
+            else PrintWarning($"Unable to find definition for: {item}.");
         }
         private void CompleteQuest(BasePlayer player, string questName)
         {
@@ -811,7 +813,7 @@ namespace Oxide.Plugins
             var items = PlayerProgress[player.userID].RequiredItems;
             var quest = GetQuest(questName);
             if (quest != null)
-            {               
+            {
                 data.Status = QuestStatus.Completed;
                 data.ResetTime = GrabCurrentTime() + (quest.Cooldown * 60);
 
@@ -825,26 +827,26 @@ namespace Oxide.Plugins
                 }
                 SendMSG(player, "", $"{LA("qComple", player.UserIDString)} {questName}. {LA("claRew", player.UserIDString)}");
                 PlayerChallenges?.Call("CompletedQuest", player);
-            }           
+            }
         }
 
         private ItemDefinition FindItemDefinition(string shortname)
         {
             ItemDefinition itemDefinition;
             return ItemDefs.TryGetValue(shortname, out itemDefinition) ? itemDefinition : null;
-        }       
+        }
         private string GetRewardString(List<RewardItem> entry)
         {
             var rewards = "";
-            int i = 1;          
+            int i = 1;
             foreach (var item in entry)
             {
                 rewards = rewards + $"{(int)item.Amount}x {item.DisplayName}";
                 if (i < entry.Count)
                     rewards = rewards + ", ";
-                i++;              
+                i++;
             }
-            return rewards; 
+            return rewards;
         }
         private bool GiveReward(BasePlayer player, List<RewardItem> rewards)
         {
@@ -852,7 +854,7 @@ namespace Oxide.Plugins
             {
                 if (reward.isCoins && Economics)
                 {
-                    Economics?.Call("Deposit", player.userID, (int)reward.Amount);
+                    Economics?.Call("Deposit", player.UserIDString, (int)reward.Amount);
                 }
                 else if (reward.isRP && ServerRewards)
                 {
@@ -861,7 +863,7 @@ namespace Oxide.Plugins
                 else if (reward.isHuntXP)
                 {
                     HuntPlugin?.Call("GiveEXP", player, (int)reward.Amount);
-                }                
+                }
                 else
                 {
                     if (string.IsNullOrEmpty(reward.ShortName)) return true;
@@ -874,7 +876,7 @@ namespace Oxide.Plugins
                             player.inventory.GiveItem(item, player.inventory.containerMain);
                         }
                     }
-                    else PrintWarning($"Quests: Error building item {reward.ShortName} for {player.displayName}");                    
+                    else PrintWarning($"Quests: Error building item {reward.ShortName} for {player.displayName}");
                 }
             }
             return true;
@@ -901,19 +903,19 @@ namespace Oxide.Plugins
             if (item == null) return null;
             var newItem = new RewardItem
             {
-                Amount = item.amount,                
+                Amount = item.amount,
                 DisplayName = DisplayNames[item.info.shortname],
                 ID = item.info.itemid,
                 ShortName = item.info.shortname,
-                Skin = item.skin            
+                Skin = item.skin
             };
             return newItem;
         }
 
         private bool hasQuests(ulong player)
         {
-            if (PlayerProgress.ContainsKey(player))            
-                return true;                       
+            if (PlayerProgress.ContainsKey(player))
+                return true;
             return false;
         }
         private bool isQuestItem(ulong player, string name, QuestType type)
@@ -924,11 +926,11 @@ namespace Oxide.Plugins
                 if (data[i].ShortName == name && data[i].Type == type)
                     return true;
             }
-            return false;           
+            return false;
         }
         private void CheckPlayerEntry(BasePlayer player)
         {
-            if (!PlayerProgress.ContainsKey(player.userID))            
+            if (!PlayerProgress.ContainsKey(player.userID))
                 PlayerProgress.Add(player.userID, new PlayerQuestData());
         }
 
@@ -938,7 +940,7 @@ namespace Oxide.Plugins
                 if (entry.Value.ContainsKey(name))
                     return entry.Key;
             return null;
-        }        
+        }
         private QuestEntry GetQuest(string name)
         {
             var type = GetQuestType(name);
@@ -965,7 +967,7 @@ namespace Oxide.Plugins
             Quest = Creator.entry;
 
             if (isCreating)
-            {                
+            {
                 if (Creator.type == QuestType.Delivery)
                 {
                     var npc = BasePlayer.FindByID(ulong.Parse(Creator.deliveryInfo.Info.ID));
@@ -1005,10 +1007,10 @@ namespace Oxide.Plugins
             questData.Quest[Creator.type].Remove(Creator.entry.QuestName);
             questData.Quest[Creator.type].Add(Quest.QuestName, Quest);
 
-            DestroyUI(player);            
+            DestroyUI(player);
             SaveQuestData();
             CreationHelp(player, 10);
-            SendMSG(player, $"{LA("saveQ", player.UserIDString)} {Quest.QuestName}", LA("QC", player.UserIDString));            
+            SendMSG(player, $"{LA("saveQ", player.UserIDString)} {Quest.QuestName}", LA("QC", player.UserIDString));
         }
         private void ExitQuest(BasePlayer player, bool isCreating)
         {
@@ -1017,7 +1019,7 @@ namespace Oxide.Plugins
             else ActiveEditors.Remove(player.userID);
 
             SendMSG(player, LA("QCCancel", player.UserIDString), LA("QC", player.UserIDString));
-            DestroyUI(player);            
+            DestroyUI(player);
         }
         private void RemoveQuest(string questName)
         {
@@ -1025,11 +1027,11 @@ namespace Oxide.Plugins
             if (Quest == null) return;
             var Type = (QuestType)GetQuestType(questName);
             questData.Quest[Type].Remove(questName);
-            
+
             foreach (var player in PlayerProgress)
             {
-                if (player.Value.Quests.ContainsKey(questName))                
-                    player.Value.Quests.Remove(questName); 
+                if (player.Value.Quests.ContainsKey(questName))
+                    player.Value.Quests.Remove(questName);
             }
             if (vendors.DeliveryVendors.ContainsKey(Quest.Objective))
                 vendors.DeliveryVendors.Remove(Quest.Objective);
@@ -1045,12 +1047,12 @@ namespace Oxide.Plugins
             int hits = 0;
             ulong majorityPlayer = 0U;
             if (HeliAttackers.ContainsKey(id))
-            {                
+            {
                 foreach (var score in HeliAttackers[id])
                 {
                     if (score.Value > hits)
                         majorityPlayer = score.Key;
-                }                
+                }
             }
             return majorityPlayer;
         }
@@ -1074,7 +1076,7 @@ namespace Oxide.Plugins
         private QuestType ConvertStringToType(string type)
         {
             switch (type)
-            {                
+            {
                 case "gather":
                 case "Gather":
                     return QuestType.Gather;
@@ -1157,20 +1159,20 @@ namespace Oxide.Plugins
             {
                 RemoveMapMarker(vendors.QuestVendors[ID].Name);
                 vendors.QuestVendors.Remove(ID);
-                                
+
                 int i = 1;
                 foreach(var npc in vendors.QuestVendors)
                 {
                     RemoveMapMarker(npc.Value.Name);
                     AddMapMarker(npc.Value.x, npc.Value.z, npc.Value.Name, $"{configData.LustyMapIntegration.Icon_Vendor}.png");
                     i++;
-                }                
+                }
             }
             else
             {
                 RemoveMapMarker(vendors.DeliveryVendors[ID].Info.Name);
                 vendors.DeliveryVendors.Remove(ID);
-                
+
                 int i = 1;
                 foreach (var npc in vendors.DeliveryVendors)
                 {
@@ -1179,7 +1181,7 @@ namespace Oxide.Plugins
                     i++;
                 }
                 foreach (var user in PlayerProgress)
-                {                    
+                {
                     if (user.Value.Quests.ContainsKey(ID))
                         user.Value.Quests.Remove(ID);
                 }
@@ -1191,9 +1193,9 @@ namespace Oxide.Plugins
         private string GetRandomNPC(string ID)
         {
             List<string> npcIDs = vendors.DeliveryVendors.Keys.ToList();
-            List<string> withoutSelected = npcIDs;    
+            List<string> withoutSelected = npcIDs;
             if (withoutSelected.Contains(ID))
-                withoutSelected.Remove(ID);            
+                withoutSelected.Remove(ID);
             var randNum = UnityEngine.Random.Range(0, withoutSelected.Count - 1);
             return withoutSelected[randNum];
         }
@@ -1236,10 +1238,10 @@ namespace Oxide.Plugins
             var MenuElement = QUI.CreateElementContainer(UIMain, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0 0", "0.12 1");
             QUI.CreatePanel(ref MenuElement, UIMain, QUI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha), "0.05 0.01", "0.95 0.99", true);
             QUI.CreateLabel(ref MenuElement, UIMain, "", $"{textPrimary}Quests</color>", 30, "0.05 0.9", "0.95 1");
-            CreateMenuButton(ref MenuElement, UIMain, LA("Your Quests", player.UserIDString), "QUI_ChangeElement personal", 4); 
+            CreateMenuButton(ref MenuElement, UIMain, LA("Your Quests", player.UserIDString), "QUI_ChangeElement personal", 4);
 
             QUI.CreateButton(ref MenuElement, UIMain, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), LA("Close", player.UserIDString), 18, "0.1 0.03", "0.9 0.085", "QUI_DestroyAll");
-            CuiHelper.AddUi(player, MenuElement);            
+            CuiHelper.AddUi(player, MenuElement);
         }
         private void CreateMenuButton(ref CuiElementContainer container, string panelName, string buttonname, string command, int number)
         {
@@ -1284,17 +1286,17 @@ namespace Oxide.Plugins
 
             int i = 0;
             for (int n = rewardcount; n < maxentries; n++)
-            {                
+            {
                 CreateQuestEntry(player, quests[questNames[n]], i);
                 i++;
             }
-        } 
+        }
         private void CreateQuestEntry(BasePlayer player, QuestEntry entry, int num)
-        {            
+        {
             Vector2 posMin = CalcQuestPos(num);
             Vector2 dimensions = new Vector2(0.21f, 0.22f);
             Vector2 posMax = posMin + dimensions;
-            
+
             var panelName = UIEntry + num;
             AddUIString(player, panelName);
 
@@ -1312,7 +1314,7 @@ namespace Oxide.Plugins
                 switch (prog[entry.QuestName].Status)
                 {
                     case QuestStatus.Pending:
-                        
+
                         buttonColor = QUI.Color(configData.Colors.Button_Pending.Color, configData.Colors.Button_Pending.Alpha);
                         buttonText = LA("Pending", player.UserIDString);
                         break;
@@ -1339,7 +1341,7 @@ namespace Oxide.Plugins
 
             QUI.CreateLabel(ref questEntry, panelName, "", $"{entry.QuestName}", 16, $"0.02 0.8", "0.72 0.95", TextAnchor.MiddleLeft);
             QUI.CreateLabel(ref questEntry, panelName, buttonColor, questInfo, 14, $"0.02 0.01", "0.98 0.78", TextAnchor.UpperLeft);
-            
+
             CuiHelper.AddUi(player, questEntry);
         }
 
@@ -1393,7 +1395,7 @@ namespace Oxide.Plugins
 
             var questEntry = QUI.CreateElementContainer(panelName, "0 0 0 0", $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}");
             QUI.CreatePanel(ref questEntry, panelName, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), $"0 0", $"1 1");
-           
+
             string statusColor = "";
             QuestStatus status = QuestStatus.Open;
             var prog = PlayerProgress[player.userID].Quests;
@@ -1410,7 +1412,7 @@ namespace Oxide.Plugins
                         break;
                 }
             }
-            
+
             if (status != QuestStatus.Completed)
                 QUI.CreateButton(ref questEntry, panelName, QUI.Color(configData.Colors.Button_Cancel.Color, configData.Colors.Button_Cancel.Alpha), LA("Cancel Quest",player.UserIDString), 16, $"0.75 0.83", $"0.97 0.97", $"QUI_CancelQuest {entry.QuestName}");
             if (status == QuestStatus.Completed && !prog[entry.QuestName].RewardClaimed)
@@ -1440,10 +1442,10 @@ namespace Oxide.Plugins
             stats += $"\n{textPrimary}{LA("Objective:", player.UserIDString)} </color>{textSecondary}{entry.AmountRequired}x {entry.ObjectiveName}</color>";
             stats += $"\n{textPrimary}{LA("Collected:", player.UserIDString)} </color>{textSecondary}{prog[entry.QuestName].AmountCollected}</color> {textPrimary}({percent * 100}%)</color>";
             stats += $"\n{textPrimary}{LA("Reward:", player.UserIDString)} </color>{textSecondary}{rewards}</color>";
-            
+
             QUI.CreateLabel(ref questEntry, panelName, "", $"{entry.QuestName}", 18, $"0.02 0.8", "0.8 0.95", TextAnchor.UpperLeft);
-            QUI.CreateLabel(ref questEntry, panelName, "", stats, 14, $"0.02 0.01", "0.98 0.78", TextAnchor.UpperLeft);            
-            
+            QUI.CreateLabel(ref questEntry, panelName, "", stats, 14, $"0.02 0.01", "0.98 0.78", TextAnchor.UpperLeft);
+
             CuiHelper.AddUi(player, questEntry);
         }
         private void PlayerDelivery(BasePlayer player)
@@ -1497,7 +1499,7 @@ namespace Oxide.Plugins
                 CreateNewQuestButton(ref Main, UIPanel, LA("Delivery", player.UserIDString), "QUI_NewQuest delivery", i); i++;
 
             CuiHelper.AddUi(player, Main);
-        }        
+        }
         private void CreationHelp(BasePlayer player, int page = 0)
         {
             DestroyEntries(player);
@@ -1603,15 +1605,15 @@ namespace Oxide.Plugins
                     if (quest.type != QuestType.Kill) questDetails = questDetails + $"\n{textPrimary}{LA("Item Deduction:", player.UserIDString)}</color> {textSecondary}{quest.entry.ItemDeduction}</color>";
                     questDetails = questDetails + $"\n{textPrimary}{LA("CDMin", player.UserIDString)}</color> {textSecondary}{quest.entry.Cooldown}</color>";
 
-                    var rewards = GetRewardString(quest.entry.Rewards);                    
-                    
+                    var rewards = GetRewardString(quest.entry.Rewards);
+
                     questDetails = questDetails + $"\n{textPrimary}{LA("Reward:", player.UserIDString)}</color> {textSecondary}{rewards}</color>";
 
                     QUI.CreateLabel(ref HelpMain, UIPanel, "", questDetails, 20, "0.1 0.2", "0.9 0.75", TextAnchor.MiddleLeft);
                     QUI.CreateButton(ref HelpMain, UIPanel, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), LA("Save Quest", player.UserIDString), 18, "0.6 0.05", "0.8 0.15", $"QUI_SaveQuest");
                     QUI.CreateButton(ref HelpMain, UIPanel, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), LA("Cancel", player.UserIDString), 18, "0.2 0.05", "0.4 0.15", $"QUI_ExitQuest");
                     break;
-            }            
+            }
             CuiHelper.AddUi(player, HelpMain);
         }
         private void CreateObjectiveMenu(BasePlayer player, int page = 0)
@@ -1641,7 +1643,7 @@ namespace Oxide.Plugins
             {
                 CreateObjectiveEntry(ref HelpMain, UIPanel, AllObjectives[type][n], i);
                 i++;
-            }           
+            }
             CuiHelper.AddUi(player, HelpMain);
         }
         private void DeliveryHelp(BasePlayer player, int page = 0)
@@ -1660,8 +1662,8 @@ namespace Oxide.Plugins
                 case 1:
                     var element = QUI.CreateElementContainer(UIMain, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0.25 0.85", "0.75 0.95");
                     QUI.CreatePanel(ref element, UIMain, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), "0.005 0.04", "0.995 0.96");
-                    QUI.CreateLabel(ref element, UIMain, "", $"{textPrimary}{LA("delHelNewNPC", player.UserIDString)} '/questnpc'</color>", 22, "0 0", "1 1");                    
-                    CuiHelper.AddUi(player, element);                    
+                    QUI.CreateLabel(ref element, UIMain, "", $"{textPrimary}{LA("delHelNewNPC", player.UserIDString)} '/questnpc'</color>", 22, "0 0", "1 1");
+                    CuiHelper.AddUi(player, element);
                     return;
                 case 2:
                     DestroyUI(player);
@@ -1670,8 +1672,8 @@ namespace Oxide.Plugins
                     QUI.CreateLabel(ref HelpMain, UIPanel, "", $"{textSecondary}{LA("delHelMult", player.UserIDString)}</color>\n{textPrimary}{LA("creHelRT", player.UserIDString)}</color>", 18, "0.05 0.82", "0.95 0.98");
                     int i = 0;
                     if (Economics) CreateRewardTypeButton(ref HelpMain, UIPanel, "Coins (Economics)", "QUI_RewardType coins", i); i++;
-                    if (ServerRewards) CreateRewardTypeButton(ref HelpMain, UIPanel, "RP (ServerRewards)", "QUI_RewardType rp", i); i++;                    
-                    CreateRewardTypeButton(ref HelpMain, UIPanel, LA("Item", player.UserIDString), "QUI_RewardType item", i); i++;                    
+                    if (ServerRewards) CreateRewardTypeButton(ref HelpMain, UIPanel, "RP (ServerRewards)", "QUI_RewardType rp", i); i++;
+                    CreateRewardTypeButton(ref HelpMain, UIPanel, LA("Item", player.UserIDString), "QUI_RewardType item", i); i++;
                     if (HuntPlugin) { CreateRewardTypeButton(ref HelpMain, UIPanel, "XP (HuntRPG)", "QUI_RewardType huntxp", i); i++; }
                     CuiHelper.AddUi(player, HelpMain);
                     return;
@@ -1726,8 +1728,8 @@ namespace Oxide.Plugins
                     return;
             default:
                     return;
-            }            
-        }        
+            }
+        }
         private void AcceptDelivery(BasePlayer player, string npcID, int page = 0)
         {
             var quest = vendors.DeliveryVendors[npcID];
@@ -1810,7 +1812,7 @@ namespace Oxide.Plugins
             {
                 CreateDelEditButton(ref Main, 0.785f, UIPanel, entry.Key, craftNum, command);
                 craftNum++;
-            }           
+            }
             CuiHelper.AddUi(player, Main);
         }
         private void DeleteNPCMenu(BasePlayer player)
@@ -1821,8 +1823,8 @@ namespace Oxide.Plugins
             QUI.CreateLabel(ref Main, UIPanel, "1 1 1 0.025", LA("REMOVER", player.UserIDString), 200, "0.01 0.01", "0.99 0.99");
 
             QUI.CreateLabel(ref Main, UIPanel, "", $"{textPrimary}{LA("Delivery Vendors", player.UserIDString)}</color>", 20, "0 0.87", "0.5 0.92");
-            QUI.CreateLabel(ref Main, UIPanel, "", $"{textPrimary}{LA("Quest Vendors", player.UserIDString)}</color>", 20, "0.5 0.87", "1 0.92");           
-                       
+            QUI.CreateLabel(ref Main, UIPanel, "", $"{textPrimary}{LA("Quest Vendors", player.UserIDString)}</color>", 20, "0.5 0.87", "1 0.92");
+
             int VendorNum = 0;
             int DeliveryNum = 0;
             foreach (var entry in vendors.QuestVendors)
@@ -1857,10 +1859,10 @@ namespace Oxide.Plugins
 
             CuiHelper.AddUi(player, ConfirmDelete);
         }
-             
+
         private void QuestEditorMenu(BasePlayer player)
         {
-            DestroyEntries(player); 
+            DestroyEntries(player);
             var Main = QUI.CreateElementContainer(UIPanel, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0.12 0", "1 1");
             QUI.CreatePanel(ref Main, UIPanel, QUI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha), "0.01 0.01", "0.99 0.99", true);
             QUI.CreateLabel(ref Main, UIPanel, "1 1 1 0.025", LA("EDITOR", player.UserIDString), 200, "0.01 0.01", "0.99 0.99");
@@ -1871,15 +1873,15 @@ namespace Oxide.Plugins
             CreateNewQuestButton(ref Main, UIPanel, LA("Description", player.UserIDString), "QUI_EditQuestVar description", i); i++;
             CreateNewQuestButton(ref Main, UIPanel, LA("Objective", player.UserIDString), "QUI_EditQuestVar objective", i); i++;
             CreateNewQuestButton(ref Main, UIPanel, LA("Amount", player.UserIDString), "QUI_EditQuestVar amount", i); i++;
-            CreateNewQuestButton(ref Main, UIPanel, LA("Reward", player.UserIDString), "QUI_EditQuestVar reward", i); i++;           
+            CreateNewQuestButton(ref Main, UIPanel, LA("Reward", player.UserIDString), "QUI_EditQuestVar reward", i); i++;
 
             CuiHelper.AddUi(player, Main);
         }
-       
+
         private void CreateObjectiveEntry(ref CuiElementContainer container, string panelName, string name, int number)
         {
-            var pos = CalcEntryPos(number);            
-            QUI.CreateButton(ref container, panelName, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), name, 10, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"QUI_SelectObj {name}");            
+            var pos = CalcEntryPos(number);
+            QUI.CreateButton(ref container, panelName, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), name, 10, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"QUI_SelectObj {name}");
         }
         private void CreateNewQuestButton(ref CuiElementContainer container, string panelName, string buttonname, string command, int number)
         {
@@ -1902,7 +1904,7 @@ namespace Oxide.Plugins
             Vector2 posMax = posMin + dimensions;
 
             QUI.CreateButton(ref container, panelName, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), buttonname, 18, $"{posMin.x} {posMin.y}", $"{posMax.x} {posMax.y}", command);
-        }        
+        }
         private void CreateDelEditButton(ref CuiElementContainer container, float xPos, string panelName, string buttonname, int number, string command, float width = 0.18f)
         {
             Vector2 dimensions = new Vector2(width, 0.05f);
@@ -1936,7 +1938,7 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, element);
             timer.Once(3, () => CuiHelper.DestroyUi(player, "PopupMsg"));
         }
-               
+
         private Vector2 CalcQuestPos(int number)
         {
             Vector2 position = new Vector2(0.1325f, 0.71f);
@@ -1963,7 +1965,7 @@ namespace Oxide.Plugins
                 offsetY = (-0.008f - dimensions.y) * 3;
             }
             return new Vector2(position.x + offsetX, position.y + offsetY);
-        }        
+        }
         private float[] CalcEntryPos(int number)
         {
             Vector2 position = new Vector2(0.014f, 0.8f);
@@ -2044,15 +2046,15 @@ namespace Oxide.Plugins
         private void DestroyUI(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, UIMain);
-            DestroyEntries(player);             
+            DestroyEntries(player);
         }
         private void DestroyEntries(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, UIPanel);
             if (OpenUI.ContainsKey(player.userID))
             {
-                foreach (var entry in OpenUI[player.userID])                
-                    CuiHelper.DestroyUi(player, entry);                
+                foreach (var entry in OpenUI[player.userID])
+                    CuiHelper.DestroyUi(player, entry);
                 OpenUI.Remove(player.userID);
             }
         }
@@ -2115,15 +2117,15 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            
+
             if (PlayerProgress[player.userID].CurrentDelivery != null && PlayerProgress[player.userID].CurrentDelivery.TargetID == arg.GetString(0))
             {
                 var npcID = PlayerProgress[player.userID].CurrentDelivery.VendorID;
                 var distance = PlayerProgress[player.userID].CurrentDelivery.Distance;
                 var quest = vendors.DeliveryVendors[npcID];
                 var rewardAmount = distance * quest.Multiplier;
-                if (rewardAmount < 1) rewardAmount = 1;                     
-                           
+                if (rewardAmount < 1) rewardAmount = 1;
+
                 var reward = quest.Reward;
                     reward.Amount = rewardAmount;
                 if (GiveReward(player, new List<RewardItem> { reward }))
@@ -2134,7 +2136,7 @@ namespace Oxide.Plugins
                 }
                 DestroyUI(player);
             }
-        }       
+        }
         [ConsoleCommand("QUI_ChangeElement")]
         private void cmdChangeElement(ConsoleSystem.Arg arg)
         {
@@ -2189,7 +2191,7 @@ namespace Oxide.Plugins
                         ListElement(player, type, int.Parse(pageNumber));
                     }
                     return;
-                case "statspage":                    
+                case "statspage":
                     {
                         var pageNumber = arg.GetString(1);
                         PlayerStats(player, int.Parse(pageNumber));
@@ -2213,7 +2215,7 @@ namespace Oxide.Plugins
                 OpenMenuBind.Remove(player.userID);
             DestroyUI(player);
             OpenMap(player);
-        }       
+        }
         [ConsoleCommand("QUI_NewQuest")]
         private void cmdNewQuest(ConsoleSystem.Arg arg)
         {
@@ -2231,7 +2233,7 @@ namespace Oxide.Plugins
                 }
 
                 ActiveCreations.Add(player.userID, new QuestCreator { type = Type, entry = new QuestEntry { Rewards = new List<RewardItem>() }, item = new RewardItem() });
-                DestroyUI(player);                
+                DestroyUI(player);
                 CreationHelp(player);
             }
         }
@@ -2252,7 +2254,7 @@ namespace Oxide.Plugins
                 DestroyUI(player);
                 DeliveryHelp(player, 1);
             }
-        }       
+        }
         [ConsoleCommand("QUI_SelectObj")]
         private void cmdSelectObj(ConsoleSystem.Arg arg)
         {
@@ -2275,7 +2277,7 @@ namespace Oxide.Plugins
 
                 Creator.partNum++;
                 DestroyUI(player);
-                
+
                 CreationHelp(player, 2);
             }
         }
@@ -2292,7 +2294,7 @@ namespace Oxide.Plugins
 
                 if (ActiveCreations.ContainsKey(player.userID))
                     Creator = ActiveCreations[player.userID];
-                else Creator = ActiveEditors[player.userID];                
+                else Creator = ActiveEditors[player.userID];
 
                 bool isRP = false;
                 bool isCoins = false;
@@ -2303,7 +2305,7 @@ namespace Oxide.Plugins
                 {
                     case "rp":
                         isRP = true;
-                        name = LA("RP", player.UserIDString);                        
+                        name = LA("RP", player.UserIDString);
                         break;
                     case "coins":
                         isCoins = true;
@@ -2312,8 +2314,8 @@ namespace Oxide.Plugins
                     case "huntxp":
                         isHuntXP = true;
                         name = LA("HuntXP", player.UserIDString);
-                        break;                    
-                    default:                        
+                        break;
+                    default:
                         break;
                 }
                 Creator.partNum = 5;
@@ -2323,7 +2325,7 @@ namespace Oxide.Plugins
                     Creator.item.isCoins = isCoins;
                     Creator.item.isHuntXP = isHuntXP;
                     Creator.item.DisplayName = name;
-                    CreationHelp(player, 5);                    
+                    CreationHelp(player, 5);
                 }
                 else
                 {
@@ -2332,7 +2334,7 @@ namespace Oxide.Plugins
                     Creator.deliveryInfo.Reward.isHuntXP = isHuntXP;
                     Creator.deliveryInfo.Reward.DisplayName = name;
                     DeliveryHelp(player, 3);
-                }                
+                }
             }
         }
         [ConsoleCommand("QUI_ClaimReward")]
@@ -2340,16 +2342,16 @@ namespace Oxide.Plugins
         {
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
-                return;            
+                return;
 
             var questName = string.Join(" ", arg.Args);
             var quest = GetQuest(questName);
             if (quest == null) return;
-                        
+
             if (IsQuestCompleted(player.userID, questName))
             {
                 if (GiveReward(player, quest.Rewards))
-                {                    
+                {
                     var rewards = GetRewardString(quest.Rewards);
                     PopupMessage(player, $"{LA("rewRec", player.UserIDString)} {rewards}");
                     PlayerProgress[player.userID].Quests[questName].RewardClaimed = true;
@@ -2370,7 +2372,7 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             var questName = string.Join(" ", arg.Args);
-            DestroyUI(player);          
+            DestroyUI(player);
             ConfirmCancellation(player, questName);
         }
         [ConsoleCommand("QUI_ItemDeduction")]
@@ -2389,7 +2391,7 @@ namespace Oxide.Plugins
                 {
                     case "0":
                         Creator.entry.ItemDeduction = false;
-                        break;                    
+                        break;
                     default:
                         Creator.entry.ItemDeduction = true;
                         break;
@@ -2459,8 +2461,8 @@ namespace Oxide.Plugins
                     items.Remove(items[i]);
                     break;
                 }
-            }            
-            PlayerProgress[player.userID].Quests.Remove(questName);           
+            }
+            PlayerProgress[player.userID].Quests.Remove(questName);
             PlayerStats(player);
         }
         [ConsoleCommand("QUI_DeleteQuest")]
@@ -2489,7 +2491,7 @@ namespace Oxide.Plugins
                 CreateMenu(player);
                 DeletionEditMenu(player, LA("REMOVER", player.UserIDString), "QUI_ConfirmDelete");
             }
-        }        
+        }
         [ConsoleCommand("QUI_DeleteNPCMenu")]
         private void cmdDeleteNPCMenu(ConsoleSystem.Arg arg)
         {
@@ -2527,7 +2529,7 @@ namespace Oxide.Plugins
                     }
                 }
             }
-        }        
+        }
         [ConsoleCommand("QUI_ConfirmDelete")]
         private void cmdConfirmDelete(ConsoleSystem.Arg arg)
         {
@@ -2538,9 +2540,9 @@ namespace Oxide.Plugins
             {
                 var questName = string.Join(" ", arg.Args);
                 DestroyUI(player);
-                ConfirmDeletion(player, questName);                        
+                ConfirmDeletion(player, questName);
             }
-        }        
+        }
         [ConsoleCommand("QUI_EditQuest")]
         private void cmdEditQuest(ConsoleSystem.Arg arg)
         {
@@ -2559,7 +2561,7 @@ namespace Oxide.Plugins
                 ActiveEditors[player.userID].entry = Quest;
                 ActiveEditors[player.userID].oldEntry = Quest.QuestName;
                 ActiveEditors[player.userID].type = (QuestType)GetQuestType(questName);
-                ActiveEditors[player.userID].item = new RewardItem();              
+                ActiveEditors[player.userID].item = new RewardItem();
                 QuestEditorMenu(player);
             }
         }
@@ -2583,7 +2585,7 @@ namespace Oxide.Plugins
                             break;
                         case "description":
                             Creator.partNum = 3;
-                            CreationHelp(player, 3);                            
+                            CreationHelp(player, 3);
                             break;
                         case "objective":
                             Creator.partNum = 1;
@@ -2723,18 +2725,18 @@ namespace Oxide.Plugins
                 CheckPlayerEntry(player);
                 if (!StatsMenu.Contains(player.userID))
                     StatsMenu.Add(player.userID);
-                
+
                 CreateEmptyMenu(player);
                 PlayerStats(player);
                 PopupMessage(player, LA("noVendor", player.UserIDString));
-            }            
+            }
         }
 
         [ChatCommand("questnpc")]
         void cmdQuestNPC(BasePlayer player, string command, string[] args)
         {
             if (!player.IsAdmin) return;
-            var NPC = FindEntity(player);            
+            var NPC = FindEntity(player);
             if (NPC != null)
             {
                 var isRegistered = isNPCRegistered(NPC.UserIDString);
@@ -2777,7 +2779,7 @@ namespace Oxide.Plugins
                         pos.Name = name;
 
                         ActiveCreations.Add(player.userID, new QuestCreator
-                        {                            
+                        {
                             deliveryInfo = new DeliveryInfo
                             {
                                 Info = pos,
@@ -2792,7 +2794,7 @@ namespace Oxide.Plugins
             }
             else SendMSG(player, LA("noNPC", player.UserIDString));
         }
-        
+
         #endregion
 
         #region Data Management
@@ -2830,7 +2832,7 @@ namespace Oxide.Plugins
             catch
             {
                 Puts("Couldn't load quest data, creating new datafile");
-                questData = new QuestData();                
+                questData = new QuestData();
             }
             try
             {
@@ -2854,7 +2856,7 @@ namespace Oxide.Plugins
             }
             try
             {
-                itemNames = Item_Names.ReadObject<ItemNames>();                
+                itemNames = Item_Names.ReadObject<ItemNames>();
             }
             catch
             {
@@ -2903,7 +2905,7 @@ namespace Oxide.Plugins
             public UIColor Button_Accept { get; set; }
             public UIColor Button_Completed { get; set; }
             public UIColor Button_Cancel { get; set; }
-            public UIColor Button_Pending { get; set; }       
+            public UIColor Button_Pending { get; set; }
         }
         class Keybinds
         {
@@ -2916,18 +2918,18 @@ namespace Oxide.Plugins
             public string Icon_Delivery { get; set; }
         }
         class ConfigData
-        {          
+        {
             public Colors Colors { get; set; }
             public Keybinds KeybindOptions { get; set; }
             public LMIcons LustyMapIntegration { get; set; }
-            public bool DisableUI_FadeIn { get; set; } 
+            public bool DisableUI_FadeIn { get; set; }
             public bool UseNPCVendors { get; set; }
-            
+
         }
         private void LoadVariables()
         {
             LoadConfigVariables();
-            SaveConfig();            
+            SaveConfig();
         }
         private void LoadConfigVariables()
         {
@@ -2939,7 +2941,7 @@ namespace Oxide.Plugins
             ConfigData config = new ConfigData
             {
                 DisableUI_FadeIn = false,
-                
+
                 UseNPCVendors = false,
                 Colors = new Colors
                 {
@@ -2964,7 +2966,7 @@ namespace Oxide.Plugins
                     KeyBind_Key = "k"
                 }
             };
-            SaveConfig(config);            
+            SaveConfig(config);
         }
         void SaveConfig(ConfigData config)
         {
@@ -2974,7 +2976,7 @@ namespace Oxide.Plugins
 
         #region Messaging
         void SendMSG(BasePlayer player, string message, string keyword = "")
-        {            
+        {
             message = $"{textSecondary}{message}</color>";
             if (!string.IsNullOrEmpty(keyword))
                 message = $"{textPrimary}{keyword}</color> {message}";
@@ -3059,7 +3061,7 @@ namespace Oxide.Plugins
             { "creHelNewRew", "Select a reward to remove, or add a new one" },
             { "Coins", "Coins" },
             { "RP", "RP" },
-            { "HuntXP", "XP" },            
+            { "HuntXP", "XP" },
             { "Item", "Item" },
             { "creHelRewA", "Enter a reward amount" },
             { "creHelIH", "Place the item you want to issue as a reward in your hands and type" },

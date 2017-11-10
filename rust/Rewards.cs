@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace Oxide.Plugins
 {
-    [Info("Rewards", "Tarek", "1.3.12", ResourceId = 1961)]
+    [Info("Rewards", "Tarek", "1.3.13", ResourceId = 1961)]
     [Description("Reward players for activities using Economic and/or ServerRewards")]
     class Rewards : RustPlugin
     {
@@ -489,7 +489,7 @@ namespace Oxide.Plugins
             {
                 amount = amount * multiplier;
                 if (options.UseEconomicsPlugin)
-                    Economics?.Call("Deposit", player.userID, amount);
+                    Economics?.Call("Deposit", player.UserIDString, amount);
                 if (options.UseServerRewardsPlugin)
                     ServerRewards?.Call("AddPoints", new object[] { player.userID, amount });
                 if (!isWelcomeReward)
@@ -532,14 +532,14 @@ namespace Oxide.Plugins
                     {
                         if (options.Economincs_TakeMoneyFromVictim)
                         {
-                            if (!(bool)Economics?.Call("Transfer", victim.userID, player.userID, rewardrates.human * multiplier))
+                            if (!(bool)Economics?.Call("Transfer", victim.UserIDString, player.UserIDString, rewardrates.human * multiplier))
                             {
                                 SendChatMessage(player,  Lang("VictimNoMoney", player.UserIDString, victim.displayName), Lang("Prefix"));
                                 success = false;
                             }
                         }
                         else
-                            Economics?.Call("Deposit", player.userID, rewardrates.human * multiplier);
+                            Economics?.Call("Deposit", player.UserIDString, rewardrates.human * multiplier);
                     }
                     if (IsServerRewardsLoaded) //ServerRewards
                     {

@@ -1,7 +1,7 @@
 {
     "name": "BetterChat Flood",
     "description": "Puts a cooldown on peoples messages preventing them flooding the chat.",
-    "author": "Ryan",
+    "author": "Wulf",
     "version": "1.0.4",
     "configuration": true,
     "suggest": {
