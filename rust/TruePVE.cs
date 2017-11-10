@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.8.4", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.8.5", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
@@ -950,9 +950,9 @@ namespace Oxide.Plugins
 						if (trace) Trace($"WARNING: Found multiple RuleSets: {string.Join(", ", sets.Select(s => s.name).ToArray())}", 3);
 						PrintWarning(GetMessage("Warning_MultipleRuleSets"), string.Join(", ", sets.Select(s => s.name).ToArray()));
 					}
-
-					ruleSet = sets.First();
-					if (trace) Trace($"Found RuleSet: {ruleSet.name}", 3);
+					
+					ruleSet = sets.FirstOrDefault();
+					if (trace && ruleSet != null) Trace($"Found RuleSet: {ruleSet.name}", 3);
 				}
 			}
 			if (ruleSet == null)
