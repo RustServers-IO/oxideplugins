@@ -5,11 +5,12 @@ using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using System.Linq;
 
-// TODO: Add SQLite and MySQL database support
+// TODO: Add SQLite and MySQL database support?
+// TODO: Add individual permissions for each self command?
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.1.2", ResourceId = 717)]
+    [Info("Economics", "Wulf/lukespragg", "3.1.3", ResourceId = 717)]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -63,7 +64,7 @@ namespace Oxide.Plugins
 
         #region Stored Data
 
-        private DynamicConfigFile oldStoredData;
+        private DynamicConfigFile data;
         private StoredData storedData;
         private bool changed;
 
@@ -93,16 +94,17 @@ namespace Oxide.Plugins
                 ["NewPlayerBalance"] = "New player balance: {0:C}",
                 ["NotAllowed"] = "You are not allowed to use the '{0}' command",
                 ["NoPlayersFound"] = "No players found with '{0}'",
-                ["PlayerBalance"] = "Player balance: {0:C}",
+                ["PlayerBalance"] = "Balance for {0}: {1:C}",
                 ["PlayerLacksMoney"] = "'{0}' does not have enough money!",
                 ["PlayersFound"] = "Multiple players were found, please specify: {0}",
                 ["ReceivedFrom"] = "You have received {0} from {1}",
                 ["TransferredTo"] = "{0} transferred to {1}",
                 ["TransferToSelf"] = "You can not transfer money yourself!",
                 ["UsageBalance"] = "{0} - check your balance",
-                ["UsageDeposit"] = "{0} <name or id> <amount> - transfer [amount] to [name] player (fee may apply)",
-                ["UsageSet"] = "Usage: {0} <name or id> <amount>",
-                ["UsageTransfer"] = "Usage: {0} <name or id> <amount>",
+                ["UsageBalanceOthers"] = "{0} <name or id> - check balance of a player",
+                ["UsageDeposit"] = "{0} <name or id> <amount> - deposits amount to player",
+                ["UsageSetMoney"] = "Usage: {0} <name or id> <amount>",
+                ["UsageTransfer"] = "Usage: {0} <name or id> <amount> - transfers amount to player (fee may apply)",
                 ["UsageWithdraw"] = "Usage: {0} <amount>",
                 ["UsageWipe"] = "Usage: {0} - wipes all economics data",
                 ["YouLackMoney"] = "You do not have enough money!",
@@ -131,33 +133,39 @@ namespace Oxide.Plugins
             AddLocalizedCommand("CommandWithdraw", "WithdrawCommand");
             AddLocalizedCommand("CommandWipe", "WipeCommand");
 
-            oldStoredData = Interface.Oxide.DataFileSystem.GetFile(nameof(Economics));
+            data = Interface.Oxide.DataFileSystem.GetFile(nameof(Economics));
             try
             {
-                storedData = oldStoredData.ReadObject<StoredData>(Name);
+                storedData = data.ReadObject<StoredData>(Name);
+                changed = true;
+                SaveData();
             }
             catch
             {
                 storedData = new StoredData();
-                try {
-                    var temp = oldStoredData.ReadObject<Dictionary<ulong, double>>();
+                try
+                {
+                    var temp = data.ReadObject<Dictionary<ulong, double>>();
                     foreach (var old in temp.ToArray())
                     {
                         if (!storedData.Balances.ContainsKey(old.Key.ToString()))
-                           storedData.Balances.Add(old.Key.ToString(), old.Value);
+                            storedData.Balances.Add(old.Key.ToString(), old.Value);
                     }
                     changed = true;
                     SaveData();
                 }
-                catch {}
+                catch { }
             }
 
             if (config.RemoveUnused)
             {
                 var playerData = storedData.Balances.Keys.ToArray();
                 foreach (var p in playerData.Where(p => storedData.Balances[p].Equals(config.StartAmount))) storedData.Balances.Remove(p);
-                if (playerData.Length != storedData.Balances.Count) changed = true;
-                SaveData();
+                if (playerData.Length != storedData.Balances.Count)
+                {
+                    changed = true;
+                    SaveData();
+                }
             }
         }
 
@@ -256,11 +264,14 @@ namespace Oxide.Plugins
                 var target = FindPlayer(args[0], player);
                 if (target == null) return;
 
-                Message(player, "PlayerBalance", Balance(target.Id));
+                Message(player, "PlayerBalance", target.Name, Balance(target.Id));
                 return;
             }
 
-            Message(player, "YourBalance", Balance(player.Id));
+            if (player.IsServer)
+                Message(player, "UsageBalanceOthers", command);
+            else
+                Message(player, "YourBalance", Balance(player.Id));
         }
 
         #endregion Balance Command
@@ -293,7 +304,7 @@ namespace Oxide.Plugins
             }
 
             Deposit(target.Id, amount);
-            Message(player, "NewPlayerBalance", Balance(target.Id));
+            Message(player, "NewBalanceForPlayer", target.Name, Balance(target.Id));
         }
 
         #endregion Deposit Command
@@ -310,7 +321,7 @@ namespace Oxide.Plugins
 
             if (args == null || args.Length <= 1)
             {
-                Message(player, "UsageSetmoney", command);
+                Message(player, "UsageSetMoney", command);
                 return;
             }
 
@@ -432,19 +443,19 @@ namespace Oxide.Plugins
             }
         }
 
-        private IPlayer FindPlayer(string nameOrId, IPlayer user)
+        private IPlayer FindPlayer(string nameOrId, IPlayer player)
         {
             var foundPlayers = players.FindPlayers(nameOrId).ToArray();
             if (foundPlayers.Length > 1)
             {
-                Message(user, "PlayersFound", string.Join(", ", foundPlayers.Select(p => p.Name).ToArray()));
+                Message(player, "PlayersFound", string.Join(", ", foundPlayers.Select(p => p.Name).ToArray()));
                 return null;
             }
 
             var target = foundPlayers.Length == 1 ? foundPlayers[0] : null;
             if (target == null || !target.IsConnected)
             {
-                Message(user, "PlayerNotFound", nameOrId);
+                Message(player, "NoPlayersFound", nameOrId);
                 return null;
             }
 
