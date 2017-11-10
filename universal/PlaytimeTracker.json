@@ -2,7 +2,7 @@
     "name": "Playtime Tracker",
     "description": "Tracks playtime and AFK time of players with a built-in reward system",
     "author": "k1lly0u",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "configuration": true,
     "suggest": {
         "ServerRewards": "*",

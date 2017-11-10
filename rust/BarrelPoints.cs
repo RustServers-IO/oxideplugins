@@ -2,15 +2,14 @@
 using System;
 using System.Collections.Generic;
 
-                        //
-                        //      Credit to the original author of this plugin, Scriptzyy
-                        //
+//
+//      Credit to the original author of this plugin, Scriptzyy
+//
 
 namespace Oxide.Plugins
 {
-    [Info("BarrelPoints", "redBDGR", "2.0.7", ResourceId = 2182)]
+    [Info("BarrelPoints", "redBDGR", "2.0.8", ResourceId = 2182)]
     [Description("Gives players extra rewards for destroying barrels")]
-
     class BarrelPoints : RustPlugin
     {
         [PluginReference] Plugin Economics; // http://oxidemod.org/plugins/economics.717/
@@ -137,7 +136,7 @@ namespace Oxide.Plugins
                     // Section that gives the player their money
                     if (useEconomy)
                     {
-                        Economics?.CallHook("Deposit", player.userID, Convert.ToDouble(permissionList[userPermission]));
+                        Economics?.CallHook("Deposit", player.UserIDString, Convert.ToDouble(permissionList[userPermission]));
                         if (sendNotificationMessage)
                             player.ChatMessage(string.Format(msg("Economy Notice (Barrel)", player.UserIDString), permissionList[userPermission].ToString()));
                     }
@@ -180,7 +179,7 @@ namespace Oxide.Plugins
                 if (userPermission == null) return;
                 if (useEconomy)
                 {
-                    Economics?.CallHook("Deposit", player.userID, Convert.ToDouble(permissionList[userPermission]));
+                    Economics?.CallHook("Deposit", player.UserIDString, Convert.ToDouble(permissionList[userPermission]));
                     if (sendNotificationMessage)
                         player.ChatMessage(string.Format(msg("Economy Notice (Crate)", player.UserIDString), permissionList[userPermission].ToString()));
                 }

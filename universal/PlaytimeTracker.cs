@@ -8,7 +8,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Playtime Tracker", "k1lly0u", "0.1.6", ResourceId = 2125)]
+    [Info("Playtime Tracker", "k1lly0u", "0.1.7", ResourceId = 2125)]
     [Description("Tracks playtime and AFK time of players with a built-in reward system")]
     class PlaytimeTracker : CovalencePlugin
     {
@@ -232,7 +232,7 @@ namespace Oxide.Plugins
             }
 
             if (Economics && configData.RewardSystem.RewardPlugins.Rust.Economics)
-                Economics?.Call("Deposit", ulong.Parse(player.Id), (double)amount);
+                Economics?.Call("Deposit", player.Id, (double)amount);
             #endif
 
             #if HURTWORLD
