@@ -4,7 +4,7 @@ using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 namespace Oxide.Plugins
 {
-    [Info("VIP Trial", "Maik8", "1.3.3", ResourceId = 2563)]
+    [Info("VIP Trial", "Maik8", "1.3.5", ResourceId = 2563)]
     [Description("Plugin that lets Users try VIP functions.")]
     public class VIPTrial : CovalencePlugin
     {
@@ -12,7 +12,9 @@ namespace Oxide.Plugins
         StoredData storedData;
         string groupName;
         int days;
+        string message;
         List<object> permlist;
+        
         #endregion
 
         #region Commands
@@ -31,21 +33,27 @@ namespace Oxide.Plugins
                         }
                         else
                         {
-                            Reply(player, "VIPStillRunning", getDaysLeft(player));
+                            message = string.Format(GetLangValue("VIPStillRunning", player.Id), getDaysLeft(player).ToString());
+                            player.Reply(message);
                         }
                     }
                     else if (checkPlayerForGroup(player))
                     {
-                        Reply(player, "VIPStillRunning", getDaysLeft(player));
+
+                        //player.Reply("VIPStillRunning", getDaysLeft(player).ToString());
+                        message = string.Format(GetLangValue("VIPStillRunning", player.Id), getDaysLeft(player).ToString());
+                        player.Reply(message);
                     }
                     else
                     {
-                        Reply(player, "VIPAlreadyUsed");
+                        message = string.Format(GetLangValue("VIPAlreadyUsed", player.Id));
+                        player.Reply(message);
                     }
                 }
                 else
                 {
-                    Reply(player, "NoPermission");
+                    message = string.Format(GetLangValue("NoPermission", player.Id));
+                    player.Reply(message);
                 }
             }
             else if ("list".Equals(args[0]))
@@ -56,7 +64,8 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    Reply(player, "NoPermission");
+                    message = string.Format(GetLangValue("NoPermission", player.Id));
+                    player.Reply(message);
                 }
             }
             else if ("clean_group".Equals(args[0]))
@@ -67,7 +76,8 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    Reply(player, "NoPermission");
+                    message = string.Format(GetLangValue("NoPermission", player.Id));
+                    player.Reply(message);
                 }
             }
         }
@@ -99,14 +109,18 @@ namespace Oxide.Plugins
                             if (!usersremoved)
                             {
                                 usersremoved = true;
-                               Reply(player, "CleanGroupFirstFeed");
+
+                            message = string.Format(GetLangValue("CleanGroupFirstFeed", player.Id));
+                            player.Reply(message);
                             }
-                            Reply(player, "CleanGroupGiveBackRemovedUser", id, name);
+                            message = string.Format(GetLangValue("CleanGroupGiveBackRemovedUser", player.Id), id, name);
+                            player.Reply(message);
                         }
                     }
                     if (!usersremoved)
                     {
-                        Reply(player, "CleanGroupNobodyRemoved");
+                        message = string.Format(GetLangValue("CleanGroupNobodyRemoved", player.Id));
+                        player.Reply(message);
                     }
 		}
 		
@@ -142,11 +156,13 @@ namespace Oxide.Plugins
                 if (checkExpired(player.Id))
                 {
                     permission.RemoveUserGroup(player.Id, groupName);
-                    Reply(player, "VIPExpired");
+                    message = string.Format(GetLangValue("VIPExpired", player.Id));
+                    player.Reply(message);
                 }
                 else
                 {
-                    Reply(player, "VIPEndsIn", getDaysLeft(player));
+                    message = string.Format(GetLangValue("VIPEndsIn", player.Id), getDaysLeft(player).ToString());
+                    player.Reply(message);
                 }
             }
         }
@@ -154,12 +170,14 @@ namespace Oxide.Plugins
 
         void listActiveTrials(IPlayer player)
         {
-            Reply(player, "ListActiveVIPStart");
+            message = string.Format(GetLangValue("ListActiveVIPStart", player.Id));
+            player.Reply(message);
             foreach (VIPDataSaveFile elm in storedData.VIPDataHash)
             {
                 if (!checkExpired(elm.userId))
                 {
-                    Reply(player, "ListActiveVIPUser2", elm.now, elm.userId, players.FindPlayerById(elm.userId).Name);
+                    message = string.Format(GetLangValue("ListActiveVIPUser2", player.Id), elm.now, elm.userId, players.FindPlayerById(elm.userId).Name);
+                    player.Reply(message);
                 }
             }
         }
@@ -218,7 +236,8 @@ namespace Oxide.Plugins
             permission.AddUserGroup(player.Id, groupName);
             storedData.VIPDataHash.Add( new VIPDataSaveFile( player, DateTime.Now.AddDays( days ) ) );
             Interface.Oxide.DataFileSystem.WriteObject(this.Name, storedData);
-            Reply(player, "VIPStarted", DateTime.Now.Date.AddDays( days ).ToShortDateString() );
+            message = string.Format(GetLangValue("VIPStarted", player.Id), DateTime.Now.Date.AddDays(days).ToShortDateString());
+            player.Reply(message);
         }
 
         private bool checkPlayerForGroup(IPlayer player) => permission.UserHasGroup(player.Id, groupName);
@@ -258,7 +277,8 @@ namespace Oxide.Plugins
             }
         }
 
-        private void Reply(IPlayer player, string langKey, params object[] args) => player.Reply(lang.GetMessage(langKey, this, player.Id), args);
+        //private void Reply(IPlayer player, string langKey, params object[] args) => player.Reply(lang.GetMessage(langKey, this, player.Id), args);
+          private string GetLangValue(string key, string userId) => lang.GetMessage(key, this, userId);
 
         #endregion
 
@@ -282,7 +302,7 @@ namespace Oxide.Plugins
             // English
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                { "VIPStillRunning", "Your VIP trial is still running. ({0} days left)" },
+                { "VIPStillRunning", "Your VIP trial is still running. Days left: {0}." },
                 { "VIPAlreadyUsed", "You have already used your VIP trial." },
                 { "NoPermission", "You are not allowed to use this command!" },
                 { "VIPExpired", "Your VIP trial is expired." },
