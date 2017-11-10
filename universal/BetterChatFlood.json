@@ -1,6 +1,6 @@
 {
     "name": "BetterChat Flood",
-    "description": "Puts a cooldown on chat to prevent flooding",
+    "description": "Adds a cooldown to chat to prevent flooding",
     "author": "Wulf",
     "version": "1.0.4",
     "configuration": true,
