@@ -1,12 +1,12 @@
-﻿using System.Collections.Generic;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Oxide.Core;
-using System.Linq;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("KDRGui", "Ankawi/LaserHydra", "1.0.6", ResourceId = 2042)]
+    [Info("KDRGui", "Ankawi/LaserHydra", "1.0.7", ResourceId = 2042)]
     [Description("GUI that portrays kills, deaths, player name, and K/D Ratio")]
     class KDRGui : RustPlugin
     {
@@ -260,6 +260,7 @@ namespace Oxide.Plugins
         {
             PlayerData.TryLoad(player);
         }
+
         //void LoadSleeperData()
         //{
         //    var sleepers = BasePlayer.sleepingPlayerList;
@@ -269,6 +270,7 @@ namespace Oxide.Plugins
         //        Puts("Loaded sleeper data");
         //    }
         //}
+
         void OnPlayerDisconnected(BasePlayer player)
         {
             PlayerData.TryLoad(player);
@@ -283,7 +285,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void Loaded()
+        void OnServerInitialized()
         {
             foreach (var player in BasePlayer.activePlayerList)
             {
@@ -302,6 +304,7 @@ namespace Oxide.Plugins
 
             return info;
         }
+
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
             if (entity?.ToPlayer() != null && info?.Initiator?.ToPlayer() != null)
@@ -313,6 +316,7 @@ namespace Oxide.Plugins
                 });
             }
         }
+
         void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             try
@@ -342,7 +346,7 @@ namespace Oxide.Plugins
                 }
             }
             catch (Exception ex)
-            {              
+            {
             }
         }
         #endregion
@@ -397,6 +401,7 @@ namespace Oxide.Plugins
         {
             GetCurrentStats(player);
         }
+
         void GetCurrentStats(BasePlayer player)
         {
             PlayerData data = Interface.Oxide.DataFileSystem.ReadObject<PlayerData>($"KDRGui/{player.userID}");
@@ -405,15 +410,15 @@ namespace Oxide.Plugins
             string playerName = data.name;
             float kdr = data.KDR;
 
-            //rust.SendChatMessage(player, "<color=lime> Player Name : </color>" + $"{playerName}");
-            //rust.SendChatMessage(player, "<color=red> Kills : </color>" + $"{kills}");
-            //rust.SendChatMessage(player, "<color=red> Deaths : </color>" + $"{deaths}");
-            //rust.SendChatMessage(player, "<color=red> K/D Ratio : </color>" + $"{kdr}");
+            //PrintToChat(player, "<color=lime> Player Name : </color>" + $"{playerName}");
+            //PrintToChat(player, "<color=red> Kills : </color>" + $"{kills}");
+            //PrintToChat(player, "<color=red> Deaths : </color>" + $"{deaths}");
+            //PrintToChat(player, "<color=red> K/D Ratio : </color>" + $"{kdr}");
 
-            rust.SendChatMessage(player, "<color=red> Player Name : </color>" + $"{playerName}"
-                                        + "\n" + "<color=lime> Kills : </color>" + $"{kills}"
-                                        + "\n" + "<color=lime> Deaths : </color>" + $"{deaths}"
-                                        + "\n" + "<color=lime> K/D Ratio : </color>" + $"{kdr}");
+            PrintToChat(player, "<color=red> Player Name : </color>" + $"{playerName}"
+                        + "\n" + "<color=lime> Kills : </color>" + $"{kills}"
+                        + "\n" + "<color=lime> Deaths : </color>" + $"{deaths}"
+                        + "\n" + "<color=lime> K/D Ratio : </color>" + $"{kdr}");
         }
         #endregion
     }
