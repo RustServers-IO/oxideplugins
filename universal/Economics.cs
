@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using Oxide.Core;
+using Oxide.Core.Configuration;
 using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.1.1", ResourceId = 717)]
+    [Info("Economics", "Wulf/lukespragg", "3.1.2", ResourceId = 717)]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -62,13 +63,13 @@ namespace Oxide.Plugins
 
         #region Stored Data
 
+        private DynamicConfigFile oldStoredData;
         private StoredData storedData;
         private bool changed;
 
         private class StoredData
         {
             public Dictionary<string, double> Balances = new Dictionary<string, double>();
-            public Dictionary<ulong, double> balances = new Dictionary<ulong, double>();
         }
 
         #endregion Stored Data
@@ -130,18 +131,25 @@ namespace Oxide.Plugins
             AddLocalizedCommand("CommandWithdraw", "WithdrawCommand");
             AddLocalizedCommand("CommandWipe", "WipeCommand");
 
-            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
-            if (storedData.balances != null)
+            oldStoredData = Interface.Oxide.DataFileSystem.GetFile(nameof(Economics));
+            try
             {
-                foreach (var p in storedData.balances.ToList())
-                {
-                    var id = p.Key.ToString();
-                    if (!storedData.Balances.Keys.Contains(id)) storedData.Balances.Add(id, p.Value);
-                    storedData.balances.Remove(p.Key);
+                storedData = oldStoredData.ReadObject<StoredData>(Name);
+            }
+            catch
+            {
+                storedData = new StoredData();
+                try {
+                    var temp = oldStoredData.ReadObject<Dictionary<ulong, double>>();
+                    foreach (var old in temp.ToArray())
+                    {
+                        if (!storedData.Balances.ContainsKey(old.Key.ToString()))
+                           storedData.Balances.Add(old.Key.ToString(), old.Value);
+                    }
+                    changed = true;
+                    SaveData();
                 }
-                //if (storedData.balances.Length == 0) // TODO: Remove old, empty balances
-                changed = true;
-                SaveData();
+                catch {}
             }
 
             if (config.RemoveUnused)

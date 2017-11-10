@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using Oxide.Core.Plugins;
 namespace Oxide.Plugins
 {
-     	[Info("VisualCupboard", "Colon Blow", "1.0.10", ResourceId = 2030)]
+     	[Info("VisualCupboard", "Colon Blow", "1.0.11", ResourceId = 2030)]
     	class VisualCupboard : RustPlugin
      	{
 		void OnServerInitialized() { serverInitialized = true; }
@@ -189,7 +189,7 @@ namespace Oxide.Plugins
 
 		void AddSphere(BasePlayer player, bool showall, bool adminshow)
 		{
-			if (isAllowed(player, "visualcupboard.allowed"))
+			if (isAllowed(player, "visualcupboard.allowed") || isAllowed(player, "visualcupboard.admin"))
 			{
 				List<BaseCombatEntity> cblist = new List<BaseCombatEntity>();
 				Vis.Entities<BaseCombatEntity>(player.transform.position, ShowCupboardsWithinRangeOf, cblist);
@@ -204,14 +204,16 @@ namespace Oxide.Plugins
 
 							if (!adminshow)
 							{
-								if (player.userID != bp.OwnerID) return;
-            							for (int i = 0; i < VisualDarkness; i++)
-            							{
-									sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
-									if (showall) sphereobj.showall = true;
-									GameManager.Destroy(sphereobj, DurationToShowRadius);
+								if (player.userID == bp.OwnerID)
+								{
+            								for (int i = 0; i < VisualDarkness; i++)
+            								{
+										sphereobj = bp.gameObject.AddComponent<ToolCupboardSphere>();
+										if (showall) sphereobj.showall = true;
+										GameManager.Destroy(sphereobj, DurationToShowRadius);
+									}
 								}
-								return;
+
 							}
 							if (adminshow)
 							{
@@ -221,18 +223,16 @@ namespace Oxide.Plugins
 									sphereobj.showall = true;
 									GameManager.Destroy(sphereobj, DurationToShowRadius);
 								}
+								player.SendConsoleCommand("ddraw.text", 10f, Color.red, pos+Vector3.up, FindPlayerName(bp.OwnerID));
 								PrintWarning("Tool Cupboard Owner " + bp.OwnerID + " : " + FindPlayerName(bp.OwnerID));
 							}	
 						}
 					}
 				}
+				return;
 			}
-			if (!isAllowed(player, "visualcupboard.allowed"))
-			{
-				SendReply(player, lang.GetMessage("notallowed", this));
-			 	return;	
-			}
-			else return;
+			SendReply(player, lang.GetMessage("notallowed", this));
+			 return;	
 		}
 
 
