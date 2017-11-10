@@ -6,10 +6,9 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("ConnectMessages", "Spicy", "1.1.8", ResourceId = 2178)]
+    [Info("ConnectMessages", "Spicy", "1.1.9", ResourceId = 2178)]
     [Description("Provides connect and disconnect messages.")]
-
-    class ConnectMessages : CovalencePlugin
+    public class ConnectMessages : CovalencePlugin
     {
         #region Country API Class
 
@@ -26,7 +25,7 @@ namespace Oxide.Plugins
         private void Broadcast(string key, params object[] args)
         {
             foreach (var player in players.Connected)
-                player.Message(GetLangValue(key, player.Id), args);
+                player.Message(string.Format(GetLangValue(key, player.Id), args));
         }
 
         private bool GetConfigValue(string key) => Config.Get<bool>("Settings", key);
@@ -75,7 +74,7 @@ namespace Oxide.Plugins
 
         #region Lang
 
-        private void InitialiseLang()
+        private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -87,10 +86,10 @@ namespace Oxide.Plugins
 
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["ConnectMessage"] = "{0} s'est connecté(e).",
-                ["ConnectMessageCountry"] = "{0} s'est connecté(e) de {1}.",
-                ["DisconnectMessage"] = "{0} s'est disconnecté(e).",
-                ["DisconnectMessageReason"] = "{0} s'est disconnecté(e). ({1})"
+                ["ConnectMessage"] = "{0} s'est connectï¿½(e).",
+                ["ConnectMessageCountry"] = "{0} s'est connectï¿½(e) de {1}.",
+                ["DisconnectMessage"] = "{0} s'est disconnectï¿½(e).",
+                ["DisconnectMessageReason"] = "{0} s'est disconnectï¿½(e). ({1})"
             }, this, "fr");
 
             lang.RegisterMessages(new Dictionary<string, string>
@@ -111,9 +110,7 @@ namespace Oxide.Plugins
 #if HURTWORLD
             GameManager.Instance.ServerConfig.ChatConnectionMessagesEnabled = false;
 #endif
-
             InitialiseConfig();
-            InitialiseLang();
         }
 
         private void OnUserConnected(IPlayer player)
@@ -129,7 +126,7 @@ namespace Oxide.Plugins
 
             string apiUrl = "http://ip-api.com/json/";
 
-            webrequest.EnqueueGet(apiUrl + player.Address, (code, response) =>
+            webrequest.Enqueue(apiUrl + player.Address, null, (code, response) =>
             {
                 if (code != 200 || response == null)
                 {

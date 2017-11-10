@@ -2,19 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-
-using UnityEngine;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust;
 using Oxide.Game.Rust.Cui;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("InfoPanel", "Ghosst / Nogrod", "0.9.5", ResourceId = 1356)]
+    [Info("InfoPanel", "Ghosst / Nogrod", "0.9.6", ResourceId = 1356)]
     [Description("A little panel with useful informations.")]
     public class InfoPanel : RustPlugin
     {
@@ -1317,7 +1315,7 @@ namespace Oxide.Plugins
             {
                 var player = RustCore.FindPlayerByIdString(PlayerID);
                 if (player == null) return 0;
-                return (double)(Interface.Oxide.CallHook("GetPlayerMoney", player.userID) ?? 0.0);
+                return (double)(Interface.Oxide.CallHook("Balance", player.userID) ?? 0.0);
             }
 
             public void Refresh(StoredData storedData, Dictionary<string, Dictionary<string, IPanel>> panels)

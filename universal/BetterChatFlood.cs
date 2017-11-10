@@ -3,10 +3,11 @@ using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterChatFlood", "Ryan", "1.0.3", ResourceId = 2484)]
+    [Info("BetterChatFlood", "Ryan", "1.0.4", ResourceId = 2484)]
     [Description("Puts a cooldown on peoples messages preventing them flooding the chat.")]
     public class BetterChatFlood : CovalencePlugin
     {
@@ -66,23 +67,18 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-            if(!BetterChat)
-                Unsubscribe(nameof(OnBetterChat));
-            if (BetterChat)
+            if (!BetterChat) Unsubscribe(nameof(OnBetterChat));
+            if (BetterChat && BetterChat.Version < new VersionNumber(5, 0, 6))
             {
-                bool isSupported = new Version($"{BetterChat.Version.Major}.{BetterChat.Version.Minor}.{BetterChat.Version.Patch}") < new Version("5.0.6") ? false : true;
-                if (!isSupported)
-                {
-                    Unsubscribe(nameof(OnBetterChat));
-                    PrintWarning("This plugin is only compatable with BetterChat version 5.0.6 or greater!");
-                }
+                Unsubscribe(nameof(OnBetterChat));
+                PrintWarning("This plugin is only compatable with BetterChat version 5.0.6 or greater!");
             }
         }
 
         private double GetNextMsgTime(IPlayer player)
         {
             if (cooldowns[player.Id].AddSeconds(_Config.cooldown) > DateTime.Now)
-                return Math.Floor((cooldowns[player.Id].AddSeconds(_Config.cooldown) - DateTime.Now).TotalSeconds);
+                return Math.Ceiling((cooldowns[player.Id].AddSeconds(_Config.cooldown) - DateTime.Now).TotalSeconds);
             return 0;
         }
 
@@ -91,7 +87,7 @@ namespace Oxide.Plugins
             if (cooldowns.ContainsKey(player.Id))
             {
                 if (permission.UserHasPermission(player.Id, _Config.perm)) return null;
-                bool hasCooldown = GetNextMsgTime(player) != 0 ? true : false;
+                var hasCooldown = GetNextMsgTime(player) <= 0;
                 if (hasCooldown)
                 {
                     if (thresholds.ContainsKey(player.Id))
@@ -99,10 +95,10 @@ namespace Oxide.Plugins
                         if (thresholds[player.Id] > _Config.threshold)
                         {
                             if (action != null)
-                                player.Reply(lang.GetMessage("Cooldown", this, player.Id), GetNextMsgTime(player));
+                                player.Message(lang.GetMessage("Cooldown", this, player.Id), string.Empty, GetNextMsgTime(player));
                             return true;
                         }
-                        else if (action != null)
+                        if (action != null)
                         {
                             thresholds[player.Id] = ++thresholds[player.Id];
                             cooldowns.Remove(player.Id);
@@ -110,17 +106,16 @@ namespace Oxide.Plugins
                         }
                         return null;
                     }
-                    else if (!thresholds.ContainsKey(player.Id))
+                    if (!thresholds.ContainsKey(player.Id))
                         thresholds.Add(player.Id, 1);
                     return null;
                 }
-                else if (!hasCooldown)
-                    if (cooldowns.ContainsKey(player.Id))
-                    {
-                        cooldowns.Remove(player.Id);
-                        if (thresholds.ContainsKey(player.Id))
-                            thresholds.Remove(player.Id);
-                    }
+                if (!hasCooldown && cooldowns.ContainsKey(player.Id))
+                {
+                    cooldowns.Remove(player.Id);
+                    if (thresholds.ContainsKey(player.Id))
+                        thresholds.Remove(player.Id);
+                }
             }
             if (action != null && !cooldowns.ContainsKey(player.Id))
                 cooldowns.Add(player.Id, DateTime.Now);
