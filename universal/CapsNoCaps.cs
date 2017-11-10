@@ -1,64 +1,53 @@
-﻿using System.Collections.Generic;
-using Oxide.Core;
+﻿using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("CapsNoCaps", "PsychoTea", "1.3.3")]
+    [Info("CapsNoCaps", "PsychoTea", "1.3.4", ResourceId = 1324)]
     [Description("Turns all uppercase chat into lowercase")]
-
-    class CapsNoCaps : CovalencePlugin
+    public class CapsNoCaps : CovalencePlugin
     {
-        private const string IgnorePerm = "capsnocaps.ignore";
+        [PluginReference]
+        private Plugin BetterChat;
 
-        [PluginReference] Plugin BetterChat;
+        private const string permIgnore = "capsnocaps.ignore";
 
-        void Init()
-        {
-            permission.RegisterPermission(IgnorePerm, this);
-        }
+        private void Init() => permission.RegisterPermission(permIgnore, this);
 
-        object OnUserChat(IPlayer player, string message)
+        private object OnUserChat(IPlayer player, string message)
         {
             if (BetterChat != null) return null;
-            if (HasPerm(player.Id)) return null;
+            if (player.HasPermission(permIgnore)) return null;
 
             foreach (var target in players.Connected)
             {
-                #if RUST
-                
+#if RUST
                 var rPlayer = player.Object as BasePlayer;
-                
-                string colour = "#5af";
+                var rTarget = target.Object as BasePlayer;
+
+                var colour = "#5af";
                 if (rPlayer.IsAdmin) colour = "#af5";
                 if (rPlayer.IsDeveloper) colour = "#fa5";
-                
-                var rTarget = target.Object as BasePlayer;
-                
-                rTarget?.SendConsoleCommand("chat.add2", rPlayer.userID, message, rPlayer.displayName, colour);
-                
-                #else
 
-                target.Message($"{player.Name}: {message}");
-                
-                #endif
+                rTarget?.SendConsoleCommand("chat.add2", rPlayer.userID, message, rPlayer.displayName, colour);
+#else
+                target.Message(message, player.Name);
+#endif
             }
 
-            Log($"[CHAT] {player.Name}: {message}");
-
+            Log($"[CHAT] {player.Name} : {message}");
             return true;
         }
 
-        Dictionary<string, object> OnBetterChat(Dictionary<string, object> dict)
+        private Dictionary<string, object> OnBetterChat(Dictionary<string, object> dict)
         {
-            IPlayer player = dict["Player"] as IPlayer;
-            if (HasPerm(player.Id)) return null;
+            var player = dict["Player"] as IPlayer;
+            if (permission.UserHasPermission(player.Id, permIgnore)) return null;
 
             dict["Text"] = (dict["Text"] as string).SentenceCase();
             return dict;
         }
-
-        bool HasPerm(string userID, string perm = IgnorePerm) => permission.UserHasPermission(userID, perm);
     }
 }
