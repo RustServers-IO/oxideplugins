@@ -1,7 +1,7 @@
 {
     "name": "BarrelPoints",
     "description": "Gives players RewardPoints for destroying barrels",
-    "author": "Wulf",
+    "author": "redBDGR",
     "version": "2.0.8",
     "configuration": true,
     "require": {
