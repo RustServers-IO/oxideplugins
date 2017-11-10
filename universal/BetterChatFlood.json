@@ -2,12 +2,12 @@
     "name": "BetterChat Flood",
     "description": "Adds a cooldown to chat to prevent flooding",
     "author": "Wulf",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "configuration": true,
     "suggest": {
         "BetterChat": "*"
     },
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/betterchat-flood.2484",
     "games": [
         "universal"
