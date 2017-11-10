@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("EconomicsBalanceGUI", "lethal_d0se", "1.1.2", ResourceId = 1670)]
+    [Info("EconomicsBalanceGUI", "lethal_d0se", "1.1.3", ResourceId = 1670)]
     [Description("Displays a players economics balance on the HUD.")]
     public class EconomicsBalanceGUI : RustPlugin
     {
@@ -35,7 +35,7 @@ namespace Oxide.Plugins
                     {
                         foreach (BasePlayer player in BasePlayer.activePlayerList)
                         {
-                            double currentBalance = (double)Economics?.Call("Balance", player.userID);
+                            double currentBalance = (double)Economics?.Call("Balance", player.UserIDString);
 
                             if (Balances.ContainsKey(player.userID))
                             {
@@ -87,7 +87,7 @@ namespace Oxide.Plugins
         private void OnPlayerInit(BasePlayer player)
         {
             if (Economics && Economics.IsLoaded)
-                Balances.Add(player.userID, (double)Economics?.Call("Balance", player.userID));
+                Balances.Add(player.userID, (double)Economics?.Call("Balance", player.UserIDString));
         }
 
         private void OnPlayerSleepEnded(BasePlayer player)
@@ -221,7 +221,7 @@ namespace Oxide.Plugins
 
         private string GetFormattedMoney(BasePlayer player)
         {
-            string s = string.Format("{0:C}", (double)Economics?.Call("Balance", player.userID));
+            string s = string.Format("{0:C}", (double)Economics?.Call("Balance", player.UserIDString));
             s = s.Substring(1);
             s = s.Remove(s.Length - 3);
             return s;

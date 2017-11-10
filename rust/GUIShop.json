@@ -1,8 +1,8 @@
 {
     "name": "GUI Shop",
     "description": "GUI Shop based on Economics. Supports NPC",
-    "author": "Nogrod",
-    "version": "1.4.3",
+    "author": "Wulf",
+    "version": "1.4.4",
     "configuration": true,
     "suggest": {
         "Kits": "*",

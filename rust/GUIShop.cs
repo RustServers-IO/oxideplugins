@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("GUIShop", "Nogrod / Reneb", "1.4.3", ResourceId = 1319)]
+    [Info("GUIShop", "Nogrod / Reneb", "1.4.4", ResourceId = 1319)]
     public class GUIShop : RustPlugin
     {
         private const string ShopOverlayName = "ShopOverlay";
@@ -695,7 +695,7 @@ namespace Oxide.Plugins
             success = TryGive(player, item, amount);
             if (success is string) return success;
             var data = ShopCategories[item];
-            var tryShopBuy = Economics?.CallHook("Withdraw", player.userID, GetBuyPrice(data) * amount);
+            var tryShopBuy = Economics?.CallHook("Withdraw", player.UserIDString, GetBuyPrice(data) * amount);
             if (tryShopBuy == null || tryShopBuy is bool && !(bool) tryShopBuy)
                 return MessageShowNoEconomics;
             if (data.Cooldown > 0)
@@ -841,7 +841,7 @@ namespace Oxide.Plugins
                     itemCooldowns[item] = CurrentTime() + cooldown * amount;
                 }
             }*/
-            Economics?.CallHook("Deposit", player.userID, GetSellPrice(data) * amount);
+            Economics?.CallHook("Deposit", player.UserIDString, GetSellPrice(data) * amount);
             if (!string.IsNullOrEmpty(data.Shortname))
             {
                 ulong count;
