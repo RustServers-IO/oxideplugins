@@ -1,4 +1,3 @@
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Oxide.Core;
@@ -11,12 +10,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("VendingManager", "ignignokt84", "0.2.2", ResourceId = 2331)]
+	[Info("VendingManager", "ignignokt84", "0.2.3", ResourceId = 2331)]
 	[Description("Improved vending machine control")]
 	class VendingManager : RustPlugin
 	{
 		#region Variables
-		
+
 		[PluginReference]
 		Plugin Economics, ServerRewards;
 
@@ -127,7 +126,7 @@ namespace Oxide.Plugins
 				{"SetSuccess", "Successfully set flag <color=cyan>{0}</color>" },
 				{"UnsetSuccess", "Successfully removed flag <color=cyan>{0}</color>" },
 				{"WarnEconAndSREnabled", "Economics and ServerRewards are both enabled as currency; ServerRewards has been forcibly disabled." },
-				
+
 				{"CmdBase", "vm"}
 			};
 			lang.RegisterMessages(messages, this);
@@ -192,7 +191,7 @@ namespace Oxide.Plugins
 			else if (plugin.Name == "ServerRewards" && ConfigValue<bool>(Option.useServerRewards))
 				Check();
 		}
-		
+
 		void Check(bool initial = false)
 		{
 			bool prev = useEconomics;
@@ -346,14 +345,14 @@ namespace Oxide.Plugins
 			VendingMachineInfo i;
 			vms.TryGetValue(vm.net.ID, out i);
 			bool bottomless = i == null ? false : i.HasFlag(VendingMachineInfo.VMFlags.Bottomless);
-			
+
 			bool log = ConfigValue<bool>(Option.logTransSuccess) || ConfigValue<bool>(Option.logTransFailure) || (i != null && i.HasFlag(VendingMachineInfo.VMFlags.LogTransactions));
 			bool force = i != null && i.HasFlag(VendingMachineInfo.VMFlags.LogTransactions);
 			ProtoBuf.VendingMachine.SellOrder sellOrder = vm.sellOrders.sellOrders[sellOrderId];
-			
+
 			bool isCurrencySellOrder = (useEconomics || useServerRewards) && sellOrder.currencyID == currencyItem.itemid;
 			bool isCurrencyBuyOrder = (useEconomics || useServerRewards) && sellOrder.itemToSellID == currencyItem.itemid;
-			
+
 			LogEntry logEntry = new LogEntry();
 			if (log)
 			{
@@ -361,7 +360,7 @@ namespace Oxide.Plugins
 				logEntry.playerID = player.userID;
 				logEntry.playerName = player.displayName;
 			}
-			
+
 			List<Item> items = vm.inventory.FindItemsByItemID(sellOrder.itemToSellID);
 			if (sellOrder.itemToSellIsBP)
 			{
@@ -377,10 +376,10 @@ namespace Oxide.Plugins
 			int numberOfTransactions = Mathf.Clamp(numTransactions, 1, (!items[0].hasCondition ? 1000000 : 1));
 			int sellCount = sellOrder.itemToSellAmount * numberOfTransactions;
 			int buyCount = sellOrder.currencyAmountPerItem * numberOfTransactions;
-			
+
 			if (sellCount > items.Sum(x => x.amount))
 				return false;
-			
+
 			int cost = 0;
 			if (!isCurrencySellOrder)
 			{
@@ -418,7 +417,7 @@ namespace Oxide.Plugins
 					}
 					return false;
 				}
-				
+
 				vm.transactionActive = true;
 				int num3 = 0;
 				Item item;
@@ -458,7 +457,7 @@ namespace Oxide.Plugins
 					}
 					return false;
 				}
-				
+
 				if (Mathf.FloorToInt((float)money) < cost)
 				{
 					if (log)
@@ -535,7 +534,7 @@ namespace Oxide.Plugins
 					success = Deposit(player.userID, amount);
 				else
 					success = Transfer(vm.OwnerID, player.userID, amount);
-				
+
 				if (!success)
 				{
 					if (log)
@@ -579,7 +578,7 @@ namespace Oxide.Plugins
 					player.GiveItem(item, BaseEntity.GiveItemReason.PickedUp);
 				}
 			}
-			
+
 			vm.UpdateEmptyFlag();
 			vm.transactionActive = false;
 
@@ -641,7 +640,7 @@ namespace Oxide.Plugins
 		{
 			if (!useEconomics && !useServerRewards) return;
 			if (vm.sellOrders.sellOrders.Count == 0) return;
-			
+
 			bool hasCurrencySellOrder = false;
 			bool hasCurrencyBuyOrder = true;
 			// create and add items to player inventory to prevent "Can't Afford" button
@@ -1154,7 +1153,7 @@ namespace Oxide.Plugins
 			{
 				BaseLock l = (BaseLock)vm.GetSlot(BaseEntity.Slot.Lock);
 				if (l == null) continue;
-				
+
 				LockInfo li = new LockInfo(vm.net.ID, l);
 				locks[vm.net.ID] = li;
 			}
@@ -1203,7 +1202,7 @@ namespace Oxide.Plugins
 		{
 			if(useEconomics)
 			{
-				return (double) Economics.CallHook("GetPlayerMoney", playerId);
+				return (double) Economics.CallHook("Balance", playerId.ToString());
 			}
 			else if(useServerRewards)
 			{
@@ -1211,12 +1210,12 @@ namespace Oxide.Plugins
 			}
 			return 0.0;
 		}
-		
+
 		bool Withdraw(ulong playerId, double amount)
 		{
 			if (useEconomics)
 			{
-				return (bool) Economics.CallHook("Withdraw", playerId, amount);
+				return (bool) Economics.CallHook("Withdraw", playerId.ToString(), amount);
 			}
 			else if (useServerRewards)
 			{
@@ -1229,7 +1228,7 @@ namespace Oxide.Plugins
 		{
 			if (useEconomics)
 			{
-				Economics.CallHook("Deposit", playerId, amount);
+				Economics.CallHook("Deposit", playerId.ToString(), amount);
 				return true;
 			}
 			else if (useServerRewards)
@@ -1243,7 +1242,7 @@ namespace Oxide.Plugins
 		{
 			if (useEconomics)
 			{
-				return (bool) Economics.CallHook("Transfer", fromId, toId, amount);
+				return (bool) Economics.CallHook("Transfer", fromId.ToString(), toId.ToString(), amount);
 			}
 			else if (useServerRewards)
 			{
@@ -1379,7 +1378,7 @@ namespace Oxide.Plugins
 			public VMFlags flags;
 			public bool HasFlag(VMFlags flag) => (flags & flag) == flag;
 		}
-		
+
 		// Lock details container
 		class LockInfo
 		{
