@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.1.4", ResourceId = 717)]
+    [Info("Economics", "Wulf/lukespragg", "3.1.5", ResourceId = 717)]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -372,8 +372,8 @@ namespace Oxide.Plugins
             }
 
             Deposit(target.Id, amount * (1 - config.TransferFee));
-            Message(player, "TransferredTo", target.Name);
-            Message(target, "ReceivedFrom", player.Name);
+            Message(player, "TransferredTo", amount, target.Name);
+            Message(target, "ReceivedFrom", amount, player.Name);
         }
 
         #endregion Transfer Command

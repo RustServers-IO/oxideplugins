@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote-HighestVoter", "Exel80", "1.0.1", ResourceId = 2671)]
+    [Info("EasyVote-HighestVoter", "Exel80", "1.0.11", ResourceId = 2671)]
     class EasyVoteHighestvoter : RustPlugin
     {
         // EasyVote is life and <3
@@ -126,7 +126,7 @@ namespace Oxide.Plugins
         #region Localization
         string _lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        protected void LoadDefaultMessages()
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
