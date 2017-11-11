@@ -1,11 +1,11 @@
 {
-    "name": "Friends API",
-    "description": "An API to manage a friend list",
+    "name": "Friends",
+    "description": "Universal friends plugin. Compatible with BattleLink.",
     "author": "Wulf",
-    "version": "2.2.5",
+    "version": "2.5.5",
     "configuration": true,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/friends-api.686",
+    "url": "http:\/\/oxidemod.org\/plugins\/friends.2120",
     "games": [
         "rust"
     ],
