@@ -1,5 +1,6 @@
 ﻿using Facepunch;
 using Oxide.Core;
+using Oxide.Core.Libraries;
 using Newtonsoft.Json;
 using ProtoBuf;
 using System;
@@ -11,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.4.5", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.4.6", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
@@ -56,7 +57,7 @@ namespace Oxide.Plugins
 
 			[JsonProperty(PropertyName = "Paste Options")]
 			public PasteOptions Paste { get; set; }
-
+			
 			public class CopyOptions
 			{
 				[JsonProperty(PropertyName = "Buildings (true/false)")]
@@ -70,7 +71,7 @@ namespace Oxide.Plugins
 				[JsonProperty(PropertyName = "Inventories (true/false)")]
 				[DefaultValue(true)]
 				public bool Inventories { get; set; } = true;
-
+				
 				[JsonProperty(PropertyName = "Share (true/false)")]
 				[DefaultValue(false)]
 				public bool Share { get; set; } = false;
@@ -640,7 +641,7 @@ namespace Oxide.Plugins
 					if(basecombat != null)
 						basecombat.ChangeHealth(basecombat.MaxHealth());
 
-					TryPasteSlots(entity, data);
+					pastedEntities.AddRange(TryPasteSlots(entity, data));
 
 					var box = entity.GetComponentInParent<StorageContainer>();
 
@@ -652,9 +653,12 @@ namespace Oxide.Plugins
 							_equippingActive.SetValue(locker, true);
 						
 						box.inventory.Clear();
-						var items = data["items"] as List<object>;
-						var itemlist = new List<ItemAmount>();
+						
+						var items = new List<object>();
 
+						if(data.ContainsKey("items"))					
+							items = data["items"] as List<object>;
+						
 						foreach(var itemDef in items)
 						{
 							var item = itemDef as Dictionary<string, object>;
@@ -713,9 +717,9 @@ namespace Oxide.Plugins
 						}
 						
 						if(locker != null)
-							_equippingActive.SetValue(locker, false);						
+							_equippingActive.SetValue(locker, false);				
 					}
-
+					 
 					var sign = entity.GetComponentInParent<Signage>();
 
 					if(sign != null && data.ContainsKey("sign"))
@@ -807,7 +811,18 @@ namespace Oxide.Plugins
 
 			return pastedEntities;
 		}
-
+		
+		//TODO
+		
+		private void PastebinSend(BasePlayer player, string name, string text, string api_dev_key = "a30aa0c4ac9c29b8b2a016114023a687")
+		{
+            webrequest.Enqueue("https://pastebin.com/api/api_post.php", $"api_option=paste&api_paste_private=1&api_paste_name={name}&api_paste_expire_date=N&api_paste_format=json&api_dev_key={api_dev_key}&api_paste_code={text}", (code, response) =>
+            {
+                if(!(response == null && code == 200))			
+                    SendReply(player, Lang("LINK_ON_BUILDING", player.UserIDString) + response);						
+            }, this, RequestMethod.POST);
+		}
+		
 		private List<Dictionary<string, object>> PreLoadData(List<object> entities, Vector3 startPos, float RotationCorrection, bool deployables, bool inventories, bool auth, bool vending)
 		{
 			var eulerRotation = new Vector3(0f, RotationCorrection, 0f);
@@ -1078,8 +1093,10 @@ namespace Oxide.Plugins
 			return Paste(preloadData, startPos, player);
 		}
 
-		private void TryPasteSlots(BaseEntity ent, Dictionary<string, object> structure)
+		private List<BaseEntity> TryPasteSlots(BaseEntity ent, Dictionary<string, object> structure)
 		{
+			List<BaseEntity> entitySlots = new List<BaseEntity>();
+			
 			foreach(BaseEntity.Slot slot in checkSlots)
 			{
 				string slotName = slot.ToString().ToLower();
@@ -1100,6 +1117,8 @@ namespace Oxide.Plugins
 
 				ent.SetSlot(slot, slotEntity);
 
+				entitySlots.Add(slotEntity);
+				
 				if(slotName == "lock" && slotData.ContainsKey("code"))
 				{
 					if(slotEntity.GetComponent<CodeLock>())
@@ -1151,6 +1170,8 @@ namespace Oxide.Plugins
 					}
 				}
 			}
+			
+			return entitySlots;
 		}
 
 		private object TryPasteBack(string filename, BasePlayer player, string[] args)
@@ -1174,7 +1195,7 @@ namespace Oxide.Plugins
 		}
 
 		//Сhat commands
-
+		
 		[ChatCommand("copy")]
 		private void cmdChatCopy(BasePlayer player, string command, string[] args)
 		{
@@ -1266,7 +1287,7 @@ namespace Oxide.Plugins
 			else
 				SendReply(player, Lang("UNDO_SUCCESS", player.UserIDString));
 		}
-
+		
 		//Console commands [From Server]
 
 		[ConsoleCommand("pasteback")]
@@ -1373,6 +1394,10 @@ namespace Oxide.Plugins
 				{"en", "Something is blocking the paste"},
 				{"ru", "Что-то препятствует вставке"},
 			}},
+			{"LINK_ON_BUILDING", new Dictionary<string, string>() {
+				{"en", "Link on building: "},
+				{"ru", "Ссылка на постройку: "},
+			}},			
 		};
 	}
 }
