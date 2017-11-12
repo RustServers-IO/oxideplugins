@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.1.12", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.1.13", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
