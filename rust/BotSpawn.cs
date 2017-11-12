@@ -11,16 +11,17 @@ using System.Globalization;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using UnityEngine.SceneManagement;
-using Facepunch; 
+using Facepunch;
+using ProtoBuf;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.2.7", ResourceId = 2580)]
-
-    [Description("Spawn Bots with kits at monuments.")]
+    [Info("BotSpawn", "Steenamaroo", "1.2.8", ResourceId = 2580)]
     
-    class BotSpawn : RustPlugin
+    [Description("Spawn Bots with kits at monuments.")]
 
+	
+    class BotSpawn : RustPlugin
     {
         [PluginReference]
         Plugin Vanish, Kits;
@@ -114,46 +115,36 @@ namespace Oxide.Plugins
                     return true;
         }
     
+    
+	void OnPlayerDropActiveItem(BasePlayer player, Item item)
+	{
+	    if (player as NPCPlayer != null)
+            {
+                NPCPlayerApex botapex = player as NPCPlayerApex;
+                
+            if (TempRecord.NPCPlayers.ContainsKey(botapex) && !configData.Options.Bots_Drop_Weapons)
+            {
+                item.Remove(0f);
+                return;
+                }
+            }   
+	}
+    
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            if (entity as NPCPlayer != null)
-            {
-                NPCPlayerApex botapex = entity as NPCPlayerApex;
-                
-                if (TempRecord.NPCPlayers.ContainsKey(botapex))
-                {
-                    if (TempRecord.NPCPlayers[botapex].healthSurplus > 100)
-                    {
-                    TempRecord.NPCPlayers[botapex].healthSurplus = TempRecord.NPCPlayers[botapex].healthSurplus - (info.damageTypes.Total() / 2);
-                    info.damageTypes.ScaleAll(0);
-                    }
-                    
-                    NextTick(() =>
-                    {
-                        if (botapex == null)return;
-                        if (info.damageTypes.Total() > entity.health && !configData.Options.Bots_Drop_Weapons)
-                        {
-                            botapex.svActiveItemID = 0u;
-                            botapex.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                            return;
-                        }
-                    });
-                }
-            }
-                            
-            //bool chute;                       //commented awaiting changes in Rust.
-            //NPCPlayerApex botapex;
-            //if (entity is NPCPlayer)
-            //{
-            //    botapex = entity.GetComponent<NPCPlayerApex>();
-            //        if (TempRecord.NPCPlayers.ContainsKey(botapex))
-            //        {
-            //            if (TempRecord.NPCPlayers[botapex].invincible)
-            //            foreach (var child in botapex.children)
-            //            if (child.ToString().Contains("parachute"))
-            //            return true;
-            //        }
-            //}
+	//bool chute;                       //commented awaiting changes in Rust.
+	//NPCPlayerApex botapex;
+	//if (entity is NPCPlayer)
+	//{
+	//    botapex = entity.GetComponent<NPCPlayerApex>();
+	//	if (TempRecord.NPCPlayers.ContainsKey(botapex))
+	//	{
+	//	    if (TempRecord.NPCPlayers[botapex].invincible)
+	//	    foreach (var child in botapex.children)
+	//	    if (child.ToString().Contains("parachute"))
+	//	    return true;
+	//	}
+	//}
             
             if (entity is NPCPlayer && info.Initiator is BasePlayer)
             {
@@ -207,10 +198,18 @@ namespace Oxide.Plugins
         void OnEntityDeath(BaseEntity entity)
         {
             string respawnLocationName = "";
-            BasePlayer Scientist = null;
-            if (entity is NPCPlayer)
+            NPCPlayerApex Scientist = null;
+            if (entity is NPCPlayerApex)
             {
-                Scientist = entity as NPCPlayer;
+                
+                Scientist = entity as NPCPlayerApex;
+                if (TempRecord.dontRespawn.Contains(Scientist.userID))
+                {
+                    TempRecord.dontRespawn.Remove(Scientist.userID);
+                    TempRecord.NPCPlayers.Remove(Scientist);
+                    return;
+                }
+                
                 foreach (var bot in TempRecord.NPCPlayers)
                 {
                     if (bot.Value.botID == Scientist.userID)
@@ -246,7 +245,7 @@ namespace Oxide.Plugins
             return Facepunch.RandomUsernames.Get((int)(v % 2147483647uL));
         }
 
-		BaseEntity InstantiateSci(Vector3 position, Quaternion rotation, bool murd) // Spawn population spam fix - credit Fuji
+        BaseEntity InstantiateSci(Vector3 position, Quaternion rotation, bool murd) // Spawn population spam fix - credit Fuji
         {
             string prefabname = "assets/prefabs/npc/scientist/scientist.prefab";
             if (murd == true)
@@ -268,26 +267,28 @@ namespace Oxide.Plugins
 
         void SpawnSci(string name, MonumentSettings settings, string type = null)
         {
+
             var murd = settings.Murderer;
-            var pos = settings.Location;
+            var pos = new Vector3 (settings.LocationX, settings.LocationY, settings.LocationZ);
             var zone = settings;
 
                 int X = rnd.Next((-zone.Radius/2), (zone.Radius/2));
                 int Z = rnd.Next((-zone.Radius/2), (zone.Radius/2));
                 int dropX = rnd.Next(5, 10);
                 int dropZ = rnd.Next(5, 10);
-                int Y = 100;
-                //int Y = rnd.Next(zone.Spawn_Height, (zone.Spawn_Height + 50));
+		int Y = 100;
+	    //int Y = rnd.Next(zone.Spawn_Height, (zone.Spawn_Height + 50));
                 var CentrePos = new Vector3((pos.x + X),200,(pos.z + Z));    
                 Quaternion rot = Quaternion.Euler(0, 0, 0);
                 Vector3 newPos = (CalculateGroundPos(CentrePos));
-                //if (zone.Chute)newPos =  newPos + new Vector3(0,Y,0);  //commented awaiting changes in Rust.
-                //if (type == "AirDrop" && zone.Chute) newPos = new Vector3((pos.x + dropX),pos.y,(pos.z + dropZ));
-				//NPCPlayer entity = GameManager.server.CreateEntity("assets/prefabs/npc/scientist/scientist.prefab", newPos, rot, true) as NPCPlayer;
+	    //if (zone.Chute)newPos =  newPos + new Vector3(0,Y,0);  //commented awaiting changes in Rust.
+	    //if (type == "AirDrop" && zone.Chute) newPos = new Vector3((pos.x + dropX),pos.y,(pos.z + dropZ));
+		//NPCPlayer entity = GameManager.server.CreateEntity("assets/prefabs/npc/scientist/scientist.prefab", newPos, rot, true) as NPCPlayer;
 
                 NPCPlayer entity = (NPCPlayer)InstantiateSci(newPos, rot, murd);
-				var botapex = entity.GetComponent<NPCPlayerApex>();                
-                botapex.Spawn();
+                    
+                    var botapex = entity.GetComponent<NPCPlayerApex>();
+                    botapex.Spawn();
 
                 if (zone.Disable_Radio)
                 botapex.GetComponent<FacepunchBehaviour>().CancelInvoke(new Action(botapex.RadioChatter));
@@ -295,24 +296,58 @@ namespace Oxide.Plugins
                 TempRecord.NPCPlayers.Add(botapex, new botData()
                 {
                 spawnPoint = newPos,
-                //invincible = zone.Invincible_In_Air,
+		//invincible = zone.Invincible_In_Air,
                 accuracy = zone.Bot_Accuracy,
                 damage = zone.Bot_Damage,
                 botID = entity.userID,
                 bot = entity,
-                healthSurplus = zone.BotHealth,
                 monumentName = name,
                 });
 
-            
-                no_of_AI++;
+                int suicInt = rnd.Next((configData.Options.Suicide_Timer), (configData.Options.Suicide_Timer + 10));
                 
+                if (type == "AirDrop" || type == "Attack")
+                {
+                TempRecord.dontRespawn.Add(botapex.userID);
+                timer.Once(suicInt, () =>
+                {
+                    if (TempRecord.NPCPlayers.ContainsKey(botapex))
+                    {
+                        if (botapex != null)
+                        {
+                        OnEntityDeath(botapex);
+                        Effect.server.Run("assets/prefabs/weapons/rocketlauncher/effects/rocket_explosion.prefab", botapex.transform.position);
+                        botapex.Kill();
+                        }
+                        else
+                        {
+                            TempRecord.dontRespawn.Remove(botapex.userID);
+                            TempRecord.NPCPlayers.Remove(botapex);
+                            return;
+                        }
+                    }
+                    else return; 
+                });
+                }
+                no_of_AI++;
+
                 if (zone.Kit != "default")
                 {
+                    object checkKit = (Kits.CallHook("GetKitInfo", zone.Kit));
+                    if (checkKit == null)
+                    {
+                        PrintWarning("Kit does not exist - Defaulting to 'Scientist'.");
+                        return;
+                    }
+                    else
+                    {
                     entity.inventory.Strip(); 
-                    Kits?.Call($"GiveKit", entity, zone.Kit);
+                    Kits?.Call($"TryGiveKit", entity, zone.Kit);
+                    }
                 }
-                
+
+                entity.health = zone.BotHealth;
+		
                 if (zone.BotName == "randomname")
                 {
                 entity.displayName = Get(entity.userID);
@@ -322,33 +357,18 @@ namespace Oxide.Plugins
                 entity.displayName = zone.BotName;
                 }
                 SetFiringRange(botapex, zone.Bot_Firing_Range);
-                //if (zone.Chute)                   //commented awaiting changes in Rust.
-                //{
-                //var Chute = GameManager.server.CreateEntity("assets/prefabs/misc/parachute/parachute.prefab", newPos, rot);
-                //Chute.gameObject.Identity();
-                //Chute.SetParent(botapex, "parachute");
-                //Chute.Spawn();
-                //float x = Convert.ToSingle(GetRandomNumber(-0.16, 0.16));
-                //float z = Convert.ToSingle(GetRandomNumber(-0.16, 0.16));
-                //float varySpeed = Convert.ToSingle(GetRandomNumber(0.4, 0.8));
-                //Drop(botapex, Chute, zone, x, varySpeed, z);
-                //}         
+	//if (zone.Chute)                   //commented awaiting changes in Rust.
+	//{
+	//var Chute = GameManager.server.CreateEntity("assets/prefabs/misc/parachute/parachute.prefab", newPos, rot);
+	//Chute.gameObject.Identity();
+	//Chute.SetParent(botapex, "parachute");
+	//Chute.Spawn();
+	//float x = Convert.ToSingle(GetRandomNumber(-0.16, 0.16));
+	//float z = Convert.ToSingle(GetRandomNumber(-0.16, 0.16));
+	//float varySpeed = Convert.ToSingle(GetRandomNumber(0.4, 0.8));
+	//Drop(botapex, Chute, zone, x, varySpeed, z);
+	//}         
 
-		    int suicInt = rnd.Next((configData.Options.Suicide_Timer), (configData.Options.Suicide_Timer + 10));
-		    
-		    if (type == "AirDrop" || type == "Attack")
-		    {
-			timer.Once(suicInt, () =>
-			{
-			    if (TempRecord.NPCPlayers.ContainsKey(botapex))
-			    {
-                    Effect.server.Run("assets/prefabs/weapons/rocketlauncher/effects/rocket_explosion.prefab", botapex.transform.position);
-                    OnEntityDeath(botapex);
-                    botapex.Kill();
-			    }
-			    else return;
-			});
-		    }
         }
 
         void SetFiringRange(NPCPlayerApex botapex, int range)
@@ -356,49 +376,90 @@ namespace Oxide.Plugins
             if (botapex == null)
             {        
                 TempRecord.NPCPlayers.Remove(botapex);
+                TempRecord.dontRespawn.Remove(botapex.userID);
                 return;
-            }                
-            AttackEntity heldEntity = botapex.GetHeldEntity() as AttackEntity;
-            if (heldEntity != null)
-            {
-                    var heldMelee = heldEntity as BaseMelee;
-                    var heldTorchWeapon = heldEntity as TorchWeapon;
-                    if (heldMelee != null || heldTorchWeapon != null)
-                       heldEntity.effectiveRange = 1; 
-                    else
-                        heldEntity.effectiveRange = range;
-            return;
             }
+
+            var heldEntity = botapex.GetActiveItem();
+            if (botapex.svActiveItemID != 0)
+            {
+                    List<int> weapons = new List<int>(); //check all their weapons
+                    foreach (Item item in botapex.inventory.containerBelt.itemList)
+                    {
+                        if (item.GetHeldEntity() as BaseProjectile != null || item.GetHeldEntity() as BaseMelee != null || item.GetHeldEntity() as TorchWeapon != null)
+                        {
+                            weapons.Add(Convert.ToInt16(item.position));
+                        }
+                    }
+
+                    if (weapons.Count == 0)
+                    {
+                        Puts("No suitable weapon found in kit.");
+                        return;
+                    }
+                int index = rnd.Next(weapons.Count);
+                
+                foreach (Item item in botapex.inventory.containerBelt.itemList) //pick one at random
+                {
+                    
+                    if (item.position == weapons[index])
+                    {
+                    var UID = botapex.inventory.containerBelt.GetSlot(weapons[index]).uid;
+                    Item activeItem = item;
+                    botapex.svActiveItemID = 0;
+                    botapex.inventory.UpdatedVisibleHolsteredItems();
+                    HeldEntity held = activeItem.GetHeldEntity() as HeldEntity;
+                    botapex.svActiveItemID = UID;
+                    botapex.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+                    held.SetHeld(true);
+                    botapex.svActiveItemID = UID;
+                    botapex.inventory.UpdatedVisibleHolsteredItems();
+                    }
+                }
+                
+                AttackEntity heldGun = botapex.GetHeldEntity() as AttackEntity;
+                if (heldGun != null)
+                {
+                    var heldMelee = heldGun as BaseMelee;
+                    var heldTorchWeapon = heldGun as TorchWeapon;
+                    if (heldMelee != null || heldTorchWeapon != null)
+                       heldGun.effectiveRange = 1; 
+                    else
+                        heldGun.effectiveRange = range;
+                    return;
+                }
+		    }
             else
             {
                 timer.Once(1, () => SetFiringRange(botapex, range));
-            }      
+            }
+
         }
-        //void Drop(NPCPlayer bot, BaseEntity Chute, MonumentSettings zone, float x, float varyY, float z)
-        //{
-        //    if (bot == null) return;
-        //    isInAir = true;
-        //    var gnd = (CalculateGroundPos(bot.transform.position));
-        //    var botapex = bot.GetComponent<NPCPlayerApex>();
-        //    if (bot.transform.position.y > gnd.y)
-        //    {
-        //        float logSpeed = ((bot.transform.position.y / 150f) + varyY);
-        //        bot.transform.position = bot.transform.position + new Vector3(x, (-logSpeed), z);
-        //        timer.Once(0.2f, () =>
-        //        {
-        //            if (TempRecord.NPCPlayers.ContainsKey(botapex))
-        //            Drop(bot, Chute, zone, x, varyY, z);
-        //        });
-        //                        
-        //    }
-        //    else
-        //    {
-        //        isInAir = false;
-        //        botapex.Resume();
-        //        bot.RemoveChild(Chute);
-        //        Chute.Kill();
-        //    }
-        //}
+	//    void Drop(NPCPlayer bot, BaseEntity Chute, MonumentSettings zone, float x, float varyY, float z)
+	//    {
+	//	if (bot == null) return;
+	//	isInAir = true;
+	//	var gnd = (CalculateGroundPos(bot.transform.position));
+	//	var botapex = bot.GetComponent<NPCPlayerApex>();
+	//	if (bot.transform.position.y > gnd.y)
+	//	{
+	//	    float logSpeed = ((bot.transform.position.y / 150f) + varyY);
+	//	    bot.transform.position = bot.transform.position + new Vector3(x, (-logSpeed), z);
+	//	    timer.Once(0.2f, () =>
+	//	    {
+	//		if (TempRecord.NPCPlayers.ContainsKey(botapex))
+	//		Drop(bot, Chute, zone, x, varyY, z);
+	//	    });
+	//			    
+	//	}
+	//	else
+	//	{
+	//	    isInAir = false;
+	//	    botapex.Resume();
+	//	    bot.RemoveChild(Chute);
+	//	    Chute.Kill();
+	//	}
+	//    }
 
 	void OnEntitySpawned(BaseEntity entity)
 	{
@@ -437,6 +498,7 @@ namespace Oxide.Plugins
             dropLocation = (CalculateGroundPos(entity.transform.position));
             List<BaseEntity> entitiesWithinRadius = new List<BaseEntity>();
             Vis.Entities(dropLocation, 50f, entitiesWithinRadius);
+            
             foreach (var BaseEntity in entitiesWithinRadius)
             {
                 if (BaseEntity.name.Contains("grenade.smoke.deployed") && !(configData.Options.Supply_Enabled))
@@ -448,7 +510,9 @@ namespace Oxide.Plugins
                     {
                         timer.Repeat(0f,profile.Value.Bots, () =>
                         {
-                        profile.Value.Location = entity.transform.position;
+                        profile.Value.LocationX = entity.transform.position.x;
+                        profile.Value.LocationY = entity.transform.position.y;
+                        profile.Value.LocationZ = entity.transform.position.z;
                         SpawnSci(profile.Key, profile.Value, "AirDrop");
                         }
                         );
@@ -461,8 +525,8 @@ namespace Oxide.Plugins
         
         object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)//stops bots targetting animals
         {
-            //if ((bool)isInAir && configData.Options.Ai_Falling_Disable)
-            ///return 0f;
+	    //if ((bool)isInAir && configData.Options.Ai_Falling_Disable)
+	    //return 0f;
             BasePlayer victim = null;
             if (entity is BasePlayer)
             {
@@ -524,7 +588,9 @@ namespace Oxide.Plugins
     
             timer.Repeat(0f,profile.Bots, () =>
             {
-            profile.Location = location;
+            profile.LocationX = location.x;
+            profile.LocationY = location.y;
+            profile.LocationZ = location.z;
             SpawnSci(name, profile, "Attack");
             }
             );
@@ -576,6 +642,7 @@ namespace Oxide.Plugins
                     item.Remove();
                 } 
                 TempRecord.NPCPlayers.Remove(bot.Key);
+                TempRecord.dontRespawn.Remove(bot.Value.botID);
                 return;
                 }
             }
@@ -624,9 +691,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Powerplant.Bot_Damage,
                         Disable_Radio = configData.Zones.Powerplant.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Powerplant.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Powerplant.Spawn_Height,
+                        Spawn_Height = configData.Zones.Powerplant.Spawn_Height,
                         Respawn_Timer = configData.Zones.Powerplant.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });             
                     continue;
                     }
@@ -648,9 +717,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Airfield.Bot_Damage,
                         Disable_Radio = configData.Zones.Airfield.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Airfield.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Airfield.Spawn_Height,
+                        Spawn_Height = configData.Zones.Airfield.Spawn_Height,
                         Respawn_Timer = configData.Zones.Airfield.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });    
                     continue;
                     }
@@ -672,9 +743,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Trainyard.Bot_Damage,
                         Disable_Radio = configData.Zones.Trainyard.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Trainyard.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Trainyard.Spawn_Height,
+                        Spawn_Height = configData.Zones.Trainyard.Spawn_Height,
                         Respawn_Timer = configData.Zones.Trainyard.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });              
                     continue;
                     }
@@ -696,9 +769,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Watertreatment.Bot_Damage,
                         Disable_Radio = configData.Zones.Watertreatment.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Watertreatment.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Watertreatment.Spawn_Height,
+                        Spawn_Height = configData.Zones.Watertreatment.Spawn_Height,
                         Respawn_Timer = configData.Zones.Watertreatment.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });     
                     continue;
                     }
@@ -720,9 +795,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Satellite.Bot_Damage,  
                         Disable_Radio = configData.Zones.AirDrop.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.AirDrop.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Satellite.Spawn_Height,
+                        Spawn_Height = configData.Zones.Satellite.Spawn_Height,
                         Respawn_Timer = configData.Zones.Satellite.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });   
                     continue;
                     } 
@@ -744,9 +821,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Dome.Bot_Damage,
                         Disable_Radio = configData.Zones.Dome.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Dome.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Dome.Spawn_Height,
+                        Spawn_Height = configData.Zones.Dome.Spawn_Height,
                         Respawn_Timer = configData.Zones.Dome.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     }); 
                     continue;
                     }
@@ -768,9 +847,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Radtown.Bot_Damage,
                         Disable_Radio = configData.Zones.Radtown.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Radtown.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Radtown.Spawn_Height,
+                        Spawn_Height = configData.Zones.Radtown.Spawn_Height,
                         Respawn_Timer = configData.Zones.Radtown.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });      
                     continue;
                     }
@@ -792,9 +873,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Launchsite.Bot_Damage,
                         Disable_Radio = configData.Zones.Launchsite.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Launchsite.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Launchsite.Spawn_Height,
+                        Spawn_Height = configData.Zones.Launchsite.Spawn_Height,
                         Respawn_Timer = configData.Zones.Launchsite.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     }); 
                     continue;
                     }
@@ -816,9 +899,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.MilitaryTunnel.Bot_Damage,  
                         Disable_Radio = configData.Zones.MilitaryTunnel.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.MilitaryTunnel.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.MilitaryTunnel.Spawn_Height,
+                        Spawn_Height = configData.Zones.MilitaryTunnel.Spawn_Height,
                         Respawn_Timer = configData.Zones.MilitaryTunnel.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     }); 
                     continue;
                     }
@@ -840,9 +925,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Harbor1.Bot_Damage,  
                         Disable_Radio = configData.Zones.Harbor1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Harbor1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Harbor1.Spawn_Height,
+                        Spawn_Height = configData.Zones.Harbor1.Spawn_Height,
                         Respawn_Timer = configData.Zones.Harbor1.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });     
                     continue;
                     }
@@ -864,9 +951,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Harbor2.Bot_Damage,  
                         Disable_Radio = configData.Zones.Harbor2.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Harbor2.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Harbor2.Spawn_Height,
+                        Spawn_Height = configData.Zones.Harbor2.Spawn_Height,
                         Respawn_Timer = configData.Zones.Harbor2.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });             
                     continue;
                     }
@@ -888,9 +977,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.GasStation.Bot_Damage,  
                         Disable_Radio = configData.Zones.GasStation.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.GasStation.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.GasStation.Spawn_Height,
+                        Spawn_Height = configData.Zones.GasStation.Spawn_Height,
                         Respawn_Timer = configData.Zones.GasStation.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });
                     gasstation++;
                     continue;
@@ -913,9 +1004,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.GasStation1.Bot_Damage,  
                         Disable_Radio = configData.Zones.GasStation1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.GasStation1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.GasStation1.Spawn_Height,
+                        Spawn_Height = configData.Zones.GasStation1.Spawn_Height,
                         Respawn_Timer = configData.Zones.GasStation1.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });
                     gasstation++;
                     continue;
@@ -938,9 +1031,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.SuperMarket.Bot_Damage,  
                         Disable_Radio = configData.Zones.SuperMarket.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.SuperMarket.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.SuperMarket.Spawn_Height,
+                        Spawn_Height = configData.Zones.SuperMarket.Spawn_Height,
                         Respawn_Timer = configData.Zones.SuperMarket.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });
                     spermket++;
                     continue;
@@ -963,9 +1058,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.SuperMarket1.Bot_Damage,  
                         Disable_Radio = configData.Zones.SuperMarket1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.SuperMarket1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.SuperMarket1.Spawn_Height,
+                        Spawn_Height = configData.Zones.SuperMarket1.Spawn_Height,
                         Respawn_Timer = configData.Zones.SuperMarket1.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });
                     spermket++;
                     continue;
@@ -988,9 +1085,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Lighthouse.Bot_Damage,
                         Disable_Radio = configData.Zones.Lighthouse.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Lighthouse.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Lighthouse.Spawn_Height,
+                        Spawn_Height = configData.Zones.Lighthouse.Spawn_Height,
                         Respawn_Timer = configData.Zones.Lighthouse.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });             
                     lighthouse++;
                     continue;
@@ -1013,9 +1112,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Lighthouse1.Bot_Damage,
                         Disable_Radio = configData.Zones.Lighthouse1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Lighthouse1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Lighthouse1.Spawn_Height,
+                        Spawn_Height = configData.Zones.Lighthouse1.Spawn_Height,
                         Respawn_Timer = configData.Zones.Lighthouse1.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });     
                     lighthouse++;
                     continue;
@@ -1038,9 +1139,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Lighthouse2.Bot_Damage,
                         Disable_Radio = configData.Zones.Lighthouse2.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Lighthouse2.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Lighthouse2.Spawn_Height,
+                        Spawn_Height = configData.Zones.Lighthouse2.Spawn_Height,
                         Respawn_Timer = configData.Zones.Lighthouse2.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });     
                     lighthouse++;
                     continue;
@@ -1063,9 +1166,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Warehouse.Bot_Damage,
                         Disable_Radio = configData.Zones.Warehouse.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Warehouse.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Warehouse.Spawn_Height,
+                        Spawn_Height = configData.Zones.Warehouse.Spawn_Height,
                         Respawn_Timer = configData.Zones.Warehouse.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });             
                     warehouse++;
                     continue;
@@ -1088,9 +1193,11 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Warehouse1.Bot_Damage,
                         Disable_Radio = configData.Zones.Warehouse1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Warehouse1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Warehouse1.Spawn_Height,
+                        Spawn_Height = configData.Zones.Warehouse1.Spawn_Height,
                         Respawn_Timer = configData.Zones.Warehouse1.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });     
                     warehouse++;
                     continue;
@@ -1113,18 +1220,20 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Warehouse2.Bot_Damage,
                         Disable_Radio = configData.Zones.Warehouse2.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Warehouse2.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Warehouse2.Spawn_Height,
+                        Spawn_Height = configData.Zones.Warehouse2.Spawn_Height,
                         Respawn_Timer = configData.Zones.Warehouse2.Respawn_Timer,
-                        Location = pos,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     });     
                     warehouse++;
                     continue;
                     }
-                    if (gobject.name.Contains("supermarket_1") && warehouse > 2)
+                    if (gobject.name.Contains("warehouse") && warehouse > 2)
                     continue;
-                    if (gobject.name.Contains("supermarket_1") && lighthouse > 2)
+                    if (gobject.name.Contains("lighthouse") && lighthouse > 2)
                     continue;
-                    if (gobject.name.Contains("supermarket_1") && gasstation > 1)
+                    if (gobject.name.Contains("gas_station_1") && gasstation > 1)
                     continue;
                     if (gobject.name.Contains("supermarket_1") && spermket > 1)
                     continue;
@@ -1145,9 +1254,11 @@ namespace Oxide.Plugins
                     Bot_Damage = configData.Zones.AirDrop.Bot_Damage,
                     Disable_Radio = configData.Zones.AirDrop.Disable_Radio,
                     //Invincible_In_Air = configData.Zones.AirDrop.Invincible_In_Air,
-                    Location = new Vector3(0,0,0),
+                    LocationX = 0f,
+                    LocationY = 0f,
+                    LocationZ = 0f,
                     Respawn_Timer = 10,
-                    //Spawn_Height = 100,
+                    Spawn_Height = 100,
                 });     
             
             foreach (var profile in storedData.CustomProfiles)
@@ -1184,28 +1295,28 @@ namespace Oxide.Plugins
             Puts($"There are {total} bots.");
         }
         
-        [ConsoleCommand("bot.stats")]
-        void cmdBotStats()
-        {
-            foreach(var botapex in GameObject.FindObjectsOfType<NPCPlayerApex>())
-            {
-                Puts($"agentTypeIndex = {botapex.agentTypeIndex}");
-                Puts($"AttackTarget = {botapex.AttackTarget}");
-                Puts($"IsStopped = {botapex.IsStopped}");
-                Puts($"GuardPosition = {botapex.GuardPosition}");
-                Puts($"AttackReady = {botapex.AttackReady()}");
-                Puts($"WeaponAttackRange = {botapex.WeaponAttackRange()}");
-                Puts($"Size = {botapex.Stats.Size}");
-                Puts($"Speed = {botapex.Stats.Speed}");
-                Puts($"Acceleration = {botapex.Stats.Acceleration}");
-                Puts($"TurnSpeed = {botapex.Stats.TurnSpeed}");
-                Puts($"VisionRange = {botapex.Stats.VisionRange}");
-                Puts($"VisionCone = {botapex.Stats.VisionCone}");
-                Puts($"Hostility = {botapex.Stats.Hostility}");
-                Puts($"Defensiveness = {botapex.Stats.Defensiveness}");
-                Puts($"AggressionRange = {botapex.Stats.AggressionRange}");
-            }
-        }        
+        //[ConsoleCommand("bot.stats")]
+        //void cmdBotStats()
+        //{
+        //    foreach(var botapex in GameObject.FindObjectsOfType<NPCPlayerApex>())
+        //    {
+        //        Puts($"agentTypeIndex = {botapex.agentTypeIndex}");
+        //        Puts($"AttackTarget = {botapex.AttackTarget}");
+        //        Puts($"IsStopped = {botapex.IsStopped}");
+        //        Puts($"GuardPosition = {botapex.GuardPosition}");
+        //        Puts($"AttackReady = {botapex.AttackReady()}");
+        //        Puts($"WeaponAttackRange = {botapex.WeaponAttackRange()}");
+        //        Puts($"Size = {botapex.Stats.Size}");
+        //        Puts($"Speed = {botapex.Stats.Speed}");
+        //        Puts($"Acceleration = {botapex.Stats.Acceleration}");
+        //        Puts($"TurnSpeed = {botapex.Stats.TurnSpeed}");
+        //        Puts($"VisionRange = {botapex.Stats.VisionRange}");
+        //        Puts($"VisionCone = {botapex.Stats.VisionCone}");
+        //        Puts($"Hostility = {botapex.Stats.Hostility}");
+        //        Puts($"Defensiveness = {botapex.Stats.Defensiveness}");
+        //        Puts($"AggressionRange = {botapex.Stats.AggressionRange}");
+        //    }
+        //}        
         
         [ChatCommand("botspawn")]
         void botspawn(BasePlayer player, string command, string[] args)
@@ -1235,11 +1346,15 @@ namespace Oxide.Plugins
                         SendReply(player, "<color=orange>" + lang.GetMessage("Title", this) + "</color>" + lang.GetMessage("alreadyexists", this),name);
                         return;
                     }
+                    Vector3 pos = player.transform.position;
+
                     var customSettings = new MonumentSettings()
                     {
                         Activate = false,
                         BotName = "randomname",
-                        Location = player.transform.position,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
                     };
                     
                     storedData.CustomProfiles.Add(name, customSettings);
@@ -1253,7 +1368,9 @@ namespace Oxide.Plugins
                     var name = args[1];
                     if (storedData.CustomProfiles.ContainsKey(name))
                     {
-                        storedData.CustomProfiles[name].Location = player.transform.position;
+                        storedData.CustomProfiles[name].LocationX = player.transform.position.x;
+                        storedData.CustomProfiles[name].LocationX = player.transform.position.y;
+                        storedData.CustomProfiles[name].LocationX = player.transform.position.z;
                         Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData);
                         SendReply(player, "<color=orange>" + lang.GetMessage("Title", this) + "</color>" + lang.GetMessage("custommoved", this),name);
                     }
@@ -1320,26 +1437,26 @@ namespace Oxide.Plugins
             SendReply(player, "<color=orange>" + lang.GetMessage("Title", this) + "</color>" + lang.GetMessage("error", this));
         }
         #endregion
-        
+	
         #region Config
         private ConfigData configData;
         
         class TempRecord
         {
             public static Dictionary<NPCPlayerApex, botData> NPCPlayers = new Dictionary<NPCPlayerApex, botData>();
+            public static List<ulong> dontRespawn = new List<ulong>();
             public static Dictionary<string, MonumentSettings> MonumentProfiles = new Dictionary<string, MonumentSettings>();
             public static List<ulong> DeadNPCPlayerIds = new List<ulong>();
         }
         class botData
         {
             public Vector3 spawnPoint;
-            //public bool invincible;
+            public bool invincible;
             public int accuracy;
             public float damage;
             public ulong botID;
             public BasePlayer bot;
             public string monumentName;
-            public float healthSurplus;
         }
         class CustomSettings
         {
@@ -1355,7 +1472,7 @@ namespace Oxide.Plugins
             public int Bot_Accuracy = 4;
             public float Bot_Damage = 0.4f;     
             //public bool Invincible_In_Air = true;
-            //public int Spawn_Height = 100;
+            public int Spawn_Height = 100;
             public int Respawn_Timer = 60;
             public bool Disable_Radio = true;
         }
@@ -1373,10 +1490,12 @@ namespace Oxide.Plugins
             public int Bot_Accuracy = 4;
             public float Bot_Damage = 0.4f;     
             //public bool Invincible_In_Air = true;
-            ///public int Spawn_Height = 100;
+            public int Spawn_Height = 100;
             public int Respawn_Timer = 60;
             public bool Disable_Radio = true;
-            public Vector3 Location;
+            public float LocationX;
+            public float LocationY;
+            public float LocationZ;
         }
         class AirDropSettings
         {
@@ -1499,7 +1618,7 @@ namespace Oxide.Plugins
                     Warehouse2 = new CustomSettings{},
                     Lighthouse = new CustomSettings{},
                     Lighthouse1 = new CustomSettings{},
-                    Lighthouse2 = new CustomSettings{},
+                    Lighthouse2 = new CustomSettings{}, 
                     AirDrop = new AirDropSettings{}
                }
             };
