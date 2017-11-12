@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.4.5", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.4.6", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -158,6 +158,7 @@ namespace Oxide.Plugins
 	
 		void OnLootEntity(BasePlayer player, BaseEntity entity)
 		{
+			if(entity == null || player == null) return;
 			if(player.IsAdmin && AdminCanLoot) return;
 			if(permission.UserHasPermission(player.userID.ToString(), AdmPerm)) return;
 			if(UseZoneManager && ZoneManager != null)
@@ -192,8 +193,7 @@ namespace Oxide.Plugins
 				StopLooting(player, "OnTryLootBackpack");	
 				return;
 			}
-			var st = entity.GetComponent<StorageContainer>();
-			if (neededShortNames.Contains(st?.inventory.entityOwner.ShortPrefabName))
+			if (neededShortNames.Contains(entity.ShortPrefabName))	
 			{
 				List<BaseCombatEntity> entlist = new List<BaseCombatEntity>();
 				Vis.Entities<BaseCombatEntity>(player.transform.position, 10f, entlist);
