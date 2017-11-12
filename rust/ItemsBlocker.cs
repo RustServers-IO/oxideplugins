@@ -12,13 +12,14 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("ItemsBlocker", "Vlad-00003", "3.1.0", ResourceId = 2407)]
+    [Info("ItemsBlocker", "Vlad-00003", "3.1.11", ResourceId = 2407)]
     [Description("Prevents some items from being used for a limited period of time.")]
 
     class ItemsBlocker : RustPlugin
     {
         #region Vars
-        private string Image = null;
+        //private string Image = null;
+        private Dictionary<string, string> Image =  new Dictionary<string, string>();
         private PluginConfig config;
         [PluginReference]
         Plugin Duel;
@@ -233,6 +234,7 @@ namespace Oxide.Plugins
                     config.Gui.Image.Image = "file://" + Interface.Oxide.DataDirectory + Path.DirectorySeparatorChar + config.Gui.Image.Image;
                 }
             LoadData();
+            permission.RegisterPermission("itemsblocker.refresh", this);
         }
         protected override void SaveConfig()
         {
@@ -245,17 +247,28 @@ namespace Oxide.Plugins
         {
             try
             {
-                Image = Interface.Oxide.DataFileSystem.ReadObject<string>(Title);
+                Image = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, string>>(Title);
             }
             catch (Exception ex)
             {
-                if(ex is MissingMethodException)
+                if(ex is JsonSerializationException)
                 {
-                    Image = null;
-                    return;
+                    try
+                    {
+                        string old = Interface.Oxide.DataFileSystem.ReadObject<string>(Title);
+                        Image[config.Gui.Image.Image] = old;
+                        SaveData();
+                        return;
+                    }
+                    catch(Exception ex1)
+                    {
+                        PrintWarning("Failed to convert old data fromat to the new. Data wiped.\n{0}", ex1.Message);
+                        Image = new Dictionary<string, string>();
+                        return;
+                    }
                 }
-                RaiseError($"Failed to load data file. ({ex.Message})\nThe image would now be re-downloaded.");
-                Image = null;
+                PrintWarning("Failed to load datafile (is the file corrupt?)\n{0}", ex.Message);
+                Image = new Dictionary<string, string>();
             }
         }
         private void SaveData()
@@ -267,7 +280,7 @@ namespace Oxide.Plugins
         #region Initialization and quiting
         void OnServerInitialized()
         {
-            if (Image == null && !string.IsNullOrEmpty(config.Gui.Image.Image))
+            if (!Image.ContainsKey(config.Gui.Image.Image))
                 DownloadImage();
             else
                 OnScreenPanel(true);
@@ -299,7 +312,7 @@ namespace Oxide.Plugins
                 ["Ammo blocked"] = "Вид боеприпасов, которые вы пытаетесь использовать заблокирован!"
             }, this, "ru");
         }
-        string GetMsg(string key, BasePlayer player = null) => lang.GetMessage(key, this, player == null ? null : player.UserIDString);
+        string GetMsg(string key, BasePlayer player = null) => lang.GetMessage(key, this, player?.UserIDString);
         string GetMsg(string key) => lang.GetMessage(key, this);
         #endregion
 
@@ -382,8 +395,7 @@ namespace Oxide.Plugins
         {
             if (!InBlock) return;
             if (InDuel(player) || IsNPC(player)) return;
-            var ammo = projectile.primaryMagazine.ammoType;
-            if (config.BlockedAmmo.Contains(ammo.displayName.english) || config.BlockedAmmo.Contains(ammo.shortname))
+            if(IsAmmoBlocked(player, projectile))
             {
                 SendToChat(player, GetMsg("Ammo blocked", player) + GetMsg("BlockTimeLeft", player));
             }
@@ -394,14 +406,29 @@ namespace Oxide.Plugins
             {
                 if (InDuel(player) || IsNPC(player)) return null;
                 var ammo = projectile.primaryMagazine.ammoType;
-                if (config.BlockedAmmo.Contains(ammo.displayName.english) || config.BlockedAmmo.Contains(ammo.shortname))
+                if (IsAmmoBlocked(player, projectile))
+                {
+                    projectile.SendNetworkUpdateImmediate();
                     return false;
+                }
             }
             return null;
         }
         #endregion
 
         #region Image
+        [ConsoleCommand("ib.refresh")]
+        private void CmdRefresh(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null && arg.Connection.player != null)
+            {
+                BasePlayer player = arg.Connection.player as BasePlayer;
+
+                if (!permission.UserHasPermission(player.UserIDString, "itemsblocker.refresh"))
+                    return;
+            }
+            DownloadImage();
+        }
         private void DownloadImage()
         {
             PrintWarning("Downloading image...");
@@ -421,7 +448,7 @@ namespace Oxide.Plugins
                 {
                     var tex = www.texture;
                     byte[] bytes = tex.EncodeToPNG();
-                    Image = FileStorage.server.Store(www.bytes, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
+                    Image[url] = FileStorage.server.Store(www.bytes, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
                     SaveData();
                     PrintWarning("Image download is complete.");
                     OnScreenPanel(true);
@@ -490,7 +517,7 @@ namespace Oxide.Plugins
                 }
                 container.Add(new CuiElement
                 {
-                    Name = Name == null ? CuiHelper.GetGuid() : Name,
+                    Name = Name ?? CuiHelper.GetGuid(),
                     Parent = Parent,
                     Components = { ImageComp, new CuiRectTransformComponent { AnchorMin = Amin, AnchorMax = Amax } }
                 });
@@ -509,7 +536,7 @@ namespace Oxide.Plugins
                 var Element = new CuiElement
                 {
                     Parent = Parent,
-                    Name = Name == null ? CuiHelper.GetGuid() : Name,
+                    Name = Name ?? CuiHelper.GetGuid(),
                     Components =
                     {
                         new CuiTextComponent { Color = ToRustColor(TextColor), FontSize = FontSize, Text = Text, Align = Anchor },
@@ -528,7 +555,7 @@ namespace Oxide.Plugins
 
         #region Commands
         [ConsoleCommand("ib.close")]
-        private void cmdCloseUI(ConsoleSystem.Arg arg)
+        private void CmdCloseUI(ConsoleSystem.Arg arg)
         {
             var player = arg.Player();
             if(player == null)
@@ -592,7 +619,7 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, OnScreenParent);
             var container = new CuiElementContainer();
             UI.CreatePanel(ref container, "Hud", OnScreenParent, config.Gui.OnScreenPanel);
-            UI.CreateImage(ref container, OnScreenParent, null, config.Gui.Image, Image);
+            UI.CreateImage(ref container, OnScreenParent, null, config.Gui.Image, Image[config.Gui.Image.Image]);
             CuiHelper.AddUi(player, container);
             OnScreen.Add(player);
         }
@@ -621,6 +648,25 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
+        private bool IsAmmoBlocked(BasePlayer owner, BaseProjectile proj)
+        {
+            List<Item> currentAmmo = owner.inventory.FindItemIDs(proj.primaryMagazine.ammoType.itemid).ToList();
+            Item newAmmo = null;
+            if (currentAmmo.Count == 0)
+            {
+                List<Item> newAmmoList = new List<Item>();
+                owner.inventory.FindAmmo(newAmmoList, proj.primaryMagazine.definition.ammoTypes);
+                if (newAmmoList.Count == 0)
+                    return false;
+                newAmmo = newAmmoList[0];
+                if (config.BlockedAmmo.Contains(newAmmo.info.displayName.english) || config.BlockedAmmo.Contains(newAmmo.info.shortname))
+                    return true;
+            }
+            newAmmo = currentAmmo[0];
+            if (config.BlockedAmmo.Contains(newAmmo.info.displayName.english) || config.BlockedAmmo.Contains(newAmmo.info.shortname))
+                return true;
+            return false;
+        }
         private bool IsNPC(BasePlayer player)
         {
             //BotSpawn

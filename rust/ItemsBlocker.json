@@ -2,7 +2,7 @@
     "name": "Items Blocker",
     "description": "Prevents some items from being used for a limited period of time. With UI.",
     "author": "Vlad-00003",
-    "version": "3.1.0",
+    "version": "3.1.11",
     "configuration": true,
     "suggest": {
         "BotSpawn": "*",
