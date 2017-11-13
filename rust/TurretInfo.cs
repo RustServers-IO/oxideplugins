@@ -14,7 +14,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("TurretInfo", "ninco90", "1.0.1")]
+    [Info("TurretInfo", "ninco90", "1.0.2")]
     class TurretInfo : RustPlugin
     {
         #region Fields
@@ -91,60 +91,64 @@ namespace Oxide.Plugins
 
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo infos)
         {
-            BasePlayer player = entity as BasePlayer;
-            if (infos.Initiator is AutoTurret)
+            if (entity != null && infos != null)
             {
-                if (entity != null && entity is BasePlayer)
+                BasePlayer player = entity as BasePlayer;
+                if (infos.Initiator is AutoTurret)
                 {
-                    BasePlayer owner = BasePlayer.FindByID(infos.Initiator.OwnerID);
-                    BasePlayer players = BasePlayer.FindByID(entity.ToPlayer().userID);
-                    if (configuration.LOG_ENABLED)
+                    if (entity is BasePlayer)
                     {
-                        Puts(msg("killplayer", player.UserIDString, players.displayName, owner.displayName));
+                        BasePlayer owner = BasePlayer.FindByID(infos.Initiator.OwnerID);
+                        BasePlayer players = BasePlayer.FindByID(entity.ToPlayer().userID);
+                        if (configuration.LOG_ENABLED)
+                        {
+                            Puts(String.Format(GetMessage("killplayer"), players.displayName, owner.displayName));
+                        }
+                        if (configuration.CHAT_ENABLED)
+                        {
+                            PrintToChat(GetMessage("prefix") + String.Format(GetMessage("killplayer"), players.displayName, owner.displayName));
+                        }
+                        PlayerKillsAdd(player.userID.ToString(), infos.Initiator.net.ID.ToString());
                     }
-                    if (configuration.CHAT_ENABLED)
-                    {
-                        PrintToChat(msg("prefix", player.UserIDString) + msg("killplayer", player.UserIDString, players.displayName, owner.displayName));
-                    }
-                    PlayerKillsAdd(player.userID.ToString(), infos.Initiator.net.ID.ToString());
                 }
-            }
-            else
-            {
-                if (entity != null && entity.ShortPrefabName == "autoturret_deployed") {
-                    BasePlayer owner = BasePlayer.FindByID(entity.OwnerID);
-                    BasePlayer killer = infos.Initiator as BasePlayer;
-                    if (killer == null)
+                else
+                {
+                    if (entity.ShortPrefabName == "autoturret_deployed")
                     {
-                        if (configuration.LOG_ENABLED)
+                        BasePlayer owner = BasePlayer.FindByID(entity.OwnerID);
+                        BasePlayer killer = infos.Initiator as BasePlayer;
+                        if (killer == null)
                         {
-                            Puts(msg("killturret", player.UserIDString, owner.displayName));
+                            if (configuration.LOG_ENABLED)
+                            {
+                                Puts(String.Format(GetMessage("killturret"), owner.displayName));
+                            }
+                            if (configuration.CHAT_ENABLED)
+                            {
+                                PrintToChat(GetMessage("prefix") + String.Format(GetMessage("killturret"), player.UserIDString, owner.displayName));
+                            }
                         }
-                        if (configuration.CHAT_ENABLED)
+                        else
                         {
-                            PrintToChat(msg("prefix", player.UserIDString) + msg("killturret", player.UserIDString, owner.displayName));
+                            BasePlayer players = BasePlayer.FindByID(infos.Initiator.ToPlayer().userID);
+                            if (configuration.LOG_ENABLED)
+                            {
+                                Puts(String.Format(GetMessage("killturretplayer"), players.displayName, owner.displayName));
+                            }
+                            if (configuration.CHAT_ENABLED)
+                            {
+                                PrintToChat(GetMessage("prefix") + String.Format(GetMessage("killturretplayer"), players.displayName, owner.displayName));
+                            }
                         }
-                    }
-                    else
-                    {
-                        BasePlayer players = BasePlayer.FindByID(infos.Initiator.ToPlayer().userID);
-                        if (configuration.LOG_ENABLED)
+                        if (configuration.GUI_ENABLED)
                         {
-                            Puts(msg("killturretplayer", player.UserIDString, players.displayName, owner.displayName));
+                            CuiTurretDestroy(owner);
+                            Effect.server.Run("assets/prefabs/npc/autoturret/effects/targetacquired.prefab", owner.transform.position);
+                            timer.Once(6, () =>
+                            {
+                                CuiHelper.DestroyUi(owner, "BlockMsg");
+                            });
                         }
-                        if (configuration.CHAT_ENABLED)
-                        {
-                            PrintToChat(msg("prefix", player.UserIDString) + msg("killturretplayer", player.UserIDString, players.displayName, owner.displayName));
-                        }
-                    }
-                    if (configuration.GUI_ENABLED)
-                    {
-                        CuiTurretDestroy(owner);
-                        Effect.server.Run("assets/prefabs/npc/autoturret/effects/targetacquired.prefab", owner.transform.position);
-                        timer.Once(6, () =>
-                        {
-                            CuiHelper.DestroyUi(owner, "BlockMsg");
-                        });
                     }
                 }
             }
@@ -302,7 +306,7 @@ namespace Oxide.Plugins
         #region Configuration
         struct Configuration
         {
-            public const string GS_CHAT = "CHAT | Show owner of the turret in the global chat [true, false]";
+            public const string GS_CHAT = "CHAT | Show owner of the turret in the global chat [true,false]";
             public const string GS_GUI = "GUI | Display GUI Turret Destroy [true,false]";
             public const string GS_EFFECT = "EFFECT | Show effect when using [true,false]";
             public const string GS_LOG = "LOG | Show Show log in console [true,false]";
@@ -324,19 +328,20 @@ namespace Oxide.Plugins
         T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
         protected override void LoadDefaultConfig()
         {
-            bool effect, chat, gui, log;
+            bool chat, gui, effect, log;
 
-            Config[Configuration.GS_EFFECT] = effect = GetConfig(Configuration.GS_EFFECT, true);
             Config[Configuration.GS_CHAT] = chat = GetConfig(Configuration.GS_CHAT, true);
             Config[Configuration.GS_GUI] = gui = GetConfig(Configuration.GS_GUI, true);
+            Config[Configuration.GS_EFFECT] = effect = GetConfig(Configuration.GS_EFFECT, true);
             Config[Configuration.GS_LOG] = log = GetConfig(Configuration.GS_LOG, true);
 
-            configuration = new Configuration(effect, chat, gui, log);
+            configuration = new Configuration(chat, gui, effect, log);
             SaveConfig();
         }
         #endregion
 
         #region Messaging
+        string GetMessage(string key, string steamId = null) => lang.GetMessage(key, this, steamId);
         string msg(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
         Dictionary<string, string> MessagesEN = new Dictionary<string, string>
         {

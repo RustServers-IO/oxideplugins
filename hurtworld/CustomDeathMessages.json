@@ -1,6 +1,6 @@
 {
     "name": "Custom Death Messages",
-    "description": "Just displays custom death messages",
+    "description": "Displays custom messages on player death",
     "author": "Mr. Blue",
     "version": "1.0.6",
     "configuration": true,
