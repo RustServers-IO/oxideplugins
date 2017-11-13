@@ -2,7 +2,7 @@
     "name": "StaffRoster",
     "description": "Shows the staff roster and availability",
     "author": "Wulf",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/staffroster.2048",
