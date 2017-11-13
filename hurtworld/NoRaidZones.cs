@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoRaidZones", "Swat1801", "1.2.7")]
+    [Info("NoRaidZones", "Swat1801", "1.3.0")]
     [Description("No Raid Zones protects defined zones from raids.")]
     public class NoRaidZones : HurtworldPlugin
     {
@@ -47,13 +47,13 @@ namespace Oxide.Plugins
         {
             if (!_helpers.HasPermission(session, "use"))
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Misc - No Permission", this, session.SteamId.ToString()));
                 return;
             }
             if (args.Length == 0)
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Misc - Help", this, session.SteamId.ToString()).Replace("{name}", "/nrz help"));
                 return;
             }
@@ -61,7 +61,7 @@ namespace Oxide.Plugins
                 _mappings.Where(m => m.Parameter.Equals(args[0], StringComparison.OrdinalIgnoreCase)).ToList();
             if (!mappings.Any())
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Misc - Help", this, session.SteamId.ToString()).Replace("{name}", "/nrz help"));
                 return;
             }
@@ -69,7 +69,7 @@ namespace Oxide.Plugins
             var mapping = mappings.FirstOrDefault(m => m.ArgsLength == parameters.Length);
             if (mapping == null)
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Misc - Syntax", this, session.SteamId.ToString())
                         .Replace("{syntax}",
                             string.Join("\n",
@@ -92,7 +92,7 @@ namespace Oxide.Plugins
                         z.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existZone != null)
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Zone - Exists", this, session.SteamId.ToString())
                         .Replace("{name}", existZone.Name));
                 return;
@@ -100,17 +100,17 @@ namespace Oxide.Plugins
             var cell = Zone.GetCell(session.WorldPlayerEntity.transform.position);
             if (cell <= 0)
             {
-                hurt.SendChatMessage(session, lang.GetMessage("Zone - Not Found", this, session.SteamId.ToString()));
+                hurt.SendChatMessage(session, null, lang.GetMessage("Zone - Not Found", this, session.SteamId.ToString()));
                 return;
             }
             if (!Zone.IsCellOwnedByPlayer(session.Identity, cell))
             {
-                hurt.SendChatMessage(session, lang.GetMessage("Zone - Not Owned", this, session.SteamId.ToString()));
+                hurt.SendChatMessage(session, null, lang.GetMessage("Zone - Not Owned", this, session.SteamId.ToString()));
                 return;
             }
             if (_zones.Any(z => z.AllCells.Contains(cell)))
             {
-                hurt.SendChatMessage(session, lang.GetMessage("Zone - Already", this, session.SteamId.ToString()));
+                hurt.SendChatMessage(session, null, lang.GetMessage("Zone - Already", this, session.SteamId.ToString()));
                 return;
             }
             var zone = new Zone(session.SteamId.ToString(), name, cell);
@@ -120,7 +120,7 @@ namespace Oxide.Plugins
                 zone.FillStakes();
             }
             _zones.Add(zone);
-            hurt.SendChatMessage(session,
+            hurt.SendChatMessage(session, null,
                 lang.GetMessage("Zone - Added", this, session.SteamId.ToString())
                     .Replace("{name}", zone.Name)
                     .Replace("{count}", zone.Bounds.Count.ToString()));
@@ -138,18 +138,18 @@ namespace Oxide.Plugins
                         z.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (zone == null)
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Zone - Unknown", this, session.SteamId.ToString()).Replace("{name}", name));
                 return;
             }
             if (zone.MainCell <= 0)
             {
-                hurt.SendChatMessage(session, lang.GetMessage("Zone - Not Found", this, session.SteamId.ToString()));
+                hurt.SendChatMessage(session, null, lang.GetMessage("Zone - Not Found", this, session.SteamId.ToString()));
                 return;
             }
             if (!Zone.IsCellOwnedByPlayer(session.Identity, zone.MainCell))
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Zone - Auto Removed", this, session.SteamId.ToString())
                         .Replace("{name}", zone.Name));
                 _zones.Remove(zone);
@@ -162,7 +162,7 @@ namespace Oxide.Plugins
             {
                 zone.FillStakes();
             }
-            hurt.SendChatMessage(session,
+            hurt.SendChatMessage(session, null,
                 lang.GetMessage("Zone - Updated", this, session.SteamId.ToString())
                     .Replace("{name}", zone.Name)
                     .Replace("{count}", zone.Bounds.Count.ToString()));
@@ -178,12 +178,12 @@ namespace Oxide.Plugins
                         z.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (zone == null)
             {
-                hurt.SendChatMessage(session,
+                hurt.SendChatMessage(session, null,
                     lang.GetMessage("Zone - Unknown", this, session.SteamId.ToString()).Replace("{name}", name));
                 return;
             }
             _zones.Remove(zone);
-            hurt.SendChatMessage(session,
+            hurt.SendChatMessage(session, null,
                 lang.GetMessage("Zone - Removed", this, session.SteamId.ToString()).Replace("{name}", zone.Name));
             SaveData();
         }
@@ -191,7 +191,7 @@ namespace Oxide.Plugins
         private void CommandList(PlayerSession session, string[] args)
         {
             var zones = _zones.Where(z => z.SteamId.Equals(session.SteamId.ToString())).ToList();
-            hurt.SendChatMessage(session,
+            hurt.SendChatMessage(session, null,
                 zones.Any()
                     ? lang.GetMessage("Zone - List", this, session.SteamId.ToString())
                         .Replace("{names}", string.Join(",", zones.Select(z => z.Name).ToArray()))
@@ -200,7 +200,7 @@ namespace Oxide.Plugins
 
         private void CommandHelp(PlayerSession session, string[] args)
         {
-            hurt.SendChatMessage(session,
+            hurt.SendChatMessage(session, null,
                 lang.GetMessage("Misc - Commands", this, session.SteamId.ToString())
                     .Replace("{commands}",
                         string.Join("\n",
@@ -654,7 +654,7 @@ namespace Oxide.Plugins
                     var session = _helpers.GetSessionBySteamId(zone.SteamId);
                     if (session != null)
                     {
-                        hurt.SendChatMessage(session,
+                        hurt.SendChatMessage(session, null,
                             lang.GetMessage("Zone - Auto Removed", this, session.SteamId.ToString())
                                 .Replace("{name}", zone.Name));
                     }
