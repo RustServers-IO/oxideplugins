@@ -1,0 +1,16 @@
+{
+    "name": "TurretInfo",
+    "description": "Check the authorized players in a AutoTurret and the victims of it.",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/turretinfo.2678",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
