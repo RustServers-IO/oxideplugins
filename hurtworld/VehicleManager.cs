@@ -8,10 +8,9 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("VehicleManager", "SouZa", "1.2.4", ResourceId = 1725)]
+    [Info("VehicleManager", "SouZa", "1.2.5", ResourceId = 1725)]
     [Description("Vehicle customization! You can now install/remove/switch vehicle attachments.")]
-
-    class VehicleManager : HurtworldPlugin
+    public class VehicleManager : HurtworldPlugin
     {
         #region [CLASSES]
         public class PlayerVehicles
@@ -156,7 +155,7 @@ namespace Oxide.Plugins
                 VehicleOwnershipManager vom = Singleton<VehicleOwnershipManager>.Instance;
                 VehicleStatManager vsm = getVSMs(session, vom, allVsm, true)?[0];
 
-                //hurt.SendChatMessage(session, "DEBUG: ", $"{session.WorldPlayerEntity.transform.localPosition}");
+                //hurt.SendChatMessage(session, null, $"{session.WorldPlayerEntity.transform.localPosition}");
             }
         }
 
@@ -166,7 +165,7 @@ namespace Oxide.Plugins
             //Check for permission to use the plugin
             if (!userHasPerm(session, "vehiclemanager.use"))
             {
-                hurt.SendChatMessage(session, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.use"));
+                hurt.SendChatMessage(session, null, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.use"));
                 return;
             }
 
@@ -180,7 +179,7 @@ namespace Oxide.Plugins
             {
                 if (!GetConfig(true, "ShowDistanceCommand"))
                 {
-                    hurt.SendChatMessage(session, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_showDistanceCMD"));
+                    hurt.SendChatMessage(session, null, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_showDistanceCMD"));
                     return;
                 }
                 var playerVSMs = getVSMs(session, vom, allVsm, false);
@@ -192,12 +191,12 @@ namespace Oxide.Plugins
                         string distanceMsg = string.Format("{0:0}m", (int)Math.Ceiling(distance));
                         int index = playerVSM.gameObject.name.IndexOf('(');
                         string vehicleName = playerVSM.gameObject.name.Substring(0, index);
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleDistance").Replace("{vehicle}", vehicleName).Replace("{distance}", distanceMsg));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleDistance").Replace("{vehicle}", vehicleName).Replace("{distance}", distanceMsg));
                     }
                 }
                 else
                 {
-                    hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_noClaim"));
+                    hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_noClaim"));
                 }
             }
             else if (args.Length == 1)
@@ -216,14 +215,14 @@ namespace Oxide.Plugins
                             }
                             if (!vom.HasClaim(session.Identity))
                             {
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_claimWithButtom"));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_claimWithButtom"));
                                 return;
                             }
 
                             List<VehicleStatManager> playerVSM = (from v in allVsm where v.Owner == session.Identity select v).ToList();
                             if (playerVSM.Count >= GetConfig(1, "MaxVehicleClaimsPerPlayer"))
                             {
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_maxClaim").Replace("{number}", playerVSM.Count + ""));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_maxClaim").Replace("{number}", playerVSM.Count + ""));
                                 return;
                             }
 
@@ -234,7 +233,7 @@ namespace Oxide.Plugins
                             Singleton<AlertManager>.Instance.GenericTextNotificationServer("Alerts/Already Owned", session.Player);
                     }
                     else
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notInsideVehicle"));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notInsideVehicle"));
                 }
                 else if (args[0] == "unclaim")
                 {
@@ -256,7 +255,7 @@ namespace Oxide.Plugins
                             Singleton<AlertManager>.Instance.GenericTextNotificationServer("Alerts/Not Owner", session.Player);
                     }
                     else
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notInsideVehicle"));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notInsideVehicle"));
                 }
                 else if (args[0] == "help" || args[0] == "h")
                 {
@@ -274,10 +273,10 @@ namespace Oxide.Plugins
                     };
 
                     foreach (string cmd in commands)
-                        hurt.SendChatMessage(session, cmd);
+                        hurt.SendChatMessage(session, null, cmd);
                 }
                 else
-                    hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
+                    hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
             }
             else if (args.Length == 2 || (args.Length == 3 && (args[2].ToLower() == "l" || args[2].ToLower() == "r")))
             {
@@ -301,13 +300,13 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notOwner"));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notOwner"));
                         return;
                     }
                 }
                 else
                 {
-                    hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notInsideVehicle"));
+                    hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notInsideVehicle"));
                     return;
                 }
                 if (args[0] == "install")
@@ -315,7 +314,7 @@ namespace Oxide.Plugins
                     //Check for permission to install
                     if (!userHasPerm(session, "vehiclemanager.install"))
                     {
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.install"));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.install"));
                         return;
                     }
 
@@ -324,7 +323,7 @@ namespace Oxide.Plugins
                     int slot = -1;
                     if (!int.TryParse(args[1], out slot) || slot < 1 || slot > 8)
                     {
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
                         return;
                     }
                     PlayerInventory playerInventory = session.WorldPlayerEntity.GetComponent<PlayerInventory>();
@@ -340,17 +339,17 @@ namespace Oxide.Plugins
                             if ((vehicleType == "roach" && slotTypeString.Contains("goat"))
                                 || (vehicleType == "goat" && slotTypeString.Contains("roach"))
                                 || (vehicleType == "kanga" && slotTypeString.Contains("kanga")))
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notCorrectVehicleAttachment").Replace("{vehicleType}", vehicleType));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notCorrectVehicleAttachment").Replace("{vehicleType}", vehicleType));
                             else
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notVehicleAttachment"));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_notVehicleAttachment"));
                             return;
                         }
                         if (itemSlotType == ESlotType.RoachSidePanel)
                         {
                             if (args.Length == 2 || (args.Length == 3 && (args[2].ToLower() != "l" && args[2].ToLower() != "r")))
                             {
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_roachSideIncorrect"));
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_roachSideIncorrect"));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
                                 return;
                             }
                         }
@@ -375,13 +374,13 @@ namespace Oxide.Plugins
                                         {
                                             //Vehicle doesn't have attachment on that slot. Can install.
                                             vehicleInstall(session, playerItemInstance, restrictedInv, restrictions[k].SlotNumber);
-                                            hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleInstall").Replace("{attachInstalled}", Color(playerItemInstance.Item.GetNameKey(), "orange")).Replace("{vehicleType}", vehicleType));
+                                            hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleInstall").Replace("{attachInstalled}", Color(playerItemInstance.Item.GetNameKey(), "orange")).Replace("{vehicleType}", vehicleType));
                                         }
                                         else
                                         {
                                             //Vehicle have attachment on that slot. Can switch.
                                             string attachSwitched = vehicleSwitch(session, playerItemInstance, restrictedInv, restrictions[k].SlotNumber);
-                                            hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleSwitch").Replace("{attachSwitched}", Color(attachSwitched, "orange")).Replace("{vehicleType}", vehicleType).Replace("{attachInstalled}", Color(playerItemInstance.Item.GetNameKey(), "orange")));
+                                            hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleSwitch").Replace("{attachSwitched}", Color(attachSwitched, "orange")).Replace("{vehicleType}", vehicleType).Replace("{attachInstalled}", Color(playerItemInstance.Item.GetNameKey(), "orange")));
                                         }
                                         restrictedInv.Invalidate(false);
                                         return;
@@ -392,7 +391,7 @@ namespace Oxide.Plugins
                     }
                     else
                     {
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_noCarAttachment").Replace("{slot}", slot + ""));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_noCarAttachment").Replace("{slot}", slot + ""));
                     }
                 }
                 else if (args[0] == "remove")
@@ -405,14 +404,14 @@ namespace Oxide.Plugins
                     if (tmp == "gear" || tmp == "gearbox" || tmp == "engine" || tmp == "tire" || tmp == "wheel")
                         if (!userHasPerm(session, "vehiclemanager.remove.extra"))
                         {
-                            hurt.SendChatMessage(session, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.remove.extra"));
+                            hurt.SendChatMessage(session, null, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.remove.extra"));
                             return;
                         }
                     //Check for permission to remove
                     if (tmp == "bumper" || tmp == "front" || tmp == "left" || tmp == "right" || tmp == "roof" || tmp == "rear" || tmp == "all")
                         if (!userHasPerm(session, "vehiclemanager.remove"))
                         {
-                            hurt.SendChatMessage(session, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.remove"));
+                            hurt.SendChatMessage(session, null, Color(GetMsg("msg_SERVER"), "red") + GetMsg("msg_permission").Replace("{perm}", "vehiclemanager.remove"));
                             return;
                         }
 
@@ -439,7 +438,7 @@ namespace Oxide.Plugins
                                     string seat = getSeatName(p.SeatOffset);
                                     if (attach == seat)
                                     {
-                                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_removeSeatError").Replace("{seat}", seat));
+                                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_removeSeatError").Replace("{seat}", seat));
                                         ignorePart = true;
                                         break;
                                     }
@@ -461,27 +460,27 @@ namespace Oxide.Plugins
                             restrictedInv.Items[slot] = null;
                             restrictedInv.Invalidate(false);
                             if (tmp != "all")
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleRemove").Replace("{attachRemoved}", Color(vehicleAttach.Item.GetNameKey(), "orange")).Replace("{vehicleType}", vehicleType));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleRemove").Replace("{attachRemoved}", Color(vehicleAttach.Item.GetNameKey(), "orange")).Replace("{vehicleType}", vehicleType));
                         }
                         if (restrictedSlots.Count == 0)
                         {
                             if (tmp != "all")
-                                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_removeError").Replace("{attach}", attach));
+                                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_removeError").Replace("{attach}", attach));
                         }
                     }
                     if (tmp == "all")
                     {
-                        hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleRemoveAll").Replace("{vehicleType}", vehicleType));
+                        hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_vehicleRemoveAll").Replace("{vehicleType}", vehicleType));
                     }
                 }
                 else
                 {
-                    hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
+                    hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
                 }
             }
             else
             {
-                hurt.SendChatMessage(session, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
+                hurt.SendChatMessage(session, null, Color(GetMsg("msg_INFO"), "orange") + GetMsg("msg_carInfo"));
             }
         }
         #endregion
