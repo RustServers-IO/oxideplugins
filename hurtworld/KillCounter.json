@@ -4,9 +4,7 @@
     "author": "Mr. Blue",
     "version": "1.0.7",
     "configuration": true,
-    "suggest": {
-        "HWClans": "*"
-    },
+    "suggest": {},
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/killcounter.1916",
     "games": [

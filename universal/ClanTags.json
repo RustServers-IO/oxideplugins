@@ -5,7 +5,6 @@
     "version": "0.5",
     "configuration": true,
     "suggest": {
-        "HWClans": "*",
         "Clans": "*"
     },
     "require": {

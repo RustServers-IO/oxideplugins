@@ -5,12 +5,12 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("RespawnProtection", "sami37", "1.2.1")]
+    [Info("RespawnProtection", "sami37", "1.2.2", ResourceId = 2551)]
     [Description("RespawnProtection allow admin to set a respawn protection timer.")]
     public class RespawnProtection : RustPlugin
     {
-        [PluginReference("Economics")]
-        Plugin Economy;
+        [PluginReference]
+        private Plugin Economics;
 
         private int Respawn;
         private bool Enabled;
@@ -42,7 +42,6 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-
             ReadFromConfig("Default Respawn Protection", ref Respawn);
             ReadFromConfig("Godmode Enabled", ref Enabled);
             ReadFromConfig("Punish fresh respawn kill (Enabled)", ref Punish);
@@ -60,7 +59,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        HitInfo TryGetLastWounded(ulong uid, HitInfo info)
+        private HitInfo TryGetLastWounded(ulong uid, HitInfo info)
         {
             if (LastWounded.ContainsKey(uid))
             {
@@ -72,7 +71,7 @@ namespace Oxide.Plugins
             return info;
         }
 
-        void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
+        private void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
         {
             BasePlayer victimBasePlayer = victim as BasePlayer;
             if (victimBasePlayer == null)
@@ -82,10 +81,10 @@ namespace Oxide.Plugins
 
             if (info?.InitiatorPlayer == null && (victimBasePlayer.name?.Contains("autospawn") ?? false))
                 return;
-            if (info?.InitiatorPlayer != null && Economy != null && Economy.IsLoaded)
+            if (info?.InitiatorPlayer != null && Economics != null && Economics.IsLoaded)
             {
                 SendReply(info.InitiatorPlayer, string.Format(lang.GetMessage("TryKill", this, info.InitiatorPlayer.UserIDString), AmountPerKill));
-                Economy?.CallHook("Withdraw", info.InitiatorPlayer.userID,
+                Economics?.CallHook("Withdraw", info.InitiatorPlayer.UserIDString,
                     AmountPerKill);
             }
         }
@@ -107,11 +106,11 @@ namespace Oxide.Plugins
                     if (!Enabled && !Punish)
                         return;
                     if (Punish)
-                        if (Economy != null && Economy.IsLoaded)
+                        if (Economics != null && Economics.IsLoaded)
                         {
                             SendReply(attacker,
                                 string.Format(lang.GetMessage("TryKill", this, attacker.UserIDString), AmountPerHit));
-                            Economy?.CallHook("Withdraw", attacker.userID,
+                            Economics?.CallHook("Withdraw", attacker.UserIDString,
                                 AmountPerKill);
                         }
                     if (protectedPlayersList.ContainsKey(attacker.userID))
@@ -144,9 +143,9 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnPlayerRespawned(BasePlayer player)
+        private void OnPlayerRespawned(BasePlayer player)
         {
-            if (protectedPlayersList.ContainsKey(player.userID)) 
+            if (protectedPlayersList.ContainsKey(player.userID))
                 protectedPlayersList.Remove(player.userID);
             protectedPlayersList.Add(player.userID, DateTime.Now);
             if(Enabled)
@@ -158,8 +157,8 @@ namespace Oxide.Plugins
                     SendReply(player, lang.GetMessage("NoLongerProtected", this, player.UserIDString));
             });
         }
-		
-        bool PlayerRespawn(ulong UserID)
+
+        private bool PlayerRespawn(ulong UserID)
         {
             var baseplayer = BasePlayer.Find(UserID.ToString());
             if (baseplayer == null) return false;
@@ -176,7 +175,7 @@ namespace Oxide.Plugins
             });
             return true;
         }
-		
+
         private bool AddProtection(ulong UserID)
         {
             return PlayerRespawn(UserID);

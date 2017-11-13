@@ -1,0 +1,19 @@
+{
+    "name": "AntiLoot",
+    "description": "Stops Looting of chests, torches, stations, furniture, anything that's lootable.",
+    "author": "Mordeus",
+    "version": "1.0.0",
+    "configuration": true,
+    "suggest": {
+        "ProtectedZone": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/antiloot.2688",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

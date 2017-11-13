@@ -4,7 +4,9 @@
     "author": "Mordeus",
     "version": "1.2.0",
     "configuration": true,
-    "suggest": {},
+    "suggest": {
+        "AntiLoot": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/protectedzone.2638",
     "games": [
