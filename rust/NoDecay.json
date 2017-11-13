@@ -1,8 +1,8 @@
 {
     "name": "NoDecay",
-    "description": "Scales or disables decay of items",
-    "author": "Piarb",
-    "version": "1.0.13",
+    "description": "Scales or disables decay of items, and deployables.",
+    "author": "Diesel 42o",
+    "version": "1.0.15",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/nodecay.1160",
