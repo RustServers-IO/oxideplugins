@@ -16,7 +16,7 @@ using ProtoBuf;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.2.8", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.3.0", ResourceId = 2580)]
     
     [Description("Spawn Bots with kits at monuments.")]
 
@@ -197,11 +197,11 @@ namespace Oxide.Plugins
         
         void OnEntityDeath(BaseEntity entity)
         {
+            
             string respawnLocationName = "";
             NPCPlayerApex Scientist = null;
             if (entity is NPCPlayerApex)
             {
-                
                 Scientist = entity as NPCPlayerApex;
                 if (TempRecord.dontRespawn.Contains(Scientist.userID))
                 {
@@ -217,6 +217,8 @@ namespace Oxide.Plugins
                             no_of_AI--;
                             respawnLocationName = bot.Value.monumentName;
                             TempRecord.DeadNPCPlayerIds.Add(bot.Value.botID);
+                            if (TempRecord.MonumentProfiles[respawnLocationName].Disable_Radio == true)
+                            Scientist.DeathEffect = new GameObjectRef();
                         }
                 }
                 if(respawnLocationName == "AirDrop")
@@ -333,7 +335,7 @@ namespace Oxide.Plugins
 
                 if (zone.Kit != "default")
                 {
-                    object checkKit = (Kits.CallHook("GetKitInfo", zone.Kit));
+                    object checkKit = (Kits.CallHook("GetKitInfo", zone.Kit, true));
                     if (checkKit == null)
                     {
                         PrintWarning("Kit does not exist - Defaulting to 'Scientist'.");
@@ -342,7 +344,7 @@ namespace Oxide.Plugins
                     else
                     {
                     entity.inventory.Strip(); 
-                    Kits?.Call($"TryGiveKit", entity, zone.Kit);
+                    Kits?.Call($"GiveKit", entity, zone.Kit, true);
                     }
                 }
 
@@ -617,18 +619,6 @@ namespace Oxide.Plugins
             }
             }
             return result;
-        }
-        
-        public object CheckKit(string name) //credit K1lly0u
-        {
-            object success = Kits?.Call("isKit", name);
-            if ((success is bool))
-                if (!(bool)success)
-                {
-                PrintWarning("BotSpawn : The Specified Kit Does Not Exist. Please update your config and reload.");
-                return null;
-                }
-                return true;
         }
 
         void UpdateRecords(BasePlayer player)
