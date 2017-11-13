@@ -1,15 +1,12 @@
+using Newtonsoft.Json;
+using Oxide.Core;
 using System;
 using System.Collections.Generic;
 
-using Newtonsoft.Json;
-
-using Oxide.Core;
-
 namespace Oxide.Plugins
 {
-    [Info("Kits", "Reneb", "1.0.4", ResourceId = 1494)]
+    [Info("Kits", "Reneb", "1.0.5", ResourceId = 1494)]
     [Description("Create kits of items for players to use.")]
-
     class Kits : HurtworldPlugin
     {
         //////////////////////////////////////////////////////////////////////////////////////////
@@ -94,16 +91,16 @@ namespace Oxide.Plugins
             var success = CanRedeemKit(session, kitname) as string;
             if (success != null)
             {
-                hurt.SendChatMessage(session, success);
+                hurt.SendChatMessage(session, null, success);
                 return;
             }
             success = GiveKit(session, kitname) as string;
             if (success != null)
             {
-                hurt.SendChatMessage(session, success);
+                hurt.SendChatMessage(session, null, success);
                 return;
             }
-            hurt.SendChatMessage(session, "Kit redeemed");
+            hurt.SendChatMessage(session, null, "Kit redeemed");
 
             ProccessKitGiven(session, kitname);
         }
@@ -337,13 +334,13 @@ namespace Oxide.Plugins
 
         void SendListKitEdition(PlayerSession session)
         {
-            hurt.SendChatMessage(session, "permission \"permission name\" => set the permission needed to get this kit");
-            hurt.SendChatMessage(session, "description \"description text here\" => set a description for this kit");
-            hurt.SendChatMessage(session, "authlevel XXX");
-            hurt.SendChatMessage(session, "cooldown XXX");
-            hurt.SendChatMessage(session, "max XXX");
-            hurt.SendChatMessage(session, "items => set new items for your kit (will copy your inventory)");
-            hurt.SendChatMessage(session, "hide TRUE/FALSE => dont show this kit in lists (EVER)");
+            hurt.SendChatMessage(session, null, "permission \"permission name\" => set the permission needed to get this kit");
+            hurt.SendChatMessage(session, null, "description \"description text here\" => set a description for this kit");
+            hurt.SendChatMessage(session, null, "authlevel XXX");
+            hurt.SendChatMessage(session, null, "cooldown XXX");
+            hurt.SendChatMessage(session, null, "max XXX");
+            hurt.SendChatMessage(session, null, "items => set new items for your kit (will copy your inventory)");
+            hurt.SendChatMessage(session, null, "hide TRUE/FALSE => dont show this kit in lists (EVER)");
         }
 
         [ChatCommand("kit")]
@@ -356,7 +353,7 @@ namespace Oxide.Plugins
                 {
                     var cansee = CanSeeKit(session, pair.Key, out reason);
                     if (!cansee && string.IsNullOrEmpty(reason)) continue;
-                    hurt.SendChatMessage(session, $"{pair.Value.name} - {pair.Value.description} {reason}");
+                    hurt.SendChatMessage(session, null, $"{pair.Value.name} - {pair.Value.description} {reason}");
                 }
                 return;
             }
@@ -365,47 +362,47 @@ namespace Oxide.Plugins
                 switch (args[0])
                 {
                     case "help":
-                        hurt.SendChatMessage(session, "====== Player Commands ======");
-                        hurt.SendChatMessage(session, "/kit => to get the list of kits");
-                        hurt.SendChatMessage(session, "/kit KITNAME => to redeem the kit");
+                        hurt.SendChatMessage(session, null, "====== Player Commands ======");
+                        hurt.SendChatMessage(session, null, "/kit => to get the list of kits");
+                        hurt.SendChatMessage(session, null, "/kit KITNAME => to redeem the kit");
                         if (!HasAccess(session)) return;
-                        hurt.SendChatMessage(session, "====== Admin Commands ======");
-                        hurt.SendChatMessage(session, "/kit add KITNAME => add a kit");
-                        hurt.SendChatMessage(session, "/kit remove KITNAME => remove a kit");
-                        hurt.SendChatMessage(session, "/kit edit KITNAME => edit a kit");
-                        hurt.SendChatMessage(session, "/kit list => get a raw list of kits (the real full list)");
-                        hurt.SendChatMessage(session, "/kit give PLAYER/STEAMID KITNAME => give a kit to a player");
-                        hurt.SendChatMessage(session, "/kit resetkits => deletes all kits");
-                        hurt.SendChatMessage(session, "/kit resetdata => reset player data");
+                        hurt.SendChatMessage(session, null, "====== Admin Commands ======");
+                        hurt.SendChatMessage(session, null, "/kit add KITNAME => add a kit");
+                        hurt.SendChatMessage(session, null, "/kit remove KITNAME => remove a kit");
+                        hurt.SendChatMessage(session, null, "/kit edit KITNAME => edit a kit");
+                        hurt.SendChatMessage(session, null, "/kit list => get a raw list of kits (the real full list)");
+                        hurt.SendChatMessage(session, null, "/kit give PLAYER/STEAMID KITNAME => give a kit to a player");
+                        hurt.SendChatMessage(session, null, "/kit resetkits => deletes all kits");
+                        hurt.SendChatMessage(session, null, "/kit resetdata => reset player data");
                         break;
                     case "add":
                     case "remove":
                     case "edit":
-                        if (!HasAccess(session)) { hurt.SendChatMessage(session, "You don't have access to this command"); return; }
-                        hurt.SendChatMessage(session,  $"/kit {args[0]} KITNAME");
+                        if (!HasAccess(session)) { hurt.SendChatMessage(session, null, "You don't have access to this command"); return; }
+                        hurt.SendChatMessage(session, null,  $"/kit {args[0]} KITNAME");
                         break;
                     case "give":
-                        if (!HasAccess(session)) { hurt.SendChatMessage(session, "You don't have access to this command"); return; }
-                        hurt.SendChatMessage(session, "/kit give PLAYER/STEAMID KITNAME");
+                        if (!HasAccess(session)) { hurt.SendChatMessage(session, null, "You don't have access to this command"); return; }
+                        hurt.SendChatMessage(session, null, "/kit give PLAYER/STEAMID KITNAME");
                         break;
                     case "list":
-                        if (!HasAccess(session)) { hurt.SendChatMessage(session, "You don't have access to this command"); return; }
-                        foreach (var kit in storedData.Kits.Values) hurt.SendChatMessage(session, $"{kit.name} - {kit.description}");
+                        if (!HasAccess(session)) { hurt.SendChatMessage(session, null, "You don't have access to this command"); return; }
+                        foreach (var kit in storedData.Kits.Values) hurt.SendChatMessage(session, null, $"{kit.name} - {kit.description}");
                         break;
                     case "items":
                         break;
                     case "resetkits":
-                        if (!HasAccess(session)) { hurt.SendChatMessage(session, "You don't have access to this command"); return; }
+                        if (!HasAccess(session)) { hurt.SendChatMessage(session, null, "You don't have access to this command"); return; }
                         storedData.Kits.Clear();
                         kitEditor.Clear();
                         ResetData();
                         SaveKits();
-                        hurt.SendChatMessage(session, "Resetted all kits and player data");
+                        hurt.SendChatMessage(session, null, "Resetted all kits and player data");
                         break;
                     case "resetdata":
-                        if (!HasAccess(session)) { hurt.SendChatMessage(session, "You don't have access to this command"); return; }
+                        if (!HasAccess(session)) { hurt.SendChatMessage(session, null, "You don't have access to this command"); return; }
                         ResetData();
-                        hurt.SendChatMessage(session, "Resetted all player data");
+                        hurt.SendChatMessage(session, null, "Resetted all player data");
                         break;
                     default:
                         TryGiveKit(session, args[0].ToLower());
@@ -414,7 +411,7 @@ namespace Oxide.Plugins
                 if (args[0] != "items") return;
 
             }
-            if (!HasAccess(session)) { hurt.SendChatMessage(session, "You don't have access to this command"); return; }
+            if (!HasAccess(session)) { hurt.SendChatMessage(session, null, "You don't have access to this command"); return; }
 
             string kitname;
             switch (args[0])
@@ -423,72 +420,72 @@ namespace Oxide.Plugins
                     kitname = args[1].ToLower();
                     if (storedData.Kits.ContainsKey(kitname))
                     {
-                        hurt.SendChatMessage(session, "This kit already exists.");
+                        hurt.SendChatMessage(session, null, "This kit already exists.");
                         return;
                     }
                     storedData.Kits[kitname] = new Kit { name = args[1] };
                     kitEditor[session.SteamId.m_SteamID] = kitname;
-                    hurt.SendChatMessage(session, "You've created a new kit: " + args[1]);
+                    hurt.SendChatMessage(session, null, "You've created a new kit: " + args[1]);
                     SendListKitEdition(session);
                     break;
                 case "give":
                     if (args.Length < 3)
                     {
-                        hurt.SendChatMessage(session, "/kit give PLAYER/STEAMID KITNAME");
+                        hurt.SendChatMessage(session, null, "/kit give PLAYER/STEAMID KITNAME");
                         return;
                     }
                     kitname = args[2].ToLower();
                     if (!storedData.Kits.ContainsKey(kitname))
                     {
-                        hurt.SendChatMessage(session, "This kit doesn't seem to exist.");
+                        hurt.SendChatMessage(session, null, "This kit doesn't seem to exist.");
                         return;
                     }
                     var findPlayers = FindPlayer(args[1]);
                     if (findPlayers.Count == 0)
                     {
-                        hurt.SendChatMessage(session, "No players found.");
+                        hurt.SendChatMessage(session, null, "No players found.");
                         return;
                     }
                     if (findPlayers.Count > 1)
                     {
-                        hurt.SendChatMessage(session, "Multiple players found.");
+                        hurt.SendChatMessage(session, null, "Multiple players found.");
                         return;
                     }
                     GiveKit(findPlayers[0], kitname);
-                    hurt.SendChatMessage(session, $"You gave {findPlayers[0].Name} the kit: {storedData.Kits[kitname].name}");
+                    hurt.SendChatMessage(session, null, $"You gave {findPlayers[0].Name} the kit: {storedData.Kits[kitname].name}");
                     hurt.SendChatMessage(findPlayers[0], string.Format("You've received the kit {1} from {0}", session.Name, storedData.Kits[kitname].name));
                     break;
                 case "edit":
                     kitname = args[1].ToLower();
                     if (!storedData.Kits.ContainsKey(kitname))
                     {
-                        hurt.SendChatMessage(session, "This kit doesn't seem to exist");
+                        hurt.SendChatMessage(session, null, "This kit doesn't seem to exist");
                         return;
                     }
                     kitEditor[session.SteamId.m_SteamID] = kitname;
-                    hurt.SendChatMessage(session, $"You are now editing the kit: {kitname}");
+                    hurt.SendChatMessage(session, null, $"You are now editing the kit: {kitname}");
                     SendListKitEdition(session);
                     break;
                 case "remove":
                     kitname = args[1].ToLower();
                     if (!storedData.Kits.Remove(kitname))
                     {
-                        hurt.SendChatMessage(session, "This kit doesn't seem to exist");
+                        hurt.SendChatMessage(session, null, "This kit doesn't seem to exist");
                         return;
                     }
-                    hurt.SendChatMessage(session, $"{kitname} was removed");
+                    hurt.SendChatMessage(session, null, $"{kitname} was removed");
                     if (kitEditor[session.SteamId.m_SteamID] == kitname) kitEditor.Remove(session.SteamId.m_SteamID);
                     break;
                 default:
                     if (!kitEditor.TryGetValue(session.SteamId.m_SteamID, out kitname))
                     {
-                        hurt.SendChatMessage(session, "You are not creating or editing a kit");
+                        hurt.SendChatMessage(session, null, "You are not creating or editing a kit");
                         return;
                     }
                     Kit kit;
                     if (!storedData.Kits.TryGetValue(kitname, out kit))
                     {
-                        hurt.SendChatMessage(session, "There was an error while getting this kit, was it changed while you were editing it?");
+                        hurt.SendChatMessage(session, null, "There was an error while getting this kit, was it changed while you were editing it?");
                         return;
                     }
                     for (var i = 0; i < args.Length; i++)
@@ -499,7 +496,7 @@ namespace Oxide.Plugins
                         {
                             case "items":
                                 kit.items = GetPlayerItems(session);
-                                hurt.SendChatMessage(session, "The items were copied from your inventory");
+                                hurt.SendChatMessage(session, null, "The items were copied from your inventory");
                                 continue;
                             case "name":
                                 continue;
@@ -523,10 +520,10 @@ namespace Oxide.Plugins
                                 InitializePermissions();
                                 break;
                             default:
-                                hurt.SendChatMessage(session, $"{args[i]} is not a valid argument");
+                                hurt.SendChatMessage(session, null, $"{args[i]} is not a valid argument");
                                     continue;
                         }
-                        hurt.SendChatMessage(session, $"{key} set to {editvalue ?? "null"}");
+                        hurt.SendChatMessage(session, null, $"{key} set to {editvalue ?? "null"}");
                     }
                     break;
             }
