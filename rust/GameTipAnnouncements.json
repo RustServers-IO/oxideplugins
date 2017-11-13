@@ -1,0 +1,16 @@
+{
+    "name": "GameTipAnnouncements",
+    "description": "Send notifications to players as gametips",
+    "author": "redBDGR",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/gametipannouncements.2689",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
