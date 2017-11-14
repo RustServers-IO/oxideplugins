@@ -11,7 +11,7 @@ using System.Text;
 
 namespace Oxide.Plugins
 {
-    [Info("KillCounter", "SouZa and Mr. Blue", "1.0.7", ResourceId = 18063)]
+    [Info("KillCounter", "SouZa and Mr. Blue", "1.0.8", ResourceId = 18063)]
     [Description("Creates a kill count for each player. Displays on the death notice.")]
 
     class KillCounter : HurtworldPlugin
@@ -268,18 +268,18 @@ namespace Oxide.Plugins
         {
             if (!HasPermission(session, "use") && !session.IsAdmin)
             {
-                hurt.SendChatMessage(session, lang.GetMessage("no_permission", this)
+                Player.Message(session, lang.GetMessage("no_permission", this)
                         .Replace("{perm}", PermissionPrefix + ".use"));
                 return;
             }
 
-            hurt.SendChatMessage(session, lang.GetMessage("playertop", this));
+            Player.Message(session, lang.GetMessage("playertop", this));
             var top5 = data.OrderByDescending(pair => pair.Value).Take(5);
             var cycle = 1;
             foreach (var kills in top5)
             {
                 string playername = GetPlayerName(kills.Key);
-                hurt.SendChatMessage(session, lang.GetMessage("playertopline", this).Replace("{Number}", cycle.ToString()).Replace("{Name}", playername).Replace("{Kills}", kills.Value.ToString()));
+                Player.Message(session, lang.GetMessage("playertopline", this).Replace("{Number}", cycle.ToString()).Replace("{Name}", playername).Replace("{Kills}", kills.Value.ToString()));
                 cycle++;
             }
 
@@ -289,17 +289,17 @@ namespace Oxide.Plugins
         {
             if (!HasPermission(session, "use") && !session.IsAdmin)
             {
-                hurt.SendChatMessage(session, lang.GetMessage("no_permission", this)
+                Player.Message(session, lang.GetMessage("no_permission", this)
                         .Replace("{perm}", PermissionPrefix + ".use"));
                 return;
             }
             
             if (!data.ContainsKey(session.SteamId.m_SteamID))
-                hurt.SendChatMessage(session, lang.GetMessage("playernokills", this));
+                Player.Message(session, lang.GetMessage("playernokills", this));
             else
             {
                 var kills = data[session.SteamId.m_SteamID];
-                hurt.SendChatMessage(session, lang.GetMessage("playerkills", this).Replace("{Kills}", kills.ToString()));
+                Player.Message(session, lang.GetMessage("playerkills", this).Replace("{Kills}", kills.ToString()));
             }
 
         }
@@ -312,7 +312,7 @@ namespace Oxide.Plugins
             //Test permission
             if (!HasPermission(session, "mod") && !session.IsAdmin)
             {
-                hurt.SendChatMessage(session, lang.GetMessage("no_permission", this)
+                Player.Message(session, lang.GetMessage("no_permission", this)
                         .Replace("{perm}", PermissionPrefix + ".mod"));
                 return;
             }
@@ -322,24 +322,24 @@ namespace Oxide.Plugins
                 // [/kc]
                 string[] kcCMDS = lang.GetMessage("kc_cmds", this).Split(new string[] { "{newcmd}" }, StringSplitOptions.RemoveEmptyEntries);
 
-                hurt.SendChatMessage(session, lang.GetMessage("kc_commands_list", this));
+                Player.Message(session, lang.GetMessage("kc_commands_list", this));
                 foreach (string cmd in kcCMDS)
                 {
-                    hurt.SendChatMessage(session, cmd);
+                    Player.Message(session, cmd);
                 }
             }
             else if (args.Length == 1 && args[0] == "resetall")
             {
                 data = new Dictionary<ulong, int>();
                 SaveData();
-                hurt.SendChatMessage(session, lang.GetMessage("kc_reset_all", this));
+                Player.Message(session, lang.GetMessage("kc_reset_all", this));
             }
             else if (args.Length == 2 && args[0] == "reset")
             {
                 var player_steamID = GetSteamID(args[1]);
 
                 if (player_steamID == ulong.MinValue)
-                    hurt.SendChatMessage(session, lang.GetMessage("player_offline", this).Replace("{player}", args[1]));
+                    Player.Message(session, lang.GetMessage("player_offline", this).Replace("{player}", args[1]));
                 else
                 {
                     var playerName = GameManager.Instance.GetIdentity(player_steamID).Name;
@@ -348,11 +348,11 @@ namespace Oxide.Plugins
 
                     data[player_steamID] = 0;
                     SaveData();
-                    hurt.SendChatMessage(session, lang.GetMessage("kc_reset_player", this).Replace("{player}", playerName));
+                    Player.Message(session, lang.GetMessage("kc_reset_player", this).Replace("{player}", playerName));
                 }
             }
             else
-                hurt.SendChatMessage(session, lang.GetMessage("kc_usage", this));
+                Player.Message(session, lang.GetMessage("kc_usage", this));
         }
         #endregion Chat Commands
 
@@ -404,7 +404,7 @@ namespace Oxide.Plugins
                 if (killerkills != null)
                 {
                     timer.Once(1f, () => {
-                        hurt.BroadcastChat(lang.GetMessage("player", this).Replace("{Name}", killer_name).Replace("{Kills}", killerkills));
+                        Server.Broadcast(lang.GetMessage("player", this).Replace("{Name}", killer_name).Replace("{Kills}", killerkills));
                     });
                 }
             }

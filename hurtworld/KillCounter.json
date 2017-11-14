@@ -2,7 +2,7 @@
     "name": "KillCounter",
     "description": "Creates a kill count for each player. Displays on the death notice.",
     "author": "Mr. Blue",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "configuration": true,
     "suggest": {},
     "language": "cs",

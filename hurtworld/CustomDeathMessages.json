@@ -2,7 +2,7 @@
     "name": "Custom Death Messages",
     "description": "Displays custom messages on player death",
     "author": "Mr. Blue",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "configuration": true,
     "suggest": {
         "KillCounter": "*"

@@ -3,7 +3,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomDeathMessages", "Wil Simpson", "1.0.6")]
+    [Info("CustomDeathMessages", "Wil Simpson & Mr. Blue", "1.0.7")]
     [Description("Just displays custom death messages.")]
 
     class CustomDeathMessages : HurtworldPlugin
@@ -65,17 +65,18 @@ namespace Oxide.Plugins
             var textcolor = $"<color={Config["TextColor"]}>";
             string name = playerSession.Name;
             string KillerName = GetNameOfObject(dataSource.EntitySource);
+            Puts(dataSource.SourceDescriptionKey);
             if (KillerName == "")
             {
-                hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
+                Server.Broadcast(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
             }
             else if (KillerName == "Creatures/Tokar")
             {
-                hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage("Creatures/Tokar", this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
+                Server.Broadcast(prefix, textcolor + (lang.GetMessage("Creatures/Tokar", this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
             }
             else if (KillerName == "Machines/Medusa Vine")
             {
-                hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage("Machines/Medusa Vine", this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
+                Server.Broadcast(prefix, textcolor + (lang.GetMessage("Machines/Medusa Vine", this) ?? lang.GetMessage("Unknown", this)).Replace("{Name}", name) + "</color>");
             }
             else
             {
@@ -86,13 +87,13 @@ namespace Oxide.Plugins
                     var killerkills = KillCounter.Call("AddKill", playerSession, dataSource);
                     if(killerkills != null)
                     {
-                        hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName).Replace("{Kills}", killerkills.ToString()) + "</color>");
+                        Server.Broadcast(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName).Replace("{Kills}", killerkills.ToString()) + "</color>");
                     }
                     else
-                        hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName) + "</color>");
+                        Server.Broadcast(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName) + "</color>");
                 }
                 else
-                    hurt.BroadcastChat(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName) + "</color>");
+                    Server.Broadcast(prefix, textcolor + (lang.GetMessage(dataSource.SourceDescriptionKey, this) ?? lang.GetMessage("player", this)).Replace("{Name}", name).Replace("{Killer}", KillerName) + "</color>");
             }
         }
     }
