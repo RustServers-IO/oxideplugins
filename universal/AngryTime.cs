@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AngryTime", "Tori1157", "1.0.5")]
+    [Info("AngryTime", "Tori1157", "1.0.6")]
     [Description("Check & set time via commands")]
 
     class AngryTime : CovalencePlugin
@@ -16,8 +16,10 @@ namespace Oxide.Plugins
 
         private bool Changed;
 
-        private string MessagePrefix;
-        private string MessagePrefixColor;
+        private string messagePrefix;
+        private string messagePrefixColor;
+
+        private const string adminPermission = "angrytime.admin";
 
         private void Init()
         {
@@ -28,8 +30,8 @@ namespace Oxide.Plugins
 
         private void LoadVariables()
         {
-            MessagePrefix = Convert.ToString(GetConfig("Options", "Message Prefix", "Angry Time"));
-            MessagePrefixColor = Convert.ToString(GetConfig("Options", "Message Prefix Color", "#ffa500"));
+            messagePrefix = Convert.ToString(GetConfig("Options", "Message Prefix", "Angry Time"));
+            messagePrefixColor = Convert.ToString(GetConfig("Options", "Message Prefix Color", "#ffa500"));
 
             if (Changed)
             {
@@ -49,50 +51,35 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                //////////////////////
-                // ---- ERROR ----- //
-                //////////////////////
+                /// -- ERROR -- ///
 
                 ["No Permission"] = "[#add8e6]{player}[/#] you do not have permission to use the [#00ffff]{command}[/#] command.",
 
-                ["Incorrect Parameter Chat"] = "Parameter [#add8e6]{parameter}[/#] is invalid or written wrong.",
-                ["Incorrect Parameter Console"] = "Parameter {parameter} is invalid or written wrong.",
+                ["Incorrect Parameter"] = "Parameter [#add8e6]{parameter}[/#] is invalid or written wrong.",
 
-                ["Invalid Syntax Set Chat"] = "Invalid syntax!  |  /time set 10 [#00ffff](0 > 23)[/#]",
-                ["Invalid Syntax Set Console"] = "Invalid Syntax!  |  time set 10 (0 > 23)",
+                ["Invalid Syntax Set"] = "Invalid syntax!  |  /time set 10 [#00ffff](0 > 23)[/#]",
 
                 //["Invalid Syntax Add Chat"] = "Invalid syntax!  |  /time add 10 [#00ffff](1 > 23)[/#]",
-                //["Invalid Syntax Add Console"] = "Invalid syntax!  |  time add 10 (1 > 23)",
 
-                ["Invalid Time Set Chat"] = "[#add8e6]{time}[/#] is not a valid number  |  /time set 10:30 \n[#00ffff](01 > 23 Hours : 01 > 59 Minutes)[/#]",
-                ["Invalid Time Set Console"] = "{time} is not a valid number  |  time set 10:30 (01 > 23 Hours : 01 > 59 Minutes)",
+                ["Invalid Time Set"] = "[#add8e6]{time}[/#] is not a valid number  |  /time set 10:30 \n[#00ffff](01 > 23 Hours : 01 > 59 Minutes)[/#]",
 
                 //["Invalid Time Add Chat"] = "[#add8e6]{time}[/#] is not a number  |  /time add \n[#00ffff](1 > 23)[/#]",
-                //["Invalid Time Add Console"] = "{time} is not a correct number  |  time add 1 (1 > 23)",
 
-                ["Invalid Time Length Chat"] = "{time} is too short, need to be a four digit number  |  [#00ffff]2359[/#] - [#00ffff]23:59[/#]",
-                ["Invalid Time Length Console"] = "{time} is too short, need to be a four digit number  |  2359 - 23:59",
+                ["Invalid Time Length"] = "[#add8e6]{time}[/#] is too short, need to be a four digit number  |  [#00ffff]2359[/#] - [#00ffff]23:59[/#]",
 
-                /////////////////////////
-                // ----- CONFIRM ----- //
-                /////////////////////////
+                /// -- CONFIRM -- ///
 
                 //["Time Added Chat"] = "You have added [#add8e6]{time}[/#] hours",
-                //["Time Added Console"] = "You have added {time} hours",
 
-                ["Time Changed Chat"] = "You have changed the time to [#add8e6]{time}[/#]",
-                ["Time Changed Console"] = "You have changed the time to {time}",
+                ["Time Changed"] = "You have changed the time to [#add8e6]{time}[/#]",
 
-                /////////////////////////////
-                // ----- INFORMATION ----- //
-                /////////////////////////////
+                /// -- INFO -- ///
 
-                ["Current Game Time Chat"] = "Current game time is [#00ffff]{0}[/#]",
-                ["Current Game Time Console"] = "Current game time is {0}",
+                ["Current Game Time"] = "[#00ffff]{0}[/#]",
 
-                ["Time Help Command Chat Player"] = "- [#ffa500]/time help[/#] [i](Displays this message)[/i]\n- [#ffa500]/time[/#] [i](This will display the current time and date in-game)[/i]",
+                ["Time Help Command Player"] = "- [#ffa500]/time help[/#] [i](Displays this message)[/i]\n- [#ffa500]/time[/#] [i](This will display the current time and date in-game)[/i]",
                 //["Time Help Command Chat Admin"] = "- [#ffa500]/time set 10[/#] [i](This will set the time to a whole number [#00ffff][+12](01 > 23 Hours : 01 > 59 Minutes)[/+][/#])[/i]\n- [#ffa500]/time add 1[/#] [i](This will add one hour to the current time [#00ffff][+12](1 > 23)[/+][/#])[/i]\n- [#ffa500]/time help[/#] [i](Displays this message)[/i]\n- [#ffa500]/time[/#] [i](This will display the current time and date in-game)[/i]",
-                ["Time Help Command Chat Admin"] = "- [#ffa500]/time set 10[/#] [i](This will set the time to a whole number [#00ffff][+12](01 > 23 Hours : 01 > 59 Minutes)[/+][/#])[/i]\n- [#ffa500]/time help[/#] [i](Displays this message)[/i]\n- [#ffa500]/time[/#] [i](This will display the current time and date in-game)[/i]",
+                ["Time Help Command Admin"] = "- [#ffa500]/time set 10[/#] [i](This will set the time to a whole number [#00ffff][+12](01 > 23 Hours : 01 > 59 Minutes)[/+][/#])[/i]\n- [#ffa500]/time help[/#] [i](Displays this message)[/i]\n- [#ffa500]/time[/#] [i](This will display the current time and date in-game)[/i]",
                 ["Time Help Command Console"] = "\n- time set 10 (This will set the time to a whole number(10:00))\n- time add 1 (This will add one hour to the current time (1 > 23))\n- time (This will display the current time and date in-game)",
 
             }, this);
@@ -106,17 +93,11 @@ namespace Oxide.Plugins
         private void TimeCommand(IPlayer player, string command, string[] args)
         {
             #region Default
-            var HasPerm = (player.HasPermission("angrytime.admin"));
+            var HasPerm = (player.HasPermission(adminPermission));
 
             if (args.Length == 0)
             {
-                if (!player.IsServer)
-                {
-                    SendChatMessage(player, MessagePrefix, Lang("Current Game Time Chat", player.Id, server.Time));
-                    return;
-                }
-
-                SendConsoleMessage(player, MessagePrefix, Lang("Current Game Time Console", player.Id, server.Time));
+                SendChatMessage(player, Lang("Current Game Time", player.Id, server.Time));
                 return;
             }
             
@@ -130,13 +111,7 @@ namespace Oxide.Plugins
 
             if (!CaseArgs.Contains(CommandArg))
             {
-                if (!player.IsServer)
-                {
-                    SendChatMessage(player, MessagePrefix, lang.GetMessage("Incorrect Parameter Chat", this, player.Id).Replace("{parameter}", CommandArg));
-                    return;
-                }
-
-                SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Incorrect Parameter Console", this, player.Id).Replace("{parameter}", CommandArg));
+                SendChatMessage(player, lang.GetMessage("Incorrect Parameter", this, player.Id).Replace("{parameter}", CommandArg));
                 return;
             }
             #endregion
@@ -148,34 +123,22 @@ namespace Oxide.Plugins
 
                     if (!HasPerm && !player.IsServer)
                     {
-                        SendChatMessage(player, MessagePrefix, lang.GetMessage("No Permission", this, player.Id).Replace("{player}", player.Name).Replace("{command}", command));
+                        SendChatMessage(player, lang.GetMessage("No Permission", this, player.Id).Replace("{player}", player.Name).Replace("{command}", command));
                         return;
                     }
 
                     if (args.Length != 2)
                     {
-                        if (!player.IsServer)
-                        {
-                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Syntax Set Chat", this, player.Id));
-                            return;
-                        }
-
-                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Syntax Set Console", this, player.Id));
+                        SendChatMessage(player, lang.GetMessage("Invalid Syntax Set", this, player.Id));
                         return;
                     }
 
                     // Checking to see if the parameter put in is a number
-                    double number1;
-                    string TimeParameter1 = args[1];
-                    if (!double.TryParse(TimeParameter1, out number1))
+                    double Setnumber;
+                    string TimeSetParameter = args[1];
+                    if (!double.TryParse(TimeSetParameter, out Setnumber))
                     {
-                        if (!player.IsServer)
-                        {
-                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Chat", this, player.Id).Replace("{time}", TimeParameter1));
-                            return;
-                        }
-
-                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Console", this, player.Id).Replace("{time}", TimeParameter1));
+                        SendChatMessage(player, lang.GetMessage("Invalid Time Set", this, player.Id).Replace("{time}", TimeSetParameter));
                         return;
                     }
 
@@ -183,13 +146,7 @@ namespace Oxide.Plugins
 
                     if (args[1].Length <= 3)
                     {
-                        if (!player.IsServer)
-                        {
-                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Length Chat", this, player.Id).Replace("{time}", TimeParameter1));
-                            return;
-                        }
-
-                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Length Console", this, player.Id).Replace("{time}", TimeParameter1));
+                        SendChatMessage(player, lang.GetMessage("Invalid Time Length", this, player.Id).Replace("{time}", TimeSetParameter));
                         return;
                     }
 
@@ -203,26 +160,13 @@ namespace Oxide.Plugins
 
                     if (ConvertHour >= 24 || ConvertMinute >= 60)
                     {
-                        if (!player.IsServer)
-                        {
-                            SendChatMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Chat", this, player.Id).Replace("{time}", TimeParameter1));
-                            return;
-                        }
-
-                        SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Invalid Time Set Console", this, player.Id).Replace("{time}", TimeParameter1));
+                        SendChatMessage(player, lang.GetMessage("Invalid Time Set", this, player.Id).Replace("{time}", TimeSetParameter));
                         return;
                     }
 
                     server.Time = server.Time.Date + TimeSpan.Parse(SplitHour + ":" + SplitMinute + ":00");
-                    server.Time.AddHours(1);
 
-                    if (!player.IsServer)
-                    {
-                        SendChatMessage(player, MessagePrefix, lang.GetMessage("Time Changed Chat", this, player.Id).Replace("{time}", ClockInText));
-                        return;
-                    }
-
-                    SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Time Changed Console", this, player.Id).Replace("{time}", ClockInText));
+                    SendChatMessage(player, lang.GetMessage("Time Changed", this, player.Id).Replace("{time}", ClockInText));
 
                 return;
                 #endregion
@@ -287,15 +231,15 @@ namespace Oxide.Plugins
                     {
                         if (!HasPerm)
                         {
-                            SendInfoMessage(player, MessagePrefix, lang.GetMessage("Time Help Command Chat Player", this, player.Id));
+                            SendInfoMessage(player, lang.GetMessage("Time Help Command Player", this, player.Id));
                             return;
                         }
 
-                        SendInfoMessage(player, MessagePrefix, lang.GetMessage("Time Help Command Chat Admin", this, player.Id));
+                        SendInfoMessage(player, lang.GetMessage("Time Help Command Admin", this, player.Id));
                         return;
                     }
 
-                    SendConsoleMessage(player, MessagePrefix, lang.GetMessage("Time Help Command Console", this, player.Id));
+                    SendChatMessage(player, lang.GetMessage("Time Help Command Console", this, player.Id));
 
                 return;
                 #endregion
@@ -307,7 +251,6 @@ namespace Oxide.Plugins
         #region Helpers
 
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
-
 
         private object GetConfig(string menu, string datavalue, object defaultValue)
         {
@@ -335,19 +278,14 @@ namespace Oxide.Plugins
 
         #region Messages
 
-        private void SendConsoleMessage(IPlayer player, string prefix, string msg)
+        private void SendChatMessage(IPlayer player, string message)
         {
-            player.Reply(prefix + ": " + msg);
+            player.Reply(message, covalence.FormatText("[" + messagePrefixColor + "]" + messagePrefix + "[/#]:"));
         }
 
-        private void SendChatMessage(IPlayer player, string prefix, string msg)
+        private void SendInfoMessage(IPlayer player, string message)
         {
-            player.Reply("[" + MessagePrefixColor + "]" + prefix + "[/#]: " + msg);
-        }
-
-        private void SendInfoMessage(IPlayer player, string prefix, string msg)
-        {
-            player.Reply("[+18][" + MessagePrefixColor + "]" + prefix + "[/#][/+]\n\n" + msg);
+            player.Reply(message, covalence.FormatText("[+18][" + messagePrefixColor + "]" + messagePrefix + "[/#][/+]\n\n"));
         }
 
         #endregion
