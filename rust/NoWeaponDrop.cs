@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoWeaponDrop", "Fujikura", "1.0.0", ResourceId = 1960)]
+    [Info("NoWeaponDrop", "Fujikura", "1.0.1", ResourceId = 1960)]
 	[Description("Prevents dropping of active weapon when players start to die")]
     class NoWeaponDrop : RustPlugin
     {
@@ -58,14 +58,11 @@ namespace Oxide.Plugins
 			if (!permission.PermissionExists(permissionName)) permission.RegisterPermission(permissionName, this);
 		}
 		
-		void OnPlayerDie(BasePlayer player, HitInfo info)
+		object CanDropActiveItem(BasePlayer player)
 		{
-			if (player == null || player.svActiveItemID == 0u)
-				return;
-			if(usePermission && !permission.UserHasPermission(player.UserIDString, permissionName))
-				return;
-			player.svActiveItemID = 0u;
-			player.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+			if (player == null || player is NPCMurderer || (usePermission && !permission.UserHasPermission(player.UserIDString, permissionName)))
+				return null;
+			return false;
 		}
 	}
 }
