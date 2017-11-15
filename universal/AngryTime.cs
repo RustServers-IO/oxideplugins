@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AngryTime", "Tori1157", "1.0.6")]
+    [Info("AngryTime", "Tori1157", "1.1.1")]
     [Description("Check & set time via commands")]
 
     class AngryTime : CovalencePlugin
@@ -15,11 +15,29 @@ namespace Oxide.Plugins
         #region Loading
 
         private bool Changed;
+        private bool realTime;
 
         private string messagePrefix;
         private string messagePrefixColor;
 
         private const string adminPermission = "angrytime.admin";
+
+        private void Loaded()
+        {
+            if (realTime == true)
+            {
+                var ServerTimeHour = DateTime.Now.Hour;
+                var ServerTimeMinute = DateTime.Now.Minute;
+                var ServerTimeSecond = DateTime.Now.Second;
+
+                // TODO: Have it so users can add hours
+
+                timer.Repeat(1, 0, () =>
+                {
+                    server.Time = server.Time.Date + TimeSpan.Parse(ServerTimeHour + ":" + ServerTimeMinute + ":" + ServerTimeSecond);
+                });
+            }
+        }
 
         private void Init()
         {
@@ -30,8 +48,9 @@ namespace Oxide.Plugins
 
         private void LoadVariables()
         {
-            messagePrefix = Convert.ToString(GetConfig("Options", "Message Prefix", "Angry Time"));
-            messagePrefixColor = Convert.ToString(GetConfig("Options", "Message Prefix Color", "#ffa500"));
+            messagePrefix = Convert.ToString(GetConfig("Messaging", "Message Prefix", "Angry Time"));
+            messagePrefixColor = Convert.ToString(GetConfig("Messaging", "Message Prefix Color", "#ffa500"));
+            realTime = Convert.ToBoolean(GetConfig("Options", "Use Server Time", false));
 
             if (Changed)
             {
