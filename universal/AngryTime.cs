@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AngryTime", "Tori1157", "1.1.1")]
+    [Info("AngryTime", "Tori1157", "1.1.2")]
     [Description("Check & set time via commands")]
 
     class AngryTime : CovalencePlugin
@@ -26,16 +26,19 @@ namespace Oxide.Plugins
         {
             if (realTime == true)
             {
-                var ServerTimeHour = DateTime.Now.Hour;
-                var ServerTimeMinute = DateTime.Now.Minute;
-                var ServerTimeSecond = DateTime.Now.Second;
-
                 // TODO: Have it so users can add hours
-
-                timer.Repeat(1, 0, () =>
+                timer.Once(60, () =>
                 {
-                    server.Time = server.Time.Date + TimeSpan.Parse(ServerTimeHour + ":" + ServerTimeMinute + ":" + ServerTimeSecond);
+                    timer.Repeat(1, 0, () =>
+                    {
+                        var ServerTimeHour = DateTime.Now.Hour;
+                        var ServerTimeMinute = DateTime.Now.Minute;
+                        var ServerTimeSecond = DateTime.Now.Second;
+
+                        server.Time = server.Time.Date + TimeSpan.Parse(ServerTimeHour + ":" + ServerTimeMinute + ":" + ServerTimeSecond);
+                    });
                 });
+                
             }
         }
 

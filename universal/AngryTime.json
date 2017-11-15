@@ -2,7 +2,7 @@
     "name": "AngryTime",
     "description": "Check & set time via commands",
     "author": "Tori1157",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/angrytime.2670",
