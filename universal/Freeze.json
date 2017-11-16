@@ -1,10 +1,10 @@
 {
     "name": "Freeze",
-    "description": "Stops a player or players in their tracks and keep them from moving",
+    "description": "Stops one or more players on command and keeps them from moving",
     "author": "Wulf",
-    "version": "2.0.1",
+    "version": "2.1.0",
     "configuration": false,
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/freeze.1432",
     "games": [
         "universal"
