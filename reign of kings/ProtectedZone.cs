@@ -37,7 +37,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("ProtectedZone", "Mordeus", "1.2.0")]
+    [Info("ProtectedZone", "Mordeus", "1.2.1")]
     public class ProtectedZone : ReignOfKingsPlugin
     {
         [PluginReference]
@@ -175,8 +175,7 @@ namespace Oxide.Plugins
         }        
         private void Init()
         {
-            LoadDefaultConfig();
-            LoadDefaultMessages();
+            LoadDefaultConfig();            
             ProtectedZoneData = Interface.Oxide.DataFileSystem.GetFile("ProtectedZone");
             ProtectedZoneData.Settings.Converters = new JsonConverter[] { new StringEnumConverter(), new UnityVector3Converter(), };
             LoadZones();
@@ -378,10 +377,10 @@ namespace Oxide.Plugins
                     int zcount = 0;
                     foreach (var zoneDef in ZoneDefinitions)
                     {
-                        count++;
+                        count++;                        
                         if (IsInZone(player, zoneDef.Value.ZoneX, zoneDef.Value.ZoneZ, zoneDef.Value.ZoneRadius) == true)
                         {
-                            zcount++;
+                            zcount++;                            
                             SendReply(player, lang.GetMessage("zoneInfo", this, playerId), zoneDef.Value.Id, zoneDef.Value.ZoneName);
                             SendReply(player, lang.GetMessage("zoneFlag1", this, playerId), zoneDef.Value.ZoneRadius);
                             SendReply(player, lang.GetMessage("zoneFlag2", this, playerId), zoneDef.Value.ZoneNoPVP);
@@ -411,10 +410,9 @@ namespace Oxide.Plugins
                                 SendReply(player, lang.GetMessage("zoneFlag24", this, playerId), zoneDef.Value.ZoneNoVillagerLooting);
                             }          
                             return;
-                        }
-
+                        }                        
                     }
-                    if (zcount == 0 && count > 1)
+                    if (zcount == 0 && count >= 1)
                         SendReply(player, lang.GetMessage("zoneLocError", this, playerId));
                     if (count == 0)
                         SendReply(player, lang.GetMessage("noZoneError", this, playerId));
@@ -756,7 +754,7 @@ namespace Oxide.Plugins
             });
 
         }
-        private void CheckPlayerLocation(Player player)        
+        private void CheckPlayerLocation(Player player)
         {
             if (player.Name == "Server" && player.Id == 9999999999) return; //fixes error
             if (player == null) return;
@@ -772,7 +770,7 @@ namespace Oxide.Plugins
                         EjectPlayer(zoneDef.Value.ZoneRadius, zoneDef.Value.Location, player);
                         SendReply(player, lang.GetMessage("noEntry", this, playerId));
                         Puts(lang.GetMessage("logEjectPlayer", this, playerId), player);
-                    }                    
+                    }
                     if (IsInZone(player, zoneDef.Value.ZoneX, zoneDef.Value.ZoneZ, zoneDef.Value.ZoneRadius) == true)
                     {
                         Player.ZoneId = zoneDef.Value.Id;
@@ -801,7 +799,7 @@ namespace Oxide.Plugins
                             Player.ExitZone = true;
 
                             if (zoneDef.Value.ZoneExitMessageOn == true)
-                            {                                
+                            {
                                 SendMessage(player, zoneDef.Value.ExitZoneMessage, false, false);
                             }
 
@@ -810,22 +808,24 @@ namespace Oxide.Plugins
                         if (Player.EnterZone == false && Player.ExitZone == true)
                         {
                             Player.ExitZone = false;
-                        }                        
+                        }
                     }
                 }
             }
         }
 
         private bool IsInZone(Player player, float zoneX, float zoneZ, float radius)
-        {            
+        {
             if (PData.ContainsKey(player))
             {
+
                 PlayerData Player = GetCache(player);
-                if (Server.PlayerIsOnline(player.DisplayName))
+
+                if (Server.PlayerIsOnline(player.Id))
                 {
                     foreach (Vector2 zone in zones)
                     {
-                       
+
                         Vector2 vector = new Vector2(zoneX, zoneZ);
                         float distance = Math.Abs(Vector2.Distance(vector, new Vector2(player.Entity.Position.x, player.Entity.Position.z)));
                         if (distance <= radius)
@@ -842,22 +842,22 @@ namespace Oxide.Plugins
             return false;
         }
         private bool IsEntityInZone(Vector3 location, float zoneX, float zoneZ, float radius)
-        {   
-                    foreach (Vector2 zone in zones)
-                    {
+        {
+            foreach (Vector2 zone in zones)
+            {
 
-                        Vector2 vector = new Vector2(zoneX, zoneZ);
-                        float distance = Math.Abs(Vector2.Distance(vector, new Vector2(location.x, location.z)));
-                        if (distance <= radius)
-                        {
-                            return true;
-                        }
-                        else
-                            return false;
-                    }
+                Vector2 vector = new Vector2(zoneX, zoneZ);
+                float distance = Math.Abs(Vector2.Distance(vector, new Vector2(location.x, location.z)));
+                if (distance <= radius)
+                {
+                    return true;
+                }
+                else
+                    return false;
+            }
 
-                    return false;                
-            
+            return false;
+
         }
         private void SendMessage(Player player, string message , bool repeat, bool inZone)
         {
@@ -938,25 +938,25 @@ namespace Oxide.Plugins
         {           
             if (Server.AllPlayers.Count > 0)
             {
-                foreach (Player Player in Server.AllPlayers)
+                foreach (Player player in Server.AllPlayers)
                 {
-                    if (Player.Name.ToLower() == "server")
+                    if (player.Name.ToLower() == "server")
                     {
                         continue;
                     }
-                   if (Player.Id == 9999999999) continue; //fixes error
+                   if (player.Id == 9999999999) continue; //fixes error
 
-                    if (Server.PlayerIsOnline(Player.DisplayName))
+                    if (Server.PlayerIsOnline(player.Id))
                     {
-                        string playerId = Player.Id.ToString();                        
-                        if (!PData.ContainsKey(Player))
+                        string playerId = player.Id.ToString();                        
+                        if (!PData.ContainsKey(player))
                         {
-                            PData.Add(Player, new PlayerData(Player.Id));
+                            PData.Add(player, new PlayerData(player.Id));
                             if (ZoneCheckOn == true)
                             {
                                 if (!ZoneCheckTimer.ContainsKey(playerId))
                                 {
-                                    ZoneCheckTimer.Add(playerId, timer.Repeat(ZoneCheckInterval, 0, () => CheckPlayerLocation(Player)));
+                                    ZoneCheckTimer.Add(playerId, timer.Repeat(ZoneCheckInterval, 0, () => CheckPlayerLocation(player)));
                                 }
                             }
 

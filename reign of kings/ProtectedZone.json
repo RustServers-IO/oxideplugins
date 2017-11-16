@@ -2,7 +2,7 @@
     "name": "ProtectedZone",
     "description": "Allows the easy addition of zones that have many options like noPvP, NoBuild, noDamage, etc",
     "author": "Mordeus",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "configuration": true,
     "suggest": {
         "AntiLoot": "*"
