@@ -7,8 +7,8 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("CustomDecay", "Wizera", "1.0.0", ResourceId = 0)]
-    [Description("Scales decay of items")]
+    [Info("CustomDecay", "Wizera", "1.0.1", ResourceId = 2690)]
+    [Description("Custom decay for all individual entities")]
 
     class CustomDecay : CovalencePlugin
     {
@@ -56,6 +56,7 @@ namespace Oxide.Plugins
                         { "box.wooden.large", 0.0f },
                         { "campfire", 0.0f },
                         { "fridge.deployed", 0.0f },
+                        { "furnace", 0.0f },
                         { "furnace.large", 0.0f },
                         { "gates.external.high.wood", 0.0f },
                         { "jackolantern.angry", 0.0f },
