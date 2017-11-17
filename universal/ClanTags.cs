@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace Oxide.Plugins
 {
-    [Info("Clan Tags", "GreenArrow", "0.5", ResourceId = 2450)]
+    [Info("Clan Tags", "GreenArrow", "0.7", ResourceId = 2450)]
     [Description("Adding support for Clan tags in Better Chat. ")]
 
     class ClanTags : CovalencePlugin
