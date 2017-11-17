@@ -2,7 +2,7 @@
     "name": "Gather Control",
     "description": "Control gather rates by day and night with permissions",
     "author": "CaseMan",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "configuration": true,
     "suggest": {
         "GUIAnnouncements": "*"

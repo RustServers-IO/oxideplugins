@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherControl", "CaseMan", "1.5.0", ResourceId = 2477)]
+    [Info("GatherControl", "CaseMan", "1.5.1", ResourceId = 2477)]
     [Description("Control gather rates by day and night with permissions")]
 
     class GatherControl : RustPlugin
@@ -223,7 +223,7 @@ namespace Oxide.Plugins
 			if(gr >= 0)
 			{
 				if(item.info.shortname=="hq.metal.ore") GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResourceHQM, permData.PermissionsGroups[gr].NightRateMultResourceHQM);
-				if(item.info.shortname!="hq.metal.ore" && permData.PermissionsGroups[gr].CustomRateMultResourceBonus.ContainsKey(item.info.shortname)) CustomList(item, permData.PermissionsGroups[gr].CustomRateMultResourceBonus[item.info.shortname]);
+				else if(item.info.shortname!="hq.metal.ore" && permData.PermissionsGroups[gr].CustomRateMultResourceBonus.ContainsKey(item.info.shortname)) CustomList(item, permData.PermissionsGroups[gr].CustomRateMultResourceBonus[item.info.shortname]);
 				else GatherMultiplier(item, permData.PermissionsGroups[gr].DayRateMultResourceBonus, permData.PermissionsGroups[gr].NightRateMultResourceBonus);			
 			}		
 		}		

@@ -5,6 +5,7 @@ using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using System.Collections;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 namespace Oxide.Plugins
 {
     [Info("Clan Tags", "GreenArrow", "0.5", ResourceId = 2450)]
@@ -29,19 +30,26 @@ namespace Oxide.Plugins
 	    
 	
         private string GetUsersClan(IPlayer player) {
-#if RUST
+			
     		string clan = (string)Clans?.Call("GetClanOf",player.Object);
-#endif
-#if HURTWORLD
-	        string clan = (string)HWClans?.Call("getClanTag_bySession",player.Object);
-#endif
+			
 			if (clan != null)
 			    return clan;
 		
 		    return null;
 		}
 		
-		
+	
+        private string GetClanOwner(string lol) {
+
+    		JObject claninfo = (JObject)Clans?.Call("GetClan",lol);	
+		    
+			string clanowner = (string)claninfo["owner"];
+
+    			return clanowner;
+		 
+		    return null;
+		}
 		
         private string GetClanTagFormatted(IPlayer player)
         {	
@@ -100,15 +108,48 @@ namespace Oxide.Plugins
 
 
         }
+	
+        [Command("clantag")]
+        void ChangeClanTagOwner(IPlayer player, string command, string[] args)
+        {
+		    string clantag = GetUsersClan(player);
 				
+			if (permission.UserHasPermission(player.Id, "clantags.default") && args.Length == 1 && (clantag != null) && (GetClanOwner(clantag) == (string)player.Id))
+            {
+			if (perClanColor.ContainsKey(clantag))
+			perClanColor.Remove(clantag);
+			
+			perClanColor.Add(clantag,args[0]);
+			Config.Set("PerClanColor", perClanColor);
+			SaveConfig();
+			player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> <color=#{args[0]}> {clantag}</color> your clan tag has been updated.");		    
+
+			} else
+
+			if (!permission.UserHasPermission(player.Id, "clantags.default"))
+			player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> You don't have permission!");
+            
+            if (args.Length <= 0)
+		    player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> Not enough infomation given! <color=#c4c103>Example: /clantag 800000</color>");
+				
+			if ((clantag != null) && (GetClanOwner(clantag) != (string)player.Id) )
+		    player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> Only the clan owner is allowed to change the clans tag color.");		    
+				
+			if (clantag == null)
+			player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> You're not in a clan.");		    
+
+        }
+
+		
         void OnServerInitialized()
 		{
 
     		defaultClanCol = Config["defaultClanCol"];
             before = Config["BeforeTag"];
 		    after = Config["AfterTag"];
-    		perClanColor = JsonConvert.DeserializeObject<Dictionary<string, string>>(JsonConvert.SerializeObject(Config["PerClanColor"]));
+			perClanColor = JsonConvert.DeserializeObject<Dictionary<string, string>>(JsonConvert.SerializeObject(Config["PerClanColor"]));
             permission.RegisterPermission("clantags.admin", this);
+			permission.RegisterPermission("clantags.default", this);
 						
     		BetterChat?.CallHook("API_RegisterThirdPartyTitle", this, new Func<IPlayer, string>(GetClanTagFormatted));
 
