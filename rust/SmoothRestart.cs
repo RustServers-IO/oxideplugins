@@ -6,12 +6,13 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using System.Linq;
 using System.Text;
+using Oxide.Core;
 using Oxide.Core.Configuration;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.2", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.3", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -197,7 +198,7 @@ namespace Oxide.Plugins
 			newOxideBuildDetected = false;
 			userAgent = new Dictionary<string, string>();
 			userAgent.Add("User-Agent", "OxideMod");
-			serverOxideVersion = Convert.ToInt32(Oxide.Core.OxideMod.Version.Patch);
+			serverOxideVersion = Convert.ToInt32(Manager.GetPlugin("RustCore").Version.Patch);
 			initCheckDevblog = true;
 			initCheckOxideBuild = true;
 			simulationActive = false;
@@ -278,7 +279,7 @@ namespace Oxide.Plugins
 
 		void CheckOxideCommits()
 		{
-			var url = $"https://api.github.com/repos/oxidemod/oxide/releases/latest";
+			var url = $"https://api.github.com/repos/oxidemod/oxide.rust/releases/latest";
 			Dictionary<string, string> userAgent  = new Dictionary<string, string>();
 			userAgent.Add("User-Agent", "OxideMod");
 			try { webrequest.EnqueueGet(url, (code, response) => APIResponse(code, response, "oxide", 0), this, userAgent); }
