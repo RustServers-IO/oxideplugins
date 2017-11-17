@@ -1,14 +1,16 @@
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Night Door", "Slydelix", "1.5.4", ResourceId = 2684)]
+    [Info("Night Door", "Slydelix", "1.6", ResourceId = 2684)]
     class NightDoor : RustPlugin
     {
         int layers = LayerMask.GetMask("Construction");
+        bool debug = false;
         bool BypassAdmin, BypassPerm, UseRealTime, AutoDoor, useMulti;
         string startTime, endTime;
 
@@ -60,7 +62,11 @@ namespace Oxide.Plugins
                 {"ListOfTimeIntervals_NEW", "List of all time periods: \n{0}"},
                 {"NotFoundEntry_NEW", "Couldn't find a time period with name '{0}'"},
                 {"TimeIntervalExist_NEWs", "A time period with that name already exists"},
-                {"TimeIntervalDisabled_NEW", "Multiple time periods are disabled in config"},
+
+                {"debugging_disabled", "Debugging is disabled"},
+                {"debugging_null", "Entity is null"},
+                {"debugging_hit", "HIT entity: {0}"},
+
                 {"TimeIntervalUsage_NEW", "To create a time period type <color=silver>/timeperiod create <name of time period> <HH:mm> (starting time) <HH:mm> (ending time)</color>\nTo delete a time period type <color=silver>/timeperiod remove <name></color>\nFor list of all time periods type <color=silver>/timeperiod list</color>"},
                 {"HelpMsg_NEW", "List of commands:\n<color=silver>*You have to look at the door/hatch/gate for most of the commands to work*</color>\n<color=silver>/nd add</color> - Makes the entity openable only during default time period(config time)\n<color=silver>/nd add <time period></color> Makes the entity openable only during specified time period (/timeperiod)\n<color=silver>/nd remove</color> Makes the entity 'normal' again (openable at any time)\n<color=silver>/nd show</color> shows all time locked entites\n<color=silver>/nd info</color> shows if the door/hatch/gate is time locked and the time period if it is\nCurrent time period: {0} - {1}"}
             }, this);
@@ -85,9 +91,9 @@ namespace Oxide.Plugins
 
         class StoredData
         {
-            public Dictionary<uint, string> IDlist  = new Dictionary<uint, string>();
+            public Dictionary<uint, string> IDlist = new Dictionary<uint, string>();
             public HashSet<TimeInfo> TimeEntries = new HashSet<TimeInfo>();
-            
+
 
             public StoredData()
             {
@@ -149,7 +155,7 @@ namespace Oxide.Plugins
                 SaveFile();
                 return;
             });
-            
+
         }
 
         void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject("NightDoor_NEW", storedData);
@@ -176,14 +182,14 @@ namespace Oxide.Plugins
         void UpgradeSaveFile()
         {
             if (storedData2.IDlist == null) return;
-            foreach(var entry in storedData2.IDlist)
+            foreach (var entry in storedData2.IDlist)
             {
                 if (!storedData.IDlist.ContainsKey(entry))
                 {
                     storedData.IDlist.Add(entry, "default");
                     SaveFile();
                 }
-                
+
             }
             storedData2.IDlist = null;
             Interface.Oxide.DataFileSystem.WriteObject("NightDoor", storedData2);
@@ -193,7 +199,7 @@ namespace Oxide.Plugins
 
         void OnNewSave(string filename)
         {
-            Puts(lang.GetMessage("serverWipe_NEW", this));
+            PrintWarning(lang.GetMessage("serverWipe_NEW", this));
             storedData.IDlist.Clear();
             SaveFile();
         }
@@ -212,15 +218,15 @@ namespace Oxide.Plugins
         {
             string temp = storedData.IDlist[ID];
             string input = "";
-            foreach(var entry in storedData.TimeEntries)
+            foreach (var entry in storedData.TimeEntries)
             {
-                if(entry.name == temp)
+                if (entry.name == temp)
                 {
                     if (start)
                     {
                         input = entry.start;
                     }
-                    
+
                     else
                     {
                         input = entry.end;
@@ -232,8 +238,8 @@ namespace Oxide.Plugins
             string h, m;
             int hourInt = Convert.ToInt32(parts[0]);
             int minInt = Convert.ToInt32(parts[1]);
-            
-            float min = (float) minInt / 60;
+
+            float min = (float)minInt / 60;
             final = hourInt + min;
             return final;
         }
@@ -285,7 +291,6 @@ namespace Oxide.Plugins
 
         void CheckDoors()
         {
-
             if (!AutoDoor) return;
 
             Dictionary<uint, string> tempList = new Dictionary<uint, string>();
@@ -293,24 +298,45 @@ namespace Oxide.Plugins
 
             timer.Every(5f, () =>
             {
-                tempList = storedData.IDlist;
+                tempList = storedData.IDlist ?? tempList;
                 time = ConVar.Env.time;
-                foreach (var entry in tempList)
+
+                if (tempList.Count > 1)
                 {
-                    BaseEntity ent = BaseNetworkable.serverEntities.Find(entry.Key) as BaseEntity;
-
-                    DateTime start = GetDateTime(ent.net.ID, true);
-                    DateTime end = GetDateTime(ent.net.ID, false);
-
-                    if (ent == null || ent.IsDestroyed)
+                    foreach (var entry in tempList)
                     {
-                        storedData.IDlist.Remove(entry.Key);
-                        continue;
-                    }
+                        BaseEntity ent = BaseNetworkable.serverEntities.Find(entry.Key) as BaseEntity;
 
-                    if (UseRealTime)
-                    {
-                        if ((DateTime.Now >= start) && (DateTime.Now <= end))
+                        DateTime start = GetDateTime(ent.net.ID, true);
+                        DateTime end = GetDateTime(ent.net.ID, false);
+
+                        if (ent == null || ent.IsDestroyed)
+                        {
+                            storedData.IDlist.Remove(entry.Key);
+                            continue;
+                        }
+
+                        if (UseRealTime)
+                        {
+                            if ((DateTime.Now >= start) && (DateTime.Now <= end))
+                            {
+                                ent.SetFlag(BaseEntity.Flags.Open, true);
+                                ent.SendNetworkUpdateImmediate();
+                            }
+
+                            else
+                            {
+                                ent.SetFlag(BaseEntity.Flags.Open, false);
+                                ent.SendNetworkUpdateImmediate();
+                            }
+
+                            continue;
+                        }
+
+                        float a = GetFloat(ent.net.ID, true);
+                        float b = GetFloat(ent.net.ID, false);
+
+                        if (time >= a && time <= b)
                         {
                             ent.SetFlag(BaseEntity.Flags.Open, true);
                             ent.SendNetworkUpdateImmediate();
@@ -321,27 +347,34 @@ namespace Oxide.Plugins
                             ent.SetFlag(BaseEntity.Flags.Open, false);
                             ent.SendNetworkUpdateImmediate();
                         }
-
-                        continue;
-                    }
-
-                    float a = GetFloat(ent.net.ID, true);
-                    float b = GetFloat(ent.net.ID, false);
-
-                    if (time >= a && time <= b)
-                    {
-                        ent.SetFlag(BaseEntity.Flags.Open, true);
-                        ent.SendNetworkUpdateImmediate();
-                    }
-
-                    else
-                    {
-                        ent.SetFlag(BaseEntity.Flags.Open, false);
-                        ent.SendNetworkUpdateImmediate();
                     }
                 }
             });
         }
+
+        BaseEntity GetLookAtEntity(BasePlayer player, float maxDist = 250, int coll = -1)
+        {
+            if (player == null || player.IsDead()) return null;
+            RaycastHit hit;
+            var currentRot = Quaternion.Euler(player?.serverInput?.current?.aimAngles ?? Vector3.zero) * Vector3.forward;
+            var ray = new Ray((player?.eyes?.position ?? Vector3.zero), currentRot);
+            if (UnityEngine.Physics.Raycast(ray, out hit, maxDist, ((coll != -1) ? coll : layers)))
+            {
+                var ent = hit.GetEntity() ?? null;
+                if (debug)
+                {
+                    Vector3 ent_pos = ent.transform.position;
+                    Vector3 RayPos = ray.GetPoint(1f);
+                    SendReply(player, "Ray Pos: " + RayPos + " Ent pos: " + ent_pos);
+                    player.SendConsoleCommand("ddraw.arrow", 10f, Color.blue, player.eyes.position, hit.point, 0.1f);
+                    player.SendConsoleCommand("ddraw.sphere", 10f, Color.green, ent.transform.position, 1f);
+                    player.SendConsoleCommand("ddraw.sphere", 10f, Color.blue, hit.point, 0.1f);
+                }
+                if (ent != null && !(ent?.IsDestroyed ?? true)) return ent;
+            }
+            return null;
+        }
+
 
         void OnDoorOpened(Door door, BasePlayer player)
         {
@@ -410,7 +443,7 @@ namespace Oxide.Plugins
         [ChatCommand("timeperiod")]
         void timeCmd(BasePlayer player, string command, string[] args)
         {
-            if(!permission.UserHasPermission(player.UserIDString, "nightdoor.createinterval"))
+            if (!permission.UserHasPermission(player.UserIDString, "nightdoor.createinterval"))
             {
                 SendReply(player, lang.GetMessage("NoPerm_NEW", this, player.UserIDString));
                 return;
@@ -422,7 +455,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if(args.Length < 1)
+            if (args.Length < 1)
             {
                 SendReply(player, lang.GetMessage("TimeIntervalUsage_NEW", this, player.UserIDString));
                 return;
@@ -432,7 +465,7 @@ namespace Oxide.Plugins
             {
                 case "create":
                     {
-                        if(args.Length < 4)
+                        if (args.Length < 4)
                         {
                             SendReply(player, lang.GetMessage("timeintervalAddWrong_NEW", this, player.UserIDString));
                             return;
@@ -462,10 +495,10 @@ namespace Oxide.Plugins
                         string[] split1, split2;
                         split2 = time2.Split(':');
                         split1 = time1.Split(':');
-                        string[] allNumbers = {split1[0], split1[1], split2[0], split2[1], };
-                        foreach(string p in allNumbers)
+                        string[] allNumbers = { split1[0], split1[1], split2[0], split2[1], };
+                        foreach (string p in allNumbers)
                         {
-                            foreach(var ew in p)
+                            foreach (var ew in p)
                             {
                                 if (ew == '0' || ew == '1' || ew == '2' || ew == '3' || ew == '4' || ew == '5' || ew == '6' || ew == '7' || ew == '8' || ew == '9') continue;
 
@@ -476,10 +509,10 @@ namespace Oxide.Plugins
                                 }
                             }
 
-                            if(p.Length != 2)
+                            if (p.Length != 2)
                             {
                                 SendReply(player, lang.GetMessage("timeintervalAddWrong_NEW", this, player.UserIDString));
-                                return; 
+                                return;
                             }
                         }
 
@@ -500,7 +533,7 @@ namespace Oxide.Plugins
 
                         string Inputname = args[1];
 
-                        foreach(var entry in storedData.TimeEntries)
+                        foreach (var entry in storedData.TimeEntries)
                         {
                             if (entry.name.ToLower() == Inputname.ToLower() && entry.name != "default")
                             {
@@ -517,23 +550,23 @@ namespace Oxide.Plugins
 
                 case "list":
                     {
-                        string text ="";
+                        string text = "";
                         List<string> L = new List<string>();
                         if (storedData.TimeEntries.Count < 1)
                         {
                             SendReply(player, lang.GetMessage("NoTimeIntervals_NEW", this, player.UserIDString));
                             return;
                         }
-                        
+
                         foreach (var entry in storedData.TimeEntries)
                         {
-                            if(entry.name == "default") text = text = entry.name + " (" + entry.start + " - " + entry.end + ") (updates on plugin startup if changed)";
+                            if (entry.name == "default") text = text = entry.name + " (" + entry.start + " - " + entry.end + ") (updates on plugin startup if changed)";
                             text = entry.name + " (" + entry.start + " - " + entry.end + ")";
                             L.Add(text);
                         }
 
                         string finished = string.Join("\n", L.ToArray());
-                        SendReply(player, lang.GetMessage("ListOfTimeIntervals_NEW", this, player.UserIDString), finished);            
+                        SendReply(player, lang.GetMessage("ListOfTimeIntervals_NEW", this, player.UserIDString), finished);
                         return;
                     }
 
@@ -566,9 +599,7 @@ namespace Oxide.Plugins
             {
                 case "add":
                     {
-                        RaycastHit hit;
-                        if (!Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity, layers)) return;
-                        BaseEntity ent = hit.GetEntity();
+                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
 
                         if (!(ent is Door))
                         {
@@ -576,7 +607,7 @@ namespace Oxide.Plugins
                             return;
                         }
 
-                        if (storedData.IDlist.ContainsKey(ent.net.ID))  
+                        if (storedData.IDlist.ContainsKey(ent.net.ID))
                         {
                             SendReply(player, lang.GetMessage("AlreadyOnList_NEW", this, player.UserIDString));
                             return;
@@ -597,7 +628,7 @@ namespace Oxide.Plugins
                             return;
                         }
 
-                        foreach(var entry in storedData.TimeEntries)
+                        foreach (var entry in storedData.TimeEntries)
                         {
                             if (entry.name.ToLower() == tiName.ToLower())
                             {
@@ -612,9 +643,7 @@ namespace Oxide.Plugins
 
                 case "remove":
                     {
-                        RaycastHit hit;
-                        if (!Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity, layers)) return;
-                        BaseEntity ent = hit.GetEntity();
+                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
 
                         if (!(ent is Door))
                         {
@@ -636,9 +665,7 @@ namespace Oxide.Plugins
 
                 case "info":
                     {
-                        RaycastHit hit;
-                        if (!Physics.Raycast(player.eyes.HeadRay(), out hit, Mathf.Infinity, layers)) return;
-                        BaseEntity ent = hit.GetEntity();
+                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
 
                         if (!(ent is Door))
                         {
@@ -673,9 +700,9 @@ namespace Oxide.Plugins
                             return;
                         }
 
-                        foreach(var entry in storedData.TimeEntries)
+                        foreach (var entry in storedData.TimeEntries)
                         {
-                            if(entry.name == type)
+                            if (entry.name == type)
                             {
                                 start = entry.start;
                                 end = entry.end;
@@ -721,6 +748,30 @@ namespace Oxide.Plugins
                         end = p3 + ":" + p4;
 
                         SendReply(player, lang.GetMessage("HelpMsg_NEW", this, player.UserIDString), start, end);
+                        return;
+                    }
+
+                case "debug":
+                    {
+                        if (!debug)
+                        {
+                            SendReply(player, lang.GetMessage("debugging_disabled", this, player.UserIDString));
+                            return;
+                        }
+
+                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
+
+                        if (ent == null || ent.IsDestroyed)
+                        {
+                            SendReply(player, lang.GetMessage("debugging_null", this, player.UserIDString));
+                            return;
+                        }
+
+                        SendReply(player, lang.GetMessage("debugging_hit", this, player.UserIDString), ent.ShortPrefabName);
+
+                        if (!(ent is Door)) SendReply(player, lang.GetMessage("NotDoor_NEW", this, player.UserIDString));
+
+                        player.SendConsoleCommand("ddraw.sphere", 10f, Color.green, ent.transform.position, 1f);
                         return;
                     }
 
