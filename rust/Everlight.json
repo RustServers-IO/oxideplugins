@@ -2,9 +2,9 @@
     "name": "Everlight",
     "description": "Creates infinite fuel and light from configured objects",
     "author": "Wulf",
-    "version": "3.0.0",
+    "version": "3.0.1",
     "configuration": true,
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/everlight.2170",
     "games": [
         "rust"

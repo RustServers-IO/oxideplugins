@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AngryPromotion", "Tori1157", "1.1.0", ResourceId = 2686)]
+    [Info("AngryPromotion", "Tori1157", "1.1.1", ResourceId = 2686)]
     [Description("Automatically add users to a group if they have a specific word/phrase in their steam name.")]
 
     class AngryPromotion : CovalencePlugin
@@ -121,8 +121,8 @@ namespace Oxide.Plugins
 
                 /// -- CONFIRM -- ///
                 
-                ["Player Added Group Chat"] = "You have been added to the [#00ffff]{group}[/#] group.",
-                ["Player Removed Group Chat"] = "You have been removed from the [#00ffff]{group}[/#] group, since you removed [#00ffff]{promotionkey}[/#] from your name.",
+                ["Player Added Group"] = "You have been added to the [#00ffff]{group}[/#] group.",
+                ["Player Removed Group"] = "You have been removed from the [#00ffff]{group}[/#] group, since you removed [#00ffff]{promotionkey}[/#] from your name.",
 
                 ["Admin Removed User"] = "You have successfully removed [#00ffff]{target}[/#] from [#00ffff]{group}[/#] group.",
 
@@ -134,7 +134,7 @@ namespace Oxide.Plugins
                 ["Player Is Promoting"] = "[#00ffff]{player}[/#] is currently promoting your server.",
                 ["Player Not Promoting"] = "[#00ffff]{player}[/#] is currently [#ff0000]not[/#] promoting your server.",
 
-                ["Admin Help"] = "- [#ffa500]/promotion check[/#] [i](Checks to see if user is promoting)[/i]\n- [#ffa500]/promotion help[/#] [i](Displays this message)[/i]\n- [#ffa500]/promotion group[/#] [i](Displays the information regarding the group)[/i]\n- [#ffa500]/promotion[/#] [i](Displays the information regarding the plugin)[/i]\n- [#ffa500]/promotion remove \"User Name\"[/#] [i](Removes player from promotion group)[/i]",
+                ["Admin Help1"] = "- [#ffa500]/promotion check[/#] [i](Checks to see if user is promoting)[/i]\n- [#ffa500]/promotion help[/#] [i](Displays this message)[/i]\n- [#ffa500]/promotion group[/#] [i](Displays the information regarding the group)[/i]\n- [#ffa500]/promotion[/#] [i](Displays the information regarding the plugin)[/i]\n- [#ffa500]/promotion remove \"User Name\"[/#] [i](Removes player from promotion group)[/i]",
                 ["Player Help"] = "- [#ffa500]/promotion help[/#] [i](Displays this message)[/i]\n- [#ffa500]/promotion group[/#] [i](Displays the information regarding the group)[/i]\n- [#ffa500]/promotion[/#] [i](Displays the information regarding the plugin)[/i]",
 
             }, this);
@@ -227,7 +227,7 @@ namespace Oxide.Plugins
 
                     if (HasPerm)
                     {
-                        SendInfoMessage(player, lang.GetMessage("Admin Help", this, player.Id));
+                        SendInfoMessage(player, lang.GetMessage("Admin Help1", this, player.Id));
                         return;
                     }
 
@@ -313,13 +313,13 @@ namespace Oxide.Plugins
                                     return;
                                 }
 
-                                SendChatMessage(player, lang.GetMessage("Player Added Group Chat", this, player.Id).Replace("{group}", groupKey));
+                                SendChatMessage(player, lang.GetMessage("Player Added Group", this, player.Id).Replace("{group}", groupKey));
                             });
                         }
 
                         if (printToConsole == true)
                         {
-                            Puts(lang.GetMessage("Player Added Group Console", this, player.Id).Replace("{player}", player.Name).Replace("{group}", groupKey));
+                            Puts(lang.GetMessage("Player Added Group", this, player.Id).Replace("{player}", player.Name).Replace("{group}", groupKey));
                         }
 
                         return;
@@ -340,13 +340,13 @@ namespace Oxide.Plugins
                         {
                             timer.Once(messageDelay, () =>
                             {
-                                SendChatMessage(player, lang.GetMessage("Player Removed Group Chat", this, player.Id).Replace("{group}", groupKey).Replace("{promotionkey}", promotionKey));
+                                SendChatMessage(player, lang.GetMessage("Player Removed Group", this, player.Id).Replace("{group}", groupKey).Replace("{promotionkey}", promotionKey));
                             });
                         }
 
                         if (printToConsole == true)
                         {
-                            Puts(lang.GetMessage("Player Removed Group Console", this, player.Id).Replace("{group}", groupKey).Replace("{promotionkey}", promotionKey));
+                            Puts(lang.GetMessage("Player Removed Group", this, player.Id).Replace("{group}", groupKey).Replace("{promotionkey}", promotionKey));
                         }
 
                         return;
