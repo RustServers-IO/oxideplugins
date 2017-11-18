@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.0", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.1", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
@@ -100,7 +100,7 @@ namespace Oxide.Plugins
 			private void OnTriggerStay(Collider range)
 			{
 				BaseCombatEntity entity = range.GetComponentInParent<BaseCombatEntity>();
-				
+
 				// Check if entity is valid
 				if (!IsValid(entity))
 					return;
@@ -162,7 +162,7 @@ namespace Oxide.Plugins
 				}
 
 				instance.SaveData();
-				
+
 				Destroy(this);
 			}
 			#endregion
@@ -195,7 +195,8 @@ namespace Oxide.Plugins
 					// Check if light is the closest valid light
 					else if (!instance.IsClosest(entity, id))
 						return false;
-				if (entity is BasePlayer)
+				// Check if entity is a BasePlayer and not an NPCPlayer
+				if (entity is BasePlayer && !(entity is NPCPlayer))
 				{
 					BasePlayer player = entity as BasePlayer;
 					// Check if player is authorized on the light
@@ -646,7 +647,7 @@ namespace Oxide.Plugins
 			config.playerTrackingRadius = (int)Config["Tracking Radius - Players"];
 			config.heliDetectionRadius = (int)Config["Detection Radius - Helicopter"];
 			config.heliTrackingRadius = (int)Config["Tracking Radius - Helicopter"];
-			
+
 			config.autoConvert = (bool)Config["Auto Convert"];
 			config.requireFuel = (bool)Config["Require Fuel"];
 			config.nightOnly = (bool)Config["Night Only Operation"];
@@ -725,7 +726,7 @@ namespace Oxide.Plugins
 			SearchLight light = null;
 			if (target is SearchLight)
 				light = target as SearchLight;
-			
+
 			if (args.Length == 0)
 				args = new string[] { String.Empty };
 			switch (args[0].ToLower())

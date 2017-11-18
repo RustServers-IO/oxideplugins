@@ -46,7 +46,7 @@ namespace Oxide.Plugins
                 { "StickOrWhip", "You must use a WOODEN STICK or a WHIP to tame animals!" },
                 { "NoCrestedTaming", "If you are trying to TAME this animal, do it in the wilds, you cannot TAME on crested Land!" },
                 { "PreventDamageViolator", "You cannot attack until you choose a profession!" },
-                { "WrongProfession", "You are a {0}! You cannot craft {1}!" },
+                { "WrongProfession", "You are a {0}! [FFFFFF]You cannot craft [FF0000]{1}![FFFFFF]" },
                 { "NoFarmer", "You are not a Farmer you cannot collect animals from your territory!" },
                 { "OnlyMateOnTerritory", "You can only Mate Animals on your territory!" },
                 { "WrongMatingArgs", "The animal you entered does not exist!" },
@@ -431,7 +431,7 @@ namespace Oxide.Plugins
             }
             return;
         }
-        void OnItemCrafterStart(ItemCrafterEvent e)
+        void OnItemCraft(ItemCrafterStartEvent e)
         {
             LoadLists();
             float[] Area = new float[4];
@@ -521,7 +521,7 @@ namespace Oxide.Plugins
             }
             foreach (Entity ent in _globalEntList)
             {
-                if (!ent.name.ToLower().Contains("sheep") && !ent.name.Contains("Wolf") && !ent.name.ToLower().Contains("duck") && !ent.name.ToLower().Contains("chicken") && !ent.name.ToLower().Contains("rooster")) continue;
+                if (!ent.name.ToLower().Contains("sheep") && !ent.name.Contains("Wolf") && !ent.name.ToLower().Contains("duck") && !ent.name.ToLower().Contains("chicken") && !ent.name.ToLower().Contains("rooster") && !ent.name.ToLower().Contains("rabbit")) continue;
                 if (crestScheme.GetCrestAt(ent.Position) == null || crestScheme.GetCrestAt(ent.Position).GuildName != PlayerExtensions.GetGuild(player).Name) continue;
                 if (ent.TryGet<IHealth>().CurrentHealth == 0) continue;
                 string entname = ent.name.Replace("[Entity] ", "");
@@ -592,11 +592,11 @@ namespace Oxide.Plugins
             string argument = string.Concat(arg);
             if (argument.ToLower() == "chicken") { MateChicken(player); return; }
             if (argument.ToLower() == "duck") { MateDucks(player); return; }
-            //if (argument.ToLower() == "grizzly") { MateGrizzly(player); return; }
+            if (argument.ToLower() == "grizzly") { MateGrizzly(player); return; }
             if (argument.ToLower() == "rabbit") { MateRabbits(player); return; }
             if (argument.ToLower() == "sheep") { MateSheep(player); return; } 
-            //if (argument.ToLower() == "wolf") { MateWolves(player); return; }
-            //if (argument.ToLower() == "werewolf") { MateWerewolves(player); return; }
+            if (argument.ToLower() == "wolf") { MateWolves(player); return; }
+            if (argument.ToLower() == "werewolf") { MateWerewolves(player); return; }
             PrintToChat(player, string.Format(GetMessage("WrongMatingArgs", player.Id.ToString())));
             return;
         }
@@ -764,7 +764,7 @@ namespace Oxide.Plugins
             {
                 if (isInArea(ent, GenerateAreaAroundPlayer(player, 10)))
                 {
-                    if (ent.name.ToLower().Contains("duck")) grizzlycount++;
+                    if (ent.name.ToLower().Contains("grizzly")) grizzlycount++;
                 }
             }
             if (grizzlycount / 2 < 1)
@@ -830,7 +830,7 @@ namespace Oxide.Plugins
         }
         void MateRabbits(Player player)
         {
-            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Sheep", true, true);
+            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Rabbit", true, true);
             string animalstring = blueprintForName.Name;
             if (MatedRabbitsSinceLastRestart.Contains(player.Id))
             {
@@ -896,7 +896,8 @@ namespace Oxide.Plugins
         }
         void MateSheep(Player player)
         {
-            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Duck", true, true);
+            
+            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Sheep", true, true);
             string animalstring = blueprintForName.Name;
             if (MatedSheepSinceLastRestart.Contains(player.Id))
             {
@@ -912,7 +913,7 @@ namespace Oxide.Plugins
             {
                 if (isInArea(ent, GenerateAreaAroundPlayer(player, 10)))
                 {
-                    if (ent.name.ToLower().Contains("rabbit")) sheepcount++;
+                    if (ent.name.ToLower().Contains("sheep")) sheepcount++;
                 }
             }
             if (sheepcount / 2 < 1)
@@ -956,13 +957,13 @@ namespace Oxide.Plugins
             }
             else
             {
-                PrintToChat(player, string.Format(GetMessage("ResourcesToMate", player.Id.ToString()), (AmountToMateRabbit * attemptstomate).ToString(), FarmerResourceToMateRabbit, attemptstomate.ToString(), animalstring));
+                PrintToChat(player, string.Format(GetMessage("ResourcesToMate", player.Id.ToString()), (AmountToMateSheep * attemptstomate).ToString(), FarmerResourceToMateSheep, attemptstomate.ToString(), animalstring));
                 return;
             }
         }
         void MateWolves(Player player)
         {
-            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Chicken", true, true);
+            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wolf", true, true);
             string animalstring = blueprintForName.Name;
             string Message = "";
             if (MatedWolfSinceLastRestart.Contains(player.Id))
@@ -988,7 +989,7 @@ namespace Oxide.Plugins
                 return;
             }
             attemptstomate = Math.DivRem(wolfcount, 2, out wolfcount);
-            if (!CanRemoveResource(player, FarmerResourcesToMateWolf0, AmountToMateGrizzly * attemptstomate) || !CanRemoveResource(player, FarmerResourcesToMateWolf1, AmountToMateGrizzly * attemptstomate))
+            if (!CanRemoveResource(player, FarmerResourcesToMateWolf0, AmountToMateWolf * attemptstomate) || !CanRemoveResource(player, FarmerResourcesToMateWolf1, AmountToMateWolf * attemptstomate))
             {
                 if (CanRemoveResource(player, FarmerResourcesToMateWolf0, AmountToMateWolf * attemptstomate))
                 {
@@ -1041,7 +1042,7 @@ namespace Oxide.Plugins
         void MateWerewolves(Player player)
         {
             string Message = "";
-            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Grizzly Bear", true, true);
+            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Werewolf", true, true);
             string animalstring = blueprintForName.Name;
             if (MatedWerewolfSinceLastRestart.Contains(player.Id))
             {
@@ -1070,17 +1071,17 @@ namespace Oxide.Plugins
             {
                 if (CanRemoveResource(player, FarmerResourcesToMateWerewolf0, AmountToMateWerewolf * attemptstomate))
                 {
-                    Message = Message + string.Format(GetMessage("ResourcesToMate", player.Id.ToString()), (AmountToMateGrizzly * attemptstomate).ToString(), FarmerResourcesToMateGrizzly0, attemptstomate.ToString(), animalstring) + "\n";
+                    Message = Message + string.Format(GetMessage("ResourcesToMate", player.Id.ToString()), (AmountToMateWerewolf * attemptstomate).ToString(), FarmerResourcesToMateWerewolf0, attemptstomate.ToString(), animalstring) + "\n";
                 }
                 if (CanRemoveResource(player, FarmerResourcesToMateWerewolf1, AmountToMateWerewolf * attemptstomate))
                 {
                     Message = Message + string.Format(GetMessage("ResourcesToMate", player.Id.ToString()), (AmountToMateWerewolf * attemptstomate).ToString(), FarmerResourcesToMateWerewolf1, attemptstomate.ToString(), animalstring) + "\n";
                 }
-                if (CanRemoveResource(player, FarmerResourcesToMateGrizzly2, AmountToMateGrizzly * attemptstomate))
+                if (CanRemoveResource(player, FarmerResourcesToMateWerewolf2, AmountToMateWerewolf * attemptstomate))
                 {
                     Message = Message + string.Format(GetMessage("ResourcesToMate", player.Id.ToString()), (AmountToMateWerewolf * attemptstomate).ToString(), FarmerResourcesToMateWerewolf2, attemptstomate.ToString(), animalstring) + "\n";
                 }
-                if (CanRemoveResource(player, FarmerResourcesToMateGrizzly2, AmountToMateGrizzly * attemptstomate))
+                if (CanRemoveResource(player, FarmerResourcesToMateWerewolf3, AmountToMateWerewolf * attemptstomate))
                 {
                     Message = Message + string.Format(GetMessage("ResourcesToMate", player.Id.ToString()), (AmountToMateWerewolf * attemptstomate).ToString(), FarmerResourcesToMateWerewolf3, attemptstomate.ToString(), animalstring) + "\n";
                 }
@@ -1374,134 +1375,135 @@ namespace Oxide.Plugins
             if (blueprintNameKey.Contains("Weapons.Projectile.Steel")) return true;
             switch (blueprintNameKey)
             {
-                case ("AreaProtection.Crests.IronCrest"):
+                case ("Items.AreaProtection.Crests.IronCrest"):
                     return true;
-                case ("AreaProtection.Crests.SteelCrest"):
+                case ("Items.AreaProtection.Crests.SteelCrest"):
                     return true;
-                case ("AreaProtection.Totems.IronTotem"):
+                case ("Items.AreaProtection.Totems.IronTotem"):
                     return true;
-                case ("BuildingMaterials.Doors.IronDoor"):
+                case ("Items.BuildingMaterials.Doors.IronDoor"):
                     return true;
-                case ("BuildingMaterials.Gates.IronGate"):
+                case ("Items.BuildingMaterials.Gates.IronGate"):
                     return true;
-                case ("BuildingMaterials.Windows.IronBarWindow"):
+                case ("Items.BuildingMaterials.Windows.IronBarWindow"):
                     return true;
-                case ("Containers.IronChest"):
+                case ("Items.Containers.IronChest"):
                     return true;
-                case ("Containers.SteelChest"):
+                case ("Items.Containers.SteelChest"):
                     return true;
-                case ("Dungeon.LargeIronCage"):
+                case ("Items.Dungeon.LargeIronCage"):
                     return true;
-                case ("Dungeon.LargeIronHangingCage"):
+                case ("Items.Dungeon.LargeIronHangingCage"):
                     return true;
-                case ("Dungeon.SmallIronCage"):
+                case ("Items.Dungeon.SmallIronCage"):
                     return true;
-                case ("Dungeon.SmallIronHangingCage"):
+                case ("Items.Dungeon.SmallIronHangingCage"):
                     return true;
-                case ("Dungeon.SteelCage"):
+                case ("Items.Dungeon.SteelCage"):
                     return true;
-                case ("Equipment.IronShackles"):
+                case ("Items.Equipment.IronShackles"):
                     return true;
-                case ("Equipment.Lockpick"):
+                case ("Items.Equipment.Lockpick"):
                     return true;
-                case ("Furniture.BellGong"):
+                case ("Items.Furniture.BellGong"):
                     return true;
-                case ("Furniture.LordsBath"):
+                case ("Items.Furniture.LordsBath"):
                     return true;
-                case ("Lights.Candle"):
+                case ("Items.Lights.Candle"):
                     return true;
-                case ("Lights.CandleStand"):
+                case ("Items.Lights.CandleStand"):
                     return true;
-                case ("Lights.Chandelier"):
+                case ("Items.Lights.Chandelier"):
                     return true;
-                case ("Lights.HangingLantern"):
+                case ("Items.Lights.HangingLantern"):
                     return true;
-                case ("Lights.HangingTorch"):
+                case ("Items.Lights.HangingTorch"):
                     return true;
-                case ("Lights.IronFloorTorch"):
+                case ("Items.Lights.IronFloorTorch"):
                     return true;
-                case ("Lights.SmallWallLantern"):
+                case ("Items.Lights.SmallWallLantern"):
                     return true;
-                case ("Lights.SmallWallTorch"):
+                case ("Items.Lights.SmallWallTorch"):
                     return true;
-                case ("Lights.StandingIronTorch"):
+                case ("Items.Lights.StandingIronTorch"):
                     return true;
-                case ("Paintable.MediumSteelHangingSign"):
+                case ("Items.Paintable.MediumSteelHangingSign"):
                     return true;
-                case ("Paintable.SmallSteelHangingSign"):
+                case ("Items.Paintable.SmallSteelHangingSign"):
                     return true;
-                case ("Paintable.SmallSteelSignpost"):
+                case ("Items.Paintable.SmallSteelSignpost"):
                     return true;
-                case ("Paintable.SteelPictureFrame"):
+                case ("Items.Paintable.SteelPictureFrame"):
                     return true;
-                case ("Resources.SteelCompound"):
+                case ("Items.Resources.SteelCompound"):
                     return true;
-                case ("Stations.Anvil"):
+                case ("Items.Stations.Anvil"):
                     return true;
-                case ("Traps.BladedPillar"):
+                case ("Items.Traps.BladedPillar"):
                     return true;
-                case ("Traps.IronBearTrap"):
+                case ("Items.Traps.IronBearTrap"):
                     return true;
-                case ("Traps.IronSpikes(Hidden)"):
+                case ("Items.Traps.IronSpikes(Hidden)"):
                     return true;
-                case ("Traps.IronSpikes"):
+                case ("Items.Traps.IronSpikes"):
                     return true;
-                case ("Weapons.HarvestingTool.IronHatchet"):
+                case ("Items.Weapons.HarvestingTool.IronHatchet"):
                     return true;
-                case ("Weapons.HarvestingTool.IronPickaxe"):
+                case ("Items.Weapons.HarvestingTool.IronPickaxe"):
                     return true;
-                case ("Weapons.HarvestingTool.IronWoodCuttersAxe"):
+                case ("Items.Weapons.HarvestingTool.IronWoodCuttersAxe"):
                     return true;
-                case ("Weapons.HarvestingTool.Scythe"):
+                case ("Items.Weapons.HarvestingTool.Scythe"):
                     return true;
-                case ("Weapons.HarvestingTool.SteelHatchet"):
+                case ("Items.Weapons.HarvestingTool.SteelHatchet"):
                     return true;
-                case ("Weapons.HarvestingTool.SteelPickaxe"):
+                case ("Items.Weapons.HarvestingTool.SteelPickaxe"):
                     return true;
-                case ("Weapons.HarvestingTool.SteelWoodCuttersAxe"):
+                case ("Items.Weapons.HarvestingTool.SteelWoodCuttersAxe"):
                     return true;
-                case ("Weapons.Melee.ExecutionersAxe"):
+                case ("Items.Weapons.Melee.ExecutionersAxe"):
                     return true;
-                case ("Weapons.Siege.BallistaBolt"):
+                case ("Items.Weapons.Siege.BallistaBolt"):
                     return true;
-                case ("Lights.WallLantern"):
+                case ("Items.Lights.WallLantern"):
                     return true;
-                case ("Lights.WallTorch"):
+                case ("Items.Lights.WallTorch"):
                     return true;
                 default: return false;
             }
         }
         bool isCraftableByStoneMason(string blueprintNameKey)
         {
+           
             if (blueprintNameKey.Contains("BuildingMaterials.Blocks.Tier5")) return true;
             if (blueprintNameKey.Contains("BuildingMaterials.Blocks.Tier7")) return true;
             if (blueprintNameKey.Contains("Weapons.Melee.Stone")) return true;
             if (blueprintNameKey.Contains("Weapons.Projectile.Stone")) return true;
             switch (blueprintNameKey)
             {
-                case ("AreaProtection.Totems.StoneTotem"):
+                case ("Items.AreaProtection.Totems.StoneTotem"):
                     return true;
-                case ("BuildingMaterials.Doors.StoneArch"):
+                case ("Items.BuildingMaterials.Doors.StoneArch"):
                     return true;
-                case ("BuildingMaterials.Gates.LongWoodDrawbridge"):
+                case ("Items.BuildingMaterials.Gates.LongWoodDrawbridge"):
                     return true;
-                case ("BuildingMaterials.Gates.WoodDrawbridge"):
+                case ("Items.BuildingMaterials.Gates.WoodDrawbridge"):
                     return true;
-                case ("BuildingMaterials.Windows.StoneSlitWindow"):
+                case ("Items.BuildingMaterials.Windows.StoneSlitWindow"):
                     return true;
-                case ("Lights.GreatFireplace"):
+                case ("Items.Lights.GreatFireplace"):
                     return true;
-                case ("Lights.GroundTorch"):
+                case ("Items.Lights.GroundTorch"):
                     return true;
-                case ("Lights.StoneFireplace"):
+                case ("Items.Lights.StoneFireplace"):
                     return true;
-                case ("Resources.StoneSlab"):
+                case ("Items.Resources.StoneSlab"):
                     return true;
-                case ("Stations.Granary"):
+                case ("Items.Stations.Granary"):
                     return true;
-                case ("Stations.Well"):
+                case ("Items.Stations.Well"):
                     return true;
-                case ("Weapons.Siege.TrebuchetStone"):
+                case ("Items.Weapons.Siege.TrebuchetStone"):
                     return true;
                 default: return false;
             }
@@ -1514,159 +1516,162 @@ namespace Oxide.Plugins
             if (blueprintNameKey.Contains("Shield.Wood")) return true;
             if (blueprintNameKey.Contains("Traps.Wood")) return true;
             if (blueprintNameKey.Contains("Weapons.Projectile.Wood")) return true;
-            switch (blueprintNameKey)
+            else
             {
-                case ("AreaProtection.Totems.WoodTotem"):
-                    return true;
-                case ("BuildingMaterials.Defences.DefensiveBarricade"):
-                    return true;
-                case ("BuildingMaterials.Defences.LogFence"):
-                    return true;
-                case ("BuildingMaterials.Defences.WoodLedge"):
-                    return true;
-                case ("BuildingMaterials.Doors.ReinforcedWood(Iron)Door"):
-                    return true;
-                case ("BuildingMaterials.Doors.ReinforcedWood(Steel)Door"):
-                    return true;
-                case ("BuildingMaterials.Doors.WoodDoor"):
-                    return true;
-                case ("BuildingMaterials.Gates.ReinforcedWood(Iron)Gate"):
-                    return true;
-                case ("BuildingMaterials.Gates.WoodGate"):
-                    return true;
-                case ("BuildingMaterials.Windows.WoodShutters"):
-                    return true;
-                case ("Containers.HighQualityCabinet"):
-                    return true;
-                case ("Containers.MediumQualityBookcase"):
-                    return true;
-                case ("Containers.MediumQualityDresser"):
-                    return true;
-                case ("Containers.WoodChest"):
-                    return true;
-                case ("Dungeon.Guillotine"):
-                    return true;
-                case ("Dungeon.LargeGallows"):
-                    return true;
-                case ("Dungeon.Pillory"):
-                    return true;
-                case ("Dungeon.SmallGallows"):
-                    return true;
-                case ("Dungeon.WoodCage"):
-                    return true;
-                case ("Equipment.DjembeDrum"):
-                    return true;
-                case ("Equipment.RepairHammer"):
-                    return true;
-                case ("Equipment.WoodFlute"):
-                    return true;
-                case ("Furniture.ArcheryTarget"):
-                    return true;
-                case ("Furniture.BanquetTable"):
-                    return true;
-                case ("Furniture.Gazebo"):
-                    return true;
-                case ("Furniture.HayBaleTarget"):
-                    return true;
-                case ("Furniture.HighQualityBed"):
-                    return true;
-                case ("Furniture.LordsBed"):
-                    return true;
-                case ("Furniture.LordsLargeChair"):
-                    return true;
-                case ("Furniture.LordsSmallChair"):
-                    return true;
-                case ("Furniture.LowQualityBed"):
-                    return true;
-                case ("Furniture.LowQualityBench"):
-                    return true;
-                case ("Furniture.LowQualityChair"):
-                    return true;
-                case ("Furniture.LowQualityFence"):
-                    return true;
-                case ("Furniture.LowQualityShelf"):
-                    return true;
-                case ("Furniture.LowQualityStool"):
-                    return true;
-                case ("Furniture.LowQualityTable"):
-                    return true;
-                case ("Furniture.MediumQualityBed"):
-                    return true;
-                case ("Furniture.MediumQualityBench"):
-                    return true;
-                case ("Furniture.MediumQualityChair"):
-                    return true;
-                case ("Furniture.MediumQualityStool"):
-                    return true;
-                case ("Furniture.MediumQualityTable"):
-                    return true;
-                case ("Furniture.RockingHorse"):
-                    return true;
-                case ("Paintable.LargeWoodBillboard"):
-                    return true;
-                case ("Paintable.MediumStickBillboard"):
-                    return true;
-                case ("Paintable.MediumWoodBillboard"):
-                    return true;
-                case ("Paintable.SmallStickSignpost"):
-                    return true;
-                case ("Paintable.SmallWoodHangingSign"):
-                    return true;
-                case ("Paintable.SmallWoodSignpost"):
-                    return true;
-                case ("Paintable.WoodPictureFrame"):
-                    return true;
-                case ("Stations.Fletcher"):
-                    return true;
-                case ("Stations.Sawmill"):
-                    return true;
-                case ("Stations.Siegeworks"):
-                    return true;
-                case ("Stations.SpinningWheel"):
-                    return true;
-                case ("Stations.Woodworking"):
-                    return true;
-                case ("Weapons.Melee.WoodMace"):
-                    return true;
-                case ("Weapons.Melee.WoodSword"):
-                    return true;
-                case ("Weapons.Projectile.Crossbow"):
-                    return true;
-                case ("Weapons.Siege.Ballista"):
-                    return true;
-                case ("Weapons.Siege.Trebuchet"):
-                    return true;
-                default: return false;
-            }
+                switch (blueprintNameKey)
+                {
+                    case ("Items.AreaProtection.Totems.WoodTotem"):
+                        return true;
+                    case ("Items.BuildingMaterials.Defences.DefensiveBarricade"):
+                        return true;
+                    case ("Items.BuildingMaterials.Defences.LogFence"):
+                        return true;
+                    case ("Items.BuildingMaterials.Defences.WoodLedge"):
+                        return true;
+                    case ("Items.BuildingMaterials.Doors.ReinforcedWood(Iron)Door"):
+                        return true;
+                    case ("Items.BuildingMaterials.Doors.ReinforcedWood(Steel)Door"):
+                        return true;
+                    case ("Items.BuildingMaterials.Doors.WoodDoor"):
+                        return true;
+                    case ("Items.BuildingMaterials.Gates.ReinforcedWood(Iron)Gate"):
+                        return true;
+                    case ("Items.BuildingMaterials.Gates.WoodGate"):
+                        return true;
+                    case ("Items.BuildingMaterials.Windows.WoodShutters"):
+                        return true;
+                    case ("Items.Containers.HighQualityCabinet"):
+                        return true;
+                    case ("Items.Containers.MediumQualityBookcase"):
+                        return true;
+                    case ("Items.Containers.MediumQualityDresser"):
+                        return true;
+                    case ("Items.Containers.WoodChest"):
+                        return true;
+                    case ("Items.Dungeon.Guillotine"):
+                        return true;
+                    case ("Items.Dungeon.LargeGallows"):
+                        return true;
+                    case ("Items.Dungeon.Pillory"):
+                        return true;
+                    case ("Items.Dungeon.SmallGallows"):
+                        return true;
+                    case ("Items.Dungeon.WoodCage"):
+                        return true;
+                    case ("Items.Equipment.DjembeDrum"):
+                        return true;
+                    case ("Items.Equipment.RepairHammer"):
+                        return true;
+                    case ("Items.Equipment.WoodFlute"):
+                        return true;
+                    case ("Items.Furniture.ArcheryTarget"):
+                        return true;
+                    case ("Items.Furniture.BanquetTable"):
+                        return true;
+                    case ("Items.Furniture.Gazebo"):
+                        return true;
+                    case ("Items.Furniture.HayBaleTarget"):
+                        return true;
+                    case ("Items.Furniture.HighQualityBed"):
+                        return true;
+                    case ("Items.Furniture.LordsBed"):
+                        return true;
+                    case ("Items.Furniture.LordsLargeChair"):
+                        return true;
+                    case ("Items.Furniture.LordsSmallChair"):
+                        return true;
+                    case ("Items.Furniture.LowQualityBed"):
+                        return true;
+                    case ("Items.Furniture.LowQualityBench"):
+                        return true;
+                    case ("Items.Furniture.LowQualityChair"):
+                        return true;
+                    case ("Items.Furniture.LowQualityFence"):
+                        return true;
+                    case ("Items.Furniture.LowQualityShelf"):
+                        return true;
+                    case ("Items.Furniture.LowQualityStool"):
+                        return true;
+                    case ("Items.Furniture.LowQualityTable"):
+                        return true;
+                    case ("Items.Furniture.MediumQualityBed"):
+                        return true;
+                    case ("Items.Furniture.MediumQualityBench"):
+                        return true;
+                    case ("Items.Furniture.MediumQualityChair"):
+                        return true;
+                    case ("Items.Furniture.MediumQualityStool"):
+                        return true;
+                    case ("Items.Furniture.MediumQualityTable"):
+                        return true;
+                    case ("Items.Furniture.RockingHorse"):
+                        return true;
+                    case ("Items.Paintable.LargeWoodBillboard"):
+                        return true;
+                    case ("Items.Paintable.MediumStickBillboard"):
+                        return true;
+                    case ("Items.Paintable.MediumWoodBillboard"):
+                        return true;
+                    case ("Items.Paintable.SmallStickSignpost"):
+                        return true;
+                    case ("Items.Paintable.SmallWoodHangingSign"):
+                        return true;
+                    case ("Items.Paintable.SmallWoodSignpost"):
+                        return true;
+                    case ("Items.Paintable.WoodPictureFrame"):
+                        return true;
+                    case ("Items.Stations.Fletcher"):
+                        return true;
+                    case ("Items.Stations.Sawmill"):
+                        return true;
+                    case ("Items.Stations.Siegeworks"):
+                        return true;
+                    case ("Items.Stations.SpinningWheel"):
+                        return true;
+                    case ("Items.Stations.Woodworking"):
+                        return true;
+                    case ("Items.Weapons.Melee.WoodMace"):
+                        return true;
+                    case ("Items.Weapons.Melee.WoodSword"):
+                        return true;
+                    case ("Items.Weapons.Projectile.Crossbow"):
+                        return true;
+                    case ("Items.Weapons.Siege.Ballista"):
+                        return true;
+                    case ("Items.Weapons.Siege.Trebuchet"):
+                        return true;
+                    default: return false;
+                }
+            } 
         }
         bool isCraftableByFarmer(string blueprintNameKey)
         {
             if (blueprintNameKey.Contains("Armour.LeatherArmour")) return true;
             switch (blueprintNameKey)
             {
-                case ("AreaProtection.Crests.LeatherCrest"):
+                case ("Items.AreaProtection.Crests.LeatherCrest"):
                     return true;
-                case ("Armour.Apparel.Tabard"):
+                case ("Items.Armour.Apparel.Tabard"):
                     return true;
-                case ("Consumables.Bandage"):
+                case ("Items.Consumables.Bandage"):
                     return true;
-                case ("Equipment.MediumBanner"):
+                case ("Items.Equipment.MediumBanner"):
                     return true;
-                case ("Equipment.Rope"):
+                case ("Items.Equipment.Rope"):
                     return true;
-                case ("Equipment.SmallBanner"):
+                case ("Items.Equipment.SmallBanner"):
                     return true;
-                case ("Furniture.BearSkinRug"):
+                case ("Items.Furniture.BearSkinRug"):
                     return true;
-                case ("Furniture.DeerHeadTrophy"):
+                case ("Items.Furniture.DeerHeadTrophy"):
                     return true;
-                case ("Weapons.HarvestingTool.WateringPot"):
+                case ("Items.Weapons.HarvestingTool.WateringPot"):
                     return true;
-                case ("Weapons.Melee.Whip"):
+                case ("Items.Weapons.Melee.Whip"):
                     return true;
-                case ("Weapons.Melee.WoodStick"):
+                case ("Items.Weapons.Melee.WoodStick"):
                     return true;
-                case ("Weapons.Projectile.BoneLongbow"):
+                case ("Items.Weapons.Projectile.BoneLongbow"):
                     return true;
                 default: return false;
             }
@@ -1679,7 +1684,7 @@ namespace Oxide.Plugins
             if (blueprintNameKey.Contains("Armour.Masks")) return true;
             switch (blueprintNameKey)
             {
-                case ("Weapons.Siege.TrebuchetHayBale"):
+                case ("Items.Weapons.Siege.TrebuchetHayBale"):
                     return true;
                 default: return false;
             }

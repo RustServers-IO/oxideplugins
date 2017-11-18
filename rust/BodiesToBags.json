@@ -1,10 +1,10 @@
 {
     "name": "BodiesToBags",
-    "description": "Instantly turns PLAYER corpses into Backpacks, making animal corpses remain",
+    "description": "Instantly turns player corpses into backpacks",
     "author": "Ryan",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": false,
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/bodiestobags.2548",
     "games": [
         "rust"
