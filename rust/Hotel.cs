@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Hotel", "FireStorm78", "1.1.8", ResourceId = 1298)]
+    [Info("Hotel", "FireStorm78", "1.1.9", ResourceId = 1298)]
     class Hotel : RustPlugin
     {
         ////////////////////////////////////////////////////////////
@@ -15,10 +15,7 @@ namespace Oxide.Plugins
         ////////////////////////////////////////////////////////////
 
         [PluginReference]
-        Plugin ZoneManager;
-
-        [PluginReference("Economics")]
-        Plugin Economics;
+        Plugin ZoneManager, Economics;
 
         //////////////////////////////////////////////////////////////////////////////////////
         // Workaround the Blocks of Economics. Hope This wont be needed in the future
@@ -570,7 +567,7 @@ namespace Oxide.Plugins
 
             LockLock(codelock);
 
-            if (room.renter != player.userID.ToString())
+            if (room.renter != player.UserIDString)
             {
                 SendReply(player, MessageErrorNotAllowedToEnter);
                 return false;
@@ -673,7 +670,7 @@ namespace Oxide.Plugins
         }
         void EconomicsWithdraw(BasePlayer player, int amount)
         {
-            Economics?.Call("Withdraw", player.userID, amount);
+            Economics?.Call("Withdraw", player.UserIDString, amount);
             SendReply(player, string.Format("You payed for this room {0} coins", amount));
         }
 
@@ -681,7 +678,7 @@ namespace Oxide.Plugins
         {
             foreach (KeyValuePair<string, Room> pair in hotel.rooms)
             {
-                if (pair.Value.renter == player.userID.ToString())
+                if (pair.Value.renter == player.UserIDString)
                 {
                     SendReply(player, MessageErrorAlreadyGotRoom);
                     return false;
@@ -689,7 +686,7 @@ namespace Oxide.Plugins
             }
             if (hotel.p != null)
             {
-                if (!permission.UserHasPermission(player.userID.ToString(), hotel.p))
+                if (!permission.UserHasPermission(player.UserIDString, hotel.p))
                 {
                     SendReply(player, string.Format(MessageErrorPermissionsNeeded, hotel.p));
                     return false;
@@ -697,7 +694,7 @@ namespace Oxide.Plugins
             }
             if (hotel.e != null && Economics != null)
             {
-                int money = Convert.ToInt32((double)Economics.Call("GetPlayerMoney", player.userID));
+                int money = Convert.ToInt32((double)Economics.Call("Balance", player.UserIDString));
                 if (money < hotel.Price())
                 {
                     SendReply(player, string.Format(MessageErrorNotEnoughCoins, hotel.e, money));
@@ -781,7 +778,7 @@ namespace Oxide.Plugins
             whitelist.Add(player.userID);
             fieldWhiteList.SetValue(codelock, whitelist);
 
-            room.renter = player.userID.ToString();
+            room.renter = player.UserIDString;
             room.checkingTime = LogTime().ToString();
 
             room.checkoutTime = hotel.rd == "0" ? "0" : (LogTime() + double.Parse(hotel.rd)).ToString();
@@ -822,15 +819,15 @@ namespace Oxide.Plugins
                     if (door2.transform.position == doorpos) continue;
 
                     bool canreach2 = true;
-                    foreach (RaycastHit rayhit in Physics.RaycastAll(deploy.transform.position + Vector3UP, (door2.transform.position + Vector3UP - deploy.transform.position).normalized, Vector3.Distance(deploy.transform.position, door2.transform.position) - 0.2f, constructionColl)) 
-                    { 
-                        canreach2 = false; 
+                    foreach (RaycastHit rayhit in Physics.RaycastAll(deploy.transform.position + Vector3UP, (door2.transform.position + Vector3UP - deploy.transform.position).normalized, Vector3.Distance(deploy.transform.position, door2.transform.position) - 0.2f, constructionColl))
+                    {
+                        canreach2 = false;
                     }
 
-                    if (canreach2) 
+                    if (canreach2)
                     {
-                        canReach = false; 
-                        break; 
+                        canReach = false;
+                        break;
                     }
                 }
                 if (!canReach) continue;
@@ -871,7 +868,7 @@ namespace Oxide.Plugins
 
         void OnUseNPC(BasePlayer npc, BasePlayer player)
         {
-            string npcid = npc.userID.ToString();
+            string npcid = npc.UserIDString;
             foreach (HotelData hotel in storedData.Hotels)
             {
                 if (hotel.npc == null) continue;
@@ -904,7 +901,7 @@ namespace Oxide.Plugins
         {
             RemoveAdminHotelGUI(player);
 
-            if (!EditHotel.ContainsKey(player.userID.ToString())) return;
+            if (!EditHotel.ContainsKey(player.UserIDString)) return;
             string Msg = CreateAdminGUIMsg(player);
             if (Msg == string.Empty) return;
             string send = adminguijson.Replace("{msg}", Msg);
@@ -973,7 +970,7 @@ namespace Oxide.Plugins
                     if (pair.Value.renter != null)
                     {
                         onumint++;
-                        if (pair.Value.renter == player.userID.ToString())
+                        if (pair.Value.renter == player.UserIDString)
                         {
                             roomgui = GUIBoardPlayerRoom.Replace("{jdate}", ConvertSecondsToDate(pair.Value.checkingTime)).Replace("{timeleft}", pair.Value.CheckOutTime() == 0.0 ? "Unlimited" : ConvertSecondsToBetter(pair.Value.CheckOutTime() - LogTime()));
                         }
@@ -993,7 +990,7 @@ namespace Oxide.Plugins
         string CreateAdminGUIMsg(BasePlayer player)
         {
             string newguimsg = string.Empty;
-            HotelData hoteldata = EditHotel[player.userID.ToString()];
+            HotelData hoteldata = EditHotel[player.UserIDString];
 
             string loc = hoteldata.x == null ? "None" : string.Format("{0} {1} {2}", hoteldata.x, hoteldata.y, hoteldata.z);
             string hrad = hoteldata.r == null ? "None" : hoteldata.r;
@@ -1030,7 +1027,7 @@ namespace Oxide.Plugins
 
         void ShowHotelGrid(BasePlayer player)
         {
-            HotelData hoteldata = EditHotel[player.userID.ToString()];
+            HotelData hoteldata = EditHotel[player.UserIDString];
             if (hoteldata.x != null && hoteldata.r != null)
             {
                 Vector3 hpos = hoteldata.Pos();
@@ -1052,7 +1049,7 @@ namespace Oxide.Plugins
             Room foundroom = null;
             foreach (KeyValuePair<string, Room> pair in hotel.rooms)
             {
-                if (pair.Value.renter == player.userID.ToString())
+                if (pair.Value.renter == player.UserIDString)
                 {
                     foundroom = pair.Value;
                     break;
@@ -1070,19 +1067,19 @@ namespace Oxide.Plugins
         {
             if (player == null) return false;
             if (player.net.connection.authLevel >= authlevel) return true;
-            return permission.UserHasPermission(player.userID.ToString(), "hotel.admin");
+            return permission.UserHasPermission(player.UserIDString, "hotel.admin");
         }
 
         [ChatCommand("hotel_save")]
         void cmdChatHotelSave(BasePlayer player, string command, string[] args)
         {
             if (!hasAccess(player)) { SendReply(player, "You dont have access to this command"); return; }
-            if (!EditHotel.ContainsKey(player.userID.ToString()))
+            if (!EditHotel.ContainsKey(player.UserIDString))
             {
                 SendReply(player, "You are not editing a hotel.");
                 return;
             }
-            HotelData editedhotel = EditHotel[player.userID.ToString()];
+            HotelData editedhotel = EditHotel[player.UserIDString];
 
             HotelData removeHotel = null;
             foreach (HotelData hoteldata in storedData.Hotels)
@@ -1105,7 +1102,7 @@ namespace Oxide.Plugins
             SaveData();
             LoadPermissions();
 
-            EditHotel.Remove(player.userID.ToString());
+            EditHotel.Remove(player.UserIDString);
 
             SendReply(player, "Hotel Saved and Closed.");
 
@@ -1116,12 +1113,12 @@ namespace Oxide.Plugins
         void cmdChatHotelClose(BasePlayer player, string command, string[] args)
         {
             if (!hasAccess(player)) { SendReply(player, "You dont have access to this command"); return; }
-            if (!EditHotel.ContainsKey(player.userID.ToString()))
+            if (!EditHotel.ContainsKey(player.UserIDString))
             {
                 SendReply(player, "You are not editing a hotel.");
                 return;
             }
-            HotelData editedhotel = EditHotel[player.userID.ToString()];
+            HotelData editedhotel = EditHotel[player.UserIDString];
             foreach (HotelData hoteldata in storedData.Hotels)
             {
                 if (hoteldata.hotelname.ToLower() == editedhotel.hotelname.ToLower())
@@ -1131,7 +1128,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            EditHotel.Remove(player.userID.ToString());
+            EditHotel.Remove(player.UserIDString);
 
             SendReply(player, "Hotel Closed without saving.");
 
@@ -1142,13 +1139,13 @@ namespace Oxide.Plugins
         void cmdChatHotel(BasePlayer player, string command, string[] args)
         {
             if (!hasAccess(player)) { SendReply(player, "You dont have access to this command"); return; }
-            if (!EditHotel.ContainsKey(player.userID.ToString()))
+            if (!EditHotel.ContainsKey(player.UserIDString))
             {
                 SendReply(player, "You are not editing a hotel. Create a new one with /hotel_new, or edit an existing one with /hotel_edit");
                 return;
             }
 
-            HotelData editedhotel = EditHotel[player.userID.ToString()];
+            HotelData editedhotel = EditHotel[player.UserIDString];
 
             if (args.Length == 0)
             {
@@ -1172,9 +1169,9 @@ namespace Oxide.Plugins
                         string[] zoneargs = new string[] { "name", editedhotel.hotelname, "radius", rad };
                         ZoneManager.Call("CreateOrUpdateZone", editedhotel.hotelname, zoneargs, player.transform.position);
 
-                        (EditHotel[player.userID.ToString()]).x = player.transform.position.x.ToString();
-                        (EditHotel[player.userID.ToString()]).y = player.transform.position.y.ToString();
-                        (EditHotel[player.userID.ToString()]).z = player.transform.position.z.ToString();
+                        (EditHotel[player.UserIDString]).x = player.transform.position.x.ToString();
+                        (EditHotel[player.UserIDString]).y = player.transform.position.y.ToString();
+                        (EditHotel[player.UserIDString]).z = player.transform.position.z.ToString();
 
                         SendReply(player, string.Format("Location set to {0}", player.transform.position));
                         break;
@@ -1187,7 +1184,7 @@ namespace Oxide.Plugins
                         int rd = 86400;
                         int.TryParse(args[1], out rd);
 
-                        (EditHotel[player.userID.ToString()]).rd = rd.ToString();
+                        (EditHotel[player.UserIDString]).rd = rd.ToString();
                         SendReply(player, string.Format("Rent Duration set to {0}", rd == 0 ? "Infinite" : rd.ToString()));
                         break;
                     case "rentprice":
@@ -1207,7 +1204,7 @@ namespace Oxide.Plugins
                             SendReply(player, "/hotel rentprice XX");
                             return;
                         }
-                        (EditHotel[player.userID.ToString()]).e = rp == 0 ? null : rp.ToString();
+                        (EditHotel[player.UserIDString]).e = rp == 0 ? null : rp.ToString();
                         SendReply(player, string.Format("Rent Price set to {0}", rp == 0 ? "null" : rp.ToString()));
                         break;
                     case "roomradius":
@@ -1220,7 +1217,7 @@ namespace Oxide.Plugins
                         int.TryParse(args[1], out rad3);
                         if (rad3 < 1) rad3 = 5;
 
-                        (EditHotel[player.userID.ToString()]).rr = rad3.ToString();
+                        (EditHotel[player.UserIDString]).rr = rad3.ToString();
 
                         SendReply(player, string.Format("RoomRadius set to {0}", args[1]));
                         break;
@@ -1231,7 +1228,7 @@ namespace Oxide.Plugins
                             return;
                         }
                         string setnewperm = (args[1].ToLower() == "null" || args[1].ToLower() == "false" || args[1].ToLower() == "0") ? null : args[1];
-                        (EditHotel[player.userID.ToString()]).p = setnewperm;
+                        (EditHotel[player.UserIDString]).p = setnewperm;
 
                         SendReply(player, string.Format("Permissions set to {0}", setnewperm == null ? "null" : setnewperm));
                         break;
@@ -1245,21 +1242,21 @@ namespace Oxide.Plugins
                         int.TryParse(args[1], out npcid);
                         if (npcid < 1) return;
 
-                        (EditHotel[player.userID.ToString()]).npc = npcid.ToString();
+                        (EditHotel[player.UserIDString]).npc = npcid.ToString();
                         SendReply(player, string.Format("NPC ID hooked to this hotel: {0}", npcid));
                         break;
                     case "rooms":
                         SendReply(player, "Rooms Refreshing ...");
-                        (EditHotel[player.userID.ToString()]).RefreshRooms();
+                        (EditHotel[player.UserIDString]).RefreshRooms();
 
                         SendReply(player, "Rooms Refreshed");
                         break;
                     case "reset":
-                        foreach (KeyValuePair<string, Room> pair in (EditHotel[player.userID.ToString()]).rooms)
+                        foreach (KeyValuePair<string, Room> pair in (EditHotel[player.UserIDString]).rooms)
                         {
                             CodeLock codelock = FindCodeLockByRoomID(pair.Key);
                             if (codelock == null) continue;
-                            ResetRoom(codelock, (EditHotel[player.userID.ToString()]), pair.Value);
+                            ResetRoom(codelock, (EditHotel[player.UserIDString]), pair.Value);
                         }
                         break;
                     case "radius":
@@ -1275,7 +1272,7 @@ namespace Oxide.Plugins
                         string[] zoneargs2 = new string[] { "name", editedhotel.hotelname, "radius", rad2.ToString() };
                         ZoneManager.Call("CreateOrUpdateZone", editedhotel.hotelname, zoneargs2);
 
-                        (EditHotel[player.userID.ToString()]).r = rad2.ToString();
+                        (EditHotel[player.UserIDString]).r = rad2.ToString();
 
                         SendReply(player, string.Format("Radius set to {0}", args[1]));
                         break;
@@ -1304,7 +1301,7 @@ namespace Oxide.Plugins
         void cmdChatHotelEdit(BasePlayer player, string command, string[] args)
         {
             if (!hasAccess(player)) { SendReply(player, MessageErrorNotAllowed); return; }
-            if (EditHotel.ContainsKey(player.userID.ToString())) { SendReply(player, MessageAlreadyEditing); return; }
+            if (EditHotel.ContainsKey(player.UserIDString)) { SendReply(player, MessageAlreadyEditing); return; }
             if (args.Length == 0) { SendReply(player, MessageHotelEditHelp); return; }
 
             string hname = args[0];
@@ -1328,14 +1325,14 @@ namespace Oxide.Plugins
                             }
                         }
                     }
-                    EditHotel.Add(player.userID.ToString(), hotel);
+                    EditHotel.Add(player.UserIDString, hotel);
                     break;
                 }
             }
 
-            if (!EditHotel.ContainsKey(player.userID.ToString())) { SendReply(player, string.Format(MessageErrorEditDoesntExist, args[0])); return; }
+            if (!EditHotel.ContainsKey(player.UserIDString)) { SendReply(player, string.Format(MessageErrorEditDoesntExist, args[0])); return; }
 
-            SendReply(player, string.Format(MessageHotelEditEditing, EditHotel[player.userID.ToString()].hotelname));
+            SendReply(player, string.Format(MessageHotelEditEditing, EditHotel[player.UserIDString].hotelname));
 
             RefreshAdminHotelGUI(player);
         }
@@ -1344,7 +1341,7 @@ namespace Oxide.Plugins
         void cmdChatHotelRemove(BasePlayer player, string command, string[] args)
         {
             if (!hasAccess(player)) { SendReply(player, MessageErrorNotAllowed); return; }
-            if (EditHotel.ContainsKey(player.userID.ToString())) { SendReply(player, MessageAlreadyEditing); return; }
+            if (EditHotel.ContainsKey(player.UserIDString)) { SendReply(player, MessageAlreadyEditing); return; }
             if (args.Length == 0) { SendReply(player, MessageHotelEditHelp); return; }
 
             string hname = args[0];
@@ -1370,7 +1367,7 @@ namespace Oxide.Plugins
         void cmdChatHotelReset(BasePlayer player, string command, string[] args)
         {
             if (!hasAccess(player)) { SendReply(player, MessageErrorNotAllowed); return; }
-            if (EditHotel.ContainsKey(player.userID.ToString())) { SendReply(player, MessageAlreadyEditing); return; }
+            if (EditHotel.ContainsKey(player.UserIDString)) { SendReply(player, MessageAlreadyEditing); return; }
 
             storedData.Hotels = new HashSet<HotelData>();
             SaveData();
@@ -1525,7 +1522,7 @@ namespace Oxide.Plugins
         void cmdChatHotelNew(BasePlayer player, string command, string[] args)
         {
             if (!hasAccess(player)) { SendReply(player, MessageErrorNotAllowed); return; }
-            if (EditHotel.ContainsKey(player.userID.ToString())) { SendReply(player, MessageAlreadyEditing); return; }
+            if (EditHotel.ContainsKey(player.UserIDString)) { SendReply(player, MessageAlreadyEditing); return; }
             if (args.Length == 0) { SendReply(player, MessageHotelNewHelp); return; }
 
             string hname = args[0];
@@ -1542,7 +1539,7 @@ namespace Oxide.Plugins
             }
             HotelData newhotel = new HotelData(hname);
             newhotel.Deactivate();
-            EditHotel.Add(player.userID.ToString(), newhotel);
+            EditHotel.Add(player.UserIDString, newhotel);
 
             SendReply(player, string.Format(MessageHotelNewCreated, hname));
             RefreshAdminHotelGUI(player);
