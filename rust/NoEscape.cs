@@ -1274,7 +1274,11 @@ namespace Oxide.Plugins
                 return players;
 
             if (friendShare || raiderFriendShare || friendCheck)
-                players.AddRange(getFriendList(player));
+            {
+                var friendList = getFriendList(player);
+                if (friendList != null)
+                    players.AddRange(friendList);
+            }
 
             if (clanShare || raiderClanShare || clanCheck)
             {
