@@ -17,7 +17,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.0.9", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.1.0", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -322,6 +322,8 @@ namespace Oxide.Plugins
         void OnServerInitialized()
         {
             NoEscape.plugin = this;
+
+            permission.RegisterPermission("noescape.disable", this);
 
             foreach (string command in blockTypes)
             {
@@ -1001,7 +1003,7 @@ namespace Oxide.Plugins
 
         #region API
 
-        bool IsBlockedS(string target)
+        bool IsBlocked(string target)
         {
             var player = BasePlayer.Find(target);
             if (player is BasePlayer)
@@ -1039,7 +1041,7 @@ namespace Oxide.Plugins
             return IsBlocked<CombatBlock>(target);
         }
 
-        bool IsEscapeBlockedS(string target)
+        bool IsEscapeBlocked(string target)
         {
             var player = BasePlayer.Find(target);
             if (player is BasePlayer)
@@ -1050,7 +1052,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        bool IsRaidBlockedS(string target)
+        bool IsRaidBlocked(string target)
         {
             var player = BasePlayer.Find(target);
             if (player is BasePlayer)
@@ -1061,7 +1063,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        bool IsCombatBlockedS(string target)
+        bool IsCombatBlocked(string target)
         {
             var player = BasePlayer.Find(target);
             if (player is BasePlayer)
@@ -1102,6 +1104,9 @@ namespace Oxide.Plugins
 
         void StartRaidBlocking(BasePlayer target, Vector3 position, bool createZone = true)
         {
+            if(HasPerm(target.UserIDString, "disable")) {
+                return;
+            }
             if (position == null) {
                 position = target.transform.position;
             }
@@ -1122,6 +1127,9 @@ namespace Oxide.Plugins
 
         void StartCombatBlocking(BasePlayer target)
         {
+            if(HasPerm(target.UserIDString, "disable")) {
+                return;
+            }
             if (target.gameObject == null) return;
             var combatBlocker = target.gameObject.GetComponent<CombatBlock>();
             if (combatBlocker == null)
@@ -1153,26 +1161,26 @@ namespace Oxide.Plugins
 
         void ClearRaidBlockingS(string target)
         {
-            StopRaidBlockingS(target);
+            StopRaidBlocking(target);
         }
 
-        void StopRaidBlockingS(string target)
+        void StopRaidBlocking(string target)
         {
             var player = BasePlayer.Find(target);
             if (player is BasePlayer && IsRaidBlocked(player))
                 StopBlocking<RaidBlock>(player);
         }
 
-        void StopCombatBlockingS(string target)
+        void StopCombatBlocking(string target)
         {
             var player = BasePlayer.Find(target);
             if (player is BasePlayer && IsRaidBlocked(player))
                 StopBlocking<CombatBlock>(player);
         }
 
-        void ClearCombatBlockingS(string target)
+        void ClearCombatBlocking(string target)
         {
-            StopCombatBlockingS(target);
+            StopCombatBlocking(target);
         }
 
         #endregion
@@ -1442,9 +1450,9 @@ namespace Oxide.Plugins
             return raidBlock && HasPerm(player.UserIDString, "raid." + command + "block") && IsRaidBlocked(player);
         }
 
-        bool CanRaidCommandS(string playerID, string command)
+        bool CanRaidCommand(string playerID, string command)
         {
-            return raidBlock && HasPerm(playerID, "raid." + command + "block") && IsRaidBlockedS(playerID);
+            return raidBlock && HasPerm(playerID, "raid." + command + "block") && IsRaidBlocked(playerID);
         }
 
         bool CanCombatCommand(BasePlayer player, string command)
@@ -1452,9 +1460,9 @@ namespace Oxide.Plugins
             return combatBlock && HasPerm(player.UserIDString, "combat." + command + "block") && IsCombatBlocked(player);
         }
 
-        bool CanCombatCommandS(string playerID, string command)
+        bool CanCombatCommand(string playerID, string command)
         {
-            return combatBlock && HasPerm(playerID, "combat." + command + "block") && IsCombatBlockedS(playerID);
+            return combatBlock && HasPerm(playerID, "combat." + command + "block") && IsCombatBlocked(playerID);
         }
 
         object CanDo(string command, BasePlayer player)
