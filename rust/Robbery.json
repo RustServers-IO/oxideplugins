@@ -2,7 +2,7 @@
     "name": "Robbery",
     "description": "Players can steal money, points, and\/or items from other players",
     "author": "Wulf",
-    "version": "4.0.1",
+    "version": "4.1.0",
     "configuration": true,
     "suggest": {
         "Clans": "*",
@@ -14,7 +14,7 @@
         "UEconomics": "*",
         "ZoneManager": "*"
     },
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/robbery.736",
     "games": [
         "rust"

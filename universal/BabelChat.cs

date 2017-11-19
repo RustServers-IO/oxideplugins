@@ -1,15 +1,14 @@
-//#define DEBUG
 // Requires: Babel
 
-using System;
-using System.Linq;
 using Newtonsoft.Json;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using System;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("BabelChat", "Wulf/lukespragg", "1.1.2", ResourceId = 1964)]
+    [Info("BabelChat", "Wulf/lukespragg", "1.1.3", ResourceId = 1964)]
     [Description("Translates chat messages to each player's language preference or server default")]
     public class BabelChat : CovalencePlugin
     {
@@ -63,7 +62,7 @@ namespace Oxide.Plugins
 
         protected override void SaveConfig() => Config.WriteObject(config);
 
-        #endregion
+        #endregion Configuration
 
         #region Chat Translation
 
@@ -84,30 +83,27 @@ namespace Oxide.Plugins
 
         private void SendMessage(IPlayer target, IPlayer sender, string message)
         {
-            var format = $"{sender.Name}: {message}";
+            var prefix = sender.Name;
             if (BetterChat != null)
-                format = (string)BetterChat.Call("API_GetFormattedMessage", sender, message);
+            {
+                message = (string)BetterChat.Call("API_GetFormattedMessage", sender, message);
+                prefix = (string)BetterChat.Call("API_GetFormattedUsername", sender);
+            }
             else if (config.UseRandomColors)
-                format = covalence.FormatText($"[#{random.Next(0x1000000):X6}]{sender.Name}[/#]: {message}");
+                prefix = covalence.FormatText($"[#{random.Next(0x1000000):X6}]{sender.Name}[/#]");
             else
-                format = covalence.FormatText($"[{(sender.IsAdmin ? "#af5af5" : "#55aaff")}]{sender.Name}[/#]: {message}");
+                prefix = covalence.FormatText($"[{(sender.IsAdmin ? "#af5af5" : "#55aaff")}]{sender.Name}[/#]");
 #if RUST
             var basePlayer = target.Object as BasePlayer;
-            basePlayer.SendConsoleCommand("chat.add", sender.Id, format, 1.0);
-            if (config.LogChatMessages)
-            {
-                ConVar.Server.Log("Log.Chat.txt", $"{basePlayer.ToString()}: {message}\n");
-                LogToFile("log", message, this);
-                Log($"{sender.Name}: {message}");
-            }
+            basePlayer.SendConsoleCommand("chat.add2", sender.Id, message, prefix);
 #else
-            target.Message(format);
+            target.Message(message, prefix);
+#endif
             if (config.LogChatMessages)
             {
                 LogToFile("log", message, this);
                 Log($"{sender.Name}: {message}");
             }
-#endif
         }
 
         private object OnUserChat(IPlayer player, string message)
@@ -140,6 +136,6 @@ namespace Oxide.Plugins
 
         private bool OnBetterChat() => true;
 
-        #endregion
+        #endregion Chat Translation
     }
 }

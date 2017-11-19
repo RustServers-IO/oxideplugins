@@ -1,0 +1,16 @@
+{
+    "name": "AngryBounds",
+    "description": "Prevents players from building outside map bounds.",
+    "author": "Tori1157",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/angrybounds.2695",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
