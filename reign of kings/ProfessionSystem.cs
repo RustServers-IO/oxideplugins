@@ -440,6 +440,7 @@ namespace Oxide.Plugins
             Area[2] = (e.Entity.Position.x - 10f);
             Area[3] = (e.Entity.Position.z - 10f);
             Player PlayerWhoOrderedCraft = CheckAroundStation(Area);
+            if (PlayerWhoOrderedCraft == Server.GetPlayerByName("Server")) return;
             if (!PlayerCanCraftItem(PlayerWhoOrderedCraft,e.Crafter.Product.GetNameKey()))
             {
                 PrintToChat(PlayerWhoOrderedCraft, string.Format(GetMessage("WrongProfession",PlayerWhoOrderedCraft.Id.ToString()), AddPrefixColor(ProfessionString(PlayerWhoOrderedCraft)) + ReturnProperProfession(ProfessionString(PlayerWhoOrderedCraft)) , e.Crafter.Product.Name));
@@ -1340,11 +1341,11 @@ namespace Oxide.Plugins
         {
             var inventory = player.CurrentCharacter.Entity.GetContainerOfType(CollectionTypes.Inventory);
             int foundResource = 0;
-            foreach (var item in inventory.Contents.Where(item => item != null))
+            for (var i =0; i < inventory.Contents.Count();i++)
             {
-                if (item.Name.ToLower() == InvDefinitions.Instance.Blueprints.GetBlueprintForName(ResourceToChangeProfession).Name)
+                if (inventory.Contents.ElementAt(i).Name.ToLower() == InvDefinitions.Instance.Blueprints.GetBlueprintForName(ResourceToChangeProfession).Name)
                 {
-                    foundResource = foundResource + item.StackAmount;
+                    foundResource = foundResource + inventory.Contents.ElementAt(i).StackAmount;
                 }
             }
             if (foundResource >= ResourceAmountToChange) return true;
@@ -1756,6 +1757,7 @@ namespace Oxide.Plugins
                 if ((playerX > posX1 && playerX < posX2) && (playerZ < posZ1 && playerZ > posZ2)) PlayerAtStation = player;
                 if ((playerX > posX1 && playerX < posX2) && (playerZ > posZ1 && playerZ < posZ2)) PlayerAtStation = player;
             }
+            if (PlayerAtStation == null) return Server.GetPlayerByName("Server");
             return PlayerAtStation;
         }
         #endregion
