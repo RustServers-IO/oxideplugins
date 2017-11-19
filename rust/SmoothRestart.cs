@@ -1,18 +1,18 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
-//using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using System.Linq;
 using System.Text;
 using Oxide.Core;
+using Oxide.Core.Libraries;
 using Oxide.Core.Configuration;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.3", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.4", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -170,7 +170,7 @@ namespace Oxide.Plugins
 			LoadVariables();
 		}
 		
-		void LoadDefaultMessages()
+		protected override void LoadDefaultMessages()
 		{
 			lang.RegisterMessages(new Dictionary<string, string>
 			                      {
@@ -273,7 +273,7 @@ namespace Oxide.Plugins
 		void CheckDevBlog(int countNews)
 		{
 			var url = $"http://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=252490&count={countNews}&maxlength=1&format=json";
-			try { webrequest.EnqueueGet(url, (code, response) => APIResponse(code, response, "devblog", countNews), this); }
+			try { webrequest.Enqueue(url, null, (code, response) => APIResponse(code, response, "devblog", countNews), this, RequestMethod.GET); }
 			catch { timer.Once(60f, () => CheckDevBlog(4)); }
 		}
 
@@ -282,7 +282,7 @@ namespace Oxide.Plugins
 			var url = $"https://api.github.com/repos/oxidemod/oxide.rust/releases/latest";
 			Dictionary<string, string> userAgent  = new Dictionary<string, string>();
 			userAgent.Add("User-Agent", "OxideMod");
-			try { webrequest.EnqueueGet(url, (code, response) => APIResponse(code, response, "oxide", 0), this, userAgent); }
+			try { webrequest.Enqueue(url, null, (code, response) => APIResponse(code, response, "oxide", 0), this, RequestMethod.GET, userAgent); }
 			catch { timer.Once(60f, CheckOxideCommits);}
 		}
 
