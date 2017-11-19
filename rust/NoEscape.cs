@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -17,7 +17,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.1.0", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.1.1", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -115,7 +115,7 @@ namespace Oxide.Plugins
         private readonly int cupboardMask = LayerMask.GetMask("Deployed");
         private readonly int blockLayer = LayerMask.GetMask("Player (Server)");
 
-        List<string> prefabs = new List<string>()
+        List<string> blockedPrefabs = new List<string>()
         {
             "door",
             "window.bars",
@@ -124,6 +124,11 @@ namespace Oxide.Plugins
             "wall.frame",
             "shutter",
             "external"
+        };
+
+        List<string> exceptionPrefabs = new List<string>()
+        {
+            "ladder.wooden"
         };
 
         private List<string> GetDefaultRaidDamageTypes()
@@ -191,6 +196,8 @@ namespace Oxide.Plugins
             Config["combatUnblockOnWakeup"] = false;
             Config["combatUnblockOnRespawn"] = true;
 
+            Config[""] = true;
+
             Config["raidDamageTypes"] = GetDefaultRaidDamageTypes();
             Config["combatDamageTypes"] = GetDefaultCombatDamageTypes();
             Config["cacheMinutes"] = 1f;
@@ -205,7 +212,8 @@ namespace Oxide.Plugins
             Config["sendUINotification"] = true;
             Config["sendChatNotification"] = true;
 
-            Config["blockingPrefabs"] = prefabs;
+            Config["blockingPrefabs"] = blockedPrefabs;
+            Config["exceptionPrefabs"] = exceptionPrefabs;
 
             Config["VERSION"] = Version.ToString();
         }
@@ -271,7 +279,9 @@ namespace Oxide.Plugins
             Config["VERSION"] = Version.ToString();
 
             // NEW CONFIGURATION OPTIONS HERE
-            Config["blockingPrefabs"] = GetConfig("blockingPrefabs", prefabs);
+            Config["blockingPrefabs"] = GetConfig("blockingPrefabs", blockedPrefabs);
+            Config["exceptionPrefabs"] = GetConfig("exceptionPrefabs", exceptionPrefabs);
+
             Config["cupboardShare"] = GetConfig("cupboardShare", false);
             Config["raidBlockNotify"] = GetConfig("raidBlockNotify", true);
             Config["combatBlockNotify"] = GetConfig("combatBlockNotify", false);
@@ -333,7 +343,8 @@ namespace Oxide.Plugins
 
             CheckConfig();
 
-            prefabs = GetConfig("blockingPrefabs", prefabs);
+            blockedPrefabs = GetConfig("blockingPrefabs", blockedPrefabs);
+            exceptionPrefabs = GetConfig("exceptionPrefabs", exceptionPrefabs);
 
             raidBlock = GetConfig("raidBlock", true);
             raidDuration = GetConfig("raidDuration", 50f);
@@ -1522,6 +1533,10 @@ namespace Oxide.Plugins
 
         object CanBuild(Planner plan, Construction prefab)
         {
+            if(isEntityException(prefab.fullName)) {
+                return true;
+            }
+
             var player = plan.GetOwnerPlayer();
             var result = CanDo("build", player);
             if (result is string)
@@ -1696,6 +1711,21 @@ namespace Oxide.Plugins
             return false;
         }
 
+        public bool isEntityException(string prefabName) {
+            var result = false;
+
+            foreach (string p in exceptionPrefabs)
+            {
+                if (prefabName.IndexOf(p) != -1)
+                {
+                    result = true;
+                    break;
+                }
+            }
+
+            return result;
+        }
+
         public bool IsEntityBlocked(BaseCombatEntity entity)
         {
             if (entity is BuildingBlock)
@@ -1713,7 +1743,7 @@ namespace Oxide.Plugins
 
             result = false;
 
-            foreach (string p in prefabs)
+            foreach (string p in blockedPrefabs)
             {
                 if (prefabName.IndexOf(p) != -1)
                 {
