@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.1", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.2", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
 	
@@ -219,8 +219,8 @@ namespace Oxide.Plugins
 			SaveConfig();
 			Changed = false;
 		}
-
-		void LoadDefaultMessages()
+		
+		protected override void LoadDefaultMessages()
 		{
 			lang.RegisterMessages(new Dictionary<string, string>
 			{
@@ -698,7 +698,8 @@ namespace Oxide.Plugins
 					{
 						foreach (var target in BasePlayer.activePlayerList.Where(x => x.userID != crafter.userID))
 						{
-							PrintToChat(target, string.Format(msg("LevelUpTextBroadcast", target.UserIDString), crafter.displayName, Level, colors[Skills.CRAFTING], msg("CSkill", crafter.UserIDString)));
+							if (hasRights(target.UserIDString) && playerPrefs.PlayerInfo[target.userID].ONOFF)
+								PrintToChat(target, string.Format(msg("LevelUpTextBroadcast", target.UserIDString), crafter.displayName, Level, colors[Skills.CRAFTING], msg("CSkill", crafter.UserIDString)));
 						}
 					}
 				}
@@ -910,6 +911,30 @@ namespace Oxide.Plugins
 			textTable.AddRow(new string[]	{ "XP Multiplier", playerData.XPM.ToString()+"%", string.Empty });
 			SendReply(arg, "\nStats for player: " + player.Name + "\n" +textTable.ToString());
         }
+		
+		[ConsoleCommand("zl.reset")]
+        void ResetCommand(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null && arg.Connection.authLevel < 2) return;
+            if (arg.Args == null || arg.Args.Length != 1 || arg.Args[0] != "true")
+            {
+                SendReply(arg, "Usage: zl.reset true | Resets all userdata to zero");
+                return;
+            }
+			playerPrefs = new PlayerData();
+			Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerPrefs);
+			foreach (var player in BasePlayer.activePlayerList)
+			{
+				if (player != null)
+				{
+					CuiHelper.DestroyUi(player, "ZLevelsUI");
+					UpdatePlayer(player);
+					if (cuiEnabled)
+						CreateGUI(player);
+				}
+			}
+			SendReply(arg, "Userdata was successfully reset to zero");
+		}
 
         [ConsoleCommand("zl.lvl")]
         void ZlvlCommand(ConsoleSystem.Arg arg)
@@ -1277,7 +1302,6 @@ namespace Oxide.Plugins
 			}
             return penaltyPercent;
         }
-		
 
 		void levelHandler(BasePlayer player, Item item, string skill)
         {
@@ -1302,7 +1326,8 @@ namespace Oxide.Plugins
 						{
 							foreach (var target in BasePlayer.activePlayerList.Where(x => x.userID != player.userID))
 							{
-								PrintToChat(target, string.Format(msg("LevelUpTextBroadcast", target.UserIDString), player.displayName, Level, colors[skill], msg(skill + "Skill", target.UserIDString)));
+								if (hasRights(target.UserIDString) && playerPrefs.PlayerInfo[target.userID].ONOFF)
+									PrintToChat(target, string.Format(msg("LevelUpTextBroadcast", target.UserIDString), player.displayName, Level, colors[skill], msg(skill + "Skill", target.UserIDString)));
 							}
 						}
                     }
