@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterChatIgnore", "Togoshige", "1.0.1")]
+    [Info("BetterChatIgnore", "Togoshige", "1.0.2", ResourceId = 2490)]
     [Description("Players can ignore chat messages from other players")]
     public class BetterChatIgnore : RustPlugin
     {
@@ -31,7 +31,7 @@ namespace Oxide.Plugins
             IPlayer playerSendingMessage = (IPlayer)messageData["Player"];
             ulong playerSendingMessage_userID = Convert.ToUInt64(playerSendingMessage.Id);
 
-            List<string> blockedReceivers = new List<string>();
+            List<string> blockedReceivers = (List<string>)messageData["BlockedReceivers"];
             foreach (BasePlayer playerReceivingMessage in BasePlayer.activePlayerList)
             {
                 var hasIgnored = Ignore?.CallHook("HasIgnored", playerReceivingMessage.userID, playerSendingMessage_userID);
