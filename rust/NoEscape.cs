@@ -17,7 +17,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.1.1", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.1.2", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -577,9 +577,7 @@ namespace Oxide.Plugins
                     timer.Destroy();
 
                 if (plugin.sendUINotification && player is BasePlayer && player.IsConnected)
-                {
                     CuiHelper.DestroyUi(player, "BlockMsg" + BlockName);
-                }
 
                 GameObject.Destroy(this);
             }
@@ -587,31 +585,22 @@ namespace Oxide.Plugins
             public void Notify(Action callback)
             {
                 if (plugin.sendUINotification)
-                {
                     SendGUI();
-                }
+                
                 notifyCallback = callback;
                 if (timer is Timer && !timer.Destroyed)
-                {
-                    timer.Reset(Duration);
-                }
-                else
-                {
-                    plugin.timer.In(Duration, callback);
-                }
+                    timer.Destroy();
+
+                timer = plugin.timer.In(Duration, callback);
             }
 
             private string FormatTime(TimeSpan ts)
             {
                 if (ts.Days > 0)
-                {
                     return string.Format("{0}D, {1}H", ts.Days, ts.Hours);
-                }
 
                 if (ts.Hours > 0)
-                {
                     return string.Format("{0}H {1}M", ts.Hours, ts.Minutes);
-                }
 
                 return string.Format("{0}M {1}S", ts.Minutes, ts.Seconds);
             }
@@ -1101,12 +1090,12 @@ namespace Oxide.Plugins
             return true;
         }
 
-        //[ChatCommand("bblocked")]
-        //void cmdBBlocked(BasePlayer player, string command, string[] args)
-        //{
-        //    StartCombatBlocking(player);
-        //    StartRaidBlocking(player);
-        //}
+        [ChatCommand("bblocked")]
+        void cmdBBlocked(BasePlayer player, string command, string[] args)
+        {
+            StartCombatBlocking(player);
+            StartRaidBlocking(player);
+        }
 
         void StartRaidBlocking(BasePlayer target, bool createZone = true)
         {
@@ -1537,14 +1526,15 @@ namespace Oxide.Plugins
 
         object CanBuild(Planner plan, Construction prefab)
         {
-            if(isEntityException(prefab.fullName)) {
-                return true;
-            }
-
             var player = plan.GetOwnerPlayer();
             var result = CanDo("build", player);
             if (result is string)
             {
+                if (isEntityException(prefab.fullName))
+                {
+                    return null;
+                }
+
                 SendReply(player, result.ToString());
                 return true;
             }
@@ -1630,23 +1620,17 @@ namespace Oxide.Plugins
             if (send)
             {
                 if (sendChatNotification)
-                {
                     SendReply(target, GetPrefix(target.UserIDString) + GetMsg(langMessage, target.UserIDString).Replace("{time}", GetCooldownTime(blocker.Duration, target.UserIDString)));
-                }
-                blocker.lastNotification = DateTime.Now;
 
-                blocker.Notify(delegate()
-                {
-                    blocker.notifyCallback = null;
-                    if (target.IsConnected)
-                    {
-                        if (sendChatNotification)
-                        {
-                            SendReply(target, GetPrefix(target.UserIDString) + GetMsg(completeMessage, target.UserIDString));
-                        }
-                    }
-                });
+                blocker.lastNotification = DateTime.Now;
             }
+
+            blocker.Notify(delegate()
+            {
+                blocker.notifyCallback = null;
+                if (target.IsConnected && sendChatNotification)
+                    SendReply(target, GetPrefix(target.UserIDString) + GetMsg(completeMessage, target.UserIDString));
+            });
         }
 
         string GetCooldownTime(float f, string userID)
