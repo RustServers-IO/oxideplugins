@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.1.13", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.1.14", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -55,7 +55,8 @@ namespace Oxide.Plugins
 		
         static int RemoveDefaultTime = 30;
         static int RemoveMaxTime = 300;
-		static bool RemoveContainerWithDrop = false;
+		static bool RemoveContainerWithDrop = true;
+		static bool RemoveContainerWithContent = true;
 		static bool RemoveFractionedObjects = false;
 		static bool RemoveFractionedObjectsExcludeBuildingBlocks = true;
 		static int RemoveFractionedPercent = 90;
@@ -221,7 +222,9 @@ namespace Oxide.Plugins
             CheckCfg<bool>("Remove - Normal - Use Friends (RustIO)", ref RemoveWithRustIO);
             CheckCfg<bool>("Remove - Normal - Use Friends (Friends)", ref RemoveWithFriends);
 			CheckCfg<bool>("Remove - Normal - Use Clans", ref RemoveWithClans);
+			
 			CheckCfg<bool>("Remove - Normal - Drop items from StorageContainer", ref RemoveContainerWithDrop);
+			CheckCfg<bool>("Remove - Normal - Enable remove of not empty storages", ref RemoveContainerWithContent);
 			CheckCfg<bool>("Remove - Normal - Remove fractioned objects", ref RemoveFractionedObjects);
 			CheckCfg<bool>("Remove - Normal - Remove fractioned objects - exclude BuildingBlocks", ref RemoveFractionedObjectsExcludeBuildingBlocks);
 			CheckCfg<int>("Remove - Normal - Remove fractioned objects percentage", ref RemoveFractionedPercent);
@@ -341,6 +344,7 @@ namespace Oxide.Plugins
                 {"Couldn't use the RemoverTool: No valid entity targeted","Couldn't use the RemoverTool: No valid entity targeted" },
                 {"Couldn't use the RemoverTool: Paying system crashed! Contact an administrator with the time and date to help him understand what happened.","Couldn't use the RemoverTool: Paying system crashed! Contact an administrator with the time and date to help him understand what happened." },
                 {"Couldn't use the RemoverTool: No valid entity targeted, or entity is too far.","Couldn't use the RemoverTool: No valid entity targeted, or entity is too far." },
+				{"Couldn't use the RemoverTool: Entity storage is not empty","Couldn't use the RemoverTool: Entity storage is not empty"},
 				{"You need to wait {0} seconds to use the Remover again", "You need to wait {0} seconds to use the Remover again"},
 				{"Refund:","Refund:" },
                 {"Nothing","Nothing" },
@@ -1134,8 +1138,14 @@ namespace Oxide.Plugins
             if (removeType == RemoveType.All) { RemoveAll(TargetEntity); return string.Empty; }
             if (removeType == RemoveType.Structure) { RemoveStructure(TargetEntity); return string.Empty; }
 
-			if (TargetEntity is StorageContainer && RemoveContainerWithDrop && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
-				DropUtil.DropItems((TargetEntity as StorageContainer).inventory, TargetEntity.transform.position, 1f);
+			if (TargetEntity is StorageContainer)
+			{
+				if (!RemoveContainerWithContent)
+					return GetMsg("Couldn't use the RemoverTool: Entity storage is not empty", player);
+				if (RemoveContainerWithDrop && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
+					DropUtil.DropItems((TargetEntity as StorageContainer).inventory, TargetEntity.transform.position, 1f);
+			}
+			
 			
 			if (shouldPay)
             {
