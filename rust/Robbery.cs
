@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Robbery", "Wulf/lukespragg", "4.1.0", ResourceId = 736)]
+    [Info("Robbery", "Wulf/lukespragg", "4.1.1", ResourceId = 736)]
     [Description("Players can steal money, points, and/or items from other players")]
     public class Robbery : RustPlugin
     {
@@ -368,12 +368,26 @@ namespace Oxide.Plugins
         {
             var victim = entity.ToPlayer();
             var attacker = info?.Initiator.ToPlayer();
+
+            // Check if victim and attacker are invalid or equal
             if (victim == null || attacker == null || victim.Equals(attacker)) return;
 
-            if (!permission.UserHasPermission(attacker.UserIDString, permKilling)) return;
+            // Check if victim is an NPCPlayer (ie. Murderer)
+            if (entity is NPCPlayer || info.Initiator is NPCPlayer) return;
+
+            // Check if victim is a manually spawned BasePlayer
+            if (victim.Connection == null || attacker.Connection == null) return;
+
+            // Check if victim is protected from being killed
             if (permission.UserHasPermission(victim.UserIDString, permProtection)) return;
+
+            // Check if attacker is allowed to kill
+            if (!permission.UserHasPermission(attacker.UserIDString, permKilling)) return;
+
+            // Check if victim or attacker are in a loot zone, are friends, or share a clan
             if (InNoLootZone(victim, attacker) || IsFriend(victim, attacker) || IsClanmate(victim, attacker)) return;
 
+            // Check if config options for stealing are enabled
             if (config.MoneyStealing) StealMoney(victim, attacker);
             if (config.PointStealing) StealPoints(victim, attacker);
         }
@@ -386,13 +400,29 @@ namespace Oxide.Plugins
         {
             var victim = entity?.ToPlayer();
             var attacker = info?.Initiator?.ToPlayer();
+
+            // Check if victim and attacker are invalid or equal
             if (victim == null || attacker == null || victim.Equals(attacker)) return;
+
+            // Check if victim is an NPCPlayer (ie. Murderer)
+            if (entity is NPCPlayer || info.Initiator is NPCPlayer) return;
+
+            // Check if victim is a manually spawned BasePlayer
+            if (victim.Connection == null || attacker.Connection == null) return;
+
+            // Make sure player isn't using ranged weapons
             if (info.IsProjectile()) return;
 
-            if (!permission.UserHasPermission(attacker.UserIDString, permMugging)) return;
+            // Check if victim is protected from being mugged
             if (permission.UserHasPermission(victim.UserIDString, permProtection)) return;
+
+            // Check if attacker is allowed to mug
+            if (!permission.UserHasPermission(attacker.UserIDString, permMugging)) return;
+
+            // Check if victim or attacker are in a loot zone, are friends, or share a clan
             if (InNoLootZone(victim, attacker) || IsFriend(victim, attacker) || IsClanmate(victim, attacker)) return;
 
+            // Check for a cooldown and set one if it doesn't exist
             if (!cooldowns.ContainsKey(attacker.UserIDString)) cooldowns.Add(attacker.UserIDString, 0f);
             if (config.UsageCooldown != 0 && cooldowns[attacker.UserIDString] + config.UsageCooldown > Interface.Oxide.Now)
             {
@@ -400,10 +430,12 @@ namespace Oxide.Plugins
                 return;
             }
 
+            // Check if config options are enabled for stealing
             if (config.ItemStealing) StealItem(victim, attacker);
             if (config.MoneyStealing) StealMoney(victim, attacker);
             if (config.PointStealing) StealPoints(victim, attacker);
 
+            // Set time for next cooldown check
             cooldowns[attacker.UserIDString] = Interface.Oxide.Now;
         }
 
@@ -413,17 +445,27 @@ namespace Oxide.Plugins
 
         private void OnPlayerInput(BasePlayer attacker, InputState input)
         {
+            // Only listen for presses of use key (E by default)
             if (!input.WasJustPressed(BUTTON.USE)) return;
+
+            // Check if attacker is allowed to pickpocket
             if (!permission.UserHasPermission(attacker.UserIDString, permPickpocket)) return;
 
+            // Look for a valid player to pickpocket
             var ray = new Ray(attacker.eyes.position, attacker.eyes.HeadForward());
             var entity = FindObject(ray, 1);
             var victim = entity?.ToPlayer();
-            if (victim == null) return;
 
+            // Check if victim is invalid or is an NPCPlayer (ie. Murderer)
+            if (victim == null || entity is NPCPlayer) return;
+
+            // Check if victim is protected from being pickpocketed
             if (permission.UserHasPermission(victim.UserIDString, permProtection)) return;
+
+            // Check if victim or attacker are in a loot zone, are friends, or share a clam
             if (InNoLootZone(victim, attacker) || IsFriend(victim, attacker) || IsClanmate(victim, attacker)) return;
 
+            // Check if attacker is in line of sight of victim
             var victimToAttacker = (attacker.transform.position - victim.transform.position).normalized;
             if (Vector3.Dot(victimToAttacker, victim.eyes.HeadForward().normalized) > 0)
             {
@@ -431,12 +473,14 @@ namespace Oxide.Plugins
                 return;
             }
 
+            // Check if attacker is holding an item
             if (attacker.GetActiveItem()?.GetHeldEntity() != null)
             {
                 Player.Reply(attacker, Lang("CantHoldItem", attacker.UserIDString));
                 return;
             }
 
+            // Check for a cooldown and set one if it doesn't exist
             if (!cooldowns.ContainsKey(attacker.UserIDString)) cooldowns.Add(attacker.UserIDString, 0f);
             if (config.UsageCooldown != 0 && cooldowns[attacker.UserIDString] + config.UsageCooldown > Interface.Oxide.Now)
             {
@@ -444,10 +488,12 @@ namespace Oxide.Plugins
                 return;
             }
 
+            // Check if config options are enabled for stealing
             if (config.ItemStealing) StealItem(victim, attacker);
             if (config.MoneyStealing) StealMoney(victim, attacker);
             if (config.PointStealing) StealPoints(victim, attacker);
 
+            // Set time for next cooldown check
             cooldowns[attacker.UserIDString] = Interface.Oxide.Now;
         }
 
