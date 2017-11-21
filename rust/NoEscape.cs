@@ -17,7 +17,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.1.2", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.1.4", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -161,7 +161,6 @@ namespace Oxide.Plugins
 
         protected override void LoadDefaultConfig()
         {
-                
             Config["VERSION"] = Version.ToString();
 
             Config["raidBlock"] = true;
@@ -195,8 +194,6 @@ namespace Oxide.Plugins
             Config["combatUnblockOnDeath"] = true;
             Config["combatUnblockOnWakeup"] = false;
             Config["combatUnblockOnRespawn"] = true;
-
-            Config[""] = true;
 
             Config["raidDamageTypes"] = GetDefaultRaidDamageTypes();
             Config["combatDamageTypes"] = GetDefaultCombatDamageTypes();
@@ -1090,12 +1087,12 @@ namespace Oxide.Plugins
             return true;
         }
 
-        [ChatCommand("bblocked")]
-        void cmdBBlocked(BasePlayer player, string command, string[] args)
-        {
-            StartCombatBlocking(player);
-            StartRaidBlocking(player);
-        }
+        //[ChatCommand("bblocked")]
+        //void cmdBBlocked(BasePlayer player, string command, string[] args)
+        //{
+        //    StartCombatBlocking(player);
+        //    StartRaidBlocking(player);
+        //}
 
         void StartRaidBlocking(BasePlayer target, bool createZone = true)
         {

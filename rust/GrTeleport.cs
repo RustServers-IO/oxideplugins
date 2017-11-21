@@ -5,12 +5,13 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.0.9", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.1.0", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
         private const string adminPermission = "GrTeleport.admin";
         private const string grtPermission = "GrTeleport.use";
+
         #endregion
 
         #region local variabls / supporting classes
@@ -28,7 +29,8 @@ namespace Oxide.Plugins
             public bool AllowBuildingBlocked { get; set; }
             public int LimitPerDay { get; set; }
             public string RestrictedZones { get; set; }
-            public int DistanceToWarnConstructions { get; set; }
+            public int DistanceToWarnConstructions { get; set;}
+            public Dictionary<string, GroupData> groupData = new Dictionary<string, GroupData>();
         }
 
         class SpawnPosition
@@ -40,7 +42,7 @@ namespace Oxide.Plugins
             public SpawnPosition(Vector3 position)
             {
                 Position = position;
-                GroundPosition = GetGroundPosition(new Vector3(position.x, 50, position.z));
+                GroundPosition = GetGroundPosition(new Vector3(position.x, 25, position.z));
             }
 
             public bool isPositionAboveWater()
@@ -92,6 +94,13 @@ namespace Oxide.Plugins
             public BasePlayer Player { get; set; }
             public int TeleportsRemaining { get; set; }
             public DateTime ResetDateTime { get; set; }
+            public int CoolDownInSeconds { get; set; }
+        }
+
+        class GroupData
+        {
+            public int coolDownPeriodSeconds { get; set; }
+            public int DailyTeleports { get; set; }
         }
         #endregion
 
@@ -102,6 +111,8 @@ namespace Oxide.Plugins
             grTeleportData = Config.ReadObject<GrTeleportData>();
             if (Config["Messages"] != null)
                 Config.WriteObject(grTeleportData, true);
+
+            PrintToChat($"{this.Title} {this.Version} Initialized @ {DateTime.Now.ToLongTimeString()}...");
         }
 
         void Loaded()
@@ -117,7 +128,7 @@ namespace Oxide.Plugins
                 {
                     { "buildingblocked", "You cannot grTeleport into or out from a building blocked area." },
                     { "noinit", "spawnGrid was not initialized. 0 spawn points available." },
-                    { "teleported", "You have GrTeleported to {gridreference}, {postion}." }, // {gridreference}
+                    { "teleported", "You have GrTeleported to {gridreference}, {position}." }, // {gridreference}
                     { "teleportlimit", "You have {teleportsremaining} remaining." }, // {teleportsremaining}
                     { "teleportminutesexhauseted", "You have exhausted your remaining grTeleports for today. You can use grTeleport in {minutesleft} minutes." },  // minutesleft hoursleft
                     { "teleporthoursexhauseted", "You have exhausted your remaining grTeleports for today. You can use grTeleport in {hoursleft} hours." },  // minutesleft hoursleft
@@ -142,14 +153,14 @@ namespace Oxide.Plugins
                     { "zonesremoved", "Restricted Zones ({zone}) have been removed, you now have {zones}." },
                     { "nozones", "There are no zones to remove." },
                     { "buildonref", "Your construction is within the vicinty of a grTransport reference. You may want to reconsider building here within {amount}m. your are now {distance}." },
-                    { "constructionreply", "Construction/Grid Reference distance has been set to {DistanceToWarnConstructions}m." }
+                    { "constructionreply", "Construction/Grid Reference distance has been set to {DistanceToWarnConstructions}m." },
+                    { "setgroupusage", "type /setgroup groupName 30 10 - where 30 is cooldown and 10 is daily teleport limit." },
+                    { "setgroupusageerror", "Must have 3 arguments. /setgroup groupName 30 10" }
                 }, this, "en");
-
-                PrintToChat("grtLoaded..");
             }
             catch (Exception ex)
             {
-                throw new Exception($"Loaded {ex.Message}");
+                throw new Exception($"Error: Loaded {ex.Message}");
             }
         }
 
@@ -185,8 +196,9 @@ namespace Oxide.Plugins
                 AllowBuildingBlocked = false,
                 LimitPerDay = -1, // -1 = unlim
                 RestrictedZones = "ZZZ123,YYY666",
-                DistanceToWarnConstructions = 15
-            };
+                DistanceToWarnConstructions = 15,
+                groupData = new Dictionary<string, GroupData>()
+        };
             Config.WriteObject(data, true);
         }
         #endregion
@@ -197,7 +209,13 @@ namespace Oxide.Plugins
         {
             try
             {
-                if (!CheckAccess(player, command, grtPermission)) return;
+                var userGroupData = GetUsersGroupDataOrDefault(player);
+
+                if (userGroupData == null)
+                {
+                    CheckAccess(player, "grt", "userGroupDataNull", true);
+                    return;
+                }
 
                 var tmp = GetCooldown(player.displayName);
                 if (tmp != null)  
@@ -214,7 +232,7 @@ namespace Oxide.Plugins
                     var gr = args[0];
                     var index = GridIndexFromReference(gr);
 
-                    if (TestRestrictedZone(gr))
+                    if (TestRestrictedZone(gr)) // vip have zones? later..
                     {
                         PrintToChat(player, lang.GetMessage("restrictedzone", this, player.UserIDString).Replace("{zone}", gr.ToUpper()));
                         return;
@@ -233,10 +251,9 @@ namespace Oxide.Plugins
                         return;
                     }
 
-                    var user = GetOrCreateUser(player);
+                    var user = GetOrCreateUser(player, userGroupData);
                     if (user.TeleportsRemaining == 0) // none left
                     {
-
                         if ((user.ResetDateTime - DateTime.Now).TotalHours < 1) 
                             PrintToChat(player, lang.GetMessage("teleportminutesexhauseted", this, player.UserIDString).Replace("{minutesleft}", (user.ResetDateTime - DateTime.Now).TotalMinutes.ToString("0")).Replace("{hoursleft}", (user.ResetDateTime - DateTime.Now).TotalHours.ToString("0")));
                         else
@@ -251,11 +268,15 @@ namespace Oxide.Plugins
                         if (user.TeleportsRemaining != -1)
                             user.TeleportsRemaining--;
                             
-                        PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{playerPosition}", player.transform.position.ToString()).Replace("{gridreference}", gr.ToUpper()));
-                        if (user.TeleportsRemaining != -1)  
-                            PrintToChat(player, lang.GetMessage("teleportlimit", this, player.UserIDString).Replace("{teleportsremaining}", user.TeleportsRemaining.ToString()));
+                        PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString)
+                            .Replace("{position}", player.transform.position.ToString())
+                            .Replace("{gridreference}", gr.ToUpper()));
 
-                        AddToCoolDown(player.displayName, grTeleportData.CooldownInSeconds);
+                        if (user.TeleportsRemaining != -1)  
+                            PrintToChat(player, lang.GetMessage("teleportlimit", this, player.UserIDString)
+                                .Replace("{teleportsremaining}", user.TeleportsRemaining.ToString()));
+
+                        AddToCoolDown(player.displayName, userGroupData.coolDownPeriodSeconds);
                         return;
                     }
                     
@@ -291,7 +312,9 @@ namespace Oxide.Plugins
 
                 Teleport(player, spawnGrid[lastGridTested].GroundPosition, false);
 
-                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{gridreference}", spawnGrid[lastGridTested].GridReference).Replace("{postion}", player.transform.position.ToString()) );
+                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString)
+                    .Replace("{gridreference}", spawnGrid[lastGridTested].GridReference)
+                    .Replace("{position}", player.transform.position.ToString()) );
             }
             catch (Exception ex)
             {
@@ -320,11 +343,13 @@ namespace Oxide.Plugins
 
                 Teleport(player, spawnGrid[lastGridTested].GroundPosition, false);
 
-                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString).Replace("{gridreference}", spawnGrid[lastGridTested].GridReference).Replace("{postion}", player.transform.position.ToString()));
+                PrintToChat(player, lang.GetMessage("teleported", this, player.UserIDString)
+                    .Replace("{gridreference}", spawnGrid[lastGridTested].GridReference)
+                    .Replace("{position}", player.transform.position.ToString()));
             }
             catch (Exception ex)
             {
-                throw new Exception($"ccGrtNextspawn {ex.Message}");
+                throw new Exception($"ccGrtPrevspawn {ex.Message}");
             }
         }
 
@@ -520,6 +545,81 @@ namespace Oxide.Plugins
             }
 
         }
+
+        [ChatCommand("setgroup")]
+        void chmSetGroup(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "setgroup", adminPermission)) return;
+
+                if (args.Length == 0) // help
+                {
+                    PrintToChat(player, lang.GetMessage("setgroupusage", this, player.UserIDString));
+                    return;
+                }
+
+                string groupName = "";
+                int cooldownInSeconds = grTeleportData.CooldownInSeconds;
+                int dailyLimit = grTeleportData.LimitPerDay;
+
+                if (args.Length == 3) // set..
+                {
+                    try
+                    {
+                        groupName = args[0];
+                        cooldownInSeconds = int.Parse(args[1]);
+                        dailyLimit = int.Parse(args[2]);
+                    }
+                    catch (Exception)
+                    {
+                        PrintToChat(player, lang.GetMessage("setgroupusageerror", this, player.UserIDString));
+                        return;
+                    }
+                }
+                else // bad comd, help
+                {
+                    PrintToChat(player, lang.GetMessage("setgroupusageerror", this, player.UserIDString));
+                    return;
+                }
+
+                if (!grTeleportData.groupData.ContainsKey(groupName))
+                    grTeleportData.groupData.Add(groupName, new GroupData { coolDownPeriodSeconds = cooldownInSeconds, DailyTeleports = dailyLimit });
+                else
+                {
+                    grTeleportData.groupData[groupName].coolDownPeriodSeconds = cooldownInSeconds;
+                    grTeleportData.groupData[groupName].DailyTeleports = dailyLimit;
+                }
+                Config.WriteObject(grTeleportData, true);
+                PrintToChat(player, $"Saved {groupName} cooldown:{grTeleportData.groupData[groupName].coolDownPeriodSeconds} Limit:{grTeleportData.groupData[groupName].DailyTeleports}.");
+                //PrintToChat(player, lang.GetMessage("cooldownreply", this, player.UserIDString).Replace("{cooldownperiod}", grTeleportData.CooldownInSeconds.ToString()));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetCooldown {ex.Message}");
+            }
+
+        }
+
+        [ChatCommand("getgroups")]
+        void chmGetGroups(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "getgroups", adminPermission)) return;
+
+                foreach(var g in grTeleportData.groupData)
+                    PrintToChat(player, $"{g.Key} cooldown:{g.Value.coolDownPeriodSeconds} Limit:{g.Value.DailyTeleports}.");
+                return;
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmGetGroup {ex.Message}");
+            }
+
+        }
+
         #endregion
 
         #region API
@@ -746,22 +846,22 @@ namespace Oxide.Plugins
             }
         }
 
-        RustUser GetOrCreateUser(BasePlayer player)
+        RustUser GetOrCreateUser(BasePlayer player, GroupData groupData)
         {
             var index = rustUsers.FindIndex(x => x.Player== player);
 
             if (index == -1)
             {
-                var user = new RustUser { Player = player, TeleportsRemaining = grTeleportData.LimitPerDay, ResetDateTime = DateTime.Now.AddHours(24) };
+                var user = new RustUser { Player = player, TeleportsRemaining = groupData.DailyTeleports, ResetDateTime = DateTime.Now.AddHours(24), CoolDownInSeconds = groupData.coolDownPeriodSeconds };
                 rustUsers.Add(user);
-
                 return rustUsers[rustUsers.IndexOf(user)];
             } 
 
             if (rustUsers[index].ResetDateTime <= DateTime.Now) // reset daily limit 
             {
                 rustUsers[index].ResetDateTime = DateTime.Now.AddHours(24);
-                rustUsers[index].TeleportsRemaining = grTeleportData.LimitPerDay;
+                rustUsers[index].TeleportsRemaining = groupData.DailyTeleports; //grTeleportData.LimitPerDay;
+                rustUsers[index].CoolDownInSeconds = groupData.coolDownPeriodSeconds;
             }
 
             return rustUsers[index];
@@ -777,6 +877,40 @@ namespace Oxide.Plugins
             sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
 
             return sourcePos;
+        }
+
+        GroupData GetUsersGroupDataOrDefault(BasePlayer user)
+        {
+            // test for each groupd defined..
+            foreach (var p in grTeleportData.groupData)
+            {
+                string groupName = p.Key;
+                GroupData groupData = p.Value;
+                PrintToChat($"Testing if {groupName}");
+                // on match return group data
+                if (permission.UserHasGroup(user.UserIDString, groupName))
+                {
+                    PrintToChat($"It's {groupName}");
+                    return groupData;
+                }
+            }
+
+            // if has def permission or is admin 
+            if (permission.UserHasPermission(user.UserIDString, grtPermission))
+            {
+                PrintToChat($"def permission");
+                return new GroupData { coolDownPeriodSeconds = grTeleportData.CooldownInSeconds, DailyTeleports = grTeleportData.LimitPerDay };
+            }
+            else if (permission.UserHasPermission(user.UserIDString, adminPermission))
+            {
+                PrintToChat($"fancy admin");
+                return new GroupData { coolDownPeriodSeconds = 0, DailyTeleports = 9999 };
+            }
+            else
+            {
+                PrintToChat($"no access");
+                return null; // no permission!!
+            }
         }
 
         #endregion
