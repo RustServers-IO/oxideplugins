@@ -2,7 +2,7 @@
     "name": "Clan Tags",
     "description": "Added support for Clan Tags in BetterChat",
     "author": "",
-    "version": "0.7",
+    "version": "0.8",
     "configuration": true,
     "suggest": {
         "Clans": "*"

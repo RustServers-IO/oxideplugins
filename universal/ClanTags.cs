@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace Oxide.Plugins
 {
-    [Info("Clan Tags", "GreenArrow", "0.7", ResourceId = 2450)]
+    [Info("Clan Tags", "GreenArrow", "0.8", ResourceId = 2450)]
     [Description("Adding support for Clan tags in Better Chat. ")]
 
     class ClanTags : CovalencePlugin
@@ -33,10 +33,10 @@ namespace Oxide.Plugins
 			
     		string clan = (string)Clans?.Call("GetClanOf",player.Object);
 			
-			if (clan != null)
-			    return clan;
-		
+		if (clan == null)
 		    return null;
+		
+		return clan;
 		}
 		
 	
@@ -119,10 +119,10 @@ namespace Oxide.Plugins
 			if (perClanColor.ContainsKey(clantag))
 			perClanColor.Remove(clantag);
 			
-			perClanColor.Add(clantag,args[0]);
+			perClanColor.Add(clantag,args[0].Substring(1,6));
 			Config.Set("PerClanColor", perClanColor);
 			SaveConfig();
-			player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> <color=#{args[0]}> {clantag}</color> your clan tag has been updated.");		    
+			player.Reply($"<size=15><color=#31e231>[ClanTags]</color></size> <color=#{args[0].Substring(1,6)}> {clantag}</color> your clan tag has been updated.");		    
 
 			} else
 
