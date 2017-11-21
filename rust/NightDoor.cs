@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Night Door", "Slydelix", "1.6.1", ResourceId = 2684)]
+    [Info("Night Door", "Slydelix", "1.6.2", ResourceId = 2684)]
     class NightDoor : RustPlugin
     {
         int layers = LayerMask.GetMask("Construction");
@@ -41,7 +41,7 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>()
             {
                 {"serverWipe_NEW", "Server wipe detected, wiping data file"},
-                {"NotOpenable_NEW", "This door/hatch/gate cannot be opened at this time"},
+                {"NotOpenable", "This door/hatch/gate cannot be opened until {0}"},
                 {"CantPlace_NEW", "The code lock cannot be placed on this door/hatch/gate"},
                 {"ManualWipe_NEW", "Manually wiped Night Door data file"},
                 {"NoPerm_NEW", "You don't have permission to use this command"},
@@ -53,6 +53,7 @@ namespace Oxide.Plugins
                 {"NoDoorsCurrently_NEW", "No time locked doors/hatches/gates set up yet"},
                 {"DoorInfo_NEW", "This door is time locked\nTime period is {0} ({1} - {2})"},
                 {"ShowingDoor_NEW", "Showing all time locked doors/hatches/gates"},
+                {"Timeperiod_removed", "Door at {0} can now be opened at any time because the time period got removed!"},
                 {"AddedDoor_NEW", "This door/hatch/gate is now time locked (default time)"},
                 {"AddedDoorCustom_NEW", "This door/hatch/gate is now time locked (Time period '{0}' ({1} - {2})"},
                 {"NotOnList_NEW", "This door/hatch/gate isn't time locked"},
@@ -63,9 +64,10 @@ namespace Oxide.Plugins
                 {"CreatedEntry_NEW", "Created a new time period with name '{0}' ({1} - {2})"},
                 {"RemovedEntry_NEW", "Removed a time period with name '{0}'"},
                 {"NoTimeIntervals_NEW", "There are no time periods set up"},
+                {"HowTo26Hour", "To create time periods that includes 2 days, like 22:00 - 02:00 add 24 to the last value (22:00 - 26:00)" },
                 {"ListOfTimeIntervals_NEW", "List of all time periods: \n{0}"},
                 {"NotFoundEntry_NEW", "Couldn't find a time period with name '{0}'"},
-                {"TimeIntervalExist_NEWs", "A time period with that name already exists"},
+                {"TimeIntervalExists_NEW", "A time period with that name already exists"},
                 {"debugging_disabled", "Debugging is disabled"},
                 {"debugging_null", "Entity is null"},
                 {"debugging_period", "Entity time period: {0}"},
@@ -171,23 +173,19 @@ namespace Oxide.Plugins
             if (storedData.IDlist.ContainsKey(door.net.ID))
             {
                 float time = ConVar.Env.time;
-                if (player.IsAdmin && BypassAdmin) return;
-                if (permission.UserHasPermission(player.UserIDString, "nightdoor.bypass") && BypassPerm) return;
-
-                if (UseRealTime)
-                {
-                    DateTime start = GetDateTime(entID, true);
-                    DateTime end = GetDateTime(entID, false);
-
-                    if ((DateTime.Now >= start) && (DateTime.Now <= end)) return;
-                }
-
-                float a = GetFloat(entID, true);
-                float b = GetFloat(entID, false);
-
-                if (time >= a && time <= b) return;
+                if (CanOpen(player, entID, time)) return;
                 door.CloseRequest();
-                SendReply(player, lang.GetMessage("NotOpenable_NEW", this, player.UserIDString));
+
+                string entname = storedData.IDlist[entID];
+
+                foreach(var entry in storedData.TimeEntries)
+                {
+                    if(entry.name == entname)
+                    {
+                        SendReply(player, lang.GetMessage("NotOpenable", this, player.UserIDString), entry.start);
+                        return;
+                    }
+                }
                 return;
             }
         }
@@ -282,36 +280,9 @@ namespace Oxide.Plugins
                 {
                     BaseEntity ent = BaseNetworkable.serverEntities.Find(entry.Key) as BaseEntity;
 
-                    DateTime start = GetDateTime(ent.net.ID, true);
-                    DateTime end = GetDateTime(ent.net.ID, false);
+                    if (ent == null || ent.IsDestroyed) continue;
 
-                    if (ent == null || ent.IsDestroyed)
-                    {
-                        storedData.IDlist.Remove(entry.Key);
-                        continue;
-                    }
-
-                    if (UseRealTime)
-                    {
-                        if ((DateTime.Now >= start) && (DateTime.Now <= end))
-                        {
-                            ent.SetFlag(BaseEntity.Flags.Open, true);
-                            ent.SendNetworkUpdateImmediate();
-                        }
-
-                        else
-                        {
-                            ent.SetFlag(BaseEntity.Flags.Open, false);
-                            ent.SendNetworkUpdateImmediate();
-                        }
-
-                        continue;
-                    }
-
-                    float a = GetFloat(ent.net.ID, true);
-                    float b = GetFloat(ent.net.ID, false);
-
-                    if (time >= a && time <= b)
+                    if (CanOpen(null, ent.net.ID, time))
                     {
                         ent.SetFlag(BaseEntity.Flags.Open, true);
                         ent.SendNetworkUpdateImmediate();
@@ -321,10 +292,69 @@ namespace Oxide.Plugins
                     {
                         ent.SetFlag(BaseEntity.Flags.Open, false);
                         ent.SendNetworkUpdateImmediate();
+                    }  
+                }
+            }
+        }
+
+        bool CanOpen(BasePlayer player, uint ID, float now)
+        {
+            if (player != null)
+            {
+                if (player.IsAdmin && BypassAdmin) return true;
+                if (permission.UserHasPermission(player.UserIDString, "nightdoor.bypass") && BypassPerm) return true;
+            }
+
+            if (UseRealTime)
+            {
+                foreach(var entry in storedData.IDlist)
+                {
+                    if(entry.Key == ID)
+                    {
+                        string name = entry.Value;
+                        foreach(var ent in storedData.TimeEntries)
+                        {
+                            if(ent.name == name)
+                            {
+                                string ending = ent.end;
+                                string val = ending.Split(':')[0];
+                                int valInt = Convert.ToInt32(val);
+                                if (valInt > 24)
+                                {
+                                    DateTime start_changed = GetDateTime(ID, true);
+                                    DateTime end_changed = GetDateTime(ID, false);
+                                    start_changed = start_changed.AddDays(-1);
+                                    end_changed = end_changed.AddDays(-1);
+                                    if ((DateTime.Now >= start_changed) && (DateTime.Now <= end_changed)) return true;
+                                    return false;
+                                }
+
+                                else
+                                {
+                                    DateTime start = GetDateTime(ID, true);
+                                    DateTime end = GetDateTime(ID, false);
+                                    if ((DateTime.Now >= start) && (DateTime.Now <= end)) return true;
+                                    return false;
+                                } 
+                            }
+                        }
                     }
                 }
             }
-        }   
+
+            float a = GetFloat(ID, true);
+            float b = GetFloat(ID, false);
+            float c = b - 24f;
+            if (c < 0) c = 99999f;
+
+            if (now >= a && now <= b) return true;
+            if (c != 99999f)
+            {
+                if (now >= 0f && now <= c) return true;
+            }
+
+            return false;
+        }
 
         void CheckAllEntites()
         {
@@ -372,6 +402,19 @@ namespace Oxide.Plugins
             return final;
         }
 
+        float GetFloat(string in2)
+        {
+            float final = 0f;
+            string[] parts = in2.Split(':');
+            string h = "", m = "";
+            int hourInt = Convert.ToInt32(parts[0]);
+            int minInt = Convert.ToInt32(parts[1]);
+
+            float min = (float)minInt / 60;
+            final = hourInt + min;
+            return final;
+        }
+
         DateTime GetDateTime(uint ID, bool start)
         {
             DateTime final = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 0, 0, 0);
@@ -398,6 +441,15 @@ namespace Oxide.Plugins
             m = parts[1].ToString();
             int mInt = Convert.ToInt32(m);
             int hInt = Convert.ToInt32(h);
+            
+            if(hInt > 24 && start)
+            {
+                final = final.AddHours(hInt);
+                final = final.AddMinutes(mInt);
+                final = final.AddDays(-1);
+                return final;
+            }
+
             final = final.AddHours(hInt);
             final = final.AddMinutes(mInt);
             return final;
@@ -529,6 +581,15 @@ namespace Oxide.Plugins
                             }
                         }
 
+                        float a = GetFloat(time1);
+                        float b = GetFloat(time2);
+
+                        if (a > b)
+                        {
+                            SendReply(player, lang.GetMessage("HowTo26Hour", this, player.UserIDString));
+                            return;
+                        }
+
                         TimeInfo entry = new TimeInfo(Inputname, time1, time2);
                         storedData.TimeEntries.Add(entry);
                         SendReply(player, lang.GetMessage("CreatedEntry_NEW", this, player.UserIDString), Inputname, time1, time2);
@@ -545,17 +606,32 @@ namespace Oxide.Plugins
                         }
 
                         string Inputname = args[1];
+                        List<TimeInfo> toRemove = new List<TimeInfo>();
+                        List<uint> idList = new List<uint>();
 
                         foreach (var entry in storedData.TimeEntries)
                         {
-                            if (entry.name.ToLower() == Inputname.ToLower() && entry.name != "default")
+                            if (entry.name == Inputname && entry.name != "default")
                             {
-                                storedData.TimeEntries.Remove(entry);
-                                SaveFile();
+                                toRemove.Add(entry);
+                                foreach (var ent in storedData.IDlist)
+                                {
+                                    if(ent.Value == Inputname)
+                                    {
+                                        idList.Add(ent.Key);
+                                        BaseNetworkable entity = BaseNetworkable.serverEntities.Find(ent.Key);
+                                        SendReply(player, lang.GetMessage("Timeperiod_removed", this, player.UserIDString), entity.transform.position.ToString());
+                                        player.SendConsoleCommand("ddraw.sphere", 10f, Color.green, entity.transform.position, 1f);
+                                    }
+                                }
+
                                 SendReply(player, lang.GetMessage("RemovedEntry_NEW", this, player.UserIDString), entry.name);
                                 return;
                             }
                         }
+
+                        foreach(var ent2 in toRemove) storedData.TimeEntries.Remove(ent2);
+                        foreach (var ent3 in idList) storedData.IDlist.Remove(ent3);
 
                         SendReply(player, lang.GetMessage("NotFoundEntry_NEW", this, player.UserIDString), Inputname);
                         return;
@@ -651,6 +727,7 @@ namespace Oxide.Plugins
                                 return;
                             }
                         }
+                        SendReply(player, lang.GetMessage("NotFoundEntry_NEW", this, player.UserIDString), tiName);
                         return;
                     }
 
