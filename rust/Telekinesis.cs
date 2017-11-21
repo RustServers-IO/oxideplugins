@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Telekinesis", "redBDGR", "2.0.5", ResourceId = 823)]
+    [Info("Telekinesis", "redBDGR", "2.0.6", ResourceId = 823)]
     [Description("Control objects with your mind!")]
 
     class Telekinesis : RustPlugin
@@ -320,7 +320,7 @@ namespace Oxide.Plugins
                     //gameObject.transform.LookAt(originPlayer.transform);
                 //else
                     //gameObject.transform.Rotate(gameObject.transform.rotation.x, roty, gameObject.transform.rotation.z);
-                target.transform.position = Vector3.Lerp(target.transform.position, originPlayer.transform.position + originPlayer.eyes.HeadRay().direction * entDis + new Vector3(0, vertOffset, 0), UnityEngine.Time.deltaTime * 5);
+                target.transform.position = Vector3.Lerp(target.transform.position, originPlayer.transform.position + originPlayer.eyes.HeadRay().direction * entDis + new Vector3(0, vertOffset, 0), UnityEngine.Time.deltaTime * 15f);
                 target.SendNetworkUpdateImmediate();
             }
 
@@ -328,6 +328,8 @@ namespace Oxide.Plugins
             {
                 if (plugin.undoDic.ContainsKey(originPlayer.UserIDString))
                     plugin.undoDic.Remove(originPlayer.UserIDString);
+                if (plugin.grabList.ContainsKey(originPlayer.UserIDString))
+                    plugin.grabList.Remove(originPlayer.UserIDString);
                 originPlayer.ChatMessage(plugin.msg("Grab tool end", originPlayer.UserIDString));
                 Destroy(this);
             }
