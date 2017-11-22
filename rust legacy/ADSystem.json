@@ -4,9 +4,7 @@
     "author": "mcnovinho08",
     "version": "1.1.1",
     "configuration": true,
-    "suggest": {
-        "MoneySystem": "*"
-    },
+    "suggest": {},
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/adsystem.2371",
     "games": [
