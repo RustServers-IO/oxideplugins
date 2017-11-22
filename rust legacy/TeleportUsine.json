@@ -5,6 +5,7 @@
     "version": "0.8.0",
     "configuration": true,
     "suggest": {
+        "AdminControl": "*",
         "MoneySystem": "*"
     },
     "language": "cs",
