@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Robbery", "Wulf/lukespragg", "4.1.1", ResourceId = 736)]
+    [Info("Robbery", "Wulf/lukespragg", "4.1.2", ResourceId = 736)]
     [Description("Players can steal money, points, and/or items from other players")]
     public class Robbery : RustPlugin
     {
@@ -372,10 +372,13 @@ namespace Oxide.Plugins
             // Check if victim and attacker are invalid or equal
             if (victim == null || attacker == null || victim.Equals(attacker)) return;
 
-            // Check if victim is an NPCPlayer (ie. Murderer)
+            // Check if victim or attacker is an NPCPlayer (ie. murderer)
             if (entity is NPCPlayer || info.Initiator is NPCPlayer) return;
 
-            // Check if victim is a manually spawned BasePlayer
+            // Check if victim or attacker is an NPCPlayerApex (ie. scientist)
+            if (entity is NPCPlayerApex || info.Initiator is NPCPlayerApex) return;
+
+            // Check if victim or attacker is a manually spawned BasePlayer
             if (victim.Connection == null || attacker.Connection == null) return;
 
             // Check if victim is protected from being killed
@@ -404,10 +407,13 @@ namespace Oxide.Plugins
             // Check if victim and attacker are invalid or equal
             if (victim == null || attacker == null || victim.Equals(attacker)) return;
 
-            // Check if victim is an NPCPlayer (ie. Murderer)
+            // Check if victim or attacker is an NPCPlayer (ie. murderer)
             if (entity is NPCPlayer || info.Initiator is NPCPlayer) return;
 
-            // Check if victim is a manually spawned BasePlayer
+            // Check if victim or attacker is an NPCPlayerApex (ie. scientist)
+            if (entity is NPCPlayerApex || info.Initiator is NPCPlayerApex) return;
+
+            // Check if victim or attacker is a manually spawned BasePlayer
             if (victim.Connection == null || attacker.Connection == null) return;
 
             // Make sure player isn't using ranged weapons
@@ -456,8 +462,17 @@ namespace Oxide.Plugins
             var entity = FindObject(ray, 1);
             var victim = entity?.ToPlayer();
 
-            // Check if victim is invalid or is an NPCPlayer (ie. Murderer)
-            if (victim == null || entity is NPCPlayer) return;
+            // Check if victim is invalid
+            if (victim == null ) return;
+
+            // Check if victim is an NPCPlayer (ie. murderer)
+            if (entity is NPCPlayer) return;
+
+            // Check if victim is an NPCPlayerApex (ie. scientist)
+            if (entity is NPCPlayerApex) return;
+
+            // Check if victim is a manually spawned BasePlayer
+            if (victim.Connection == null) return;
 
             // Check if victim is protected from being pickpocketed
             if (permission.UserHasPermission(victim.UserIDString, permProtection)) return;
