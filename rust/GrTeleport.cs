@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.1.0", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.1.1", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
@@ -30,6 +30,7 @@ namespace Oxide.Plugins
             public int LimitPerDay { get; set; }
             public string RestrictedZones { get; set; }
             public int DistanceToWarnConstructions { get; set;}
+            public float AllowableWaterDepth { get; set; }
             public Dictionary<string, GroupData> groupData = new Dictionary<string, GroupData>();
         }
 
@@ -54,7 +55,7 @@ namespace Oxide.Plugins
 
             public float WaterDepthAtPosition()
             {
-                return (TerrainMeta.HeightMap.GetHeight(Position) - TerrainMeta.WaterMap.GetHeight(Position));
+                return (TerrainMeta.WaterMap.GetHeight(Position) - TerrainMeta.HeightMap.GetHeight(Position));
             }
 
             Vector3 GetGroundPosition(Vector3 sourcePos)
@@ -155,7 +156,10 @@ namespace Oxide.Plugins
                     { "buildonref", "Your construction is within the vicinty of a grTransport reference. You may want to reconsider building here within {amount}m. your are now {distance}." },
                     { "constructionreply", "Construction/Grid Reference distance has been set to {DistanceToWarnConstructions}m." },
                     { "setgroupusage", "type /setgroup groupName 30 10 - where 30 is cooldown and 10 is daily teleport limit." },
-                    { "setgroupusageerror", "Must have 3 arguments. /setgroup groupName 30 10" }
+                    { "setgroupusageerror", "Must have 3 arguments. /setgroup groupName 30 10" },
+                    { "setwaterdepthreply", "Allowable water depth has been set to {waterdepth}" },
+                    { "setwaterdeptherror", "usage: /setwaterdepth 1.0" }
+
                 }, this, "en");
             }
             catch (Exception ex)
@@ -197,6 +201,7 @@ namespace Oxide.Plugins
                 LimitPerDay = -1, // -1 = unlim
                 RestrictedZones = "ZZZ123,YYY666",
                 DistanceToWarnConstructions = 15,
+                AllowableWaterDepth = 1.0f,
                 groupData = new Dictionary<string, GroupData>()
         };
             Config.WriteObject(data, true);
@@ -245,9 +250,10 @@ namespace Oxide.Plugins
                         return;
                     }
 
-                    if (spawnGrid[index].isPositionAboveWater() && grTeleportData.AvoidWater)
+                    if (spawnGrid[index].isPositionAboveWater() && grTeleportData.AvoidWater && (spawnGrid[index].WaterDepthAtPosition() > grTeleportData.AllowableWaterDepth))
                     {
-                        PrintToChat(player, lang.GetMessage("overwater", this, player.UserIDString));
+                        PrintToChat($"{spawnGrid[index].WaterDepthAtPosition().ToString("0.00")} meters. deep");
+                        PrintToChat(player, lang.GetMessage("overwater", this, player.UserIDString).Replace("{depth}", spawnGrid[index].WaterDepthAtPosition().ToString("0.00")));
                         return;
                     }
 
@@ -263,7 +269,7 @@ namespace Oxide.Plugins
                     }
 
 
-                    if (TeleportToGridReference(player, gr, grTeleportData.AvoidWater))                    
+                    if (TeleportToGridReference(player, gr, false))                    
                     {
                         if (user.TeleportsRemaining != -1)
                             user.TeleportsRemaining--;
@@ -370,6 +376,33 @@ namespace Oxide.Plugins
             catch (Exception ex)
             {
                 throw new Exception($"chmSetCooldown {ex.Message}");
+            }
+
+        }
+
+        [ChatCommand("setwaterdepth")]
+        void chmsetwaterdepth(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "setwaterdepth", adminPermission)) return;
+                try
+                {
+                    if (args.Length > 0)
+                        grTeleportData.AllowableWaterDepth = float.Parse(args[0]);
+                } catch(Exception  ex)
+                {
+                    PrintToChat(player, lang.GetMessage("setwaterdeptherror", this, player.UserIDString)
+                        .Replace("{waterdepth}", grTeleportData.AllowableWaterDepth.ToString("0.00")));
+                }
+
+                Config.WriteObject(grTeleportData, true);
+                PrintToChat(player, lang.GetMessage("setwaterdepthreply", this, player.UserIDString)
+                    .Replace("{waterdepth}", grTeleportData.AllowableWaterDepth.ToString("0.00")));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmSetwaterdepth {ex.Message}");
             }
 
         }
@@ -619,6 +652,40 @@ namespace Oxide.Plugins
             }
 
         }
+
+        [ChatCommand("clearcooldown")]
+        void chmClearCooldown(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "clearcooldown", adminPermission)) return;
+
+                if (args.Length == 1)
+                {
+                    var cd = coolDowns.Find(x => x.name.ToLower().Contains(args[0].ToLower()));
+                    if (cd != null)
+                    {
+                        coolDowns.Remove(cd);
+                        PrintToChat($"Cleared {cd.name}..");
+                    }
+                    else
+                    {
+                        PrintToChat($"{cd.name} not found.");
+                    }
+                    return;
+                }
+
+                coolDowns.Clear();
+                PrintToChat($"Cleared Cooldowns");
+                return;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmClearCooldown {ex.Message}");
+            }
+
+        }
+
 
         #endregion
 
@@ -886,29 +953,22 @@ namespace Oxide.Plugins
             {
                 string groupName = p.Key;
                 GroupData groupData = p.Value;
-                PrintToChat($"Testing if {groupName}");
                 // on match return group data
                 if (permission.UserHasGroup(user.UserIDString, groupName))
-                {
-                    PrintToChat($"It's {groupName}");
                     return groupData;
-                }
             }
 
             // if has def permission or is admin 
             if (permission.UserHasPermission(user.UserIDString, grtPermission))
             {
-                PrintToChat($"def permission");
                 return new GroupData { coolDownPeriodSeconds = grTeleportData.CooldownInSeconds, DailyTeleports = grTeleportData.LimitPerDay };
             }
             else if (permission.UserHasPermission(user.UserIDString, adminPermission))
             {
-                PrintToChat($"fancy admin");
                 return new GroupData { coolDownPeriodSeconds = 0, DailyTeleports = 9999 };
             }
             else
             {
-                PrintToChat($"no access");
                 return null; // no permission!!
             }
         }

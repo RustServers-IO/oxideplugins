@@ -2,7 +2,7 @@
     "name": "GrTeleport",
     "description": "GrTeleport allows you to teleport using the new grid reference. e.g: n5 or p14 or AA22",
     "author": "",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/grteleport.2665",
