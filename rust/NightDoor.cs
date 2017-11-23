@@ -5,12 +5,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Night Door", "Slydelix", "1.6.2", ResourceId = 2684)]
+    [Info("Night Door", "Slydelix", "1.6.3", ResourceId = 2684)]
     class NightDoor : RustPlugin
     {
         int layers = LayerMask.GetMask("Construction");
         bool debug = false;
-        bool BypassAdmin, BypassPerm, UseRealTime, AutoDoor, useMulti;
+        bool BypassAdmin, BypassPerm, UseRealTime, AutoDoor, useMulti, intialized = false;
         string startTime, endTime;
 
         #region config
@@ -140,6 +140,18 @@ namespace Oxide.Plugins
             SaveFile();
         }
 
+        void OnServerInitialized()
+        {
+            timer.In(10f, () =>
+            {
+                //DUMB WAY TO CHECK WHEN THE SERVER IS FULLY INIT.
+                intialized = true;
+            });
+            Repeat();
+            UpgradeSaveFile();
+            DoDefaultT();
+        }
+
         void Init()
         {
             LoadDefaultConfig();
@@ -150,13 +162,6 @@ namespace Oxide.Plugins
             storedData2 = Interface.Oxide.DataFileSystem.ReadObject<StoredData2>("NightDoor");
             if (GetDateTime(startTime) > GetDateTime(endTime)) PrintWarning(lang.GetMessage("Start>End_NEW", this));
             if (startTime == "00:00" && endTime == "00:00") PrintWarning(lang.GetMessage("Start&EndValIs0_NEW", this));
-        }
-
-        void Loaded()
-        {
-            Repeat();
-            UpgradeSaveFile();
-            DoDefaultT();
         }
 
         void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject("NightDoor_NEW", storedData);
@@ -178,9 +183,9 @@ namespace Oxide.Plugins
 
                 string entname = storedData.IDlist[entID];
 
-                foreach(var entry in storedData.TimeEntries)
+                foreach (var entry in storedData.TimeEntries)
                 {
-                    if(entry.name == entname)
+                    if (entry.name == entname)
                     {
                         SendReply(player, lang.GetMessage("NotOpenable", this, player.UserIDString), entry.start);
                         return;
@@ -225,7 +230,7 @@ namespace Oxide.Plugins
             timer.Every(5f, () => {
                 CheckDoors();
                 CheckAllEntites();
-            }); 
+            });
         }
 
         void UpgradeSaveFile()
@@ -292,7 +297,7 @@ namespace Oxide.Plugins
                     {
                         ent.SetFlag(BaseEntity.Flags.Open, false);
                         ent.SendNetworkUpdateImmediate();
-                    }  
+                    }
                 }
             }
         }
@@ -307,14 +312,14 @@ namespace Oxide.Plugins
 
             if (UseRealTime)
             {
-                foreach(var entry in storedData.IDlist)
+                foreach (var entry in storedData.IDlist)
                 {
-                    if(entry.Key == ID)
+                    if (entry.Key == ID)
                     {
                         string name = entry.Value;
-                        foreach(var ent in storedData.TimeEntries)
+                        foreach (var ent in storedData.TimeEntries)
                         {
-                            if(ent.name == name)
+                            if (ent.name == name)
                             {
                                 string ending = ent.end;
                                 string val = ending.Split(':')[0];
@@ -335,7 +340,7 @@ namespace Oxide.Plugins
                                     DateTime end = GetDateTime(ID, false);
                                     if ((DateTime.Now >= start) && (DateTime.Now <= end)) return true;
                                     return false;
-                                } 
+                                }
                             }
                         }
                     }
@@ -346,7 +351,6 @@ namespace Oxide.Plugins
             float b = GetFloat(ID, false);
             float c = b - 24f;
             if (c < 0) c = 99999f;
-
             if (now >= a && now <= b) return true;
             if (c != 99999f)
             {
@@ -358,17 +362,20 @@ namespace Oxide.Plugins
 
         void CheckAllEntites()
         {
+            if (!intialized) return;
             List<uint> temp = new List<uint>();
+            if (storedData.IDlist.Count < 1) return;
             foreach (var entry in storedData.IDlist)
             {
-                BaseEntity ent = BaseNetworkable.serverEntities.Find(entry.Key) as BaseEntity;
+                BaseNetworkable ent = BaseNetworkable.serverEntities.Find(entry.Key) ?? null;
                 if (ent == null || ent.IsDestroyed) temp.Add(entry.Key);
+                
                 else continue;
             }
 
             if (temp.Count < 1) return;
 
-            foreach(uint id in temp) storedData.IDlist.Remove(id);
+            foreach (uint id in temp) storedData.IDlist.Remove(id);
             SaveFile();
         }
 
@@ -441,8 +448,8 @@ namespace Oxide.Plugins
             m = parts[1].ToString();
             int mInt = Convert.ToInt32(m);
             int hInt = Convert.ToInt32(h);
-            
-            if(hInt > 24 && start)
+
+            if (hInt > 24 && start)
             {
                 final = final.AddHours(hInt);
                 final = final.AddMinutes(mInt);
@@ -616,7 +623,7 @@ namespace Oxide.Plugins
                                 toRemove.Add(entry);
                                 foreach (var ent in storedData.IDlist)
                                 {
-                                    if(ent.Value == Inputname)
+                                    if (ent.Value == Inputname)
                                     {
                                         idList.Add(ent.Key);
                                         BaseNetworkable entity = BaseNetworkable.serverEntities.Find(ent.Key);
@@ -626,13 +633,12 @@ namespace Oxide.Plugins
                                 }
 
                                 SendReply(player, lang.GetMessage("RemovedEntry_NEW", this, player.UserIDString), entry.name);
+                                foreach (var ent2 in toRemove) storedData.TimeEntries.Remove(ent2);
+                                foreach (var ent3 in idList) storedData.IDlist.Remove(ent3);
+                                SaveFile();
                                 return;
                             }
                         }
-
-                        foreach(var ent2 in toRemove) storedData.TimeEntries.Remove(ent2);
-                        foreach (var ent3 in idList) storedData.IDlist.Remove(ent3);
-
                         SendReply(player, lang.GetMessage("NotFoundEntry_NEW", this, player.UserIDString), Inputname);
                         return;
                     }
@@ -815,7 +821,7 @@ namespace Oxide.Plugins
                         foreach (var entry in storedData.IDlist)
                         {
                             BaseNetworkable ent = BaseNetworkable.serverEntities.Find(entry.Key);
-                            if(ent == null)
+                            if (ent == null)
                             {
                                 CheckAllEntites();
                                 continue;
