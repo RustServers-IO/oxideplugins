@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Telekinesis", "redBDGR", "2.0.6", ResourceId = 823)]
+    [Info("Telekinesis", "redBDGR", "2.0.8", ResourceId = 823)]
     [Description("Control objects with your mind!")]
 
     class Telekinesis : RustPlugin
@@ -18,6 +18,7 @@ namespace Oxide.Plugins
         private float maxDist = 3f;
         private float autoDisableLength = 60f;
         private bool restrictedBuildingAuthOnly = true;
+        private bool restrictedCanMoveBasePlayers = false;
         private bool restrictedOwnerIdOnly;
         private float restrictedGrabDistance = 20f;
 
@@ -66,6 +67,7 @@ namespace Oxide.Plugins
             restrictedBuildingAuthOnly = Convert.ToBoolean(GetConfig("Settings", "Restricted Cannot Use If Building Blocked", true));
             restrictedOwnerIdOnly = Convert.ToBoolean(GetConfig("Settings", "Restricted OwnerID Only", false));
             restrictedGrabDistance = Convert.ToSingle(GetConfig("Settings", "Restricted Grab Distance", 20f));
+            restrictedCanMoveBasePlayers = Convert.ToBoolean(GetConfig("Settings", "Restricted Cannot Move Players (Sleeping or Awake)", false));
 
             if (!Changed) return;
             SaveConfig();
@@ -172,13 +174,17 @@ namespace Oxide.Plugins
             BaseEntity ent = FindEntity(player);
             if (ent == null)
                 return null;
-            if (restrictedOwnerIdOnly)
-                if (permission.UserHasPermission(player.UserIDString, permissionNameRESTRICTED))
+            if (PlayerIsRestricted(player))
+            {
+                if (restrictedOwnerIdOnly)                  // Target object ID restriction
                     if (ent.OwnerID != player.userID)
                         return null;
-            if (permission.UserHasPermission(player.UserIDString, permissionNameRESTRICTED))
-                if (Vector3.Distance(ent.transform.position, player.transform.position) >= restrictedGrabDistance)
+                if (Vector3.Distance(ent.transform.position, player.transform.position) >= restrictedGrabDistance)      // Distance restriction
                     return null;
+                if (!restrictedCanMoveBasePlayers)
+                    if (ent.GetComponent<BasePlayer>() != null)
+                        return null;
+            }
             TelekinesisComponent grab = ent.gameObject.AddComponent<TelekinesisComponent>();
             grab.originPlayer = player;
             if (undoDic.ContainsKey(player.UserIDString))
@@ -192,6 +198,11 @@ namespace Oxide.Plugins
                     grab.DestroyThis();
             });
             return ent;
+        }
+
+        private bool PlayerIsRestricted(BasePlayer player)
+        {
+            return permission.UserHasPermission(player.UserIDString, permissionNameRESTRICTED);
         }
 
         private static BaseEntity FindEntity(BasePlayer player)
@@ -326,8 +337,8 @@ namespace Oxide.Plugins
 
             public void DestroyThis()
             {
-                if (plugin.undoDic.ContainsKey(originPlayer.UserIDString))
-                    plugin.undoDic.Remove(originPlayer.UserIDString);
+                //if (plugin.undoDic.ContainsKey(originPlayer.UserIDString))
+                //    plugin.undoDic.Remove(originPlayer.UserIDString);
                 if (plugin.grabList.ContainsKey(originPlayer.UserIDString))
                     plugin.grabList.Remove(originPlayer.UserIDString);
                 originPlayer.ChatMessage(plugin.msg("Grab tool end", originPlayer.UserIDString));
