@@ -7,7 +7,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Portals", "LaserHydra", "2.0.4", ResourceId = 1234)]
+    [Info("Portals", "LaserHydra", "2.0.5", ResourceId = 1234)]
     [Description("Create portals and feel like in Star Trek")]
     class Portals : RustPlugin
     {
@@ -47,7 +47,7 @@ namespace Oxide.Plugins
                 p.GameObject = new GameObject();
 
                 PortalEntity portal = p.GameObject.AddComponent<PortalEntity>();
-                
+
                 p.Sphere = GameManager.server.CreateEntity("assets/prefabs/visualization/sphere.prefab", p.Location.Vector3, new Quaternion(), true).GetComponent<SphereEntity>();
                 p.Sphere.currentRadius = 2;
                 p.Sphere.lerpSpeed = 0f;
@@ -252,7 +252,7 @@ namespace Oxide.Plugins
                 OnPlayerInit(player);
         }
 
-        private void Unloaded()
+        private void Unload()
         {
             foreach (var portal in portals)
                 portal.Remove();
@@ -412,7 +412,7 @@ namespace Oxide.Plugins
                     break;
 
                 default:
-                    
+
                     SendReply(player, "Syntax: /portal <entrance|exit|remove> <ID>");
 
                     break;
@@ -429,7 +429,7 @@ namespace Oxide.Plugins
         {
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "StartLoading");
-            
+
             player.StartSleeping();
             player.MovePosition(position);
 

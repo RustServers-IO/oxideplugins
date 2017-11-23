@@ -1,8 +1,8 @@
 {
     "name": "Portals",
-    "description": "Create portals and feel like in Star Trek",
+    "description": "Create portals allowing players to walk through to another location",
     "author": "LaserHydra",
-    "version": "2.0.4",
+    "version": "2.0.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/portals.1234",
