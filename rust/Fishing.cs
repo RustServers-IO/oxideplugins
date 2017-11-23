@@ -5,76 +5,66 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Reflection;
 using Oxide.Game.Rust.Cui;
-using Facepunch.Extend;
 
 namespace Oxide.Plugins
 {
-     [Info("Fishing", "Colon Blow", "1.2.3", ResourceId = 1537)]
-     class Fishing : RustPlugin
-     {
-	public int fishchance;
-	public int fishchancemodweapon;
-	public int fishchancemodattire;
-	public int fishchancemoditem;
-	public int fishchancemodtime;
-	public string FishIcon;
-	public string chancetext1;
-	public string chancetext2;
-	public float currenttime;
-	public float ghitDistance;
-	public float whitDistance;
-	private static int waterlayer;
-	private static int groundlayer;
-	private bool Changed;
-	//string CaughtFish = "assets/content/unimplemented/fishing_rod/vm_fishing_rod/pluck_fish.prefab";
+    [Info("Fishing", "Colon Blow", "1.3.1", ResourceId = 1537)]
+    class Fishing : RustPlugin
+    {
 
-	Dictionary<ulong, string> GuiInfo = new Dictionary<ulong, string>();
+        private static int waterlayer;
+        private static int groundlayer;
+        private bool Changed;
+
+        Dictionary<ulong, string> GuiInfo = new Dictionary<ulong, string>();
 
         void Loaded()
-        {                       
-        	lang.RegisterMessages(messages, this);
-        	LoadVariables();
-		permission.RegisterPermission("fishing.allowed", this);
-	}
+        {
+            lang.RegisterMessages(messages, this);
+            LoadVariables();
+            permission.RegisterPermission("fishing.allowed", this);
+        }
         void LoadDefaultConfig()
         {
-	    	Puts("No configuration file found, generating...");
-	    	Config.Clear();
-            	LoadVariables();
+            Puts("No configuration file found, generating...");
+            Config.Clear();
+            LoadVariables();
         }
 
         void OnServerInitialized()
         {
-        	waterlayer = UnityEngine.LayerMask.GetMask("Water");
-	        groundlayer = UnityEngine.LayerMask.GetMask("Terrain", "World", "Construction");
+            waterlayer = UnityEngine.LayerMask.GetMask("Water");
+            groundlayer = UnityEngine.LayerMask.GetMask("Terrain", "World", "Construction");
         }
 
         bool IsAllowed(BasePlayer player, string perm)
         {
-        	if (permission.UserHasPermission(player.userID.ToString(), perm)) return true;
-        	return false;
+            if (permission.UserHasPermission(player.userID.ToString(), perm)) return true;
+            return false;
         }
-//Configuration Variables
 
-	public bool ShowFishCatchIcon = true;
-	public bool allowrandomitemchance = true;
-	public bool useweaponmod = true;
-	public bool useattiremod = true;
-	public bool useitemmod = true;
-	public bool usetimemod = true;
+        ///////////////////////////////////////////////////////////////////////////////////////////
 
-	public int fishchancedefault = 10;
-	public int randomitemchance = 1;
-	public int fishchancemodweaponbonus = 10;
-	public int fishchancemodattirebonus = 10;
-	public int fishchancemoditembonus = 10;
-	public int fishchancemodtimebonus = 10;
+        bool ShowFishCatchIcon = true;
+        bool allowrandomitemchance = true;
+        bool useweaponmod = true;
+        bool useattiremod = true;
+        bool useitemmod = true;
+        bool usetimemod = true;
 
-	public string iconcommonfish2 = "http://i.imgur.com/HftxU00.png";
-	public string iconuncommonfish1 = "http://i.imgur.com/xReDQM1.png";
-	public string iconcommonfish1 = "http://i.imgur.com/rBEmhpg.png";
-	public string iconrandomitem = "http://i.imgur.com/y2scGmZ.png";
-	public string iconrarefish1 = "http://i.imgur.com/jMZxGf1.png";
+        int fishchancedefault = 10;
+        int randomitemchance = 1;
+        int fishchancemodweaponbonus = 10;
+        int fishchancemodattirebonus = 10;
+        int fishchancemoditembonus = 10;
+        int fishchancemodtimebonus = 10;
+        float treasureDespawn = 200f;
+
+        string iconcommonfish2 = "http://i.imgur.com/HftxU00.png";
+        string iconuncommonfish1 = "http://i.imgur.com/xReDQM1.png";
+        string iconcommonfish1 = "http://i.imgur.com/rBEmhpg.png";
+        string iconrandomitem = "http://i.imgur.com/y2scGmZ.png";
+        string iconrarefish1 = "http://i.imgur.com/jMZxGf1.png";
 
         private void LoadVariables()
         {
@@ -97,6 +87,7 @@ namespace Oxide.Plugins
             CheckCfg("Bonus - From Attire (Percentage)", ref fishchancemodattirebonus);
             CheckCfg("Bonus - From Items (Percentage)", ref fishchancemoditembonus);
             CheckCfg("Bonus - From Time of Day (Percentage)", ref fishchancemodtimebonus);
+            CheckCfg("Treasure - Time to despawn chests : ", ref treasureDespawn);
 
             CheckCfg("Icon - Url for Common Fish 2", ref iconcommonfish2);
             CheckCfg("Icon - Url for Common Fish 1", ref iconcommonfish1);
@@ -141,242 +132,379 @@ namespace Oxide.Plugins
             return value;
         }
 
-//Plugin Messages that use language
+        ///////////////////////////////////////////////////////////////////////////////////////////
+
+        string msg(string key, string playerId = null) => lang.GetMessage(key, this, playerId);
+
         Dictionary<string, string> messages = new Dictionary<string, string>()
         {
-            {"missedfish", "You Missed the fish...." },
-            {"commonfish1", "You Got a Savis Island Swordfish" },
-            {"commonfish2", "You Got a Hapis Island RazorJaw" },
-            {"uncommonfish1", "You Got a Colon BlowFish" },
-            {"rarefish1", "You Got a Craggy Island Dorkfish" },
-            {"randomitem", "You found something in the water !!!" },
-            {"chancetext1", "Your chance to catch a fish is : " },
-            {"chancetext2", "% at Current time of : " }
+            ["missedfish"] = "You Missed the fish....",
+            ["notlookingatwater"] = "You must be aiming at water !!!!",
+            ["notstandinginwater"] = "You must be standing in water !!!!",
+            ["alreadyfishing"] = "You are already fishing !!",
+            ["cantmove"] = "You must stay still while fishing !!!",
+            ["wrongweapon"] = "You are not holding a fishing pole !!!",
+            ["commonfish1"] = "You Got a Savis Island Swordfish",
+            ["commonfish2"] = "You Got a Hapis Island RazorJaw",
+            ["uncommonfish1"] = "You Got a Colon BlowFish",
+            ["rarefish1"] = "You Got a Craggy Island Dorkfish",
+            ["randomitem"] = "You found something in the water !!!",
+            ["chancetext1"] = "Your chance to catch a fish is : ",
+            ["chancetext2"] = "at Current time of : "
         };
 
-// Modifiers that chance the chance a player will get a fish or not
-	void catchChanceMod(BasePlayer player)
-	{
+        //////////////////////////////////////////////////////////////////////////////////////////
 
-	fishchancemodweapon = 0;
-	fishchancemodattire = 0;
-	fishchancemoditem = 0;
-	fishchancemodtime = 0;
-	currenttime = TOD_Sky.Instance.Cycle.Hour;
-
-	Item activeItem = player.GetActiveItem();
-
-            	if (activeItem != null && activeItem.info.shortname == "spear.stone" && useweaponmod)
-		{ 
-		fishchancemodweapon = fishchancemodweaponbonus;
-		}
-            	if (activeItem != null && activeItem.info.shortname == "crossbow" && useweaponmod)
-		{ 
-		fishchancemodweapon = fishchancemodweaponbonus;
-		}
-
-	int hasBoonieOn = player.inventory.containerWear.GetAmount(-1397343301, true);
-	if (hasBoonieOn >= 1 && useattiremod)
-		{ 
-		fishchancemodattire = fishchancemodattirebonus;
-		}
-	int hasPookie = player.inventory.containerMain.GetAmount(640562379, true);
-	if (hasPookie >= 1 && useitemmod)
-		{ 
-		fishchancemoditem = fishchancemoditembonus;
-		}
-	if (currenttime < 8 && currenttime > 6 && usetimemod)
-		{
-		fishchancemodtime = fishchancemodtimebonus;
-		}
-	if (currenttime < 19 && currenttime > 16 && usetimemod)
-		{
-		fishchancemodtime = fishchancemodtimebonus;
-		}
-	return;
-	}
-	
-// Checks to see if player is looking at water
-	bool isLookingAtWater(BasePlayer player)
+        [ChatCommand("castfishingpole")]
+        void cmdChatcastfishingpole(BasePlayer player, string command, string[] args)
         {
-		whitDistance = 0;
-		ghitDistance = 0;
-		UnityEngine.Ray ray = new UnityEngine.Ray(player.eyes.position, player.eyes.HeadForward());
-
-		var hitsw = UnityEngine.Physics.RaycastAll(ray, 5f, waterlayer);
-		var hitsg = UnityEngine.Physics.RaycastAll(ray, 5f, groundlayer);
-
-	foreach (var hit in hitsw) 
-		{
-		if (hit.distance == null) return false;
-		whitDistance = hit.distance;
-		}
-	foreach (var hit in hitsg)
-		{
-		if (hit.distance == null) return false;
-		ghitDistance = hit.distance;
-		}
-		if (whitDistance < ghitDistance && whitDistance > 0) return true;
-		return false;
+            if (!IsAllowed(player, "fishing.allowed")) return;
+            var isfishing = player.GetComponent<FishingControl>();
+            if (isfishing) { SendReply(player, msg("alreadyfishing", player.UserIDString)); return; }
+            if (!UsingFishingWeapon(player)) { SendReply(player, msg("wrongweapon", player.UserIDString)); return; }
+            if (!LookingAtWater(player)) { SendReply(player, msg("notlookingatwater", player.UserIDString)); return; }
+            Vector3 whitpos = new Vector3();
+            RaycastHit whit;
+            if (Physics.Raycast(player.eyes.HeadRay(), out whit, 50f, waterlayer)) whitpos = whit.point;
+            var addfishing = player.gameObject.AddComponent<FishingControl>();
+            addfishing.SpawnBobber(whitpos);
         }
 
-// Chance roll to see if player gets a fish or not in Open water areas
-	void rollforfish(BasePlayer player, HitInfo hitInfo)
-	{
-		catchChanceMod(player);
-		int roll = UnityEngine.Random.Range(0, 100);
-		fishchance = fishchancedefault+fishchancemodweapon+fishchancemodattire+fishchancemoditem+fishchancemodtime;
-		if (roll < fishchance)
-                {
-			catchFishFX(player, hitInfo);
-			return;
-                }
-		else
-		SendReply(player, lang.GetMessage("missedfish", this));
-		return;
-	}
-
-// Effect for catching fish
-	void catchFishFX(BasePlayer player, HitInfo hitInfo)
-	{
-
-	int fishtyperoll = UnityEngine.Random.Range(1, 100);
-	if (fishtyperoll > 99)
-		{
-		FishIcon = iconrarefish1;
-		SendReply(player, lang.GetMessage("rarefish", this));
-		player.inventory.GiveItem(ItemManager.CreateByItemID(865679437, 5));
-		player.Command("note.inv", 865679437, 5);
-		}
-	if (fishtyperoll >= 90 && fishtyperoll < 100)
-		{
-		FishIcon = iconuncommonfish1;
-		SendReply(player, lang.GetMessage("uncommonfish1", this));
-		player.inventory.GiveItem(ItemManager.CreateByItemID(865679437, 2));
-		player.Command("note.inv", 865679437, 2);
-		}
-	if (fishtyperoll > 45 && fishtyperoll < 90)
-		{
-		FishIcon = iconcommonfish2;
-		SendReply(player, lang.GetMessage("commonfish2", this));
-		player.inventory.GiveItem(ItemManager.CreateByItemID(88869913, 1));
-		player.Command("note.inv", 88869913, 1);
-		}
-	if (fishtyperoll >= 1 && fishtyperoll <= 45)
-		{
-		FishIcon = iconcommonfish1;
-		SendReply(player, lang.GetMessage("commonfish1", this));
-		player.inventory.GiveItem(ItemManager.CreateByItemID(865679437, 1));
-		player.Command("note.inv", 865679437, 1);
-		}
-	if (fishtyperoll < randomitemchance && allowrandomitemchance)
-		{
-		FishIcon = iconrandomitem;
-		SendReply(player, lang.GetMessage("randomitem", this));
-		SpawnLootBox(player, hitInfo);
-		}
-
-	catchFishCui(player);
-	}
-
-// Runs Fishing Action on player attack when all criteria are met
-	void OnPlayerAttack(BasePlayer attacker, HitInfo hitInfo)
-	{
-	var player = attacker as BasePlayer;
-
-	if (!IsAllowed(player, "fishing.allowed")) return;
-	if (IsAllowed(player, "fishing.allowed"))
-		{
-		if (hitInfo?.HitEntity as BaseCombatEntity) return;
-		if (hitInfo == null) return;
-
-		if (hitInfo.WeaponPrefab.ToString().Contains("spear") || hitInfo.WeaponPrefab.ToString().Contains("bow"))
-			{
-			if (isLookingAtWater(player))
-				{
-				rollforfish(player, hitInfo);
-				hitInfo.CanGather = true;
-				return;
-				}
-			}
-			if (player.IsHeadUnderwater())
-			{
-				{
-				rollforfish(player, hitInfo);
-				hitInfo.CanGather = true;
-				return;
-				}
-			}
-		}
-	}
-
-// Show fish icon and player animation when catching fish
-	void catchFishCui(BasePlayer player)
-	{
-	if (ShowFishCatchIcon) FishingGui(player);
-	}
-
-// Displays Fish catch icon
-        void FishingGui(BasePlayer player)
+	[ChatCommand("fishchance")]
+        void cmdChatfishchance(BasePlayer player, string command, string[] args)
         {
-	DestroyCui(player);
+		catchChanceMod(player, player.transform.position, false);
+        }
 
-        var elements = new CuiElementContainer();
-        GuiInfo[player.userID] = CuiHelper.GetGuid();
+        ///////////////////////////////////////////////////////////////////////////////////////////
 
-        if (ShowFishCatchIcon)
+        void catchChanceMod(BasePlayer player, Vector3 hitloc, bool catchfish)
         {
-        	elements.Add(new CuiElement
+	    int chances = fishchancedefault;
+            var currenttime = TOD_Sky.Instance.Cycle.Hour;
+            Item activeItem = player.GetActiveItem();
+            if (activeItem != null && (activeItem.info.shortname == "spear.stone" || activeItem.info.shortname == "crossbow") && useweaponmod) chances += fishchancemodweaponbonus;
+            int hasBoonieOn = player.inventory.containerWear.GetAmount(-1397343301, true);
+            if (hasBoonieOn >= 1 && useattiremod) chances += fishchancemodattirebonus;
+            int hasPookie = player.inventory.containerMain.GetAmount(640562379, true);
+            if (hasPookie >= 1 && useitemmod) chances += fishchancemoditembonus;
+            if (currenttime < 8 && currenttime > 6 && usetimemod) chances += fishchancemodtimebonus;
+            if (currenttime < 19 && currenttime > 16 && usetimemod) chances += fishchancemodtimebonus;
+            if (catchfish) { FishChanceRoll(player, hitloc, chances); return; }
+	    if (!catchfish) SendReply(player, lang.GetMessage("chancetext1", this) + chances + "%\n"+lang.GetMessage("chancetext2", this) + currenttime);
+        }
+
+        void FishChanceRoll(BasePlayer player, Vector3 hitloc, int fishchance)
+        {
+            int roll = UnityEngine.Random.Range(0, 100);
+            if (roll < fishchance)
+            {
+                FishTypeRoll(player, hitloc);
+                return;
+            }
+            else
+                SendReply(player, msg("missedfish", player.UserIDString));
+            return;
+        }
+
+        void FishTypeRoll(BasePlayer player, Vector3 hitloc)
+        {
+            int fishtyperoll = UnityEngine.Random.Range(1, 100);
+            if (fishtyperoll < randomitemchance && allowrandomitemchance)
+            {
+                catchFishCui(player, iconrandomitem);
+                SendReply(player, msg("randomitem", player.UserIDString));
+                SpawnLootBox(player, hitloc);
+                return;
+            }
+            if (fishtyperoll > 99)
+            {
+                catchFishCui(player, iconrarefish1);
+                SendReply(player, msg("rarefish1", player.UserIDString));
+                player.inventory.GiveItem(ItemManager.CreateByItemID(865679437, 5));
+                player.Command("note.inv", 865679437, 5);
+                return;
+            }
+            if (fishtyperoll >= 90 && fishtyperoll < 100)
+            {
+                catchFishCui(player, iconuncommonfish1);
+                SendReply(player, msg("uncommonfish1", player.UserIDString));
+                player.inventory.GiveItem(ItemManager.CreateByItemID(865679437, 2));
+                player.Command("note.inv", 865679437, 2);
+                return;
+            }
+            if (fishtyperoll > 45 && fishtyperoll < 90)
+            {
+                catchFishCui(player, iconcommonfish2);
+                SendReply(player, msg("commonfish2", player.UserIDString));
+                player.inventory.GiveItem(ItemManager.CreateByItemID(88869913, 1));
+                player.Command("note.inv", 88869913, 1);
+                return;
+            }
+            if (fishtyperoll >= 1 && fishtyperoll <= 45)
+            {
+                catchFishCui(player, iconcommonfish1);
+                SendReply(player, msg("commonfish1", player.UserIDString));
+                player.inventory.GiveItem(ItemManager.CreateByItemID(865679437, 1));
+                player.Command("note.inv", 865679437, 1);
+                return;
+            }
+        }
+
+        ///////////////////////////////////////////////////////////////////////////////////////////
+
+        void OnPlayerAttack(BasePlayer attacker, HitInfo hitInfo)
+        {
+            var player = attacker as BasePlayer;
+
+            if (!IsAllowed(player, "fishing.allowed")) return;
+            if (IsAllowed(player, "fishing.allowed"))
+            {
+                if (hitInfo?.HitEntity as BaseCombatEntity) return;
+                if (hitInfo == null) return;
+
+                Vector3 hitloc = hitInfo.HitPositionWorld;
+                if (hitInfo.WeaponPrefab.ToString().Contains("spear") || hitInfo.WeaponPrefab.ToString().Contains("bow"))
                 {
-                    Name = GuiInfo[player.userID],
-		    Parent = "Overlay",
-                    Components =
+                    if (IsStandingInWater(player))
                     {
-                        new CuiRawImageComponent { Color = "1 1 1 1", Url = FishIcon, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
-                        new CuiRectTransformComponent { AnchorMin = "0.220 0.03",  AnchorMax = "0.260 0.10" }
+                        catchChanceMod(player, hitloc, true);
+                        hitInfo.CanGather = true;
+                        return;
                     }
-                });
+                }
+                if (player.IsHeadUnderwater())
+                {
+                    {
+                        catchChanceMod(player, hitloc, true);
+                        hitInfo.CanGather = true;
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void OnPlayerInput(BasePlayer player, InputState input)
+        {
+            var isfishing = player.GetComponent<FishingControl>();
+            if (!isfishing) return;
+            if (input != null)
+            {
+                if (input.WasJustPressed(BUTTON.FORWARD)) isfishing.playermoved = true;
+                if (input.WasJustPressed(BUTTON.BACKWARD)) isfishing.playermoved = true;
+                if (input.WasJustPressed(BUTTON.RIGHT)) isfishing.playermoved = true;
+                if (input.WasJustPressed(BUTTON.LEFT)) isfishing.playermoved = true;
+                if (input.WasJustPressed(BUTTON.JUMP)) isfishing.playermoved = true;
+            }
+        }
+
+        void OnPlayerRespawned(BasePlayer player)
+        {
+            var isfishing = player.GetComponent<FishingControl>();
+            if (!isfishing) return;
+            isfishing.OnDestroy();
+        }
+
+        void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            var isfishing = player.GetComponent<FishingControl>();
+            if (!isfishing) return;
+            isfishing.OnDestroy();
+        }
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        public bool IsStandingInWater(BasePlayer player)
+        {
+            if (player.modelState.waterLevel > 0.05f) return true;
+            return false;
+        }
+
+        bool UsingFishingWeapon(BasePlayer player)
+        {
+            Item activeItem = player.GetActiveItem();
+            if (activeItem != null && activeItem.info.shortname.Contains("spear")) return true;
+            return false;
+        }
+
+        bool LookingAtWater(BasePlayer player)
+        {
+            RaycastHit whit;
+            RaycastHit hit;
+            float Gdistance = 0f;
+            float Wdistance = 0f;
+            if (Physics.Raycast(player.eyes.HeadRay(), out whit, 50f, waterlayer)) Wdistance = whit.distance;
+            if (Physics.Raycast(player.eyes.HeadRay(), out hit, 50f, groundlayer)) Gdistance = hit.distance;
+            if (Gdistance > Wdistance) return true;
+            return false;
+        }
+
+        void SpawnLootBox(BasePlayer player, Vector3 hitloc)
+        {
+	    var randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier1 lootbox.prefab";
+            int rlroll = UnityEngine.Random.Range(1, 4);
+            if (rlroll == 1) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier1 lootbox.prefab";
+            if (rlroll == 2) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier2 lootbox.prefab";
+            if (rlroll == 3) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier3 lootbox.prefab";
+            var createdPrefab = GameManager.server.CreateEntity(randomlootprefab, hitloc);
+            BaseEntity treasurebox = createdPrefab?.GetComponent<BaseEntity>();
+            treasurebox.enableSaving = false;
+            treasurebox?.Spawn();
+            timer.Once(treasureDespawn, () => CheckTreasureDespawn(treasurebox));
             }
 
-            CuiHelper.AddUi(player, elements);
-	    timer.Once(1f, () => DestroyCui(player));
-        }
+   	void CheckTreasureDespawn(BaseEntity treasurebox)
+   	{
+         	if (treasurebox != null) treasurebox.Kill(BaseNetworkable.DestroyMode.None);
+	}
 
         void Unload()
         {
+            DestroyAll<FishingControl>();
             foreach (var player in BasePlayer.activePlayerList)
             {
                 string guiInfo;
                 if (GuiInfo.TryGetValue(player.userID, out guiInfo)) CuiHelper.DestroyUi(player, guiInfo);
             }
         }
-	void DestroyCui(BasePlayer player)
-	{
-                string guiInfo;
-                if (GuiInfo.TryGetValue(player.userID, out guiInfo)) CuiHelper.DestroyUi(player, guiInfo);
-	}
 
-	
-	[ChatCommand("fishchance")]
-        void cmdChatfishchance(BasePlayer player, string command, string[] args)
+        static void DestroyAll<T>()
         {
-	currenttime = TOD_Sky.Instance.Cycle.Hour;
-	catchChanceMod(player);
-	var fishchancepercent = fishchancedefault+fishchancemodweapon+fishchancemodattire+fishchancemoditem+fishchancemodtime;
-	SendReply(player, lang.GetMessage("chancetext1", this) + fishchancepercent + lang.GetMessage("chancetext2", this) + currenttime);
+            var objects = GameObject.FindObjectsOfType(typeof(T));
+            if (objects != null)
+                foreach (var gameObj in objects)
+                    GameObject.Destroy(gameObj);
         }
 
-	string randomlootprefab;
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        void SpawnLootBox(BasePlayer player, HitInfo hitInfo)
+        void catchFishCui(BasePlayer player, string fishicon)
         {
-		int rlroll = UnityEngine.Random.Range(1, 4);
-		if (rlroll == 1) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier1 lootbox.prefab";
-		if (rlroll == 2) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier2 lootbox.prefab";
-		if (rlroll == 3) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier3 lootbox.prefab";
-            	var createdPrefab = GameManager.server.CreateEntity(randomlootprefab, hitInfo.HitPositionWorld);
-            	BaseEntity entity = createdPrefab?.GetComponent<BaseEntity>();
-            	entity?.Spawn();
+            if (ShowFishCatchIcon) FishingGui(player, fishicon);
         }
-     }
+
+        void FishingGui(BasePlayer player, string fishicon)
+        {
+            DestroyCui(player);
+
+            var elements = new CuiElementContainer();
+            GuiInfo[player.userID] = CuiHelper.GetGuid();
+
+            if (ShowFishCatchIcon)
+            {
+                elements.Add(new CuiElement
+                {
+                    Name = GuiInfo[player.userID],
+                    Parent = "Overlay",
+                    Components =
+                    {
+                        new CuiRawImageComponent { Color = "1 1 1 1", Url = fishicon, Sprite = "assets/content/textures/generic/fulltransparent.tga" },
+                        new CuiRectTransformComponent { AnchorMin = "0.220 0.03",  AnchorMax = "0.260 0.10" }
+                    }
+                });
+            }
+
+            CuiHelper.AddUi(player, elements);
+            timer.Once(1f, () => DestroyCui(player));
+        }
+
+
+        void DestroyCui(BasePlayer player)
+        {
+            string guiInfo;
+            if (GuiInfo.TryGetValue(player.userID, out guiInfo)) CuiHelper.DestroyUi(player, guiInfo);
+        }
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        class FishingControl : MonoBehaviour
+        {
+            BasePlayer player;
+            public string anchormaxstr;
+            Fishing fishing;
+            public int counter;
+            BaseEntity bobber;
+            public bool playermoved;
+            Vector3 bobberpos;
+
+            void Awake()
+            {
+                fishing = new Fishing();
+                player = base.GetComponentInParent<BasePlayer>();
+                counter = 1000;
+                playermoved = false;
+            }
+
+            public void SpawnBobber(Vector3 pos)
+            {
+                float waterheight = TerrainMeta.WaterMap.GetHeight(pos);
+
+                pos = new Vector3(pos.x, waterheight, pos.z);
+                var createdPrefab = GameManager.server.CreateEntity("assets/prefabs/food/small water bottle/smallwaterbottle.entity.prefab", pos, Quaternion.identity);
+                bobber = createdPrefab?.GetComponent<BaseEntity>();
+                bobber.enableSaving = false;
+                bobber.transform.eulerAngles = new Vector3(270, 0, 0);
+                bobber?.Spawn();
+                bobberpos = bobber.transform.position;
+            }
+
+            void FixedUpdate()
+            {
+                bobberpos = bobber.transform.position;
+                if (playermoved) PlayerMoved();
+                counter = counter - 10;
+                if (counter <= 0) RollForFish();
+                fishingindicator(player, counter);
+            }
+
+	    void PlayerMoved()
+	    {
+		if (bobber != null && !bobber.IsDestroyed) { bobber.Invoke("KillMessage", 0.1f); }
+		fishing.SendReply(player, fishing.msg("cantmove", player.UserIDString)); 
+		OnDestroy();
+	    }
+
+	    void RollForFish()
+	    {
+		fishing.catchChanceMod(player, bobberpos, true); 
+		if (bobber != null && !bobber.IsDestroyed) { bobber.Invoke("KillMessage", 0.1f); } 
+		OnDestroy();
+	    }
+
+            public void fishingindicator(BasePlayer player, int counter)
+            {
+                DestroyCui(player);
+                if (counter >= 901 && counter <= 1000) anchormaxstr = "0.60 0.145";
+                if (counter >= 801 && counter <= 900) anchormaxstr = "0.58 0.145";
+                if (counter >= 701 && counter <= 800) anchormaxstr = "0.56 0.145";
+                if (counter >= 601 && counter <= 700) anchormaxstr = "0.54 0.145";
+                if (counter >= 501 && counter <= 600) anchormaxstr = "0.52 0.145";
+                if (counter >= 401 && counter <= 500) anchormaxstr = "0.50 0.145";
+                if (counter >= 301 && counter <= 400) anchormaxstr = "0.48 0.145";
+                if (counter >= 201 && counter <= 300) anchormaxstr = "0.46 0.145";
+                if (counter >= 101 && counter <= 200) anchormaxstr = "0.44 0.145";
+                if (counter >= 0 && counter <= 100) anchormaxstr = "0.42 0.145";
+                var fishingindicator = new CuiElementContainer();
+
+                fishingindicator.Add(new CuiButton
+                {
+                    Button = { Command = $"", Color = "0.0 0.0 1.0 0.6" },
+                    RectTransform = { AnchorMin = "0.40 0.125", AnchorMax = anchormaxstr },
+                    Text = { Text = (""), FontSize = 14, Color = "1.0 1.0 1.0 0.6", Align = TextAnchor.MiddleRight }
+                }, "Overall", "FishingGui");
+                CuiHelper.AddUi(player, fishingindicator);
+            }
+
+            void DestroyCui(BasePlayer player)
+            {
+                CuiHelper.DestroyUi(player, "FishingGui");
+            }
+
+            public void OnDestroy()
+            {
+                DestroyCui(player);
+                Destroy(this);
+            }
+        }
+    }
 }
