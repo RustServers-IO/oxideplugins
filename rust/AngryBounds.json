@@ -1,6 +1,6 @@
 {
     "name": "AngryBounds",
-    "description": "Prevents players from building outside map bounds.",
+    "description": "Prevents players from building outside of map bounds.",
     "author": "Tori1157",
     "version": "1.0.1",
     "configuration": false,
