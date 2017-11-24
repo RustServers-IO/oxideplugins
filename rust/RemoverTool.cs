@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.1.14", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.1.15", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -1140,7 +1140,7 @@ namespace Oxide.Plugins
 
 			if (TargetEntity is StorageContainer)
 			{
-				if (!RemoveContainerWithContent)
+				if (!RemoveContainerWithContent && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
 					return GetMsg("Couldn't use the RemoverTool: Entity storage is not empty", player);
 				if (RemoveContainerWithDrop && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
 					DropUtil.DropItems((TargetEntity as StorageContainer).inventory, TargetEntity.transform.position, 1f);
