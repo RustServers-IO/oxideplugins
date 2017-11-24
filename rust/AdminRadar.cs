@@ -11,11 +11,12 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminRadar", "nivex", "4.1.3", ResourceId = 978)]
+    [Info("AdminRadar", "nivex", "4.1.4", ResourceId = 978)]
     [Description("ESP tool for Admins and Developers.")]
     public class AdminRadar: RustPlugin
     {
         readonly string permName = "adminradar.allowed";
+        static readonly string permBypass = "adminradar.bypass";
         static AdminRadar ins;
         DynamicConfigFile dataFile;
         static StoredData storedData = new StoredData();
@@ -575,6 +576,7 @@ namespace Oxide.Plugins
         void Loaded()
         {
             permission.RegisterPermission(permName, this);
+            permission.RegisterPermission(permBypass, this);
         }
 
         void OnServerInitialized()
@@ -848,7 +850,7 @@ namespace Oxide.Plugins
                     {
                         double currDistance = Math.Floor(Vector3.Distance(target.transform.position, source.transform.position));
 
-                        if (player == target || currDistance > maxDistance)
+                        if (player == target || currDistance > maxDistance || (useBypass && ins.permission.UserHasPermission(target.UserIDString, permBypass)))
                             continue;
 
                         if (currDistance < playerDistance)
@@ -1173,8 +1175,14 @@ namespace Oxide.Plugins
                     if (showNPC || showAll)
                     {
                         error = "ZOMBIECACHE";
-                        foreach(var zombie in zombieCache)
+                        foreach(var zombie in zombieCache.ToList())
                         {
+                            if (zombie == null || zombie.transform == null || zombie.net == null)
+                            {
+                                zombieCache.Remove(zombie);
+                                continue;
+                            }
+
                             double currDistance = Math.Floor(Vector3.Distance(zombie.transform.position, source.transform.position));
 
                             if (currDistance > maxDistance)
@@ -1192,8 +1200,14 @@ namespace Oxide.Plugins
                         }
 
                         error = "NPCCACHE";
-                        foreach (var target in npcCache)
+                        foreach (var target in npcCache.ToList())
                         {
+                            if (target?.transform == null)
+                            {
+                                npcCache.Remove(target);
+                                continue;
+                            }
+
                             double currDistance = Math.Floor(Vector3.Distance(target.transform.position, source.transform.position));
 
                             if (player == target || currDistance > maxDistance)
@@ -1216,6 +1230,9 @@ namespace Oxide.Plugins
                         error = "ANIMALS";
                         foreach (var npc in BaseNetworkable.serverEntities.Where(e => e is BaseNpc).Cast<BaseNpc>().ToList())
                         {
+                            if (npc.ShortPrefabName == "zombie")
+                                continue;
+
                             double currDistance = Math.Floor(Vector3.Distance(npc.transform.position, source.transform.position));
 
                             if (currDistance < npcDistance && currDistance < maxDistance)
@@ -1320,10 +1337,6 @@ namespace Oxide.Plugins
             if (!init || entity == null)
                 return;
 
-            if (entity is Zombie && zombieCache.Contains(entity as Zombie))
-            {
-                zombieCache.Remove(entity as Zombie);
-            }
             if (cachedBackpacks.ContainsKey(entity.transform.position))
             {
                 cachedBackpacks.Remove(entity.transform.position);
@@ -1468,7 +1481,14 @@ namespace Oxide.Plugins
             }
             else if (entity is DroppedItemContainer)
             {
-                cachedBackpacks.Add(entity.transform.position, new CachedInfo() { Name = entity.ShortPrefabName, Info = entity.net.ID });
+                var position = entity.transform.position;
+
+                while (cachedBackpacks.ContainsKey(position))
+                {
+                    position.y += 1f;
+                }
+
+                cachedBackpacks.Add(position, new CachedInfo() { Name = entity.ShortPrefabName, Info = entity.net.ID });
                 return true;
             }
             else if (entity is SleepingBag)
@@ -1866,6 +1886,7 @@ namespace Oxide.Plugins
         static float inactiveTimeLimit;
         static int deactiveTimeLimit;
         static bool showUI;
+        static bool useBypass;
 
         static string szChatCommand;
         static List<object> authorized;
@@ -1942,6 +1963,7 @@ namespace Oxide.Plugins
             inactiveTimeLimit = Convert.ToSingle(GetConfig("Settings", "Deactivate Radar After X Seconds Inactive", 300f));
             deactiveTimeLimit = Convert.ToInt32(GetConfig("Settings", "Deactivate Radar After X Minutes", 0));
             showUI = Convert.ToBoolean(GetConfig("Settings", "User Interface Enabled", true));
+            useBypass = Convert.ToBoolean(GetConfig("Settings", "Use Bypass Permission", false));
 
             showLootContents = Convert.ToBoolean(GetConfig("Options", "Show Barrel And Crate Contents", false));
             showAirdropContents = Convert.ToBoolean(GetConfig("Options", "Show Airdrop Contents", false));

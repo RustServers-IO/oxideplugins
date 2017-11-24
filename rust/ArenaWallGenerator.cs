@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ArenaWallGenerator", "nivex", "1.0.2", ResourceId = 2589)]
+    [Info("ArenaWallGenerator", "nivex", "1.0.3", ResourceId = 2589)]
     [Description("An easy to use arena wall generator.")]
     public class ArenaWallGenerator : RustPlugin
     {
@@ -198,8 +198,8 @@ namespace Oxide.Plugins
             var tick = DateTime.Now;
             ulong ownerId = GetOwnerId(center.ToString());
 
-            if (ZoneWallsExist(ownerId, entities))
-                return true;
+            //if (ZoneWallsExist(ownerId, entities))
+                //return true;
 
             float maxHeight = -200f;
             float minHeight = 200f;
@@ -267,11 +267,19 @@ namespace Oxide.Plugins
 
         private bool API_CreateZoneWalls(Vector3 center, float radius)
         {
-            return CreateZoneWalls(center, radius, useWoodenWalls ? hewwPrefab : heswPrefab, null, null);
+            if (CreateZoneWalls(center, radius, useWoodenWalls ? hewwPrefab : heswPrefab, null, null))
+            {
+                storedData.Arenas[center.ToString()] = radius;
+                return true;
+            }
+
+            return false;
         }
 
         private bool API_RemoveZoneWalls(Vector3 center)
         {
+            storedData.Arenas.Remove(center.ToString());
+
             return RemoveCustomZoneWalls(center);
         }
 
@@ -300,6 +308,7 @@ namespace Oxide.Plugins
 
                         storedData.Arenas[hit.point.ToString()] = radius;
                         CreateZoneWalls(hit.point, radius, prefab, null, player);
+                        player.ChatMessage("ok");
                     }
                     else
                         player.ChatMessage(msg("FailedRaycast", player.UserIDString));

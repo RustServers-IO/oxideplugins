@@ -18,7 +18,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "1.1.2", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
+    [Info("Duelist", "nivex", "1.1.3", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
     public class Duelist : RustPlugin
     {
         public enum Team
@@ -700,6 +700,7 @@ namespace Oxide.Plugins
 
                 ins.Metabolize(player, false);
                 ins.RemoveEntities(player.userID);
+                Interface.Oxide.CallHook("DisableBypass", player.userID);
 
                 if (DuelTerritory(player.transform.position))
                 {
@@ -1337,7 +1338,7 @@ namespace Oxide.Plugins
             }
 
             if (useWorkshopSkins)
-                webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", GetWorkshopIDs, this);
+                webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, GetWorkshopIDs, this);
         }
 
         private void OnServerSave()
@@ -1530,6 +1531,7 @@ namespace Oxide.Plugins
 
                         CheckAutoReady(player);
                         zone.AddPlayer(player);
+                        Interface.Oxide.CallHook("EnableBypass", player.userID);
                         return;
                     }
                 }
@@ -1552,6 +1554,7 @@ namespace Oxide.Plugins
                 Metabolize(player, true);
                 match.GiveShirt(player);
                 CheckAutoReady(player);
+                Interface.Oxide.CallHook("EnableBypass", player.userID);
                 return;
             }
             else if (announcements.ContainsKey(player.UserIDString))
@@ -1789,6 +1792,9 @@ namespace Oxide.Plugins
             RemoveDuelist(attackerId);
             RemoveEntities(Convert.ToUInt64(attackerId));
             AwardPlayer(Convert.ToUInt64(attackerId), economicsMoney, serverRewardsPoints);
+
+            Interface.Oxide.CallHook("DisableBypass", victim.userID);
+            Interface.Oxide.CallHook("DisableBypass", attackerId);
 
             if (attacker != null)
             {
@@ -5042,7 +5048,7 @@ namespace Oxide.Plugins
 
             Player.Teleport(player, destination);
 
-            if (player.IsConnected && Vector3.Distance(player.transform.position, destination) > 150f)
+            if (player.IsConnected && Vector3.Distance(player.transform.position, destination) > 50f) // 1.1.2 reduced from 150 to 100
             {
                 player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
                 player.UpdateNetworkGroup();
