@@ -1,11 +1,11 @@
 {
-    "name": "SurveyBlocker",
+    "name": "Survey Blocker",
     "description": "Simple plugin to block damage of structure from survey charges",
     "author": "miRror",
     "version": "1.0.0",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/surveyblocker.2699",
+    "url": "http:\/\/oxidemod.org\/plugins\/survey-blocker.2699",
     "games": [
         "rust"
     ],
