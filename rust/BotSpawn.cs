@@ -16,10 +16,10 @@ using ProtoBuf;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.3.0", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.3.1", ResourceId = 2580)]
     
     [Description("Spawn Bots with kits at monuments.")]
-
+//airdrop respawn fix
 	
     class BotSpawn : RustPlugin
     {
@@ -197,21 +197,13 @@ namespace Oxide.Plugins
         
         void OnEntityDeath(BaseEntity entity)
         {
-            
             string respawnLocationName = "";
             NPCPlayerApex Scientist = null;
             if (entity is NPCPlayerApex)
             {
-                Scientist = entity as NPCPlayerApex;
-                if (TempRecord.dontRespawn.Contains(Scientist.userID))
-                {
-                    TempRecord.dontRespawn.Remove(Scientist.userID);
-                    TempRecord.NPCPlayers.Remove(Scientist);
-                    return;
-                }
-                
                 foreach (var bot in TempRecord.NPCPlayers)
                 {
+		    Scientist = entity as NPCPlayerApex;
                     if (bot.Value.botID == Scientist.userID)
                         {
                             no_of_AI--;
@@ -221,7 +213,7 @@ namespace Oxide.Plugins
                             Scientist.DeathEffect = new GameObjectRef();
                         }
                 }
-                if(respawnLocationName == "AirDrop")
+                if(TempRecord.dontRespawn.Contains(Scientist.userID))
                 {
                 UpdateRecords(Scientist);
                 return;
@@ -240,7 +232,24 @@ namespace Oxide.Plugins
                 return;
             }
         }
-        
+      
+        void UpdateRecords(BasePlayer player)
+        {
+            foreach (var bot in TempRecord.NPCPlayers)
+            {
+                if (bot.Value.botID == player.userID)
+                {
+                foreach (Item item in player.inventory.containerBelt.itemList) 
+                {
+                    item.Remove();
+                } 
+                TempRecord.NPCPlayers.Remove(bot.Key);
+                TempRecord.dontRespawn.Remove(bot.Value.botID);
+                return;
+                }
+            }
+        }
+	
         // Facepunch.RandomUsernames
         public static string Get(ulong v) //credit fuji.
         {
@@ -619,23 +628,6 @@ namespace Oxide.Plugins
             }
             }
             return result;
-        }
-
-        void UpdateRecords(BasePlayer player)
-        {
-            foreach (var bot in TempRecord.NPCPlayers)
-            {
-                if (bot.Value.botID == player.userID)
-                {
-                foreach (Item item in player.inventory.containerBelt.itemList) 
-                {
-                    item.Remove();
-                } 
-                TempRecord.NPCPlayers.Remove(bot.Key);
-                TempRecord.dontRespawn.Remove(bot.Value.botID);
-                return;
-                }
-            }
         }
 
         static Vector3 CalculateGroundPos(Vector3 sourcePos) // credit Wulf & Nogrod 
