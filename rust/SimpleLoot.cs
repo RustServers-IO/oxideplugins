@@ -15,7 +15,58 @@ namespace Oxide.Plugins
          *   - Maxaki ($20) @ Blueberry Servers
          */
 
-        #region Configuration 
+        private static SimpleLoot _instance;
+
+        private Configuration _configuration;
+
+        private void Init() => _instance = this;
+
+        private void OnServerInitialized()
+        {
+            _configuration = new Configuration();
+            var containers = UnityEngine.Object.FindObjectsOfType<LootContainer>();
+            for (var i = 0; i < containers.Length; i++)
+            {
+                OnSpawnLoot(containers[i]);
+                if (i == containers.Length - 1)
+                    PrintWarning($"Repopulating {i} loot containers.");
+            }
+        }
+
+        private void OnSpawnLoot(LootContainer lootContainer)
+        {
+            if (lootContainer?.inventory?.itemList == null)
+                return;
+
+            foreach (var item in lootContainer.inventory.itemList.ToList())
+            {
+                item.RemoveFromWorld();
+                item.RemoveFromContainer();
+            }
+
+            lootContainer.PopulateLoot();
+            foreach (var item in lootContainer.inventory.itemList.ToList())
+            {
+                var itemBlueprint = ItemManager.FindItemDefinition(item.info.shortname).Blueprint;
+                if (_configuration.ReplaceItems && itemBlueprint != null && itemBlueprint.isResearchable)
+                {
+                    var slot = item.position;
+                    item.RemoveFromWorld();
+                    item.RemoveFromContainer();
+                    var blueprint = ItemManager.CreateByName("blueprintbase");
+                    blueprint.blueprintTarget = item.info.itemid;
+                    blueprint.MoveToContainer(lootContainer.inventory, slot);
+                }
+                else
+                {
+                    object multiplier;
+                    if (_configuration.Multipliers.TryGetValue(item.info.shortname, out multiplier))
+                        item.amount *= Convert.ToInt32(multiplier);
+                }
+            }
+        }
+
+        protected override void LoadDefaultConfig() => PrintWarning("Generating new config file...");
 
         private class Configuration
         {
@@ -62,110 +113,5 @@ namespace Oxide.Plugins
 
             private void SetConfig<T>(ref T variable, params string[] path) => _instance.Config.Set(path.Concat(new object[] { variable }).ToArray());
         }
-
-        protected override void LoadDefaultConfig() => PrintWarning("Generating new config file...");
-
-        #endregion
-
-        #region Data
-
-        private class Data
-        {
-            public Dictionary<string, object> ItemRarities = new Dictionary<string, object>();
-
-            public Data()
-            {
-                ReadData(ref ItemRarities, "ItemRarities");
-
-                foreach (var itemDefinition in ItemManager.itemList)
-                {
-                    object rarity;
-                    if (ItemRarities.TryGetValue(itemDefinition.shortname, out rarity))
-                    {
-                        itemDefinition.rarity =  (Rarity) Convert.ToInt32(rarity);
-                        continue;
-                    }
-
-                    ItemRarities.Add(itemDefinition.shortname, itemDefinition.rarity);
-                }
-
-                SaveData(ItemRarities, "ItemRarities");
-            }
-
-            private void SaveData<T>(T data, string file) => Interface.Oxide.DataFileSystem.WriteObject($"{_instance.Name}/{file}", data);
-
-            private void ReadData<T>(ref T data, string file) => data = Interface.Oxide.DataFileSystem.ReadObject<T>($"{_instance.Name}/{file}");
-        }
-
-        #endregion
-
-        #region Fields
-
-        private static SimpleLoot _instance;
-
-        private Configuration _configuration;
-
-        private Data _data;
-
-        private bool _initalized;
-
-        #endregion
-
-        #region Oxide Hooks
-
-        private void Init() => _instance = this;
-
-        private void OnServerInitialized()
-        {
-            _configuration = new Configuration();
-            _data = new Data();
-            _initalized = true;
-            var containers = UnityEngine.Object.FindObjectsOfType<LootContainer>();
-            for (var i = 0; i < containers.Length; i++)
-            {
-                OnEntitySpawned(containers[i]);
-                if (i == containers.Length - 1)
-                    PrintWarning($"Repopulating {i} loot containers.");
-            }
-        }
-
-        private void OnEntitySpawned(BaseNetworkable entity)
-        {
-            if (!_initalized)
-                return;
-
-            var lootContainer = entity as LootContainer;
-            if (lootContainer?.inventory?.itemList == null)
-                return;
-
-            foreach (var item in lootContainer.inventory.itemList.ToList().Where(x => x != null))
-            {
-                item.RemoveFromWorld();
-                item.RemoveFromContainer();
-            }
-
-            lootContainer.PopulateLoot();
-            foreach (var item in lootContainer.inventory.itemList.ToList().Where(x => x != null))
-            {
-                var itemBlueprint = ItemManager.FindItemDefinition(item.info.shortname).Blueprint;
-                if (_configuration.ReplaceItems && itemBlueprint != null && itemBlueprint.isResearchable)
-                {
-                    var slot = item.position;
-                    item.RemoveFromWorld();
-                    item.RemoveFromContainer();
-                    var blueprint = ItemManager.CreateByName("blueprintbase");
-                    blueprint.blueprintTarget = item.info.itemid;
-                    blueprint.MoveToContainer(lootContainer.inventory, slot);
-                }
-                else
-                {
-                    object multiplier;
-                    if (_configuration.Multipliers.TryGetValue(item.info.shortname, out multiplier))
-                        item.amount *= Convert.ToInt32(multiplier);
-                }
-            }
-        }
-
-        #endregion
     }
 }
