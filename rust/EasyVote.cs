@@ -1,7 +1,4 @@
-﻿// Make sure that everything works (like multiple server voting)
-// Check all todos
-// Double test everything
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Plugins;
@@ -15,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "2.0.21", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "2.0.3", ResourceId = 2102)]
     [Description("Simple and smooth voting start by activating one scirpt.")]
     class EasyVote : RustPlugin
     {
@@ -49,6 +46,14 @@ namespace Oxide.Plugins
 
         void Loaded()
         {
+            // Load configs
+            LoadConfigValues();
+            LoadMessages();
+
+            // Regitering permissions
+            permission.RegisterPermission(permUse, this);
+            permission.RegisterPermission(permAdmin, this);
+
             // Load storedata
             _storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("EasyVote");
 
@@ -57,23 +62,12 @@ namespace Oxide.Plugins
 
             // Build helptext
             HelpText();
-        }
-
-        void Init()
-        {
-            // Load configs
-            LoadMessages();
-            LoadConfigValues();
 
             // Check available vote sites
             checkVoteSites();
 
             // Build StringBuilders
             voteList();
-
-            // Regitering permissions
-            permission.RegisterPermission(permUse, this);
-            permission.RegisterPermission(permAdmin, this);
         }
         #endregion
 
@@ -415,22 +409,25 @@ namespace Oxide.Plugins
 
             // Take closest number from rewardNumbers
             int? closest = null;
-            try
+            if (numberMax.Count != 0)
             {
-                closest = (int?)numberMax.Aggregate((x, y) => Math.Abs(x - voted) < Math.Abs(y - voted)
-                        ? (x > voted ? y : x)
-                        : (y > voted ? x : y));
-            }
-            catch (InvalidOperationException error) { PrintError($"Player {player.displayName} tried to claim a reward but this happened ...\n{error.ToString()}"); return; }
+                try
+                {
+                    closest = (int?)numberMax.Aggregate((x, y) => Math.Abs(x - voted) < Math.Abs(y - voted)
+                            ? (x > voted ? y : x)
+                            : (y > voted ? x : y));
+                }
+                catch (InvalidOperationException error) { PrintError($"Player {player.displayName} tried to claim a reward but this happened ...\n{error.ToString()}"); return; }
 
-            if (closest > voted)
-            {
-                _Debug($"Closest ({closest}) number was bigger then voted number ({voted})");
-                _Debug($"Closest ({closest}) is now 0!");
-                closest = 0;
-            }
+                //TODO: Check this
+                if (closest > voted)
+                {
+                    _Debug($"Closest ({closest}) number was bigger then voted number ({voted}). Changed closest from ({closest}) to 0");
+                    closest = 0;
+                }
 
-            _Debug($"Reward Number: {closest} Voted: {voted}");
+                _Debug($"Reward Number: {closest} Voted: {voted}");
+            }
 
             // and here the magic happens. Loop for all rewards.
             foreach (KeyValuePair<string, List<string>> kvp in _config.Rewards)
@@ -438,10 +435,10 @@ namespace Oxide.Plugins
                 // If first time voted
                 if (kvp.Key.ToLower() == "first")
                 {
+                    // Make sure that this is player first time voting
                     if (voted > 1)
                         continue;
 
-                    _Debug("Founded 'first' in config!");
                     GaveRewards(player, kvp.Value);
                     continue;
                 }
@@ -449,8 +446,6 @@ namespace Oxide.Plugins
                 // Gave this reward everytime
                 if (kvp.Key == "@")
                 {
-                    _Debug("Founded 'repeat reward' in config!");
-
                     GaveRewards(player, kvp.Value);
                     continue;
                 }
@@ -476,9 +471,12 @@ namespace Oxide.Plugins
                 }
 
                 // Got closest vote
-                if (kvp.Key.ToString() == $"vote{closest}")
+                if (closest != null)
                 {
-                    GaveRewards(player, kvp.Value);
+                    if (kvp.Key.ToString() == $"vote{closest}")
+                    {
+                        GaveRewards(player, kvp.Value);
+                    }
                 }
 
             }
@@ -511,7 +509,10 @@ namespace Oxide.Plugins
                 Interface.CallHook("onUserReceiveReward", player, voted);
 
                 // Send ThankYou to player
-                Chat(player, $"{_lang("ThankYou", player.UserIDString, voted, rewardsString.ToString())}");
+                if (_config.Discord[PluginSettings.LocalChatAnnouncments].ToLower() == "true")
+                    Chat(player, $"{_lang("ThankYou", player.UserIDString, voted, rewardsString.ToString())}");
+
+                // Clear rewardString
                 rewardsString.Clear();
             }
         }
@@ -538,11 +539,11 @@ namespace Oxide.Plugins
                     rust.RunServerCommand(getCmdLine(player, commmand, value));
 
                     if (!value.Contains("-"))
-                        rewardsString.Append($"- {_lang(commmand, player.UserIDString, value)}").AppendLine();
+                        rewardsString.AppendLine($"- {_lang(commmand, player.UserIDString, value)}");
                     else
                     {
                         string[] _value = value.Split('-');
-                        rewardsString.Append($"- {_lang(commmand, player.UserIDString, _value[0], _value[1])}").AppendLine();
+                        rewardsString.AppendLine($"- {_lang(commmand, player.UserIDString, _value[0], _value[1])}");
                     }
 
                     _Debug($"Ran command {String.Format(commmand, value)}");
@@ -559,7 +560,7 @@ namespace Oxide.Plugins
                         if (!player.inventory.GiveItem(itemToReceive, player.inventory.containerMain))
                             itemToReceive.Drop(player.GetDropPosition(), player.GetDropVelocity());
 
-                        rewardsString.Append($"- {_lang("Received", player.UserIDString, value, itemToReceive.info.displayName.translated)}").AppendLine();
+                        rewardsString.AppendLine($"- {_lang("Received", player.UserIDString, value, itemToReceive.info.displayName.translated)}");
                     }
                     catch (Exception e) { PrintWarning($"{e}"); }
                 }
@@ -711,7 +712,7 @@ namespace Oxide.Plugins
                 },
                 Commands = new Dictionary<string, string>
                 {
-                    ["money"] = "eco.c deposit {playerid} {value}",
+                    ["money"] = "deposit {playerid} {value}",
                     ["rp"] = "sr add {playerid} {value}",
                     ["oxidegrantperm"] = "oxide.grant user {playerid} {value}",
                     ["oxiderevokeperm"] = "oxide.revoke user {playerid} {value}",
@@ -761,15 +762,39 @@ namespace Oxide.Plugins
         }
         void LoadConfigValues()
         {
+            // Load config file
             _config = Config.ReadObject<PluginConfig>();
             var defaultConfig = DefaultConfig();
-            Merge(_config.Settings, defaultConfig.Settings);
-            Merge(_config.Discord, defaultConfig.Discord);
-            Merge(_config.Servers, defaultConfig.Servers, true);
-            Merge(_config.VoteSitesAPI, defaultConfig.VoteSitesAPI, true);
-            Merge(_config.Rewards, defaultConfig.Rewards, true);
-            Merge(_config.Commands, defaultConfig.Commands, true);
 
+            try
+            {
+                // Try merge config
+                Merge(_config.Settings, defaultConfig.Settings);
+                Merge(_config.Discord, defaultConfig.Discord);
+                Merge(_config.Servers, defaultConfig.Servers, true);
+                Merge(_config.VoteSitesAPI, defaultConfig.VoteSitesAPI, true);
+                Merge(_config.Rewards, defaultConfig.Rewards, true);
+                Merge(_config.Commands, defaultConfig.Commands, true);
+            }
+            catch
+            {
+                // Print warning
+                PrintWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+
+                // Load default config
+                LoadDefaultConfig();
+                _config = Config.ReadObject<PluginConfig>();
+
+                // Merge config again
+                Merge(_config.Settings, defaultConfig.Settings);
+                Merge(_config.Discord, defaultConfig.Discord);
+                Merge(_config.Servers, defaultConfig.Servers, true);
+                Merge(_config.VoteSitesAPI, defaultConfig.VoteSitesAPI, true);
+                Merge(_config.Rewards, defaultConfig.Rewards, true);
+                Merge(_config.Commands, defaultConfig.Commands, true);
+            }
+
+            // If config changed, run this
             if (!configChanged) return;
             PrintWarning("Configuration file(s) updated!");
             Config.WriteObject(_config);
@@ -787,6 +812,7 @@ namespace Oxide.Plugins
             foreach (var oldPair in oldPairs)
             {
                 if (bypass) continue;
+                current.Remove(oldPair);
                 configChanged = true;
             }
         }
@@ -910,20 +936,25 @@ namespace Oxide.Plugins
         {
             foreach (KeyValuePair<string, List<string>> kvp in _config.Rewards)
             {
+                // Ignore @ and first
                 if (kvp.Key == "@")
                     continue;
                 if (kvp.Key.ToLower() == "first")
                     continue;
 
-                int rewardNumber;
-
-                // Remove alphabetic and leave only number.
-                if (!int.TryParse(kvp.Key.Replace("vote", ""), out rewardNumber))
+                // If key contains "vote"
+                if (kvp.Key.ToLower().Contains("vote"))
                 {
-                    Puts($"Invalid vote config format \"{kvp.Key}\"");
-                    continue;
+                    int rewardNumber;
+
+                    // Remove alphabetic and leave only number.
+                    if (!int.TryParse(kvp.Key.Replace("vote", ""), out rewardNumber))
+                    {
+                        Puts($"Invalid vote config format \"{kvp.Key}\"");
+                        continue;
+                    }
+                    numberMax.Add(rewardNumber);
                 }
-                numberMax.Add(rewardNumber);
             }
         }
 
