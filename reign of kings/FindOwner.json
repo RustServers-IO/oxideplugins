@@ -1,0 +1,16 @@
+{
+    "name": "FindOwner",
+    "description": "A \/prod command that gives owner info for sleepers, blocks in crest zones, and any player item",
+    "author": "Mordeus",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/findowner.2702",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}

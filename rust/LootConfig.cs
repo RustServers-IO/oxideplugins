@@ -19,10 +19,10 @@ using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.25")]
+    [Info("LootConfig", "Nogrod", "1.0.26")]
     internal class LootConfig : RustPlugin
     {
-        private const int VersionConfig = 13;
+        private const int VersionConfig = 14;
         private readonly FieldInfo ParentSpawnGroupField = typeof (SpawnPointInstance).GetField("parentSpawnGroup", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnGroupsField = typeof (SpawnHandler).GetField("SpawnGroups", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnPointsField = typeof(SpawnGroup).GetField("spawnPoints", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -132,6 +132,7 @@ namespace Oxide.Plugins
             var loot = Resources.FindObjectsOfTypeAll<LootSpawn>();
             var itemModReveal = Resources.FindObjectsOfTypeAll<ItemModReveal>();
             var itemModUnwrap = Resources.FindObjectsOfTypeAll<ItemModUnwrap>();
+            var workbench = Resources.FindObjectsOfTypeAll<Workbench>();
 #if DEBUG
             var sb = new StringBuilder();
             foreach (var reveal in itemModReveal)
@@ -165,6 +166,7 @@ namespace Oxide.Plugins
             Array.Sort(loot, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             Array.Sort(itemModReveal, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             Array.Sort(itemModUnwrap, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
+            Array.Sort(workbench, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             var spawnGroupsData = new Dictionary<string, Dictionary<string, LootContainer>>();
             var spawnGroups = (List<SpawnGroup>)SpawnGroupsField.GetValue(SpawnHandler.Instance);
             var monuments = Resources.FindObjectsOfTypeAll<MonumentInfo>();
@@ -211,6 +213,7 @@ namespace Oxide.Plugins
                         new LootSpawnSlotConverter(),
                         new ItemModRevealConverter(),
                         new ItemModUnwrapConverter(),
+                        new WorkbenchConverter(),
                         new StringEnumConverter(),
                     }
                 };
@@ -224,6 +227,7 @@ namespace Oxide.Plugins
                     SpawnGroups = spawnGroupsData.OrderBy(l => l.Key).ToDictionary(l => l.Key, l => l.Value),
                     ItemModReveals = itemModReveal.ToDictionary(l => l.name),
                     ItemModUnwraps = itemModUnwrap.Where(l => l.revealList != null).ToDictionary(l => l.name),
+                    Workbenchs = workbench.ToDictionary(l => l.name),
                     Categories = loot.ToDictionary(l => l.name)
                 });
             }
@@ -288,6 +292,7 @@ namespace Oxide.Plugins
             var lootSpawnsOld = Resources.FindObjectsOfTypeAll<LootSpawn>();
             var itemModReveals = Resources.FindObjectsOfTypeAll<ItemModReveal>();
             var itemModUnwraps = Resources.FindObjectsOfTypeAll<ItemModUnwrap>();
+            var workbenchs = Resources.FindObjectsOfTypeAll<Workbench>();
             var monuments = Resources.FindObjectsOfTypeAll<MonumentInfo>();
 #if DEBUG
             Puts("LootContainer: {0} LootSpawn: {1} ItemModReveal: {2}", lootContainers.Length, lootSpawnsOld.Length, itemModReveals.Length);
@@ -402,6 +407,25 @@ namespace Oxide.Plugins
                     continue;
                 }
                 unwrap.revealList = lootSpawn;
+            }
+            foreach (var workbench in workbenchs)
+            {
+#if DEBUG
+                Puts("Update Workbench: {0}", workbench.name);
+#endif
+                WorkbenchData workbenchConfig;
+                if (!_config.Workbenchs.TryGetValue(workbench.name.Replace("(Clone)", ""), out workbenchConfig))
+                {
+                    Puts("No reveal data found: {0}", workbench.name.Replace("(Clone)", ""));
+                    continue;
+                }
+                var lootSpawn = GetLootSpawn(workbenchConfig.ExperimentalItems, lootSpawns);
+                if (lootSpawn == null)
+                {
+                    Puts("RevealList category '{0}' for '{1}' not found, skipping", workbenchConfig.ExperimentalItems, workbench.name.Replace("(Clone)", ""));
+                    continue;
+                }
+                workbench.experimentalItems = lootSpawn;
             }
             _itemsDict = null;
             foreach (var lootSpawn in lootSpawnsOld)
@@ -591,6 +615,7 @@ namespace Oxide.Plugins
             public Dictionary<string, Dictionary<string, LootContainerData>> SpawnGroups { get; set; } = new Dictionary<string, Dictionary<string, LootContainerData>>();
             public Dictionary<string, ItemModRevealData> ItemModReveals { get; set; } = new Dictionary<string, ItemModRevealData>();
             public Dictionary<string, ItemModUnwrapData> ItemModUnwraps { get; set; } = new Dictionary<string, ItemModUnwrapData>();
+            public Dictionary<string, WorkbenchData> Workbenchs { get; set; } = new Dictionary<string, WorkbenchData>();
             public Dictionary<string, LootSpawnData> Categories { get; set; } = new Dictionary<string, LootSpawnData>();
         }
 
@@ -608,6 +633,7 @@ namespace Oxide.Plugins
             public Dictionary<string, Dictionary<string, LootContainer>> SpawnGroups { get; set; } = new Dictionary<string, Dictionary<string, LootContainer>>();
             public Dictionary<string, ItemModReveal> ItemModReveals { get; set; } = new Dictionary<string, ItemModReveal>();
             public Dictionary<string, ItemModUnwrap> ItemModUnwraps { get; set; } = new Dictionary<string, ItemModUnwrap>();
+            public Dictionary<string, Workbench> Workbenchs { get; set; } = new Dictionary<string, Workbench>();
             public Dictionary<string, LootSpawn> Categories { get; set; } = new Dictionary<string, LootSpawn>();
         }
 
@@ -927,6 +953,43 @@ namespace Oxide.Plugins
         {
             public string Category { get; set; }
             public int Weight { get; set; }
+        }
+
+        #endregion
+
+        #region Nested type: WorkbenchConverter
+
+        private class WorkbenchConverter : JsonConverter
+        {
+            public override bool CanRead => false;
+
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                var entry = (Workbench)value;
+                writer.WriteStartObject();
+                writer.WritePropertyName("ExperimentalItems");
+                writer.WriteValue(entry.experimentalItems.name);
+                writer.WriteEndObject();
+            }
+
+            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+            {
+                return null;
+            }
+
+            public override bool CanConvert(Type objectType)
+            {
+                return typeof(Workbench).IsAssignableFrom(objectType);
+            }
+        }
+
+        #endregion
+
+        #region Nested type: WorkbenchData
+
+        public class WorkbenchData
+        {
+            public string ExperimentalItems { get; set; }
         }
 
         #endregion
