@@ -7,8 +7,8 @@ using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins {
- [Info("DamageControl", "ColonBlow, MSpeedie", "2.1.5", ResourceId = 0)]
- [Description("Allows authorized Users to control damage settings for animals, buildings, npcs, players and zombies")]
+ [Info("DamageControl", "ColonBlow, MSpeedie", "2.1.7", ResourceId = 2677)]
+ [Description("Allows authorized Users to control damage settings for animals, apc, buildings, heli, npcs, players and zombies")]
  // internal class DamageControl : RustPlugin
  class DamageControl: CovalencePlugin {
   // note we check isAdmin as well so Admins get this by default
@@ -22,6 +22,8 @@ namespace Oxide.Plugins {
   public bool ProtectStairs;
   public bool ProtectDoor;
   public bool ProtectOther;
+  public bool ProtectTC;
+  public bool ProtectDeployed;
 
   // these are to make checking look cleaner
   // action
@@ -55,10 +57,13 @@ namespace Oxide.Plugins {
    "door",
    "stairs",
    "roof",
-   "other"
+   "other",
+   "deployed",
+   "toolcupboard"
+   
   };
 
-  // damage types (some seem rather redundant, go FacePunch)  
+  // damage types (some seem rather redundant, go FacePunch)
   // this order matched the HitInfo, do not touch or it will break the list command
   readonly List < string > dtype = new List < string > {
    "generic",
@@ -85,6 +90,9 @@ namespace Oxide.Plugins {
    "arrow"
   };
 
+  // deployables list
+  List < string > deployable_list = new List< string >();
+  
   // max size of damage types, if this changed the dtype above needs to be updated
   private
   const int DamageTypeMax = (int) DamageType.LAST;
@@ -105,8 +113,9 @@ namespace Oxide.Plugins {
 
   void Init() {
    permission.RegisterPermission(permAdmin, this);
-   LoadDefaultMessages();
+   // LoadDefaultMessages();  // Done Automatically
    LoadConfigValues();
+   build_dep_list();
   }
 
   void LoadDefaultMessages() {
@@ -135,6 +144,8 @@ namespace Oxide.Plugins {
     ["roof"] = "Roofs",
     ["stairs"] = "Stairs",
     ["wall"] = "Walls",
+	["toolcupboard"] = "ToolCupboard",
+	["deployed"] = "Deployable",
     // Class
     ["animal"] = "Animal",
     ["apc"] = "APC aka Bradley",
@@ -174,6 +185,36 @@ namespace Oxide.Plugins {
    }, this);
   }
 
+	private void build_dep_list()
+    {
+        foreach (var itemDef in ItemManager.GetItemDefinitions().ToList())
+             {
+                var mod = itemDef.GetComponent<ItemModDeployable>();
+                if (mod != null) 
+				{ 
+					if (itemDef.name.LastIndexOf(".item") > 0)
+					{
+						deployable_list.Add(itemDef.name.Substring(0,itemDef.name.LastIndexOf(".item")).Replace("_","."));
+						deployable_list.Add(itemDef.name.Substring(0,itemDef.name.LastIndexOf(".item")).Replace("_",".")+".deployed"); // hack to deal with some having deployed and some not
+					}
+					else
+					{
+						deployable_list.Add(itemDef.name.Replace("_","."));
+						deployable_list.Add(itemDef.name.Replace("_",".")+".deployed");  // hack to deal with some having deployed and some not
+					}
+				}
+             }
+		// deal with messed up repair_bench losing its "_" to become repairbench
+		deployable_list.Add("repairbench.deployed");
+		
+		// debugging dump
+		//foreach (string p in deployable_list)
+        //{
+        //    PrintWarning(p);
+        //}
+    }
+
+  
   private void Loaded() => LoadConfigValues();
   protected override void LoadDefaultConfig() => Puts("New configuration file created.");
 
@@ -196,6 +237,8 @@ namespace Oxide.Plugins {
    ProtectStairs = Convert.ToBoolean(GetConfigValue("Building", "ProtectStairs", "false"));
    ProtectDoor = Convert.ToBoolean(GetConfigValue("Building", "ProtectDoor", "false"));
    ProtectOther = Convert.ToBoolean(GetConfigValue("Building", "ProtectOther", "false"));
+   ProtectDeployed = Convert.ToBoolean(GetConfigValue("Building", "ProtectDeployed", "false"));
+   ProtectTC = Convert.ToBoolean(GetConfigValue("Building", "ProtectToolCupboard", "false"));
 
    if (!_didConfigChange) return;
    Puts("Configuration file updated.");
@@ -203,8 +246,7 @@ namespace Oxide.Plugins {
   }
 
   private object GetConfigValue(string category, string setting, object defaultValue) {
-   var data = Config[category] as Dictionary < string,
-    object > ;
+   var data = Config[category] as Dictionary < string, object > ;
    object value;
    if (data == null) {
     data = new Dictionary < string, object > ();
@@ -222,7 +264,7 @@ namespace Oxide.Plugins {
   private object SetConfigValue(string category, string setting, object defaultValue) {
    var data = Config[category] as Dictionary < string, object > ;
    object value;
-   
+
    if (data == null) {
     data = new Dictionary < string, object > ();
     Config[category] = data;
@@ -242,8 +284,8 @@ namespace Oxide.Plugins {
    string paramatype = null;
    string paramavalue = null;
    Boolean newbool = false;
-   float newnumber = -1;  
-   
+   float newnumber = -1;
+
    if (!IsAllowed(player)) {
     player.Reply(Lang("nopermission", player.Id, command));
    } else {
@@ -295,7 +337,7 @@ namespace Oxide.Plugins {
      if (paramaaction == "set" && paramaclass == null) {
       player.Reply(Lang("wrongclass", player.Id, args[1]));
       return;
-     }	 
+     }
      if (paramaclass != null && paramaclass != "" && !dclass.Contains(paramaclass)) {
       player.Reply(Lang("wrongclass", player.Id, args[1]));
       return;
@@ -366,6 +408,12 @@ namespace Oxide.Plugins {
        } else if (paramatype.Contains("other")) {
         ProtectOther = newbool;
         SetConfigValue("Building", "ProtectOther", paramavalue);
+       } else if (paramatype.Contains("deploy")) {
+        ProtectDeployed = newbool;
+        SetConfigValue("Building", "ProtectDeployed", paramavalue);
+       } else if (paramatype.Contains("cupboard")) {
+        ProtectTC = newbool;
+        SetConfigValue("Building", "ProtectToolCupboard", paramavalue);
        }
 
       } else if (paramaclass.Contains("build") && paramaclass.Contains("block")) {
@@ -447,7 +495,7 @@ namespace Oxide.Plugins {
 
 	string tempstring = "Undefined";
 	float  tempnumber = -1;
-	
+
 	if (paramaclass.Contains("build") && !paramaclass.Contains("block")) {
        if (paramatype.Contains("found")) {
 			tempstring = Convert.ToString(ProtectFoundation);
@@ -463,6 +511,10 @@ namespace Oxide.Plugins {
 			tempstring = Convert.ToString(ProtectRoof);
        } else if (paramatype.Contains("other")) {
 			tempstring = Convert.ToString(ProtectOther);
+       } else if (paramatype.Contains("deployed")) {
+			tempstring = Convert.ToString(ProtectDeployed);
+       }  else if (paramatype.Contains("cupboard")) {
+			tempstring = Convert.ToString(ProtectTC);
        }
 	}
 	else
@@ -494,47 +546,85 @@ namespace Oxide.Plugins {
   }
 
   private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo) {
-   if (entity == null || hitInfo == null) {
-    return; // Nothing to process
-   } else if (entity as BaseNpc != null && entity.ShortPrefabName != "zombie") // Animals
-   {
-    setHitScale(hitInfo, _Animalmodifiers);
-   } else if ((entity as BasePlayer != null && entity is NPCMurderer) || (entity as BaseNpc != null && entity.ShortPrefabName == "zombie")) // Murderer and Zombies
-   {
-    setHitScale(hitInfo, _Zombiemodifiers);
-   } else if (entity as BasePlayer != null && entity is NPCPlayer) // Scientists, etc.
-   {
-    setHitScale(hitInfo, _NPCmodifiers);
-   } else if (entity as BasePlayer != null) // Player
-   {
-    setHitScale(hitInfo, _Playermodifiers);
-   } else if (entity is BuildingBlock || entity is Door) {
-    setHitScale(hitInfo, _Buildingmodifiers);
-   } else if (entity as BradleyAPC != null) // APC
-   {
-    setHitScale(hitInfo, _APCmodifiers);
-   } else if (entity as BaseHelicopter != null) // Heli
-   {
-    setHitScale(hitInfo, _Helimodifiers);
-   }
 
-   // special overrides for building
-   if (entity is BuildingBlock || entity is Door) {
-    if ((entity.name.Contains("foundation") && ProtectFoundation == true) ||
-     (entity.name.Contains("wall") && ProtectWall == true) ||
-     (entity.name.Contains("floor") && ProtectFloor == true) ||
-     (entity.name.Contains("roof") && ProtectRoof == true) ||
-     ((entity is Door || entity.name.Contains("hatch")) && ProtectDoor == true) ||
-     ((entity.name.Contains("stairs") || entity.name.Contains("hatch")) && ProtectStairs == true) ||
-     (entity is BuildingBlock && !entity.name.Contains("foundation") && !entity.name.Contains("wall") &&
-      !entity.name.Contains("floor") && !entity.name.Contains("roof") && !entity.name.Contains("hatch") &&
-      !(entity is Door) && ProtectOther == true)
-    ) {
-     setHitScale(hitInfo, _Zeromodifiers);
-    } else {
-     setHitScale(hitInfo, _Buildingmodifiers);
-    }
+	// debugging
+	// PrintWarning("0 " + entity.ShortPrefabName.Replace("_","."));
+	
+	if (entity == null || hitInfo == null)
+		{
+			return; // Nothing to process
+		}
+	else if (entity as BaseNpc != null)
+		{
+			if (entity.ShortPrefabName == "zombie") // Zombie
+				{
+				setHitScale(hitInfo, _Zombiemodifiers);
+				}
+			else // Animal
+				{
+				setHitScale(hitInfo, _Animalmodifiers);
+				}
+		}
+	else if (entity as BasePlayer != null)
+		{
+			if (entity is NPCMurderer) // Murderer (treated the same as zombies)
+			{
+				setHitScale(hitInfo, _Zombiemodifiers);
+			}
+			else if (entity is NPCPlayer) // Scientists, etc.
+			{
+				setHitScale(hitInfo, _NPCmodifiers);
+			}
+			else // Player
+			{
+				setHitScale(hitInfo, _Playermodifiers);
+			}
+		}
+	else if (entity as BradleyAPC != null) // APC
+		{
+			setHitScale(hitInfo, _APCmodifiers);
+		}
+	else if (entity as BaseHelicopter != null) // Heli
+		{
+			setHitScale(hitInfo, _Helimodifiers);
+		}
+	// special overrides for building
+	else if (entity is BuildingBlock || entity is Door) 
+	{
+		if ((entity.name.Contains("foundation") && ProtectFoundation == true) ||
+		(entity.name.Contains("wall") && ProtectWall == true) ||
+		(entity.name.Contains("floor") && ProtectFloor == true) ||
+		(entity.name.Contains("roof") && ProtectRoof == true) ||
+		((entity is Door || entity.name.Contains("hatch")) && ProtectDoor == true) ||
+		((entity.name.Contains("stairs") || entity.name.Contains("hatch")) && ProtectStairs == true) ||
+		(entity is BuildingBlock && !entity.name.Contains("foundation") && !entity.name.Contains("wall") &&
+		!entity.name.Contains("floor") && !entity.name.Contains("roof") && !entity.name.Contains("hatch") &&
+		!(entity is Door) && ProtectOther == true))
+		{
+			setHitScale(hitInfo, _Zeromodifiers);
+		}
+		else if (deployable_list.Contains(entity.ShortPrefabName.Replace("_",".")) && ProtectDeployed == true)  // this deal with high walls etc.
+		{
+			setHitScale(hitInfo, _Zeromodifiers);
+		}
+		else
+		{
+			setHitScale(hitInfo, _Buildingmodifiers);
+		}
    }
+	else if (deployable_list.Contains(entity.ShortPrefabName.Replace("_","."))) // Deployed  or TC
+		{
+			if (entity.ShortPrefabName.Contains("cupboard.tool.deployed") && ProtectTC == true) // Tool Cupboard
+			{
+				setHitScale(hitInfo, _Zeromodifiers);
+			}
+			else if (ProtectDeployed == true)  // deployables
+			{
+				setHitScale(hitInfo, _Zeromodifiers);
+			}
+		}
+   else
+	   return; // Nothing to process
   }
 
   bool IsAllowed(IPlayer player) {
