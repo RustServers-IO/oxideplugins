@@ -7,7 +7,7 @@ using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins {
- [Info("DamageControl", "ColonBlow, MSpeedie", "2.1.7", ResourceId = 2677)]
+ [Info("DamageControl", "ColonBlow, MSpeedie", "2.1.8", ResourceId = 2677)]
  [Description("Allows authorized Users to control damage settings for animals, apc, buildings, heli, npcs, players and zombies")]
  // internal class DamageControl : RustPlugin
  class DamageControl: CovalencePlugin {
@@ -357,9 +357,13 @@ namespace Oxide.Plugins {
        player.Reply(Lang("wrongnvalues", player.Id, args[3]));
        return;
       }
-     if (paramaclass.Contains("build") && !paramaclass.Contains("block") && paramavalue != "true" && paramavalue != "false" && paramaaction == "set") {
-      player.Reply(Lang("wrongbvalues", player.Id, args[3]));
-      return;
+     if (paramaclass.Contains("build") && !paramaclass.Contains("block"))
+	 { 
+		if (paramavalue != "true" && paramavalue != "false" && paramaaction == "set") 
+		{
+			player.Reply(Lang("wrongbvalues", player.Id, args[3]));
+			return;
+		}
      } else if ((newnumber < 0 || newnumber > 100) && paramaaction == "set") {
       player.Reply(Lang("wrongnvalues", player.Id, args[3]));
       return;
@@ -493,8 +497,8 @@ namespace Oxide.Plugins {
 
     private string getHitScale(string paramaclass, string paramatype) {
 
-	string tempstring = "Undefined";
 	float  tempnumber = -1;
+	string tempstring = "Undefined";
 
 	if (paramaclass.Contains("build") && !paramaclass.Contains("block")) {
        if (paramatype.Contains("found")) {
