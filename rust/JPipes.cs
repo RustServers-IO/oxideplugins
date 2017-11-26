@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.7", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.5.8", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -81,7 +81,6 @@ namespace Oxide.Plugins {
 
             LoadConfig();
             LoadCommands();
-            maxpipedistsq = (maxpipedist * 0.5f) * (maxpipedist * 0.5f);
 
             users = new Dictionary<ulong, UserInfo>();
             storedData = new PipeSaveData();
@@ -122,8 +121,6 @@ namespace Oxide.Plugins {
         }
 
         void LoadEnd() {
-            UpdateTick();
-
             Puts($"{regpipes.Count} Pipes Loaded");
             //Puts($"{regsyncboxes.Count} SyncBoxes Loaded");
         }
@@ -155,45 +152,7 @@ namespace Oxide.Plugins {
         }
 
         void OnServerSave() => SavePipes();
-
-        private float animaterate = 0.5f;
-        private float animatelength = 2.5f;
-        private float updatetickrate = 3f; // update without animation
-        private float[] frames = new float[] { 0.1f, 0.3f, 0.5f, 0.7f, 0.9f };
-        private int frame = 0;
-        private float maxpipedistsq = 0;
-        private static bool OnlyShowArrowsForOwner = false;
-        private static bool ShowSingleArrow = true;
-        private static bool ShowOnAllSides = false;
-
-        void UpdateTick() {
-
-            //if (!drawflowarrows)
-            //    return;
-
-            //if (animatearrows) frame = (frame < 4) ? frame + 1 : 0;
-
-            //foreach (var player in BasePlayer.activePlayerList) {
-
-            //    var item = player.GetActiveItem();
-            //    if (item != null && item.info != null && (item.info.name == "hammer.item" || item.info.name == "camera.item")) {
-
-            //        var pipes = OnlyShowArrowsForOwner && !checkbuildingprivlage(player) ? GetUserInfo(player).pipes : regpipes;
-
-            //        foreach (var pipe in pipes) {
-
-            //            if ((pipe.Value.sourcepos - player.transform.position).sqrMagnitude < maxpipedistsq || (pipe.Value.endpos - player.transform.position).sqrMagnitude < maxpipedistsq) {
-            //                if (animatearrows)
-            //                    pipe.Value.DrawArrows(player, animatelength, animaterate, frames[frame]);
-            //                else
-            //                    pipe.Value.DrawArrows(player, updatetickrate, updatetickrate, 0.5f);
-            //            }
-            //        }
-            //    }
-            //}
-
-            //timer.Once(animatearrows ? animaterate : updatetickrate, UpdateTick);
-        }
+		
 
         void OnPlayerInit(BasePlayer player) {
 
@@ -205,13 +164,7 @@ namespace Oxide.Plugins {
         void OnPlayerDisconnected(BasePlayer player) {
             users.Remove(player.userID);
         }
-
-        //void OnUserPermissionGranted(string id,string perm) {
-        //    if (perm == "backpacks.use") {
-        //        BasePlayer player = BasePlayer.Find(id)
-        //    }
-        //}
-
+		
         void OnHammerHit(BasePlayer player, HitInfo hit) {
 
             //ListComponentsDebug(player, hit.HitEntity);
@@ -339,22 +292,27 @@ namespace Oxide.Plugins {
 
         // pipe damage handling
         bool? OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo) {
-            jPipeSegChild p = entity.GetComponent<jPipeSegChild>();
-            if (p != null && p.pipe != null) {
-                if (nodecay)
-                    hitInfo.damageTypes.Scale(Rust.DamageType.Decay, 0f); // no decay damage
-                float damage = hitInfo.damageTypes.Total();
-                if (damage > 0) {
-                    float newhealth = entity.GetComponent<BuildingBlock>().health - damage;
-                    if (newhealth >= 1f)
-                        p.pipe.SetHealth(newhealth);
-                    else
-                        p.pipe.OnSegmentKilled();
-                }
-                return true;
-            }
-            return null;
-        }
+
+			if (entity != null && hitInfo != null) {
+
+				jPipeSegChild p = entity.GetComponent<jPipeSegChild>();
+				if (p != null && p.pipe != null) {
+
+					if (nodecay)
+						hitInfo.damageTypes.Scale(Rust.DamageType.Decay, 0f); // no decay damage
+					float damage = hitInfo.damageTypes.Total();
+					if (damage > 0) {
+						float newhealth = entity.GetComponent<BuildingBlock>().health - damage;
+						if (newhealth >= 1f)
+							p.pipe.SetHealth(newhealth);
+						else
+							p.pipe.OnSegmentKilled();
+					}
+					return true;
+				}
+			}
+			return null;
+		}
 
         // When item is added to filter
         ItemContainer.CanAcceptResult? CanAcceptItem(ItemContainer container, Item item) {
@@ -386,7 +344,7 @@ namespace Oxide.Plugins {
             //Puts(item.ToString());
 
             BasePlayer ownerPlayer = item.GetOwnerPlayer();
-            if (container.transactionActive || item.parent == null || container.inventory.itemList.Contains(item))
+            if (item.parent == null || container.inventory.itemList.Contains(item))
                 return true;
             if ((UnityEngine.Object) ownerPlayer == (UnityEngine.Object) null)
                 return true;
@@ -846,9 +804,6 @@ namespace Oxide.Plugins {
                 int segments = (int) Mathf.Ceil(distance / pipesegdist);
                 float segspace = (distance - pipesegdist) / (segments - 1);
 
-                //arrowspace = distance / segments;
-                //RefreshArrows();
-
                 initerr = "";
 
                 for (int i = 0; i < segments; i++) {
@@ -866,9 +821,9 @@ namespace Oxide.Plugins {
                         mainlogic = jPipeLogic.Attach(ent, this, updaterate, pipeplugin.flowrates[0]);
                         mainparent = ent;
                     } else {
-                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", sourcepos + rotation * (Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset)), rotation);
+                        //ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", sourcepos + rotation * (Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset)), rotation);
                         // position based on parent
-                        //ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset));
+                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset));
                     }
 
                     ent.enableSaving = false;
@@ -885,37 +840,11 @@ namespace Oxide.Plugins {
 
                     jPipeSegChild.Attach(ent, this);
 
-                    //if (i != 0)
-                    //ent.SetParent(mainparent);
+                    if (i != 0)
+                    ent.SetParent(mainparent);
 
                     pillars.Add(ent);
                     ent.enableSaving = false;
-
-                    //create satchel charge for arrows
-
-                    //var arrowent = GameManager.server.CreateEntity("assets/prefabs/weapons/satchelcharge/explosive.satchel.deployed.prefab", Vector3.zero, Quaternion.Euler(0, 0, -90));
-
-                    //arrowent.SetParent(ent);
-
-                    //arrowent.UpdateNetworkGroup();
-                    //arrowent.SendNetworkUpdateImmediate();
-
-                    //arrowent.Spawn();
-
-                    //arrowent.globalBroadcast = true;
-
-                    //arrowent.name = "JPipe";
-
-                    //DudTimedExplosive explosive = arrowent.GetComponent<DudTimedExplosive>();
-
-                    ////explosive.itemToGive = ItemManager.FindItemDefinition(1916127949);
-                    //explosive.dudChance = 2;
-                    //explosive.CancelInvoke("Explode");
-                    //explosive.CancelInvoke("Kill");
-                    //explosive.SetFlag(BaseEntity.Flags.On, false);
-                    //explosive.SendNetworkUpdate();
-
-                    //arrowent.enableSaving = false;
 
                 }
 
@@ -1059,11 +988,8 @@ namespace Oxide.Plugins {
                 sourceiconurl = GetContIcon(source);
                 endiconurl = GetContIcon(dest);
 
-                //invertarrows = !invertarrows;
-
                 destisstartable = isStartable(dest);
                 RefreshMenu();
-                //RefreshArrows();
             }
 
             // destroy entire pipe when one segment fails
@@ -1093,7 +1019,6 @@ namespace Oxide.Plugins {
                 mainlogic.flowrate = ((int) grade == -1) ? pipeplugin.flowrates[0] : pipeplugin.flowrates[(int) grade];
 
                 RefreshMenu();
-                RefreshArrows();
 
                 DestroyFilter();
                 foreach (BasePlayer p in playerslookingatfilter)
@@ -1109,7 +1034,19 @@ namespace Oxide.Plugins {
                 health = nhealth;
             }
 
-            public void OpenMenu(BasePlayer player, UserInfo userinfo) {
+			private static string ArrowString(int count) {
+				if (count == 1)
+					return ">>";
+				if (count == 2)
+					return ">>>";
+				if (count == 3)
+					return ">>>>";
+				if (count == 4)
+					return ">>>>>";
+				return ">";
+			}
+
+			public void OpenMenu(BasePlayer player, UserInfo userinfo) {
 
                 CloseMenu(player, userinfo);
 
@@ -1382,19 +1319,7 @@ namespace Oxide.Plugins {
                 CuiHelper.AddUi(player, elements);
                 userinfo.isMenuOpen = true;
             }
-
-            private string ArrowString(int count) {
-                if (count == 1)
-                    return ">>";
-                if (count == 2)
-                    return ">>>";
-                if (count == 3)
-                    return ">>>>";
-                if (count == 4)
-                    return ">>>>>";
-                return ">";
-            }
-
+			
             public void CloseMenu(BasePlayer player, UserInfo userinfo) {
                 if (!string.IsNullOrEmpty(userinfo.menu))
                     CuiHelper.DestroyUi(player, userinfo.menu);
@@ -1463,99 +1388,6 @@ namespace Oxide.Plugins {
                 }
 
                 return "http://i.imgur.com/BwJN0rt.png";
-            }
-
-            private float arrowspace;
-            private Color arrowcolor;
-            private bool invertarrows = false;
-            private float arrowoffset;
-            private float arrowsize;
-            private Vector3 arrowup;
-            private Vector3 arroworigin;
-
-            public void RefreshArrows() {
-                float[] arrowoffsets = new float[] { 0.13f, 0.11f, 0.11f, 0.11f, 0.16f };
-                float[] arrowsizes = new float[] { 0.08f, 0.06f, 0.06f, 0.06f, 0.08f };
-                arrowoffset = arrowoffsets[(int) pipegrade];
-                arrowsize = arrowsizes[(int) pipegrade];
-
-                arrowcolor = isEnabled ? blue : orange;
-
-                arrowup = invertarrows ? Vector3.down : Vector3.up;
-                arroworigin = invertarrows ? endpos : sourcepos;
-            }
-
-            public void DrawArrows(BasePlayer player, float updaterate, float update, float frame) {
-                //return;
-                if (!isEnabled) {
-                    if (frame != 0.5f)
-                        return;
-                    update = updaterate;
-                }
-
-                for (int i = 0; i < pillars.Count; i++) {
-
-                    Vector3 pos = arroworigin + (rotation * (arrowup * ((arrowspace * i) + (arrowspace * frame))));
-
-                    if ((pos - player.transform.position).sqrMagnitude < 64f) {
-
-                        if (ShowOnAllSides) {
-                            DrawArrow(player, update, ((rotation * Vector3.back) * arrowoffset) + pos, rotation, arrowup, Vector3.left);
-                            DrawArrow(player, update, ((rotation * Vector3.forward) * arrowoffset) + pos, rotation, arrowup, Vector3.right);
-                        }
-                        DrawArrow(player, update, ((rotation * Vector3.left) * arrowoffset) + pos, rotation, arrowup, Vector3.forward);
-                        DrawArrow(player, update, ((rotation * Vector3.right) * arrowoffset) + pos, rotation, arrowup, Vector3.back);
-
-                        //player.SendConsoleCommand("ddraw.arrow", update, arrowcolor, ((rotation * Vector3.back) * arrowoffset) + pos, pos + arrowup, 1f);
-                    }
-                }
-
-            }
-
-            private void DrawArrow(BasePlayer player, float time, Vector3 origin, Quaternion rot, Vector3 up, Vector3 left) {
-                Vector3 right = origin + ((rot * -left) * arrowsize);
-                left = origin + ((rot * left) * arrowsize);
-                up = (rot * up) * arrowsize;
-
-                Vector3 origin1 = ShortVec(origin + up);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left), origin1);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right), origin1);
-
-                if (pipegrade == 0 || ShowSingleArrow)
-                    return;
-
-                Vector3 origin2 = ShortVec(origin);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left - up), origin2);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right - up), origin2);
-
-                if ((int) pipegrade == 1)
-                    return;
-
-                Vector3 origin3 = ShortVec(origin - up);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left - up * 2), origin3);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right - up * 2), origin3);
-
-                if ((int) pipegrade == 2)
-                    return;
-
-                Vector3 origin4 = ShortVec(origin + up * 2);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left + up), origin4);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right + up), origin4);
-
-                if ((int) pipegrade == 3)
-                    return;
-
-                Vector3 origin5 = ShortVec(origin - up * 2);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(left - up * 3), origin5);
-                player.SendConsoleCommand("ddraw.line", time, arrowcolor, ShortVec(right - up * 3), origin5);
-            }
-
-            // rounds vector3 to 3 decimal points to make console commands shorter
-            private static Vector3 ShortVec(Vector3 input) {
-                input.x = (float) Math.Round(input.x, 3);
-                input.y = (float) Math.Round(input.y, 3);
-                input.z = (float) Math.Round(input.z, 3);
-                return input;
             }
         }
 
@@ -1897,14 +1729,14 @@ namespace Oxide.Plugins {
 
         private void UnloadPipe(jPipe p) {
             NextFrame(() => {
-                // destroy parent
-                //if (!p.mainparent.IsDestroyed)
-                //    p.mainparent.Kill();
+				// destroy parent
+				if (!p.mainparent.IsDestroyed)
+					p.mainparent.Kill();
 
-                foreach (var pil in p.pillars)
-                    if (!pil.IsDestroyed)
-                        pil.Kill();
-            });
+				//foreach (var pil in p.pillars)
+				//    if (!pil.IsDestroyed)
+				//        pil.Kill();
+			});
         }
 
         private void SavePipes() {
@@ -2048,12 +1880,10 @@ namespace Oxide.Plugins {
                     period = 0;
                 pipe.isEnabled = true;
                 pipe.RefreshMenu();
-                pipe.RefreshArrows();
             }
             public void pipeDisable(BasePlayer player) {
                 pipe.isEnabled = false;
                 pipe.RefreshMenu();
-                pipe.RefreshArrows();
             }
 
             private static Item FilterItem(List<Item> cont, List<int> filter) {
