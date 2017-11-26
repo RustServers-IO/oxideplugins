@@ -53,6 +53,8 @@ namespace Oxide.Plugins
                 { "Harvested", "You harvested {0} {1} and {2} {3}! ! You now have to wait for the server to restart, to harvest again!" },
                 { "NoHarvestableAnimals", "There are no harvestable animals on your territory!" },
                 { "NoMatableAnimals", "There are no matable animals around!" },
+                { "LooseInventoryTitle", "[FF0000]ATTENTION!!!!!![FFFFFF]" },
+                { "LooseInventory", "[FF0000]Beware!!!!!![FFFFFF]\n If you change your profession, you will loose all your current inventory, drop it to the ground before changing your profession!" },
                 { "ResourcesToMate", "You need {0} {1} to mate {2} {3}!" },
                 { "MateSuccess", "You have successfully mated your {0}!" },
                 { "MateFailBite", "You tried to mate your {0} but the male attacked you!" },
@@ -293,13 +295,13 @@ namespace Oxide.Plugins
                 _ProfessionLevels.Add(e.Player.Id, Temp);
                 SaveLists();
                 ShowDescriptions(e.Player);
-                e.Player.ShowInputPopup(string.Format(GetMessage("Title", e.Player.Id.ToString())), string.Format(GetMessage("NewOnServer", e.Player.Id.ToString()), StoneMasonCol, BlacksmithCol, SoldierCol, ArcherCol, CarpenterCol, FarmerCol, CollectorCol, AssassinCol) + string.Format(GetMessage("Choose", e.Player.Id.ToString()), ResourceAmountToChange.ToString(), ResourceToChangeProfession.ToString()), "", "ok", "cancel", (selection, dialogue, data) => ChooseProfession(e.Player, selection, dialogue, data));
+               // e.Player.ShowInputPopup(string.Format(GetMessage("Title", e.Player.Id.ToString())), string.Format(GetMessage("NewOnServer", e.Player.Id.ToString()), StoneMasonCol, BlacksmithCol, SoldierCol, ArcherCol, CarpenterCol, FarmerCol, CollectorCol, AssassinCol) + string.Format(GetMessage("Choose", e.Player.Id.ToString()), ResourceAmountToChange.ToString(), ResourceToChangeProfession.ToString()), "", "ok", "cancel", (selection, dialogue, data) => ChooseProfession(e.Player, selection, dialogue, data));
             }
             if (HasProfession(e.Player) && AddPrefix)
             {
                 ProfessionString(e.Player);
                 AddPrefixColor(ProfessionString(e.Player));
-                if (e.Player.DisplayNameFormat.Contains(ProfessionString(e.Player))) return;
+                if (e.Player.DisplayNameFormat.Contains(ReturnPrefix(ProfessionString(e.Player)))) return;
                 e.Player.DisplayNameFormat = AddPrefixColor(ProfessionString(e.Player)) + ReturnPrefix(ProfessionString(e.Player)) + "[FFFFFF]" + e.Player.DisplayName;
             }
         }
@@ -307,28 +309,28 @@ namespace Oxide.Plugins
         {
             LoadLists();
             e.Player.GetInventory().MaximumSlots = GetInvSpaceFromString(ReturnProfessionFromPlayerId(e.Player.Id));
-            if (e.Player.DisplayNameFormat.ToLower().Contains(ProfessionString(e.Player))) return;
+            if (e.Player.DisplayNameFormat.Contains(ReturnPrefix(ProfessionString(e.Player)))) return;
             e.Player.DisplayNameFormat = AddPrefixColor(ProfessionString(e.Player)) + ReturnPrefix(ProfessionString(e.Player)) + "[FFFFFF]" + e.Player.DisplayName;
         }
         void OnPlayerRespawn(PlayerRespawnEvent e)
         {
             LoadLists();
             e.Player.GetInventory().MaximumSlots = GetInvSpaceFromString(ReturnProfessionFromPlayerId(e.Player.Id));
-            if (e.Player.DisplayNameFormat.ToLower().Contains(ProfessionString(e.Player))) return;
+            if (e.Player.DisplayNameFormat.Contains(ReturnPrefix(ProfessionString(e.Player)))) return;
             e.Player.DisplayNameFormat = AddPrefixColor(ProfessionString(e.Player)) + ReturnPrefix(ProfessionString(e.Player)) + "[FFFFFF]" + e.Player.DisplayName;
         }
         void OnPlayerRespawn(PlayerRespawnAtBaseEvent e)
         {
             LoadLists();
             e.Player.GetInventory().MaximumSlots = GetInvSpaceFromString(ReturnProfessionFromPlayerId(e.Player.Id));
-            if (e.Player.DisplayNameFormat.ToLower().Contains(ProfessionString(e.Player))) return;
+            if (e.Player.DisplayNameFormat.Contains(ReturnPrefix(ProfessionString(e.Player)))) return;
             e.Player.DisplayNameFormat = AddPrefixColor(ProfessionString(e.Player)) + ReturnPrefix(ProfessionString(e.Player)) + "[FFFFFF]" + e.Player.DisplayName;
         }
         void OnPlayerRespawn(PlayerRespawnAtBedEvent e)
         {
             LoadLists();
             e.Player.GetInventory().MaximumSlots = GetInvSpaceFromString(ReturnProfessionFromPlayerId(e.Player.Id));
-            if (e.Player.DisplayNameFormat.ToLower().Contains(ProfessionString(e.Player))) return;
+            if (e.Player.DisplayNameFormat.Contains(ReturnPrefix(ProfessionString(e.Player)))) return;
             e.Player.DisplayNameFormat = AddPrefixColor(ProfessionString(e.Player)) + ReturnPrefix(ProfessionString(e.Player)) + "[FFFFFF]" + e.Player.DisplayName;
         }
         private void ChooseProfession(Player player, Options selection, Dialogue dialogue, object contextData)
@@ -378,6 +380,7 @@ namespace Oxide.Plugins
         {
             player.ShowPopup(string.Format(GetMessage("DescTitle")), string.Format(GetMessage("StoneMasonDesc",player.Id.ToString()),StoneMasonInv.ToString(), StoneMasonDmg.ToString(), StoneMasonDef.ToString()) + string.Format(GetMessage("BlacksmithDesc", player.Id.ToString()),BlacksmithInv.ToString(), BlacksmithDmg.ToString(), BlacksmithDef.ToString()) + string.Format(GetMessage("SoldierDesc", player.Id.ToString()), SoldierInv.ToString(), SoldierDmg.ToString(), SoldierDef.ToString()) + string.Format(GetMessage("ArcherDesc", player.Id.ToString()), ArcherInv.ToString(), ArcherDmg.ToString(), ArcherDef.ToString()) , "OK");
             player.ShowPopup(string.Format(GetMessage("DescTitle")), string.Format(GetMessage("CarpenterDesc", player.Id.ToString()), CarpenterInv.ToString(), CarpenterDmg.ToString(), CarpenterDef.ToString()) + string.Format(GetMessage("FarmerDesc", player.Id.ToString()), FarmerInv.ToString(), FarmerDmg.ToString(), FarmerDef.ToString()) + string.Format(GetMessage("CollectorDesc", player.Id.ToString()), CollectorInv.ToString(), CollectorDmg.ToString(), CollectorDef.ToString()) + string.Format(GetMessage("AssassinDesc", player.Id.ToString()), AssassinInv.ToString(), AssassinDmg.ToString(), AssassinDef.ToString()), "OK");
+            player.ShowPopup(string.Format(GetMessage("LooseInventoryTitle")), string.Format(GetMessage("LooseInventory", player.Id.ToString())));
         }
         [ChatCommand("changeprofession")]
         private void ProfessionChange (Player player)
@@ -389,7 +392,7 @@ namespace Oxide.Plugins
                 player.ShowInputPopup(string.Format(GetMessage("Title", player.Id.ToString())), string.Format(GetMessage("NewOnServer", player.Id.ToString()), StoneMasonCol, BlacksmithCol, SoldierCol, ArcherCol, CarpenterCol, FarmerCol, CollectorCol, AssassinCol) + string.Format(GetMessage("Choose", player.Id.ToString()), ResourceAmountToChange.ToString(), ResourceToChangeProfession.ToString()), "", "ok", "cancel", (selection, dialogue, data) => ChooseProfession(player, selection, dialogue, data));
                 return;
             }
-            if (!PlayerHasResources(player))
+            if (!CanRemoveResource(player,ResourceToChangeProfession,ResourceAmountToChange))
             {
                 PrintToChat(player, string.Format(GetMessage("NotEnough", player.Id.ToString()), ResourceToChangeProfession));
                 return;
@@ -1335,20 +1338,6 @@ namespace Oxide.Plugins
                 return true;
             }
             
-            return false;
-        }
-        bool PlayerHasResources(Player player)
-        {
-            var inventory = player.CurrentCharacter.Entity.GetContainerOfType(CollectionTypes.Inventory);
-            int foundResource = 0;
-            for (var i =0; i < inventory.Contents.Count();i++)
-            {
-                if (inventory.Contents.ElementAt(i).Name.ToLower() == InvDefinitions.Instance.Blueprints.GetBlueprintForName(ResourceToChangeProfession).Name)
-                {
-                    foundResource = foundResource + inventory.Contents.ElementAt(i).StackAmount;
-                }
-            }
-            if (foundResource >= ResourceAmountToChange) return true;
             return false;
         }
         string ProfessionString(Player player)
