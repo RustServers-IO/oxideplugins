@@ -1,24 +1,20 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
+using Oxide.Core;
+using Rust;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
-
-using Oxide.Core;
-
-using Rust;
-
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("SpawnConfig", "Nogrod", "1.0.14")]
+    [Info("SpawnConfig", "Nogrod", "1.0.15", ResourceId = 1346)]
     internal class SpawnConfig : RustPlugin
     {
         private const bool Debug = false;
@@ -250,7 +246,7 @@ namespace Oxide.Plugins
                 }
             }
             //Puts(stringBuilder.ToString());
-            ConVar.Server.Log("oxide/logs/spawns.txt", stringBuilder.ToString());
+            LogToFile("spawns", stringBuilder.ToString(), this);
             //SpawnHandler.Instance.DumpReport("spawn.info.txt");
         }
 

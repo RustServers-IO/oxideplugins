@@ -2,7 +2,7 @@
     "name": "SpawnConfig",
     "description": "Change SpawnHandler behaviour of SpawnPopulations",
     "author": "Nogrod",
-    "version": "1.0.14",
+    "version": "1.0.15",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/spawnconfig.1346",
