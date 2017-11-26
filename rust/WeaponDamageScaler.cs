@@ -11,7 +11,7 @@ namespace Oxide.Plugins
 {
     //Body part scaling from k1lly0u's plugin, with permission (thanks, k1lly0u)
     //Further code cleanup/improvement with help of k1lly0u
-    [Info("Weapon Damage Scaler", "Shady", "1.1.0", ResourceId = 1594)]
+    [Info("Weapon Damage Scaler", "Shady", "1.1.1", ResourceId = 1594)]
     [Description("Scale damage per weapon, ammo types, skins, prefabs, and per body part.")]
     internal class WeaponDamageScaler : RustPlugin
     {
@@ -47,7 +47,7 @@ namespace Oxide.Plugins
             {
                 var definition = ItemManager.itemList[i];
                 if (definition == null) continue;
-                if (definition.category == ItemCategory.Weapon || definition.category == ItemCategory.Tool || definition.category == ItemCategory.Ammunition && !definition.shortname.Contains("mod") && !weaponData.Weapons.TryGetValue(definition.shortname, out outStructure)) weaponData.Weapons[definition.shortname] = new ItemStructure { Name = definition.displayName.english, GlobalModifier = 1.0f, PrefabModifiers = new Dictionary<string, float>(), IndividualParts = CreateBodypartList() };
+                if ((definition.category == ItemCategory.Weapon || definition.category == ItemCategory.Tool || definition.category == ItemCategory.Ammunition) && !definition.shortname.Contains("mod") && !weaponData.Weapons.TryGetValue(definition.shortname, out outStructure)) weaponData.Weapons[definition.shortname] = new ItemStructure { Name = definition.displayName.english, GlobalModifier = 1.0f, PrefabModifiers = new Dictionary<string, float>(), IndividualParts = CreateBodypartList() };
 
                 var skinDir = ItemSkinDirectory.ForItem(definition) ?? null;
                 if (skinDir != null && skinDir.Length > 0 && (definition.category == ItemCategory.Weapon || definition.category == ItemCategory.Tool))
