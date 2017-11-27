@@ -18,7 +18,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "1.1.3", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
+    [Info("Duelist", "nivex", "1.1.4", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
     public class Duelist : RustPlugin
     {
         public enum Team
@@ -2005,6 +2005,19 @@ namespace Oxide.Plugins
 
                 CancelDamage(hitInfo);
                 return false;
+            }
+
+            if (entity != null && hitInfo.Initiator != null && !(entity is BasePlayer) && !(hitInfo.Initiator is BasePlayer) && (DuelTerritory(hitInfo.PointStart) || DuelTerritory(hitInfo.PointEnd)))
+            {
+                bool eb = entity is BaseNpc || entity.ShortPrefabName == "scientist" || entity.ShortPrefabName == "zombie";
+                bool ib = hitInfo.Initiator is BaseNpc || hitInfo.Initiator.ShortPrefabName == "scientist" || hitInfo.Initiator.ShortPrefabName == "zombie";
+
+                if (eb && ib)
+                {
+                    entity.Kill();
+                    hitInfo.Initiator.Kill();
+                    return false;
+                }
             }
 
             if (hitInfo.Initiator is BaseNpc && DuelTerritory(hitInfo.PointStart))
