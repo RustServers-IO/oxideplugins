@@ -4,7 +4,9 @@
     "author": "tugamano",
     "version": "1.0.1",
     "configuration": true,
-    "suggest": {},
+    "suggest": {
+        "ZoneManager": "*"
+    },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/arenaminigames.2194",
     "games": [
