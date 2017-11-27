@@ -12,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "2.0.3", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "2.0.31", ResourceId = 2102)]
     [Description("Simple and smooth voting start by activating one scirpt.")]
     class EasyVote : RustPlugin
     {
@@ -309,9 +309,11 @@ namespace Oxide.Plugins
                 {
                     foreach (KeyValuePair<string, string> vp in kvp.Value)
                     {
+                        // Make sure that key is site
                         if (vp.Key != site)
                             continue;
 
+                        // Null check for ID & KEY
                         if (!vp.Value.Contains(":"))
                         {
                             _Debug($"{kvp.Key} {vp.Key} does NOT contains ID or Key !!!");
@@ -328,9 +330,13 @@ namespace Oxide.Plugins
                             continue;
                         }
 
+                        // Split ID & Key
                         string[] idKeySplit = vp.Value.Split(':');
+
+                        // Loop API pages
                         foreach (KeyValuePair<string, string> SitesApi in _config.VoteSitesAPI[site])
                         {
+                            // Got apiClaim url
                             if (SitesApi.Key == PluginSettings.apiClaim)
                             {
                                 // Formating api claim =>
@@ -352,11 +358,15 @@ namespace Oxide.Plugins
             // Wait 5.55 sec before remove player from cooldown list.
             timer.Once(5.55f, () =>
             {
-                // Print builded stringbuilder
-                Chat(player, claimCooldown[player.userID].ToString(), false);
+                try
+                {
+                    // Print builded stringbuilder
+                    Chat(player, claimCooldown[player.userID].ToString(), false);
 
-                // Remove player from cooldown list
-                claimCooldown.Remove(player.userID);
+                    // Remove player from cooldown list
+                    claimCooldown.Remove(player.userID);
+                }
+                catch (Exception ex) { _Debug($"Error happen when try print \\claim status to \"{player.displayName}\"\n{ex.ToString()}"); PrintError("[ClaimStatus] Error printed to oxide/logs/EasyVote"); }
             });
 
             // Wait 5.55 sec before execute this command.
@@ -417,7 +427,7 @@ namespace Oxide.Plugins
                             ? (x > voted ? y : x)
                             : (y > voted ? x : y));
                 }
-                catch (InvalidOperationException error) { PrintError($"Player {player.displayName} tried to claim a reward but this happened ...\n{error.ToString()}"); return; }
+                catch (InvalidOperationException error) { _Debug($"Player {player.displayName} tried to claim a reward but this happened ...\n{error.ToString()}"); PrintError("[ClaimReward] Error printed to oxide/logs/EasyVote"); return; }
 
                 //TODO: Check this
                 if (closest > voted)
@@ -509,7 +519,7 @@ namespace Oxide.Plugins
                 Interface.CallHook("onUserReceiveReward", player, voted);
 
                 // Send ThankYou to player
-                if (_config.Discord[PluginSettings.LocalChatAnnouncments].ToLower() == "true")
+                if (_config.Settings[PluginSettings.LocalChatAnnouncments].ToLower() == "true")
                     Chat(player, $"{_lang("ThankYou", player.UserIDString, voted, rewardsString.ToString())}");
 
                 // Clear rewardString
@@ -554,7 +564,7 @@ namespace Oxide.Plugins
                     try
                     {
                         Item itemToReceive = ItemManager.CreateByName(commmand, Convert.ToInt32(value));
-                        _Debug($"Received item {itemToReceive.info.displayName.translated} {value}");
+                        _Debug($"Received item {itemToReceive.info.displayName.translated} x{value}");
                         //If the item does not end up in the inventory
                         //Drop it on the ground for them
                         if (!player.inventory.GiveItem(itemToReceive, player.inventory.containerMain))
@@ -620,12 +630,12 @@ namespace Oxide.Plugins
             // Change response to number
             int responseNum = 0;
             if (!int.TryParse(response, out responseNum))
-                _Debug($"Cant undestad vote sive {url} response, {response}");
+                _Debug($"Cant understand vote site {url} response \"{response}\"");
 
             // If vote site is down
             if (code != 200)
             {
-                PrintWarning("Error: {0} - Couldn't get an answer for {1} ({2})", code, player.displayName, url);
+                PrintError("Error: {0} - Couldn't get an answer for {1} ({2})", code, player.displayName, url);
                 Chat(player, $"{_lang("ClaimError", player.UserIDString, code, url)}");
                 return;
             }
