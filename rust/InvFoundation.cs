@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("InvFoundation", "sami37", "1.1.0", ResourceId = 2096)]
+    [Info("InvFoundation", "sami37", "1.2.3", ResourceId = 2096)]
     [Description("Invulnerable foundation")]
     public class InvFoundation : RustPlugin
     {
@@ -22,7 +22,8 @@ namespace Oxide.Plugins
         Plugin EntityOwner;
         #endregion
 
-        private Dictionary<string, object> damageList => GetConfig("DamageList", defaultDamageScale()); 
+        private Dictionary<string, object> damageList => GetConfig("DamageList", defaultDamageScale());
+        private Dictionary<string, object> damageGradeScaling => GetConfig("TierScalingDamage", defaultDamageTierScaling());
         private bool UseEntityOwner => GetConfig("UseEntityOwner", false);
         private bool UseBuildOwners => GetConfig("UseBuildingOwner", false);
         private bool UseDamageScaling => GetConfig("UseDamageScaling", false);
@@ -46,6 +47,17 @@ namespace Oxide.Plugins
 			return dp;
 		}
 
+        static Dictionary<string, object> defaultDamageTierScaling()
+        {
+            var dp = new Dictionary<string, object>();
+            dp.Add("Twigs", 0.0);
+            dp.Add("Wood", 0.0);
+            dp.Add("Stone", 0.0);
+            dp.Add("Metal", 0.0);
+            dp.Add("TopTier", 0.0);
+            return dp;
+        }
+
 
         void Loaded()
         {
@@ -53,6 +65,7 @@ namespace Oxide.Plugins
             Config["UseEntityOwner"] = UseEntityOwner;
             Config["UseDamageScaling"] = UseDamageScaling;
             Config["DamageList"] = damageList;
+            Config["TierScalingDamage"] = damageGradeScaling;
             SaveConfig();
         }
         protected override void LoadDefaultConfig()
@@ -64,6 +77,7 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             Config["DamageList"] = damageList;
+            Config["TierScalingDamage"] = damageGradeScaling;
             SaveConfig();
             var messages = new Dictionary<string, string>
             {
@@ -76,17 +90,18 @@ namespace Oxide.Plugins
             if (entity == null || hitInfo == null)
                 return;
 
-            if (entity is BuildingBlock)
+            var buildingBlock = entity as BuildingBlock;
+            if (buildingBlock != null)
             {
-                BuildingBlock block = entity as BuildingBlock;
-                if (block == null) return;
-                if (hitInfo.Initiator == null) return;
-                BasePlayer attacker = hitInfo.Initiator.ToPlayer();
+                BuildingBlock block = buildingBlock;
+                BasePlayer attacker = hitInfo.Initiator?.ToPlayer();
                 if (attacker == null) return;
 
-
-                if (block.LookupPrefab().name.Contains("foundation") && !IsOwner(attacker, block) && !CupboardPrivlidge(attacker, block.transform.position))
+                object modifier;
+                if (block.LookupPrefab().name.ToLower().Contains("foundation") && !CupboardPrivlidge(attacker, block.transform.position))
                 {
+                    if (IsOwner(attacker, block))
+                        return;
                     if (!UseDamageScaling)
                     {
                         hitInfo.damageTypes = new DamageTypeList();
@@ -96,14 +111,63 @@ namespace Oxide.Plugins
                         return;
                     }
                     DamageType type = hitInfo.damageTypes.GetMajorityDamageType();
-                    object modifier;
-                    float mod = 0;
                     if (damageList.TryGetValue(type.ToString(), out modifier))
                     {
-                        mod = Convert.ToSingle(modifier);
-                        if (mod != 0)
+                        float mod = Convert.ToSingle(modifier);
+                        if (mod > 0.0f)
                         {
                             hitInfo.damageTypes.Scale(type, mod);
+                            damageGradeScaling.TryGetValue(block.grade.ToString(), out modifier);
+                            mod = Convert.ToSingle(modifier);
+                            if (Math.Abs(mod) > 0)
+                            {
+                                hitInfo.damageTypes.Scale(type, mod);
+                                return;
+                            }
+                            hitInfo.damageTypes = new DamageTypeList();
+                            hitInfo.DoHitEffects = false;
+                            hitInfo.HitMaterial = 0;
+                            SendReply(attacker, lang.GetMessage("NoPerm", this, attacker.UserIDString));
+                        }
+                        else
+                        {
+                            hitInfo.damageTypes = new DamageTypeList();
+                            hitInfo.DoHitEffects = false;
+                            hitInfo.HitMaterial = 0;
+                            SendReply(attacker, lang.GetMessage("NoPerm", this, attacker.UserIDString));
+                        }
+                    }
+                }
+                else if(block.LookupPrefab().name.ToLower().Contains("foundation") && CupboardPrivlidge(attacker, block.transform.position))
+                {
+                    if (IsOwner(attacker, block))
+                        return;
+                    if (!UseDamageScaling)
+                    {
+                        hitInfo.damageTypes = new DamageTypeList();
+                        hitInfo.DoHitEffects = false;
+                        hitInfo.HitMaterial = 0;
+                        SendReply(attacker, lang.GetMessage("NoPerm", this, attacker.UserIDString));
+                        return;
+                    }
+                    DamageType type = hitInfo.damageTypes.GetMajorityDamageType();
+                    if (damageList.TryGetValue(type.ToString(), out modifier))
+                    {
+                        var mod = Convert.ToSingle(modifier);
+                        if (Math.Abs(mod) > 0)
+                        {
+                            hitInfo.damageTypes.Scale(type, mod);
+                            damageGradeScaling.TryGetValue(block.grade.ToString(), out modifier);
+                            mod = Convert.ToSingle(modifier);
+                            if (Math.Abs(mod) > 0)
+                            {
+                                hitInfo.damageTypes.Scale(type, mod);
+                                return;
+                            }
+                            hitInfo.damageTypes = new DamageTypeList();
+                            hitInfo.DoHitEffects = false;
+                            hitInfo.HitMaterial = 0;
+                            SendReply(attacker, lang.GetMessage("NoPerm", this, attacker.UserIDString));
                         }
                         else
                         {
@@ -163,6 +227,7 @@ namespace Oxide.Plugins
             }
             return false;
         }
+
         private bool CupboardPrivlidge(BasePlayer player, Vector3 position)
         {
             var hits = Physics.OverlapSphere(position, 2f, cupboardMask);

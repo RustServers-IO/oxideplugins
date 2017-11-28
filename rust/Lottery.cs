@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lottery", "Sami37", "1.2.0", ResourceId = 2145)]
+    [Info("Lottery", "Sami37", "1.2.1", ResourceId = 2145)]
     internal class Lottery : RustPlugin
     {
         #region Economy Support
@@ -379,7 +379,7 @@ namespace Oxide.Plugins
                 return;
             }
             int from = 0;
-            var currentBalance = Economy.Call("GetPlayerMoney", player.userID);
+            var currentBalance = Economy.Call("Balance", player.UserIDString);
             playerinfo playerbet;
             if(Currentbet == null)
                 Currentbet = new Dictionary<ulong, playerinfo>();
@@ -1863,7 +1863,7 @@ namespace Oxide.Plugins
                                 }
                                 Currentbet.Clear();
                                 Currentbet = playerinfos;
-                                Economy?.CallHook("Deposit", arg.Player().userID, rwd);
+                                Economy?.CallHook("Deposit", arg.Player().UserIDString, rwd);
                                 SendReply(arg.Player(),
                                     string.Format(lang.GetMessage("Jackpot", this, arg.Player().UserIDString), random,
                                         rwd));
@@ -1873,25 +1873,25 @@ namespace Oxide.Plugins
                         {
                             Currentbet.Remove(arg.Player().userID);
                             Currentbet.Add(arg.Player().userID, playerbet);
-                            Economy?.CallHook("Deposit", arg.Player().userID, rwd);
+                            Economy?.CallHook("Deposit", arg.Player().UserIDString, rwd);
                             SendReply(arg.Player(),
                                 string.Format(lang.GetMessage("Win", this, arg.Player().UserIDString), random, rwd));
                         }
                         else
                         {
-                            Economy?.CallHook("Deposit", arg.Player().userID, rwd);
+                            Economy?.CallHook("Deposit", arg.Player().UserIDString, rwd);
                             SendReply(arg.Player(),
                                 string.Format(lang.GetMessage("Win", this, arg.Player().UserIDString), random, rwd));
                         }
                         playerbet.totalbet += playerbet.currentbet*(10/100.0);
-                        Economy?.CallHook("Withdraw", arg.Player().userID, playerbet.currentbet*playerbet.multiplicator);
+                        Economy?.CallHook("Withdraw", arg.Player().UserIDString, playerbet.currentbet*playerbet.multiplicator);
                         playerbet.currentbet = 0;
                         playerbet.multiplicator = 1;
                     }
                     else
                     {
                         playerbet.totalbet += playerbet.currentbet*(10/100.0);
-                        Economy?.CallHook("Withdraw", arg.Player().userID, playerbet.currentbet*playerbet.multiplicator);
+                        Economy?.CallHook("Withdraw", arg.Player().UserIDString, playerbet.currentbet*playerbet.multiplicator);
                         playerbet.currentbet = 0;
                         playerbet.multiplicator = 1;
                         SendReply(arg.Player(),
