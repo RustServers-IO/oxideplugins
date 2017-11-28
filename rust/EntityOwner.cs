@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Owner", "rustservers.io", "3.1.4", ResourceId = 1255)]
+    [Info("Entity Owner", "rustservers.io", "3.1.5", ResourceId = 1255)]
     [Description("Modify entity ownership and cupboard/turret authorization")]      
     class EntityOwner : RustPlugin
     {
@@ -796,7 +796,7 @@ namespace Oxide.Plugins
                 entityList.Add((T)entity);
                 checkFrom.Add(entity.transform.position);
                 var c = 1;
-                if (target == null)
+                if (target == 0)
                 {
                     RemoveOwner(entity);
                 }
@@ -850,7 +850,7 @@ namespace Oxide.Plugins
                             ebs++;
                         }
 
-                        if (target == null)
+                        if (target == 0)
                         {
                             RemoveOwner(entityComponent);
                         }
