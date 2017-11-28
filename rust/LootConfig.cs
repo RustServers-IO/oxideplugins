@@ -19,7 +19,7 @@ using Newtonsoft.Json.Converters;
 
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.26")]
+    [Info("LootConfig", "Nogrod", "1.0.27")]
     internal class LootConfig : RustPlugin
     {
         private const int VersionConfig = 14;
@@ -129,13 +129,13 @@ namespace Oxide.Plugins
         private bool CreateDefaultConfig()
         {
             Config.Clear();
-            var loot = Resources.FindObjectsOfTypeAll<LootSpawn>();
-            var itemModReveal = Resources.FindObjectsOfTypeAll<ItemModReveal>();
-            var itemModUnwrap = Resources.FindObjectsOfTypeAll<ItemModUnwrap>();
-            var workbench = Resources.FindObjectsOfTypeAll<Workbench>();
+            var lootSpawns = Resources.FindObjectsOfTypeAll<LootSpawn>();
+            var itemModReveals = Resources.FindObjectsOfTypeAll<ItemModReveal>();
+            var itemModUnwraps = Resources.FindObjectsOfTypeAll<ItemModUnwrap>();
+            var workbenchs = Resources.FindObjectsOfTypeAll<Workbench>();
 #if DEBUG
             var sb = new StringBuilder();
-            foreach (var reveal in itemModReveal)
+            foreach (var reveal in itemModReveals)
             {
                 var items = new List<ItemAmount>();
                 var stack = new Stack<LootSpawn>();
@@ -160,13 +160,13 @@ namespace Oxide.Plugins
                     sb.AppendLine($"\t{item.itemDef.shortname}: {item.amount}");
                 Puts(sb.ToString());
             }
-            Puts("LootContainer: {0} LootSpawn: {1} ItemModReveal: {2}", Resources.FindObjectsOfTypeAll<LootContainer>().Length, loot.Length, itemModReveal.Length);
+            Puts("LootContainer: {0} LootSpawn: {1} ItemModReveal: {2}", Resources.FindObjectsOfTypeAll<LootContainer>().Length, lootSpawns.Length, itemModReveals.Length);
 #endif
             var caseInsensitiveComparer = new CaseInsensitiveComparer();
-            Array.Sort(loot, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
-            Array.Sort(itemModReveal, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
-            Array.Sort(itemModUnwrap, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
-            Array.Sort(workbench, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
+            Array.Sort(lootSpawns, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
+            Array.Sort(itemModReveals, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
+            Array.Sort(itemModUnwraps, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
+            Array.Sort(workbenchs, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             var spawnGroupsData = new Dictionary<string, Dictionary<string, LootContainer>>();
             var spawnGroups = (List<SpawnGroup>)SpawnGroupsField.GetValue(SpawnHandler.Instance);
             var monuments = Resources.FindObjectsOfTypeAll<MonumentInfo>();
@@ -199,6 +199,10 @@ namespace Oxide.Plugins
                 if (container.gameObject.activeInHierarchy || container.GetComponent<SpawnPointInstance>() != null) continue; //skip spawned & spawn groups
                 containerData[container.PrefabName] = container;
             }*/
+            foreach (var workbench in workbenchs)
+            {
+                Puts("{0} {1} {2}", workbench.name, workbench.isActiveAndEnabled, workbench.gameObject.activeInHierarchy);
+            }
             try
             {
                 Config.Settings = new JsonSerializerSettings
@@ -225,10 +229,10 @@ namespace Oxide.Plugins
                     WorldSeed = World.Seed,
                     LootContainers = containerData,
                     SpawnGroups = spawnGroupsData.OrderBy(l => l.Key).ToDictionary(l => l.Key, l => l.Value),
-                    ItemModReveals = itemModReveal.ToDictionary(l => l.name),
-                    ItemModUnwraps = itemModUnwrap.Where(l => l.revealList != null).ToDictionary(l => l.name),
-                    Workbenchs = workbench.ToDictionary(l => l.name),
-                    Categories = loot.ToDictionary(l => l.name)
+                    ItemModReveals = itemModReveals.ToDictionary(l => l.name),
+                    ItemModUnwraps = itemModUnwraps.Where(l => l.revealList != null).ToDictionary(l => l.name),
+                    Workbenchs = workbenchs.Where(l => !l.gameObject.activeInHierarchy).ToDictionary(l => l.name),
+                    Categories = lootSpawns.ToDictionary(l => l.name)
                 });
             }
             catch (Exception e)
