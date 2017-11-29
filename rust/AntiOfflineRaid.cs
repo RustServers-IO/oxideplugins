@@ -424,22 +424,16 @@ namespace Oxide.Plugins
             if (targetID.IsSteamId() && HasPerm(targetID.ToString(), "antiofflineraid.protect") && lastOnline.ContainsKey(targetID))
             {
                 float scale = scaleDamage(targetID);
-                Debug.Log(scale);
-                if (clanShare)
-                {
-                    if (IsClanOffline(targetID))
-                        mitigateDamage(hitinfo, scale);
-                }
-                else
-                {
-                    mitigateDamage(hitinfo, scale);
-                }
+if (clanShare)
+    if (IsClanOffline(targetID))
+        mitigateDamage(hitinfo, scale);
+else
+    mitigateDamage(hitinfo, scale);
             }
         }
 
         public void mitigateDamage(HitInfo hitinfo, float scale)
         {
-            Debug.Log("MITIGATE");
             if (scale > -1 && scale != 1)
             {
                 var isFire = hitinfo.damageTypes.GetMajorityDamageType() == DamageType.Heat;
@@ -458,7 +452,6 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    Debug.Log("SCALING");
                     // only scale damage
                     hitinfo.damageTypes.ScaleAll(scale);
                     if (scale < 1)
