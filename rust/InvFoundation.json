@@ -5,7 +5,8 @@
     "version": "1.2.3",
     "configuration": true,
     "suggest": {
-        "BuildingOwners": "*"
+        "BuildingOwners": "*",
+        "EntityOwner": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/invfoundation.2096",
