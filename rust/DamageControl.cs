@@ -7,7 +7,7 @@ using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins {
- [Info("DamageControl", "ColonBlow, MSpeedie", "2.1.8", ResourceId = 2677)]
+ [Info("DamageControl", "ColonBlow, MSpeedie", "2.1.9", ResourceId = 2677)]
  [Description("Allows authorized Users to control damage settings for animals, apc, buildings, heli, npcs, players and zombies")]
  // internal class DamageControl : RustPlugin
  class DamageControl: CovalencePlugin {
@@ -568,6 +568,10 @@ namespace Oxide.Plugins {
 				{
 				setHitScale(hitInfo, _Animalmodifiers);
 				}
+		}
+	else if (entity as NPCPlayerApex != null) // BotSpawn type Scientists, etc.
+		{
+			setHitScale(hitInfo, _NPCmodifiers);		
 		}
 	else if (entity as BasePlayer != null)
 		{
