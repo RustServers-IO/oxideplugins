@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.4.6", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.4.7", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
@@ -332,7 +332,7 @@ namespace Oxide.Plugins
 
 			return rawData;
 		}
-
+		
 		private Dictionary<string, object> EntityData(BaseEntity entity, Vector3 sourcePos, Vector3 sourceRot, Vector3 entPos, Vector3 entRot, float diffRot, bool saveInventories, bool saveShare)
 		{
 			var normalizedPos = NormalizePosition(sourcePos, entPos, diffRot);
@@ -340,24 +340,25 @@ namespace Oxide.Plugins
 
 			var data = new Dictionary<string, object>
 			{
-				{ "prefabname", entity.PrefabName },
-				{ "skinid", entity.skinID },
-				{ "pos", new Dictionary<string,object>
+				{"prefabname", entity.PrefabName},
+				{"skinid", entity.skinID},
+				{"flags", TryCopyFlags(entity)},
+				{"pos", new Dictionary<string,object>
 					{
-						{ "x", normalizedPos.x.ToString() },
-						{ "y", normalizedPos.y.ToString() },
-						{ "z", normalizedPos.z.ToString() }
+						{"x", normalizedPos.x.ToString()},
+						{"y", normalizedPos.y.ToString()},
+						{"z", normalizedPos.z.ToString()}
 					}
 				},
-				{ "rot", new Dictionary<string,object>
+				{"rot", new Dictionary<string,object>
 					{
-						{ "x", entRot.x.ToString() },
-						{ "y", normalizedRot.ToString() },
-						{ "z", entRot.z.ToString() },
+						{"x", entRot.x.ToString()},
+						{"y", normalizedRot.ToString()},
+						{"z", entRot.z.ToString()},
 					}
 				}
 			};
-
+			
 			TryCopySlots(entity, data, saveShare);
 
 			var buildingblock = entity.GetComponentInParent<BuildingBlock>();
@@ -691,7 +692,7 @@ namespace Oxide.Plugins
 											projectiles.primaryMagazine.contents = ammoamount;
 										}
 
-										//TODO: Compability water
+										//TODO Не добавляет капли воды в некоторые контейнеры
 
 										if(item.ContainsKey("items"))
 										{
@@ -803,6 +804,18 @@ namespace Oxide.Plugins
 						}	
 											
 						vendingMachine.FullUpdate();
+					}
+					
+					var flags = data.ContainsKey("flags") ? data["flags"] as Dictionary<string, object> : new Dictionary<string, object>();
+					
+					//TODO Проверить необходимость выполнения дополнительных действий
+					
+					var baseOven = entity.GetComponentInParent<BaseOven>();
+					
+					if(baseOven != null)
+					{
+						if(flags.ContainsKey("On") && Convert.ToBoolean(flags["On"]))
+							baseOven.StartCooking();
 					}
 					
 					pastedEntities.Add(entity);
@@ -953,7 +966,8 @@ namespace Oxide.Plugins
 
 				var codedata = new Dictionary<string, object>
 				{
-					{"prefabname", slotEntity.PrefabName}
+					{"prefabname", slotEntity.PrefabName},
+					{"flags", TryCopyFlags(ent)}
 				};
 
 				if(slotEntity.GetComponent<CodeLock>())
@@ -987,7 +1001,19 @@ namespace Oxide.Plugins
 				housedata.Add(slotName, codedata);
 			}
 		}
+		
+		private Dictionary<string, object> TryCopyFlags(BaseEntity entity)
+		{
+			var flags = new Dictionary<string, object>();
+			
+			foreach(BaseEntity.Flags flag in Enum.GetValues(typeof(BaseEntity.Flags)))
+			{
+				flags.Add(flag.ToString(), entity.HasFlag(flag));
+			}
 
+			return flags;
+		}
+		
 		private object TryPaste(Vector3 startPos, string filename, BasePlayer player, float RotationCorrection, string[] args, bool autoHeight = true)
 		{
 			var userID = player?.UserIDString;
