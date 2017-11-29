@@ -3,7 +3,7 @@
     "description": "Form alliances with other guilds. Yes, you and THIS army...",
     "author": "juk3b0x",
     "version": "2.0.0",
-    "configuration": false,
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/alliance-tracker.1122",
     "games": [
