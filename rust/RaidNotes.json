@@ -2,9 +2,12 @@
     "name": "RaidNotes",
     "description": "Broadcasts raid activity to chat",
     "author": "Calytic",
-    "version": "0.0.7",
+    "version": "1.0.0",
     "configuration": true,
     "suggest": {
+        "Slack": "*",
+        "Discord": "*",
+        "LustyMap": "*",
         "Clans": "*"
     },
     "language": "cs",
