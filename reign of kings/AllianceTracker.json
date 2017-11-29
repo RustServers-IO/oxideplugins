@@ -1,8 +1,8 @@
 {
     "name": "Alliance Tracker",
     "description": "Form alliances with other guilds. Yes, you and THIS army...",
-    "author": "Scorpyon",
-    "version": "1.0.3",
+    "author": "juk3b0x",
+    "version": "2.0.0",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/alliance-tracker.1122",
