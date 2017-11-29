@@ -5,9 +5,7 @@
     "version": "1.2.1",
     "configuration": true,
     "suggest": {
-        "ServerRewards": "*",
-        "Economics": "*",
-        "HumanNPC": "*"
+        "ServerRewards": "*"
     },
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/lottery.2145",
