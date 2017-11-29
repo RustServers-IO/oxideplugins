@@ -16,10 +16,10 @@ using ProtoBuf;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.3.1", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.3.2", ResourceId = 2580)]
     
     [Description("Spawn Bots with kits at monuments.")]
-//airdrop respawn fix
+// /botspawn move fix
 	
     class BotSpawn : RustPlugin
     {
@@ -1351,8 +1351,8 @@ namespace Oxide.Plugins
                     if (storedData.CustomProfiles.ContainsKey(name))
                     {
                         storedData.CustomProfiles[name].LocationX = player.transform.position.x;
-                        storedData.CustomProfiles[name].LocationX = player.transform.position.y;
-                        storedData.CustomProfiles[name].LocationX = player.transform.position.z;
+                        storedData.CustomProfiles[name].LocationY = player.transform.position.y;
+                        storedData.CustomProfiles[name].LocationZ = player.transform.position.z;
                         Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData);
                         SendReply(player, "<color=orange>" + lang.GetMessage("Title", this) + "</color>" + lang.GetMessage("custommoved", this),name);
                     }
