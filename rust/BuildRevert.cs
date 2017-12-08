@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildRevert", "nivex", "0.1.3", ResourceId = 2465)]
+    [Info("BuildRevert", "nivex", "1.0.0", ResourceId = 2465)]
     [Description("Prevent building in blocked area.")]
     public class BuildRevert : RustPlugin
     {
@@ -32,14 +32,14 @@ namespace Oxide.Plugins
             var buildPos = position + (player.eyes.BodyForward() * 4f);
             var up = buildPos + Vector3.up + upOffset;
 
-            buildPos.y = Math.Max(position.y, up.y);
+            buildPos.y = Mathf.Max(position.y, up.y);
             Vis.Colliders(buildPos, 1.875f, colliders, layerMask, QueryTriggerInteraction.Collide);
 
             foreach(var collider in colliders)
             {
                 var p = collider.GetComponentInParent<BuildingPrivlidge>();
 
-                if (p != null && p.Dominates(priv))
+                if (p != null && Dominates(p, priv))
                     priv = p;
             }
             
@@ -54,6 +54,17 @@ namespace Oxide.Plugins
             return _canBuild;
         }
 
+        public bool Dominates(BuildingPrivlidge priv, BuildingPrivlidge other)
+        {
+            if (other == null)
+            {
+                return true;
+            }
+            uint num = (priv.net != null) ? priv.net.ID : 0u;
+            uint num2 = (other.net != null) ? other.net.ID : 0u;
+            return num < num2;
+        }
+        
         #region Config
         bool Changed;
         string permName;

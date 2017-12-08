@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("GUIShop", "Nogrod / Reneb", "1.4.4", ResourceId = 1319)]
+    [Info("GUIShop", "Nogrod / Reneb", "1.4.5", ResourceId = 1319)]
     public class GUIShop : RustPlugin
     {
         private const string ShopOverlayName = "ShopOverlay";
@@ -515,7 +515,7 @@ namespace Oxide.Plugins
                 SendReply(player, MessageShowNoEconomics);
                 return;
             }
-            var playerCoins = (double) Economics.CallHook("Balance", player.userID);
+            var playerCoins = (double)Economics.CallHook("Balance", player.UserIDString);
 
             var shop = (Dictionary<string, object>) shopObj;
 
@@ -763,7 +763,7 @@ namespace Oxide.Plugins
             if (stack < 1) stack = 1;
             var freeSlots = player.inventory.containerMain.capacity - player.inventory.containerMain.itemList.Count;
             var slotAmount = freeSlots*stack;
-            var balanceAmount = (int)((double)Economics.CallHook("Balance", player.userID) / GetBuyPrice(data));
+            var balanceAmount = (int)((double)Economics.CallHook("Balance", player.UserIDString) / GetBuyPrice(data));
             return slotAmount < balanceAmount ? slotAmount : balanceAmount;
         }
 
@@ -796,7 +796,7 @@ namespace Oxide.Plugins
             if (data.Cmd != null && amount > 1) return MessageErrorBuyCmd;
             var buyprice = GetBuyPrice(data);
 
-            var playerCoins = (double) Economics.CallHook("Balance", player.userID);
+            var playerCoins = (double)Economics.CallHook("Balance", player.UserIDString);
             if (playerCoins < buyprice*amount)
                 return string.Format(MessageErrorNotEnoughMoney, buyprice*amount, amount, item);
             if (data.Cooldown > 0)
@@ -809,7 +809,7 @@ namespace Oxide.Plugins
                     && itemCooldowns.TryGetValue(item, out itemCooldown)
                     && itemCooldown > CurrentTime())
                 {
-                    return string.Format(MessageErrorCooldown, FormatTime((long) (itemCooldown - CurrentTime())));
+                    return string.Format(MessageErrorCooldown, FormatTime((long)(itemCooldown - CurrentTime())));
                 }
             }
             return true;

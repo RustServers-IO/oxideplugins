@@ -5,9 +5,9 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.10", ResourceId = 2383)]
+    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.11", ResourceId = 2383)]
     [Description("Adds the option to set off C4 manually without a timer")]
-    class TriggeredExplosiveCharges : RustPlugin
+    public class TriggeredExplosiveCharges : RustPlugin
     {
         #region Constants
         private const string PERMISSION_PLACE = "triggeredexplosivecharges.place";
@@ -26,7 +26,7 @@ namespace Oxide.Plugins
 
         #region Classes
 
-        class TriggeredExplosivesManager
+        private class TriggeredExplosivesManager
         {
             #region Member Variables
 
@@ -110,7 +110,7 @@ namespace Oxide.Plugins
 
                 if (configuration.TRIGGER_ONE_TIME_USE && triggeredExplosives.Count > 0)
                         trigger.Remove();
-                    
+
                 Instance.timer.Once(0.1f, () =>
                 {
                     foreach (TimedExplosive te in triggeredExplosives)
@@ -312,7 +312,7 @@ namespace Oxide.Plugins
             }
         }
 
-        static class TriggerShop
+        private static class TriggerShop
         {
             struct CreateInfo_BuildingBlock
             {
@@ -400,7 +400,7 @@ namespace Oxide.Plugins
                     buildingBlock.blockDefinition = PrefabAttribute.server.Find<Construction>(buildingBlock.prefabID);
                     buildingBlock.SetGrade((BuildingGrade.Enum)ci_BB.grade);
                     if (buidlingID == null)
-                        buidlingID = BuildingBlock.NewBuildingID();
+                        buidlingID = BuildingManager.server.NewBuildingID();
                     buildingBlock.buildingID = (uint)buidlingID;
 
                     entity.Spawn();
@@ -504,15 +504,15 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        static TriggeredExplosiveCharges Instance;
-        static Configuration configuration;
-        static SaveData saveData;
+        private static TriggeredExplosiveCharges Instance;
+        private static Configuration configuration;
+        private static SaveData saveData;
 
         #region Commands
         bool PermissionGranted(BasePlayer player, string permissionName) { return (player.net.connection.authLevel > 1) || permission.UserHasPermission(player.UserIDString, permissionName); }
 
         [ChatCommand("tec.shop")]
-        void PlaceShop(BasePlayer player, string command, string[] args)
+        private void PlaceShop(BasePlayer player, string command, string[] args)
         {
             if (!PermissionGranted(player, PERMISSION_PLACE))
             {
@@ -547,13 +547,13 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("tec.givetrigger")]
-        void GiveTrigger_Chat(BasePlayer player, string command, string[] args)
+        private void GiveTrigger_Chat(BasePlayer player, string command, string[] args)
         {
             GiveTrigger(player, args);
         }
 
         [ConsoleCommand("tec.givetrigger")]
-        void GiveTrigger_Console(ConsoleSystem.Arg arg)
+        private void GiveTrigger_Console(ConsoleSystem.Arg arg)
         {
             if (arg.Player() != null)
                 GiveTrigger(arg.Player(), arg.Args);
@@ -561,7 +561,7 @@ namespace Oxide.Plugins
                 GiveTrigger(null, arg.Args);
         }
 
-        void GiveTrigger(BasePlayer player, string[] args)
+        private void GiveTrigger(BasePlayer player, string[] args)
         {
             int amount = 1;
             bool playerNotNull = (player != null);
@@ -613,7 +613,7 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("tec.craft")]
-        void CraftTrigger(BasePlayer player, string command, string[] args)
+        private void CraftTrigger(BasePlayer player, string command, string[] args)
         {
             if (!configuration.CRAFTING_ENABLED && (player.net.connection.authLevel < 2) && !PermissionGranted(player, PERMISSION_CRAFTING))
             {
@@ -650,12 +650,12 @@ namespace Oxide.Plugins
 
         #region Initialization & Termination
 
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             LoadDataFromFile();
         }
 
-        void Init()
+        private void Init()
         {
             permission.RegisterPermission(PERMISSION_PLACE, this);
             permission.RegisterPermission(PERMISSION_CRAFTING, this);
@@ -666,7 +666,7 @@ namespace Oxide.Plugins
             LoadDefaultConfig();
         }
 
-        void Unload()
+        private void Unload()
         {
             foreach (BasePlayer player in BasePlayer.activePlayerList)
                 OnPlayerDisconnected(player, "");
@@ -678,22 +678,24 @@ namespace Oxide.Plugins
             SaveDataToFile();
         }
 
-        void OnPlayerInit(BasePlayer player) { TriggeredExplosivesManager.allManagers.Add(player.userID, new TriggeredExplosivesManager(player)); }
+        private void OnPlayerInit(BasePlayer player) { TriggeredExplosivesManager.allManagers.Add(player.userID, new TriggeredExplosivesManager(player)); }
 
-        void OnPlayerDisconnected(BasePlayer player, string reason) { TriggeredExplosivesManager.allManagers.Remove(player.userID); }
+        private void OnPlayerDisconnected(BasePlayer player, string reason) { TriggeredExplosivesManager.allManagers.Remove(player.userID); }
+
         #endregion
 
         #region Hooks
-        void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
+
+        private void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
             TimedExplosive te = entity as TimedExplosive;
             if (entity.name.Equals("assets/prefabs/tools/c4/explosive.timed.deployed.prefab"))
                 TriggeredExplosivesManager.allManagers[player.userID].DeployExplosive(te);
         }
 
-        void OnPlayerTick(BasePlayer player, PlayerTick msg, bool wasPlayerStalled) { TriggeredExplosivesManager.allManagers[player.userID].UpdateActiveItem(); }
+        private void OnPlayerTick(BasePlayer player, PlayerTick msg, bool wasPlayerStalled) { TriggeredExplosivesManager.allManagers[player.userID].UpdateActiveItem(); }
 
-        void OnPlayerInput(BasePlayer player, InputState input)
+        private void OnPlayerInput(BasePlayer player, InputState input)
         {
             if (input.WasJustPressed(BUTTON.FIRE_PRIMARY))
                 TriggeredExplosivesManager.allManagers[player.userID].Explode();
@@ -701,7 +703,7 @@ namespace Oxide.Plugins
                 TriggeredExplosivesManager.allManagers[player.userID].Toggle_C4_Mode();
         }
 
-        void OnVendingTransaction(VendingMachine vendingMachine, BasePlayer player)
+        private void OnVendingTransaction(VendingMachine vendingMachine, BasePlayer player)
         {
             if (saveData.vendingMachines.Contains(vendingMachine.net.ID))
             {
@@ -710,13 +712,13 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
+        private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
             if (saveData.vendingMachines.Contains(entity.net.ID) || saveData.shopEntities.Contains(entity.net.ID))
                 info.damageTypes = new Rust.DamageTypeList();
         }
 
-        void OnItemPickup(Item item, BasePlayer player)
+        private void OnItemPickup(Item item, BasePlayer player)
         {
             if (configuration.C4_ALLOW_PICKUP && item.info.itemid == 498591726)
                 TriggeredExplosivesManager.Pickup(item);
@@ -725,7 +727,7 @@ namespace Oxide.Plugins
 
         #region Configuration & Data
 
-        struct Configuration
+        private struct Configuration
         {
             public const string S_CURRENCY_ID =     "SHOP | Currency item for buying a trigger [item shortname]";
             public const string S_CURRENCY_NEEDED = "SHOP | Needed amount of currency item [number]";
@@ -760,7 +762,6 @@ namespace Oxide.Plugins
                                  int item_1_id, int item_1_needed, int item_2_id, int item_2_needed,
                                  int beepDuration, bool allowPickup, bool oneTimeUse)
             {
-
                 CURRENCY_ID = currency_id;
                 CURRENCY_NEEDED = currency_needed;
 
@@ -778,6 +779,7 @@ namespace Oxide.Plugins
         }
 
         T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
+
         protected override void LoadDefaultConfig()
         {
             string currency_shortname;
@@ -830,9 +832,9 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-        public static void SaveDataToFile() { Core.Interface.Oxide.DataFileSystem.WriteObject(Instance.Name, saveData); }
+        private static void SaveDataToFile() { Core.Interface.Oxide.DataFileSystem.WriteObject(Instance.Name, saveData); }
 
-        public static void LoadDataFromFile()
+        private static void LoadDataFromFile()
         {
             saveData = Core.Interface.Oxide.DataFileSystem.ReadObject<SaveData>(Instance.Name);
             if (saveData == null)
@@ -849,27 +851,28 @@ namespace Oxide.Plugins
 
             SaveDataToFile();
         }
+
         #endregion
 
         #region Localization
 
-        const string L_CRAFTING_SUCCESS = "Crafting | Success";
-        const string L_CRAFTING_FAILED_SPACE = "Crafting | NotEnoughSpace";
-        const string L_CRAFTING_FAILED_RESOURCES = "Crafting | NotEnoughResources";
-        const string L_PERMISSION_FAILED = "Permission | NotGranted";
-        const string L_SHOP_FAILED = "Shop | NoValidTarget";
-        const string L_GIVE_MISSING_ARGUMENT = "Give | MissingArgument";
-        const string L_GIVE_WRONG_FORMAT = "Give | WrongFormat";
-        const string L_GIVE_NOT_FOUND = "Give | PlayerNotFound";
-        const string L_GIVE_SYNTAX = "Give | Syntax";
-        const string L_GIVE_SUCCESS = "Give | Success";
-        const string L_CONFIG_ERROR = "Config | Error";
-        const string L_INVENTORY_FULL = "Inventory | NotEnoughSpace";
+        private const string L_CRAFTING_SUCCESS = "Crafting | Success";
+        private const string L_CRAFTING_FAILED_SPACE = "Crafting | NotEnoughSpace";
+        private const string L_CRAFTING_FAILED_RESOURCES = "Crafting | NotEnoughResources";
+        private const string L_PERMISSION_FAILED = "Permission | NotGranted";
+        private const string L_SHOP_FAILED = "Shop | NoValidTarget";
+        private const string L_GIVE_MISSING_ARGUMENT = "Give | MissingArgument";
+        private const string L_GIVE_WRONG_FORMAT = "Give | WrongFormat";
+        private const string L_GIVE_NOT_FOUND = "Give | PlayerNotFound";
+        private const string L_GIVE_SYNTAX = "Give | Syntax";
+        private const string L_GIVE_SUCCESS = "Give | Success";
+        private const string L_CONFIG_ERROR = "Config | Error";
+        private const string L_INVENTORY_FULL = "Inventory | NotEnoughSpace";
 
-        static void ChatMessage(BasePlayer player, string key) { player.ChatMessage(Instance.lang.GetMessage(key, Instance, player.UserIDString)); }
-        static void ChatMessage(BasePlayer player, string key, object[] args) { player.ChatMessage(String.Format(Instance.lang.GetMessage(key, Instance, player.UserIDString), args)); }
-        static void ServerMessage(string key) { Instance.Puts(Instance.lang.GetMessage(key, Instance)); }
-        static void ServerMessage(string key, object[] args) { Instance.Puts(String.Format(Instance.lang.GetMessage(key, Instance), args)); }
+        private static void ChatMessage(BasePlayer player, string key) { player.ChatMessage(Instance.lang.GetMessage(key, Instance, player.UserIDString)); }
+        private static void ChatMessage(BasePlayer player, string key, object[] args) { player.ChatMessage(String.Format(Instance.lang.GetMessage(key, Instance, player.UserIDString), args)); }
+        private static void ServerMessage(string key) { Instance.Puts(Instance.lang.GetMessage(key, Instance)); }
+        private static void ServerMessage(string key, object[] args) { Instance.Puts(String.Format(Instance.lang.GetMessage(key, Instance), args)); }
 
         private new void LoadDefaultMessages()
         {

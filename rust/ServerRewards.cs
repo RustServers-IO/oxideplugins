@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ServerRewards", "k1lly0u", "0.4.63", ResourceId = 1751)]
+    [Info("ServerRewards", "k1lly0u", "0.4.64", ResourceId = 1751)]
     class ServerRewards : RustPlugin
     {
         #region Fields
@@ -610,7 +610,7 @@ namespace Oxide.Plugins
 
             CreateSubMenu(ref container, UIMain, hasItems, npcId);
             UI.CreatePanel(ref container, UIMain, uiColors["light"], "0.01 0.01", "0.99 0.93", true);
-                        
+
             if (pageUp) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], ">>>", 16, "0.87 0.03", "0.955 0.07", $"SRUI_ChangeElement Items {page + 1} {npcId ?? "null"} {category}");
             if (pageDown) UI.CreateButton(ref container, UIMain, uiColors["buttonbg"], "<<<", 16, "0.045 0.03", "0.13 0.07", $"SRUI_ChangeElement Items {page - 1} {npcId ?? "null"} {category}");
 
@@ -618,7 +618,7 @@ namespace Oxide.Plugins
             {
                 CreateItemEntry(ref container, UIMain, items[i].Key, items[i].Value, i);
             }
-                        
+
             return container;
         }
         private CuiElementContainer CreateKitsElement(List<KeyValuePair<string, RewardData.RewardKit>> kits, int page, bool pageUp, bool pageDown, string npcId = null)
@@ -701,7 +701,7 @@ namespace Oxide.Plugins
             string message = $"{color1}{msg("storeRP", player.UserIDString)}: {playerPoints}</color>";
             if (Economics && configData.Tabs.Exchange)
             {
-                var amount = Economics?.Call("Balance", player.userID);
+                var amount = Economics?.Call("Balance", player.UserIDString);
                 message = message + $"  {color2}||</color> {color1}Economics: {amount}</color>";
             }
             if (configData.UIOptions.ShowPlaytime && PlaytimeTracker)
@@ -1191,19 +1191,19 @@ namespace Oxide.Plugins
                 }
                 if (TakePoints(player.userID, configData.Exchange.RP, "RP Exchange") != null)
                 {
-                    Economics.Call("Deposit", player.userID, (double)configData.Exchange.Economics);
+                    Economics.Call("Deposit", player.UserIDString, (double)configData.Exchange.Economics);
                     PopupMessage(player, $"{msg("exchange", player.UserIDString)}{configData.Exchange.RP} {msg("storeRP", player.UserIDString)} for {configData.Exchange.Economics} {msg("storeCoins", player.UserIDString)}");
                 }
             }
             else
             {
-                double amount = (double)Economics?.Call("Balance", player.userID);
+                double amount = (double)Economics?.Call("Balance", player.UserIDString);
                 if (amount < configData.Exchange.Economics)
                 {
                     PopupMessage(player, msg("notEnoughCoins", player.UserIDString));
                     return;
                 }
-                if ((bool)Economics?.Call("Withdraw", player.userID, (double)configData.Exchange.Economics))
+                if ((bool)Economics?.Call("Withdraw", player.UserIDString, (double)configData.Exchange.Economics))
                 {
                     AddPoints(player.userID, configData.Exchange.RP);
                     PopupMessage(player, $"{msg("exchange", player.UserIDString)}{configData.Exchange.Economics} {msg("storeCoins", player.UserIDString)} for {configData.Exchange.RP} {msg("storeRP", player.UserIDString)}");
@@ -1310,14 +1310,14 @@ namespace Oxide.Plugins
                 if (configData.Options.Logs)
                 {
                     var message = $"{player.displayName} sold {amount}x {itemId} for {salePrice}";
-                    LogToFile($"Sold Items", $"[{DateTime.Now.ToString("hh:mm:ss")}] {message}", this);                    
+                    LogToFile($"Sold Items", $"[{DateTime.Now.ToString("hh:mm:ss")}] {message}", this);
                 }
 
                 uiManager.SwitchElement(player, UIPanel.Sell, Category.None, 0, uiManager.GetNPCInUse(player));
                 PopupMessage(player, string.Format(msg("saleSuccess"), amount, saleItem.displayName, salePrice, msg("storeRP")));
             }
         }
-        #endregion       
+        #endregion
 
         #region Oxide Hooks
         void Loaded()
@@ -1813,7 +1813,7 @@ namespace Oxide.Plugins
         #endregion
         #endregion
 
-        #region NPC Registration       
+        #region NPC Registration
         private bool IsRegisteredNPC(string ID)
         {
             if (npcData.npcInfo.ContainsKey(ID))
@@ -3178,7 +3178,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Kit Contents       
+        #region Kit Contents
         private string GetKitContents(string kitname)
         {
             var contents = Kits?.Call("GetKitInfo", kitname);
@@ -3209,7 +3209,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Config        
+        #region Config
         private ConfigData configData;
         class Colors
         {
@@ -3592,7 +3592,7 @@ namespace Oxide.Plugins
             {"exchange", "You have exchanged " },
             {"itemInHand", "You must place the item you wish to add in your hands" },
             {"itemIDHelp", "You must enter the items number. Type /rewards list to see available entries" },
-            {"noProfile", "{0} does not have any saved data" },           
+            {"noProfile", "{0} does not have any saved data" },
             {"storeTitle", "Reward Store" },
             {"storeKits", "Kits" },
             {"storeCommands", "Commands" },

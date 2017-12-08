@@ -2,10 +2,11 @@
     "name": "NoEscape",
     "description": "Prevent teleportation (and more) while in raid or combat",
     "author": "Calytic",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "configuration": true,
     "suggest": {
         "Clans": "*",
+        "GUIShop": "*",
         "Friends": "*",
         "RemoverTool": "*",
         "MagicTeleportation": "*",

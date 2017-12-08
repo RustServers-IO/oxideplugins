@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Owner", "rustservers.io", "3.1.5", ResourceId = 1255)]
+    [Info("Entity Owner", "rustservers.io", "3.1.7", ResourceId = 1255)]
     [Description("Modify entity ownership and cupboard/turret authorization")]      
     class EntityOwner : RustPlugin
     {
@@ -211,7 +211,6 @@ namespace Oxide.Plugins
                 sb.Append("  ").Append("<color=\"#ffd479\">/own [all/block] PlayerName</color> - Give ownership of entire structure to specified player").Append("\n");
                 sb.Append("  ").Append("<color=\"#ffd479\">/unown [all/block]</color> - Remove ownership from entire structure").Append("\n");
                 sb.Append("  ").Append("<color=\"#ffd479\">/auth PlayerName</color> - Authorize specified player on all nearby cupboards").Append("\n");
-                sb.Append("  ").Append("<color=\"#ffd479\">/authclean PlayerName</color> - Remove all building privileges on a player").Append("\n");
             }
 
             player.ChatMessage(sb.ToString());
@@ -614,63 +613,6 @@ namespace Oxide.Plugins
             {
                 massTurretDeauthorize(player, target);
             }
-        }
-
-        [ConsoleCommand("authclean")]
-        void ccAuthClean(ConsoleSystem.Arg arg)
-        {
-            if (arg.Connection != null && arg.Connection.authLevel < 1)
-            {
-                SendReply(arg, "No permission");
-                return;
-            }
-
-            BasePlayer target = null;
-            if (arg.Args.Length == 1)
-            {
-                target = FindPlayerByPartialName(arg.Args[0]);
-                if (target == null)
-                {
-                    SendReply(arg, messages["Target player not found"]);
-                    return;
-                }
-            }
-            else
-            {
-                SendReply(arg, "Invalid Syntax. authclean PlayerName");
-            }
-
-            SetValue(target, "buildingPrivilege", new List<BuildingPrivlidge>());
-            target.SetPlayerFlag(BasePlayer.PlayerFlags.InBuildingPrivilege, false);
-            target.SetPlayerFlag(BasePlayer.PlayerFlags.HasBuildingPrivilege, false);
-        }
-
-        [ChatCommand("authclean")]
-        void cmdAuthClean(BasePlayer player, string command, string[] args)
-        {
-            if (!canChangeOwners(player))
-            {
-                return;
-            }
-
-            BasePlayer target = null;
-            if (args.Length == 1)
-            {
-                target = FindPlayerByPartialName(args[0]);
-                if (target == null)
-                {
-                    SendReply(player, messages["Target player not found"]);
-                    return;
-                }
-            }
-            else
-            {
-                target = player;
-            }
-
-            SetValue(target, "buildingPrivilege", new List<BuildingPrivlidge>());
-            target.SetPlayerFlag(BasePlayer.PlayerFlags.InBuildingPrivilege, false);
-            target.SetPlayerFlag(BasePlayer.PlayerFlags.HasBuildingPrivilege, false);
         }
 
         [ChatCommand("prod2")]
@@ -1295,9 +1237,7 @@ namespace Oxide.Plugins
                         });
 
                         priv.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                        if(priv.CheckEntity(target))
-                            target.SetInsideBuildingPrivilege(priv, true);
-
+                        
                         total++;
                     }
                     Pool.FreeList(ref entities);
@@ -1359,8 +1299,6 @@ namespace Oxide.Plugins
                             {
                                 priv.authorizedPlayers.Remove(p);
                                 priv.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                                if(priv.CheckEntity(target))
-                                    target.SetInsideBuildingPrivilege(priv, false);
                             }
                         }
 

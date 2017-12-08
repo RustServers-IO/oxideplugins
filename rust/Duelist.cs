@@ -18,7 +18,7 @@ using Random = UnityEngine.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Duelist", "nivex", "1.1.4", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
+    [Info("Duelist", "nivex", "1.1.5", ResourceId = 2520), Description("1v1 & TDM dueling event.")]
     public class Duelist : RustPlugin
     {
         public enum Team
@@ -1338,7 +1338,7 @@ namespace Oxide.Plugins
             }
 
             if (useWorkshopSkins)
-                webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, GetWorkshopIDs, this);
+                webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, GetWorkshopIDs, this, Core.Libraries.RequestMethod.GET);
         }
 
         private void OnServerSave()
@@ -5061,7 +5061,7 @@ namespace Oxide.Plugins
 
             Player.Teleport(player, destination);
 
-            if (player.IsConnected && Vector3.Distance(player.transform.position, destination) > 50f) // 1.1.2 reduced from 150 to 100
+            if (player.IsConnected && Vector3.Distance(player.transform.position, destination) > 50f || !DuelTerritory(destination)) // 1.1.2 reduced from 150 to 100
             {
                 player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
                 player.UpdateNetworkGroup();
@@ -5666,9 +5666,19 @@ namespace Oxide.Plugins
             return false;
         }
 
-        private bool IsAuthorizing(BasePlayer player, BasePlayer target) // 2nd method. thanks @psychotea for the linq suggestion
+        private bool IsAuthorizing(BasePlayer player, BasePlayer target) // 2nd method.
         {
-            return player.buildingPrivilege.Any(x => x.IsAuthed(target)) || target.buildingPrivilege.Any(x => x.IsAuthed(player));
+            var privs = BaseNetworkable.serverEntities.Where(e => e != null && e is BuildingPrivlidge).Cast<BuildingPrivlidge>();
+
+            foreach (var priv in privs)
+            {
+                if (priv.IsAuthed(player) && priv.IsAuthed(target))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool IsBunked(BasePlayer player, BasePlayer target) // 3rd method. thanks @i_love_code for helping with this too
@@ -5702,8 +5712,9 @@ namespace Oxide.Plugins
         private bool IsInSameBase(BasePlayer player, BasePlayer target) // 5th method
         {
             bool _sharesBase = false; // to free the pooled lists
-
-            foreach (var priv in player.buildingPrivilege)
+            var privs = BaseNetworkable.serverEntities.Where(e => e != null && e is BuildingPrivlidge).Cast<BuildingPrivlidge>();
+            
+            foreach (var priv in privs.Where(p => p != null && p.IsAuthed(player)))
             {
                 var colliders = Pool.GetList<Collider>();
                 Vis.Colliders(priv.transform.position, 25f, colliders, constructionMask, QueryTriggerInteraction.Collide);
@@ -5728,7 +5739,7 @@ namespace Oxide.Plugins
                     return true;
             }
 
-            foreach (var priv in target.buildingPrivilege)
+            foreach (var priv in privs.Where(p => p != null && p.IsAuthed(target)))
             {
                 var colliders = Pool.GetList<Collider>();
                 Vis.Colliders(priv.transform.position, 25f, colliders, constructionMask, QueryTriggerInteraction.Collide);

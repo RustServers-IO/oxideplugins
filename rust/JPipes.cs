@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.8", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.5.10", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -268,8 +268,8 @@ namespace Oxide.Plugins {
                     return false;
                 int upgradelimit = getplayerupgradelimit(player);
                 if (upgradelimit != -1 && upgradelimit < (int) grade) {
-                    Puts(upgradelimit.ToString());
-                    Puts(((int) grade).ToString());
+                    //Puts(upgradelimit.ToString());
+                    //Puts(((int) grade).ToString());
 
                     ShowOverlayText(player, string.Format(lang.GetMessage("ErrorUpgradeLimit", this, player.UserIDString), (BuildingGrade.Enum) upgradelimit));
                     HideOverlayText(player, 2f);
@@ -1336,56 +1336,59 @@ namespace Oxide.Plugins {
             }
 
             public string GetContIcon(BaseEntity e) {
-                if (e is BoxStorage) {
-                    string panel = e.GetComponent<StorageContainer>().panelName;
-                    if (panel == "largewoodbox")
-                        return GetItemIconURL("Large_Wood_Box", 140);
-                    return GetItemIconURL("Wood_Storage_Box", 140);
 
-                } else if (e is BaseOven) {
-                    string panel = e.GetComponent<BaseOven>().panelName;
+				if (e is BoxStorage) {
+					string panel = e.GetComponent<StorageContainer>().panelName;
+					if (panel == "largewoodbox")
+						return GetItemIconURL("Large_Wood_Box", 140);
+					return GetItemIconURL("Wood_Storage_Box", 140);
 
-                    if (panel == "largefurnace")
-                        return GetItemIconURL("Large_Furnace", 140);
-                    else if (panel == "smallrefinery")
-                        return GetItemIconURL("Small_Oil_Refinery", 140);
-                    else if (panel == "lantern")
-                        return GetItemIconURL("Lantern", 140);
-                    else if (panel == "bbq")
-                        return GetItemIconURL("BBQ", 140);
-                    else if (panel == "campfire")
-                        return GetItemIconURL("Camp_Fire", 140);
-                    else
-                        return GetItemIconURL("Furnace", 140);
-                } else if (e is AutoTurret) {
-                    return GetItemIconURL("Auto_Turret", 140);
-                } else if (e is Recycler) {
-                    return GetItemIconURL("Recycler", 140);
-                } else if (e is FlameTurret) {
-                    return GetItemIconURL("Flame_Turret", 140);
-                } else if (e is GunTrap) {
-                    return GetItemIconURL("Shotgun_Trap", 140);
-                } else if (e is SearchLight) {
-                    return GetItemIconURL("Search_Light", 140);
-                } else if (e is WaterCatcher) {
-                    if (e.GetComponent<WaterCatcher>()._collider.ToString().Contains("small"))
-                        return GetItemIconURL("Small_Water_Catcher", 140);
-                    return GetItemIconURL("Large_Water_Catcher", 140);
-                } else if (e is LiquidContainer) {
-                    if (e.GetComponent<LiquidContainer>()._collider.ToString().Contains("purifier"))
-                        return GetItemIconURL("Water_Purifier", 140);
-                    return GetItemIconURL("Water_Barrel", 140);
-                } else if (e is VendingMachine) {
-                    return GetItemIconURL("Vending_Machine", 140);
-                } else if (e is DropBox) {
-                    return GetItemIconURL("Drop_Box", 140);
-                } else if (e is StashContainer) {
-                    return GetItemIconURL("Small_Stash", 140);
-                } else if (e is MiningQuarry) {
-                    if (e.ToString().Contains("pump"))
-                        return GetItemIconURL("Pump_Jack", 140);
-                    return GetItemIconURL("Mining_Quarry", 140);
-                }
+				} else if (e is BaseOven) {
+					string panel = e.GetComponent<BaseOven>().panelName;
+
+					if (panel == "largefurnace")
+						return GetItemIconURL("Large_Furnace", 140);
+					else if (panel == "smallrefinery")
+						return GetItemIconURL("Small_Oil_Refinery", 140);
+					else if (panel == "lantern")
+						return GetItemIconURL("Lantern", 140);
+					else if (panel == "bbq")
+						return GetItemIconURL("BBQ", 140);
+					else if (panel == "campfire")
+						return GetItemIconURL("Camp_Fire", 140);
+					else
+						return GetItemIconURL("Furnace", 140);
+				} else if (e is AutoTurret) {
+					return GetItemIconURL("Auto_Turret", 140);
+				} else if (e is Recycler) {
+					return GetItemIconURL("Recycler", 140);
+				} else if (e is FlameTurret) {
+					return GetItemIconURL("Flame_Turret", 140);
+				} else if (e is GunTrap) {
+					return GetItemIconURL("Shotgun_Trap", 140);
+				} else if (e is SearchLight) {
+					return GetItemIconURL("Search_Light", 140);
+				} else if (e is WaterCatcher) {
+					if (e.GetComponent<WaterCatcher>()._collider.ToString().Contains("small"))
+						return GetItemIconURL("Small_Water_Catcher", 140);
+					return GetItemIconURL("Large_Water_Catcher", 140);
+				} else if (e is LiquidContainer) {
+					if (e.GetComponent<LiquidContainer>()._collider.ToString().Contains("purifier"))
+						return GetItemIconURL("Water_Purifier", 140);
+					return GetItemIconURL("Water_Barrel", 140);
+				} else if (e is VendingMachine) {
+					return GetItemIconURL("Vending_Machine", 140);
+				} else if (e is DropBox) {
+					return GetItemIconURL("Drop_Box", 140);
+				} else if (e is StashContainer) {
+					return GetItemIconURL("Small_Stash", 140);
+				} else if (e is MiningQuarry) {
+					if (e.ToString().Contains("pump"))
+						return GetItemIconURL("Pump_Jack", 140);
+					return GetItemIconURL("Mining_Quarry", 140);
+				} else if (e is BuildingPrivlidge) {
+					return GetItemIconURL("Tool_Cupboard", 140);
+				}
 
                 return "http://i.imgur.com/BwJN0rt.png";
             }
@@ -1471,8 +1474,9 @@ namespace Oxide.Plugins {
             { "Fridge", "http://vignette2.wikia.nocookie.net/play-rust/images/8/88/Fridge_icon.png/revision/latest/scale-to-width-down/{0}" },
             { "Shotgun_Trap", "http://vignette2.wikia.nocookie.net/play-rust/images/6/6c/Shotgun_Trap_icon.png/revision/latest/scale-to-width-down/{0}" },
             { "Flame_Turret", "http://vignette2.wikia.nocookie.net/play-rust/images/f/f9/Flame_Turret_icon.png/revision/latest/scale-to-width-down/{0}" },
-            { "Recycler", "http://vignette2.wikia.nocookie.net/play-rust/images/e/ef/Recycler_icon.png/revision/latest/scale-to-width-down/{0}" }
-        };
+            { "Recycler", "http://vignette2.wikia.nocookie.net/play-rust/images/e/ef/Recycler_icon.png/revision/latest/scale-to-width-down/{0}" },
+            { "Tool_Cupboard", "http://vignette2.wikia.nocookie.net/play-rust/images/5/57/Tool_Cupboard_icon.png/revision/latest/scale-to-width-down/{0}" }
+		};
 
         #endregion
 
@@ -1617,9 +1621,11 @@ namespace Oxide.Plugins {
         private bool checkbuildingprivlage(BasePlayer p) {
             if (permission.UserHasPermission(p.UserIDString, "jpipes.admin"))
                 return true;
-            BuildingPrivlidge priv = p.GetBuildingPrivilege();
-            return (priv != null) ? priv.IsAuthed(p) : true;
-        }
+
+			//BuildingPrivlidge priv = p.GetBuildingPrivilege();
+			//return (priv != null) ? priv.IsAuthed(p) : true;
+			return p.CanBuild();
+		}
 
         private bool checkplayerpipelimit(BasePlayer p, UserInfo user) {
             int limit = getplayerpipelimit(p);
@@ -1662,7 +1668,7 @@ namespace Oxide.Plugins {
 
             List<string> uperms = permission.GetUserPermissions(p.UserIDString).ToList();
             List<string> pperms = new List<string>();
-
+			 
             foreach (var s in permlevels.Keys) {
                 if (uperms.Contains($"jpipes.level.{s}"))
                     pperms.Add(s);
@@ -2200,12 +2206,17 @@ namespace Oxide.Plugins {
 
                     permlevel npl = new permlevel();
 
-                    if (permvals.ContainsKey("pipelimit"))
-                        npl.pipelimit = (int) permvals["pipelimit"];
-                    if (permvals.ContainsKey("upgradelimit"))
-                        npl.upgradelimit = (int) permvals["upgradelimit"];
+					if (permvals.ContainsKey("pipelimit"))
+						npl.pipelimit = (int) permvals["pipelimit"];
+					else
+						npl.pipelimit = 0;
 
-                    if (permvals.ContainsKey("pipelimit") || permvals.ContainsKey("upgradelimit"))
+					if (permvals.ContainsKey("upgradelimit"))
+						npl.upgradelimit = (int) permvals["upgradelimit"];
+					else
+						npl.upgradelimit = -1;
+
+					if (permvals.ContainsKey("pipelimit") || permvals.ContainsKey("upgradelimit"))
                         permlevels.Add((string) key, npl);
                 }
             } else {
@@ -2356,77 +2367,78 @@ namespace Oxide.Plugins {
         private static void LoadData<T>(ref T data) => data = Core.Interface.Oxide.DataFileSystem.ReadObject<T>("JPipes");
         private static void SaveData<T>(T data) => Core.Interface.Oxide.DataFileSystem.WriteObject("JPipes", data);
 
-        #endregion
+		#endregion
 
-        #region Debug tools
+		#region Debug tools
 
-        // Lists the ent's components and variables to player's chat
+		// Lists the ent's components and variables to player's chat
 
-        //void ListComponentsDebug(BasePlayer player, BaseEntity ent) {
+		//void ListComponentsDebug(BasePlayer player, BaseEntity ent) {
 
-        //    List<string> lines = new List<string>();
-        //    //string s = "-----------------------------------------";
-        //    string s = "<color=#80c5ff>───────────────────────</color>";
-        //    int limit = 1030;
+		//	List<string> lines = new List<string>();
+		//	//string s = "-----------------------------------------";
+		//	string s = "<color=#80c5ff>───────────────────────</color>";
+		//	int limit = 1030;
 
-        //    foreach (var c in ent.GetComponents<Component>()) {
+		//	foreach (var c in ent.GetComponents<Component>()) {
 
-        //        List<string> types = new List<string>();
-        //        List<string> names = new List<string>();
-        //        List<string> values = new List<string>();
-        //        int typelength = 0;
+		//		List<string> types = new List<string>();
+		//		List<string> names = new List<string>();
+		//		List<string> values = new List<string>();
+		//		int typelength = 0;
 
-        //        foreach (FieldInfo fi in c.GetType().GetFields()) {
+		//		foreach (FieldInfo fi in c.GetType().GetFields()) {
 
-        //            System.Object obj = (System.Object) c;
-        //            string ts = fi.FieldType.Name;
-        //            if (ts.Length > typelength)
-        //                typelength = ts.Length;
+		//			System.Object obj = (System.Object) c;
+		//			string ts = fi.FieldType.Name;
+		//			if (ts.Length > typelength)
+		//				typelength = ts.Length;
 
-        //            types.Add(ts);
-        //            names.Add(fi.Name);
+		//			types.Add(ts);
+		//			names.Add(fi.Name);
 
-        //            var val = fi.GetValue(obj);
-        //            if (val != null)
-        //                values.Add(val.ToString());
-        //            else
-        //                values.Add("null");
+		//			var val = fi.GetValue(obj);
+		//			if (val != null)
+		//				values.Add(val.ToString());
+		//			else
+		//				values.Add("null");
 
-        //        }
+		//		}
 
-        //        if (s.Length > 0) s += "\n";
-        //        s += types.Count > 0 ? "╔" : "═";
-        //        s += $" {c.GetType()} : {c.GetType().BaseType}";
-        //        //s += " <"+c.name+">\n";
-        //        //if (c.sharedMesh != null) s += "-> "+c.sharedMesh.triangles.Length.ToString()+"\n";
+		//		if (s.Length > 0)
+		//			s += "\n";
+		//		s += types.Count > 0 ? "╔" : "═";
+		//		s += $" {c.GetType()} : {c.GetType().BaseType}";
+		//		//s += " <"+c.name+">\n";
+		//		//if (c.sharedMesh != null) s += "-> "+c.sharedMesh.triangles.Length.ToString()+"\n";
 
-        //        for (int i = 0; i < types.Count; i++) {
+		//		for (int i = 0; i < types.Count; i++) {
 
-        //            string ns = $"<color=#80c5ff> {types[i]}</color> {names[i]} = <color=#00ff00>{values[i]}</color>";
+		//			string ns = $"<color=#80c5ff> {types[i]}</color> {names[i]} = <color=#00ff00>{values[i]}</color>";
 
-        //            if (s.Length + ns.Length >= limit) {
-        //                lines.Add(s);
-        //                s = "║" + ns;
-        //            } else {
-        //                s += "\n║" + ns;
-        //            }
-        //        }
+		//			if (s.Length + ns.Length >= limit) {
+		//				lines.Add(s);
+		//				s = "║" + ns;
+		//			} else {
+		//				s += "\n║" + ns;
+		//			}
+		//		}
 
-        //        if (types.Count > 0) {
-        //            s += "\n╚══";
-        //            lines.Add(s);
-        //            s = string.Empty;
-        //        }
-        //    }
+		//		if (types.Count > 0) {
+		//			s += "\n╚══";
+		//			lines.Add(s);
+		//			s = string.Empty;
+		//		}
+		//	}
 
-        //    lines.Add(s);
+		//	lines.Add(s);
 
-        //    foreach (string ls in lines)
-        //        PrintToChat(player, ls);
+		//	foreach (string ls in lines)
+		//		PrintToChat(player, ls);
 
-        //}
+		//}
 
-        #endregion
+		#endregion
 
-    }
+	}
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -17,7 +17,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "1.1.4", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "1.1.5", ResourceId = 1394)]
     [Description("Prevent commands while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -948,27 +948,33 @@ namespace Oxide.Plugins
 
             List<string> cupboardMembers = new List<string>();
 
-            foreach (var cup in nearbyCupboards)
-            {
-                if (cup.CheckEntity(sourceEntity))
+            var sourcePlayer = sourceEntity as BasePlayer;
+
+            if(sourcePlayer != null) {
+                foreach (var cup in nearbyCupboards)
                 {
-                    bool ownerOrFriend = false;
-
-                    if (owner == cup.OwnerID.ToString())
-                        ownerOrFriend = true;
-
-                    foreach (var member in sourceMembers)
+                    if (cup.IsAuthed(sourcePlayer))
                     {
-                        if (member == cup.OwnerID.ToString())
-                            ownerOrFriend = true;
-                    }
+                        bool ownerOrFriend = false;
 
-                    if (ownerOrFriend)
-                        foreach (var proto in cup.authorizedPlayers)
-                            if (!sourceMembers.Contains(proto.userid.ToString()))
-                                cupboardMembers.Add(proto.userid.ToString());
+                        if (owner == cup.OwnerID.ToString())
+                            ownerOrFriend = true;
+
+                        foreach (var member in sourceMembers)
+                        {
+                            if (member == cup.OwnerID.ToString())
+                                ownerOrFriend = true;
+                        }
+
+                        if (ownerOrFriend)
+                            foreach (var proto in cup.authorizedPlayers)
+                                if (!sourceMembers.Contains(proto.userid.ToString()))
+                                    cupboardMembers.Add(proto.userid.ToString());
+                    }
                 }
             }
+
+            
 
             sourceMembers.AddRange(cupboardMembers);
             Pool.FreeList<BuildingPrivlidge>(ref nearbyCupboards);

@@ -2,7 +2,7 @@
     "name": "BuildRevert",
     "description": "Prevent building in blocked area.",
     "author": "nivex",
-    "version": "0.1.3",
+    "version": "1.0.0",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/buildrevert.2465",

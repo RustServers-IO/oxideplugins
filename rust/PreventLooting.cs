@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.4.6", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.4.7", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -226,10 +226,7 @@ namespace Oxide.Plugins
 			if(entity.OwnerID != player.userID && entity.OwnerID != 0)
 			{								
 				if(UseCupboard || UseOnlyInCupboardRange)
-				{	
-					Collider[] findcoll = Physics.OverlapBox(entity.transform.position, entity.bounds.extents/2f, entity.transform.rotation, LayerMask.GetMask("Trigger"));
-					if(CheckAuthCupboard(entity, player, findcoll)) return;
-				}
+					if(CheckAuthCupboard(entity, player)) return;
 				StopLooting(player, "OnTryLootEntity");
 			}
 		}
@@ -278,22 +275,10 @@ namespace Oxide.Plugins
 			success = hit.GetEntity();
 			return true; 
         }
-		bool CheckAuthCupboard(BaseEntity entity, BasePlayer player, Collider[] findcoll)
+		bool CheckAuthCupboard(BaseEntity entity, BasePlayer player)
 		{
-			if(UseOnlyInCupboardRange && (findcoll == null || findcoll.Length == 0)) return true;
-			if(UseCupboard)
-			{
-				List<BuildingPrivlidge> listcupbpriv = new List<BuildingPrivlidge>();
-				foreach (Collider findentity in findcoll)
-				{
-					BuildingPrivlidge cupbpriv = findentity.GetComponentInParent<BuildingPrivlidge>();
-					if (cupbpriv != null)
-					{		
-						listcupbpriv.Add(cupbpriv);
-					}				
-				}
-				if(listcupbpriv.Any(p => p.IsAuthed(player))) return true;
-			}
+			if(UseOnlyInCupboardRange && !player.IsBuildingBlocked(entity.transform.position, entity.transform.rotation, entity.bounds)) return true;
+			if(UseCupboard && player.IsBuildingBlocked(entity.transform.position, entity.transform.rotation, entity.bounds)) return false;
 			return false;	
 		}
 		#endregion
