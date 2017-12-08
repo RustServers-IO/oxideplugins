@@ -1,17 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using Oxide.Core;
-using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("SharedDoors", "dbteku", "0.7.7", ResourceId = 2108)]
+    [Info("SharedDoors", "dbteku", "0.7.8", ResourceId = 2108)]
     [Description("Making sharing doors easier.")]
-    class SharedDoors : CovalencePlugin
+    public class SharedDoors : CovalencePlugin
     {
         [PluginReference]
         private Plugin Clans;
@@ -24,7 +23,7 @@ namespace Oxide.Plugins
         private const string MASTER_PERM = "shareddoors.master";
         private MasterKeyHolders holders;
 
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             instance = this;
             permission.RegisterPermission(MASTER_PERM, this);
@@ -39,12 +38,12 @@ namespace Oxide.Plugins
             }
         }
 
-        void Unload()
+        private void Unload()
         {
             instance = null;
         }
 
-        void OnPluginLoaded(Plugin plugin)
+        private void OnPluginLoaded(Plugin plugin)
         {
             if (plugin.Name == CLANS_NAME)
             {
@@ -53,7 +52,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnPluginUnloaded(Plugin name)
+        private void OnPluginUnloaded(Plugin name)
         {
             if (name.Name == CLANS_NAME)
             {
@@ -62,7 +61,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnPlayerInit(BasePlayer player)
+        private void OnPlayerInit(BasePlayer player)
         {
             IPlayer iPlayer = covalence.Players.FindPlayerById(player.userID.ToString());
             if (player.IsAdmin || iPlayer.HasPermission(MASTER_PERM))
@@ -71,7 +70,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnPlayerDisconnected(BasePlayer player, string reason)
+        private void OnPlayerDisconnected(BasePlayer player, string reason)
         {
             IPlayer iPlayer = covalence.Players.FindPlayerById(player.userID.ToString());
             if (player.IsAdmin || iPlayer.HasPermission(MASTER_PERM))
@@ -80,7 +79,7 @@ namespace Oxide.Plugins
             }
         }
 
-        bool CanUseLockedEntity(BasePlayer player, BaseLock door)
+        private bool CanUseLockedEntity(BasePlayer player, BaseLock door)
         {
             IPlayer iPlayer = covalence.Players.FindPlayerById(player.userID.ToString());
             bool canUse = false;
@@ -91,9 +90,8 @@ namespace Oxide.Plugins
         }
 
         [Command("sd")]
-        void SharedDoorsCommand(IPlayer player, string command, string[] args)
+        private void SharedDoorsCommand(IPlayer player, string command, string[] args)
         {
-
             if (args.Length > 0)
             {
                 if (args[0].ToLower() == "help")
@@ -122,7 +120,6 @@ namespace Oxide.Plugins
                             holders.GiveMasterKey(player.Id);
                             PlayerResponder.NotifyUser(player, "Master Mode Enabled. You can now open all doors and chests.");
                         }
-
                     }
                     else
                     {
@@ -134,7 +131,6 @@ namespace Oxide.Plugins
             {
                 PlayerResponder.NotifyUser(player, "Master Mode Toggle: /sd masterMode");
             }
-
         }
 
         public static SharedDoors getInstance()
@@ -146,12 +142,10 @@ namespace Oxide.Plugins
         {
             private const String PREFIX = "<color=#00ffffff>[</color><color=#ff0000ff>SharedDoors</color><color=#00ffffff>]</color>";
 
-
             public static void NotifyUser(IPlayer player, String message)
             {
                 player.Message(PREFIX + " " + message);
             }
-
         }
 
         /*
@@ -159,6 +153,7 @@ namespace Oxide.Plugins
          * Door Handler Class
          *
          * */
+
         private class DoorAuthorizer
         {
             public BaseLock BaseDoor { get; protected set; }
@@ -177,7 +172,7 @@ namespace Oxide.Plugins
             public bool CanOpen()
             {
                 bool canUse = false;
-                if (BaseDoor.IsLocked() )
+                if (BaseDoor.IsLocked())
                 {
                     if (BaseDoor is CodeLock)
                     {
@@ -243,6 +238,7 @@ namespace Oxide.Plugins
          * Tool Cupboard Tool
          *
          * */
+
         private class ToolCupboardChecker
         {
             public BasePlayer Player { get; protected set; }
@@ -254,13 +250,7 @@ namespace Oxide.Plugins
 
             public bool IsPlayerAuthorized()
             {
-                bool isIn = false;
-                BuildPrivilegeTrigger trigger = Player.FindTrigger<BuildPrivilegeTrigger>();
-                if (trigger != null)
-                {
-                    isIn = trigger.privlidgeEntity.IsAuthed(Player);
-                }
-                return isIn;
+                return Player.IsBuildingAuthed();
             }
         }
 
@@ -269,6 +259,7 @@ namespace Oxide.Plugins
          * RustIO Handler
          *
          * */
+
         private class RustIOHandler
         {
             private const string GET_CLAN_OF_PLAYER = "GetClanOf";
@@ -331,6 +322,7 @@ namespace Oxide.Plugins
        * Admin Mode Handler
        *
        * */
+
         private class MasterKeyHolders
         {
             private Dictionary<string, PlayerSettings> keyMasters;
@@ -403,6 +395,7 @@ namespace Oxide.Plugins
        * Player Settings
        *
        * */
+
         private class PlayerSettings
         {
             public bool IsMasterKeyHolder { get; set; }

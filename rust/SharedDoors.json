@@ -1,8 +1,8 @@
 {
     "name": "SharedDoors",
     "description": "Sharing doors with friends via the tool cupboard.",
-    "author": "",
-    "version": "0.7.7",
+    "author": "Wulf",
+    "version": "0.7.8",
     "configuration": false,
     "suggest": {
         "Clans": "*"
