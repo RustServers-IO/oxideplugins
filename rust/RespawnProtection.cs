@@ -5,7 +5,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("RespawnProtection", "sami37", "1.2.2", ResourceId = 2551)]
+    [Info("RespawnProtection", "sami37", "1.2.3", ResourceId = 2551)]
     [Description("RespawnProtection allow admin to set a respawn protection timer.")]
     public class RespawnProtection : RustPlugin
     {
@@ -73,6 +73,8 @@ namespace Oxide.Plugins
 
         private void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
         {
+            if (victim is NPCPlayer)
+                return;
             BasePlayer victimBasePlayer = victim as BasePlayer;
             if (victimBasePlayer == null)
                 return;
@@ -83,7 +85,7 @@ namespace Oxide.Plugins
                 return;
             if (info?.InitiatorPlayer != null && Economics != null && Economics.IsLoaded)
             {
-                SendReply(info.InitiatorPlayer, string.Format(lang.GetMessage("TryKill", this, info.InitiatorPlayer.UserIDString), AmountPerKill));
+                SendReply(info.InitiatorPlayer, string.Format(lang.GetMessage("Killed", this, info.InitiatorPlayer.UserIDString), AmountPerKill));
                 Economics?.CallHook("Withdraw", info.InitiatorPlayer.UserIDString,
                     AmountPerKill);
             }
@@ -91,6 +93,8 @@ namespace Oxide.Plugins
 
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
+            if (entity is NPCPlayer)
+                return;
             if (hitinfo != null)
             {
                 BasePlayer attacker = hitinfo.InitiatorPlayer;
