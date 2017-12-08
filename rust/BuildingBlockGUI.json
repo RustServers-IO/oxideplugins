@@ -1,0 +1,16 @@
+{
+    "name": "BuildingBlockGUI",
+    "description": "Displays GUI to player when he enters or leaves building block without need of Planner",
+    "author": "wzp",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/buildingblockgui.2713",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

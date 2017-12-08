@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.4.7", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.4.8", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -276,10 +276,12 @@ namespace Oxide.Plugins
 			return true; 
         }
 		bool CheckAuthCupboard(BaseEntity entity, BasePlayer player)
-		{
-			if(UseOnlyInCupboardRange && !player.IsBuildingBlocked(entity.transform.position, entity.transform.rotation, entity.bounds)) return true;
-			if(UseCupboard && player.IsBuildingBlocked(entity.transform.position, entity.transform.rotation, entity.bounds)) return false;
-			return false;	
+		{		
+			BuildingPrivlidge bprev = player.GetBuildingPrivilege(new OBB(entity.transform.position, entity.transform.rotation, entity.bounds));
+			if(UseOnlyInCupboardRange && bprev == null) return true;
+			if(!UseOnlyInCupboardRange && bprev == null) return false;
+			if(UseCupboard && bprev.IsAuthed(player)) return true;
+			return false;
 		}
 		#endregion
 		#region Commands

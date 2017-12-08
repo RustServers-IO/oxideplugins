@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Oxide.Core;
-using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Simple Loot", "Jacob", "1.0.5")]
+    [Info("Simple Loot", "Jacob", "1.0.8")]
     public class SimpleLoot : RustPlugin
     {
         /*
@@ -19,7 +17,11 @@ namespace Oxide.Plugins
 
         private Configuration _configuration;
 
-        private void Init() => _instance = this;
+        private void Init()
+        {
+            Unsubscribe("OnLootSpawn");
+            _instance = this;
+        }
 
         private void OnServerInitialized()
         {
@@ -27,13 +29,15 @@ namespace Oxide.Plugins
             var containers = UnityEngine.Object.FindObjectsOfType<LootContainer>();
             for (var i = 0; i < containers.Length; i++)
             {
-                OnSpawnLoot(containers[i]);
+                OnLootSpawn(containers[i]);
                 if (i == containers.Length - 1)
                     PrintWarning($"Repopulating {i} loot containers.");
             }
+
+            Subscribe("OnLootSpawn");
         }
 
-        private void OnSpawnLoot(LootContainer lootContainer)
+        private void OnLootSpawn(LootContainer lootContainer)
         {
             if (lootContainer?.inventory?.itemList == null)
                 return;
