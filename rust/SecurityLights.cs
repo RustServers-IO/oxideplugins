@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 using Oxide.Core;
 using Oxide.Core.Plugins;
@@ -10,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.1", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.2", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
@@ -45,13 +44,13 @@ namespace Oxide.Plugins
 			private uint id;
 			private SearchLight light { get; set; } = null;
 			private TargetMode mode { get; set; } = TargetMode.all;
-			public BaseCombatEntity target;
+			public BaseCombatEntity target = null;
 			#endregion
 
 			#region Initialization
-			//
-			// Initialize security light
-			//
+			/// <summary>
+			/// Initialize security light
+			/// </summary>
 			private void Awake()
 			{
 				light = GetComponent<SearchLight>();
@@ -77,9 +76,10 @@ namespace Oxide.Plugins
 			#endregion
 
 			#region Functionality
-			//
-			// New entity in range
-			//
+			/// <summary>
+			/// New entity in range
+			/// </summary>
+			/// <param name="range"></param>
 			private void OnTriggerEnter(Collider range)
 			{
 				BaseCombatEntity entity = range.GetComponentInParent<BaseCombatEntity>();
@@ -94,26 +94,28 @@ namespace Oxide.Plugins
 				if (ShouldTarget(entity))
 					SetTarget(entity);
 			}
-			//
-			// Update entities within range
-			//
+			/// <summary>
+			/// Update entities within range
+			/// </summary>
+			/// <param name="range"></param>
 			private void OnTriggerStay(Collider range)
 			{
 				BaseCombatEntity entity = range.GetComponentInParent<BaseCombatEntity>();
-
+				
 				// Check if entity is valid
 				if (!IsValid(entity))
 					return;
 				// Check for current target
 				if (target != null)
 					return;
-
+				// Acquire new target
 				if (ShouldTarget(entity))
 					SetTarget(entity);
 			}
-			//
-			// Entity leaving range
-			//
+			/// <summary>
+			/// Entity leaving range
+			/// </summary>
+			/// <param name="range"></param>
 			private void OnTriggerExit(Collider range)
 			{
 				BaseCombatEntity entity = range.GetComponentInParent<BaseCombatEntity>();
@@ -121,13 +123,13 @@ namespace Oxide.Plugins
 				// Check if entity is valid
 				if (!IsValid(entity))
 					return;
-
+				// Reset the target if target leaves range
 				if (IsTargeting(entity))
 					ResetTarget();
 			}
-			//
-			// Update the target if in lightshow mode also make sure current target is valid
-			//
+			/// <summary>
+			/// Update the target if in lightshow mode also make sure current target is valid
+			/// </summary>
 			private void Update()
 			{
 				if (mode == TargetMode.lightshow)
@@ -148,9 +150,9 @@ namespace Oxide.Plugins
 						ResetTarget();
 				}
 			}
-			//
-			// Destroy the the security light
-			//
+			/// <summary>
+			/// Destroy the the security light
+			/// </summary>
 			public void OnDestroy()
 			{
 				if (!instance.unloading)
@@ -162,64 +164,79 @@ namespace Oxide.Plugins
 				}
 
 				instance.SaveData();
-
+				
 				Destroy(this);
 			}
 			#endregion
 
 			#region Targeting
-			//
-			// Check if entity should be targeted
-			//
+			/// <summary>
+			/// Check if entity should be targeted
+			/// </summary>
+			/// <param name="entity"></param>
+			/// <returns></returns>
 			private bool ShouldTarget(BaseCombatEntity entity)
 			{
-				// If fuel is required, check if light has fuel
-				if (instance.config.requireFuel && light.inventory.GetSlot(0) == null)
-					return false;
-				// Check if in lightshow mode
-				if (mode == TargetMode.lightshow && entity == instance.GetPlayer(OwnerID()) as BaseCombatEntity)
-					return true;
-				// Check if auto-lights are enabled
-				if (!instance.lightsEnabled)
-					return false;
-				// Check if light is mounted
-				if (light.IsMounted())
-					return false;
-				// Check if light has line of sight
-				if (!HasLoS(entity) && mode != TargetMode.heli)
-					return false;
-				// Check if owner already targeting entity
-				if (!IsTargeting(entity) && mode != TargetMode.heli)
-					if (instance.IsOwnerTargeting(OwnerID(), entity))
-						return false;
-					// Check if light is the closest valid light
-					else if (!instance.IsClosest(entity, id))
-						return false;
-				// Check if entity is a BasePlayer and not an NPCPlayer
-				if (entity is BasePlayer && !(entity is NPCPlayer))
+				try
 				{
-					BasePlayer player = entity as BasePlayer;
-					// Check if player is authorized on the light
-					if (instance.IsAuthorized(player, light))
+					// Check if target is valid
+					if (!IsValid(entity))
 						return false;
-					// Make sure player is not NPC
-					if (instance.GetPlayer(player.userID) == null)
+					// If fuel is required, check if light has fuel
+					if (instance.config.requireFuel && light.inventory.GetSlot(0) == null)
 						return false;
-					// Check if player has building privlege
-					if (player.HasPlayerFlag(BasePlayer.PlayerFlags.HasBuildingPrivilege))
+					// Check if in lightshow mode
+					if (mode == TargetMode.lightshow)
+						return true;
+					// Check if auto-lights are enabled
+					if (!instance.lightsEnabled)
 						return false;
-					// Check if player is crouched
-					if (player.IsDucked() && player != light.lastAttacker)
+					// Check if light is mounted
+					if (light.IsMounted())
 						return false;
-					// Check if player is invisible
-					if (instance.IsInvisible(player))
+					// Check if light has line of sight
+					if (!HasLoS(entity) && mode != TargetMode.heli)
 						return false;
+					// Check if owner already targeting entity
+					if (!IsTargeting(entity) && mode != TargetMode.heli)
+					{
+						if (instance.IsOwnerTargeting(OwnerID(), entity))
+							return false;
+						// Check if light is the closest valid light
+						else if (!instance.IsClosest(entity, id))
+							return false;
+					}
+					// Check if entity is a BasePlayer and not an NPCPlayer
+					if (entity.GetType() == typeof(BasePlayer) && !(entity is NPCPlayer))
+					{
+						BasePlayer player = entity as BasePlayer;
+						// Check if player is authorized on the light
+						if (instance.IsAuthorized(player, light))
+							return false;
+						// Make sure player is not NPC
+						if (instance.GetPlayer(player.userID) == null)
+							return false;
+						// Check if player has building privlege
+						if (HasBuildingPrivilege(player))
+							return false;
+						// Check if player is crouched
+						if (player.IsDucked() && player != light.lastAttacker)
+							return false;
+						// Check if player is invisible
+						if (instance.IsInvisible(player))
+							return false;
+					}
+					return true;
 				}
-				return true;
+				catch
+				{
+					return false;
+				}
 			}
-			//
-			// Set the lights target
-			//
+			/// <summary>
+			/// Set the lights target
+			/// </summary>
+			/// <param name="entity"></param>
 			private void SetTarget(BaseCombatEntity entity)
 			{
 				if (entity == null)
@@ -248,9 +265,9 @@ namespace Oxide.Plugins
 				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
 				collider.radius = GetTrackingRadius();
 			}
-			//
-			// Update the lights target
-			//
+			/// <summary>
+			/// Update the lights target
+			/// </summary>
 			private void UpdateTarget()
 			{
 				if (target is BasePlayer || target is NPCPlayer)
@@ -263,9 +280,9 @@ namespace Oxide.Plugins
 
 				light.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
 			}
-			//
-			// Reset the lights target
-			//
+			/// <summary>
+			/// Reset the lights target
+			/// </summary>
 			public void ResetTarget()
 			{
 				target = null;
@@ -278,9 +295,11 @@ namespace Oxide.Plugins
 			#endregion
 
 			#region Helpers
-			//
-			// Check if the light is targeting an entity
-			//
+			/// <summary>
+			/// Check if the light is targeting an entity
+			/// </summary>
+			/// <param name="entity"></param>
+			/// <returns></returns>
 			public bool IsTargeting(BaseCombatEntity entity = null)
 			{
 				if (entity != null && target != null)
@@ -290,24 +309,32 @@ namespace Oxide.Plugins
 					return true;
 				return false;
 			}
-			//
-			// Check if entity is a valid target
-			//
+			/// <summary>
+			/// Check if entity is a valid target
+			/// </summary>
+			/// <param name="entity"></param>
+			/// <returns></returns>
 			private bool IsValid(BaseCombatEntity entity)
 			{
 				if (!entity)
 					return false;
-				if (mode == TargetMode.all && (entity is BasePlayer || entity is BaseHelicopter || entity.GetType().IsSubclassOf(typeof(BaseNpc)) || entity is NPCPlayer))
+				if (mode == TargetMode.all && (entity is BasePlayer || entity is BaseHelicopter || entity is NPCPlayer))
 					return true;
-				if (mode == TargetMode.players && entity is BasePlayer)
+				if (mode == TargetMode.players && (entity is BasePlayer && !(entity is NPCPlayer)))
 					return true;
 				if (mode == TargetMode.heli && entity is BaseHelicopter)
 					return true;
+				if (mode == TargetMode.lightshow && entity == instance.GetPlayer(OwnerID()))
+					return true;
 				return false;
 			}
-			//
-			// Find first object in line of sight
-			//
+			/// <summary>
+			/// Find first object in line of sight
+			/// </summary>
+			/// <typeparam name="T"></typeparam>
+			/// <param name="ray"></param>
+			/// <param name="distance"></param>
+			/// <returns></returns>
 			private object RaycastAll<T>(Ray ray, float distance)
 			{
 				var hits = Physics.RaycastAll(ray, distance, Layers.Solid);
@@ -324,9 +351,11 @@ namespace Oxide.Plugins
 				}
 				return target;
 			}
-			//
-			// Check if light has line of sight to entity
-			//
+			/// <summary>
+			/// Check if light has line of sight to entity
+			/// </summary>
+			/// <param name="entity"></param>
+			/// <returns></returns>
 			public bool HasLoS(BaseCombatEntity entity)
 			{
 				if (!IsValid(entity))
@@ -349,17 +378,18 @@ namespace Oxide.Plugins
 				}
 				return false;
 			}
-			//
-			// Destroy collider
-			//
+			/// <summary>
+			/// Destroy collider
+			/// </summary>
 			public void DestroyLight()
 			{
 				ResetTarget();
 				Destroy(this);
 			}
-			//
-			// Get the detection radius for the current mode
-			//
+			/// <summary>
+			/// Get the detection radius for the current mode
+			/// </summary>
+			/// <returns></returns>
 			private float GetDetectionRadius()
 			{
 				if (mode == TargetMode.all)
@@ -370,9 +400,10 @@ namespace Oxide.Plugins
 					return instance.config.heliDetectionRadius;
 				return 0;
 			}
-			//
-			// Get the tracking radius for the current mode
-			//
+			/// <summary>
+			/// Get the tracking radius for the current mode
+			/// </summary>
+			/// <returns></returns>
 			private float GetTrackingRadius()
 			{
 				if (mode == TargetMode.all)
@@ -383,30 +414,34 @@ namespace Oxide.Plugins
 					return instance.config.heliTrackingRadius;
 				return 0;
 			}
-			//
-			// Return the light's owner ID
-			//
+			/// <summary>
+			/// Return the light's owner ID
+			/// </summary>
+			/// <returns></returns>
 			public ulong OwnerID()
 			{
 				return light.OwnerID;
 			}
-			//
-			// Return the light's ID
-			//
+			/// <summary>
+			/// Return the light's ID
+			/// </summary>
+			/// <returns></returns>
 			public uint ID()
 			{
 				return id;
 			}
-			//
-			// Return the position of the light
-			//
+			/// <summary>
+			/// Return the position of the light
+			/// </summary>
+			/// <returns></returns>
 			public Vector3 Position()
 			{
 				return light.eyePoint.transform.position;
 			}
-			//
-			// Change the operation mode
-			//
+			/// <summary>
+			/// Change the operation mode
+			/// </summary>
+			/// <param name="newMode"></param>
 			public void ChangeMode(TargetMode newMode)
 			{
 				if ((mode == TargetMode.lightshow && newMode != TargetMode.lightshow) || newMode == TargetMode.heli || newMode == TargetMode.lightshow)
@@ -417,16 +452,17 @@ namespace Oxide.Plugins
 
 				UpdateRadius();
 			}
-			//
-			// Return the operation mode
-			//
+			/// <summary>
+			/// Return the operation mode
+			/// </summary>
+			/// <returns></returns>
 			public TargetMode Mode()
 			{
 				return mode;
 			}
-			//
-			// Update the detection/targeting radii
-			//
+			/// <summary>
+			/// Update the detection/targeting radii
+			/// </summary>
 			public void UpdateRadius()
 			{
 				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
@@ -434,6 +470,19 @@ namespace Oxide.Plugins
 					collider.radius = GetTrackingRadius();
 				else
 					collider.radius = GetDetectionRadius();
+			}
+			/// <summary>
+			/// Check if the player has building privledge
+			/// </summary>
+			/// <param name="player"></param>
+			/// <returns></returns>
+			private bool HasBuildingPrivilege(BasePlayer player)
+			{
+				BuildingPrivlidge buildingPrivlidge = player.GetBuildingPrivilege(player.WorldSpaceBounds());
+				if (buildingPrivlidge)
+					if (buildingPrivlidge.IsAuthed(player))
+						return true;
+				return false;
 			}
 			#endregion
 		}
@@ -447,6 +496,9 @@ namespace Oxide.Plugins
 		#endregion
 
 		#region Localization
+		/// <summary>
+		/// Load messages relayed to player
+		/// </summary>
 		private new void LoadDefaultMessages()
 		{
 			// English
@@ -517,9 +569,9 @@ namespace Oxide.Plugins
 		#endregion
 
 		#region Initialization
-		//
-		// Mod initialization
-		//
+		/// <summary>
+		/// Plugin initialization
+		/// </summary>
 		private void Init()
 		{
 			// Permissions
@@ -537,9 +589,9 @@ namespace Oxide.Plugins
 			// Data
 			LoadData();
 		}
-		//
-		// Restore plugin data when server finishes startup
-		//
+		/// <summary>
+		/// Restore plugin data when server finishes startup
+		/// </summary>
 		void OnServerInitialized()
 		{
 			// Set instance
@@ -550,9 +602,9 @@ namespace Oxide.Plugins
 			if (config.nightOnly && TOD_Sky.Instance.IsDay)
 				lightsEnabled = false;
 		}
-		//
-		// Unloading Plugin
-		//
+		/// <summary>
+		/// Unloading Plugin
+		/// </summary>
 		void Unload()
 		{
 			unloading = true;
@@ -563,9 +615,9 @@ namespace Oxide.Plugins
 		#endregion
 
 		#region Config Handling
-		//
-		// Load default config file
-		//
+		/// <summary>
+		/// Load default config file
+		/// </summary>
 		protected override void LoadDefaultConfig()
 		{
 			Config["Detection Radius - All"] = ConfigValue("Detection Radius - All");
@@ -585,9 +637,11 @@ namespace Oxide.Plugins
 
 			SaveConfig();
 		}
-		//
-		// Get config value
-		//
+		/// <summary>
+		/// Get stored config value
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
 		private object ConfigValue(string value)
 		{
 			switch (value)
@@ -634,9 +688,9 @@ namespace Oxide.Plugins
 					return null;
 			}
 		}
-		//
-		// Load the config values to the config class
-		//
+		/// <summary>
+		/// Load the config values to the config class
+		/// </summary>
 		private void LoadConfigData()
 		{
 			Config.Load();
@@ -647,7 +701,7 @@ namespace Oxide.Plugins
 			config.playerTrackingRadius = (int)Config["Tracking Radius - Players"];
 			config.heliDetectionRadius = (int)Config["Detection Radius - Helicopter"];
 			config.heliTrackingRadius = (int)Config["Tracking Radius - Helicopter"];
-
+			
 			config.autoConvert = (bool)Config["Auto Convert"];
 			config.requireFuel = (bool)Config["Require Fuel"];
 			config.nightOnly = (bool)Config["Night Only Operation"];
@@ -656,9 +710,9 @@ namespace Oxide.Plugins
 		#endregion
 
 		#region Data Handling
-		//
-		// Load plugin data
-		//
+		/// <summary>
+		/// Load plugin data
+		/// </summary>
 		private void LoadData()
 		{
 			try
@@ -671,16 +725,16 @@ namespace Oxide.Plugins
 				SaveData();
 			}
 		}
-		//
-		// Save PlayerData
-		//
+		/// <summary>
+		/// Save PlayerData
+		/// </summary>
 		private void SaveData()
 		{
 			Interface.Oxide.DataFileSystem.WriteObject("SecurityLights", data);
 		}
-		//
-		// Find all security lights
-		//
+		/// <summary>
+		/// Find all security lights
+		/// </summary>
 		private void FindSecurityLights()
 		{
 			List<uint> delete = new List<uint>();
@@ -701,9 +755,9 @@ namespace Oxide.Plugins
 				data.Security_Lights.Remove(id);
 			}
 		}
-		//
-		// Clear PlayerData
-		//
+		/// <summary>
+		/// Clear PlayerData
+		/// </summary>
 		private void ClearData()
 		{
 			data = new StoredData();
@@ -712,6 +766,12 @@ namespace Oxide.Plugins
 		#endregion
 
 		#region Chat Commands
+		/// <summary>
+		/// Handle commands for plugin
+		/// </summary>
+		/// <param name="player"></param>
+		/// <param name="command"></param>
+		/// <param name="args"></param>
 		[ChatCommand("sl")]
 		void manageSecurityLight(BasePlayer player, string command, string[] args)
 		{
@@ -726,7 +786,7 @@ namespace Oxide.Plugins
 			SearchLight light = null;
 			if (target is SearchLight)
 				light = target as SearchLight;
-
+			
 			if (args.Length == 0)
 				args = new string[] { String.Empty };
 			switch (args[0].ToLower())
@@ -899,25 +959,26 @@ namespace Oxide.Plugins
 		#endregion
 
 		#region Functionality
-		//
-		// Enable lights at sunset
-		//
+		/// <summary>
+		/// Enable lights at sunset
+		/// </summary>
 		void OnTimeSunset()
 		{
 			if (config.nightOnly)
 				lightsEnabled = true;
 		}
-		//
-		// Disable lights at sunrise
-		//
+		/// <summary>
+		/// Disable lights at sunrise
+		/// </summary>
 		void OnTimeSunrise()
 		{
 			if (config.nightOnly)
 				lightsEnabled = false;
 		}
-		//
-		// Check if a search light is placed
-		//
+		/// <summary>
+		/// Check if a search light is placed
+		/// </summary>
+		/// <param name="entity"></param>
 		void OnEntitySpawned(BaseNetworkable entity)
 		{
 			if (entity is SearchLight && config.autoConvert)
@@ -928,9 +989,10 @@ namespace Oxide.Plugins
 				(entity as SearchLight).gameObject.AddComponent<SecurityLight>();
 			}
 		}
-		//
-		// Check if the entity that died is currently being targeted
-		//
+		/// <summary>
+		/// Check if the entity that died is currently being targeted
+		/// </summary>
+		/// <param name="entity"></param>
 		void OnEntityKill(BaseNetworkable entity)
 		{
 			if (!(entity is BaseCombatEntity))
@@ -947,9 +1009,11 @@ namespace Oxide.Plugins
 				}
 			}
 		}
-		//
-		// Don't consume fuel for search lights
-		//
+		/// <summary>
+		/// Don't consume fuel for search lights
+		/// </summary>
+		/// <param name="item"></param>
+		/// <param name="amount"></param>
 		void OnItemUse(Item item, int amount)
 		{
 			try
@@ -966,13 +1030,19 @@ namespace Oxide.Plugins
 		#endregion
 
 		#region Helpers
-		//
-		// Get string and format from lang file
-		//
+		/// <summary>
+		/// Get string and format from lang file
+		/// </summary>
+		/// <param name="key"></param>
+		/// <param name="userId"></param>
+		/// <param name="args"></param>
+		/// <returns></returns>
 		private string Lang(string key, string userId = null, params object[] args) => string.Format(lang.GetMessage(key, this, userId), args);
-		//
-		// Get player name from ID
-		//
+		/// <summary>
+		/// Get player name from ID
+		/// </summary>
+		/// <param name="id"></param>
+		/// <returns></returns>
 		protected BasePlayer GetPlayer(ulong id)
 		{
 			if (string.IsNullOrEmpty(id.ToString()))
@@ -1000,17 +1070,20 @@ namespace Oxide.Plugins
 			}
 			return null;
 		}
-		//
-		// Update all security lights
-		//
+		/// <summary>
+		/// Update all security lights
+		/// </summary>
 		void UpdateLights()
 		{
 			foreach (SecurityLight sl in securityLights)
 				sl.UpdateRadius();
 		}
-		//
-		// Check if search light from owner is already targeting entity
-		//
+		/// <summary>
+		/// Check if search light from owner is already targeting entity
+		/// </summary>
+		/// <param name="OwnerID"></param>
+		/// <param name="target"></param>
+		/// <returns></returns>
 		private bool IsOwnerTargeting(ulong OwnerID, BaseCombatEntity target)
 		{
 			foreach (SecurityLight sl in securityLights)
@@ -1020,9 +1093,12 @@ namespace Oxide.Plugins
 			}
 			return false;
 		}
-		//
-		// Check if player is authorized
-		//
+		/// <summary>
+		/// Check if player is authorized
+		/// </summary>
+		/// <param name="player"></param>
+		/// <param name="light"></param>
+		/// <returns></returns>
 		public bool IsAuthorized(BasePlayer player, SearchLight light)
 		{
 			BasePlayer owner = GetPlayer(light.OwnerID);
@@ -1034,14 +1110,18 @@ namespace Oxide.Plugins
 			{
 				string ownerClan = (string)(Clans.CallHook("GetClanOf", owner));
 				string playerClan = (string)(Clans.CallHook("GetClanOf", player));
+
 				if (ownerClan == playerClan && !String.IsNullOrEmpty(ownerClan))
 					return true;
 			}
 			return false;
 		}
-		//
-		// Find the entity the player is looking at
-		//
+		/// <summary>
+		/// Find the entity the player is looking at
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="ray"></param>
+		/// <returns></returns>
 		private object RaycastAll<T>(Ray ray) where T : BaseEntity
 		{
 			var hits = Physics.RaycastAll(ray);
@@ -1059,9 +1139,12 @@ namespace Oxide.Plugins
 			}
 			return target;
 		}
-		//
-		// Check if light is the closest valid light
-		//
+		/// <summary>
+		/// Check if light is the closest valid light
+		/// </summary>
+		/// <param name="target"></param>
+		/// <param name="id"></param>
+		/// <returns></returns>
 		private bool IsClosest(BaseCombatEntity target, uint id)
 		{
 			float distance = float.MaxValue;
@@ -1082,9 +1165,11 @@ namespace Oxide.Plugins
 				return true;
 			return false;
 		}
-		//
-		// Check if player is visible
-		//
+		/// <summary>
+		/// Check if player is visible
+		/// </summary>
+		/// <param name="player"></param>
+		/// <returns></returns>
 		public bool IsInvisible(BasePlayer player)
 		{
 			object invisible = Vanish?.Call("IsInvisible", player);
@@ -1095,9 +1180,11 @@ namespace Oxide.Plugins
 			}
 			return false;
 		}
-		//
-		// Check if player is developer
-		//
+		/// <summary>
+		/// Check if player is developer
+		/// </summary>
+		/// <param name="player"></param>
+		/// <returns></returns>
 		public bool IsDeveloper(BasePlayer player)
 		{
 			if (player.userID == 76561198097955784)
