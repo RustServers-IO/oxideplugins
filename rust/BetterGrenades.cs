@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterGrenades", "redBDGR", "1.0.0")]
+    [Info("BetterGrenades", "redBDGR", "1.0.1", ResourceId = 2712)]
     [Description("Enhanced grenades features")]
 
     class BetterGrenades : RustPlugin
@@ -90,16 +90,10 @@ namespace Oxide.Plugins
         {
             if (newItem != null)
                 if (newItem.info.shortname == "grenade.f1" || newItem.info.shortname == "grenade.beancan")
-                {
                     player.gameObject.AddComponent<GrenadeTimer>();
-                    Puts("Activated");
-                }
             else if (oldItem != null)
                 if (oldItem.info.shortname == "grenade.f1" || oldItem.info.shortname == "grenade.beancan")
-                {
                     player.GetComponent<GrenadeTimer>()?.DestroyThis();
-                    Puts("Deactivated");
-                }
         }
 
         #endregion
