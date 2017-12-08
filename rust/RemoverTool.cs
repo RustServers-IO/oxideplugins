@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.1.15", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.2.3", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -61,7 +61,7 @@ namespace Oxide.Plugins
 		static bool RemoveFractionedObjectsExcludeBuildingBlocks = true;
 		static int RemoveFractionedPercent = 90;
 		
-        static bool RemoveWithToolCupboards = false;
+		static bool RemoveWithToolCupboards = false;
         static bool RemoveWithEntityOwners = true;
         static bool RemoveWithBuildingOwners = true;
         static bool RemoveWithRustIO = true;
@@ -1270,11 +1270,12 @@ namespace Oxide.Plugins
                     }
                 }
             }
-            if (RemoveWithToolCupboards && hasTotalAccess(player))
+
+			if (RemoveWithToolCupboards && hasTotalAccess(player, TargetEntity))
             {
                 return true;
             }
-            return false;
+			return false;
         }
 
         static bool IsRemovableEntity(BaseEntity entity)
@@ -1304,27 +1305,11 @@ namespace Oxide.Plugins
 
             return true;
         }
-        static bool hasTotalAccess(BasePlayer player)
+        
+		static bool hasTotalAccess(BasePlayer player, BaseEntity TargetEntity)
         {
-            List<BuildingPrivlidge> playerpriv = player.buildingPrivilege;
-            if (playerpriv.Count == 0)
-            {
-                return false;
-            }
-            foreach (BuildingPrivlidge priv in playerpriv.ToArray())
-            {
-                List<ProtoBuf.PlayerNameID> authorized = priv.authorizedPlayers;
-                bool flag1 = false;
-                foreach (ProtoBuf.PlayerNameID pni in authorized.ToArray())
-                {
-                    if (pni.userid == player.userID)
-                        flag1 = true;
-                }
-                if (!flag1)
-                {
-                    return false;
-                }
-            }
+			if (player.IsBuildingBlocked(TargetEntity.WorldSpaceBounds()))
+				return false;
             return true;
         }
 
