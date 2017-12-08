@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.8.5", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.8.6", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
@@ -65,8 +65,6 @@ namespace Oxide.Plugins
 			TurretsIgnorePlayers = 1 << 11,
 			CupboardOwnership = 1 << 12
 		}
-		// layer mask for finding authorization
-		readonly int triggerMask = LayerMask.GetMask("Trigger");
 		// timer to check for schedule updates
 		Timer scheduleUpdateTimer;
 		// current ruleset
@@ -856,28 +854,7 @@ namespace Oxide.Plugins
 			if ((!ruleSet.HasFlag(RuleFlags.CupboardOwnership) && player.userID == entity.OwnerID) || entity.OwnerID == 0L)
 				return true; // player is the owner or the owner is undefined, allow damage/looting
 			
-			// assume no authorization by default
-			bool authed = false;
-			// check for cupboards which overlap the entity
-			Collider[] hit = Physics.OverlapBox(entity.transform.position, entity.bounds.extents/2f, entity.transform.rotation, triggerMask).Where(h => h.GetComponentInParent<BuildingPrivlidge>() != null).ToArray();
-
-			// if CupboardOwnership and no cupboards overlap, allow damage
-			if (ruleSet.HasFlag(RuleFlags.CupboardOwnership) && (hit == null || hit.Length == 0))
-				return true;
-			
-			// loop through cupboards
-			foreach (Collider ent in hit)
-			{
-				// get cupboard BuildingPrivilidge
-				BuildingPrivlidge privs = ent.GetComponentInParent<BuildingPrivlidge>();
-				// check if the player is authorized on the cupboard
-				if (privs != null)
-					if (!privs.IsAuthed(player))
-						return false; // return false if not authorized on any single cupboard which overlaps this entity
-					else
-						authed = true; // set authed to true to indicate player is authorized on at least one cupboard
-			}
-			return authed;
+			return player.IsBuildingAuthed(entity.transform.position, entity.transform.rotation, entity.bounds);
 		}
 		
 		// handle player attacking an entity - specifically, checks resource dispensers
