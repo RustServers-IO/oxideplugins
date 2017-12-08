@@ -2,7 +2,7 @@
     "name": "Respawn Protection",
     "description": "Protect fresh respawned players",
     "author": "sami37",
-    "version": "1.2.3",
+    "version": "1.2.5",
     "configuration": true,
     "suggest": {
         "Economics": "*"

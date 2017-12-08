@@ -5,7 +5,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("RespawnProtection", "sami37", "1.2.3", ResourceId = 2551)]
+    [Info("RespawnProtection", "sami37", "1.2.5", ResourceId = 2551)]
     [Description("RespawnProtection allow admin to set a respawn protection timer.")]
     public class RespawnProtection : RustPlugin
     {
@@ -13,11 +13,14 @@ namespace Oxide.Plugins
         private Plugin Economics;
 
         private int Respawn;
+        private int PVERespawn;
         private bool Enabled;
         private bool Punish;
+        private bool PVEProtect;
         private int AmountPerHit;
         private int AmountPerKill;
         private Dictionary<ulong, DateTime> protectedPlayersList = new Dictionary<ulong, DateTime>();
+        private Dictionary<ulong, DateTime> PVEprotectedPlayersList = new Dictionary<ulong, DateTime>();
         Dictionary<ulong, HitInfo> LastWounded = new Dictionary<ulong, HitInfo>();
         private void ReadFromConfig<T>(string key, ref T var)
         {
@@ -33,6 +36,8 @@ namespace Oxide.Plugins
             PrintWarning("Creating a new configuration file");
             Config.Clear();
             Config["Godmode Enabled"] = true;
+            Config["PVE Protection"] = false;
+            Config["PVE Respawn Protection"] = 60;
             Config["Default Respawn Protection"] = 60;
             Config["Punish fresh respawn kill (Enabled)"] = false;
             Config["Money withdraw per hit"] = 1;
@@ -43,7 +48,9 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             ReadFromConfig("Default Respawn Protection", ref Respawn);
+            ReadFromConfig("PVE Respawn Protection", ref PVERespawn);
             ReadFromConfig("Godmode Enabled", ref Enabled);
+            ReadFromConfig("PVE Protection", ref PVEProtect);
             ReadFromConfig("Punish fresh respawn kill (Enabled)", ref Punish);
             ReadFromConfig("Money withdraw per hit", ref AmountPerHit);
             ReadFromConfig("Money withdraw per kill", ref AmountPerKill);
@@ -52,10 +59,15 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 {"Can't Hit", "You can't hit this player until protection is left. {0}"},
-                {"Protected", "You have just respawned, you are protected for {0}s."},
-                {"NoLongerProtected", "You are no longer protected, take care."},
+                {"Protected", "You have just respawned, you are protected for {0}s from pvp."},
+                {"ProtectedPVE", "You have just respawned, you are protected for {0}s from pve."},
+                {"NoLongerProtected", "You are no longer protected from pvp, take care."},
+                {"NoLongerProtectedPVE", "You are no longer protected from pve, take care."},
                 {"TryKill", "You are trying to kill a fresh respawned player, you lost {0} money."},
-                {"Killed", "You just kill a fresh respawned player, you lost {0} money."}
+                {"Killed", "You just kill a fresh respawned player, you lost {0} money."},
+                {"UserNotFound", "There is no player with this ID ({0})"},
+                {"ProtectionRemoved", "Protection from player {0} removed."},
+                {"NotProtected", "This player is not protected."}
             }, this);
         }
 
@@ -93,13 +105,23 @@ namespace Oxide.Plugins
 
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
-            if (entity is NPCPlayer)
+            if (entity is BaseNpc && !PVEProtect)
                 return;
             if (hitinfo != null)
             {
-                BasePlayer attacker = hitinfo.InitiatorPlayer;
+                var attacker = hitinfo.Initiator;
                 BasePlayer victim = entity as BasePlayer;
-                if (victim != null && attacker != null)
+                var attack = attacker as BasePlayer;
+                if (attacker is BaseNpc && PVEProtect)
+                {
+                    if (victim != null && PVEprotectedPlayersList != null &&
+                        PVEprotectedPlayersList.ContainsKey(victim.userID))
+                    {
+                        hitinfo.damageTypes = new DamageTypeList();
+                        hitinfo.DoHitEffects = false;
+                    }
+                }
+                if (victim != null && attack != null)
                 {
                     NextTick(() =>
                     {
@@ -112,17 +134,17 @@ namespace Oxide.Plugins
                     if (Punish)
                         if (Economics != null && Economics.IsLoaded)
                         {
-                            SendReply(attacker,
-                                string.Format(lang.GetMessage("TryKill", this, attacker.UserIDString), AmountPerHit));
-                            Economics?.CallHook("Withdraw", attacker.UserIDString,
+                            SendReply(attack,
+                                string.Format(lang.GetMessage("TryKill", this, attack.UserIDString), AmountPerHit));
+                            Economics?.CallHook("Withdraw", attack.UserIDString,
                                 AmountPerKill);
                         }
-                    if (protectedPlayersList.ContainsKey(attacker.userID))
+                    if (protectedPlayersList.ContainsKey(attack.userID))
                     {
-                        protectedPlayersList.Remove(attacker.userID);
+                        protectedPlayersList.Remove(attack.userID);
                         if (Enabled)
-                            SendReply(attacker,
-                                lang.GetMessage("NoLongerProtected", this, attacker.UserIDString));
+                            SendReply(attack,
+                                lang.GetMessage("NoLongerProtected", this, attack.UserIDString));
                     }
                     if (protectedPlayersList.ContainsKey(victim.userID))
                     {
@@ -132,17 +154,23 @@ namespace Oxide.Plugins
                         hitinfo.damageTypes = new DamageTypeList();
                         hitinfo.DoHitEffects = false;
                         if (Enabled)
-                            SendReply(attacker,
-                                string.Format(lang.GetMessage("Can't Hit", this, attacker.UserIDString),
+                            SendReply(attack,
+                                string.Format(lang.GetMessage("Can't Hit", this, attack.UserIDString),
                                     wait));
                     }
                 }
-                if (entity is BuildingBlock && attacker != null && protectedPlayersList.ContainsKey(attacker.userID))
+                if (entity is BuildingBlock && attack != null && protectedPlayersList.ContainsKey(attack.userID))
                 {
-                    protectedPlayersList.Remove(attacker.userID);
+                    protectedPlayersList.Remove(attack.userID);
                     if (Enabled)
-                        SendReply(attacker,
-                            lang.GetMessage("NoLongerProtected", this, attacker.UserIDString));
+                        SendReply(attack,
+                            lang.GetMessage("NoLongerProtected", this, attack.UserIDString));
+                }
+                if (entity is BaseNpc && attack != null && PVEprotectedPlayersList.ContainsKey(attack.userID))
+                {
+                    PVEprotectedPlayersList.Remove(attack.userID);
+                    if(PVEProtect)
+                        SendReply(attack, lang.GetMessage("NoLongerProtectedNPC", this, attack.UserIDString));
                 }
             }
         }
@@ -151,14 +179,25 @@ namespace Oxide.Plugins
         {
             if (protectedPlayersList.ContainsKey(player.userID))
                 protectedPlayersList.Remove(player.userID);
+            if (PVEprotectedPlayersList.ContainsKey(player.userID))
+                PVEprotectedPlayersList.Remove(player.userID);
             protectedPlayersList.Add(player.userID, DateTime.Now);
+            PVEprotectedPlayersList.Add(player.userID, DateTime.Now);
             if(Enabled)
                 SendReply(player, string.Format(lang.GetMessage("Protected", this, player.UserIDString), Respawn));
+            if(PVEProtect)
+                SendReply(player, string.Format(lang.GetMessage("ProtectedPVE", this, player.UserIDString), PVERespawn));
             timer.Once(Respawn, () =>
             {
                 protectedPlayersList.Remove(player.userID);
                 if (Enabled)
                     SendReply(player, lang.GetMessage("NoLongerProtected", this, player.UserIDString));
+            });
+            timer.Once(PVERespawn, () =>
+            {
+                PVEprotectedPlayersList.Remove(player.userID);
+                if (PVEProtect)
+                    SendReply(player, lang.GetMessage("NoLongerProtectedPVE", this, player.UserIDString));
             });
         }
 
@@ -168,14 +207,25 @@ namespace Oxide.Plugins
             if (baseplayer == null) return false;
             if (protectedPlayersList.ContainsKey(UserID))
                 protectedPlayersList.Remove(UserID);
+            if (PVEprotectedPlayersList.ContainsKey(UserID))
+                PVEprotectedPlayersList.Remove(UserID);
             protectedPlayersList.Add(UserID, DateTime.Now);
+            PVEprotectedPlayersList.Add(UserID, DateTime.Now);
             if (Enabled)
                 SendReply(baseplayer, string.Format(lang.GetMessage("Protected", this, UserID.ToString()), Respawn));
+            if (PVEProtect)
+                SendReply(baseplayer, string.Format(lang.GetMessage("ProtectedPVE", this, UserID.ToString()), PVERespawn));
             timer.Once(Respawn, () =>
             {
                 if (Enabled)
                     protectedPlayersList.Remove(UserID);
                 SendReply(baseplayer, lang.GetMessage("NoLongerProtected", this, UserID.ToString()));
+            });
+            timer.Once(PVERespawn, () =>
+            {
+                if (PVEProtect)
+                    PVEprotectedPlayersList.Remove(UserID);
+                SendReply(baseplayer, lang.GetMessage("NoLongerProtectedPVE", this, UserID.ToString()));
             });
             return true;
         }
@@ -183,6 +233,25 @@ namespace Oxide.Plugins
         private bool AddProtection(ulong UserID)
         {
             return PlayerRespawn(UserID);
+        }
+
+        private string RemoveProtection(ulong UserID)
+        {
+            var baseplayer = BasePlayer.Find(UserID.ToString());
+            if (baseplayer == null)
+                return string.Format(lang.GetMessage("UserNotFound", this, UserID.ToString()), UserID);
+            if (protectedPlayersList != null && protectedPlayersList.ContainsKey(UserID))
+                return string.Format(lang.GetMessage("ProtectionRemoved", this, UserID.ToString()),
+                    baseplayer.displayName);
+            if (protectedPlayersList == null || !protectedPlayersList.ContainsKey(UserID))
+                return string.Format(lang.GetMessage("NotProtected", this, UserID.ToString()));
+            if (PVEprotectedPlayersList != null && PVEprotectedPlayersList.ContainsKey(UserID))
+                return string.Format(lang.GetMessage("ProtectionRemoved", this, UserID.ToString()),
+                    baseplayer.displayName);
+            if (PVEprotectedPlayersList == null || !PVEprotectedPlayersList.ContainsKey(UserID))
+                return string.Format(lang.GetMessage("NotProtected", this, UserID.ToString()));
+
+            return null;
         }
     }
 }
