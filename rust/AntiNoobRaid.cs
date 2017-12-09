@@ -8,20 +8,20 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.3.2", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.3.4", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
 
         bool debug = false;
+        List<BasePlayer> cooldown = new List<BasePlayer>();
         Dictionary<string, string> raidtools = new Dictionary<string, string>
         {
             {"ammo.rocket.fire", "rocket_fire" },
             {"ammo.rocket.hv", "rocket_hv" },
             {"ammo.rocket.basic", "rocket_basic" },
             {"explosive.timed", "explosive.timed.deployed" },
-            //Disabled because survey charge does damage 2x?????
-            //{"surveycharge", "survey_charge.deployed" },
+            {"surveycharge", "survey_charge.deployed" },
             {"explosive.satchel", "explosive.satchel.deployed" },
             {"grenade.beancan", "grenade.beancan.deployed" },
             {"grenade.f1", "grenade.f1.deployed" }
@@ -57,8 +57,8 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>()
             {
                 {"pt_notInstalled", "Playtime Tracker is not installed!"},
-                {"userinfo_notfound", "Failed to get info for {0}!! trying again in 20 seconds!"},
-                {"userinfo_notfoundlast", "Failed to find player with steamID {0}, trying again in 1 min (last attempt)"},
+                {"userinfo_nofound", "Failed to get playtime info for {0}! trying again in 20 seconds!"},
+                {"userinfo_nofoundmsg", "Failed to find playtime info for player with steamID {0}"},
                 {"userinfo_found", "Found info for {0}"},
                 {"can_attack", "This structure is not raid protected"},
                 {"NotLooking", "You are not looking at a building/deployable"},
@@ -101,6 +101,7 @@ namespace Oxide.Plugins
             public Dictionary<ulong, double> players = new Dictionary<ulong, double>();
             public Dictionary<ulong, int> AttackAttempts = new Dictionary<ulong, int>();
             public Dictionary<string, string> ItemList = new Dictionary<string, string>();
+            public List<ulong> playersWithNoData = new List<ulong>();
 
             public StoredData()
             {
@@ -117,8 +118,8 @@ namespace Oxide.Plugins
 
         void Loaded()
         {
-            Check();
             StartChecking();
+            CheckPlayersWithNoInfo();
             if (PlaytimeTracker == null) PrintWarning(lang.GetMessage("pt_notInstalled", this, null));
         }
 
@@ -147,12 +148,14 @@ namespace Oxide.Plugins
 
             catch (Exception exc)
             {
-                Puts(lang.GetMessage("userinfo_notfound", this, null), bp.userID);
+                Puts(lang.GetMessage("userinfo_nofound", this, null), bp.userID);
                 timer.In(20f, () => {
-                    Check(bp);
+                    Check(bp.userID);
                 });
 
             }
+
+            if (storedData.playersWithNoData.Contains(bp.userID)) storedData.playersWithNoData.Remove(bp.userID);
 
             if (storedData.players.ContainsKey(bp.userID))
             {
@@ -169,11 +172,27 @@ namespace Oxide.Plugins
 
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
-            if (hitinfo == null || entity == null || hitinfo?.InitiatorPlayer == null || entity?.OwnerID == 0 || entity.OwnerID == hitinfo?.InitiatorPlayer?.userID || hitinfo?.WeaponPrefab?.ShortPrefabName == null) return null;
+            if (hitinfo == null || entity == null || hitinfo?.InitiatorPlayer == null || entity.OwnerID == hitinfo?.InitiatorPlayer?.userID || entity?.OwnerID == 0 || hitinfo?.WeaponPrefab?.ShortPrefabName == null) return null;
             if (!(entity is BuildingBlock || entity is Door || entity.PrefabName.Contains("deployable"))) return null;
 
             BasePlayer attacker = hitinfo?.InitiatorPlayer ?? null;
-            var name = hitinfo?.WeaponPrefab?.ShortPrefabName ?? "Null";
+
+            if (cooldown.Contains(attacker))
+            {
+                RemoveCD(attacker);
+                if (playerIsNew(entity.OwnerID))
+                {
+                    hitinfo.damageTypes = new DamageTypeList();
+                    hitinfo.DoHitEffects = false;
+                    hitinfo.HitMaterial = 0;
+                }
+                return null;
+            }
+
+            cooldown.Add(attacker);
+            RemoveCD(attacker);
+
+            string name = hitinfo?.WeaponPrefab?.ShortPrefabName ?? "Null";
 
             if (debug) SendReply(attacker, "Name: " + name);
 
@@ -203,6 +222,8 @@ namespace Oxide.Plugins
 
                     }
 
+                    Refund(attacker, name, entity);
+
                     if (show)
                     {
                         if (playerIsNew(entity.OwnerID))
@@ -210,19 +231,17 @@ namespace Oxide.Plugins
                             if (showTime)
                             {
                                 SendReply(attacker, lang.GetMessage("cannot_attack_time", this, attacker.UserIDString), CheckLeft(left));
-                                Refund(attacker, name, entity);
-                                return false;
+                                return true;
                             }
 
                             SendReply(attacker, lang.GetMessage("cannot_attack_no_time", this, attacker.UserIDString));
-                            Refund(attacker, name, entity);
-                            return false;
+                            return true;
                         }
 
                         SendReply(attacker, lang.GetMessage("can_attack", this, attacker.UserIDString));
                         return null;
                     }
-                    return false;
+                    return true;
                 }
                 return null;
             }
@@ -235,6 +254,16 @@ namespace Oxide.Plugins
 
         #endregion
         #region Functions
+
+        void RemoveCD(BasePlayer player)
+        {
+            timer.In(0.1f, () => {
+                if (cooldown.Contains(player))
+                {
+                    cooldown.Remove(player);
+                }
+            });
+        }
 
         void Refund(BasePlayer attacker, string name, BaseEntity ent)
         {
@@ -273,7 +302,6 @@ namespace Oxide.Plugins
                                 if ((storedData.AttackAttempts[attacker.userID] + 1) <= refundTimes)
                                 {
                                     int a = refundTimes - (storedData.AttackAttempts[attacker.userID] + 1);
-                                    Puts("Info: " + refundTimes + " " + storedData.AttackAttempts[attacker.userID]);
                                     Item item = ItemManager.CreateByName(entry.Key, 1);
                                     attacker.GiveItem(item);
                                     storedData.AttackAttempts[attacker.userID]++;
@@ -345,49 +373,84 @@ namespace Oxide.Plugins
             }
         }
 
-        void Check(BasePlayer player)
+        void CheckPlayersWithNoInfo()
         {
+            List<ulong> tempList = storedData.playersWithNoData;
+            timer.Every(frequency - 5, () => {
+                tempList = storedData.playersWithNoData;
+                if (tempList.Count > 0)
+                {
+                    foreach (ulong ID in tempList)
+                    {
+                        double time = -1d;
+                        try
+                        {
+                            time = PlaytimeTracker?.Call<double>("GetPlayTime", ID.ToString()) ?? -1d;
+                            if (time == -1d)
+                            {
+                                Puts(lang.GetMessage("pt_notInstalled", this, null));
+                                continue;
+                            }
+                        }
+
+                        catch (Exception exc)
+                        {
+                            continue;
+                        }
+
+                        if (storedData.players.ContainsKey(ID))
+                        {
+                            //This isn't supposed to happen
+                            LogToFile(this.Name, "Somehow info exists for player that is in data file already (" + ID + ")", this, true);
+                            storedData.players[ID] = time;
+                            storedData.playersWithNoData.Remove(ID);
+                            SaveFile();
+                            continue;
+                        }
+
+                        storedData.players.Add(ID, time);
+                        storedData.playersWithNoData.Remove(ID);
+                        SaveFile();
+                        return;
+                    }
+                }
+            });
+        }
+
+        void Check(ulong ID)
+        {
+            if (storedData.playersWithNoData.Contains(ID)) return;
+
             double time = -1d;
             try
             {
-                time = PlaytimeTracker?.Call<double>("GetPlayTime", player.UserIDString) ?? -1d;
-                if (time == -1d)
-                {
-                    Puts(lang.GetMessage("pt_notInstalled", this, null));
-                    return;
-                }
+                time = PlaytimeTracker?.Call<double>("GetPlayTime", ID.ToString()) ?? -1d;
             }
 
             catch (Exception exc)
             {
-                Puts(lang.GetMessage("userinfo_notfoundlast", this, null), player.userID);
-                timer.In(60f, () => {
-                    try
-                    {
-                        time = PlaytimeTracker?.Call<double>("GetPlayTime", player.UserIDString) ?? -1d;
-                    }
-                    
-                    catch(Exception ex)
-                    {
-                        Puts("Failed to find player with steamID " + player.userID + " report this on Oxidemod!");
-                        LogToFile(this.Name, "Fail to find playtime info for " + player.userID, this, true);
-                        return;
-                    }
-                });
+                Puts(lang.GetMessage("userinfo_nofoundmsg", this, null), ID);
+                storedData.playersWithNoData.Add(ID);
+                SaveFile();
             }
 
-
-            if (!storedData.players.ContainsKey(player.userID))
+            if (time == -1d)
             {
-                storedData.players.Add(player.userID, time);
-                SaveFile();
-                Puts(lang.GetMessage("userinfo_found", this, null), player.userID);
+                Puts(lang.GetMessage("pt_notInstalled", this, null));
                 return;
             }
 
-            storedData.players[player.userID] = time;
+            if (!storedData.players.ContainsKey(ID))
+            {
+                storedData.players.Add(ID, time);
+                SaveFile();
+                Puts(lang.GetMessage("userinfo_found", this, null), ID);
+                return;
+            }
+
+            storedData.players[ID] = time;
             SaveFile();
-            Puts(lang.GetMessage("userinfo_found", this, null), player.userID);
+            Puts(lang.GetMessage("userinfo_found", this, null), ID);
         }
 
         void Check()
@@ -396,33 +459,24 @@ namespace Oxide.Plugins
             {
                 foreach (BasePlayer bp in BasePlayer.activePlayerList)
                 {
+                    if (storedData.playersWithNoData.Contains(bp.userID)) continue;
                     double time = -1d;
                     try
                     {
                         time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
-                        if (time == -1d)
-                        {
-                            Puts(lang.GetMessage("pt_notInstalled", this, null));
-                            return;
-                        }
                     }
 
                     catch (Exception exc)
                     {
-                        Puts(lang.GetMessage("userinfo_notfoundlast", this, null), bp.userID);
-                        timer.In(60f, () => {
-                            try
-                            {
-                                time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
-                            }
+                        Puts(lang.GetMessage("userinfo_nofoundmsg", this, null), bp.userID);
+                        storedData.playersWithNoData.Add(bp.userID);
+                        SaveFile();
+                    }
 
-                            catch (Exception ex)
-                            {
-                                Puts("Failed to find player with steamID " + bp.userID + " report this on Oxidemod!");
-                                LogToFile(this.Name, "Fail to find playtime info for " + bp.userID, this, true);
-                                return;
-                            }
-                        });
+                    if (time == -1d)
+                    {
+                        Puts(lang.GetMessage("pt_notInstalled", this, null));
+                        return;
                     }
 
                     if (!storedData.players.ContainsKey(bp.userID))
@@ -440,33 +494,24 @@ namespace Oxide.Plugins
 
             foreach (BasePlayer bp in BasePlayer.sleepingPlayerList)
             {
+                if (storedData.playersWithNoData.Contains(bp.userID)) continue;
                 double time = -1d;
                 try
                 {
                     time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
-                    if (time == -1d)
-                    {
-                        Puts(lang.GetMessage("pt_notInstalled", this, null));
-                        return;
-                    }
                 }
 
                 catch (Exception exc)
                 {
-                    Puts(lang.GetMessage("userinfo_notfoundlast", this, null), bp.userID);
-                    timer.In(60f, () => {
-                        try
-                        {
-                            time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
-                        }
+                    Puts(lang.GetMessage("userinfo_nofoundmsg", this, null), bp.userID);
+                    storedData.playersWithNoData.Add(bp.userID);
+                    SaveFile();
+                }
 
-                        catch (Exception ex)
-                        {
-                            Puts("Failed to find player with steamID " + bp.userID + " report this on Oxidemod!");
-                            LogToFile(this.Name, "Fail to find playtime info for " + bp.userID, this, true);
-                            return;
-                        }
-                    });
+                if (time == -1d)
+                {
+                    Puts(lang.GetMessage("pt_notInstalled", this, null));
+                    return;
                 }
 
                 if (!storedData.players.ContainsKey(bp.userID))
@@ -605,34 +650,27 @@ namespace Oxide.Plugins
             if (!debug) return;
             if (args.Length < 1) return;
             string ID = args[0];
+            ulong r = -0u;
+            ulong.TryParse(ID, out r);
+            if (r == -0u) return;
             double time = -1d;
 
             try
             {
                 time = PlaytimeTracker?.Call<double>("GetPlayTime", ID) ?? -1d;
-                if (time == -1d)
-                {
-                    Puts(lang.GetMessage("pt_notInstalled", this, null));
-                    return;
-                }
             }
 
             catch (Exception exc)
             {
-                Puts(lang.GetMessage("userinfo_notfoundlast", this, null), ID);
-                timer.In(60f, () => {
-                    try
-                    {
-                        time = PlaytimeTracker?.Call<double>("GetPlayTime", ID) ?? -1d;
-                    }
+                Puts(lang.GetMessage("userinfo_nofoundmsg", this, null), ID);
+                storedData.playersWithNoData.Add(ulong.Parse(ID));
+                SaveFile();
+            }
 
-                    catch (Exception ex)
-                    {
-                        Puts("Failed to find player with steamID " + ID + " report this on Oxidemod!");
-                        LogToFile(this.Name, "Fail to find playtime info for " + ID, this, true);
-                        return;
-                    }
-                });
+            if (time == -1d)
+            {
+                Puts(lang.GetMessage("pt_notInstalled", this, null));
+                return;
             }
         }
 
@@ -672,7 +710,10 @@ namespace Oxide.Plugins
         void EntDebugCmd(BasePlayer player, string command, string[] args)
         {
             if (!debug) return;
+
             BaseEntity ent = GetLookAtEntity(player, 20f, layers);
+
+            if (ent == null) return;
             var own = ent.OwnerID;
 
             if (args.Length < 1)
@@ -817,9 +858,34 @@ namespace Oxide.Plugins
                 return;
             }
 
-            double time2 = PlaytimeTracker?.Call<double>("GetPlayTime", hitEnt.OwnerID.ToString()) ?? 999999d;
-            int left = (int)(time - time2);
-            if (hitEnt == null || hitEnt.OwnerID == 0) return;
+            if(hitEnt.OwnerID == 0)
+            {
+                //DEBUGGING
+                Puts("Couldn't find owner for entity at " + hitEnt.transform.position + " , on request by player " + player.userID);
+                LogToFile(this.Name, "Couldn't find owner for entity at " + hitEnt.transform.position + " on request by player " + player.userID, this, true);
+                return;
+            }
+
+            double ftime = -1d;
+            try
+            {
+                ftime = PlaytimeTracker?.Call<double>("GetPlayTime", hitEnt.OwnerID.ToString()) ?? -1d;
+            }
+
+            catch (Exception exc)
+            {
+                Puts(lang.GetMessage("userinfo_nofoundmsg", this, null), hitEnt.OwnerID);
+                storedData.playersWithNoData.Add(hitEnt.OwnerID);
+                SaveFile();
+            }
+
+            if (time == -1d)
+            {
+                Puts(lang.GetMessage("pt_notInstalled", this, null));
+                return;
+            }
+
+            int left = (int)(time - ftime);
             if (show)
             {
                 if (playerIsNew(hitEnt.OwnerID))

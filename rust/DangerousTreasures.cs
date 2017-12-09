@@ -9,17 +9,13 @@ using Oxide.Core.Plugins;
 using Rust;
 using UnityEngine;
 
-// Removed Y coordinate from positions
-// Added marker support for private Map plugin
-// Added timer to remove markers
-
 namespace Oxide.Plugins
 {
-    [Info("Dangerous Treasures", "nivex", "1.0.0", ResourceId = 2479)]
+    [Info("Dangerous Treasures", "nivex", "1.0.2", ResourceId = 2479)]
     [Description("Event with treasure chests.")]
     public class DangerousTreasures : RustPlugin
     {
-        [PluginReference] Plugin LustyMap, ZoneManager, Economics, ServerRewards, Map;
+        [PluginReference] Plugin LustyMap, ZoneManager, Economics, ServerRewards, Map, GUIAnnouncements;
 
         static DangerousTreasures ins;
         static bool unloading = false;
@@ -835,7 +831,7 @@ namespace Oxide.Plugins
             monuments = UnityEngine.Object.FindObjectsOfType<MonumentInfo>().Select(monument => monument.transform.position).ToList();
 
             if (includeWorkshopBox || includeWorkshopTreasure)
-                webrequest.EnqueueGet("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", GetWorkshopIDs, this);
+                webrequest.Enqueue("http://s3.amazonaws.com/s3.playrust.com/icons/inventory/rust/schema.json", null, GetWorkshopIDs, this, Core.Libraries.RequestMethod.GET);
 
             init = true;
             RemoveAllTemporaryMarkers();
@@ -900,15 +896,23 @@ namespace Oxide.Plugins
 
         void OnEntitySpawned(BaseNetworkable entity)
         {
-            if (!init || entity == null || !(entity is FireBall))
+            if (!init || entity == null || (!(entity is FireBall)) && !(entity is BaseLock))
                 return;
 
             foreach (var entry in treasureChests)
             {
                 if (Vector3.Distance(entity.transform.position, entry.Value.containerPos) <= eventRadius + 25f) // some extra distance for fireballs that travel outside the sphere, usually on hills
                 {
-                    var fireball = entity.GetComponent<FireBall>();
-                    ModifyFireball(fireball);
+                    if (entity is FireBall)
+                    {
+                        var fireball = entity as FireBall;
+                        ModifyFireball(fireball);
+                    }
+                    else if (entity is BaseLock)
+                    {
+                        entity.KillMessage();
+                    }
+
                     break;
                 }
             }
@@ -1006,7 +1010,7 @@ namespace Oxide.Plugins
                         {
                             if (Economics != null)
                             {
-                                Economics?.Call("Deposit", looter.userID, economicsMoney);
+                                Economics?.Call("Deposit", looter.UserIDString, economicsMoney);
                                 looter.ChatMessage(msg(szEconomicsDeposit, looter.UserIDString, economicsMoney));
                             }
                         }
@@ -1143,7 +1147,13 @@ namespace Oxide.Plugins
 
             rocket.timerAmountMin = 10f;
             rocket.timerAmountMax = 20f;
-            rocket.damageTypes = new List<DamageTypeEntry>(); // no damage
+            //rocket.damageTypes = new List<DamageTypeEntry>(); // no damage
+
+            foreach(var type in rocket.damageTypes)
+            {
+                type.amount = rocketDamageAmount;
+            }
+
             rocket.Spawn();
         }
 
@@ -1439,12 +1449,18 @@ namespace Oxide.Plugins
             foreach (var target in BasePlayer.activePlayerList)
             {
                 double distance = Math.Round(Vector3.Distance(target.transform.position, container.transform.position), 2);
+                string unlockStr = FormatTime(unlockTime, target.UserIDString);
+                string message = msg(szEventOpened, target.UserIDString, posStr, unlockStr, distance, szDistanceChatCommand);
 
                 if (showOpened)
                 {
-                    string unlockStr = FormatTime(unlockTime, target.UserIDString);
-                    SendDangerousMessage(target, container.transform.position, msg(szEventOpened, target.UserIDString, posStr, unlockStr, distance, szDistanceChatCommand));
+                    SendDangerousMessage(target, container.transform.position, message);
                 }
+
+                if (useGUIAnnouncements && GUIAnnouncements != null && distance <= guiDrawDistance)
+                {
+                    GUIAnnouncements?.Call("CreateAnnouncement", message, guiTintColor, guiTextColor, target);
+                }                
 
                 if (useRocketOpener && showBarrage)
                     SendDangerousMessage(target, container.transform.position, msg(szEventBarrage, target.UserIDString, numRockets));
@@ -2082,6 +2098,11 @@ namespace Oxide.Plugins
         double economicsMoney;
         double serverRewardsPoints;
         decimal percentLoss;
+        bool useGUIAnnouncements;
+        string guiTintColor;
+        string guiTextColor;
+        float guiDrawDistance;
+        static float rocketDamageAmount;
 
         List<object> DefaultTimesInSeconds
         {
@@ -2471,6 +2492,7 @@ namespace Oxide.Plugins
             timeUntilExplode = Convert.ToSingle(GetConfig("Missile Launcher", "Life Time In Seconds", 60f).ToString());
             ignoreFlying = Convert.ToBoolean(GetConfig("Missile Launcher", "Ignore Flying Players", false));
             missileDetectionDistance = Convert.ToSingle(GetConfig("Missile Launcher", "Detection Distance", 15f));
+            rocketDamageAmount = Convert.ToSingle(GetConfig("Missile Launcher", "Damage Per Missile", 0.0f));
 
             if (missileDetectionDistance < 1f)
                 missileDetectionDistance = 1f;
@@ -2551,6 +2573,11 @@ namespace Oxide.Plugins
             economicsMoney = Convert.ToDouble(GetConfig("Rewards", "Economics Money", 20.0));
             useServerRewards = Convert.ToBoolean(GetConfig("Rewards", "Use ServerRewards", false));
             serverRewardsPoints = Convert.ToDouble(GetConfig("Rewards", "ServerRewards Points", 20.0));
+
+            useGUIAnnouncements = Convert.ToBoolean(GetConfig("GUIAnnouncements", "Enabled", false));
+            guiTextColor = Convert.ToString(GetConfig("GUIAnnouncements", "Text Color", "White"));
+            guiTintColor = Convert.ToString(GetConfig("GUIAnnouncements", "Banner Tint Color", "Black"));
+            guiDrawDistance = Convert.ToSingle(GetConfig("GUIAnnouncements", "Maximum Distance", 300f));
 
             if (Changed)
             {

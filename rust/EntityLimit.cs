@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Entity Limit", "PaiN", 0.6, ResourceId = 1947)]
+    [Info("Entity Limit", "PaiN", "0.6.1", ResourceId = 1947)]
     class EntityLimit : RustPlugin
     {
         static EntityLimit Plugin;
@@ -67,6 +67,8 @@ namespace Oxide.Plugins
 
                                 if (entity.ShortPrefabName.Contains("sleeping"))
                                     item = ItemManager.CreateByName("sleepingbag");
+								if (entity.ShortPrefabName == "small_stash_deployed")
+                                    item = ItemManager.CreateByName("stash.small");
 
                                 player.inventory.GiveItem(item, player.inventory.containerBelt);
                                 player.Command(string.Concat(new object[4]

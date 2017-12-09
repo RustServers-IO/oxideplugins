@@ -7,7 +7,7 @@ using ProtoBuf;
 
 namespace Oxide.Plugins
 {
-    [Info("Gyrocopter", "ColonBlow", "1.1.2", ResourceId = 2521)]
+    [Info("Gyrocopter", "ColonBlow", "1.1.3", ResourceId = 2521)]
     class Gyrocopter : RustPlugin
     {
 
@@ -235,15 +235,11 @@ namespace Oxide.Plugins
 
         private object CanDismountEntity(BaseMountable mountable, BasePlayer player)
         {
-	    if (mountable == null || player == null) return null;	
-	    if (player.GetComponent<BaseCombatEntity>().IsDead()) return null;
-            if (mountable.GetComponent<BaseEntity>() == newCopter)
-            {
-                var activecopter = mountable.GetComponentInParent<GyroCopter>();
-            	if (activecopter != null)
-            	{
-                	if(activecopter.engineon) return false;
-            	}
+	    if (mountable == null || player == null) return null;
+            var activecopter = mountable.GetComponentInParent<GyroCopter>();
+            if (activecopter != null)
+	    {
+                if(activecopter.engineon) return false;
             }
             return null;
         }
@@ -251,15 +247,12 @@ namespace Oxide.Plugins
         object CanMountEntity(BaseMountable mountable, BasePlayer player)
         {
 	    if (mountable == null || player == null) return null;
-            if (mountable.GetComponent<BaseEntity>() == newCopter)
-            {
+            var activecopter = mountable.GetComponentInParent<GyroCopter>();
+            if (activecopter != null)
+	    {
 		if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return false; }
-            	var activecopter = mountable.GetComponentInParent<GyroCopter>();
-            	if (activecopter != null)
-            	{
-			if(activecopter.copterlock != null && activecopter.copterlock.IsLocked()) return false;
-                	if(activecopter.engineon) return false;
-            	}
+		if(activecopter.copterlock != null && activecopter.copterlock.IsLocked()) return false;
+                if(activecopter.engineon) return false;
             }
             return null;
         }
@@ -315,6 +308,13 @@ namespace Oxide.Plugins
 		}
             return null;
         }
+
+	object OnEntityGroundMissing(BaseEntity entity)
+	{
+		var iscopter = entity.GetComponentInParent<GyroCopter>();
+   		if (iscopter != null) return false;
+		return null;
+	}
 
         void OnSpinWheel(BasePlayer player, SpinnerWheel wheel)
         {

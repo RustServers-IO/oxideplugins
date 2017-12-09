@@ -2,7 +2,7 @@
     "name": "AntiNoobRaid",
     "description": "Blocks raiding of new players",
     "author": "Slydelix",
-    "version": "1.3.2",
+    "version": "1.3.4",
     "configuration": true,
     "require": {
         "PlaytimeTracker": "*"
