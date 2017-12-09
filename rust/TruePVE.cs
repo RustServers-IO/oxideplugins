@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.8.6", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.8.7", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
@@ -854,7 +854,9 @@ namespace Oxide.Plugins
 			if ((!ruleSet.HasFlag(RuleFlags.CupboardOwnership) && player.userID == entity.OwnerID) || entity.OwnerID == 0L)
 				return true; // player is the owner or the owner is undefined, allow damage/looting
 			
-			return player.IsBuildingAuthed(entity.transform.position, entity.transform.rotation, entity.bounds);
+			if (player.IsBuildingBlocked(entity.transform.position, entity.transform.rotation, entity.bounds))
+				return false;
+			return true;
 		}
 		
 		// handle player attacking an entity - specifically, checks resource dispensers
