@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterGrenades", "redBDGR", "1.0.1", ResourceId = 2712)]
+    [Info("BetterGrenades", "redBDGR", "1.0.2", ResourceId = 2712)]
     [Description("Enhanced grenades features")]
 
     class BetterGrenades : RustPlugin
@@ -155,7 +155,7 @@ namespace Oxide.Plugins
 
             private void HandleSuicideExplosion(Item item) // الله أكبر
             {
-                player.inventory.containerBelt.Take(new List<Item>{ player.GetActiveItem() }, -1308622549, 1);
+                player.inventory.containerBelt.Take(new List<Item>{ item }, item.info.itemid, 1);
                 BaseEntity grenade = null;
                 switch (item.info.shortname)
                 {

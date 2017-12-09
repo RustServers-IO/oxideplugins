@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.3.1", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.3.2", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
@@ -118,6 +118,7 @@ namespace Oxide.Plugins
         void Loaded()
         {
             Check();
+            StartChecking();
             if (PlaytimeTracker == null) PrintWarning(lang.GetMessage("pt_notInstalled", this, null));
         }
 
@@ -125,7 +126,6 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission("antinoobraid.admin", this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Name);
-            StartChecking();
             LoadDefaultConfig();
         }
 
@@ -153,7 +153,7 @@ namespace Oxide.Plugins
                 });
 
             }
-            
+
             if (storedData.players.ContainsKey(bp.userID))
             {
                 storedData.players[bp.userID] = time;
@@ -176,7 +176,7 @@ namespace Oxide.Plugins
             var name = hitinfo?.WeaponPrefab?.ShortPrefabName ?? "Null";
 
             if (debug) SendReply(attacker, "Name: " + name);
-            
+
             if (storedData.players.ContainsKey(entity.OwnerID))
             {
                 if (playerIsNew(entity.OwnerID))
@@ -200,7 +200,7 @@ namespace Oxide.Plugins
                             storedData.AttackAttempts[attacker.userID]++;
                             SaveFile();
                         }
-                        
+
                     }
 
                     if (show)
@@ -358,21 +358,24 @@ namespace Oxide.Plugins
                 }
             }
 
-            catch(Exception exc)
+            catch (Exception exc)
             {
                 Puts(lang.GetMessage("userinfo_notfoundlast", this, null), player.userID);
                 timer.In(60f, () => {
-                    time = PlaytimeTracker?.Call<double>("GetPlayTime", player.UserIDString) ?? -1d;
-                    if (time == -1d)
+                    try
                     {
-                        //DEBUGGING
-                        Puts("Failed to find player with steamID " + player.userID + " report this on oxidemod!");
+                        time = PlaytimeTracker?.Call<double>("GetPlayTime", player.UserIDString) ?? -1d;
+                    }
+                    
+                    catch(Exception ex)
+                    {
+                        Puts("Failed to find player with steamID " + player.userID + " report this on Oxidemod!");
                         LogToFile(this.Name, "Fail to find playtime info for " + player.userID, this, true);
                         return;
                     }
                 });
             }
-            
+
 
             if (!storedData.players.ContainsKey(player.userID))
             {
@@ -389,27 +392,83 @@ namespace Oxide.Plugins
 
         void Check()
         {
-            if (BasePlayer.activePlayerList.Count < 1) return;
-            foreach (BasePlayer bp in BasePlayer.activePlayerList)
+            if (BasePlayer.activePlayerList.Count > 0)
             {
-                double time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
-                if (time == -1d) continue;
-                if (!storedData.players.ContainsKey(bp.userID))
+                foreach (BasePlayer bp in BasePlayer.activePlayerList)
                 {
-                    storedData.players.Add(bp.userID, time);
+                    double time = -1d;
+                    try
+                    {
+                        time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
+                        if (time == -1d)
+                        {
+                            Puts(lang.GetMessage("pt_notInstalled", this, null));
+                            return;
+                        }
+                    }
+
+                    catch (Exception exc)
+                    {
+                        Puts(lang.GetMessage("userinfo_notfoundlast", this, null), bp.userID);
+                        timer.In(60f, () => {
+                            try
+                            {
+                                time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
+                            }
+
+                            catch (Exception ex)
+                            {
+                                Puts("Failed to find player with steamID " + bp.userID + " report this on Oxidemod!");
+                                LogToFile(this.Name, "Fail to find playtime info for " + bp.userID, this, true);
+                                return;
+                            }
+                        });
+                    }
+
+                    if (!storedData.players.ContainsKey(bp.userID))
+                    {
+                        storedData.players.Add(bp.userID, time);
+                        SaveFile();
+                        continue;
+                    }
+
+                    storedData.players[bp.userID] = time;
                     SaveFile();
                     continue;
                 }
-
-                storedData.players[bp.userID] = time;
-                SaveFile();
-                continue;
             }
 
             foreach (BasePlayer bp in BasePlayer.sleepingPlayerList)
             {
-                double time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
-                if (time == -1d) continue;
+                double time = -1d;
+                try
+                {
+                    time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
+                    if (time == -1d)
+                    {
+                        Puts(lang.GetMessage("pt_notInstalled", this, null));
+                        return;
+                    }
+                }
+
+                catch (Exception exc)
+                {
+                    Puts(lang.GetMessage("userinfo_notfoundlast", this, null), bp.userID);
+                    timer.In(60f, () => {
+                        try
+                        {
+                            time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
+                        }
+
+                        catch (Exception ex)
+                        {
+                            Puts("Failed to find player with steamID " + bp.userID + " report this on Oxidemod!");
+                            LogToFile(this.Name, "Fail to find playtime info for " + bp.userID, this, true);
+                            return;
+                        }
+                    });
+                }
+
                 if (!storedData.players.ContainsKey(bp.userID))
                 {
                     storedData.players.Add(bp.userID, time);
@@ -540,11 +599,48 @@ namespace Oxide.Plugins
             SaveFile();
         }
 
+        [ChatCommand("docheck")]
+        void docheckCmd(BasePlayer player, string command, string[] args)
+        {
+            if (!debug) return;
+            if (args.Length < 1) return;
+            string ID = args[0];
+            double time = -1d;
+
+            try
+            {
+                time = PlaytimeTracker?.Call<double>("GetPlayTime", ID) ?? -1d;
+                if (time == -1d)
+                {
+                    Puts(lang.GetMessage("pt_notInstalled", this, null));
+                    return;
+                }
+            }
+
+            catch (Exception exc)
+            {
+                Puts(lang.GetMessage("userinfo_notfoundlast", this, null), ID);
+                timer.In(60f, () => {
+                    try
+                    {
+                        time = PlaytimeTracker?.Call<double>("GetPlayTime", ID) ?? -1d;
+                    }
+
+                    catch (Exception ex)
+                    {
+                        Puts("Failed to find player with steamID " + ID + " report this on Oxidemod!");
+                        LogToFile(this.Name, "Fail to find playtime info for " + ID, this, true);
+                        return;
+                    }
+                });
+            }
+        }
+
         [ChatCommand("testapi")]
         void apiTest(BasePlayer player, string command, string[] args)
         {
             if (!debug) return;
-            if(args.Length < 1)
+            if (args.Length < 1)
             {
                 SendReply(player, "/testapi <steamID>");
                 return;
@@ -556,7 +652,7 @@ namespace Oxide.Plugins
             try
             {
                 time = PlaytimeTracker?.Call<double>("GetPlayTime", ID) ?? -1d;
-                if(time == -1d)
+                if (time == -1d)
                 {
                     SendReply(player, "Playtime tracker is not installed!");
                     return;
@@ -570,7 +666,7 @@ namespace Oxide.Plugins
                 var t = ex.Message;
                 SendReply(player, t + " (NOT FOUND)");
             }
-            
+
         }
         [ChatCommand("entdebug")]
         void EntDebugCmd(BasePlayer player, string command, string[] args)
@@ -651,7 +747,7 @@ namespace Oxide.Plugins
                         {
                             storedData.ItemList.Remove(helditem.info.shortname);
                             SaveFile();
-                            SendReply(player, lang.GetMessage("refunditem_removed", this, player.UserIDString),helditem.info.displayName.english);
+                            SendReply(player, lang.GetMessage("refunditem_removed", this, player.UserIDString), helditem.info.displayName.english);
                             return;
                         }
 
@@ -689,7 +785,7 @@ namespace Oxide.Plugins
                         {
                             Item item = ItemManager.CreateByName(entry.Key, 1);
 
-                            if(item.info.displayName.english == null)
+                            if (item.info.displayName.english == null)
                             {
                                 LogToFile(this.Name, "Failed to find display name for " + entry.Key, this, true);
                             }
