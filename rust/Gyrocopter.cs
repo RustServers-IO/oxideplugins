@@ -7,18 +7,17 @@ using ProtoBuf;
 
 namespace Oxide.Plugins
 {
-    [Info("Gyrocopter", "ColonBlow", "1.0.11", ResourceId = 2521)]
+    [Info("Gyrocopter", "ColonBlow", "1.1.2", ResourceId = 2521)]
     class Gyrocopter : RustPlugin
     {
 
         #region Fields and Hooks
 
         static LayerMask layerMask;
-        BaseEntity newCopter;
+	BaseEntity newCopter;
 
         void Init()
         {
-            ConVar.AntiHack.flyhack_protection = 0;
             lang.RegisterMessages(messages, this);
             LoadVariables();
             layerMask = (1 << 29);
@@ -26,8 +25,7 @@ namespace Oxide.Plugins
             layerMask = ~layerMask;
             permission.RegisterPermission("gyrocopter.fly", this);
             permission.RegisterPermission("gyrocopter.build", this);
-	    permission.RegisterPermission("gyrocopter.unlimited", this);
-	    permission.RegisterPermission("gyrocopter.nobombs", this);
+            permission.RegisterPermission("gyrocopter.unlimited", this);
         }
 
         bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
@@ -38,15 +36,17 @@ namespace Oxide.Plugins
 
         static float MinAltitude = 10f;
         static float RechargeRange = 12f; //Needs to be more than the MinAltitude
+
+	static int NormalCost = 5;
         static int SprintCost = 20;
-        static int RechargeRate = 3;
 
-	static bool UseCooldown = false;
-        static bool NoGodMode = false;
+        static int BonusRechargeRate = 5;
+	static int BaseRechargeRate = 1;
 
-        static float DaBombReloadRange = 12f; //Needs to be more than the MinAltitude
-        static float DaBombDamageRadius = 2f;
-        static float DaBombDamageAmount = 1000f;
+	static float NormalSpeed = 12f;
+	static float SprintSpeed = 25f;
+
+	bool OwnerLockPaint = true;
 
         bool Changed;
 
@@ -60,16 +60,14 @@ namespace Oxide.Plugins
         private void LoadConfigVariables()
         {
             CheckCfgFloat("Minimum Flight Altitude : ", ref MinAltitude);
-            CheckCfgFloat("Substation Recharge Range (must be higher than Min Altitude) : ", ref RechargeRange);
-            CheckCfg("Substation recharge rate : ", ref RechargeRate);
-            CheckCfg("Sprint Cost (fast speed) : ", ref SprintCost);
-
-            CheckCfg("Reuse cooldown is enabled : ", ref UseCooldown);
-            CheckCfg("Players in God Mode Cannot fly copter : ", ref NoGodMode);
-
-            CheckCfgFloat("Bomb Reload Range : ", ref DaBombReloadRange);
-            CheckCfgFloat("Bomb Damage Radius : ", ref DaBombDamageRadius);
-            CheckCfgFloat("Bomb Damage Amount : ", ref DaBombDamageAmount);
+            CheckCfgFloat("Recharge - Range - From substation (must be higher than Min Altitude) : ", ref RechargeRange);
+            CheckCfgFloat("Speed - Normal Flight Speed is : ", ref NormalSpeed);
+            CheckCfgFloat("Speed - Sprint Flight Speed is : ", ref SprintSpeed);
+            CheckCfg("Recharge - Bonus Substation Rate : ", ref BonusRechargeRate);
+            CheckCfg("Recharge - Base Rate : ", ref BaseRechargeRate);
+            CheckCfg("Movement - Normal - Cost (normal speeed) : ", ref NormalCost);
+            CheckCfg("Movement - Sprint - Cost (fast speed) : ", ref SprintCost);
+            CheckCfg("Only the Builder (owner) of copter can lock paint job : ", ref OwnerLockPaint);
         }
 
         private void LoadVariables()
@@ -120,23 +118,17 @@ namespace Oxide.Plugins
 
         Dictionary<string, string> messages = new Dictionary<string, string>()
         {
-            {"helptext1", "type /copterbuild to spawn static copter(with perms)." },
-            {"helptext2", "spin the spinner wheel to activate flight mode." },
-            {"helptext3", "type /copterland to start landing sequence." },
-            {"helptext4", "type /copterdropnet to drop/raise cargo netting." },
-            {"helptext5", "type /copterdropbomb to drop Da Bomb." },
-            {"helptext6", "type /copterreload to reload bomb (must be next to red rad oil barrel)." },
+            {"helptext1", "type /copterbuild to spawn a gyrocopter and automount it." },
+            {"helptext2", "type /copterlockpaint to lock copter paintjob and /copterunlockpaint to unlock" },
+            {"helptext3", "use Spinner wheel while seated to start and stop flying copter." },
+            {"helptext4", "Rehcharge - land copter to recharge, hover over substation to fast charge." },
+            {"helptext5", "Locking codelock will prevent anyone from using copter (even owner)." },
+            {"helptext6", "Once copter runs out of charge, it will autoland." },
             {"notauthorized", "You don't have permission to do that !!" },
-            {"nogodmode", "You cannot be in god mode to fly the Gyrocopter !!" },
             {"cooldown", "Gyrocopter is still under cooldown, please try again later !!" },
             {"tellabouthelp", "type /copterhelp to see a list of commands !!" },
             {"notflyingcopter", "You are not piloting a gyrocopter !!" },
-            {"landingcopter", "Gryocopter Landing Sequence started !!" },
-            {"dropnet", "Dropping cargo netting !!" },
-            {"raisenet", "Raising cargo netting !!" },
-            {"dropbomb", "You just dropped Da Bomb !!" },
-            {"outofbombs", "You are out of Da Bombs !!" },
-            {"reloadbomb", "You reloaded Da Bomb !!" }
+            {"landingcopter", "Gryocopter Landing Sequence started !!" }
         };
 
         #endregion
@@ -158,406 +150,185 @@ namespace Oxide.Plugins
         void chatBuildCopter(BasePlayer player, string command, string[] args)
         {
             if (!isAllowed(player, "gyrocopter.build")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
-            AddStaticCopter(player, player.transform.position, true);
+            AddCopter(player, player.transform.position);
         }
 
-        [ChatCommand("copterreload")]
-        void chatReloadCopter(BasePlayer player, string command, string[] args)
+        [ChatCommand("copterlockpaint")]
+        void chatCopterLockPaint(BasePlayer player, string command, string[] args)
         {
-            if ((!isAllowed(player, "gyrocopter.fly")) || (isAllowed(player, "gyrocopter.nobombs"))) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
-            var copter = player.GetComponentInParent<PlayerCopter>();
-            if (copter == null) { SendReply(player, lang.GetMessage("notflyingcopter", this, player.UserIDString)); return; }
-            if (copter != null)
-            {
-                copter.FindMoreDaBombs(player.transform.position);
-            }
+            	if (!player.isMounted) return;
+            	var activecopter = player.GetMounted().GetComponentInParent<GyroCopter>();
+		if (activecopter == null) return;
+		if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
+                if (activecopter.islanding) return;
+		if (OwnerLockPaint && activecopter.ownerid != player.userID) return;
+                if (!activecopter.paintingsarelocked) { activecopter.LockPaintings(); return; }
         }
 
-        [ChatCommand("copterdropnet")]
-        void chatDropNetCopter(BasePlayer player, string command, string[] args)
+        [ChatCommand("copterunlockpaint")]
+        void chatCopterUnLockPaint(BasePlayer player, string command, string[] args)
+        {
+            	if (!player.isMounted) return;
+            	var activecopter = player.GetMounted().GetComponentInParent<GyroCopter>();
+		if (activecopter == null) return;
+		if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
+                if (activecopter.islanding) return;
+		if (OwnerLockPaint && activecopter.ownerid != player.userID) return;
+		if (activecopter.paintingsarelocked) { activecopter.UnLockPaintings(); return; }
+        }
+
+        private void AddCopter(BasePlayer player, Vector3 location)
+        {
+	    if (player == null && location == null) return;
+            if (location == null && player != null) location = player.transform.position;
+            var spawnpos = new Vector3(location.x, location.y + 0.5f, location.z);
+            string staticprefab = "assets/prefabs/deployable/chair/chair.deployed.prefab";
+            newCopter = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
+            var chairmount = newCopter.GetComponent<BaseMountable>();
+            chairmount.isMobile = true;
+	    newCopter.enableSaving = false;
+            newCopter.OwnerID = player.userID;
+            newCopter.Spawn();
+            var gyrocopter = newCopter.gameObject.AddComponent<GyroCopter>();
+	    if (chairmount != null && player != null && isAllowed(player, "gyrocopter.fly")) { chairmount.MountPlayer(player); return; }
+	    var passengermount = newCopter.GetComponent<GyroCopter>().passengerchair1.GetComponent<BaseMountable>();
+	    if (passengermount != null && player != null && isAllowed(player, "gyrocopter.build")) { passengermount.MountPlayer(player); return; }
+        }
+
+        [ChatCommand("copterswag")]
+        void chatGetCopterSwag(BasePlayer player, string command, string[] args)
         {
             if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
-            var copter = player.GetComponent<PlayerCopter>();
-            if (copter == null) { SendReply(player, lang.GetMessage("notflyingcopter", this, player.UserIDString)); return; }
-            if (copter != null)
-            {
-                copter.DropNet();
-            }
+	    Item num = ItemManager.CreateByItemID(-864578046, 1, 961776748);
+	    player.inventory.GiveItem(num, null);
+            player.Command("note.inv", -864578046, 1);
         }
 
-        [ChatCommand("copterland")]
-        void chatLandCopter(BasePlayer player, string command, string[] args)
+       void OnPlayerInput(BasePlayer player, InputState input)
         {
-            if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
-            var copter = player.GetComponent<PlayerCopter>();
-            if (copter == null) { SendReply(player, lang.GetMessage("notflyingcopter", this, player.UserIDString)); return; }
-            if (copter != null)
-            {
-		if (copter.islanding) return;
-                copter.islanding = true;
-                SendReply(player, lang.GetMessage("landingcopter", this, player.UserIDString));
-            }
-        }
-
-        [ChatCommand("copterdropbomb")]
-        void chatDropBombCopter(BasePlayer player, string command, string[] args)
-        {
-            if ((!isAllowed(player, "gyrocopter.fly")) || (isAllowed(player, "gyrocopter.nobombs"))) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
-            var copter = player.GetComponent<PlayerCopter>();
-            if (copter == null) { SendReply(player, lang.GetMessage("notflyingcopter", this, player.UserIDString)); return; }
-            if (copter != null)
-            {
-		if (isAllowed(player, "gyrocopter.unlimited"))
+		if (player == null || input == null) return;
+            	if (!player.isMounted) return;
+            	var activecopter = player.GetMounted().GetComponentInParent<GyroCopter>();
+		if (activecopter == null) return;
+            	if (player.GetMounted() != activecopter.entity) return;
+		if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
+		if (input != null)
 		{
-                    SendReply(player, lang.GetMessage("dropbomb", this, player.UserIDString));
-                    player.gameObject.AddComponent<DaBomb>();
-		    return;
+                	if (input.WasJustPressed(BUTTON.FORWARD)) activecopter.moveforward = true;
+                	if (input.WasJustReleased(BUTTON.FORWARD)) activecopter.moveforward = false;
+                	if (input.WasJustPressed(BUTTON.BACKWARD)) activecopter.movebackward = true;
+                	if (input.WasJustReleased(BUTTON.BACKWARD)) activecopter.movebackward = false;
+                	if (input.WasJustPressed(BUTTON.RIGHT)) activecopter.rotright = true;
+                	if (input.WasJustReleased(BUTTON.RIGHT)) activecopter.rotright = false;
+                	if (input.WasJustPressed(BUTTON.LEFT)) activecopter.rotleft = true;
+                	if (input.WasJustReleased(BUTTON.LEFT)) activecopter.rotleft = false;
+                	if (input.IsDown(BUTTON.SPRINT)) activecopter.throttleup = true;
+                	if (input.WasJustReleased(BUTTON.SPRINT)) activecopter.throttleup = false;
+                	if (input.WasJustPressed(BUTTON.JUMP)) activecopter.moveup = true;
+                	if (input.WasJustReleased(BUTTON.JUMP)) activecopter.moveup = false;
+               	 	if (input.WasJustPressed(BUTTON.DUCK)) activecopter.movedown = true;
+                	if (input.WasJustReleased(BUTTON.DUCK)) activecopter.movedown = false;
+		return;
 		}
-                if ((!copter.hasdabomb1) && (!copter.hasdabomb2))
-                {
-                    SendReply(player, lang.GetMessage("outofbombs", this, player.UserIDString));
-                    return;
-                }
-                if (copter.hasdabomb1 || copter.hasdabomb2)
-                {
-                    SendReply(player, lang.GetMessage("dropbomb", this, player.UserIDString));
-                    player.gameObject.AddComponent<DaBomb>();
-                    copter.usedabomb = true;
-                    return;
-                }
+	return;
+        }
+
+        private object CanDismountEntity(BaseMountable mountable, BasePlayer player)
+        {
+	    if (mountable == null || player == null) return null;	
+	    if (player.GetComponent<BaseCombatEntity>().IsDead()) return null;
+            if (mountable.GetComponent<BaseEntity>() == newCopter)
+            {
+                var activecopter = mountable.GetComponentInParent<GyroCopter>();
+            	if (activecopter != null)
+            	{
+                	if(activecopter.engineon) return false;
+            	}
+            }
+            return null;
+        }
+
+        object CanMountEntity(BaseMountable mountable, BasePlayer player)
+        {
+	    if (mountable == null || player == null) return null;
+            if (mountable.GetComponent<BaseEntity>() == newCopter)
+            {
+		if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return false; }
+            	var activecopter = mountable.GetComponentInParent<GyroCopter>();
+            	if (activecopter != null)
+            	{
+			if(activecopter.copterlock != null && activecopter.copterlock.IsLocked()) return false;
+                	if(activecopter.engineon) return false;
+            	}
+            }
+            return null;
+        }
+
+        void OnEntityMounted(BaseMountable mountable, BasePlayer player)
+        {
+            var activecopter = mountable.GetComponentInParent<GyroCopter>();
+            if (activecopter != null)
+            {
+		if (mountable.GetComponent<BaseEntity>() != activecopter.entity) return;
+		player.gameObject.AddComponent<FuelControl>();
+                activecopter.AddPilot(player);
             }
         }
+
+       void OnEntityDismounted(BaseMountable mountable, BasePlayer player)
+        {
+            var activecopter = mountable.GetComponentInParent<GyroCopter>();
+            if (activecopter != null)
+            {
+	        if (mountable.GetComponent<BaseEntity>() != activecopter.entity) return;
+		RemoveCopter(player);
+                activecopter.RemovePilot();
+            }
+        }
+
+        object CanPickupEntity(BaseCombatEntity entity, BasePlayer player)
+        {
+            if (entity == null || player == null) return null;
+            if (entity.GetComponentInParent<GyroCopter>()) return false;
+            return null;
+        }
+
+	object CanPickupLock(BasePlayer player, BaseLock baseLock)
+	{
+            if (baseLock == null || player == null) return null;
+            if (baseLock.GetComponentInParent<GyroCopter>()) return false;
+            return null;
+	}
 
         #endregion
 
         #region Gyrocopter helpers
 
-        public void AddStaticCopter(BasePlayer player, Vector3 hit, bool isnew, float cooldown = 0f)
+        // Prevents Damage to GyroCopter
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
-            var hasplayercopter = player.GetComponent<PlayerCopter>();
-            if (hasplayercopter) GameObject.Destroy(hasplayercopter);
-
-            var playerpos = hit;
-            var groundy = TerrainMeta.HeightMap.GetHeight(playerpos);
-            var groundpos = new Vector3(playerpos.x, playerpos.y + 2f, playerpos.z);
-            if (isnew) groundpos = new Vector3(playerpos.x, groundy + 2f, playerpos.z);
-
-            string staticprefab = "assets/prefabs/deployable/signs/sign.small.wood.prefab";
-            newCopter = GameManager.server.CreateEntity(staticprefab, groundpos, new Quaternion(), true);
-	    newCopter?.Spawn();
-	    var addstatic = newCopter.gameObject.AddComponent<StaticCopter>();
-	    addstatic.incooldown = true;
-	    timer.Once(cooldown, () => addstatic.incooldown = false);
-        }
-
-	public void AddPlayerCopter(BasePlayer player)
-	{
-		if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
-            	if (NoGodMode && player.IsImmortal()) { SendReply(player, lang.GetMessage("nogodmode", this, player.UserIDString)); return; }
-
-		var addcopter = player.gameObject.AddComponent<PlayerCopter>();	
-		SendReply(player, lang.GetMessage("tellabouthelp", this, player.UserIDString));
-		var playerpos = player.transform.position;
-		player.ClientRPCPlayer(null, player, "ForcePositionTo", playerpos + new Vector3(0f, 10f, 0f));
-               	player.SendNetworkUpdate();
-	}
-
-        // Prevents Damage to Static Copter Sign and chair itself
-        object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
-        {
-            if (entity.name.Contains("sign.small.wood"))
-            {
-                var iscopter = entity.GetComponentInParent<StaticCopter>();
-                if (iscopter) return false;
-            }
-            if (entity.name.Contains("chair/chair.deployed"))
-            {
-                var isscopter = entity.GetComponentInParent<StaticCopter>();
-                var ispcopter = entity.GetComponentInParent<PlayerCopter>();
-                if (isscopter || ispcopter) return false;
-            }
-            return null;
-        }
-
-        object OnPlayerDie(BasePlayer player, HitInfo info)
-        {
-            var copter = player.GetComponent<PlayerCopter>();
-            if (copter)
-            {
-                copter.islanding = true;
-                timer.Once(3f, () => player.Die());
-                return false;
-            }
-            return null;
-        }
-
-	void OnSpinWheel(BasePlayer player, SpinnerWheel wheel)
-	{
-		BaseEntity parentEntity = wheel.GetParentEntity();
-		if (parentEntity.name.Contains("sign.small.wood"))
-            	{
-			var iscopter = parentEntity.GetComponent<StaticCopter>();	
-			if (iscopter !=null  && iscopter.incooldown && UseCooldown) { SendReply(player, lang.GetMessage("cooldown", this, player.UserIDString)); return; }
-                	if (parentEntity != null) BaseEntity.saveList.Remove(parentEntity);
-                	if (parentEntity != null) { parentEntity.Invoke("KillMessage", 0.1f); }
-			AddPlayerCopter(player);
-            	}
-	}
-
-        #endregion
-
-        #region PlayerCopter
-
-        class PlayerCopter : MonoBehaviour
-        {
-            BasePlayer player;
-            GyroCopter copter;
-            Gyrocopter instance;
-            FuelControl fuelcontrol;
-            Vector3 entitypos;
-            Quaternion entityrot;
-            int count;
-            CopterNet copternet;
-            public bool usedabomb;
-            public bool hasdabomb1;
-            public bool hasdabomb2;
-            public bool throttleup;
-            public bool islanding;
-            public bool isrunning;
-            bool didtell;
-            float minaltitude;
-            float reloadrange;
-            int sprintcost;
-
-            void Awake()
-            {
-                player = GetComponent<BasePlayer>();
-                copter = player.gameObject.AddComponent<GyroCopter>();
-                instance = new Gyrocopter();
-                entitypos = player.transform.position;
-                entityrot = Quaternion.identity;
-                count = 0;
-                usedabomb = false;
-                hasdabomb1 = true;
-                hasdabomb2 = true;
-                throttleup = false;
-                islanding = false;
-                isrunning = false;
-                didtell = false;
-                minaltitude = MinAltitude;
-                reloadrange = DaBombReloadRange;
-                sprintcost = SprintCost;
-                fuelcontrol = player.gameObject.AddComponent<FuelControl>();
-            }
-
-            public void ImpactFX(Vector3 pos)
-            {
-                Effect.server.Run("assets/bundled/prefabs/fx/weapons/landmine/landmine_explosion.prefab", pos);
-                Effect.server.Run("assets/bundled/prefabs/napalm.prefab", pos);
-                BaseEntity firebomb = GameManager.server.CreateEntity("assets/bundled/prefabs/oilfireballsmall.prefab", pos);
-                firebomb?.Spawn();
-            }
-
-            public void DropNet()
-            {
-                if (copternet == null) { copternet = player.gameObject.AddComponent<CopterNet>(); instance.SendReply(player, instance.lang.GetMessage("dropnet", instance, player.UserIDString)); return; }
-                GameObject.Destroy(copternet);
-                instance.SendReply(player, instance.lang.GetMessage("raisenet", instance, player.UserIDString));
-            }
-
-            public void ReloadDaBombs()
-            {
-                string prefabbarrel = "assets/bundled/prefabs/radtown/oil_barrel.prefab";
-                entitypos = player.transform.position;
-                entityrot = Quaternion.identity;
-                if (copter.bomb1 == null)
-                {
-                    copter.bomb1 = GameManager.server.CreateEntity(prefabbarrel, entitypos, entityrot, false);
-                    copter.bomb1?.Spawn();
-                    copter.bomb1.SetParent(copter.deck2);
-                    copter.bomb1.transform.localEulerAngles = new Vector3(0, 0, 0);
-                    copter.bomb1.transform.localPosition = new Vector3(0.5f, 1f, 0.3f);
-                    copter.bomb1.transform.hasChanged = true;
-                    copter.bomb1.SendNetworkUpdateImmediate();
-                    instance.SendReply(player, instance.lang.GetMessage("reloadbomb", instance, player.UserIDString));
-                    hasdabomb1 = true;
-                    return;
-                }
-                if (copter.bomb2 == null)
-                {
-                    copter.bomb2 = GameManager.server.CreateEntity(prefabbarrel, entitypos, entityrot, false);
-                    copter.bomb2?.Spawn();
-                    copter.bomb2.SetParent(copter.deck2);
-                    copter.bomb2.transform.localEulerAngles = new Vector3(0, 0, 0);
-                    copter.bomb2.transform.localPosition = new Vector3(-0.5f, 1f, 0.3f);
-                    copter.bomb2.transform.hasChanged = true;
-                    copter.bomb2.SendNetworkUpdateImmediate();
-                    instance.SendReply(player, instance.lang.GetMessage("reloadbomb", instance, player.UserIDString));
-                    hasdabomb2 = true;
-                }
-                return;
-            }
-
-            public void FindMoreDaBombs(Vector3 localpos)
-            {
-                List<BaseEntity> barrellist = new List<BaseEntity>();
-                Vis.Entities<BaseEntity>(localpos, reloadrange, barrellist);
-                foreach (BaseEntity barrel in barrellist)
-                {
-                    if (barrel.name.Contains("oil_barrel"))
-                    {
-                        BaseEntity.saveList.Remove(barrel);
-                        barrel.Invoke("KillMessage", 0.1f);
-                        ReloadDaBombs();
-                        return;
-                    }
-                }
-            }
-
-            void FixedUpdate()
-            {
-                var currentfuel = fuelcontrol.copterfuel;
-                Vector3 oldpos = player.transform.position;
-                if ((!instance.isAllowed(player, "gyrocopter.unlimited")) && currentfuel >= 1) fuelcontrol.copterfuel = currentfuel - 1;
-                if (currentfuel <= 0) currentfuel = 0;
-		if (!instance.isAllowed(player, "gyrocopter.unlimited"))
-                {
-		    if (NoGodMode && player.IsImmortal() && (!didtell))
-		    {
-                    	instance.SendReply(player, instance.lang.GetMessage("nogodmode", instance, player.UserIDString));
-                    	islanding = true;
-                    	didtell = true;
-		    }
-                    if (player.serverInput.IsDown(BUTTON.SPRINT))
-                    {
-                    	throttleup = true;
-		    	if (!instance.isAllowed(player, "gyrocopter.unlimited")) fuelcontrol.copterfuel = fuelcontrol.copterfuel - sprintcost;
-                    }
-                }
-                if (copter.barcenter != null)
-                {
-                    Vector3 startpos = copter.barcenter.transform.eulerAngles;
-                    var throttlespeed = 30;
-                    if (throttleup) throttlespeed = 60;
-                    copter.barcenter.transform.eulerAngles = new Vector3(startpos.x, startpos.y + throttlespeed, startpos.z);
-                    copter.barcenter.transform.hasChanged = true;
-                    copter.barcenter.SendNetworkUpdateImmediate();
-                    if (copter.rotor1 != null) copter.rotor1.transform.hasChanged = true;
-                    if (copter.rotor1 != null) copter.rotor1.SendNetworkUpdateImmediate();
-                    if (copter.rotor2 != null) copter.rotor2.transform.hasChanged = true;
-                    if (copter.rotor2 != null) copter.rotor2.SendNetworkUpdateImmediate();
-                    if (copter.rotor3 != null) copter.rotor3.transform.hasChanged = true;
-                    if (copter.rotor3 != null) copter.rotor3.SendNetworkUpdateImmediate();
-                    if (copter.rotor4 != null) copter.rotor4.transform.hasChanged = true;
-                    if (copter.rotor4 != null) copter.rotor4.SendNetworkUpdateImmediate();
-
-                    count = count + 1;
-                    if (count == 3)
-                    {
-                        Effect.server.Run("assets/bundled/prefabs/fx/player/swing_weapon.prefab", this.transform.position);
-                    }
-                    if (count == 6 && throttleup) Effect.server.Run("assets/bundled/prefabs/fx/player/swing_weapon.prefab", this.transform.position);
-                    throttleup = false;
-                    if (count >= 6) count = 0;
-                }
-                if (islanding || currentfuel <= 0)
-                {
-		    islanding = true;
-                    var newpos = oldpos + Vector3.down;
-                    player.ClientRPCPlayer(null, player, "ForcePositionTo", newpos);
-                    player.SendNetworkUpdate();
-                    RaycastHit hit;
-                    if (Physics.Raycast(new Ray(player.transform.position, Vector3.down), out hit, 3f, layerMask))
-                    {
-                        Vector3 hitpoint = hit.point;
-			GameObject.Destroy(this);
-			
-			float rechargetime = (float)((10000 - currentfuel)/10);
-			if (UseCooldown) instance.SendReply(player, "Current Recharge Time is : " + rechargetime.ToString());
-                        instance.timer.Once(0.5f, () => instance.AddStaticCopter(player, hitpoint, false, rechargetime));
-                        return;
-                    }
-                    return;
-                }
-                if (copter.barcenter == null || copter.rotor1 == null || copter.rotor2 == null)
-                {
-                    Vector3 position = oldpos + Vector3.down;
-                    if (Physics.Raycast(new Ray(player.transform.position, Vector3.down), 1f, layerMask))
-                    {
-                        ImpactFX(oldpos);
-                        GameObject.Destroy(this);
-                        return;
-                    }
-                    player.ClientRPCPlayer(null, player, "ForcePositionTo", position);
-                    player.SendNetworkUpdate();
-                    return;
-                }
-                if (Physics.Raycast(new Ray(player.transform.position, Vector3.down), minaltitude, layerMask))
-                {
-                    var newpos = oldpos + Vector3.up;
-                    player.transform.position = newpos;
-                    player.ClientRPCPlayer(null, player, "ForcePositionTo", newpos);
-                    player.SendNetworkUpdate();
-                }
-               	if (usedabomb)
-              	{
-                    if (copter.bomb1)
-                    {
-                        BaseEntity.saveList.Remove(copter.bomb1);
-                        copter.bomb1.Invoke("KillMessage", 0.1f);
-                        copter.bomb1.transform.hasChanged = true;
-                        copter.bomb1.SendNetworkUpdateImmediate();
-                        usedabomb = false;
-                        hasdabomb1 = false;
-                        return;
-                    }
-                    if (copter.bomb2)
-                    {
-                        BaseEntity.saveList.Remove(copter.bomb2);
-                        copter.bomb2.Invoke("KillMessage", 0.1f);
-                        copter.bomb2.transform.hasChanged = true;
-                        copter.bomb2.SendNetworkUpdateImmediate();
-                        usedabomb = false;
-                        hasdabomb2 = false;
-                        return;
-                    }
-                    usedabomb = false;
-                    hasdabomb1 = false;
-                    hasdabomb2 = false;
+            if (entity == null || hitInfo == null) return null;
+	    var activecopter = entity.GetComponentInParent<GyroCopter>();
+            if (activecopter)
+		{
+		 return false;
 		}
-            }
-
-            void OnDestroy()
-            {
-                GameObject.Destroy(copter);
-                GameObject.Destroy(fuelcontrol);
-                GameObject.Destroy(copternet);
-                GameObject.Destroy(this);
-            }
+            return null;
         }
 
-        #endregion
-
-
-        #region StaticCopter
-
-        class StaticCopter : MonoBehaviour
+        void OnSpinWheel(BasePlayer player, SpinnerWheel wheel)
         {
-            BaseEntity entity;
-            GyroCopter copter;
-	    public bool incooldown;
-
-            void Awake()
-            {
-                entity = GetComponent<BaseEntity>();
-                copter = entity.gameObject.AddComponent<GyroCopter>();
-		incooldown = false;
-            }
-
-            void OnDestroy()
-            {
-                GameObject.Destroy(this);
-            }
+            if (!player.isMounted) return;
+            var activecopter = player.GetMounted().GetComponentInParent<GyroCopter>();
+	    if (activecopter == null) return;
+            if (player.GetMounted() != activecopter.entity) return;
+	    if (activecopter != null)
+	    {
+		if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
+            	var ison = activecopter.engineon;
+            	if (ison) { activecopter.islanding = true; SendReply(player, lang.GetMessage("landingcopter", this, player.UserIDString)); wheel.velocity = 0f; return; }
+            	if (!ison) { activecopter.engineon = true; wheel.velocity = 0f; return; }
+	    }
         }
 
         #endregion
@@ -567,12 +338,12 @@ namespace Oxide.Plugins
         class GyroCopter : BaseEntity
         {
             public BaseEntity entity;
+	    public BasePlayer player;
             public BaseEntity wheel;
             public BaseEntity deck1;
             public BaseEntity deck2;
             public BaseEntity barrel;
             public BaseEntity barcenter;
-            public BaseEntity chair;
             public BaseEntity rotor1;
             public BaseEntity rotor2;
             public BaseEntity rotor3;
@@ -584,53 +355,102 @@ namespace Oxide.Plugins
             public BaseEntity tailrotor1;
             public BaseEntity tailrotor2;
             public BaseEntity floor;
-            public BaseEntity lootbox;
+            public BaseEntity nosesign;
             public BaseEntity tail1;
             public BaseEntity tail2;
-            public BaseEntity bomb1;
-            public BaseEntity bomb2;
+	    public BaseEntity passengerchair1;
+	    public BaseEntity passengerchair2;
+	    public BaseEntity copterlock;
+	    public BaseEntity panel;
+
             Quaternion entityrot;
             Vector3 entitypos;
+            public bool moveforward;
+            public bool movebackward;
+	    public bool moveup;
+	    public bool movedown;
+            public bool rotright;
+            public bool rotleft;
+            public bool sprinting;
+	    public bool islanding;
+	    public bool hasbonuscharge;
+     	    public bool paintingsarelocked;
 
-            string prefabchair = "assets/prefabs/deployable/chair/chair.deployed.prefab";
+	    public ulong ownerid;
+            int count;
+            public bool engineon;
+	    float minaltitude;
+	    Gyrocopter instance;
+            public bool throttleup;
+            int sprintcost;
+	    int normalcost;
+	    float sprintspeed;
+	    float normalspeed;
+	    public int currentfuel;
+	    int baserechargerate;
+	    int bonusrechargerate;
+
             string prefabdeck = "assets/prefabs/deployable/signs/sign.post.town.prefab";
             string prefabbar = "assets/prefabs/deployable/signs/sign.post.single.prefab";
             string prefabrotor = "assets/prefabs/deployable/signs/sign.pictureframe.tall.prefab";
             string prefabbarrel = "assets/prefabs/deployable/liquidbarrel/waterbarrel.prefab";
             string prefabbomb = "assets/bundled/prefabs/radtown/oil_barrel.prefab";
             string prefabfloor = "assets/prefabs/building/floor.grill/floor.grill.prefab";
-            string prefablootbox = "assets/bundled/prefabs/radtown/dmloot/dm tier3 lootbox.prefab";
+            string prefabnosesign = "assets/prefabs/deployable/signs/sign.medium.wood.prefab";
+	    string prefabpanel = "assets/prefabs/deployable/signs/sign.small.wood.prefab";	
             string prefabskid = "assets/prefabs/deployable/mailbox/mailbox.deployed.prefab";
-	    string wheelprefab = "assets/prefabs/deployable/spinner_wheel/spinner.wheel.deployed.prefab";
+            string wheelprefab = "assets/prefabs/deployable/spinner_wheel/spinner.wheel.deployed.prefab";
+	    string copterlockprefab = "assets/prefabs/locks/keypad/lock.code.prefab"; 
 
             void Awake()
             {
-                entity = GetComponent<BaseEntity>();
+                entity = GetComponentInParent<BaseEntity>();
                 entityrot = Quaternion.identity;
                 entitypos = entity.transform.position;
+                minaltitude = MinAltitude;
+		instance = new Gyrocopter();
+		ownerid = entity.OwnerID;
+		baserechargerate = BaseRechargeRate;
+		bonusrechargerate = BonusRechargeRate;
 
-                chair = GameManager.server.CreateEntity(prefabchair, entitypos, entityrot, true);
+                engineon = false;
+                moveforward = false;
+                movebackward = false;
+		moveup = false;
+		movedown = false;
+                rotright = false;
+                rotleft = false;
+                sprinting = false;
+		islanding = false;
+                throttleup = false;
+		hasbonuscharge = false;
+		paintingsarelocked = false;
+                sprintcost = SprintCost;
+		sprintspeed = SprintSpeed;
+		normalcost = NormalCost;
+		normalspeed = NormalSpeed;
+		currentfuel = 10000;
+
                 deck1 = GameManager.server.CreateEntity(prefabdeck, entitypos, entityrot, true);
-                deck2 = GameManager.server.CreateEntity(prefabdeck, entitypos, entityrot, false);
-                barrel = GameManager.server.CreateEntity(prefabbarrel, entitypos, entityrot, false);
-                barcenter = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, false);
-                rotor1 = GameManager.server.CreateEntity(prefabrotor, entitypos, entityrot, false);
-                rotor2 = GameManager.server.CreateEntity(prefabrotor, entitypos, entityrot, false);
-                rotor3 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, false);
-                rotor4 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, false);
-                floor = GameManager.server.CreateEntity(prefabdeck, entitypos, entityrot, false);
-                lootbox = GameManager.server.CreateEntity(prefablootbox, entitypos, entityrot, true);
-                tail1 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, false);
-                tail2 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, false);
-                tailrotor1 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, false);
-                tailrotor2 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, false);
-                skid1 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, false);
-                skid2 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, false);
-                skid3 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, false);
-                skid4 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, false);
-		wheel = GameManager.server.CreateEntity(wheelprefab, entitypos, entityrot, true);
+                deck2 = GameManager.server.CreateEntity(prefabdeck, entitypos, entityrot, true);
+                barrel = GameManager.server.CreateEntity(prefabbarrel, entitypos, entityrot, true);
+                barcenter = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, true);
+                rotor1 = GameManager.server.CreateEntity(prefabrotor, entitypos, entityrot, true);
+                rotor2 = GameManager.server.CreateEntity(prefabrotor, entitypos, entityrot, true);
+                rotor3 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, true);
+                rotor4 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, true);
+                floor = GameManager.server.CreateEntity(prefabdeck, entitypos, entityrot, true);
+                nosesign = GameManager.server.CreateEntity(prefabnosesign, entitypos, entityrot, true);
+                tail1 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, true);
+                tail2 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, true);
+                tailrotor1 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, true);
+                tailrotor2 = GameManager.server.CreateEntity(prefabbar, entitypos, entityrot, true);
+                skid1 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, true);
+                skid2 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, true);
+                skid3 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, true);
+                skid4 = GameManager.server.CreateEntity(prefabskid, entitypos, entityrot, true);
+                wheel = GameManager.server.CreateEntity(wheelprefab, entitypos, entityrot, true);
 
-                chair?.Spawn();
                 deck1?.Spawn();
                 deck2?.Spawn();
                 barrel?.Spawn();
@@ -640,7 +460,7 @@ namespace Oxide.Plugins
                 rotor3?.Spawn();
                 rotor4?.Spawn();
                 floor?.Spawn();
-                lootbox?.Spawn();
+                nosesign?.Spawn();
                 tail1?.Spawn();
                 tail2?.Spawn();
                 tailrotor1?.Spawn();
@@ -649,9 +469,8 @@ namespace Oxide.Plugins
                 skid2?.Spawn();
                 skid3?.Spawn();
                 skid4?.Spawn();
-		wheel?.Spawn();
+                wheel?.Spawn();
 
-                chair.SetParent(entity);
                 floor.SetParent(entity);
                 deck1.SetParent(entity);
                 deck2.SetParent(entity);
@@ -661,7 +480,7 @@ namespace Oxide.Plugins
                 rotor2.SetParent(barcenter);
                 rotor3.SetParent(barcenter);
                 rotor4.SetParent(barcenter);
-                lootbox.SetParent(deck1);
+                nosesign.SetParent(deck1);
                 tail1.SetParent(deck2);
                 tail2.SetParent(deck2);
                 tailrotor1.SetParent(tail1);
@@ -670,9 +489,8 @@ namespace Oxide.Plugins
                 skid2.SetParent(deck2);
                 skid3.SetParent(deck2);
                 skid4.SetParent(deck2);
-		wheel.SetParent(entity);
+                wheel.SetParent(entity);
 
-                chair.transform.localEulerAngles = new Vector3(0, 0, 0);
                 floor.transform.localEulerAngles = new Vector3(-90, 0, 0);
                 deck1.transform.localEulerAngles = new Vector3(90, 0, 0);
                 deck2.transform.localEulerAngles = new Vector3(-90, 0, 0);
@@ -682,7 +500,7 @@ namespace Oxide.Plugins
                 rotor2.transform.localEulerAngles = new Vector3(90, 0, 0);
                 rotor3.transform.localEulerAngles = new Vector3(90, 90, 0);
                 rotor4.transform.localEulerAngles = new Vector3(-90, 90, 0);
-                lootbox.transform.localEulerAngles = new Vector3(-90, 0, 0);
+                nosesign.transform.localEulerAngles = new Vector3(-140, 0, 0);
                 tail1.transform.localEulerAngles = new Vector3(0, 90, 0);
                 tail2.transform.localEulerAngles = new Vector3(0, 90, 0);
                 tailrotor1.transform.localEulerAngles = new Vector3(0, 90, 0);
@@ -691,19 +509,18 @@ namespace Oxide.Plugins
                 skid2.transform.localEulerAngles = new Vector3(0, 0, 0);
                 skid3.transform.localEulerAngles = new Vector3(0, 0, 180);
                 skid4.transform.localEulerAngles = new Vector3(0, 0, 180);
-		wheel.transform.localEulerAngles = new Vector3(90, 0, 90);
+                wheel.transform.localEulerAngles = new Vector3(90, 0, 90);
 
-                chair.transform.localPosition = new Vector3(0f, -1f, -0.2f);
-                floor.transform.localPosition = new Vector3(0f, -1f, 1.4f);
-                deck1.transform.localPosition = new Vector3(0f, -1f, -0.4f);
-                deck2.transform.localPosition = new Vector3(0f, -1f, -0.2f);
-                barrel.transform.localPosition = new Vector3(0f, -1.5f, -1.1f);
-                barcenter.transform.localPosition = new Vector3(0f, 1f, 0f);
-                rotor1.transform.localPosition = new Vector3(0f, 2f, 0.5f);
+                floor.transform.localPosition = new Vector3(0f, 0f, 1.4f);
+                deck1.transform.localPosition = new Vector3(0f, 0f, -0.4f);
+                deck2.transform.localPosition = new Vector3(0f, 0f, -0.2f);
+                barrel.transform.localPosition = new Vector3(0f, -0.5f, -1.1f);
+                barcenter.transform.localPosition = new Vector3(0f, 1.5f, 0f);
+                rotor1.transform.localPosition = new Vector3(0f, 2f, 0.6f);
                 rotor2.transform.localPosition = new Vector3(0f, 2f, -3f);
                 rotor3.transform.localPosition = new Vector3(-2f, 2f, 0f);
                 rotor4.transform.localPosition = new Vector3(2f, 2f, 0f);
-                lootbox.transform.localPosition = new Vector3(0f, 1.8f, 0f);
+                nosesign.transform.localPosition = new Vector3(0f, 2.7f, 0.2f);
                 tail1.transform.localPosition = new Vector3(0.5f, 2f, 0f);
                 tail2.transform.localPosition = new Vector3(-0.5f, 2f, 0f);
                 tailrotor1.transform.localPosition = new Vector3(0f, 0f, -1f);
@@ -712,226 +529,263 @@ namespace Oxide.Plugins
                 skid2.transform.localPosition = new Vector3(0.9f, -1.4f, -0.5f);
                 skid3.transform.localPosition = new Vector3(-0.9f, 1.6f, -0.5f);
                 skid4.transform.localPosition = new Vector3(0.9f, 1.6f, -0.5f);
-		wheel.transform.localPosition = new Vector3(0.6f, -0.5f, 0f);
+                wheel.transform.localPosition = new Vector3(0.8f, 0.4f, 0f);
 
-                // turns off any interaction to some signs and mailbox
-                floor.SetFlag(BaseEntity.Flags.Busy, true, true);
-                chair.SetFlag(BaseEntity.Flags.Busy, true, true);
-                deck2.SetFlag(BaseEntity.Flags.Busy, true, true);
-                rotor3.SetFlag(BaseEntity.Flags.Busy, true, true);
-                rotor4.SetFlag(BaseEntity.Flags.Busy, true, true);
-                lootbox.SetFlag(BaseEntity.Flags.Busy, true, true);
+		skid1.SetFlag(BaseEntity.Flags.Busy, true, true);
+		skid2.SetFlag(BaseEntity.Flags.Busy, true, true);
+		skid3.SetFlag(BaseEntity.Flags.Busy, true, true);
+		skid4.SetFlag(BaseEntity.Flags.Busy, true, true);
 
-                AddDaBomb1();
-                AddDaBomb2();
+		SpawnPassengerChair();
+		SpawnCopterLock();
             }
 
-            void AddDaBomb1()
+	    public void SpawnCopterLock()
+	    {
+                panel = GameManager.server.CreateEntity(prefabpanel, entitypos, entityrot, true);
+                panel.transform.localEulerAngles = new Vector3(210, 0, 0);
+                panel.transform.localPosition = new Vector3(0f, 0.4f, 1.7f);
+                panel?.Spawn();
+                panel.SetParent(entity);
+		
+                copterlock = GameManager.server.CreateEntity(copterlockprefab, entitypos, entityrot, true);
+                copterlock.transform.localEulerAngles = new Vector3(0, 90, 30);
+                copterlock.transform.localPosition = new Vector3(0f, 0.3f, 1.55f);
+                copterlock?.Spawn();
+                copterlock.SetParent(entity);
+	    }
+
+            public void SpawnPassengerChair()
             {
-                bomb1 = GameManager.server.CreateEntity(prefabbomb, entitypos, entityrot, false);
-                bomb1?.Spawn();
-                bomb1.SetParent(deck2);
-                bomb1.transform.localEulerAngles = new Vector3(0, 0, 0);
-                bomb1.transform.localPosition = new Vector3(0.5f, 1.5f, 0.3f);
+                string prefabchair = "assets/prefabs/deployable/chair/chair.deployed.prefab";
+                passengerchair1 = GameManager.server.CreateEntity(prefabchair, entitypos, entityrot, true);
+                passengerchair1.transform.localEulerAngles = new Vector3(0, 90, 0);
+                passengerchair1.transform.localPosition = new Vector3(0.7f, -0.1f, -2.1f);
+                var rmount1 = passengerchair1.GetComponent<BaseMountable>();
+                rmount1.isMobile = true;
+                passengerchair1?.Spawn();
+                passengerchair1.SetParent(entity);
+
+                passengerchair2 = GameManager.server.CreateEntity(prefabchair, entitypos, entityrot, true);
+                passengerchair2.transform.localEulerAngles = new Vector3(0, 270, 0);
+                passengerchair2.transform.localPosition = new Vector3(-0.7f, -0.1f, -2.1f);
+                var rmount2 = passengerchair2.GetComponent<BaseMountable>();
+                rmount2.isMobile = true;
+                passengerchair2?.Spawn();
+                passengerchair2.SetParent(entity);
             }
 
-            void AddDaBomb2()
+	    public void LockPaintings()
+	    {
+		floor.SetFlag(BaseEntity.Flags.Busy, true, true);
+		deck1.SetFlag(BaseEntity.Flags.Busy, true, true);
+		deck2.SetFlag(BaseEntity.Flags.Busy, true, true);
+		barrel.SetFlag(BaseEntity.Flags.Busy, true, true);
+		panel.SetFlag(BaseEntity.Flags.Busy, true, true);
+		RefreshEntities();
+		paintingsarelocked = true;
+	    }
+
+	    public void UnLockPaintings()
+	    {
+		floor.SetFlag(BaseEntity.Flags.Busy, false, true);
+		deck1.SetFlag(BaseEntity.Flags.Busy, false, true);
+		deck2.SetFlag(BaseEntity.Flags.Busy, false, true);
+		barrel.SetFlag(BaseEntity.Flags.Busy, false, true);
+		panel.SetFlag(BaseEntity.Flags.Busy, false, true);
+		RefreshEntities();
+		paintingsarelocked = false;
+	    }
+
+            bool PlayerIsMounted()
             {
-                bomb2 = GameManager.server.CreateEntity(prefabbomb, entitypos, entityrot, false);
-                bomb2?.Spawn();
-                bomb2.SetParent(deck2);
-                bomb2.transform.localEulerAngles = new Vector3(0, 0, 0);
-                bomb2.transform.localPosition = new Vector3(-0.5f, 1.5f, 0.3f);
+                if (entity.GetComponent<BaseMountable>().IsMounted()) return true;
+                return false;
             }
 
-            void OnDestroy()
+            public void AddPilot(BasePlayer player)
             {
-                BaseEntity.saveList.Remove(bomb2);
-                if (bomb2 != null) { bomb2.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(bomb1);
-                if (bomb1 != null) { bomb1.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(skid4);
-                if (skid4 != null) { skid4.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(skid3);
-                if (skid3 != null) { skid3.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(skid2);
-                if (skid2 != null) { skid2.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(skid1);
-                if (skid1 != null) { skid1.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(tailrotor2);
-                if (tailrotor2 != null) { tailrotor2.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(tailrotor1);
-                if (tailrotor1 != null) { tailrotor1.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(tail2);
-                if (tail2 != null) { tail2.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(tail1);
-                if (tail1 != null) { tail1.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(lootbox);
-                if (lootbox != null) { lootbox.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(rotor4);
-                if (rotor4 != null) { rotor4.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(rotor3);
-                if (rotor3 != null) { rotor3.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(rotor2);
-                if (rotor2 != null) { rotor2.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(rotor1);
-                if (rotor1 != null) { rotor1.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(barcenter);
-                if (barcenter != null) { barcenter.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(wheel);
-                if (wheel != null) { wheel.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(barrel);
-                if (barrel != null) { barrel.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(deck2);
-                if (deck2 != null) { deck2.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(deck1);
-                if (deck1 != null) { deck1.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(floor);
-                if (floor != null) { floor.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(chair);
-                if (chair != null) { chair.Invoke("KillMessage", 0.1f); }
+                this.player = player;
             }
-        }
 
-        #endregion
-
-        #region DaBomb Spawner
-
-        class DaBomb : MonoBehaviour
-        {
-            BaseEntity dabomb;
-            BasePlayer player;
-            GyroCopter copter;
-            Vector3 PlayerPOS;
-            bool onGround;
-            float damageradius;
-            float damageamount;
-
-            void Awake()
+            public void RemovePilot()
             {
-                onGround = false;
-                damageradius = DaBombDamageRadius;
-                damageamount = DaBombDamageAmount;
-                player = GetComponent<BasePlayer>();
-                copter = player.GetComponent<GyroCopter>();
-                PlayerPOS = player.transform.position + new Vector3(0f, -5f, 0f);
-                dabomb = GameManager.server.CreateEntity("assets/bundled/prefabs/radtown/oil_barrel.prefab", PlayerPOS, new Quaternion(), true);
-                dabomb.Spawn();
-                SpawnFireEffects();
+                this.player = null;
             }
 
-            void ImpactDamage(Vector3 hitpos)
-            {
-                List<BaseCombatEntity> playerlist = new List<BaseCombatEntity>();
-                Vis.Entities<BaseCombatEntity>(hitpos, damageradius, playerlist);
-                foreach (BaseCombatEntity p in playerlist)
-                {
-                    if (!(p is BuildingPrivlidge))
-                    {
-                        p.Hurt(damageamount, Rust.DamageType.Blunt, null, false);
-                    }
-                }
-            }
-
-            public void ImpactFX(Vector3 pos)
-            {
-                Effect.server.Run("assets/bundled/prefabs/fx/weapons/landmine/landmine_explosion.prefab", pos);
-                Effect.server.Run("assets/bundled/prefabs/napalm.prefab", pos);
-                BaseEntity firebomb = GameManager.server.CreateEntity("assets/bundled/prefabs/oilfireballsmall.prefab", pos);
-                firebomb?.Spawn();
-            }
-
-            void SpawnFireEffects()
-            {
-                BaseEntity flame = GameManager.server.CreateEntity("assets/bundled/prefabs/fireball.prefab", new Vector3(), new Quaternion(), true);
-                FireBall fireball = flame.GetComponent<FireBall>();
-                fireball.SetParent(dabomb);
-                fireball.Spawn();
-            }
-
+	    void FuelCheck()
+	    {
+		if (player != null && instance.isAllowed(player, "gyrocopter.unlimited")) { if (currentfuel <= 9999) currentfuel = 10000; return; }
+                if (currentfuel >= 1 && !throttleup && engineon && !hasbonuscharge) { currentfuel = currentfuel - 1; return; }
+                if (currentfuel >= 1 && throttleup && engineon && !hasbonuscharge) { currentfuel = currentfuel - sprintcost; return; }
+		if (currentfuel <= 9999 && !hasbonuscharge) currentfuel = currentfuel + baserechargerate;
+		if (currentfuel <= 9999 && hasbonuscharge) currentfuel = currentfuel + bonusrechargerate;
+	    }
+		
             void FixedUpdate()
             {
-                if (onGround) return;
-                if (Physics.Raycast(new Ray(dabomb.transform.position, Vector3.down), 1f, layerMask))
-                {
-                    ImpactDamage(dabomb.transform.position);
-                    ImpactFX(dabomb.transform.position);
-                    BaseEntity.saveList.Remove(dabomb);
-                    if (dabomb != null) { dabomb.Invoke("KillMessage", 0.1f); }
-                    GameObject.Destroy(this);
-                    onGround = true;
-                }
-                Quaternion qTo = Quaternion.Euler(new Vector3(UnityEngine.Random.Range(-180.0f, 180.0f), UnityEngine.Random.Range(-180.0f, 180.0f), UnityEngine.Random.Range(-180.0f, 180.0f)));
-                dabomb.transform.rotation = Quaternion.Slerp(dabomb.transform.rotation, qTo, Time.deltaTime * 3.0f);
-                dabomb.transform.position = dabomb.transform.position + Vector3.down * (10f * Time.deltaTime);
-                dabomb.transform.hasChanged = true;
-                dabomb.SendNetworkUpdateImmediate();
+		FuelCheck();
+		var currentspeed = normalspeed;
+                var throttlespeed = 30;
+                if (throttleup) { throttlespeed = 60; currentspeed = sprintspeed; }
+
+		if (engineon)
+		{
+			var rotorpos = barcenter.transform.eulerAngles;
+               		barcenter.transform.eulerAngles = new Vector3(rotorpos.x, rotorpos.y + throttlespeed, rotorpos.z);
+                	count = count + 1;
+                	if (count == 3)
+                	{
+                    		Effect.server.Run("assets/bundled/prefabs/fx/player/swing_weapon.prefab", this.transform.position);
+                	}
+                	if (count == 6 && throttleup) Effect.server.Run("assets/bundled/prefabs/fx/player/swing_weapon.prefab", this.transform.position);
+                	throttleup = false;
+                	if (count >= 6) count = 0;
+
+                    	var startrot = entity.transform.eulerAngles;
+                    	var startloc = entity.transform.localPosition;
+			var endloc = startloc;
+			var rotdirection = entity.transform.eulerAngles;
+                	if (islanding || currentfuel <= 0)
+                	{
+				islanding = true;
+		    		entity.transform.localPosition = entity.transform.localPosition + (transform.up * -5f) * Time.deltaTime;
+                    		RaycastHit hit;
+                    		if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask)) 
+                    		{ 
+					islanding = false; 
+					engineon = false;
+                    		}
+				ResetMovement(); 
+				RefreshEntities();
+				return;
+                	}
+
+			if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), minaltitude, layerMask)) 
+			{
+				endloc  += transform.up * minaltitude * Time.deltaTime;
+			        entity.transform.localPosition = endloc;
+                    		entity.transform.eulerAngles = rotdirection;
+				RefreshEntities();
+				return;
+			}
+
+                  	if (rotright) rotdirection = new Vector3(startrot.x, startrot.y + 2, startrot.z);
+                    	if (rotleft) rotdirection = new Vector3(startrot.x, startrot.y - 2, startrot.z);
+			if (moveforward) endloc += ((transform.forward * currentspeed) * Time.deltaTime);
+			if (movebackward) endloc += ((transform.forward * -currentspeed) * Time.deltaTime);
+			if (moveup) endloc += ((transform.up * currentspeed) * Time.deltaTime);
+			if (movedown) endloc += ((transform.up * -currentspeed) * Time.deltaTime);
+
+			if (endloc == new Vector3(0f, 0f, 0f)) endloc = startloc;
+                    	entity.transform.localPosition = endloc;
+                    	entity.transform.eulerAngles = rotdirection;
+			RefreshEntities();
+			return;
+		}
             }
+
+            void ResetMovement()
+            {
+                moveforward = false;
+                movebackward = false;
+		moveup = false;
+		movedown = false;
+                rotright = false;
+                rotleft = false;
+		throttleup = false;
+            }
+
+            void RefreshEntities()
+            {
+                entity.UpdateNetworkGroup();
+                entity.transform.hasChanged = true;
+                entity.SendNetworkUpdateImmediate();
+
+                if (floor != null) floor.transform.hasChanged = true;
+                if (floor != null) floor.SendNetworkUpdateImmediate();
+		if (floor != null) floor.UpdateNetworkGroup();
+                if (deck1 != null) deck1.transform.hasChanged = true;
+                if (deck1 != null) deck1.SendNetworkUpdateImmediate();
+		if (deck1 != null) deck1.UpdateNetworkGroup();
+                if (deck2 != null) deck2.transform.hasChanged = true;
+                if (deck2 != null) deck2.SendNetworkUpdateImmediate();
+		if (deck2 != null) deck2.UpdateNetworkGroup();
+
+                if (barrel != null) barrel.transform.hasChanged = true;
+                if (barrel != null) barrel.SendNetworkUpdateImmediate();
+		if (barrel != null) barrel.UpdateNetworkGroup();
+
+                if (barcenter != null) barcenter.transform.hasChanged = true;
+                if (barcenter != null) barcenter.SendNetworkUpdateImmediate();
+		if (barcenter != null) barcenter.UpdateNetworkGroup();
+
+                if (rotor1 != null) rotor1.transform.hasChanged = true;
+                if (rotor1 != null) rotor1.SendNetworkUpdateImmediate();
+		if (rotor1 != null) rotor1.UpdateNetworkGroup();
+                if (rotor2 != null) rotor2.transform.hasChanged = true;
+                if (rotor2 != null) rotor2.SendNetworkUpdateImmediate();
+		if (rotor2 != null) rotor2.UpdateNetworkGroup();
+                if (rotor3 != null) rotor3.transform.hasChanged = true;
+                if (rotor3 != null) rotor3.SendNetworkUpdateImmediate();
+		if (rotor3 != null) rotor3.UpdateNetworkGroup();
+                if (rotor4 != null) rotor4.transform.hasChanged = true;
+                if (rotor4 != null) rotor4.SendNetworkUpdateImmediate();
+		if (rotor4 != null) rotor4.UpdateNetworkGroup();
+
+                if (nosesign != null) nosesign.transform.hasChanged = true;
+                if (nosesign != null) nosesign.SendNetworkUpdateImmediate();
+		if (nosesign != null) nosesign.UpdateNetworkGroup();
+
+                if (tail1 != null) tail1.transform.hasChanged = true;
+                if (tail1 != null) tail1.SendNetworkUpdateImmediate();
+		if (tail1 != null) tail1.UpdateNetworkGroup();
+                if (tail2 != null) tail2.transform.hasChanged = true;
+                if (tail2 != null) tail2.SendNetworkUpdateImmediate();
+		if (tail2 != null) tail2.UpdateNetworkGroup();
+                if (tailrotor1 != null) tailrotor1.transform.hasChanged = true;
+                if (tailrotor1 != null) tailrotor1.SendNetworkUpdateImmediate();
+		if (tailrotor1 != null) tailrotor1.UpdateNetworkGroup();
+                if (tailrotor2 != null) tailrotor2.transform.hasChanged = true;
+                if (tailrotor2 != null) tailrotor2.SendNetworkUpdateImmediate();
+		if (tailrotor2 != null) tailrotor2.UpdateNetworkGroup();
+                if (skid1 != null) skid1.transform.hasChanged = true;
+                if (skid1 != null) skid1.SendNetworkUpdateImmediate();
+		if (skid1 != null) skid1.UpdateNetworkGroup();
+                if (skid2 != null) skid2.transform.hasChanged = true;
+                if (skid2 != null) skid2.SendNetworkUpdateImmediate();
+		if (skid2 != null) skid2.UpdateNetworkGroup();
+                if (skid3 != null) skid3.transform.hasChanged = true;
+                if (skid3 != null) skid3.SendNetworkUpdateImmediate();
+		if (skid3 != null) skid3.UpdateNetworkGroup();
+                if (skid4 != null) skid4.transform.hasChanged = true;
+                if (skid4 != null) skid4.SendNetworkUpdateImmediate();
+		if (skid4 != null) skid4.UpdateNetworkGroup();
+                if (wheel != null) wheel.transform.hasChanged = true;
+                if (wheel != null) wheel.SendNetworkUpdateImmediate();
+		if (wheel != null) wheel.UpdateNetworkGroup();
+
+                if (passengerchair1 != null) passengerchair1.transform.hasChanged = true;
+                if (passengerchair1 != null) passengerchair1.SendNetworkUpdateImmediate();
+		if (passengerchair1 != null) passengerchair1.UpdateNetworkGroup();
+
+                if (passengerchair2 != null) passengerchair2.transform.hasChanged = true;
+                if (passengerchair2 != null) passengerchair2.SendNetworkUpdateImmediate();
+		if (passengerchair2 != null) passengerchair2.UpdateNetworkGroup();
+
+                if (copterlock != null) copterlock.transform.hasChanged = true;
+                if (copterlock != null) copterlock.SendNetworkUpdateImmediate();
+		if (copterlock != null) copterlock.UpdateNetworkGroup();
+
+                if (panel != null) panel.transform.hasChanged = true;
+                if (panel != null) panel.SendNetworkUpdateImmediate();
+		if (panel != null) panel.UpdateNetworkGroup();
+ 	     }
 
             void OnDestroy()
             {
-                BaseEntity.saveList.Remove(dabomb);
-                if (dabomb != null) { dabomb.Invoke("KillMessage", 0.1f); }
-                GameObject.Destroy(this);
-            }
-        }
-
-        #endregion
-
-        #region CopterNet Spawner
-
-        class CopterNet : MonoBehaviour
-        {
-            BaseEntity netting1;
-            BaseEntity netting2;
-            BaseEntity netting3;
-            BasePlayer player;
-            GyroCopter copter;
-            Vector3 entitypos;
-            Quaternion entityrot;
-
-            void Awake()
-            {
-                player = GetComponent<BasePlayer>();
-                copter = player.GetComponentInParent<GyroCopter>();
-                entitypos = player.transform.position;
-                entityrot = Quaternion.identity;
-                string prefabnetting = "assets/prefabs/building/wall.frame.netting/wall.frame.netting.prefab";
-
-                netting1 = GameManager.server.CreateEntity(prefabnetting, entitypos, entityrot, false);
-                netting1?.Spawn();
-                netting1.transform.localEulerAngles = new Vector3(0, 0, 0);
-                netting1.transform.localPosition = new Vector3(0.9f, -3.7f, -1.5f);
-                var netstab1 = netting1.GetComponent<StabilityEntity>();
-                netstab1.grounded = true;
-                netting1.SetParent(player);
-
-                netting2 = GameManager.server.CreateEntity(prefabnetting, entitypos, entityrot, false);
-                netting2?.Spawn();
-                netting2.transform.localEulerAngles = new Vector3(0, 0, 0);
-                netting2.transform.localPosition = new Vector3(0.9f, -6.7f, -1.5f);
-                var netstab2 = netting2.GetComponent<StabilityEntity>();
-                netstab2.grounded = true;
-                netting2.SetParent(player);
-
-                netting3 = GameManager.server.CreateEntity(prefabnetting, entitypos, entityrot, false);
-                netting3?.Spawn();
-                netting3.transform.localEulerAngles = new Vector3(0, 0, 0);
-                netting3.transform.localPosition = new Vector3(0.9f, -9.7f, -1.5f);
-                var netstab3 = netting3.GetComponent<StabilityEntity>();
-                netstab3.grounded = true;
-                netting3.SetParent(player);
-            }
-
-            void OnDestroy()
-            {
-                BaseEntity.saveList.Remove(netting3);
-                if (netting3 != null) { netting3.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(netting2);
-                if (netting2 != null) { netting2.Invoke("KillMessage", 0.1f); }
-                BaseEntity.saveList.Remove(netting1);
-                if (netting1 != null) { netting1.Invoke("KillMessage", 0.1f); }
-                GameObject.Destroy(this);
+                BaseEntity.saveList.Remove(entity);
+                if (entity != null) { entity.Invoke("KillMessage", 0.1f); }
             }
         }
 
@@ -942,9 +796,7 @@ namespace Oxide.Plugins
         class FuelControl : MonoBehaviour
         {
             BasePlayer player;
-            PlayerCopter copter;
-            BaseEntity entity;
-            public int copterfuel;
+            GyroCopter copter;
             public string anchormaxstr;
             public string colorstr;
             Vector3 playerpos;
@@ -957,12 +809,12 @@ namespace Oxide.Plugins
             void Awake()
             {
                 instance = new Gyrocopter();
-                rechargerange = RechargeRange;
-                rechargerate = RechargeRate;
-                player = GetComponentInParent<BasePlayer>();
-                copter = GetComponentInParent<PlayerCopter>();
+		player = GetComponentInParent<BasePlayer>();
+            	copter = player.GetMounted().GetComponentInParent<GyroCopter>();
                 playerpos = player.transform.position;
-                copterfuel = 10000;
+                rechargerange = RechargeRange;
+                rechargerate = BonusRechargeRate;
+
                 ischarging = false;
                 count = 0;
             }
@@ -977,12 +829,13 @@ namespace Oxide.Plugins
                         ischarging = true;
                         ChargingFX();
                         RechargeIndicator(player);
-                        copterfuel = copterfuel + rechargerate;
+                        copter.hasbonuscharge = true;
                         return;
                     }
                 }
                 DestroyChargeCui(player);
                 ischarging = false;
+		copter.hasbonuscharge = false;
             }
 
             void ChargingFX()
@@ -998,6 +851,7 @@ namespace Oxide.Plugins
 
             void FixedUpdate()
             {
+		var copterfuel = copter.currentfuel;
                 playerpos = player.transform.position;
                 if (copterfuel >= 10000) copterfuel = 10000;
                 if (copterfuel <= 0) copterfuel = 0;
@@ -1081,10 +935,9 @@ namespace Oxide.Plugins
 
         void RemoveCopter(BasePlayer player)
         {
-            var hasgyro = player.GetComponent<PlayerCopter>();
-            if (hasgyro == null) return;
-            GameObject.Destroy(hasgyro);
-            return;
+            	var hasgyro = player.GetComponent<FuelControl>();
+            	if (hasgyro != null) GameObject.Destroy(hasgyro);
+            	return;
         }
 
         void OnPlayerDisconnected(BasePlayer player, string reason)
@@ -1107,12 +960,8 @@ namespace Oxide.Plugins
 
         void Unload()
         {
-            DestroyAll<StaticCopter>();
-            DestroyAll<PlayerCopter>();
             DestroyAll<GyroCopter>();
-            DestroyAll<DaBomb>();
             DestroyAll<FuelControl>();
-            DestroyAll<CopterNet>();
         }
 
         #endregion
