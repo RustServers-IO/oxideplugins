@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.11", ResourceId = 2383)]
+    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.12", ResourceId = 2383)]
     [Description("Adds the option to set off C4 manually without a timer")]
     public class TriggeredExplosiveCharges : RustPlugin
     {
@@ -194,6 +194,14 @@ namespace Oxide.Plugins
                 UpdateTriggerSkin();
             }
 
+            public void Reset_C4_Mode()
+            {
+                if (trigger != null && trigger.skin != c4_mode)
+                    return;
+
+                c4_mode = (ulong)C4_MODE.TIMED;
+            }
+
             private void UpdateTriggerSkin()
             {
                 if (trigger == null || trigger.skin == c4_mode)
@@ -205,9 +213,8 @@ namespace Oxide.Plugins
                 int position = trigger.position;
 
                 trigger.RemoveFromContainer();
-                newItem.MoveToContainer(player.inventory.containerBelt, position);
-
                 trigger = newItem;
+                newItem.MoveToContainer(player.inventory.containerBelt, position);
             }
 
             public void UpdateActiveItem()
@@ -412,6 +419,7 @@ namespace Oxide.Plugins
                 // ToolCupboard
                 entity = basecombat = null;
                 entity = CreateEntity(position, y_rotation, toolCupboardInfo.position, toolCupboardInfo.rotation, toolCupboardInfo.prefabName, player);
+                ((DecayEntity)entity).buildingID = (uint)buidlingID;
                 entity.Spawn();
                 saveData.shopEntities.Add(entity.net.ID);
                 basecombat = entity.GetComponentInParent<BaseCombatEntity>();
@@ -714,6 +722,9 @@ namespace Oxide.Plugins
 
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
+            if (entity == null || info == null || entity.net == null)
+                return;
+
             if (saveData.vendingMachines.Contains(entity.net.ID) || saveData.shopEntities.Contains(entity.net.ID))
                 info.damageTypes = new Rust.DamageTypeList();
         }
@@ -722,6 +733,21 @@ namespace Oxide.Plugins
         {
             if (configuration.C4_ALLOW_PICKUP && item.info.itemid == 498591726)
                 TriggeredExplosivesManager.Pickup(item);
+        }
+
+        void OnItemRemovedFromContainer(ItemContainer container, Item item)
+        {
+            BasePlayer player = container.GetOwnerPlayer();
+
+            if (player != null && (item.skin == TRIGGER_SKIN_TIMED_MODE || item.skin == TRIGGER_SKIN_TRIGGERD_MODE))
+            {
+                foreach (Item i in player.inventory.FindItemIDs(item.info.itemid))
+                {
+                    if(item.skin == TRIGGER_SKIN_TIMED_MODE || item.skin == TRIGGER_SKIN_TRIGGERD_MODE)
+                        return;
+                }
+                TriggeredExplosivesManager.allManagers[player.userID].Reset_C4_Mode();
+            }
         }
         #endregion
 

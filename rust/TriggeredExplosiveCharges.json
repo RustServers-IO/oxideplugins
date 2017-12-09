@@ -2,7 +2,7 @@
     "name": "Triggered Explosive Charges",
     "description": "Adds the option to set off C4 manually without a timer",
     "author": "",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/triggered-explosive-charges.2383",
