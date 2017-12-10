@@ -1,28 +1,29 @@
 ﻿using System.Collections.Generic;
-using Facepunch;
-using UnityEngine;
 
 namespace Oxide.Plugins
 { 
-    [Info("PrivilegeDeploy", "k1lly0u", "0.1.3", ResourceId = 1800)]
+    [Info("PrivilegeDeploy", "k1lly0u", "0.1.4", ResourceId = 1800)]
     class PrivilegeDeploy : RustPlugin
     {
-        private readonly int triggerMask = LayerMask.GetMask("Trigger", "Construction");
-        private bool Loaded = false;
+        private bool isInitialized = false;
 
-        Dictionary<string, string> prefabToItem = new Dictionary<string, string>();
-        Dictionary<string, List<ItemAmount>> constructionToIngredients = new Dictionary<string, List<ItemAmount>>();
+        private Dictionary<string, string> prefabToItem = new Dictionary<string, string>();
+        private Dictionary<string, List<ItemAmount>> constructionToIngredients = new Dictionary<string, List<ItemAmount>>();
 
         private Dictionary<ulong, PendingItem> pendingItems = new Dictionary<ulong, PendingItem>();
 
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             LoadVariables();
+            RegisterMessages();
             InitValidList();
+
+            isInitialized = true;
         }
-        void OnEntitySpawned(BaseNetworkable entity)
+
+        private void OnEntitySpawned(BaseNetworkable entity)
         {
-            if (Loaded)
+            if (isInitialized)
             {
                 if (configData.deployables.Contains(entity.ShortPrefabName) || configData.deployables.Contains(entity.PrefabName))
                 {
@@ -30,37 +31,42 @@ namespace Oxide.Plugins
                     if (ownerID != 0)
                     {
                         BasePlayer player = BasePlayer.FindByID(ownerID);
-                        if (player == null || player.IsAdmin) return;
-                        if (!HasPriv(player))
+                        if (player == null || player.IsAdmin || IsInPrivilege(player)) return;
+
+                        List<ItemAmount> items = new List<ItemAmount>();
+                        if (entity is BuildingBlock && constructionToIngredients.ContainsKey(entity.PrefabName))
                         {
-                            List<ItemAmount> items = new List<ItemAmount>();
-                            if (entity is BuildingBlock && constructionToIngredients.ContainsKey(entity.PrefabName))
-                            {
-                                foreach (var ingredient in constructionToIngredients[entity.PrefabName])
-                                    items.Add(ingredient);
-                            }
-                            else if (prefabToItem.ContainsKey(entity.PrefabName))                            
-                                items.Add(new ItemAmount { amount = 1, startAmount = 1, itemDef = ItemManager.FindItemDefinition(prefabToItem[entity.PrefabName]) });
-                            
-                            if (!pendingItems.ContainsKey(player.userID))
-                                pendingItems.Add(player.userID, new PendingItem());
-                            pendingItems[player.userID].items = items;
-
-                            CheckForDuplicate(player);
-
-                            if (entity is BaseCombatEntity)
-                                (entity as BaseCombatEntity).DieInstantly();
-                            else entity.Kill();
+                            foreach (var ingredient in constructionToIngredients[entity.PrefabName])
+                                items.Add(ingredient);
                         }
+                        else if (prefabToItem.ContainsKey(entity.PrefabName))
+                            items.Add(new ItemAmount { amount = 1, startAmount = 1, itemDef = ItemManager.FindItemDefinition(prefabToItem[entity.PrefabName]) });
+
+                        if (!pendingItems.ContainsKey(player.userID))
+                            pendingItems.Add(player.userID, new PendingItem());
+                        pendingItems[player.userID].items = items;
+
+                        CheckForDuplicate(player);
+
+                        StorageContainer container = entity.GetComponent<StorageContainer>();
+                        if (container != null)                        
+                            container.inventory.Clear();                        
+
+                        if (entity is BaseTrap || !(entity is BaseCombatEntity))
+                            entity.Kill();
+                        else (entity as BaseCombatEntity).DieInstantly();
                     }
                 }
             }
-        }      
+        }
+      
         private void CheckForDuplicate(BasePlayer player)
         {
-            if (pendingItems[player.userID].timer != null) pendingItems[player.userID].timer.Destroy();               
+            if (pendingItems[player.userID].timer != null)
+                pendingItems[player.userID].timer.Destroy();               
             pendingItems[player.userID].timer = timer.Once(0.01f, () => GivePlayerItem(player));
         }
+
         private void GivePlayerItem(BasePlayer player)
         {
             foreach(var itemAmount in pendingItems[player.userID].items)
@@ -78,28 +84,17 @@ namespace Oxide.Plugins
             SendReply(player, lang.GetMessage("blocked", this, player.UserIDString));
             pendingItems.Remove(player.userID);
         }
-        
-        private bool HasPriv(BasePlayer player)
+
+        private bool IsInPrivilege(BasePlayer player)
         {
-            var colliders = Pool.GetList<Collider>();
-            Vis.Colliders(player.transform.position + new Vector3(0, player.bounds.max.y, 0), 0.2f, colliders, LayerMask.GetMask("Trigger"));
-            foreach (var collider in colliders)
-            {
-                if (collider.gameObject != null && collider.gameObject.name == "areaTrigger" && collider.gameObject.layer == 18)
-                {
-                    var cupboard = collider.gameObject.GetComponentInParent<BuildingPrivlidge>();
-                    if (cupboard != null)
-                    {
-                        if (cupboard.IsAuthed(player)) return true;
-                    }
-                }
-            }
-            Pool.FreeList(ref colliders);
-            return false;           
+            BuildingPrivlidge buildingPrivilege = player.GetBuildingPrivilege(player.WorldSpaceBounds());
+            if (buildingPrivilege == null)            
+                return false;            
+            return buildingPrivilege.IsAuthed(player);
         }
 
         #region Prefab to Item links
-        void InitValidList()
+        private void InitValidList()
         {
             foreach (var item in ItemManager.GetItemDefinitions())
             {
@@ -121,16 +116,15 @@ namespace Oxide.Plugins
         #endregion
 
         #region Config
-
         private ConfigData configData;
+
         class ConfigData
         {
             public List<string> deployables { get; set; }
         }
+
         private void LoadVariables()
-        {
-            Loaded = true;
-            RegisterMessages();
+        {           
             LoadConfigVariables();
             SaveConfig();
         }
@@ -159,7 +153,9 @@ namespace Oxide.Plugins
             SaveConfig(config);
         }
         private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+
+        private void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+
         class PendingItem
         {
             public Timer timer;
