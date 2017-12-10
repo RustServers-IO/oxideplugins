@@ -6,12 +6,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildRevert", "nivex", "1.0.1", ResourceId = 2465)]
+    [Info("BuildRevert", "nivex", "1.0.2", ResourceId = 2465)]
     [Description("Prevent building in blocked area.")]
     public class BuildRevert : RustPlugin
     {
         Dictionary<string, bool> constructions = new Dictionary<string, bool>();
-        readonly int layerMask = LayerMask.GetMask("Trigger");
+        readonly int layerMask = LayerMask.GetMask("Trigger", "Prevent Building", "Deployed");
         readonly Vector3 upOffset = new Vector3(0f, 0.6f, 0f);
 
         void OnServerInitialized() => LoadVariables();
@@ -37,10 +37,13 @@ namespace Oxide.Plugins
 
             foreach(var collider in colliders)
             {
+                Puts(collider.name);
                 var p = collider.GetComponentInParent<BuildingPrivlidge>();
 
                 if (p != null && p.IsOlderThan(priv))
+                {
                     priv = p;
+                }
             }
             
             Pool.FreeList<Collider>(ref colliders);

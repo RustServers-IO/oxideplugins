@@ -1,18 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using Oxide.Core;
+using Oxide.Core.Plugins;
 using UnityEngine;
-
-using IEnumerator = System.Collections.IEnumerator;
+using Diag = System.Diagnostics;
 
 namespace Oxide.Plugins
 {
-	[Info("SaveMyMap", "Fujikura", "1.2.2", ResourceId = 2111)] 
+	[Info("SaveMyMap", "Fujikura", "1.3.2", ResourceId = 2111)] 
 	class SaveMyMap : RustPlugin
 	{
 		bool Changed;
 		SaveRestore saveRestore = null;
+		bool wasShutDown;
 		int Rounds;
 		bool Initialized;
 		string saveFolder;
@@ -26,6 +28,7 @@ namespace Oxide.Plugins
 		bool saveAfterLoadFile;
 		bool allowOutOfDateSaves;
 		bool enableLoadOverride;
+		bool onServerSaveUseCoroutine;
 		int numberOfSaves;
 
 		object GetConfig(string menu, string datavalue, object defaultValue)
@@ -56,7 +59,7 @@ namespace Oxide.Plugins
 			saveAfterLoadFile = Convert.ToBoolean(GetConfig("Settings", "saveAfterLoadFile", true));
 			enableLoadOverride = Convert.ToBoolean(GetConfig("Settings", "enableLoadOverride", true));
 			allowOutOfDateSaves = Convert.ToBoolean(GetConfig("Settings", "allowOutOfDateSaves", false));
-			numberOfSaves = Convert.ToInt32(GetConfig("Settings", "numberOfSaves", 10));
+			onServerSaveUseCoroutine = Convert.ToBoolean(GetConfig("Settings", "onServerSaveUseCoroutine", true));
 
 			if (!Changed) return;
 			SaveConfig();
@@ -93,6 +96,7 @@ namespace Oxide.Plugins
 			LoadDefaultMessages();
 			Rounds = 0;
 			saveFolders = SaveFolders();
+			wasShutDown = false;
 		}
 
 		void Unload()
@@ -106,46 +110,57 @@ namespace Oxide.Plugins
 			saveRestore = SingletonComponent<SaveRestore>.Instance;
 			saveRestore.timedSave = false;
 			saveFolder = $"{ConVar.Server.rootFolder}/saves/{0}/";
-			timer.Every(saveInterval, SaveLoop);
+			timer.Every(saveInterval, () =>ServerMgr.Instance.StartCoroutine(SaveLoop()));
 			Initialized = true;
 			Puts(lang.GetMessage("loadedinfo", this), saveInterval, saveCustomAfter);
 		}		
 		
-		void SaveLoop()
+		IEnumerator SaveLoop()
 		{
-			if (!Initialized) return;
+			if (!Initialized)
+				yield return null;
+			WaitForFixedUpdate waitU = new WaitForFixedUpdate();
 			BaseEntity.saveList.RemoveWhere(p => !p);
             BaseEntity.saveList.RemoveWhere(p => p == null);
-			if (Rounds < saveCustomAfter && saveCustomAfter > 0) {
-				foreach (BaseEntity current in BaseEntity.saveList)
-					current.InvalidateNetworkCache();
-				if (callOnServerSave)
-					timer.Once(delayCallOnServerSave, () => Interface.CallHook("OnServerSave", null));
+			Diag.Stopwatch stopwatch = Diag.Stopwatch.StartNew();
+			foreach (BaseEntity current in BaseEntity.saveList)
+				current.InvalidateNetworkCache();
+			Debug.Log("Invalidate Network Cache took " + stopwatch.Elapsed.TotalSeconds.ToString("0.00") + " seconds");
+			if (Rounds < saveCustomAfter && saveCustomAfter > 0)
+			{
 				IEnumerator original = SaveRestore.Save(ConVar.Server.rootFolder+"/"+SaveRestore.SaveFileName, true);					
 				while (original.MoveNext()) {} 
+				Debug.Log("Saving complete");
 				if (!callOnServerSave) Interface.Oxide.DataFileSystem.WriteObject(this.Title, new List<object>(new object[] { ConVar.Server.rootFolder+"/"+SaveRestore.SaveFileName, "default" }) );
 				Rounds++;
-			} else {
+				CallOnServerSave();
+			}
+			else
+			{
 				string file = saveFolder + SaveRestore.SaveFileName;
-				if (callOnServerSave)
-					timer.Once(delayCallOnServerSave, () => Interface.CallHook("OnServerSave", file));
+				DirectoryEx.Backup(SaveFolders());
+				yield return waitU;
+				ConVar.Server.GetServerFolder("saves/0/");
+				yield return waitU;
 				try {
-					SaveBackupCreate();
-					foreach (BaseEntity current in BaseEntity.saveList)
-						current.InvalidateNetworkCache();
 					IEnumerator custom = SaveRestore.Save(file, true);					
 					while (custom.MoveNext()) {}
+					Debug.Log("Custom Saving complete");
 					if (!callOnServerSave) Interface.Oxide.DataFileSystem.WriteObject(this.Title, new List<object>(new object[] { file, "custom" }) );}
 				catch { PrintWarning(lang.GetMessage("dirnotfound", this)); }
+				CallOnServerSave();
 				Rounds = 0;
 			}
+			yield return null;
 		}
 
-		void OnServerShutdown()
+		void OnPluginUnloaded(Plugin name)
 		{
-				string file = ConVar.Server.rootFolder+"/"+SaveRestore.SaveFileName;
-				string type = "default";
-				Interface.Oxide.DataFileSystem.WriteObject(this.Title, new List<object>(new object[] { file, type }) );
+			if (Interface.Oxide.IsShuttingDown && !wasShutDown)
+			{
+				wasShutDown = true;
+				saveRestore.timedSave = true;
+			}
 		}
 
 		void OnServerSave(object file = null)
@@ -161,7 +176,6 @@ namespace Oxide.Plugins
 			Interface.Oxide.DataFileSystem.WriteObject(this.Title, new List<object>(new object[] { file, type }) );
 		}
 		
-		/*
 		object OnSaveLoad(Dictionary<BaseEntity, ProtoBuf.Entity> dictionary)
 		{
 			if (Initialized || loadReload || !enableLoadOverride) return null;
@@ -183,7 +197,6 @@ namespace Oxide.Plugins
 			}
 			return null;
 		}
-		*/
 		
 		void OnNewSave(string strFilename)
 		{
@@ -203,6 +216,32 @@ namespace Oxide.Plugins
 				}
 		}
 		
+		void CallOnServerSave()
+		{
+			if (Interface.Oxide.IsShuttingDown)
+				return;
+			if (callOnServerSave)
+				NextTick( () => timer.Once(delayCallOnServerSave, () =>
+				{
+					if (onServerSaveUseCoroutine)
+						ServerMgr.Instance.StartCoroutine(SaveCoroutine());
+					else
+						Interface.CallHook("OnServerSave", null);
+				}));
+		}
+
+		IEnumerator SaveCoroutine()
+		{
+			WaitForFixedUpdate waitU = new WaitForFixedUpdate();
+			var allPlugins = plugins.GetAll().Where(r => !r.IsCorePlugin);
+			foreach (var plugin in allPlugins.ToList())
+			{
+				plugin.CallHook("OnServerSave", null);
+				yield return waitU;
+			}
+			yield return null;
+		}		
+		
 		[ConsoleCommand("smm.save")]
 		void cMapSave(ConsoleSystem.Arg arg)
 		{
@@ -214,16 +253,25 @@ namespace Oxide.Plugins
 			SaveBackupCreate();
 			string saveName;
 			saveName = saveFolder + SaveRestore.SaveFileName;
+			foreach (BaseEntity current in BaseEntity.saveList)
+				current.InvalidateNetworkCache();
+			Diag.Stopwatch stopwatch = Diag.Stopwatch.StartNew();
+			UnityEngine.Debug.Log("Invalidate Network Cache took " + stopwatch.Elapsed.TotalSeconds.ToString("0.00") + " seconds");
 			try {
 				BaseEntity.saveList.RemoveWhere(p => !p);
 				BaseEntity.saveList.RemoveWhere(p => p == null);
-				foreach (BaseEntity current in BaseEntity.saveList)
-					current.InvalidateNetworkCache();
 				IEnumerator enumerator = SaveRestore.Save(saveName, true);
 				while (enumerator.MoveNext()) {}
 				Interface.Oxide.DataFileSystem.WriteObject(this.Title, new List<object>(new object[] { saveName, "custom" }) );
 				arg.ReplyWith(lang.GetMessage("customsavecomplete", this, arg.Connection != null ? arg.Connection.userid.ToString() : null )); }
 			catch { PrintWarning(lang.GetMessage("dirnotfound", this)); }
+			CallOnServerSave();
+		}
+		
+		[ConsoleCommand("server.savemymap")]
+		void cMapServerSave(ConsoleSystem.Arg arg)
+		{		
+			cMapSave(arg);
 		}
 		
 		[ConsoleCommand("smm.loadmap")]
@@ -271,7 +319,11 @@ namespace Oxide.Plugins
 
 			foreach (var player in BasePlayer.activePlayerList.ToList())
 				player.Kick(lang.GetMessage("kickreason", this));
-
+			foreach (BaseEntity current in BaseEntity.saveList.ToList())
+				if (current != null)
+					current.Kill();
+			BaseEntity.saveList.Clear();
+			ItemManager.DoRemoves();
 			if (SaveRestore.Load(file, allowOutOfDateSaves))
 			{
 				if (saveAfterLoadFile)
@@ -299,7 +351,11 @@ namespace Oxide.Plugins
 			}
 			foreach (var player in BasePlayer.activePlayerList.ToList())
 				player.Kick(lang.GetMessage("kickreason", this));
-
+			foreach (BaseEntity current in BaseEntity.saveList.ToList())
+				if (current != null)
+					current.Kill();
+			BaseEntity.saveList.Clear();
+			ItemManager.DoRemoves();
 			if (SaveRestore.Load(ConVar.Server.rootFolder+"/"+arg.Args[0], true))
 			{
 				if (saveAfterLoadFile)
@@ -314,6 +370,16 @@ namespace Oxide.Plugins
 				SendReply(arg, lang.GetMessage("filenotfound", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 				return;
 			}
+		}
+
+		[ConsoleCommand("smm.savefix")]
+		void cLoadFix(ConsoleSystem.Arg arg)
+		{
+			if(arg.Connection != null && arg.Connection.authLevel < 2) return;
+			BaseEntity.saveList.RemoveWhere(p => !p);
+            BaseEntity.saveList.RemoveWhere(p => p == null);
+			foreach (BaseEntity current in BaseEntity.saveList)
+				current.InvalidateNetworkCache();
 		}
 
 		Int32 UnixTimeStampUTC()

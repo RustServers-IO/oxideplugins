@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using System.Reflection;
 using Oxide.Core;
@@ -10,7 +11,7 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("BackupExt", "Fujikura", "1.0.0", ResourceId = 2137 )]
+    [Info("BackupExt", "Fujikura", "1.0.1", ResourceId = 2137 )]
     class BackupExt : RustPlugin
     {
 		bool Changed;
@@ -133,6 +134,19 @@ namespace Oxide.Plugins
 			}
 		}		
 
+		IEnumerator BackupCreateI(bool manual = false)
+		{
+			DirectoryEx.Backup(BackupFolders());
+			yield return new WaitForEndOfFrame();
+			DirectoryEx.CopyAll(ConVar.Server.rootFolder, backupFolders[0]);
+			yield return new WaitForEndOfFrame();
+			if (includeOxideInBackups)
+				DirectoryEx.CopyAll("oxide", backupFoldersOxide[0]);
+			if (!manual)
+				Puts(lang.GetMessage("backupfinish", this));
+			yield return null;
+		}
+
 		void BackupCreate(bool manual = false)
 		{
 			DirectoryEx.Backup(BackupFolders());
@@ -190,7 +204,7 @@ namespace Oxide.Plugins
 			if (backupBroadcast)
 				BroadcastChat(lang.GetMessage("backuprunning", this));
 			SendReply(arg, lang.GetMessage("backuprunning", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
-			BackupCreate(true);
+			NextFrame( () => ServerMgr.Instance.StartCoroutine(BackupCreateI(true)));
 			SendReply(arg, lang.GetMessage("backupfinish", this, arg.Connection != null ? arg.Connection.userid.ToString() : null ));
 			if (backupBroadcast)
 				BroadcastChat(lang.GetMessage("backupfinish", this));
