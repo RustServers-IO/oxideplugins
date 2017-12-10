@@ -273,7 +273,6 @@ namespace Oxide.Plugins
 		
 		private void OnCollectiblePickup(Item item, BasePlayer player)
 		{
-            Puts(item.ToString()); 
 			if (!Economics && !ServerRewards) return;
 			if (player == null) return;
 			resource = null;
@@ -369,7 +368,6 @@ namespace Oxide.Plugins
                 else if (entity.GetComponent("BaseNpc"))
 				{
 					animal = UppercaseFirst(entity.LookupPrefab().ToString().Replace("[0]", ""));
-					Puts(animal);
 					config.Settings.Rewards.TryGetValue(animal, out amount);
 				}
             }
