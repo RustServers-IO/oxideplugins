@@ -3,10 +3,11 @@ using UnityEngine;
 using System.Linq;
 using Oxide.Core;
 using System;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.1.1", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.1.2", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -60,8 +61,8 @@ namespace Oxide.Plugins
             private BaseEntity _boxEntity;
             private BaseEntity _visualEntity;
 
-            public bool IsOpen => _boxEntity != null;
-            public StorageContainer Container => _boxEntity?.GetComponent<StorageContainer>();
+            [JsonIgnore] public bool IsOpen => _boxEntity != null;
+            [JsonIgnore] public StorageContainer Container => _boxEntity?.GetComponent<StorageContainer>();
 
             public StorageSize Size =>
                 Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.large") ? StorageSize.Large :
@@ -123,6 +124,11 @@ namespace Oxide.Plugins
 
             public void Open(BasePlayer player)
             {
+                
+                Instance.PrintWarning(JsonConvert.SerializeObject(this, Formatting.Indented));
+
+                //return;
+
                 if (IsOpen)
                 {
                     Instance.PrintToChat(player, Instance.lang.GetMessage("Backpack Already Open", Instance, player.UserIDString));
@@ -265,22 +271,38 @@ namespace Oxide.Plugins
         private class BackpackInventory
         {
             public List<BackpackItem> Items = new List<BackpackItem>();
-
+            
             public class BackpackItem
             {
                 public int ID;
-                public int Position;
+                public int Position = -1;
                 public int Amount;
+
+                [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public ulong Skin;
+
+                [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public float Fuel;
+
+                [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public int FlameFuel;
+
+                [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public float Condition;
+
+                [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public float MaxCondition;
+
+                [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public int Ammo;
+
+                [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public int AmmoType;
+
                 public bool IsBlueprint;
                 public int BlueprintTarget;
-
+                
+                [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
                 public List<BackpackItem> Contents = new List<BackpackItem>();
 
                 public Item ToItem()
