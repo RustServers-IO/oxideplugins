@@ -3,11 +3,10 @@ using UnityEngine;
 using System.Linq;
 using Oxide.Core;
 using System;
-using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.1.0", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.1.1", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -15,7 +14,7 @@ namespace Oxide.Plugins
         private static Dictionary<ulong, Backpack> backpacks = new Dictionary<ulong, Backpack>();
 
         [PluginReference]
-        private Plugin EventManager;
+        private RustPlugin EventManager;
 
         #region Classes
 
@@ -58,11 +57,11 @@ namespace Oxide.Plugins
             public BackpackInventory Inventory = new BackpackInventory();
             public ulong ownerID;
 
-            private BaseEntity entity;
-            private BaseEntity visualEntity;
+            private BaseEntity _boxEntity;
+            private BaseEntity _visualEntity;
 
-            public bool IsOpen => entity != null;
-            public StorageContainer Container => entity.GetComponent<StorageContainer>();
+            public bool IsOpen => _boxEntity != null;
+            public StorageContainer Container => _boxEntity?.GetComponent<StorageContainer>();
 
             public StorageSize Size =>
                 Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.large") ? StorageSize.Large :
@@ -109,7 +108,7 @@ namespace Oxide.Plugins
                     }
 
                     foreach (var backpackItem in Inventory.Items)
-                        backpackItem.ToItem().MoveToContainer(entity.GetComponent<StorageContainer>().inventory);
+                        backpackItem.ToItem().MoveToContainer(container.inventory);
                 }
 
                 Erase();
@@ -129,30 +128,34 @@ namespace Oxide.Plugins
                     Instance.PrintToChat(player, Instance.lang.GetMessage("Backpack Already Open", Instance, player.UserIDString));
                     return;
                 }
-
+                
                 if (Instance.EventManager?.Call<bool>("isPlaying", player) ?? false)
                 {
                     Instance.PrintToChat(player, Instance.lang.GetMessage("May Not Open Backpack In Event", Instance, player.UserIDString));
                     return;
                 }
 
-                entity = SpawnContainer(Size, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
+                _boxEntity = SpawnContainer(Size, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
 
                 foreach (var backpackItem in Inventory.Items)
-                    backpackItem.ToItem()?.MoveToContainer(Container.inventory);
+                {
+                    var item = backpackItem.ToItem();
+                    item?.MoveToContainer(Container.inventory, item.position);
+                }
+                    
 
                 PlayerLootContainer(player, Container);
-                StorageCloser.Attach(entity, Close);
+                StorageCloser.Attach(_boxEntity, Close);
             }
 
             private void Close(BasePlayer player)
             {
-                if (entity != null)
+                if (_boxEntity != null)
                 {
                     Inventory.Items = Container.inventory.itemList.Select(BackpackInventory.BackpackItem.FromItem).ToList();
 
-                    entity.Kill();
-                    entity = null;
+                    _boxEntity.Kill();
+                    _boxEntity = null;
                 }
 
                 if (player.userID != ownerID)
@@ -163,7 +166,7 @@ namespace Oxide.Plugins
                     {
                         if (Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
                             RemoveVisual();
-                        else if (visualEntity == null)
+                        else if (_visualEntity == null)
                             SpawnVisual(target);
                     }
                 }
@@ -171,7 +174,7 @@ namespace Oxide.Plugins
                 {
                     if (Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
                         RemoveVisual();
-                    else if (visualEntity == null)
+                    else if (_visualEntity == null)
                         SpawnVisual(player);
                 }
 
@@ -182,7 +185,7 @@ namespace Oxide.Plugins
 
             public void SpawnVisual(BasePlayer player)
             {
-                if (visualEntity != null || !Configuration.ShowOnBack)
+                if (_visualEntity != null || !Configuration.ShowOnBack)
                     return;
 
                 /*var ent = GameManager.server.CreateEntity("assets/prefabs/weapons/satchelcharge/explosive.satchel.deployed.prefab", new Vector3(0, 0.35F, -0.075F), Quaternion.Euler(0, 90, -90));
@@ -226,15 +229,15 @@ namespace Oxide.Plugins
                 ent.creatorEntity = player;
                 ent.OwnerID = player.userID;
 
-                visualEntity = ent;
+                _visualEntity = ent;
             }
 
             public void RemoveVisual()
             {
-                if (visualEntity != null)
+                if (_visualEntity != null)
                 {
-                    visualEntity.Kill();
-                    visualEntity = null;
+                    _visualEntity.Kill();
+                    _visualEntity = null;
                 }
             }
 
@@ -266,6 +269,7 @@ namespace Oxide.Plugins
             public class BackpackItem
             {
                 public int ID;
+                public int Position;
                 public int Amount;
                 public ulong Skin;
                 public float Fuel;
@@ -285,6 +289,8 @@ namespace Oxide.Plugins
                         return null;
 
                     Item item = ItemManager.CreateByItemID(ID, Amount, Skin);
+
+                    item.position = Position;
 
                     if (IsBlueprint)
                     {
@@ -320,11 +326,12 @@ namespace Oxide.Plugins
                 public static BackpackItem FromItem(Item item) => new BackpackItem
                 {
                     ID = item.info.itemid,
+                    Position = item.position,
                     Ammo = item.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine?.contents ?? 0,
                     AmmoType = item.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine?.ammoType?.itemid ?? 0,
                     Amount = item.amount,
-                    MaxCondition = item.maxCondition,
                     Condition = item.condition,
+                    MaxCondition = item.maxCondition,
                     Fuel = item.fuel,
                     Skin = item.skin,
                     Contents = item.contents?.itemList?.Select(FromItem).ToList(),
@@ -459,19 +466,6 @@ namespace Oxide.Plugins
                 ent.KillMessage();
         }
 
-        private object CanAcceptItem(ItemContainer container, Item item)
-        {
-            if (!Configuration.UseBlacklist)
-                return null;
-
-            // Is the Item blacklisted and the target container is a backpack?
-            if (Configuration.BlacklistedItems.Any(i => i.ToString() == item.info.shortname) &&
-                backpacks.Values.Any(b => b.Container.inventory == container))
-                return ItemContainer.CanAcceptResult.CannotAccept;
-            
-            return null;
-        }
-
         private void OnPlayerInit(BasePlayer player)
         {
             Backpack backpack = Backpack.LoadOrCreate(player.userID);
@@ -489,6 +483,19 @@ namespace Oxide.Plugins
         {
             if (backpacks.ContainsKey(player.userID))
                 backpacks.Remove(player.userID);
+        }
+
+        private object CanAcceptItem(ItemContainer container, Item item)
+        {
+            if (!Configuration.UseBlacklist)
+                return null;
+
+            // Is the Item blacklisted and the target container is a backpack?
+            if (Configuration.BlacklistedItems.Any(i => i.ToString() == item.info.shortname) &&
+                backpacks.Values.Any(b => b.Container != null && b.Container.inventory == container))
+                return ItemContainer.CanAcceptResult.CannotAccept;
+
+            return null;
         }
 
         private void OnUserPermissionGranted(string id, string perm)
