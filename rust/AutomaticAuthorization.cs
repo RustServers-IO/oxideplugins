@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutomaticAuthorization", "k1lly0u", "0.2.02", ResourceId = 2063)]
+    [Info("AutomaticAuthorization", "k1lly0u", "0.2.03", ResourceId = 2063)]
     class AutomaticAuthorization : RustPlugin
     {
         #region Fields
@@ -175,7 +175,6 @@ namespace Oxide.Plugins
                 });
             }           
             cupboard.SendNetworkUpdateImmediate();
-            cupboard.UpdateAllPlayers();
             if (player != null)
             {
                 player.SendNetworkUpdateImmediate();

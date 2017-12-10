@@ -14,7 +14,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneManager", "Reneb / Nogrod", "2.4.3", ResourceId = 739)]
+    [Info("ZoneManager", "Reneb / Nogrod", "2.4.6", ResourceId = 739)]
     public class ZoneManager : RustPlugin
     {
         #region Fields
@@ -408,8 +408,8 @@ namespace Oxide.Plugins
                 if (instance.HasZoneFlag(this, ZoneFlags.NoDecay))
                 {
                     var decayEntity = col.GetComponentInParent<DecayEntity>();
-                    if (decayEntity != null && decay.GetValue(decayEntity) != null && BuildingManager.DecayEntities.Contains(decayEntity))                    
-                        BuildingManager.DecayEntities.Remove(decayEntity);                    
+                    if (decayEntity != null)
+                        typeof(DecayEntity).GetField("decay", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(decayEntity, null);         
                 }
                 var resourceDispenser = col.GetComponentInParent<ResourceDispenser>();
                 if (resourceDispenser != null) 
@@ -442,8 +442,8 @@ namespace Oxide.Plugins
                 if (instance.HasZoneFlag(this, ZoneFlags.NoDecay))
                 {
                     var decayEntity = col.GetComponentInParent<DecayEntity>();
-                    if (decayEntity != null && decay.GetValue(decayEntity) != null && !BuildingManager.DecayEntities.Contains(decayEntity))
-                        BuildingManager.DecayEntities.Add(decayEntity);                        
+                    if (decayEntity != null)
+                        typeof(DecayEntity).GetField("decay", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(decayEntity, PrefabAttribute.server.Find<Decay>(decayEntity.prefabID));
                 }
                 var resourceDispenser = col.GetComponentInParent<ResourceDispenser>();
                 if (resourceDispenser != null)
@@ -694,11 +694,11 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             if (Initialized) return;
-            var values = Enum.GetValues(typeof(ZoneFlags)).Cast<ZoneFlags>();
-            foreach (var flagse in values)
-            {
-                Puts("{0} {1}", flagse, (ulong)flagse);
-            }            
+            //var values = Enum.GetValues(typeof(ZoneFlags)).Cast<ZoneFlags>();
+            //foreach (var flagse in values)
+            //{
+            //    Puts("{0} {1}", flagse, (ulong)flagse);
+            //}            
             
             timer.In(1, () => {
                 SetupCollectibleEntity();
@@ -780,8 +780,13 @@ namespace Oxide.Plugins
                 
         private void OnPlayerDisconnected(BasePlayer player)
         {
-            if (HasPlayerFlag(player, ZoneFlags.KillSleepers) && !CanBypass(player, ZoneFlags.KillSleepers) && !isAdmin(player)) player.Die();
-            else if (HasPlayerFlag(player, ZoneFlags.EjectSleepers) && !CanBypass(player, ZoneFlags.EjectSleepers) && !isAdmin(player))
+            if (HasPlayerFlag(player, ZoneFlags.KillSleepers) && !CanBypass(player, ZoneFlags.KillSleepers) && !isAdmin(player))
+            {
+                player.Die();
+                return;
+            }            
+
+            if (HasPlayerFlag(player, ZoneFlags.EjectSleepers) && !CanBypass(player, ZoneFlags.EjectSleepers) && !isAdmin(player))
             {
                 HashSet<Zone> zones;
                 if (!playerZones.TryGetValue(player, out zones) || zones.Count == 0) return;
@@ -799,9 +804,13 @@ namespace Oxide.Plugins
         private void OnPlayerAttack(BasePlayer attacker, HitInfo hitinfo)
         {
             var disp = hitinfo?.HitEntity?.GetComponent<ResourceDispenser>();
-            if (disp == null) return;
+            if (disp == null || hitinfo.Weapon.GetComponent<BaseMelee>() == null)
+                return;
+                       
             HashSet<Zone> resourceZone;
-            if (!resourceZones.TryGetValue(disp, out resourceZone)) return;
+            if (!resourceZones.TryGetValue(disp, out resourceZone))
+                return;
+
             foreach (var zone in resourceZone)
             {
                 if (HasZoneFlag(zone, ZoneFlags.NoGather) && !CanBypass(attacker, ZoneFlags.NoGather))

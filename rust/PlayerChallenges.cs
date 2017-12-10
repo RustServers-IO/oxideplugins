@@ -5,12 +5,14 @@ using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
+using Newtonsoft.Json;
 using UnityEngine;
 using System.Linq;
+using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerChallenges", "k1lly0u", "2.0.21", ResourceId = 1442)]
+    [Info("PlayerChallenges", "k1lly0u", "2.0.30", ResourceId = 1442)]
     class PlayerChallenges : RustPlugin
     {
         #region Fields
@@ -26,21 +28,24 @@ namespace Oxide.Plugins
         private Dictionary<ulong, StatData> statCache = new Dictionary<ulong, StatData>();
         private Dictionary<Challenges, LeaderData> titleCache = new Dictionary<Challenges, LeaderData>();
         private Dictionary<ulong, WoundedData> woundedData = new Dictionary<ulong, WoundedData>();
+        
 
         private bool UIDisabled = false;
         #endregion
 
         #region UI Creation
-        class PCUI
+        class UI
         {
-            static public CuiElementContainer CreateElementContainer(string panelName, string color, string aMin, string aMax, bool cursor = false)
+            static public Dictionary<string, string> uiColors = new Dictionary<string, string>();
+
+            static public CuiElementContainer Container(string panelName, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
             {
                 {
                     new CuiPanel
                     {
-                        Image = {Color = color},
+                        Image = {Color = uiColors["background"]},
                         RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
                         CursorEnabled = cursor
                     },
@@ -50,68 +55,68 @@ namespace Oxide.Plugins
             };
                 return NewElement;
             }
-            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
+
+            static public void Panel(ref CuiElementContainer container, string panel, string aMin, string aMax, bool cursor = false)
             {
                 container.Add(new CuiPanel
                 {
-                    Image = { Color = color },
+                    Image = { Color = uiColors["panel"]},
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
                     CursorEnabled = cursor
                 },
                 panel);
             }
-            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 0f)
+
+            static public void Label(ref CuiElementContainer container, string panel, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 0f)
             {               
                 container.Add(new CuiLabel
                 {
-                    Text = { Color = color, FontSize = size, Align = align, FadeIn = fadein, Text = text },
+                    Text = { FontSize = size, Align = align, FadeIn = fadein, Text = text },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
                 },
                 panel);
 
             }
-            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 0f)
+
+            static public void Button(ref CuiElementContainer container, string panel, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter, float fadein = 0f)
             {                
                 container.Add(new CuiButton
                 {
-                    Button = { Color = color, Command = command, FadeIn = fadein },
+                    Button = { Color = uiColors["button"], Command = command, FadeIn = fadein },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
                     Text = { Text = text, FontSize = size, Align = align }
                 },
                 panel);
-            }            
+            }
+
+            static public string Color(string hexColor, float alpha)
+            {
+                if (hexColor.StartsWith("#"))
+                    hexColor = hexColor.Substring(1);
+                int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
+                int green = int.Parse(hexColor.Substring(2, 2), NumberStyles.AllowHexSpecifier);
+                int blue = int.Parse(hexColor.Substring(4, 2), NumberStyles.AllowHexSpecifier);
+                return $"{(double)red / 255} {(double)green / 255} {(double)blue / 255} {alpha}";
+            }
         }
-        private Dictionary<string, string> UIColors = new Dictionary<string, string>
-        {
-            {"dark", "0.1 0.1 0.1 0.98" },
-            {"light", "0.7 0.7 0.7 0.3" },
-            {"grey1", "0.6 0.6 0.6 1.0" },
-            {"buttonbg", "0.2 0.2 0.2 0.7" },
-            {"buttonopen", "0.2 0.8 0.2 0.9" },
-            {"buttoncompleted", "0 0.5 0.1 0.9" },
-            {"buttonred", "0.85 0 0.35 0.9" },
-            {"buttongrey", "0.8 0.8 0.8 0.9" },
-            {"grey8", "0.8 0.8 0.8 1.0" }
-        };
         #endregion
 
         #region UI Leaderboard
-        static string UIMain = "PCUI_Main";
-        static string UIPanel = "PCUI_Panel";
+        private string UIMain = "PCUI_Main";
+
         private void CreateMenu(BasePlayer player)
         {
             CloseMap(player);
-            CuiHelper.DestroyUi(player, UIPanel);
-            var MenuElement = PCUI.CreateElementContainer(UIMain, UIColors["dark"], "0 0", "1 1", true);
-            PCUI.CreatePanel(ref MenuElement, UIMain, UIColors["light"], "0.005 0.93", "0.995 0.99");
-            PCUI.CreateLabel(ref MenuElement, UIMain, "", $"<color={configData.Colors.MSG_ColorMain}>{MSG("UITitle").Replace("{Version}", Version.ToString())}</color>", 22, "0.05 0.93", "0.6 0.99", TextAnchor.MiddleLeft);
-            
-            CuiHelper.AddUi(player, MenuElement);
+            CuiHelper.DestroyUi(player, UIMain);            
             CreateMenuContents(player, 0);
         }
+
         private void CreateMenuContents(BasePlayer player, int page = 0)
         {
-            var MenuElement = PCUI.CreateElementContainer(UIPanel, "0 0 0 0", "0 0", "1 1");
+            CuiElementContainer container = UI.Container(UIMain, "0 0", "1 1", true);
+            UI.Panel(ref container, UIMain, "0.005 0.93", "0.995 0.99");
+            UI.Label(ref container, UIMain, $"<color={configData.Colors.TextColor1}>{MSG("UITitle").Replace("{Version}", Version.ToString())}</color>", 22, "0.05 0.93", "0.6 0.99", TextAnchor.MiddleLeft);
+
             var elements = configData.ChallengeSettings.Where(x => x.Value.Enabled).OrderByDescending(x => x.Value.UIPosition).Reverse().ToArray();
             int count = page * 5;
             int number = 0;
@@ -120,21 +125,25 @@ namespace Oxide.Plugins
             {
                 if (elements.Length < i + 1) continue;
                 float leftPos = 0.005f + (number * (dimension + 0.01f));
-                AddMenuStats(ref MenuElement, UIPanel, elements[i].Key, leftPos, 0.01f, leftPos + dimension, 0.92f);
+                AddMenuStats(ref container, UIMain, elements[i].Key, leftPos, 0.01f, leftPos + dimension, 0.92f);
                 number++;
             }
 
-            if (page > 0) PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Previous", 16, "0.63 0.94", "0.73 0.98", $"PCUI_ChangePage {page - 1}");
-            if (page < 3 && elements.Length > count + 5) PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Next", 16, "0.74 0.94", "0.84 0.98", $"PCUI_ChangePage {page + 1}");
-            PCUI.CreateButton(ref MenuElement, UIPanel, UIColors["buttonbg"], "Close", 16, "0.85 0.94", "0.95 0.98", "PCUI_DestroyAll");
-            CuiHelper.AddUi(player, MenuElement);
+            if (page > 0)
+                UI.Button(ref container, UIMain, "Previous", 16, "0.63 0.94", "0.73 0.98", $"PCUI_ChangePage {page - 1}");
+            if (page < 3 && elements.Length > count + 5)
+                UI.Button(ref container, UIMain, "Next", 16, "0.74 0.94", "0.84 0.98", $"PCUI_ChangePage {page + 1}");
+
+            UI.Button(ref container, UIMain, "Close", 16, "0.85 0.94", "0.95 0.98", "PCUI_DestroyAll");
+            CuiHelper.AddUi(player, container);
         }
+
         private void AddMenuStats(ref CuiElementContainer MenuElement, string panel, Challenges type, float left, float bottom, float right, float top)
         {
             if (configData.ChallengeSettings[type].Enabled)
             {
-                PCUI.CreatePanel(ref MenuElement, UIPanel, UIColors["light"], $"{left} {bottom}", $"{right} {top}");
-                PCUI.CreateLabel(ref MenuElement, UIPanel, "", GetLeaders(type), 16, $"{left + 0.005f} {bottom + 0.01f}", $"{right - 0.005f} {top - 0.01f}", TextAnchor.UpperLeft);
+                UI.Panel(ref MenuElement, UIMain, $"{left} {bottom}", $"{right} {top}");
+                UI.Label(ref MenuElement, UIMain, GetLeaders(type), 16, $"{left + 0.005f} {bottom + 0.01f}", $"{right - 0.005f} {top - 0.01f}", TextAnchor.UpperLeft);
             }       
         }
 
@@ -145,7 +154,7 @@ namespace Oxide.Plugins
             var player = arg.Connection.player as BasePlayer;
             if (player == null)
                 return;
-            CuiHelper.DestroyUi(player, UIPanel);
+            CuiHelper.DestroyUi(player, UIMain);
             var page = int.Parse(arg.GetString(0));
             CreateMenuContents(player, page);
         }
@@ -163,7 +172,7 @@ namespace Oxide.Plugins
         #region UI Functions
         private string GetLeaders(Challenges type)
         {
-            var listNames = $" -- <color={configData.Colors.MSG_ColorMain}>{MSG(type.ToString()).ToUpper()}</color>\n\n";
+            var listNames = $" -- <color={configData.Colors.TextColor1}>{MSG(type.ToString()).ToUpper()}</color>\n\n";
 
             var userStats = new List<KeyValuePair<string, int>>();
 
@@ -179,14 +188,14 @@ namespace Oxide.Plugins
 
             foreach (var entry in leaders)
             {
-                listNames += $"{i}.  - <color={configData.Colors.MSG_ColorMain}>{entry.Value}</color> -  {entry.Key}\n";
+                listNames += $"{i}.  - <color={configData.Colors.TextColor1}>{entry.Value}</color> -  {entry.Key}\n";
                 i++;            
             }
             return listNames;
         }
         private object GetTypeFromString(string name)
         {
-            foreach(var type in typeList)
+            foreach(var type in Enum.GetValues(typeof(Challenges)))
             {
                 if (type.ToString() == name)
                     return type;
@@ -196,7 +205,6 @@ namespace Oxide.Plugins
         private void DestroyUI(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, UIMain);
-            CuiHelper.DestroyUi(player, UIPanel);
         }
         #endregion
         #endregion
@@ -246,41 +254,49 @@ namespace Oxide.Plugins
         #endregion
 
         #region Oxide Hooks
-        void Loaded()
+        private void Loaded()
         {
             data = Interface.Oxide.DataFileSystem.GetFile("challenge_data");
             lang.RegisterMessages(Messages, this);
         }
-        void OnServerInitialized()
+
+        private void OnServerInitialized()
         {
-            LoadVariables();
             LoadData();
             CheckValidData();
 
             RegisterTitles();
             RegisterGroups();
-            AddAllUsergroups();  
-                      
+            AddAllUsergroups();
+
+            UI.uiColors.Add("background", UI.Color(configData.Colors.Background.Color, configData.Colors.Background.Alpha));
+            UI.uiColors.Add("button", UI.Color(configData.Colors.Button.Color, configData.Colors.Button.Alpha));
+            UI.uiColors.Add("panel", UI.Color(configData.Colors.Panel.Color, configData.Colors.Panel.Alpha));
+
             SaveLoop();
             
             if (configData.Options.UseUpdateTimer)
                 CheckUpdateTimer();
             foreach (var player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);                   
-        }        
-        void Unload()
+        }
+
+        private void Unload()
         {
             SaveData();
             foreach (var player in BasePlayer.activePlayerList)
                 DestroyUI(player);
             RemoveAllUsergroups();
+            UI.uiColors = null;
         }
-        void OnPluginLoaded(Plugin plugin)
+
+        private void OnPluginLoaded(Plugin plugin)
         {
             if (plugin?.Title == "BetterChat")
                 RegisterTitles();
         }
-        void OnPlayerInit(BasePlayer player)
+
+        private void OnPlayerInit(BasePlayer player)
         {
             if (statCache.ContainsKey(player.userID))
             {
@@ -288,12 +304,14 @@ namespace Oxide.Plugins
                     statCache[player.userID].DisplayName = player.displayName;                             
             }
         }
-        void OnRocketLaunched(BasePlayer player, BaseEntity entity)
+
+        private void OnRocketLaunched(BasePlayer player, BaseEntity entity)
         {
             if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.RocketsFired].Enabled) return;            
             AddPoints(player, Challenges.RocketsFired, 1);
         }
-        void OnHealingItemUse(HeldEntity item, BasePlayer target)
+
+        private void OnHealingItemUse(HeldEntity item, BasePlayer target)
         {
             var player = item.GetOwnerPlayer();
             if (player == null || player is NPCPlayer) return;
@@ -302,7 +320,8 @@ namespace Oxide.Plugins
                 AddPoints(player, Challenges.PlayersHealed, 1);
             }            
         }
-        void OnItemCraftFinished(ItemCraftTask task, Item item)
+
+        private void OnItemCraftFinished(ItemCraftTask task, Item item)
         {
             var player = task.owner;
             if (player == null || player is NPCPlayer) return;
@@ -312,19 +331,22 @@ namespace Oxide.Plugins
             if (item.info.category == ItemCategory.Weapon && configData.ChallengeSettings[Challenges.WeaponsCrafted].Enabled)
                 AddPoints(player, Challenges.WeaponsCrafted, 1);
         }
-        void OnPlantGather(PlantEntity plant, Item item, BasePlayer player)
+
+        private void OnPlantGather(PlantEntity plant, Item item, BasePlayer player)
         {
             if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
             AddPoints(player, Challenges.PlantsGathered, 1);
         }
-        void OnCollectiblePickup(Item item, BasePlayer player, CollectibleEntity entity)
+
+        private void OnCollectiblePickup(Item item, BasePlayer player, CollectibleEntity entity)
         {
             if (item == null) return;
             if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.PlantsGathered].Enabled) return;
             if (plantShortnames.Contains(item?.info?.shortname))
                 AddPoints(player, Challenges.PlantsGathered, 1);
         }
-        void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
+
+        private void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             var player = entity.ToPlayer();
             if (player == null || player is NPCPlayer || dispenser == null) return;
@@ -335,14 +357,16 @@ namespace Oxide.Plugins
             if (dispenser.gatherType == ResourceDispenser.GatherType.Ore && configData.ChallengeSettings[Challenges.RocksGathered].Enabled)
                 AddPoints(player, Challenges.RocksGathered, item.amount);               
         }
-        void OnEntityBuilt(Planner plan, GameObject go)
+
+        private void OnEntityBuilt(Planner plan, GameObject go)
         {           
             var player = plan.GetOwnerPlayer();
             if (player == null || player is NPCPlayer || !configData.ChallengeSettings[Challenges.StructuresBuilt].Enabled) return;
 
             AddPoints(player, Challenges.StructuresBuilt, 1);
         }
-        void CanBeWounded(BasePlayer player, HitInfo hitInfo)
+
+        private void CanBeWounded(BasePlayer player, HitInfo hitInfo)
         {
             if (player == null || player is NPCPlayer || hitInfo == null) return;
 
@@ -353,7 +377,8 @@ namespace Oxide.Plugins
                 woundedData[player.userID] = new WoundedData {distance = Vector3.Distance(player.transform.position, attacker.transform.position), attackerId = attacker.userID };
             }            
         }
-        void OnPlayerRecover(BasePlayer player)
+
+        private void OnPlayerRecover(BasePlayer player)
         {
             if (player == null || player is NPCPlayer)
                 return;
@@ -361,7 +386,8 @@ namespace Oxide.Plugins
             if (woundedData.ContainsKey(player.userID))
                 woundedData.Remove(player.userID);
         }
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+
+        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             if (entity == null || info == null)
                 return;
@@ -374,11 +400,14 @@ namespace Oxide.Plugins
                       
             if (entity is BasePlayer)
             {
-                var victim = entity.ToPlayer();
+                BasePlayer victim = entity.ToPlayer();
+
+                if (victim is NPCPlayer && configData.Options.IgnoreNPCKills)
+                    return;
 
                 if (attacker == victim || IsPlaying(attacker) || IsFriend(attacker.userID, victim.userID) || IsClanmate(attacker.userID, victim.userID) || (configData.Options.IgnoreSleepers && victim.IsSleeping())) return;
 
-                var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
+                float distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
                 if (woundedData.ContainsKey(victim.userID))
                 {
                     var woundData = woundedData[victim.userID];
@@ -390,7 +419,8 @@ namespace Oxide.Plugins
 
                 if (info.isHeadshot && configData.ChallengeSettings[Challenges.Headshots].Enabled)
                     AddPoints(attacker, Challenges.Headshots, 1);
-                var weapon = info?.Weapon?.GetItem()?.info?.shortname;
+
+                string weapon = info?.Weapon?.GetItem()?.info?.shortname;
                 if (!string.IsNullOrEmpty(weapon))
                 {
                     if (bladeShortnames.Contains(weapon) && configData.ChallengeSettings[Challenges.BladeKills].Enabled)
@@ -406,19 +436,21 @@ namespace Oxide.Plugins
             }
             else if (entity.GetComponent<BaseNpc>() != null)
             {
-                var distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
+                float distance = Vector3.Distance(attacker.transform.position, entity.transform.position);
                 AddDistance(attacker, Challenges.PVEKillDistance, (int)distance);
                 AddPoints(attacker, Challenges.AnimalKills, 1);
             }
         }
-        void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
+
+        private void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
             if (player == null || entity == null || !configData.ChallengeSettings[Challenges.ExplosivesThrown].Enabled) return;
             if (entity.ShortPrefabName == "survey_charge.deployed" && configData.Options.IgnoreSurveyCharges) return;
             if (entity.ShortPrefabName == "grenade.smoke.deployed" && configData.Options.IgnoreSupplySignals) return;
             AddPoints(player, Challenges.ExplosivesThrown, 1);
         }
-        void OnStructureRepair(BaseCombatEntity block, BasePlayer player)
+
+        private void OnStructureRepair(BaseCombatEntity block, BasePlayer player)
         {
             if (player == null || !configData.ChallengeSettings[Challenges.StructuresRepaired].Enabled) return;
             if (block.health < block.MaxHealth())
@@ -443,6 +475,7 @@ namespace Oxide.Plugins
             statCache[player.userID].Stats[type] += amount;            
             CheckForUpdate(player, type);
         }
+
         private void AddDistance(BasePlayer player, Challenges type, int amount)
         {
             if (configData.Options.IgnoreAdmins && player.IsAdmin) return;
@@ -451,6 +484,7 @@ namespace Oxide.Plugins
                 statCache[player.userID].Stats[type] = amount;
             CheckForUpdate(player, type);
         }
+
         private void CheckForUpdate(BasePlayer player, Challenges type)
         {
             if (titleCache[type].UserID == player.userID)
@@ -466,6 +500,7 @@ namespace Oxide.Plugins
                 }
             }         
         }
+
         private void SwitchLeader(ulong newId, ulong oldId, Challenges type)
         {
             var name = GetGroupName(type);
@@ -488,8 +523,8 @@ namespace Oxide.Plugins
             if (configData.Options.AnnounceNewLeaders)
             {
                 string message = MSG("newLeader")
-                    .Replace("{playername}", $"<color={configData.Colors.MSG_ColorMain}>{statCache[newId].DisplayName}</color><color={configData.Colors.MSG_ColorMsg}>")
-                    .Replace("{ctype}", $"</color><color={configData.Colors.MSG_ColorMain}>{MSG(type.ToString())}</color>");
+                    .Replace("{playername}", $"<color={configData.Colors.TextColor1}>{statCache[newId].DisplayName}</color><color={configData.Colors.TextColor2}>")
+                    .Replace("{ctype}", $"</color><color={configData.Colors.TextColor1}>{MSG(type.ToString())}</color>");
                 PrintToChat(message);
             }            
         }
@@ -499,27 +534,27 @@ namespace Oxide.Plugins
             if ((GrabCurrentTime() - chData.LastUpdate) > configData.Options.UpdateTimer)
             {
                 var updates = new Dictionary<Challenges, UpdateInfo>();
-                foreach (var type in typeList)
+                foreach (var type in Enum.GetValues(typeof(Challenges)))
                 {
                     bool hasChanged = false;
                     UpdateInfo info = new UpdateInfo
                     {
-                        newId = titleCache[type].UserID,
-                        oldId = titleCache[type].UserID,
-                        count = titleCache[type].Count
+                        newId = titleCache[(Challenges)type].UserID,
+                        oldId = titleCache[(Challenges)type].UserID,
+                        count = titleCache[(Challenges)type].Count
                     };
                     foreach (var player in statCache)
                     {
                         if (info.oldId == player.Key) continue;
-                        if (player.Value.Stats[type] > info.count)
+                        if (player.Value.Stats[(Challenges)type] > info.count)
                         {
                             hasChanged = true;
                             info.newId = player.Key;
-                            info.count = player.Value.Stats[type];
+                            info.count = player.Value.Stats[(Challenges)type];
                         }
                     }
                     if (hasChanged)
-                        SwitchLeader(info.newId, info.oldId, type);
+                        SwitchLeader(info.newId, info.oldId, (Challenges)type);
                 }               
             }
             else
@@ -528,6 +563,7 @@ namespace Oxide.Plugins
                 timer.Once((int)timeRemaining + 10, () => CheckUpdateTimer());
             }
         }
+
         class UpdateInfo
         {
             public ulong newId;
@@ -544,6 +580,7 @@ namespace Oxide.Plugins
                 CreateMenu(player);
             else SendReply(player, MSG("UIDisabled", player.UserIDString));
         }
+
         [ChatCommand("pc_wipe")]
         private void cmdPCWipe(BasePlayer player, string command, string[] args)
         {
@@ -555,6 +592,7 @@ namespace Oxide.Plugins
             SendReply(player, MSG("dataWipe", player.UserIDString));
             SaveData();
         }
+
         [ConsoleCommand("pc_wipe")]
         private void ccmdPCWipe(ConsoleSystem.Arg arg)
         {
@@ -578,20 +616,22 @@ namespace Oxide.Plugins
                     DisplayName = player.displayName,
                     Stats = new Dictionary<Challenges, int>()
                 });
-                foreach (var type in typeList)
-                    statCache[player.userID].Stats.Add(type, 0);
+                foreach (var type in Enum.GetValues(typeof(Challenges)))
+                    statCache[player.userID].Stats.Add((Challenges)type, 0);
             }
         }
-        private string GetGroupName(Challenges type) => configData.ChallengeSettings[type].Title;        
-        static double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).Hours;
+
+        private string GetGroupName(Challenges type) => configData.ChallengeSettings[type].Title; 
+        
+        private double GrabCurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).Hours;
         #endregion
 
         #region Titles and Groups
         private void RegisterGroups()
         {
             if (!configData.Options.UseOxideGroups) return;           
-            foreach (var type in typeList)
-                RegisterGroup(type);
+            foreach (var type in Enum.GetValues(typeof(Challenges)))
+                RegisterGroup((Challenges)type);
         }
 
         private void RegisterGroup(Challenges type)
@@ -602,12 +642,14 @@ namespace Oxide.Plugins
                 permission.CreateGroup(name, string.Empty, 0);                
             }
         }
+
         private void RegisterTitles()
         {
             if (!configData.Options.UseBetterChat || !BetterChat)
                 return;                    
             BetterChat?.Call("API_RegisterThirdPartyTitle", new object[] { this, new Func<IPlayer, string>(GetPlayerTitles) });
         }
+
         private string GetPlayerTitles(IPlayer player)
         {
             if (!configData.Options.UseBetterChat) return string.Empty;
@@ -627,6 +669,7 @@ namespace Oxide.Plugins
             }
             return count == 0 ? string.Empty : $"[{configData.Colors.TitleColor}]{playerTitle}[/#]";
         }
+
         private void AddAllUsergroups()
         {
             if (configData.Options.UseOxideGroups)
@@ -640,6 +683,7 @@ namespace Oxide.Plugins
                 }
             }
         }
+
         private void RemoveAllUsergroups()
         {
             if (configData.Options.UseOxideGroups)
@@ -653,6 +697,7 @@ namespace Oxide.Plugins
                 }
             }
         }
+
         private bool GroupExists(string name) => permission.GroupExists(name);
         private bool UserInGroup(string name, string playerId) => permission.UserHasGroup(playerId, name);
         private void AddUserToGroup(string name, string playerId) => permission.AddUserGroup(playerId, name);
@@ -663,53 +708,102 @@ namespace Oxide.Plugins
         private ConfigData configData;
         class ConfigData
         {
-            public Dictionary<Challenges, ChallengeInfo> ChallengeSettings { get; set; }           
-            public Options Options { get; set; } 
-            public Colors Colors { get; set; }           
-        }       
-       
-        class ChallengeInfo
-        {
-            public string Title;
-            public bool Enabled;
-            public int UIPosition;
-            public int Priority;
-        }
-        class Options
-        {
-            public bool IgnoreSleepers;
-            public bool UseBetterChat;
-            public bool IgnoreAdmins;
-            public bool IgnoreEventKills;
-            public bool IgnoreSupplySignals;
-            public bool IgnoreSurveyCharges;
-            public bool AnnounceNewLeaders;
-            public bool UseUpdateTimer;
-            public bool UseOxideGroups;
-            public int UpdateTimer;
-            public int MaximumTags;
-            public int SaveTimer;
-            public string TagFormat;
-        }
-        class Colors
-        {
-            public string MSG_ColorMain;
-            public string MSG_ColorMsg;
-            public string TitleColor;
-        }
-        private void LoadVariables()
-        {
-            LoadConfigVariables();
-            SaveConfig();
-        }
-        protected override void LoadDefaultConfig()
-        {
-            var config = new ConfigData
+            [JsonProperty(PropertyName = "Challenge Settings")]
+            public Dictionary<Challenges, ChallengeInfo> ChallengeSettings { get; set; }
+            public Option Options { get; set; }
+            public TextColor Colors { get; set; }
+
+            public class ChallengeInfo
             {
-                ChallengeSettings = new Dictionary<Challenges, ChallengeInfo>
+                [JsonProperty(PropertyName = "Title for name tag")]
+                public string Title;
+                [JsonProperty(PropertyName = "Enable this challenge")]
+                public bool Enabled;
+                [JsonProperty(PropertyName = "Position in the UI leaderboard")]
+                public int UIPosition;
+                [JsonProperty(PropertyName = "Title priority")]
+                public int Priority;
+            }
+            public class Option
+            {
+                [JsonProperty(PropertyName = "Ignore kills against sleeping players (Players killed)")]
+                public bool IgnoreSleepers;
+                [JsonProperty(PropertyName = "Ignore kills against NPC players (Players killed)")]
+                public bool IgnoreNPCKills;
+                [JsonProperty(PropertyName = "Show challenge leader title tags (Requires BetterChat)")]
+                public bool UseBetterChat;
+                [JsonProperty(PropertyName = "Ignore all statistics recorded by admins")]
+                public bool IgnoreAdmins;
+                [JsonProperty(PropertyName = "Ignore kills for event players (Players killed)")]
+                public bool IgnoreEventKills;
+                [JsonProperty(PropertyName = "Ignore supply signals thrown (Explosives thrown)")]
+                public bool IgnoreSupplySignals;
+                [JsonProperty(PropertyName = "Ignore survey charges thrown (Explosives thrown)")]
+                public bool IgnoreSurveyCharges;
+                [JsonProperty(PropertyName = "Broadcast new challenge leaders to chat")]
+                public bool AnnounceNewLeaders;
+                [JsonProperty(PropertyName = "Update leaders on a timer (Recommended)")]
+                public bool UseUpdateTimer;
+                [JsonProperty(PropertyName = "Create and use Oxide groups for each challenge type")]
+                public bool UseOxideGroups;
+                [JsonProperty(PropertyName = "Update timer (hours)")]
+                public int UpdateTimer;
+                [JsonProperty(PropertyName = "Maximum tags to display (Requires BetterChat)")]
+                public int MaximumTags;
+                [JsonProperty(PropertyName = "Data save timer (seconds)")]
+                public int SaveTimer;
+                [JsonProperty(PropertyName = "Format of tags displayed (Requires BetterChat)")]
+                public string TagFormat;
+            }
+            public class TextColor
+            {
+                [JsonProperty(PropertyName = "Primary message color (hex)")]
+                public string TextColor1;
+                [JsonProperty(PropertyName = "Secondary message color (hex)")]
+                public string TextColor2;
+                [JsonProperty(PropertyName = "Title color (hex) (Requires BetterChat)")]
+                public string TitleColor;
+
+                [JsonProperty(PropertyName = "UI Color - Background")]
+                public UIColor Background;
+                [JsonProperty(PropertyName = "UI Color - Panel")]
+                public UIColor Panel;
+                [JsonProperty(PropertyName = "UI Color - Button")]
+                public UIColor Button;
+
+                public class UIColor
+                {
+                    [JsonProperty(PropertyName = "Color (hex)")]
+                    public string Color;
+                    [JsonProperty(PropertyName = "Alpha (0.0 - 1.0)")]
+                    public float Alpha;
+                }
+            }
+
+            public Oxide.Core.VersionNumber Version { get; set; }
+        }
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            configData = Config.ReadObject<ConfigData>();
+
+            if (configData.Version < Version)
+                UpdateConfigValues();
+
+            Config.WriteObject(configData, true);
+        }
+
+        protected override void LoadDefaultConfig() => configData = GetBaseConfig();
+
+        private ConfigData GetBaseConfig()
+        {
+            return new ConfigData
+            {
+                ChallengeSettings = new Dictionary<Challenges, ConfigData.ChallengeInfo>
                 {
                     {
-                        Challenges.AnimalKills, new ChallengeInfo
+                        Challenges.AnimalKills, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Hunter",
@@ -718,7 +812,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.ArrowKills, new ChallengeInfo
+                        Challenges.ArrowKills, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Archer",
@@ -727,7 +821,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.StructuresBuilt, new ChallengeInfo
+                        Challenges.StructuresBuilt, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Architect",
@@ -736,7 +830,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.ClothesCrafted, new ChallengeInfo
+                        Challenges.ClothesCrafted, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Tailor",
@@ -745,7 +839,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.ExplosivesThrown, new ChallengeInfo
+                        Challenges.ExplosivesThrown, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Bomb-tech",
@@ -754,7 +848,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.Headshots, new ChallengeInfo
+                        Challenges.Headshots, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Assassin",
@@ -763,7 +857,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.PlayersHealed, new ChallengeInfo
+                        Challenges.PlayersHealed, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Medic",
@@ -772,7 +866,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.PlayersKilled, new ChallengeInfo
+                        Challenges.PlayersKilled, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Murderer",
@@ -781,7 +875,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.MeleeKills, new ChallengeInfo
+                        Challenges.MeleeKills, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Fighter",
@@ -790,7 +884,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.PlantsGathered, new ChallengeInfo
+                        Challenges.PlantsGathered, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Harvester",
@@ -799,7 +893,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.PVEKillDistance, new ChallengeInfo
+                        Challenges.PVEKillDistance, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Deadshot",
@@ -808,7 +902,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.PVPKillDistance, new ChallengeInfo
+                        Challenges.PVPKillDistance, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Sniper",
@@ -817,7 +911,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.StructuresRepaired, new ChallengeInfo
+                        Challenges.StructuresRepaired, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Handyman",
@@ -826,7 +920,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.RevolverKills, new ChallengeInfo
+                        Challenges.RevolverKills, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Gunslinger",
@@ -835,7 +929,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.RocketsFired, new ChallengeInfo
+                        Challenges.RocketsFired, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Rocketeer",
@@ -844,7 +938,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.RocksGathered, new ChallengeInfo
+                        Challenges.RocksGathered, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Miner",
@@ -853,7 +947,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.BladeKills, new ChallengeInfo
+                        Challenges.BladeKills, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "BladeKillsman",
@@ -862,7 +956,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.WeaponsCrafted, new ChallengeInfo
+                        Challenges.WeaponsCrafted, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Gunsmith",
@@ -871,7 +965,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.WoodGathered, new ChallengeInfo
+                        Challenges.WoodGathered, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Lumberjack",
@@ -880,7 +974,7 @@ namespace Oxide.Plugins
                         }
                     },
                     {
-                        Challenges.QuestsCompleted, new ChallengeInfo
+                        Challenges.QuestsCompleted, new ConfigData.ChallengeInfo
                         {
                             Enabled = true,
                             Title = "Adventurer",
@@ -890,12 +984,13 @@ namespace Oxide.Plugins
                     }
                 },
 
-                Options = new Options
+                Options = new ConfigData.Option
                 {
                     AnnounceNewLeaders = false,
                     IgnoreAdmins = true,
                     IgnoreSleepers = true,
                     IgnoreSupplySignals = false,
+                    IgnoreNPCKills = true,
                     IgnoreSurveyCharges = false,
                     IgnoreEventKills = true,
                     MaximumTags = 2,
@@ -906,28 +1001,57 @@ namespace Oxide.Plugins
                     UseUpdateTimer = false,
                     UpdateTimer = 168
                 },
-                Colors = new Colors
+                Colors = new ConfigData.TextColor
                 {
-                    MSG_ColorMain = "orange",
-                    MSG_ColorMsg = "#939393",
-                    TitleColor = "#88E188"
-                }                
+                    TextColor1 = "#ce422b",
+                    TextColor2 = "#939393",
+                    TitleColor = "#ce422b",
+                    Background = new ConfigData.TextColor.UIColor
+                    {
+                        Alpha = 0.98f,
+                        Color = "#2b2b2b"
+                    },
+                    Panel = new ConfigData.TextColor.UIColor
+                    {
+                        Alpha = 1f,
+                        Color = "#404141"
+                    },
+                    Button = new ConfigData.TextColor.UIColor
+                    {
+                        Alpha = 1f,
+                        Color = "#393939"
+                    }
+                },
+                Version = Version
             };
-            SaveConfig(config);
         }
-        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);        
+
+        protected override void SaveConfig() => Config.WriteObject(configData, true);
+
+        private void UpdateConfigValues()
+        {
+            PrintWarning("Config update detected! Updating config values...");
+
+            ConfigData baseConfig = GetBaseConfig();
+            if (configData.Version < new VersionNumber(2, 0, 30))
+                configData = baseConfig;
+
+            configData.Version = Version;
+            PrintWarning("Config update completed!");
+        }       
         #endregion
 
         #region Data Management
-        void SaveLoop() => timer.Once(configData.Options.SaveTimer, () => { SaveData(); SaveLoop(); });
-        void SaveData()
+        private void SaveLoop() => timer.Once(configData.Options.SaveTimer, () => { SaveData(); SaveLoop(); });
+
+        private void SaveData()
         {
             chData.Stats = statCache;
             chData.Titles = titleCache;
             data.WriteObject(chData);
         }
-        void LoadData()
+
+        private void LoadData()
         {
             try
             {
@@ -940,25 +1064,27 @@ namespace Oxide.Plugins
                 chData = new ChallengeData();
             }
         }
-        void CheckValidData()
+
+        private void CheckValidData()
         {
-            if (titleCache.Count < typeList.Count)
+            if (titleCache.Count < Enum.GetValues(typeof(Challenges)).Length)
             {
-                foreach (var type in typeList)
+                foreach (var type in Enum.GetValues(typeof(Challenges)))
                 {
-                    if (!titleCache.ContainsKey(type))
-                        titleCache.Add(type, new LeaderData());
+                    if (!titleCache.ContainsKey((Challenges)type))
+                        titleCache.Add((Challenges)type, new LeaderData());
                 }
             }
             foreach(var player in statCache)
             {
-                foreach(var type in typeList)
+                foreach(var type in Enum.GetValues(typeof(Challenges)))
                 {
-                    if (!player.Value.Stats.ContainsKey(type))
-                        player.Value.Stats.Add(type, 0);
+                    if (!player.Value.Stats.ContainsKey((Challenges)type))
+                        player.Value.Stats.Add((Challenges)type, 0);
                 }
             }
         }
+
         class ChallengeData
         {
             public Dictionary<ulong, StatData> Stats = new Dictionary<ulong, StatData>();
@@ -988,8 +1114,7 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Lists
-        List<Challenges> typeList = new List<Challenges> { Challenges.AnimalKills, Challenges.ArrowKills, Challenges.ClothesCrafted, Challenges.Headshots, Challenges.PlantsGathered, Challenges.PlayersHealed, Challenges.PlayersKilled, Challenges.MeleeKills, Challenges.RevolverKills, Challenges.RocketsFired, Challenges.RocksGathered, Challenges.BladeKills, Challenges.StructuresBuilt, Challenges.StructuresRepaired, Challenges.ExplosivesThrown, Challenges.WeaponsCrafted, Challenges.WoodGathered, Challenges.QuestsCompleted, Challenges.PVEKillDistance, Challenges.PVPKillDistance };
+        #region Lists       
         List<string> meleeShortnames = new List<string> { "bone.club", "hammer.salvaged", "hatchet", "icepick.salvaged", "knife.bone", "mace", "machete", "pickaxe", "rock", "stone.pickaxe", "stonehatchet", "torch" };
         List<string> bladeShortnames = new List<string> { "salvaged.sword", "salvaged.cleaver", "longsword", "axe.salvaged" };
         List<string> plantShortnames = new List<string> { "pumpkin", "cloth", "corn", "mushroom", "seed.hemp", "seed.corn", "seed.pumpkin" };

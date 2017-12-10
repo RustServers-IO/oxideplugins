@@ -2,7 +2,7 @@
     "name": "AutomaticAuthorization",
     "description": "Add your friends list or clan mates to a cupboard or turret auth list using 1 command",
     "author": "k1lly0u",
-    "version": "0.2.02",
+    "version": "0.2.03",
     "configuration": false,
     "suggest": {
         "Friends": "*",
