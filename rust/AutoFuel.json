@@ -1,0 +1,16 @@
+{
+    "name": "AutoFuel",
+    "description": "Automatically fuel lights if there is fuel in the toolcupboards inventory",
+    "author": "redBDGR",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/autofuel.2717",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
