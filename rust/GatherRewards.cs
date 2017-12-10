@@ -7,7 +7,7 @@ using Oxide.Game.Rust.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("Gather Rewards", "CanopySheep", "1.4.6", ResourceId = 770)]
+    [Info("Gather Rewards", "CanopySheep", "1.5.0", ResourceId = 770)]
     [Description("Gain money through Economics/Server Rewards for killing and gathering.")]
     public class GatherRewards : RustPlugin
     {
@@ -62,7 +62,11 @@ namespace Oxide.Plugins
                         { PluginRewards.ClanMember, -25 },
                         { PluginRewards.Ore, 25 },
                         { PluginRewards.Wood, 25 },
-                        { PluginRewards.Stone, 25}
+                        { PluginRewards.Stone, 25},
+                        { PluginRewards.Corn, 25},
+                        { PluginRewards.Hemp, 25},
+                        { PluginRewards.Mushroom, 25},
+                        { PluginRewards.Pumpkin, 25}
                     }
                 }
             };
@@ -71,10 +75,18 @@ namespace Oxide.Plugins
                 if (str.str.StartsWith("assets/rust.ai/agents"))
                 {
                     if (str.str.Contains("-") || str.str.Contains("_")) { continue; }
+					if (str.str.Contains("bottest")) { continue; }
                     var animal = str.str.Substring(str.str.LastIndexOf("/") + 1).Replace(".prefab", "");
                     if (animal.Contains(".")) { continue; }
                     defaultConfig.Settings.Rewards[UppercaseFirst(animal)] = 25;
                 }
+				else if (str.str.StartsWith("assets/prefabs/npc"))
+				{
+					if (!(str.str.Contains("murderer.prefab") || str.str.Contains("scientist.prefab"))) { continue; }
+					var animal = str.str.Substring(str.str.LastIndexOf("/") + 1).Replace(".prefab", "");
+                    if (animal.Contains(".")) { continue; }
+                    defaultConfig.Settings.Rewards[UppercaseFirst(animal)] = 25;
+				}
             }
             return defaultConfig;
         }
@@ -94,6 +106,10 @@ namespace Oxide.Plugins
             public const string Ore = "Ore";
             public const string Wood = "Wood";
             public const string Stone = "Stone";
+            public const string Corn = "Corn";
+            public const string Hemp = "Hemp";
+            public const string Mushroom = "Mushroom";
+            public const string Pumpkin = "Pumpkin";
         }
 
         private class PluginSettings
@@ -198,6 +214,28 @@ namespace Oxide.Plugins
             command.AddConsoleCommand(config.Settings.ConsoleEditCommand, this, "cmdConsoleGatherRewards");
         }
 
+        private void GiveCredit(BasePlayer player, string type, float amount, string gathered)
+        {
+            if (amount > 0)
+            {
+                if (config.Settings.UseEconomics && Economics) { Economics.CallHook("Deposit", player.UserIDString, amount); }
+                if (config.Settings.UseServerRewards && ServerRewards) { ServerRewards?.Call("AddPoints", new object[] { player.userID, amount }); }
+                if (type == "gather" && config.Settings.ShowMessagesOnGather) { PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("ReceivedForGather", player), amount, gathered.ToLower())); }
+                else if (type == "kill" && config.Settings.ShowMessagesOnKill) { PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("ReceivedForKill", player), amount, gathered.ToLower())); }
+            }
+            else
+            {
+                amountstring = amount.ToString().Replace("-", "");
+                amount = float.Parse(amountstring);
+
+                if (config.Settings.UseEconomics && Economics) { Economics.CallHook("Withdraw", player.UserIDString, amount); }
+                if (config.Settings.UseServerRewards && ServerRewards) { ServerRewards?.Call("TakePoints", new object[] { player.userID, amount }); }
+
+                if (type == "gather" && config.Settings.ShowMessagesOnGather) { PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("LostForGather", player), amount, gathered.ToLower())); }
+                else if (type == "kill" && config.Settings.ShowMessagesOnKill) { PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("LostForKill", player), amount, gathered.ToLower())); }
+            }
+        }
+
         private void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             if (!Economics && !ServerRewards) return;
@@ -228,31 +266,65 @@ namespace Oxide.Plugins
 
                 if (resource != null && amount != 0)
                 {
-                    if (amount > 0)
-                    {
-                        if (config.Settings.UseEconomics && Economics) { Economics.CallHook("Deposit", player.UserIDString, amount); }
-                        if (config.Settings.UseServerRewards && ServerRewards) { ServerRewards?.Call("AddPoints", new object[] { player.userID, amount }); }
-
-                        if (config.Settings.ShowMessagesOnGather)
-                        {
-                            PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("ReceivedForGather", player), amount, resource));
-                        }
-                    }
-                    else
-                    {
-                        amountstring = amount.ToString().Replace("-", "");
-                        amount = float.Parse(amountstring);
-                        if (config.Settings.UseEconomics && Economics) { Economics.CallHook("Withdraw", player.UserIDString, amount); }
-                        if (config.Settings.UseServerRewards && ServerRewards) { ServerRewards?.Call("TakePoints", new object[] { player.userID, amount }); }
-
-                        if (config.Settings.ShowMessagesOnGather)
-                        {
-                            PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("LostForGather", player), amount, resource));
-                        }
-                    }
+                    GiveCredit(player, "gather", amount, resource);
                 }
             }
         }
+		
+		private void OnCollectiblePickup(Item item, BasePlayer player)
+		{
+            Puts(item.ToString()); 
+			if (!Economics && !ServerRewards) return;
+			if (player == null) return;
+			resource = null;
+			
+			if (item.ToString().Contains("stones"))
+			{
+				amount = config.Settings.Rewards[PluginRewards.Stone];
+                resource = "stone";
+			}
+
+			if (item.ToString().Contains(".ore"))
+			{
+				amount = config.Settings.Rewards[PluginRewards.Ore];
+                resource = "ore";
+			}	
+            		
+			if (item.ToString().Contains("wood"))
+			{
+				amount = config.Settings.Rewards[PluginRewards.Wood];
+                resource = "wood";
+			}
+
+            if (item.ToString().Contains("mushroom"))
+            {
+                amount = config.Settings.Rewards[PluginRewards.Mushroom];
+                resource = "mushrooms";
+            }
+
+            if (item.ToString().Contains("seed.corn"))
+            {
+                amount = config.Settings.Rewards[PluginRewards.Corn];
+                resource = "corn";
+            }
+
+            if (item.ToString().Contains("seed.hemp"))
+            {
+                amount = config.Settings.Rewards[PluginRewards.Hemp];
+                resource = "hemp";
+            }
+
+            if (item.ToString().Contains("seed.pumpkin"))
+            {
+                amount = config.Settings.Rewards[PluginRewards.Pumpkin];
+                resource = "pumpkins";
+            }
+
+            if (resource != null && amount != 0)
+			{
+                GiveCredit(player, "gather", amount, resource);
+            }
+		}
 
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
@@ -292,46 +364,19 @@ namespace Oxide.Plugins
             }
             else
             {
-                if (!entity.GetComponent("BaseNpc")) { return; }
-                animal = UppercaseFirst(entity.LookupPrefab().ToString().Replace("[0]", ""));
-                config.Settings.Rewards.TryGetValue(animal, out amount);
+				if (entity is NPCMurderer) { animal = "Murderer"; config.Settings.Rewards.TryGetValue(animal, out amount); }
+				else if (entity is NPCPlayerApex) { animal = "Scientist"; config.Settings.Rewards.TryGetValue(animal, out amount); }
+                else if (entity.GetComponent("BaseNpc"))
+				{
+					animal = UppercaseFirst(entity.LookupPrefab().ToString().Replace("[0]", ""));
+					Puts(animal);
+					config.Settings.Rewards.TryGetValue(animal, out amount);
+				}
             }
 
             if (amount != 0)
             {
-                if (amount > 0)
-                {
-                    if (config.Settings.UseEconomics && Economics)
-                    {
-                        Economics.CallHook("Deposit", player.UserIDString, amount);
-                    }
-                    if (config.Settings.UseServerRewards && ServerRewards)
-                    {
-                        ServerRewards?.Call("AddPoints", new object[] { player.userID, amount });
-                    }
-                    if (config.Settings.ShowMessagesOnKill)
-                    {
-                        PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("ReceivedForKill", player), amount, animal.ToLower()));
-                    }
-                }
-                else
-                {
-                    amountstring = amount.ToString().Replace("-", "");
-                    amount = float.Parse(amountstring);
-
-                    if (config.Settings.UseEconomics && Economics)
-                    {
-                        Economics.CallHook("Withdraw", player.UserIDString, amount);
-                    }
-                    if (config.Settings.UseServerRewards && ServerRewards)
-                    {
-                        ServerRewards?.Call("TakePoints", new object[] { player.userID, amount });
-                    }
-                    if (config.Settings.ShowMessagesOnKill)
-                    {
-                        PrintToChat(player, config.Settings.PluginPrefix + " " + string.Format(Lang("LostForKill", player), amount, animal.ToLower()));
-                    }
-                }
+                GiveCredit(player, "kill", amount, animal);
             }
         }
 
@@ -363,56 +408,23 @@ namespace Oxide.Plugins
                     SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("Success", player.UserIDString), "friend", value));
                     break;
                 }
-                case "ore":
-                {
-                    config.Settings.Rewards[PluginRewards.Ore] = value;
-                    Config.WriteObject(config);
-                    SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("Success", player.UserIDString), "ore", value));
-                    break;
-                }
-                case "player":
-                {
-                    config.Settings.Rewards[PluginRewards.Player] = value;
-                    Config.WriteObject(config);
-                    SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("Success", player.UserIDString), "player", value));
-                    break;
-                }
-                case "stone":
-                {
-                    config.Settings.Rewards[PluginRewards.Stone] = value;
-                    Config.WriteObject(config);
-                    SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("Success", player.UserIDString), "stone", value));
-                    break;
-                }
-                case "wood":
-                {
-                    config.Settings.Rewards[PluginRewards.Wood] = value;
-                    Config.WriteObject(config);
-                    SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("Success", player.UserIDString), "wood", value));
-                    break;
-                }
                 default:
                 {
-                    foreach (GameManifest.PooledString str in GameManifest.Current.pooledStrings)
+                    bool found = false;
+                    foreach (KeyValuePair<string, float> entry in config.Settings.Rewards)
                     {
-                        if (str.str.StartsWith("assets/rust.ai/agents"))
-                        {
-                            if (str.str.Contains("-") || str.str.Contains("_")) { continue; }
-                            var animal = str.str.Substring(str.str.LastIndexOf("/") + 1).Replace(".prefab", "");
-                            if (animal.Contains(".")) { continue; }
-                            if (args[0].ToLower() != animal) { continue; }
-                            else { foundAnimal = true; }
-
-                            config.Settings.Rewards[UppercaseFirst(animal)] = float.Parse(args[1]);
-                            Config.WriteObject(config);
-
-                            SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("Success", player.UserIDString), animal, value));
-                            break;
-                        }
+                        if (found) { continue; }
+                        if (!(entry.Key == UppercaseFirst(args[0].ToLower()))) { continue; }
+                        found = true;
                     }
-                    if (!(foundAnimal)) { SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("ValueDoesNotExist", player.UserIDString), args[0])); }
-                    foundAnimal = false;
-                    break;
+                    if (found)
+                    {
+                        config.Settings.Rewards[UppercaseFirst(args[0].ToLower())] = float.Parse(args[1]);
+                        Config.WriteObject(config);
+                        SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("Success", player.UserIDString), args[0].ToLower(), value));
+                    }
+                    else { SendReply(player, config.Settings.PluginPrefix + " " + string.Format(Lang("ValueDoesNotExist", player.UserIDString), args[0].ToLower())); }
+                    break; 
                 }
                 break;
             }
@@ -444,61 +456,27 @@ namespace Oxide.Plugins
                     Puts(string.Format(Lang("Success"), "friend", value));
                     break;
                 }
-                case "ore":
-                {
-                    config.Settings.Rewards[PluginRewards.Ore] = value;
-                    Config.WriteObject(config);
-                    Puts(string.Format(Lang("Success"), "ore", value));
-                    break;
-                }
-                case "player":
-                {
-                    config.Settings.Rewards[PluginRewards.Player] = value;
-                    Config.WriteObject(config);
-                    Puts(string.Format(Lang("Success"), "player", value));
-                    break;
-                }
-                case "stone":
-                {
-                    config.Settings.Rewards[PluginRewards.Stone] = value;
-                    Config.WriteObject(config);
-                    Puts(string.Format(Lang("Success"), "stone", value));
-                    break;
-                }
-                case "wood":
-                {
-                    config.Settings.Rewards[PluginRewards.Wood] = value;
-                    Config.WriteObject(config);
-                    Puts(string.Format(Lang("Success"), "wood", value));
-                    break;
-                }
                 default:
                 {
-                    foreach (GameManifest.PooledString str in GameManifest.Current.pooledStrings)
+                    bool found = false;
+                    foreach (KeyValuePair<string, float> entry in config.Settings.Rewards)
                     {
-                        if (str.str.StartsWith("assets/rust.ai/agents"))
-                        {
-                            if (str.str.Contains("-") || str.str.Contains("_")) { continue; }
-                            var animal = str.str.Substring(str.str.LastIndexOf("/") + 1).Replace(".prefab", "");
-                            if (animal.Contains(".")) { continue; }
-                            if (arg.Args[0].ToLower() != animal) { continue; }
-                            else { foundAnimal = true; }
-
-                            config.Settings.Rewards[UppercaseFirst(animal)] = float.Parse(arg.Args[1]);
-                            Config.WriteObject(config);
-
-                            Puts(string.Format(Lang("Success"), animal, value));
-                            break;
-                        }
+                        if (found) { continue; }
+                        if (!(entry.Key == UppercaseFirst(arg.Args[0].ToLower()))) { continue; }
+                        found = true;
                     }
-                    if (!(foundAnimal)) { Puts(string.Format(Lang("ValueDoesNotExist"), arg.Args[0])); }
-                    foundAnimal = false;
+                    if (found)
+                    {
+                        config.Settings.Rewards[UppercaseFirst(arg.Args[0].ToLower())] = float.Parse(arg.Args[1]);
+                        Config.WriteObject(config);
+                        Puts(string.Format(Lang("Success"), arg.Args[0].ToLower(), value));
+                    }
+                    else { Puts(string.Format(Lang("ValueDoesNotExist"), arg.Args[0].ToLower())); }
                     break;
                 }
                 break;
             }
         }
-
         #endregion
     }
 }
