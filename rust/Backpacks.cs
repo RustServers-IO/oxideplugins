@@ -3,15 +3,19 @@ using UnityEngine;
 using System.Linq;
 using Oxide.Core;
 using System;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.0.9", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.1.0", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
         public static Backpacks Instance;
         private static Dictionary<ulong, Backpack> backpacks = new Dictionary<ulong, Backpack>();
+
+        [PluginReference]
+        private Plugin EventManager;
 
         #region Classes
 
@@ -29,6 +33,14 @@ namespace Oxide.Plugins
             public static bool HideOnBackIfEmpty = true;
             public static bool DropOnDeath = true;
             public static bool EraseOnDeath = false;
+
+            public static bool UseBlacklist = false;
+
+            public static List<object> BlacklistedItems = new List<object>
+            {
+                "rocket.launcher",
+                "lmg.m249"
+            };
         }
 
         private class StorageCloser : MonoBehaviour
@@ -48,13 +60,14 @@ namespace Oxide.Plugins
 
             private BaseEntity entity;
             private BaseEntity visualEntity;
-            private StorageContainer container => entity.GetComponent<StorageContainer>();
+
             public bool IsOpen => entity != null;
+            public StorageContainer Container => entity.GetComponent<StorageContainer>();
 
             public StorageSize Size =>
                 Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.large") ? StorageSize.Large :
-                (Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.medium") ? StorageSize.Medium :
-                (Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.medium") ? StorageSize.Small : Configuration.BackpackSize));
+                    (Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.medium") ? StorageSize.Medium :
+                        (Instance.permission.UserHasPermission(ownerID.ToString(), "backpacks.use.medium") ? StorageSize.Small : Configuration.BackpackSize));
 
             public Backpack(ulong id)
             {
@@ -117,12 +130,18 @@ namespace Oxide.Plugins
                     return;
                 }
 
+                if (Instance.EventManager?.Call<bool>("isPlaying", player) ?? false)
+                {
+                    Instance.PrintToChat(player, Instance.lang.GetMessage("May Not Open Backpack In Event", Instance, player.UserIDString));
+                    return;
+                }
+
                 entity = SpawnContainer(Size, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
 
                 foreach (var backpackItem in Inventory.Items)
-                    backpackItem.ToItem()?.MoveToContainer(container.inventory);
+                    backpackItem.ToItem()?.MoveToContainer(Container.inventory);
 
-                PlayerLootContainer(player, entity.GetComponent<StorageContainer>());
+                PlayerLootContainer(player, Container);
                 StorageCloser.Attach(entity, Close);
             }
 
@@ -130,7 +149,7 @@ namespace Oxide.Plugins
             {
                 if (entity != null)
                 {
-                    Inventory.Items = container.inventory.itemList.Select(BackpackInventory.BackpackItem.FromItem).ToList();
+                    Inventory.Items = Container.inventory.itemList.Select(BackpackInventory.BackpackItem.FromItem).ToList();
 
                     entity.Kill();
                     entity = null;
@@ -252,6 +271,7 @@ namespace Oxide.Plugins
                 public float Fuel;
                 public int FlameFuel;
                 public float Condition;
+                public float MaxCondition;
                 public int Ammo;
                 public int AmmoType;
                 public bool IsBlueprint;
@@ -271,12 +291,13 @@ namespace Oxide.Plugins
                         item.blueprintTarget = BlueprintTarget;
                         return item;
                     }
-                    
+
                     BaseProjectile.Magazine magazine = item.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine;
                     FlameThrower flameThrower = item.GetHeldEntity()?.GetComponent<FlameThrower>();
 
                     item.fuel = Fuel;
                     item.condition = Condition;
+                    item.maxCondition = MaxCondition;
 
                     if (Contents != null)
                         foreach (var contentItem in Contents)
@@ -302,6 +323,7 @@ namespace Oxide.Plugins
                     Ammo = item.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine?.contents ?? 0,
                     AmmoType = item.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine?.ammoType?.itemid ?? 0,
                     Amount = item.amount,
+                    MaxCondition = item.maxCondition,
                     Condition = item.condition,
                     Fuel = item.fuel,
                     Skin = item.skin,
@@ -373,7 +395,8 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 ["No Permission"] = "You don't have permission to use this command.",
-                ["Backpack Already Open"] = "Somebody already has this backpack open!"
+                ["Backpack Already Open"] = "Somebody already has this backpack open!",
+                ["May Not Open Backpack In Event"] = "You may not open a backpack while participating in an event!"
             }, this);
         }
 
@@ -386,6 +409,9 @@ namespace Oxide.Plugins
 
             GetConfig(ref Configuration.ShowOnBack, "Show On Back");
             GetConfig(ref Configuration.HideOnBackIfEmpty, "Hide On Back If Empty");
+
+            GetConfig(ref Configuration.UseBlacklist, "Use Blacklist");
+            GetConfig(ref Configuration.BlacklistedItems, "Blacklisted Items (Item Shortnames)");
 
             SaveConfig();
         }
@@ -415,12 +441,10 @@ namespace Oxide.Plugins
                 {
                     OnPlayerInit(basePlayer);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    
                 }
             }
-                
         }
 
         private void Unload()
@@ -433,6 +457,19 @@ namespace Oxide.Plugins
 
             foreach (var ent in Resources.FindObjectsOfTypeAll<StorageContainer>().Where(cont => cont.name == "droppedbackpack" && cont.inventory.itemList.Count == 0))
                 ent.KillMessage();
+        }
+
+        private object CanAcceptItem(ItemContainer container, Item item)
+        {
+            if (!Configuration.UseBlacklist)
+                return null;
+
+            // Is the Item blacklisted and the target container is a backpack?
+            if (Configuration.BlacklistedItems.Any(i => i.ToString() == item.info.shortname) &&
+                backpacks.Values.Any(b => b.Container.inventory == container))
+                return ItemContainer.CanAcceptResult.CannotAccept;
+            
+            return null;
         }
 
         private void OnPlayerInit(BasePlayer player)
