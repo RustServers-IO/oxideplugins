@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.1.2", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.1.3", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -124,11 +124,6 @@ namespace Oxide.Plugins
 
             public void Open(BasePlayer player)
             {
-                
-                Instance.PrintWarning(JsonConvert.SerializeObject(this, Formatting.Indented));
-
-                //return;
-
                 if (IsOpen)
                 {
                     Instance.PrintToChat(player, Instance.lang.GetMessage("Backpack Already Open", Instance, player.UserIDString));
