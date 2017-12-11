@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoFuel", "redBDGR", "1.0.0")]
+    [Info("AutoFuel", "redBDGR", "1.0.1", ResourceId = 2717)]
     [Description("Automatically fuel lights if there is fuel in the toolcupboards inventory")]
 
     class AutoFuel : RustPlugin
@@ -17,10 +17,10 @@ namespace Oxide.Plugins
         private bool useFurnace;
         private bool useJackOLantern;
         private bool useLantern;
-        private bool useLargeFurnace;
         private bool useSearchLight;
-        private bool useSmallOilRefinery;
         private bool useTunaCanLamp;
+
+        private bool dontRequireFuel;
 
         private List<string> activeShortNames = new List<string>();
 
@@ -41,10 +41,9 @@ namespace Oxide.Plugins
             useFurnace = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Furnace", false));
             useJackOLantern = Convert.ToBoolean(GetConfig("Types to autofuel", "Use JackOLanterns", true));
             useLantern = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Lantern", true));
-            useLargeFurnace = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Large Furnace", false));
             useSearchLight = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Search Light", true));
-            useSmallOilRefinery = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Small Oil Refinery", false));
             useTunaCanLamp = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Tuna Can Lamp", true));
+            dontRequireFuel = Convert.ToBoolean(GetConfig("Settings", "Don't require fuel", false));
 
             if (!Changed) return;
             SaveConfig();
@@ -61,6 +60,20 @@ namespace Oxide.Plugins
             DoStartupItemNames();
         }
 
+        private void Unload()
+        {
+            foreach(BaseOven oven in UnityEngine.Object.FindObjectsOfType<BaseOven>())
+                if (activeShortNames.Contains(oven.GetComponent<BaseEntity>().ShortPrefabName))
+                    if (oven.inventory.IsLocked())
+                        oven.inventory.SetLocked(false);
+        }
+
+        private void OnEntitySpawned(BaseNetworkable entity)
+        {
+            if (entity.GetComponent<BaseEntity>()?.ShortPrefabName == "jackolantern.angry" || entity.GetComponent<BaseEntity>()?.ShortPrefabName == "jackolantern.happy")
+                entity.GetComponent<BaseOven>().fuelType = ItemManager.FindItemDefinition("wood");
+        }
+
         private Item OnFindBurnable(BaseOven oven)
         {
             if (!activeShortNames.Contains(oven.GetComponent<BaseEntity>()?.ShortPrefabName))
@@ -68,22 +81,15 @@ namespace Oxide.Plugins
             if (HasFuel(oven))
                 return null;
             BuildingManager.Building building = oven.GetComponent<DecayEntity>().GetBuilding();
+            if (building == null) return null;
             foreach (BuildingPrivlidge priv in building.buildingPrivileges)
             {
+                if (dontRequireFuel)
+                    return ItemManager.CreateByName(oven.fuelType.shortname, 1);
                 Item fuelItem = GetFuel(priv, oven);
                 if (fuelItem == null)
                     continue;
-                if (fuelItem.amount == 1)
-                {
-                    fuelItem.RemoveFromContainer();
-                    fuelItem.RemoveFromWorld();
-                    fuelItem.Remove();
-                }
-                else
-                {
-                    fuelItem.amount = fuelItem.amount - 1;
-                    fuelItem.MarkDirty();
-                }
+                RemoveItemThink(fuelItem);
                 ItemManager.CreateByName(oven.fuelType.shortname, 1).MoveToContainer(oven.inventory);
                 return null;
             }
@@ -94,14 +100,29 @@ namespace Oxide.Plugins
 
         #region Methods
 
-        private static bool HasFuel(BaseOven oven)
+        private bool HasFuel(BaseOven oven)
         {
             return oven.inventory.itemList.Any(item => item.info == oven.fuelType);
         }
 
-        private static Item GetFuel(BuildingPrivlidge priv, BaseOven oven)
+        private Item GetFuel(BuildingPrivlidge priv, BaseOven oven)
         {
             return priv.inventory.itemList.FirstOrDefault(item => item.info == oven.fuelType);
+        }
+
+        private static void RemoveItemThink(Item item)
+        {
+            if (item.amount == 1)
+            {
+                item.RemoveFromContainer();
+                item.RemoveFromWorld();
+                item.Remove();
+            }
+            else
+            {
+                item.amount = item.amount - 1;
+                item.MarkDirty();
+            }
         }
 
         private void DoStartupItemNames()
@@ -121,12 +142,8 @@ namespace Oxide.Plugins
             }
             if (useLantern)
                 activeShortNames.Add("lantern.deployed");
-            if (useLargeFurnace)
-                activeShortNames.Add("furnace.large");
             if (useSearchLight)
                 activeShortNames.Add("searchlight.deployed");
-            if (useSmallOilRefinery)
-                activeShortNames.Add("refinery_small_deployed");
             if (useTunaCanLamp)
                 activeShortNames.Add("tunalight.deployed");
         }
