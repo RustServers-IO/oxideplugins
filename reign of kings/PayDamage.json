@@ -2,7 +2,7 @@
     "name": "PayDamage",
     "description": "Pay Wood and Stone to cause damage to crested blocks.",
     "author": "Karltubing",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/paydamage.2719",

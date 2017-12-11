@@ -28,7 +28,7 @@ namespace Oxide.Plugins
                 {"WoodPaid2" , "[FF0000]PayDamage[FFFFFF] :[00FF00]2[FFFF00] wood[FF0000] paid." },
                 {"StonePaid2" , "[FF0000]PayDamage[FFFFFF] :[00FF00]2[FFFF00] stone[FF0000] paid."},
                 {"PayDamageHelp" , "[FF0000]PayDamage[FFFFFF] :[00FF00]/paydmg[FFFF00] - Turns paying for damages  [00FF00]ON[FFFFFF]/[FF0000]OFF[FFFFFF]" },
-                {"PayDamageHelp3" , "[FF0000]PayDamage[FFFFFF] :[00FF00]/finespam[FFFF00] - Turns chat spam fines paid for damages [00FF00]ON[FFFFFF]/[FF0000]OFF[FFFFFF]" },
+                {"PayDamageHelp3" , "[FF0000]PayDamage[FFFFFF] :[00FF00]/finespam[FFFF00] - Turns chat spam warnings [00FF00]ON[FFFFFF]/[FF0000]OFF[FFFFFF]" },
                 {"AdminOnly" , "[FF0000]PayDamage[FFFFFF] :[00FF00]Only Admins can use this command!"},
                 {"PayDmgOff" , "[FF0000]PayDamage[FFFFFF] :[00FF00]Paying for DAMAGE is now [FF0000]OFF"},
                 {"PayDmgOn" , "[FF0000]PayDamage[FFFFFF] :[00FF00]Paying for DAMAGE is now [00FF00]ON"},
@@ -40,7 +40,7 @@ namespace Oxide.Plugins
         #endregion
         #region [BOOLS]
         private bool allowPayDmg = true; // Turns on/off paying for Damages For Damages.
-        private bool allowFineSpam = false; // Turns on/off Fine Spamming For Damages.
+        private bool allowFineSpam = false; // Turns on/off Warning messages.
         #endregion
         #region [CONFIG]
         string Resource1;
@@ -91,7 +91,6 @@ namespace Oxide.Plugins
             foreach (InvGameItemStack item in inventory.Where(item => item != null))
             {
                 if (item.Name != resource) continue;
-
                 removeAmount = amountRemaining;
                 if (item.StackAmount < removeAmount) removeAmount = item.StackAmount;
                 inventory.SplitItem(item, removeAmount);
@@ -156,7 +155,6 @@ namespace Oxide.Plugins
             int SuccessOrFail;
             int StoneOrWood;
             int OneOrTwo;
-            int GoldFine;
             var player = e.Damage.DamageSource.Owner;
             if (player == null) return;
             var worldCoordinate = e.Grid.LocalToWorldCoordinate(e.Position);
@@ -173,22 +171,22 @@ namespace Oxide.Plugins
                      e.Damage.Amount = 0f;
                      e.Damage.ImpactDamage = 0f;
                      e.Damage.MiscDamage = 0f;
-                     PrintToChat(player, "You need at least " + Amount1.ToString() + " " + Resource1.ToString() + " " + " and " + Amount2.ToString() + " " + Resource2.ToString() + " " + " to cause damage ");
-                     return;
+                    if (allowFineSpam)
+                    {
+                        PrintToChat(player, "You need at least " + Amount1.ToString() + " " + Resource1.ToString() + " " + " and " + Amount2.ToString() + " " + Resource2.ToString() + " " + " to cause damage ");
+                        return;
+                    }                  
                  }
                  if (StoneOrWood <= 50)
                  {
                      if (OneOrTwo <= 50)
                      {
                          RemoveItemsFromInventory(player, "Wood", 1);
-                         //PrintToChat(player, string.Format(GetMessage("WoodPaid", player.Id.ToString()), "1"));
                          return;
-                         //continue;
                      }
                      else
                      {
                          RemoveItemsFromInventory(player, "Wood", 2);
-                         //PrintToChat(player, string.Format(GetMessage("WoodPaid2", player.Id.ToString()), "2"));
                          return;
                      }
                  }
@@ -197,14 +195,11 @@ namespace Oxide.Plugins
                      if (OneOrTwo <= 50)
                      {
                          RemoveItemsFromInventory(player, "Stone", 1);
-                         //PrintToChat(player, string.Format(GetMessage("StonePaid", player.Id.ToString()), "1"));
                          return;
-                         //continue;
                      }
                      else
                      {
                          RemoveItemsFromInventory(player, "Stone", 2);
-                         //PrintToChat(player, string.Format(GetMessage("StonePaid2", player.Id.ToString()), "2"));
                          return;
                      }
                 }                
