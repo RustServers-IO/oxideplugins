@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.2.3", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.2.4", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -172,7 +172,8 @@ namespace Oxide.Plugins
         #endregion
 
         #region Config
-        protected override void LoadDefaultConfig() { }
+		protected override void LoadDefaultConfig(){}
+
 
         private void CheckCfg<T>(string Key, ref T var)
         {
@@ -1287,7 +1288,11 @@ namespace Oxide.Plugins
 		{
 			if (RemoveFractionedObjectsExcludeBuildingBlocks && (entity is BuildingBlock || entity is SimpleBuildingBlock)) return false;
 			var baseCombat = entity as BaseCombatEntity;
-			if (baseCombat == null || !baseCombat.repair.enabled || baseCombat.repair.itemTarget == null || baseCombat.repair.itemTarget.Blueprint == null) return false;
+			if (baseCombat == null || !baseCombat.repair.enabled)
+				return false;
+			if (!(entity is BuildingBlock) &&  !(entity is SimpleBuildingBlock))
+				if (baseCombat.repair.itemTarget == null || baseCombat.repair.itemTarget.Blueprint == null)
+					return false;
 			if ((100f / baseCombat.MaxHealth() * baseCombat.Health()) >= RemoveFractionedPercent) return false;
 			return true;			
 		}

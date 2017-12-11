@@ -1,0 +1,16 @@
+{
+    "name": "LocalTimeDamageControl",
+    "description": "Allows admin to control when damage can be done by non-owners using local server time.",
+    "author": "carny666",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/localtimedamagecontrol.2720",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
