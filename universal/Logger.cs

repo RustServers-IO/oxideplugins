@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Logger", "Wulf/lukespragg", "2.1.1", ResourceId = 670)]
+    [Info("Logger", "Wulf/lukespragg", "2.1.2", ResourceId = 670)]
     [Description("Configurable logging of chat, commands, connections, and more")]
     public class Logger : CovalencePlugin
     {
@@ -94,7 +94,7 @@ namespace Oxide.Plugins
             if (!config.LogDisconnections) Unsubscribe("OnUserDisconnected");
             if (!config.LogRespawns) Unsubscribe("OnUserRespawned");
 #if RUST
-            if (!config.LogCrafting) Unsubscribe("OnItemCraft");
+            if (!config.LogCrafting) Unsubscribe("OnItemCraftFinished");
             if (!config.LogItemDrops) Unsubscribe("OnItemAction");
 #endif
         }
