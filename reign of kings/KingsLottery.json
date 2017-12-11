@@ -1,0 +1,17 @@
+{
+    "name": "KingsLottery",
+    "description": "A way for players to gamble",
+    "author": "",
+    "version": "7.7.7",
+    "configuration": true,
+    "suggest": {},
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/kingslottery.2694",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}
