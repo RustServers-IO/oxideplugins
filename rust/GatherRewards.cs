@@ -7,7 +7,7 @@ using Oxide.Game.Rust.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("Gather Rewards", "CanopySheep", "1.5.0", ResourceId = 770)]
+    [Info("Gather Rewards", "CanopySheep", "1.5.1", ResourceId = 770)]
     [Description("Gain money through Economics/Server Rewards for killing and gathering.")]
     public class GatherRewards : RustPlugin
     {
