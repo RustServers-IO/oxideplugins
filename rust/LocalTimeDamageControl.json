@@ -1,6 +1,6 @@
 {
     "name": "LocalTimeDamageControl",
-    "description": "Allows admin to control when damage can be done by non-owners using local server time.",
+    "description": "Allows admin to control when damage can be done by non-owner players to using local server time.",
     "author": "carny666",
     "version": "1.0.0",
     "configuration": true,
