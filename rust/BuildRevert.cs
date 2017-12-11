@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildRevert", "nivex", "1.0.2", ResourceId = 2465)]
+    [Info("BuildRevert", "nivex", "1.0.3", ResourceId = 2465)]
     [Description("Prevent building in blocked area.")]
     public class BuildRevert : RustPlugin
     {
@@ -37,7 +37,6 @@ namespace Oxide.Plugins
 
             foreach(var collider in colliders)
             {
-                Puts(collider.name);
                 var p = collider.GetComponentInParent<BuildingPrivlidge>();
 
                 if (p != null && p.IsOlderThan(priv))
