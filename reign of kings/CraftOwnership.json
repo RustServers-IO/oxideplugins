@@ -1,0 +1,16 @@
+{
+    "name": "Crafting Ownership",
+    "description": "Modders resource. Stores crafting station interactions and craftings.",
+    "author": "D-Kay",
+    "version": "1.0.0",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/crafting-ownership.2718",
+    "games": [
+        "reign of kings"
+    ],
+    "keywords": [
+        "oxide",
+        "reign of kings"
+    ]
+}
