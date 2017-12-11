@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Oxide.Core.Libraries.Covalence;
+using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Logger", "Wulf/lukespragg", "2.1.0", ResourceId = 670)]
+    [Info("Logger", "Wulf/lukespragg", "2.1.1", ResourceId = 670)]
     [Description("Configurable logging of chat, commands, connections, and more")]
     public class Logger : CovalencePlugin
     {
@@ -82,7 +82,7 @@ namespace Oxide.Plugins
 
         protected override void SaveConfig() => Config.WriteObject(config);
 
-        #endregion
+        #endregion Configuration
 
         #region Initialization
 
@@ -99,7 +99,7 @@ namespace Oxide.Plugins
 #endif
         }
 
-        #endregion
+        #endregion Initialization
 
         #region Localization
 
@@ -161,7 +161,7 @@ namespace Oxide.Plugins
             }, this, "es");
         }
 
-        #endregion
+        #endregion Localization
 
         #region Logging
 
@@ -176,7 +176,7 @@ namespace Oxide.Plugins
 #if RUST
         private void OnItemAction(Item item, string action)
         {
-            var player = item.parent.playerOwner;
+            var player = item.parent?.playerOwner;
             if (action.ToLower() != "drop" || player == null) return;
 
             Log("itemdrop", Lang("ItemDropped", null, player.displayName, player.UserIDString, item.amount, item.info.displayName.english));
@@ -210,18 +210,18 @@ namespace Oxide.Plugins
         }
 #endif
 
-        #endregion
+        #endregion Logging
 
         #region Helpers
 
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        private void Log(string filename, string text)
+        private void Log(string filename, string key, params object[] args)
         {
-            LogToFile(filename, text, this);
-            if (config.LogToConsole) Puts(text);
+            if (config.LogToConsole) Puts($"[{System.DateTime.Now}] {Lang(key, null, args)}");
+            LogToFile(filename, Lang(key, null, args), this);
         }
 
-        #endregion
+        #endregion Helpers
     }
 }
