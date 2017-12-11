@@ -18,13 +18,19 @@ using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
+using CodeHatch;
 using CodeHatch.Blocks.Inventory;
+using CodeHatch.Core.Registration;
+using CodeHatch.Engine.Core.Interaction.Behaviours.Networking;
+using CodeHatch.Engine.Core.Interaction.Players;
+using CodeHatch.Engine.Modules.SocialSystem.Objects;
 using UnityEngine;
 using static CodeHatch.Blocks.Networking.Events.CubeEvent;
 
 namespace Oxide.Plugins
 {
-    [Info("LevelSystem", "D-Kay", "1.0.0", ResourceId = 1822)]
+    [Info("LevelSystem", "D-Kay", "1.1.0", ResourceId = 1822)]
     public class LevelSystem : ReignOfKingsPlugin
     {
         #region Variables
@@ -32,9 +38,13 @@ namespace Oxide.Plugins
         [PluginReference("GrandExchange")]
         private Plugin GrandExchange;
 
+        [PluginReference("CraftOwnership")]
+        private Plugin CraftOwnership;
+
         #region Fields
         private bool UsePvpXp { get; set; } = true; // Turns on/off gold for PVP.
         private bool UsePveXp { get; set; } = true; // Turns on/off gold for PVE.
+        private bool UseCraftingXp { get; set; } = true; // Turns on/off gold for crafting items.
         private bool UseDamageBonus { get; set; } = true; // Turns on/off the damage bonus.
         private bool UseDefenseBonus { get; set; } = true; // Turns on/off the defense bonus.
         private bool UseInventoryBonus { get; set; } = true; //Turns on/off the inventory slot bonus.
@@ -51,7 +61,7 @@ namespace Oxide.Plugins
         private bool UseReturnCube { get; set; } = true; // Turns on/off the returning of the cube when placing one without the correct level.
         private bool UseCrestRoping { get; set; } = true; // Turns on/off the allowance of roping in your own crest territory.
         private bool UseStatReset { get; set; } = true; // Turns on/off the allowance for resetting ones skills.
-        //private bool UseImprisonment { get; set; } = true; // Turns on/off the automated imprisonment of players.
+        private bool UseCrestIgnoring { get; set; } = true; // Turns on/off the ignoring of the newborn protection in crested area's.
 
         private static bool UseNametag { get; set; } = true; // Turns on/off the level nametag.
 
@@ -67,14 +77,17 @@ namespace Oxide.Plugins
         private int PvpLoseMaxXp => GetConfig("XpGain", "pvpLoseMaxXp", 15); // Maximum amount of xp a player can lose for getting killed by a player.
         private double PvpXpLossPercentage => GetConfig("XpGain", "pvpXpLossPercentage", 20); // Amount of xp you get less for each level difference as percentage.
         private double XpGainPerLvPercentage => GetConfig("XpGain", "xpGainPerLvPercentage", 12); // Amount of xp you get more per level as percentage.
+        // Crafting settings:
+        private int CraftingMinXp => GetConfig("XpGain", "craftingMinXp", 1);
+        private int CraftingMaxXp => GetConfig("XpGain", "craftingMaxXp", 3);
         // Damage bonus settings:
-        private float PlayerDamageBonus => GetConfig("Bonusses", "playerDamageBonus", 0.2f); // Damagebonus when hitting a player for each level gained.
+        private float PlayerDamageBonus => GetConfig("Bonusses", "playerDamageBonus", 0.1f); // Damagebonus when hitting a player for each level gained.
         private float BeastDamageBonus => GetConfig("Bonusses", "beastDamageBonus", 0.2f); // Damagebonus when hitting a monster for each level gained.
         private float BallistaDamageBonus => GetConfig("Bonusses", "ballistaDamageBonus", 5f); // Damagebonus when using siege weapons for each level gained.
         private float TrebuchetDamageBonus => GetConfig("Bonusses", "trebuchetDamageBonus", 50f); // Damagebonus when using siege weapons for each level gained.
         private float CubeDamageBonus => GetConfig("Bonusses", "cubeDamageBonus", 0.5f); // Damagebonus when hitting a block without siegeweapons for each level gained.
         // Defense bonus settings:
-        private float PlayerDefenseBonus => GetConfig("Bonusses", "playerDefenseBonus", 0.2f); // Defensebonus when getting hit by a player for each level gained.
+        private float PlayerDefenseBonus => GetConfig("Bonusses", "playerDefenseBonus", 0.1f); // Defensebonus when getting hit by a player for each level gained.
         private float BeastDefenseBonus => GetConfig("Bonusses", "beastDefenseBonus", 0.5f); // Defensebonus when getting hit by a monster for each level gained.
         // Inventory slot stat settings:
         private float InventorySlotBonus => GetConfig("Stats", "inventorySlotBonus", 0.5f); // Inventoryslot bonus per level gained.
@@ -86,6 +99,7 @@ namespace Oxide.Plugins
         private int CrestLevel => GetConfig("Requirements", "requiredLevelCrestDamage", 3); // Needed level to do damage against crests.
         private int CubeLevel => GetConfig("Requirements", "requiredLevelCubeDamage", 3); // Needed level to do damage against cubes.
         private int PvpLevel => GetConfig("Requirements", "requiredLevelPvp", 3); // Needed level to do pvp damage.
+        private int SiegeLevel => GetConfig("Requirements", "requiredLevelSiege", 3); // Needed level to do pvp damage.
         private int RopingLevel => GetConfig("Requirements", "requiredLevelRoping", 3); // Needed level to capture players.
         private int StatResetGold => GetConfig("Requirements", "requiredStatResetGold", 50000); // Needed gold amount to reset ones skills.
 
@@ -125,6 +139,7 @@ namespace Oxide.Plugins
 
         private static HashSet<Level> Levels { get; } = new HashSet<Level>();
         private Dictionary<ulong, PlayerData> PlayerXpData { get; set; } = new Dictionary<ulong, PlayerData>();
+
 
         private System.Random Random { get; } = new System.Random();
 
@@ -175,13 +190,12 @@ namespace Oxide.Plugins
 
             public PlayerData() { }
 
-            public PlayerData(ulong id, string name, int xp = 0, int points = 0)
+            public PlayerData(ulong id, int xp = 0, int points = -1)
             {
                 Id = id;
-                Name = name;
                 Xp = xp;
-                Points = points;
                 Level = Levels.Last(l => l.Xp <= Xp);
+                Points = points == -1 ? Level.MaxPoints : 0;
                 Bonuses = new Dictionary<Skill, Bonus>
                 {
                     {Skill.PlayerDamage, new Bonus()},
@@ -193,6 +207,12 @@ namespace Oxide.Plugins
                     {Skill.TrebuchetDamage, new Bonus()},
                     {Skill.InventorySlot, new Bonus()}
                 };
+            }
+
+            public PlayerData(ulong id, string name, int xp = 0, int points = -1)
+                : this(id, xp, points)
+            {
+                Name = name;
             }
 
             public void Reset()
@@ -358,9 +378,8 @@ namespace Oxide.Plugins
 
         private void Loaded()
         {
-            LoadDefaultMessages();
-            LoadXpData();
             LoadConfigData();
+            LoadXpData();
 
             if (RecalculateXpCurve) CalculateXpCurve();
 
@@ -419,8 +438,11 @@ namespace Oxide.Plugins
             UsePlaceLevel = GetConfig("Toggles", "usePlaceLevel", false);
             UseReturnCube = GetConfig("Toggles", "useReturnCube", true);
             UseCrestRoping = GetConfig("Toggles", "useCrestRoping", true);
+            UseCrestIgnoring = GetConfig("Toggles", "UseCrestIgnoring", true);
 
             UseNametag = GetConfig("Toggles", "useNametag", true);
+
+            UseCraftingXp = GetConfig("Toggles", "useCraftingXp", true);
 
             RecalculateXpCurve = GetConfig("XpCurve", "recalculateXpCurve", true);
             MaxLevel = GetConfig("XpCurve", "maxLevel", 1000);
@@ -447,6 +469,9 @@ namespace Oxide.Plugins
 
             Config["XpGain", "pvpXpLossPercentage"] = PvpXpLossPercentage;
             Config["XpGain", "xpGainPerLvPercentage"] = XpGainPerLvPercentage;
+
+            Config["XpGain", "craftingMinXp"] = CraftingMinXp;
+            Config["XpGain", "craftingMaxXp"] = CraftingMaxXp;
 
             Config["Bonusses", "playerDamageBonus"] = PlayerDamageBonus;
             Config["Bonusses", "beastDamageBonus"] = BeastDamageBonus;
@@ -477,6 +502,8 @@ namespace Oxide.Plugins
             Config["Toggles", "useReturnCube"] = UseReturnCube;
             Config["Toggles", "useCrestRoping"] = UseCrestRoping;
             Config["Toggles", "useNametag"] = UseNametag;
+            Config["Toggles", "UseCrestIgnoring"] = UseCrestIgnoring;
+            Config["Toggles", "useCraftingXp"] = UseCraftingXp;
 
             Config["XpCurve", "xpNeededPerLevel"] = Levels.Select(l => l.Xp).Cast<object>();
             Config["XpCurve", "maxLevel"] = MaxLevel;
@@ -492,6 +519,7 @@ namespace Oxide.Plugins
             Config["Requirements", "requiredLevelCrestDamage"] = CrestLevel;
             Config["Requirements", "requiredLevelCubeDamage"] = CubeLevel;
             Config["Requirements", "requiredLevelPvp"] = PvpLevel;
+            Config["Requirements", "requiredLevelSiege"] = SiegeLevel;
             Config["Requirements", "requiredLevelRoping"] = RopingLevel;
 
             Config["Placement", "Sod"] = SodLevel;
@@ -522,7 +550,7 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-        private void LoadDefaultMessages()
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -567,6 +595,8 @@ namespace Oxide.Plugins
                 { "Level Down", "Oh no! You went back to level [00FF00]{0}[FFFFFF]!" },
                 { "Not High Enough Throne Level", "Sorry. You need to be at least level [00FF00]{0}[FFFFFF] to be able to claim the throne." },
                 { "Not High Enough Crest Damage Level", "Sorry. You're too low level to do damage. Become level [00FF00]{0}[FFFFFF] first." },
+                { "Not High Enough Siege Damage Level", "Sorry. You're too low level to do damage. Become level [00FF00]{0}[FFFFFF] first." },
+                { "Not High Enough Siege Interact Level", "Sorry. You're too low level to use this. Become level [00FF00]{0}[FFFFFF] first." },
                 { "Not High Enough Cube Damage Level", "Sorry. You're too low level to do damage. Become level [00FF00]{0}[FFFFFF] first." },
                 { "Not High Enough Pvp Attack Level", "You're still under newborn protection. You can't do damage until you're level [00FF00]{0}[FFFFFF]." },
                 { "Not High Enough Pvp Defense Level", "That person is still under newborn protection! You can't damage him before he gets level [00FF00]{0}[FFFFFF]." },
@@ -582,7 +612,8 @@ namespace Oxide.Plugins
                 { "Popup Increase Stat Not Enough Points", "You don't have enough points available to upgrade your stat with that amount." },
                 { "Popup Increase Stat No Stat", "Sorry but we're unable to do that." },
                 { "Popup Increased Inventory", "You have increased your inventory." },
-                { "Popup Increased Damage Siege", "You have increased your damage done with siege weapons." },
+                { "Popup Increased Damage Ballista", "You have increased your damage done with a ballista." },
+                { "Popup Increased Damage Trebuchet", "You have increased your damage done with trebuchet." },
                 { "Popup Increased Damage Cube", "You have increased your damage against blocks with a normal weapon." },
                 { "Popup Increased Damage Player", "You have increased your damage against players." },
                 { "Popup Increased Damage Beast", "You have increased your damage against beasts." },
@@ -591,6 +622,7 @@ namespace Oxide.Plugins
                 { "Skill Points Available", "You still have [00FF00]{0}[FFFFFF] skill point(s) available." },
                 { "Skill Points Gained", "You got {0} skill point(s). Use /levelup to increase your skills." },
                 { "Skill Points Lost", "You lost {0} skill point(s)." },
+                { "Skill Points Limit", "You did not gain any skill points as you already have the max amount of points for your level." },
                 { "Stat Show Damage Siege Ballista", "You currently do [00FF00]{0}[FFFFFF] extra damage with ballista's." },
                 { "Stat Show Damage Siege Trebuchet", "You currently do [00FF00]{0}[FFFFFF] extra damage with trebuchets." },
                 { "Stat Show Damage Cube", "You currently do [00FF00]{0}[FFFFFF] extra damage against block using a normal weapon." },
@@ -609,7 +641,12 @@ namespace Oxide.Plugins
                 { "Info Current Xp", "{0} currently has [00FF00]{1}[FFFF00]xp[FFFFFF]." },
                 { "Info Current Level", "{0} current level is [00FF00]{1}[FFFFFF]." },
                 { "Info Skill Points Available", "{0} still has [00FF00]{1}[FFFFFF] skill point(s) available." },
-                { "Info Skill Points Total", "{0} has a total of [00FF00]{1}[FFFFFF] skill point(s)." }
+                { "Info Skill Points Total", "{0} has a total of [00FF00]{1}[FFFFFF] skill point(s)." },
+
+                { "Respec Player", "The skill point for player {0} have been refunded." },
+                { "Respec All", "The skill points for all players have been refunded." },
+
+                { "Crafting Finished", "Your craft has finished." }
             }, this);
         }
 
@@ -804,6 +841,12 @@ namespace Oxide.Plugins
             ResetStatChanges(player);
         }
 
+        [ChatCommand("xpstatrespec")]
+        private void RespecPlayerStats(Player player, string cmd, string[] input)
+        {
+            RespecStatChanges(player, input);
+        }
+
         [ChatCommand("xpconvertdatafile")]
         private void ConvertOldXpData(Player player, string cmd)
         {
@@ -862,7 +905,7 @@ namespace Oxide.Plugins
             var data = PlayerXpData[player.Id];
             data.Reset();
             data.Update(player);
-            KillPlayer(player);
+            ResetInventory(player);
             player.SendMessage(GetMessage("Remove My Xp", player));
             SaveXpData();
         }
@@ -965,7 +1008,8 @@ namespace Oxide.Plugins
                     target = data;
                     topXpAmount = data.Xp;
                 }
-                player.SendMessage(GetMessage("List Top Players", player), i, target.Name, target.Level.Id);
+                var targetName = target.Name ?? "Unknown";
+                player.SendMessage(GetMessage("List Top Players", player), i, targetName, target.Level.Id);
                 topPlayers.Remove(target.Id);
             }
         }
@@ -1117,7 +1161,8 @@ namespace Oxide.Plugins
             if (UseInventoryBonus) message += "[fff50c]Inventory[ffffff]\n";
             if (UseDamageBonus)
             {
-                if (BallistaDamageBonus > 0 || TrebuchetDamageBonus > 0) message += "[fff50c]Siegedamage[ffffff]\n";
+                if (BallistaDamageBonus > 0) message += "[fff50c]Ballistadamage[ffffff]\n";
+                if (TrebuchetDamageBonus > 0) message += "[fff50c]Trebuchetdamage[ffffff]\n";
                 if (CubeDamageBonus > 0) message += "[fff50c]Cubedamage[ffffff]\n";
                 if (PlayerDamageBonus > 0) message += "[fff50c]Playerdamage[ffffff]\n";
                 if (BeastDamageBonus > 0) message += "[fff50c]Beastdamage[ffffff]\n";
@@ -1165,9 +1210,42 @@ namespace Oxide.Plugins
             player.ShowConfirmPopup(GetMessage("Stat Reset Title", player), msg, GetMessage("Stat Reset Confirm", player), GetMessage("Stat Reset Cancel", player), (options, dialogue, data) => ApplyStatReset(player, options));
         }
 
+        private void RespecStatChanges(Player player, string[] args)
+        {
+            if (!player.HasPermission("LevelSystem.Modify.Points")) { player.SendError(GetMessage("No Permission", player)); return; }
+            if (args.Any())
+            {
+                Player target = Server.GetPlayerByName(args.JoinToString(" "));
+                if (target == null)
+                {
+                    player.SendError(GetMessage("Player Not Online", player));
+                    return;
+                }
+                CheckPlayerExists(target);
+                PlayerXpData[target.Id].ResetSkills();
+                player.SendMessage(GetMessage("Respec Player", player), target.Name);
+            }
+            else
+            {
+                PlayerXpData.Foreach(d => d.Value.ResetSkills());
+                player.SendMessage(GetMessage("Respec All", player));
+            }
+            SaveXpData();
+        }
+
         #endregion
 
         #region System Functions
+
+        private void CheckPlayerExists(ulong player)
+        {
+            if (!PlayerXpData.ContainsKey(player))
+            {
+                var data = new PlayerData(player);
+                PlayerXpData.Add(player, data);
+                UpdateSkills(data);
+            }
+        }
 
         private void CheckPlayerExists(Player player)
         {
@@ -1193,14 +1271,6 @@ namespace Oxide.Plugins
             data.UpdateBonus(Skill.InventorySlot, InventorySlotBonus);
         }
 
-        private void KillPlayer(Player player)
-        {
-            var flag = player.HasGodMode();
-            if (flag) player.SetGodMode(false);
-            player.Kill(DamageType.Suicide);
-            if (flag) player.SetGodMode(true);
-        }
-
         private void CalculateXpCurve()
         {
             Levels.Clear();
@@ -1212,6 +1282,23 @@ namespace Oxide.Plugins
             }
             RecalculateXpCurve = false;
             SaveConfigData();
+        }
+
+        private void GiveXp(ulong player, int amount)
+        {
+            var user = Server.GetPlayerById(player);
+            if (user != null)
+            {
+                GiveXp(user, amount);
+                return;
+            }
+
+            CheckPlayerExists(player);
+            var data = PlayerXpData[player];
+            if (data.Xp == MaxPossibleXp) return;
+            data.GiveXp(amount);
+
+            SaveXpData();
         }
 
         private void GiveXp(Player player, int amount)
@@ -1281,6 +1368,7 @@ namespace Oxide.Plugins
                 data.Points += points;
                 player.SendMessage(GetMessage("Skill Points Gained", player), points);
             }
+            else player.SendMessage(GetMessage("Skill Points Limit", player));
             if (UseNametag) data.UpdateChatFormat(player);
 
             SaveXpData();
@@ -1291,7 +1379,7 @@ namespace Oxide.Plugins
             player.SendMessage(GetMessage("Level Down", player), data.Level);
 
             var points = data.TotalPoints() - data.Level.MaxPoints;
-            if (points > 0)
+            if (points > 0 && data.Points > 0)
             {
                 data.Points -= points;
                 if (data.Points < 0) data.Points = 0;
@@ -1337,6 +1425,20 @@ namespace Oxide.Plugins
             return Convert.ToInt32(Convert.ToDouble(xpAmount) * (xpGainBonus / 100 + 1));
         }
 
+        private int GetRandomXp(int playerLevel, int minXp, int maxXp)
+        {
+            if (minXp == maxXp)
+                return UseXpGain ? XpAmountWithBonus(playerLevel, minXp) : minXp;
+
+            if (UseXpGain)
+            {
+                minXp = XpAmountWithBonus(playerLevel, minXp);
+                maxXp = XpAmountWithBonus(playerLevel, maxXp);
+            }
+
+            return Random.Next(minXp, maxXp + 1);
+        }
+
         private void GiveStatIncrease(Player player, Options selection, Dialogue dialogue)
         {
             if (selection == Options.Cancel) return;
@@ -1346,8 +1448,11 @@ namespace Oxide.Plugins
                 case "inventory":
                     if (UseInventoryBonus) player.ShowInputPopup("Level Up", GetMessage("Popup Increase Amount Question", player), "", "Upgrade", "Cancel", (options, dialogue1, data) => SelectPointAmount(player, options, dialogue1, statToIncrease));
                     break;
-                case "siegedamage":
-                    if (UseDamageBonus && (BallistaDamageBonus > 0 || TrebuchetDamageBonus > 0)) player.ShowInputPopup("Level Up", GetMessage("Popup Increase Amount Question", player), "", "Upgrade", "Cancel", (options, dialogue1, data) => SelectPointAmount(player, options, dialogue1, statToIncrease));
+                case "ballistadamage":
+                    if (UseDamageBonus && BallistaDamageBonus > 0) player.ShowInputPopup("Level Up", GetMessage("Popup Increase Amount Question", player), "", "Upgrade", "Cancel", (options, dialogue1, data) => SelectPointAmount(player, options, dialogue1, statToIncrease));
+                    break;
+                case "trebuchetdamage":
+                    if (UseDamageBonus && TrebuchetDamageBonus > 0) player.ShowInputPopup("Level Up", GetMessage("Popup Increase Amount Question", player), "", "Upgrade", "Cancel", (options, dialogue1, data) => SelectPointAmount(player, options, dialogue1, statToIncrease));
                     break;
                 case "cubedamage":
                     if (UseDamageBonus && CubeDamageBonus > 0) player.ShowInputPopup("Level Up", GetMessage("Popup Increase Amount Question", player), "", "Upgrade", "Cancel", (options, dialogue1, data) => SelectPointAmount(player, options, dialogue1, statToIncrease));
@@ -1385,10 +1490,13 @@ namespace Oxide.Plugins
                     data.UpgradeSkill(Skill.InventorySlot, increaseAmount);
                     player.ShowPopup("Stat increased", GetMessage("Popup Increased Inventory", player));
                     break;
-                case "siegedamage":
+                case "ballistadamage":
                     data.UpgradeSkill(Skill.BallistaDamage, increaseAmount);
+                    player.ShowPopup("Stat increased", GetMessage("Popup Increased Damage Ballista", player));
+                    break;
+                case "trebuchetdamage":
                     data.UpgradeSkill(Skill.TrebuchetDamage, increaseAmount);
-                    player.ShowPopup("Stat increased", GetMessage("Popup Increased DamageSiege", player));
+                    player.ShowPopup("Stat increased", GetMessage("Popup Increased Damage Trebuchet", player));
                     break;
                 case "cubedamage":
                     data.UpgradeSkill(Skill.CubeDamage, increaseAmount);
@@ -1455,7 +1563,13 @@ namespace Oxide.Plugins
         private void ResetStats(Player player)
         {
             PlayerXpData[player.Id].ResetSkills();
-            KillPlayer(player);
+            ResetInventory(player);
+        }
+
+        private void ResetInventory(Player player)
+        {
+            DropInventory(player);
+            AddStatBonusses(player);
         }
 
         private int GetCubePlaceLevel(CubeData cube)
@@ -1512,6 +1626,13 @@ namespace Oxide.Plugins
             }
         }
 
+        private bool IsInCrestArea(Vector3 position)
+        {
+            var crestScheme = SocialAPI.Get<CrestScheme>();
+            var crest = crestScheme.GetCrestAt(position);
+            return crest != null && crest.Completed;
+        }
+
         private bool IsInOwnCrestArea(Player player, Vector3 position)
         {
             var crestScheme = SocialAPI.Get<CrestScheme>();
@@ -1524,6 +1645,54 @@ namespace Oxide.Plugins
             return e.Has<MonsterEntity>() || e.Has<CritterEntity>();
         }
 
+        private bool IsSiegeWeapon(Entity e)
+        {
+            return e.name.ContainsIgnoreCase("trebuchet") || e.name.ContainsIgnoreCase("ballista");
+        }
+
+        private void DropInventory(Player player)
+        {
+            var corpse = player.Entity.TryGet<CreateCorpseOnDeath>();
+            if (corpse == null) return;
+
+            var gameObject = CustomNetworkInstantiate.ServerInstantiate(corpse.corpsePrefab, player.Entity.Position, player.Entity.Rotation);
+            var entity = gameObject.TryGetEntity();
+            var container = entity.TryGet<Container>();
+
+            var inv = player.GetInventory();
+            InvEquipment.DropInventory(inv.Contents, container.Contents);
+        }
+
+        private bool UlongTryConvert(ulong? value, out ulong result)
+        {
+            result = default(ulong);
+            if (value == null) return false;
+            try
+            {
+                result = (ulong)value;
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
+        private bool IntTryConvert(int? value, out int result)
+        {
+            result = default(int);
+            if (value == null) return false;
+            try
+            {
+                result = (int)value;
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
         #endregion
 
         #region Hooks
@@ -1532,7 +1701,6 @@ namespace Oxide.Plugins
         {
             CheckPlayerExists(respawnEvent.Player);
             AddStatBonusses(respawnEvent.Player);
-
             if (UseNametag) PlayerXpData[respawnEvent.Player.Id].UpdateChatFormat(respawnEvent.Player);
         }
 
@@ -1582,11 +1750,9 @@ namespace Oxide.Plugins
 
                 int xpAmount;
                 if (villager || bear || wolf || werewolf)
-                    xpAmount = UseXpGain ? 
-                        Random.Next(XpAmountWithBonus(playerLevel, MonsterKillMinXp), XpAmountWithBonus(playerLevel, MonsterKillMaxXp + 1)) :
-                        Random.Next(MonsterKillMinXp, MonsterKillMaxXp + 1);
-                else xpAmount = Random.Next(AnimalKillMinXp, AnimalKillMaxXp + 1);
-                
+                    xpAmount = GetRandomXp(playerLevel, MonsterKillMinXp, MonsterKillMaxXp);
+                else xpAmount = GetRandomXp(playerLevel, AnimalKillMinXp, AnimalKillMaxXp);
+
                 GiveXp(player, xpAmount);
             }
             else
@@ -1608,12 +1774,8 @@ namespace Oxide.Plugins
 
                 var victimLevel = vData.Level.Id;
                 var lvlDiff = playerLevel - victimLevel;
-                var xpGain = UseXpGain ? 
-                    Random.Next(XpAmountWithBonus(playerLevel, PvpGetMinXp), XpAmountWithBonus(playerLevel, PvpGetMaxXp) + 1) :
-                    Random.Next(PvpGetMinXp, PvpGetMaxXp + 1);
-                var xpLoss = UseXpGain ? 
-                    Random.Next(XpAmountWithBonus(victimLevel, PvpLoseMinXp), XpAmountWithBonus(victimLevel, PvpLoseMaxXp) + 1) :
-                    Random.Next(PvpLoseMinXp, PvpLoseMaxXp + 1);
+                var xpGain = GetRandomXp(playerLevel, PvpGetMinXp, PvpGetMaxXp);
+                var xpLoss = GetRandomXp(victimLevel, PvpLoseMinXp, PvpLoseMaxXp);
                 var xpLossLvlDiff = 100 - PvpXpLossPercentage * lvlDiff;
                 if (xpLossLvlDiff < 0) xpLossLvlDiff = 0;
                 else if (xpLossLvlDiff > 100) xpLossLvlDiff = 100;
@@ -1621,7 +1783,7 @@ namespace Oxide.Plugins
 
                 xpGain = (int)(xpGain * xpLossLvlDiff);
                 xpLoss = (int)(xpLoss * xpLossLvlDiff);
-                
+
                 GiveXp(player, xpGain);
                 RemoveXp(victim, xpLoss);
             }
@@ -1647,6 +1809,8 @@ namespace Oxide.Plugins
             CheckPlayerExists(player);
             var data = PlayerXpData[player.Id];
             var currentLevel = data.Level.Id;
+
+            if (IsInCrestArea(player.Entity.Position) && UseCrestIgnoring) return;
 
             if (UseCubeLevel && currentLevel < CubeLevel)
             {
@@ -1728,26 +1892,42 @@ namespace Oxide.Plugins
                 {
                     var victimCurrentLevel = vData.Level.Id;
 
-                    #region PvP Requirement
-                    if (UsePvpLevel && playerCurrentLevel < PvpLevel)
+                    if (!IsInCrestArea(victim.Entity.Position) || !UseCrestIgnoring)
                     {
-                        player.SendError(GetMessage("Not High Enough Pvp Attack Level", player), PvpLevel);
-                        damageEvent.Damage.Amount = 0f;
-                        damageEvent.Cancel();
-                        return;
+                        #region PvP Requirement
+                        if (UsePvpLevel && playerCurrentLevel < PvpLevel)
+                        {
+                            player.SendError(GetMessage("Not High Enough Pvp Attack Level", player), PvpLevel);
+                            damageEvent.Damage.Amount = 0f;
+                            damageEvent.Cancel();
+                            return;
+                        }
+                        if (UsePvpLevel && victimCurrentLevel < PvpLevel)
+                        {
+                            player.SendError(GetMessage("Not High Enough Pvp Defense Level", player), PvpLevel);
+                            damageEvent.Damage.Amount = 0f;
+                            damageEvent.Cancel();
+                            return;
+                        }
+                        #endregion
                     }
-                    if (UsePvpLevel && victimCurrentLevel < PvpLevel)
+
+                    if (UseDamageBonus) damage = CalculateDamage(pData, Skill.PlayerDamage, damage);
+                }
+                else if (UseDamageBonus && IsAnimal(damageEvent.Entity))
+                    damage = CalculateDamage(pData, Skill.BeastDamage, damage);
+                else if (IsSiegeWeapon(damageEvent.Entity) || IsSiegeWeapon(damageEvent.Damage.DamageSource))
+                {
+                    #region Siege Requirement
+                    if (playerCurrentLevel < SiegeLevel)
                     {
-                        player.SendError(GetMessage("Not High Enough Pvp Defense Level", player), PvpLevel);
+                        player.SendError(GetMessage("Not High Enough Siege Damage Level", player), CrestLevel);
                         damageEvent.Damage.Amount = 0f;
                         damageEvent.Cancel();
                         return;
                     }
                     #endregion
-                    
-                    if (UseDamageBonus) damage = CalculateDamage(pData, Skill.PlayerDamage, damage);
                 }
-                else if (UseDamageBonus && IsAnimal(damageEvent.Entity)) damage = CalculateDamage(pData, Skill.BeastDamage, damage);
             }
 
             #region Defense Bonus
@@ -1759,6 +1939,68 @@ namespace Oxide.Plugins
 
             damageEvent.Damage.Amount = damage;
             #endregion
+        }
+        
+        private void OnPlayerInteract(InteractEvent interactEvent)
+        {
+            #region Checks
+            if (SiegeLevel <= 1) return;
+            if (interactEvent == null) return;
+            if (interactEvent.Cancelled) return;
+            if (interactEvent.Entity == null) return;
+            if (interactEvent.ControllerEntity == null) return;
+            if (!interactEvent.ControllerEntity.IsPlayer) return;
+            #endregion
+
+            if (IsSiegeWeapon(interactEvent.Entity))
+            {
+                if (interactEvent.Gesture.key == Key.PickUp) return;
+                var player = interactEvent.ControllerEntity.Owner;
+                CheckPlayerExists(player);
+                var playerLvl = PlayerXpData[player.Id].Level.Id;
+
+                if (playerLvl >= SiegeLevel) return;
+
+                player.SendError(GetMessage("Not High Enough Siege Interact Level", player), SiegeLevel);
+                interactEvent.Cancel();
+            }
+            
+        }
+
+        private void OnItemCrafted(ItemCrafterFinishEvent craftEvent)
+        {
+            #region Checks
+            if (!UseCraftingXp) return;
+            if (CraftOwnership == null) return;
+            if (craftEvent == null) return;
+            if (craftEvent.Cancelled) return;
+            if (craftEvent.Entity == null) return;
+            #endregion
+
+            ulong playerId;
+            int amount;
+            if (!UlongTryConvert((ulong?)CraftOwnership.Call("GetLastCrafter", craftEvent.Entity),
+                out playerId)) return;
+            if (!IntTryConvert((int?)CraftOwnership.Call("GetCraftedAmount", craftEvent.Entity),
+                out amount)) return;
+
+            var player = Server.GetPlayerById(playerId);
+
+            CheckPlayerExists(playerId);
+            var xpData = PlayerXpData[playerId];
+            var xpAmount = 0;
+            for (int i = 0; i < amount; i++)
+                xpAmount += GetRandomXp(xpData.Level.Id, CraftingMinXp, CraftingMaxXp);
+
+            if (player == null)
+            {
+                GiveXp(playerId, xpAmount);
+                return;
+            }
+
+            player.SendMessage(GetMessage("Crafting Finished", player));
+            GiveXp(player, xpAmount);
+
         }
 
         private void OnThroneCapture(AncientThroneCaptureEvent captureEvent)
@@ -1792,6 +2034,7 @@ namespace Oxide.Plugins
             #endregion
 
             var captor = captureEvent.Captor.Owner;
+            if (UseCrestIgnoring && IsInCrestArea(captureEvent.TargetEntity.Position)) return;
             if (UseCrestRoping && IsInOwnCrestArea(captor, captureEvent.TargetEntity.Position)) return;
             CheckPlayerExists(captor);
             if (PlayerXpData[captor.Id].Level.Id < RopingLevel)
@@ -1858,6 +2101,7 @@ namespace Oxide.Plugins
             {
                 player.SendMessage("[00FF00]/givepoints (amount) (optional: player)[FFFFFF] - Gives the amount of skill points (optional: to the target player).");
                 player.SendMessage("[00FF00]/removepoints (amount) (optional: player)[FFFFFF] - Removes the amount of skill points (optional: to the target player).");
+                player.SendMessage("[00FF00]/xpstatrespec (optional: player)[FFFFFF] - Refunds all skill points and sets all bonus values to 0 for all players unless one is specified.");
             }
             if (player.HasPermission("LevelSystem.Toggle.Xp"))
             {
@@ -1916,6 +2160,8 @@ namespace Oxide.Plugins
         }
 
         private string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, player?.Id.ToString());
+
+        private void Log(string msg) => LogFileUtil.LogTextToFile($"..\\oxide\\logs\\LevelSystem_{DateTime.Now:yyyy-MM-dd}.txt", $"[{DateTime.Now:h:mm:ss tt}] {msg}\r\n");
 
         private int GetCurrentLevel(Player player)
         {
