@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.12", ResourceId = 2383)]
+    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.13", ResourceId = 2383)]
     [Description("Adds the option to set off C4 manually without a timer")]
     public class TriggeredExplosiveCharges : RustPlugin
     {
@@ -217,27 +217,15 @@ namespace Oxide.Plugins
                 newItem.MoveToContainer(player.inventory.containerBelt, position);
             }
 
-            public void UpdateActiveItem()
+            public void UpdateActiveItem(Item activeItem)
             {
-                Item activeItem = player.GetActiveItem();
-                bool activeItemIsTrigger = activeItem != null && (activeItem.skin == TRIGGER_SKIN_TIMED_MODE || activeItem.skin == TRIGGER_SKIN_TRIGGERD_MODE);
-
-                if (!activeItemIsTrigger)
+                if (activeItem != null && (activeItem.skin == TRIGGER_SKIN_TIMED_MODE || activeItem.skin == TRIGGER_SKIN_TRIGGERD_MODE))
                 {
-                    if (trigger != null)
-                    {
-                        trigger = null;
-                        UpdateTriggerSkin();
-                    }
+                    trigger = activeItem;
+                    UpdateTriggerSkin();
                 }
                 else
-                {
-                    if (trigger == null || trigger.uid != activeItem.uid)
-                    {
-                        trigger = activeItem;
-                        UpdateTriggerSkin();
-                    }
-                }
+                    trigger = null;
             }
 
             public void CraftTrigger()
@@ -701,7 +689,7 @@ namespace Oxide.Plugins
                 TriggeredExplosivesManager.allManagers[player.userID].DeployExplosive(te);
         }
 
-        private void OnPlayerTick(BasePlayer player, PlayerTick msg, bool wasPlayerStalled) { TriggeredExplosivesManager.allManagers[player.userID].UpdateActiveItem(); }
+        private void OnPlayerActiveItemChanged(BasePlayer player, Item oldItem, Item newItem) { TriggeredExplosivesManager.allManagers[player.userID].UpdateActiveItem(newItem); }
 
         private void OnPlayerInput(BasePlayer player, InputState input)
         {
