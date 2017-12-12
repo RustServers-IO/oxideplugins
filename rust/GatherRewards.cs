@@ -7,7 +7,7 @@ using Oxide.Game.Rust.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("Gather Rewards", "CanopySheep", "1.5.1", ResourceId = 770)]
+    [Info("Gather Rewards", "CanopySheep", "1.5.2", ResourceId = 770)]
     [Description("Gain money through Economics/Server Rewards for killing and gathering.")]
     public class GatherRewards : RustPlugin
     {
@@ -243,6 +243,7 @@ namespace Oxide.Plugins
 
             if (player)
             {
+                amount = 0; 
                 var shortName = item.info.shortname;
                 resource = null;
 
@@ -276,6 +277,7 @@ namespace Oxide.Plugins
 			if (!Economics && !ServerRewards) return;
 			if (player == null) return;
 			resource = null;
+            amount = 0;
 			
 			if (item.ToString().Contains("stones"))
 			{
@@ -333,6 +335,7 @@ namespace Oxide.Plugins
 
             var player = info.Initiator.ToPlayer();
             var animal = UppercaseFirst(entity.LookupPrefab().ToString().Replace("[0]", ""));
+            amount = 0;
 
             if (entity.ToPlayer() != null && !(entity is NPCPlayer))
             {

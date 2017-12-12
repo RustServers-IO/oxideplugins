@@ -1,16 +1,19 @@
 ﻿using System.Collections.Generic;
+using Newtonsoft.Json;
 using UnityEngine;
 using System.Linq;
 using Oxide.Core;
 using System;
-using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.1.3", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.1.4", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
+        private const string BackpackPrefab = "assets/prefabs/misc/item drop/item_drop_backpack.prefab";
+        private const string BackBone = "spine3";
+
         public static Backpacks Instance;
         private static Dictionary<ulong, Backpack> backpacks = new Dictionary<ulong, Backpack>();
 
@@ -45,12 +48,12 @@ namespace Oxide.Plugins
 
         private class StorageCloser : MonoBehaviour
         {
-            private Action<BasePlayer> callback;
+            private Action _callback;
 
-            public static void Attach(BaseEntity entity, Action<BasePlayer> callback)
-                => entity.gameObject.AddComponent<StorageCloser>().callback = callback;
+            public static void Attach(BaseEntity entity, Action callback)
+                => entity.gameObject.AddComponent<StorageCloser>()._callback = callback;
 
-            private void PlayerStoppedLooting(BasePlayer player) => callback(player);
+            private void PlayerStoppedLooting(BasePlayer player) => _callback.Invoke();
         }
 
         private class Backpack
@@ -60,6 +63,7 @@ namespace Oxide.Plugins
 
             private BaseEntity _boxEntity;
             private BaseEntity _visualEntity;
+            private BasePlayer _looter;
 
             [JsonIgnore] public bool IsOpen => _boxEntity != null;
             [JsonIgnore] public StorageContainer Container => _boxEntity?.GetComponent<StorageContainer>();
@@ -78,78 +82,70 @@ namespace Oxide.Plugins
             {
                 if (Inventory.Items.Count > 0)
                 {
-                    var entity = GameManager.server.CreateEntity(GetContainerPrefab(StorageSize.Small), position);
+                    BaseEntity entity = GameManager.server.CreateEntity(BackpackPrefab, position, Quaternion.identity);
+                    DroppedItemContainer container = entity as DroppedItemContainer;
+                    
+                    container.inventory = new ItemContainer();
+                    container.inventory.ServerInitialize(null, Inventory.Items.Count);
+                    container.inventory.GiveUID();
+                    container.inventory.entityOwner = container;
+                    container.inventory.SetFlag(ItemContainer.Flag.NoItemInput, true);
 
-                    entity.UpdateNetworkGroup();
-                    entity.SendNetworkUpdateImmediate();
-
-                    entity.globalBroadcast = true;
-
-                    entity.Spawn();
-
-                    entity.name = "droppedbackpack";
-
-                    StorageContainer container = entity.GetComponent<StorageContainer>();
-
-                    switch (Size)
+                    foreach(Item item in Inventory.Items.Select(i => i.ToItem()))
                     {
-                        case StorageSize.Large:
-                            container.panelName = "largewoodbox";
-                            container.inventorySlots = 30;
-                            container.inventory.capacity = 30;
-                            break;
-                        case StorageSize.Medium:
-                            container.panelName = "smallwoodbox";
-                            container.inventorySlots = 12;
-                            container.inventory.capacity = 12;
-                            break;
-                        case StorageSize.Small:
-                            container.panelName = "smallstash";
-                            break;
+                        if (!item.MoveToContainer(container.inventory))
+                            item.Remove();
                     }
 
-                    foreach (var backpackItem in Inventory.Items)
-                        backpackItem.ToItem().MoveToContainer(container.inventory);
+                    container.ResetRemovalTime();
+
+                    container.Spawn();
+
+                    container.playerName = "Backpack";
+                    container.playerSteamID = ownerID;
+
+                    entity.name = "droppedbackpack";
                 }
 
-                Erase();
+                EraseContents();
             }
 
-            public void Erase()
+            public void EraseContents()
             {
                 RemoveVisual();
                 Inventory.Items.Clear();
                 SaveData(this, $"{Instance.DataFileName}/{ownerID}");
             }
 
-            public void Open(BasePlayer player)
+            public void Open(BasePlayer looter)
             {
                 if (IsOpen)
                 {
-                    Instance.PrintToChat(player, Instance.lang.GetMessage("Backpack Already Open", Instance, player.UserIDString));
+                    Instance.PrintToChat(looter, Instance.lang.GetMessage("Backpack Already Open", Instance, looter.UserIDString));
                     return;
                 }
                 
-                if (Instance.EventManager?.Call<bool>("isPlaying", player) ?? false)
+                if (Instance.EventManager?.Call<bool>("isPlaying", looter) ?? false)
                 {
-                    Instance.PrintToChat(player, Instance.lang.GetMessage("May Not Open Backpack In Event", Instance, player.UserIDString));
+                    Instance.PrintToChat(looter, Instance.lang.GetMessage("May Not Open Backpack In Event", Instance, looter.UserIDString));
                     return;
                 }
 
-                _boxEntity = SpawnContainer(Size, player.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
+                _boxEntity = SpawnContainer(Size, looter.transform.position - new Vector3(0, UnityEngine.Random.Range(100, 5000), 0));
 
                 foreach (var backpackItem in Inventory.Items)
                 {
                     var item = backpackItem.ToItem();
                     item?.MoveToContainer(Container.inventory, item.position);
                 }
-                    
 
-                PlayerLootContainer(player, Container);
+                _looter = looter;
+
+                PlayerLootContainer(looter, Container);
                 StorageCloser.Attach(_boxEntity, Close);
             }
 
-            private void Close(BasePlayer player)
+            private void Close()
             {
                 if (_boxEntity != null)
                 {
@@ -159,16 +155,16 @@ namespace Oxide.Plugins
                     _boxEntity = null;
                 }
 
-                if (player.userID != ownerID)
+                if (_looter.userID != ownerID)
                 {
-                    BasePlayer target = BasePlayer.FindByID(ownerID);
+                    BasePlayer ownerPlayer = BasePlayer.FindByID(ownerID);
 
-                    if (target != null)
+                    if (ownerPlayer != null)
                     {
                         if (Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
                             RemoveVisual();
                         else if (_visualEntity == null)
-                            SpawnVisual(target);
+                            SpawnVisual(ownerPlayer);
                     }
                 }
                 else
@@ -176,61 +172,29 @@ namespace Oxide.Plugins
                     if (Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
                         RemoveVisual();
                     else if (_visualEntity == null)
-                        SpawnVisual(player);
+                        SpawnVisual(_looter);
                 }
+
+                _looter = null;
 
                 SaveData(this, $"{Instance.DataFileName}/{ownerID}");
             }
 
-            public void ForceClose(BasePlayer player) => Close(player);
+            public void ForceClose() => Close();
 
             public void SpawnVisual(BasePlayer player)
             {
                 if (_visualEntity != null || !Configuration.ShowOnBack)
                     return;
 
-                /*var ent = GameManager.server.CreateEntity("assets/prefabs/weapons/satchelcharge/explosive.satchel.deployed.prefab", new Vector3(0, 0.35F, -0.075F), Quaternion.Euler(0, 90, -90));
+                var entity = GameManager.server.CreateEntity(BackpackPrefab, new Vector3(0, -0.1f, 0), Quaternion.Euler(-5, -90, 180));
+                
+                entity.SetParent(player, StringPool.Get(BackBone));
+                entity.SetFlag(BaseEntity.Flags.Locked, true);
+                entity.Spawn();
+                entity.name = "backpack";
 
-                ent.SetParent(player);
-
-                ent.UpdateNetworkGroup();
-                ent.SendNetworkUpdateImmediate();
-
-                ent.Spawn();
-
-                ent.globalBroadcast = true;
-
-                ent.name = "backpack";
-                ent.creatorEntity = player;
-                ent.OwnerID = player.userID;
-
-                DudTimedExplosive explosive = ent.GetComponent<DudTimedExplosive>();
-
-                explosive.itemToGive = ItemManager.FindItemDefinition(1916127949);
-                explosive.dudChance = 2;
-                explosive.CancelInvoke("Explode");
-                explosive.CancelInvoke("Kill");
-                explosive.SetFlag(BaseEntity.Flags.On, false);
-                explosive.SendNetworkUpdate();*/
-
-                var ent = GameManager.server.CreateEntity("assets/prefabs/misc/item drop/item_drop_backpack.prefab", new Vector3(0, 0.25f, -0.125f), Quaternion.Euler(-90, 90, -90));
-
-                ent.SetParent(player);
-
-                ent.UpdateNetworkGroup();
-                ent.SendNetworkUpdateImmediate();
-
-                ent.SetFlag(BaseEntity.Flags.Locked, true);
-
-                ent.Spawn();
-
-                ent.globalBroadcast = true;
-
-                ent.name = "backpack";
-                ent.creatorEntity = player;
-                ent.OwnerID = player.userID;
-
-                _visualEntity = ent;
+                _visualEntity = entity;
             }
 
             public void RemoveVisual()
@@ -286,7 +250,7 @@ namespace Oxide.Plugins
                 public float Condition;
 
                 [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
-                public float MaxCondition;
+                public float MaxCondition = -1;
 
                 [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
                 public int Ammo;
@@ -320,7 +284,9 @@ namespace Oxide.Plugins
 
                     item.fuel = Fuel;
                     item.condition = Condition;
-                    item.maxCondition = MaxCondition;
+
+                    if (MaxCondition != -1)
+                        item.maxCondition = MaxCondition;
 
                     if (Contents != null)
                         foreach (var contentItem in Contents)
@@ -401,7 +367,7 @@ namespace Oxide.Plugins
 
         private static void PlayerLootContainer(BasePlayer player, StorageContainer container)
         {
-            container.SetFlag(BaseEntity.Flags.Open, true, false);
+            container.SetFlag(BaseEntity.Flags.Open, true);
             player.inventory.loot.StartLootingEntity(container, false);
             player.inventory.loot.AddContainer(container.inventory);
             player.inventory.loot.SendImmediate();
@@ -473,14 +439,16 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
+            foreach (var backpack in backpacks.Values)
+            {
+                if (backpack.IsOpen)
+                    backpack.ForceClose();
+
+                backpack.RemoveVisual();
+            }
+
             foreach (var basePlayer in BasePlayer.activePlayerList)
                 OnPlayerDisconnected(basePlayer);
-
-            foreach (var ent in Resources.FindObjectsOfTypeAll<BaseEntity>().Where(ent => ent.name == "backpack"))
-                ent.KillMessage();
-
-            foreach (var ent in Resources.FindObjectsOfTypeAll<StorageContainer>().Where(cont => cont.name == "droppedbackpack" && cont.inventory.itemList.Count == 0))
-                ent.KillMessage();
         }
 
         private void OnPlayerInit(BasePlayer player)
@@ -536,10 +504,10 @@ namespace Oxide.Plugins
                 BasePlayer player = (BasePlayer)victim;
                 Backpack backpack = Backpack.LoadOrCreate(player.userID);
 
-                backpack.ForceClose(player);
+                backpack.ForceClose();
 
                 if (Configuration.EraseOnDeath)
-                    backpack.Erase();
+                    backpack.EraseContents();
                 else if (Configuration.DropOnDeath)
                     backpack.Drop(player.transform.position);
             }
@@ -549,8 +517,17 @@ namespace Oxide.Plugins
 
         #region Commands
 
+        [ChatCommand("backpack")]
+        private void OpenBackpackChatCommand(BasePlayer player, string cmd, string[] args)
+        {
+            if (permission.UserHasPermission(player.UserIDString, "backpacks.use"))
+                timer.Once(0.1f, () => Backpack.LoadOrCreate(player.userID).Open(player));
+            else
+                PrintToChat(player, lang.GetMessage("No Permission", this, player.UserIDString));
+        }
+
         [ConsoleCommand("backpack.open")]
-        private void BackpackOpenCmd(ConsoleSystem.Arg arg)
+        private void OpenBackpackConsoleCommand(ConsoleSystem.Arg arg)
         {
             if (arg.Player() == null)
                 return;
