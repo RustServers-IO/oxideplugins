@@ -2,7 +2,7 @@
     "name": "MoneyTime",
     "description": "Pays players money via Economics for playing on your server",
     "author": "Wulf",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "configuration": true,
     "require": {
         "Economics": "*"
