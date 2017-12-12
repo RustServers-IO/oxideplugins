@@ -2,7 +2,7 @@
     "name": "Backpacks",
     "description": "Allows players to have Backpacks which provides them extra inventory space.",
     "author": "LaserHydra",
-    "version": "2.1.4",
+    "version": "2.1.5",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/backpacks.1408",

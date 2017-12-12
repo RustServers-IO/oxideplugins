@@ -7,7 +7,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Backpacks", "LaserHydra", "2.1.4", ResourceId = 1408)]
+    [Info("Backpacks", "LaserHydra", "2.1.5", ResourceId = 1408)]
     [Description("Allows players to have a Backpack which provides them extra inventory space.")]
     internal class Backpacks : RustPlugin
     {
@@ -155,24 +155,27 @@ namespace Oxide.Plugins
                     _boxEntity = null;
                 }
 
-                if (_looter.userID != ownerID)
+                if (_looter != null)
                 {
-                    BasePlayer ownerPlayer = BasePlayer.FindByID(ownerID);
+                    if (_looter.userID != ownerID)
+                    {
+                        BasePlayer ownerPlayer = BasePlayer.FindByID(ownerID);
 
-                    if (ownerPlayer != null)
+                        if (ownerPlayer != null)
+                        {
+                            if (Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
+                                RemoveVisual();
+                            else if (_visualEntity == null)
+                                SpawnVisual(ownerPlayer);
+                        }
+                    }
+                    else
                     {
                         if (Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
                             RemoveVisual();
                         else if (_visualEntity == null)
-                            SpawnVisual(ownerPlayer);
+                            SpawnVisual(_looter);
                     }
-                }
-                else
-                {
-                    if (Inventory.Items.Count == 0 && Configuration.HideOnBackIfEmpty)
-                        RemoveVisual();
-                    else if (_visualEntity == null)
-                        SpawnVisual(_looter);
                 }
 
                 _looter = null;
