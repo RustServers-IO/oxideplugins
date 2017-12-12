@@ -1,10 +1,10 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Logger", "Wulf/lukespragg", "2.1.2", ResourceId = 670)]
+    [Info("Logger", "Wulf/lukespragg", "2.1.3", ResourceId = 670)]
     [Description("Configurable logging of chat, commands, connections, and more")]
     public class Logger : CovalencePlugin
     {
@@ -196,19 +196,15 @@ namespace Oxide.Plugins
 
             var command = arg.cmd.FullName;
             var args = arg.GetString(0);
-
-            if (args.StartsWith("/") && !config.ExcludedCommands.Contains(args))
-                Log("commands", Lang("PlayerCommand", null, arg.Connection.username, arg.Connection.userid, args, null));
             if (command != "chat.say" && !config.ExcludedCommands.Contains(command))
                 Log("commands", Lang("PlayerCommand", null, arg.Connection.username, arg.Connection.userid, command, arg.FullString));
         }
-#else
+#endif
         private void OnUserCommand(IPlayer player, string command, string[] args)
         {
             if (!config.ExcludedCommands.Contains(command))
                 Log("commands", Lang("PlayerCommand", null, player.Name, player.Id, command, string.Join(" ", args)));
         }
-#endif
 
         #endregion Logging
 
@@ -218,8 +214,8 @@ namespace Oxide.Plugins
 
         private void Log(string filename, string key, params object[] args)
         {
-            if (config.LogToConsole) Puts($"[{System.DateTime.Now}] {Lang(key, null, args)}");
-            LogToFile(filename, Lang(key, null, args), this);
+            if (config.LogToConsole) Puts(Lang(key, null, args));
+            LogToFile(filename, $"[{System.DateTime.Now}] {Lang(key, null, args)}", this);
         }
 
         #endregion Helpers

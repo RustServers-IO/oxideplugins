@@ -1,9 +1,9 @@
 {
     "name": "Instant Research",
-    "description": "Instant research in research tables",
-    "author": "",
-    "version": "1.0.1",
-    "configuration": false,
+    "description": "Allows control over research speed.",
+    "author": "Tori1157",
+    "version": "2.0.0",
+    "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/instant-research.1318",
     "games": [

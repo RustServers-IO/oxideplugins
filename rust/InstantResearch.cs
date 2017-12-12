@@ -1,30 +1,127 @@
+using System;
+using System.Collections.Generic;
+
 namespace Oxide.Plugins
 {
-    [Info("Instant Research", "Artasan", "1.0.1", ResourceId = 1318)]
-    [Description("Allows instant research.")]
+    [Info("Instant Research", "Artasan/Tori1157", "2.0.0", ResourceId = 1318)]
+    [Description("Allows control over research speed.")]
     public class InstantResearch : RustPlugin
     {
-        void OnServerInitialized()
+        #region Fields
+
+        private bool Changed;
+
+        private float researchSpeed;
+
+        private const string instantPermission = "instantresearch.instant";
+        private const string controlledPermission = "instantresearch.controlled";
+
+        #endregion
+
+        #region Loaded
+
+        private void Init()
         {
-            updateResearchTables();
+            permission.RegisterPermission("instantresearch.instant", this);
+            permission.RegisterPermission("Instantresearch.controlled", this);
+
+            LoadVariables();
         }
 
-        void OnItemDeployed(Deployer deployer, BaseEntity deployedEntity)
+        private void LoadVariables()
         {
-            Item item = deployer.GetItem();
+            researchSpeed = Convert.ToSingle(GetConfig("Options", "Research Speed", 10));
 
-            if (item.info.shortname == "research_table")
+            if (Changed)
             {
-                updateResearchTables();
+                SaveConfig();
+                Changed = false;
             }
         }
 
-        void OnItemResearchStart(ResearchTable table)
+        protected override void LoadDefaultConfig()
+        {
+            PrintWarning("Creating a new config file");
+            Config.Clear();
+            LoadVariables();
+        }
+
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
             {
-            table.researchDuration = 0f;
+                ["Both Permission"] = "<color=red>You can't have both permissions!</color>\n\nNow using default research speed, contact an <color=cyan>Administrator</color> to fix the issue.",
+            }, this);
+        }
+
+        #endregion
+
+        #region Functions
+
+        private void OnItemResearchStart(ResearchTable table)
+        {
+            var player = table.user;
+
+            if (CanInstant(player) && CanControlled(player))
+            {
+                rust.SendChatMessage(player, "", lang.GetMessage("Both Permission", this, player.UserIDString));
+                table.researchDuration = 10f;
+                return;
             }
 
-        public void updateResearchTables()
-		{}
+            if (!CanControlled(player) && !CanInstant(player))
+            {
+                table.researchDuration = 10f;
+                return;
+            }
+
+            if (CanInstant(player))
+            {
+                table.researchDuration = 0f;
+            }
+
+            if (CanControlled(player))
+            {
+                table.researchDuration = researchSpeed;
+            }
+        }
+
+        #endregion
+
+        #region Helpers
+
+        bool CanInstant(BasePlayer player)
+        {
+            return permission.UserHasPermission(player.UserIDString, instantPermission);
+        }
+
+        bool CanControlled(BasePlayer player)
+        {
+            return permission.UserHasPermission(player.UserIDString, controlledPermission);
+        }
+
+        private object GetConfig(string menu, string datavalue, object defaultValue)
+        {
+            var data = Config[menu] as Dictionary<string, object>;
+
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[menu] = data;
+                Changed = true;
+            }
+
+            object value;
+
+            if (!data.TryGetValue(datavalue, out value))
+            {
+                value = defaultValue;
+                data[datavalue] = value;
+                Changed = true;
+            }
+            return value;
+        }
+
+        #endregion
     }
 }
