@@ -10,7 +10,7 @@ using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("LocalTimeDamageControl", "CARNY666", "1.0.0")]
+    [Info("LocalTimeDamageControl", "CARNY666", "1.0.1", ResourceId = 2720)]
 
     class LocalTimeDamageControl : RustPlugin
     {
@@ -36,6 +36,7 @@ namespace Oxide.Plugins
                 lang.RegisterMessages(new Dictionary<string, string>
                 {
                     { "localtime", "Local time is {localtime}." },
+                    { "nodamage", "You cannot damage buildings during this time {starttime} and {endtime}." },
                     { "starts", "LocalTimeDamageControl starts at {starts}." },
                     { "remains", "LocalTimeDamageControl remains on for {remains}." },
                     { "status", "LocalTimeDamageControl is {status}." },
@@ -47,7 +48,8 @@ namespace Oxide.Plugins
                     { "help2", "/lset minutes 60  ~ Set duration in minutes for damage control."},
                     { "help3", "/lset hours 12    ~ Set duration in hours for damage control."},
                     { "help4", "/lset off         ~ Turn off damage control."},
-                    { "help5", "/lset on          ~ Turn on damage control during set times. "}
+                    { "help5", "/lset on          ~ Turn on damage control during set times. "},
+                    { "help6", "- starts at {starttime} ends at {endtime}."}
             }, this, "en");
 
 
@@ -112,13 +114,26 @@ namespace Oxide.Plugins
             return false;
         }
 
+        public DateTime getStartTime()
+        {
+            return DateTime.Parse(Config["LocalTimeDamageControlStart"].ToString());
+        }
+
+        public DateTime getEndTime()
+        {
+            return DateTime.Parse(Config["LocalTimeDamageControlStart"].ToString()).AddMinutes(int.Parse(Config["LocalTimeDamageControlDuratationMinutes"].ToString()));
+        }
+
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
             try
-            {
+            {               
                 if (IsDamageControlOn() == false) return null;                  // check if on or off
                 if (entity is BasePlayer) return null;                          // damage to players ok!!
                 if (entity.OwnerID == info.InitiatorPlayer.userID) return null; // owner can damage own stuff
+
+                if (info.InitiatorPlayer != null)
+                    PrintToChat(info.InitiatorPlayer, lang.GetMessage("nodamage", this, info.InitiatorPlayer.UserIDString).Replace("{starttime}", getStartTime().ToLongTimeString()).Replace("{endtime}", getEndTime().ToLongTimeString()));
 
                 info.damageTypes.ScaleAll(0.0f);                                // no damage
                 return false;
@@ -167,7 +182,7 @@ namespace Oxide.Plugins
                         Config["LocalTimeDamageControlStart"] = dateTime.ToString("hh:mm tt" , CultureInfo.CurrentCulture);
 
                         SaveConfig();
-                        PrintToChat(player, lang.GetMessage("starts", this, player.UserIDString).Replace("{starts}", Config["LocalTimeDamageControlStart"].ToString()));                        
+                        PrintToChat(player, lang.GetMessage("starts", this, player.UserIDString).Replace("{starts}", Config["LocalTimeDamageControlStart"].ToString()));
                     }
                     catch (Exception)
                     {
@@ -209,8 +224,8 @@ namespace Oxide.Plugins
             }
             else
             {
-                for (int ii = 1; ii <= 5; ii++)
-                    PrintToChat(player, lang.GetMessage("help" + ii, this, player.UserIDString));
+                for (int ii = 1; ii <= 6; ii++)
+                    PrintToChat(player, lang.GetMessage("help" + ii, this, player.UserIDString).Replace("{starttime}", getStartTime().ToLongTimeString()).Replace("{endtime}", getEndTime().ToLongTimeString()));
             }
 
 
