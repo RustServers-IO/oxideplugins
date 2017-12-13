@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.13", ResourceId = 2383)]
+    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.14", ResourceId = 2383)]
     [Description("Adds the option to set off C4 manually without a timer")]
     public class TriggeredExplosiveCharges : RustPlugin
     {
@@ -82,7 +82,7 @@ namespace Oxide.Plugins
 
             public void DeployExplosive(TimedExplosive te)
             {
-                if (c4_mode == (ulong)C4_MODE.TIMED)
+                if (c4_mode == (ulong)C4_MODE.TIMED || (configuration.BLOCK_IN_EVENTS && Instance.IsPlayingEvent(player)))
                     return;
 
                 te.SetFuse(float.MaxValue);
@@ -674,7 +674,11 @@ namespace Oxide.Plugins
             SaveDataToFile();
         }
 
-        private void OnPlayerInit(BasePlayer player) { TriggeredExplosivesManager.allManagers.Add(player.userID, new TriggeredExplosivesManager(player)); }
+        private void OnPlayerInit(BasePlayer player)
+        {
+            if (!TriggeredExplosivesManager.allManagers.ContainsKey(player.userID))
+                TriggeredExplosivesManager.allManagers.Add(player.userID, new TriggeredExplosivesManager(player));
+        }
 
         private void OnPlayerDisconnected(BasePlayer player, string reason) { TriggeredExplosivesManager.allManagers.Remove(player.userID); }
 
@@ -689,7 +693,11 @@ namespace Oxide.Plugins
                 TriggeredExplosivesManager.allManagers[player.userID].DeployExplosive(te);
         }
 
-        private void OnPlayerActiveItemChanged(BasePlayer player, Item oldItem, Item newItem) { TriggeredExplosivesManager.allManagers[player.userID].UpdateActiveItem(newItem); }
+        private void OnPlayerActiveItemChanged(BasePlayer player, Item oldItem, Item newItem)
+        {
+            OnPlayerInit(player);
+            TriggeredExplosivesManager.allManagers[player.userID].UpdateActiveItem(newItem);
+        }
 
         private void OnPlayerInput(BasePlayer player, InputState input)
         {
@@ -757,6 +765,8 @@ namespace Oxide.Plugins
 
             public const string S_TRIGGER_ONE_TIME_USE = "TRIGGER | Trigger destroys itself after using it once [true, false]";
 
+            public const string S_BLOCK_IN_EVENTS = "Event Manager | Block trigger usage during events [true, false]";
+
             public readonly int CURRENCY_ID;
             public readonly int CURRENCY_NEEDED;
 
@@ -772,9 +782,11 @@ namespace Oxide.Plugins
 
             public readonly bool TRIGGER_ONE_TIME_USE;
 
+            public readonly bool BLOCK_IN_EVENTS;
+
             public Configuration(int currency_id, int currency_needed, bool crafting_enabled,
                                  int item_1_id, int item_1_needed, int item_2_id, int item_2_needed,
-                                 int beepDuration, bool allowPickup, bool oneTimeUse)
+                                 int beepDuration, bool allowPickup, bool oneTimeUse, bool blockInEvents)
             {
                 CURRENCY_ID = currency_id;
                 CURRENCY_NEEDED = currency_needed;
@@ -789,6 +801,8 @@ namespace Oxide.Plugins
                 C4_ALLOW_PICKUP = allowPickup;
 
                 TRIGGER_ONE_TIME_USE = oneTimeUse;
+
+                BLOCK_IN_EVENTS = blockInEvents;
             }
         }
 
@@ -808,6 +822,8 @@ namespace Oxide.Plugins
 
             bool oneTimeUse;
 
+            bool blockInEvents;
+
             Config[Configuration.S_CURRENCY_ID] = currency_shortname = GetConfig(Configuration.S_CURRENCY_ID, "techparts");
             Config[Configuration.S_CURRENCY_NEEDED] = currency_needed = GetConfig(Configuration.S_CURRENCY_NEEDED, 5);
 
@@ -821,6 +837,8 @@ namespace Oxide.Plugins
             Config[Configuration.S_C4_ALLOW_PICKUP] = allowPickup = GetConfig(Configuration.S_C4_ALLOW_PICKUP, false);
 
             Config[Configuration.S_TRIGGER_ONE_TIME_USE] = oneTimeUse = GetConfig(Configuration.S_TRIGGER_ONE_TIME_USE, false);
+
+            Config[Configuration.S_BLOCK_IN_EVENTS] = blockInEvents = GetConfig(Configuration.S_BLOCK_IN_EVENTS, false);
 
             ItemDefinition item_1_definition = ItemManager.FindItemDefinition(item_1_shortname);
             ItemDefinition item_2_definition = ItemManager.FindItemDefinition(item_2_shortname);
@@ -841,7 +859,7 @@ namespace Oxide.Plugins
 
             configuration = new Configuration(currency_id, currency_needed,
                 craft, item_1_id, item_1_needed, item_2_id, item_2_needed,
-                beepDuration, allowPickup, oneTimeUse);
+                beepDuration, allowPickup, oneTimeUse, blockInEvents);
 
             SaveConfig();
         }
@@ -925,6 +943,12 @@ namespace Oxide.Plugins
             }, this, "de");
         }
 
+        #endregion
+
+        #region External Plugins
+        [PluginReference]
+        Core.Plugins.Plugin EventManager;
+        bool IsPlayingEvent(BasePlayer player) => (bool?)EventManager?.Call("isPlaying", player) ?? false;
         #endregion
     }
 }
