@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.5.2", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.5.3", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
@@ -757,7 +757,23 @@ namespace Oxide.Plugins
 					sleepingBag.deployerUserID = ulong.Parse(bagData["deployerUserID"].ToString());
 					sleepingBag.SetPublic(Convert.ToBoolean(bagData["isPublic"]));
 				}
+				
+				var autoturret = entity.GetComponentInParent<AutoTurret>();
 
+				if(autoturret != null)
+				{
+					if(player != null)
+					{
+						autoturret.authorizedPlayers.Add(new PlayerNameID()
+						{
+							userid = Convert.ToUInt64(player.userID),
+							username = "Player"
+						});
+					}		
+
+					autoturret.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+				}
+				
 				var cupboard = entity.GetComponentInParent<BuildingPrivlidge>();
 
 				if(cupboard != null)
@@ -784,7 +800,7 @@ namespace Oxide.Plugins
 
 					cupboard.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
 				}
-				
+	
 				var vendingMachine = entity.GetComponentInParent<VendingMachine>();
 
 				if(vendingMachine != null && data.ContainsKey("vendingmachine"))
