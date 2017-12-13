@@ -2,7 +2,7 @@
     "name": "WipeProtection",
     "description": "Blocks raiding after wipe",
     "author": "Slydelix",
-    "version": "1.0",
+    "version": "1.1",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/wipeprotection.2722",

@@ -5,7 +5,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("WipeProtection", "Slydelix", 1.0, ResourceId = 0)]
+    [Info("WipeProtection", "Slydelix", 1.1, ResourceId = 2722)]
     class WipeProtection : RustPlugin
     {
         //TODO (?) BROADCAST WHEN RAID BLOCK IS OVER
@@ -79,6 +79,20 @@ namespace Oxide.Plugins
         {
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Name);
             LoadDefaultConfig();
+            CheckTime();
+        }
+
+        void CheckTime()
+        {
+            timer.Every(30f, () => {
+                if (!storedData.wipeprotection) return;
+                if (DateTime.Now >= Convert.ToDateTime(storedData.RaidStartTime))
+                {
+                    storedData.wipeprotection = false;
+                    SaveFile();
+                    return;
+                }
+            });
         }
 
         void OnNewSave(string filename)

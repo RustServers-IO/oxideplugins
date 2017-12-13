@@ -8,33 +8,36 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.3.4", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.3.6", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
-
+        [PluginReference] Plugin WipeProtection;
+        //set this to true if you are having issues with the plugin
         bool debug = false;
         List<BasePlayer> cooldown = new List<BasePlayer>();
         Dictionary<string, string> raidtools = new Dictionary<string, string>
         {
-            {"ammo.rocket.fire", "rocket_fire" },
-            {"ammo.rocket.hv", "rocket_hv" },
-            {"ammo.rocket.basic", "rocket_basic" },
-            {"explosive.timed", "explosive.timed.deployed" },
-            {"surveycharge", "survey_charge.deployed" },
-            {"explosive.satchel", "explosive.satchel.deployed" },
-            {"grenade.beancan", "grenade.beancan.deployed" },
-            {"grenade.f1", "grenade.f1.deployed" }
+            {"ammo.rocket.fire", "rocket_fire"},
+            {"ammo.rocket.hv", "rocket_hv"},
+            {"ammo.rocket.basic", "rocket_basic"},
+            {"explosive.timed", "explosive.timed.deployed"},
+            {"surveycharge", "survey_charge.deployed"},
+            {"explosive.satchel", "explosive.satchel.deployed"},
+            {"grenade.beancan", "grenade.beancan.deployed"},
+            {"grenade.f1", "grenade.f1.deployed"}
         };
 
         int layers = LayerMask.GetMask("Construction", "Deployed");
         int time, refundTimes, frequency;
-        bool show, showTime, refund;
+        bool show, showTime, refund, preventnew, unnoobnew;
 
         #region Config
         protected override void LoadDefaultConfig()
         {
             Config["Time inside which new players are protected"] = time = GetConfig("Time inside which new players are protected", 86400);
+            Config["Prevent new players from raiding"] = preventnew = GetConfig("Prevent new players from raiding", false);
+            Config["Remove noob status of a raider on raid attempt"] = unnoobnew = GetConfig("Remove noob status of a raider on raid attempt", false);
             Config["Show message for not being able to raid"] = show = GetConfig("Show message for not being able to raid", true);
             Config["Show time until raidable"] = showTime = GetConfig("Show time until raidable", false);
             Config["User data refresh interval (seconds)"] = frequency = GetConfig("User data refresh interval (seconds)", 30);
@@ -82,6 +85,7 @@ namespace Oxide.Plugins
                 {"refund_1time", "Your '{0}' was refunded After 1 more attempt it wont be refunded."},
                 {"refund_nTimes", "Your '{0}' was refunded. After {1} more attempts it wont be refunded"},
                 {"cannot_attack_no_time", "This entity cannot be destroyed because it was built by a new player"},
+                {"cannot_attack_new_raider", "Because you are a new player you cannot raid (yet)"},
                 {"cannot_attack_time", "This entity cannot be destroyed because it was built by a new player ({0})"},
                 {"secs", " seconds"},
                 {"mins", " minutes"},
@@ -135,7 +139,6 @@ namespace Oxide.Plugins
             BasePlayer bp = player.Object as BasePlayer;
 
             double time = -1d;
-
             try
             {
                 time = PlaytimeTracker?.Call<double>("GetPlayTime", bp.UserIDString) ?? -1d;
@@ -175,7 +178,10 @@ namespace Oxide.Plugins
             if (hitinfo == null || entity == null || hitinfo?.InitiatorPlayer == null || entity.OwnerID == hitinfo?.InitiatorPlayer?.userID || entity?.OwnerID == 0 || hitinfo?.WeaponPrefab?.ShortPrefabName == null) return null;
             if (!(entity is BuildingBlock || entity is Door || entity.PrefabName.Contains("deployable"))) return null;
 
-            BasePlayer attacker = hitinfo?.InitiatorPlayer ?? null;
+            bool wipe = WipeProtection?.Call<bool>("WipeProtected") ?? false;
+            if (wipe) return null;
+
+            BasePlayer attacker = hitinfo.InitiatorPlayer;
 
             if (cooldown.Contains(attacker))
             {
@@ -188,59 +194,61 @@ namespace Oxide.Plugins
                 }
                 return null;
             }
-
+            //TBH I'm confused as same as you at this point
             cooldown.Add(attacker);
             RemoveCD(attacker);
+            logPlayer(attacker);
 
             string name = hitinfo?.WeaponPrefab?.ShortPrefabName ?? "Null";
 
             if (debug) SendReply(attacker, "Name: " + name);
 
+            if (!storedData.players.ContainsKey(attacker.userID))
+            {
+                Puts("This shouldn't happen");
+                Check(attacker.userID);
+                return null;
+            }
+
+            if (preventnew)
+            {
+                if (playerIsNew(attacker.userID))
+                {
+                    if (unnoobnew)
+                    {
+                        hitinfo.damageTypes = new DamageTypeList();
+                        hitinfo.DoHitEffects = false;
+                        hitinfo.HitMaterial = 0;
+                        storedData.players[attacker.userID] = -50d;
+                        SaveFile();
+                        NextTick(() => {
+                            SendReply(attacker, lang.GetMessage("cannot_attack_new_raider", this, attacker.UserIDString));
+                            Refund(attacker, name, entity);
+                            //msgPlayer(attacker, entity);
+                        });
+                        return true;
+                    }
+
+                    hitinfo.damageTypes = new DamageTypeList();
+                    hitinfo.DoHitEffects = false;
+                    hitinfo.HitMaterial = 0;
+                    SendReply(attacker, lang.GetMessage("cannot_attack_new_raider", this, attacker.UserIDString));
+                    Refund(attacker, name, entity);
+                    return true;
+                }
+            }
+
             if (storedData.players.ContainsKey(entity.OwnerID))
             {
                 if (playerIsNew(entity.OwnerID))
                 {
-                    double time2 = PlaytimeTracker?.Call<double>("GetPlayTime", entity.OwnerID.ToString()) ?? 999999d;
-                    int left = (int)(time - time2);
                     hitinfo.damageTypes = new DamageTypeList();
                     hitinfo.DoHitEffects = false;
                     hitinfo.HitMaterial = 0;
-
-                    if (!refund)
-                    {
-                        if (!storedData.AttackAttempts.ContainsKey(attacker.userID))
-                        {
-                            storedData.AttackAttempts.Add(attacker.userID, 1);
-                            SaveFile();
-                        }
-
-                        else
-                        {
-                            storedData.AttackAttempts[attacker.userID]++;
-                            SaveFile();
-                        }
-
-                    }
-
-                    Refund(attacker, name, entity);
-
-                    if (show)
-                    {
-                        if (playerIsNew(entity.OwnerID))
-                        {
-                            if (showTime)
-                            {
-                                SendReply(attacker, lang.GetMessage("cannot_attack_time", this, attacker.UserIDString), CheckLeft(left));
-                                return true;
-                            }
-
-                            SendReply(attacker, lang.GetMessage("cannot_attack_no_time", this, attacker.UserIDString));
-                            return true;
-                        }
-
-                        SendReply(attacker, lang.GetMessage("can_attack", this, attacker.UserIDString));
-                        return null;
-                    }
+                    NextTick(() => {
+                        msgPlayer(attacker, entity);
+                        Refund(attacker, name, entity);
+                    });
                     return true;
                 }
                 return null;
@@ -265,6 +273,44 @@ namespace Oxide.Plugins
             });
         }
 
+        void logPlayer(BasePlayer attacker)
+        {
+            if (!storedData.AttackAttempts.ContainsKey(attacker.userID))
+            {
+                storedData.AttackAttempts.Add(attacker.userID, 1);
+                SaveFile();
+                return;
+            }
+
+            storedData.AttackAttempts[attacker.userID]++;
+            SaveFile();
+        }
+
+        void msgPlayer(BasePlayer attacker, BaseEntity entity)
+        {
+            double time2 = PlaytimeTracker?.Call<double>("GetPlayTime", entity.OwnerID.ToString()) ?? -1d;
+            if (time2 == -1d) return;
+            int left = (int)(time - time2);
+
+            if (show)
+            {
+                if (playerIsNew(entity.OwnerID))
+                {
+                    if (showTime)
+                    {
+                        SendReply(attacker, lang.GetMessage("cannot_attack_time", this, attacker.UserIDString), CheckLeft(left));
+                        return;
+                    }
+
+                    SendReply(attacker, lang.GetMessage("cannot_attack_no_time", this, attacker.UserIDString));
+                    return;
+                }
+
+                SendReply(attacker, lang.GetMessage("can_attack", this, attacker.UserIDString));
+                return;
+            }
+        }
+
         void Refund(BasePlayer attacker, string name, BaseEntity ent)
         {
             //Possibly most f**ked up thing I've ever made
@@ -274,7 +320,6 @@ namespace Oxide.Plugins
 
                 foreach (var entry in storedData.ItemList)
                 {
-
                     if (name == entry.Value)
                     {
                         if (refundTimes == 0)
@@ -282,68 +327,15 @@ namespace Oxide.Plugins
                             Item item = ItemManager.CreateByName(entry.Key, 1);
                             attacker.GiveItem(item);
                             SendReply(attacker, lang.GetMessage("refund_free", this, attacker.UserIDString), item.info.displayName.english);
-
-                            if (!storedData.AttackAttempts.ContainsKey(attacker.userID))
-                            {
-                                storedData.AttackAttempts.Add(attacker.userID, 1);
-                                SaveFile();
-                                return;
-                            }
-
-                            storedData.AttackAttempts[attacker.userID]++;
-                            SaveFile();
-                            return;
                         }
 
                         else
                         {
-                            if (storedData.AttackAttempts.ContainsKey(attacker.userID))
+                            if ((storedData.AttackAttempts[attacker.userID]) <= refundTimes)
                             {
-                                if ((storedData.AttackAttempts[attacker.userID] + 1) <= refundTimes)
-                                {
-                                    int a = refundTimes - (storedData.AttackAttempts[attacker.userID] + 1);
-                                    Item item = ItemManager.CreateByName(entry.Key, 1);
-                                    attacker.GiveItem(item);
-                                    storedData.AttackAttempts[attacker.userID]++;
-                                    SaveFile();
-
-                                    switch (a)
-                                    {
-                                        case 0:
-                                            {
-                                                SendReply(attacker, lang.GetMessage("refund_last", this, attacker.UserIDString), item.info.displayName.english);
-                                                //SendReply(attacker, "Your '" + item.info.displayName.english + "' was refunded but will not be next time.");
-                                                return;
-                                            }
-
-                                        case 1:
-                                            {
-                                                SendReply(attacker, lang.GetMessage("refund_1time", this, attacker.UserIDString), item.info.displayName.english);
-                                                //SendReply(attacker, "Your '" + item.info.displayName.english + "' was refunded After 1 more attempt it wont be refunded.");
-                                                return;
-                                            }
-
-                                        default:
-                                            {
-                                                SendReply(attacker, lang.GetMessage("refund_nTimes", this, attacker.UserIDString), item.info.displayName.english, a);
-                                                //SendReply(attacker, "Your '" + item.info.displayName.english + "' was refunded. After " + a + " more attempts it wont be refunded");
-                                                return;
-                                            }
-
-                                    }
-                                }
-
-                                storedData.AttackAttempts[attacker.userID]++;
-                                SaveFile();
-                            }
-
-                            else
-                            {
+                                int a = refundTimes - (storedData.AttackAttempts[attacker.userID]);
                                 Item item = ItemManager.CreateByName(entry.Key, 1);
                                 attacker.GiveItem(item);
-                                storedData.AttackAttempts.Add(attacker.userID, 1);
-                                SaveFile();
-                                int a = refundTimes - storedData.AttackAttempts[attacker.userID];
 
                                 switch (a)
                                 {
@@ -376,7 +368,10 @@ namespace Oxide.Plugins
         void CheckPlayersWithNoInfo()
         {
             List<ulong> tempList = storedData.playersWithNoData;
-            timer.Every(frequency - 5, () => {
+            int rate = 30;
+            if (frequency <= 5) rate = 10;
+            else rate = frequency - 5;
+            timer.Every(rate, () => {
                 tempList = storedData.playersWithNoData;
                 if (tempList.Count > 0)
                 {
@@ -389,7 +384,7 @@ namespace Oxide.Plugins
                             if (time == -1d)
                             {
                                 Puts(lang.GetMessage("pt_notInstalled", this, null));
-                                continue;
+                                return;
                             }
                         }
 
@@ -420,6 +415,7 @@ namespace Oxide.Plugins
         void Check(ulong ID)
         {
             if (storedData.playersWithNoData.Contains(ID)) return;
+            if (storedData.players[ID] == -50d) return;
 
             double time = -1d;
             try
@@ -460,6 +456,8 @@ namespace Oxide.Plugins
                 foreach (BasePlayer bp in BasePlayer.activePlayerList)
                 {
                     if (storedData.playersWithNoData.Contains(bp.userID)) continue;
+                    if (storedData.players[bp.userID] == -50d) continue;
+
                     double time = -1d;
                     try
                     {
@@ -495,6 +493,8 @@ namespace Oxide.Plugins
             foreach (BasePlayer bp in BasePlayer.sleepingPlayerList)
             {
                 if (storedData.playersWithNoData.Contains(bp.userID)) continue;
+                if (storedData.players[bp.userID] == -50d) continue;
+
                 double time = -1d;
                 try
                 {
@@ -608,6 +608,7 @@ namespace Oxide.Plugins
         bool playerIsNew(ulong ID)
         {
             if (!storedData.players.ContainsKey(ID)) return false;
+            if (storedData.players[ID] == -50d) return false;
             if (storedData.players[ID] < time) return true;
             return false;
         }
@@ -622,6 +623,44 @@ namespace Oxide.Plugins
             storedData.players.Clear();
             Puts(lang.GetMessage("dataFileWiped_playerdata", this, null));
             SaveFile();
+        }
+
+        [ConsoleCommand("antinoob.removenoob")]
+        void RemoveCmd(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null) return;
+            if (arg.Args == null || arg == null || arg.cmd == null || arg.Args.Length == 0 || arg.FullString == null)
+            {
+                Puts("Wrong syntax! antinoob.removenoob <steamID>");
+                return;
+            }
+
+            string ID = arg.Args[0];
+            ulong ID_u = 5u;
+            ulong.TryParse(ID, out ID_u);
+            if (ID_u == 5u)
+            {
+                Puts("Wrong steamID");
+                return;
+            }
+
+            foreach (var entry in storedData.players)
+            {
+                if (entry.Key == ID_u)
+                {
+                    if (storedData.players[entry.Key] == -50d)
+                    {
+                        Puts("That player is already a marked as non noob");
+                        return;
+                    }
+
+                    storedData.players[entry.Key] = -50d;
+                    Puts("Set " + ID_u + " as a not-new player");
+                    SaveFile();
+                    return;
+                }
+            }
+            Puts("Couldn't find a player with that ID");
         }
 
         [ConsoleCommand("antinoob.wipe.attempts")]
@@ -858,7 +897,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if(hitEnt.OwnerID == 0)
+            if (hitEnt.OwnerID == 0)
             {
                 //DEBUGGING
                 Puts("Couldn't find owner for entity at " + hitEnt.transform.position + " , on request by player " + player.userID);
