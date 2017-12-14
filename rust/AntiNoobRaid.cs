@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.3.7", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.3.8", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
@@ -371,7 +371,7 @@ namespace Oxide.Plugins
         {
             List<ulong> tempList = storedData.playersWithNoData;
             int rate = 30;
-            if (frequency <= 20) rate = 10;
+            if (frequency <= 10) rate = 10;
             else rate = frequency - 10;
             timer.Every(rate, () => {
                 tempList = storedData.playersWithNoData;
@@ -508,7 +508,10 @@ namespace Oxide.Plugins
             foreach (BasePlayer bp in BasePlayer.sleepingPlayerList)
             {
                 if (storedData.playersWithNoData.Contains(bp.userID)) continue;
-                if (storedData.players[bp.userID] == -50d) continue;
+                if (storedData.players.ContainsKey(bp.userID))
+                {
+                    if (storedData.players[bp.userID] == -50d) continue;
+                }
 
                 double time = -1d;
                 try
