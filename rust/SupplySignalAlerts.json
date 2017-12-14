@@ -1,11 +1,11 @@
 {
-    "name": "Supply Signal Alerts",
+    "name": "SupplySignalAlerts",
     "description": "Broadcasts a message when someone throws a supply signal",
     "author": "LaserHydra",
-    "version": "2.0.1",
+    "version": "3.0.0",
     "configuration": true,
-    "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/supply-signal-alerts.933",
+    "language": "cs\r\n",
+    "url": "http:\/\/oxidemod.org\/plugins\/supplysignalalerts.933",
     "games": [
         "rust"
     ],
