@@ -2,7 +2,7 @@
 
 namespace Oxide.Plugins
 {
-    [Info("Supply Signal Alerts", "LaserHydra", "3.0.0", ResourceId = 933)]
+    [Info("Supply Signal Alerts", "LaserHydra", "3.0.1", ResourceId = 933)]
     internal class SupplySignalAlerts : RustPlugin
     {
         private void Init()
@@ -18,17 +18,17 @@ namespace Oxide.Plugins
 
         private void OnExplosiveThrown(BasePlayer player, BaseEntity entity)
         {
-            if (entity.name != "grenade.smoke.deployed")
+            if (!(entity is SupplySignal))
                 return;
 
             timer.Once(2.8f, () =>
             {
-                var position = GetMessage("Position Format", player.UserIDString)
+                var position = lang.GetMessage("Position Format", this, player.UserIDString)
                     .Replace("{x}", entity.transform.position.x.ToString("##.0"))
                     .Replace("{y}", entity.transform.position.y.ToString("##.0"))
                     .Replace("{z}", entity.transform.position.z.ToString("##.0"));
 
-                var message = GetMessage("Message", player.UserIDString)
+                var message = lang.GetMessage("Supply Signal Thrown", this, player.UserIDString)
                     .Replace("{player}", player.displayName)
                     .Replace("{position}", position);
 
@@ -36,7 +36,5 @@ namespace Oxide.Plugins
                 Puts(message);
             });
         }
-
-        private string GetMessage(string key, string userid) => lang.GetMessage(key, this, userid);
     }
 }

@@ -2,7 +2,7 @@
     "name": "SupplySignalAlerts",
     "description": "Broadcasts a message when someone throws a supply signal",
     "author": "LaserHydra",
-    "version": "3.0.0",
+    "version": "3.0.1",
     "configuration": true,
     "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/supplysignalalerts.933",
