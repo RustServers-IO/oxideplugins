@@ -12,7 +12,7 @@ using Rust;
 using System.Collections;
 using Newtonsoft.Json;
 namespace Oxide.Plugins {
-    [Info("CustomAI", "serezhadelaet", "1.1.6", ResourceId = 2621)]
+    [Info("CustomAI", "serezhadelaet", "1.1.7", ResourceId = 2621)]
     [Description("CustomAI ;)")]
     class CustomAI : RustPlugin {
         #endregion
@@ -509,7 +509,7 @@ namespace Oxide.Plugins {
             InitializeConfig();
             ConVar.AI.think = false;
             if (config.RemoveAllScientists)
-                NPCPlayerApex.Population = 0;
+                Scientist.Population = 0;
         }
         void OnServerInitialized() {
             permission.RegisterPermission(ignorePermission, this);
