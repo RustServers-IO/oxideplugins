@@ -8,13 +8,15 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.3.6", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.3.7", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
         [PluginReference] Plugin WipeProtection;
+
         //set this to true if you are having issues with the plugin
         bool debug = false;
+
         List<BasePlayer> cooldown = new List<BasePlayer>();
         Dictionary<string, string> raidtools = new Dictionary<string, string>
         {
@@ -369,12 +371,13 @@ namespace Oxide.Plugins
         {
             List<ulong> tempList = storedData.playersWithNoData;
             int rate = 30;
-            if (frequency <= 5) rate = 10;
-            else rate = frequency - 5;
+            if (frequency <= 20) rate = 10;
+            else rate = frequency - 10;
             timer.Every(rate, () => {
                 tempList = storedData.playersWithNoData;
                 if (tempList.Count > 0)
                 {
+                    List<ulong> toremove = new List<ulong>();
                     foreach (ulong ID in tempList)
                     {
                         double time = -1d;
@@ -398,16 +401,24 @@ namespace Oxide.Plugins
                             //This isn't supposed to happen
                             LogToFile(this.Name, "Somehow info exists for player that is in data file already (" + ID + ")", this, true);
                             storedData.players[ID] = time;
-                            storedData.playersWithNoData.Remove(ID);
+                            toremove.Add(ID);
+                            //storedData.playersWithNoData.Remove(ID);
                             SaveFile();
                             continue;
                         }
 
                         storedData.players.Add(ID, time);
-                        storedData.playersWithNoData.Remove(ID);
+                        toremove.Add(ID);
+                        //storedData.playersWithNoData.Remove(ID);
                         SaveFile();
-                        return;
+                        continue;
                     }
+
+                    foreach(var e in toremove)
+                    {
+                        if (storedData.playersWithNoData.Contains(e)) storedData.playersWithNoData.Remove(e);
+                    }
+                    SaveFile();
                 }
             });
         }
@@ -455,8 +466,12 @@ namespace Oxide.Plugins
             {
                 foreach (BasePlayer bp in BasePlayer.activePlayerList)
                 {
+                    if (!bp.IsConnected || bp == null) continue;
                     if (storedData.playersWithNoData.Contains(bp.userID)) continue;
-                    if (storedData.players[bp.userID] == -50d) continue;
+                    if (storedData.players.ContainsKey(bp.userID))
+                    {
+                        if (storedData.players[bp.userID] == -50d) continue;
+                    }
 
                     double time = -1d;
                     try
