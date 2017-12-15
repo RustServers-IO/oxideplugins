@@ -15,7 +15,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Bank", "rustservers.io", "0.1.0", ResourceId = 2116)]
+    [Info("Bank", "rustservers.io", "0.1.1", ResourceId = 2116)]
     [Description("Safe player storage")]
     class Bank : RustPlugin
     {
@@ -577,13 +577,13 @@ namespace Oxide.Plugins
 
         object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
         {
-            if (entity == null || target == null || entity == target) return null;
+            if (entity == null || target == null || entity == target || entity.net == null) return null;
             if (target.IsAdmin) return null;
 
             OnlinePlayer onlinePlayer;
             bool IsMyBank = false;
             if(onlinePlayers.TryGetValue(target, out onlinePlayer)) {
-                if(onlinePlayer.View != null && onlinePlayer.View.net.ID == entity.net.ID) {
+                if(onlinePlayer.View != null && onlinePlayer.View.net != null && onlinePlayer.View.net.ID == entity.net.ID) {
                     IsMyBank = true;
                 }
             }
@@ -619,18 +619,18 @@ namespace Oxide.Plugins
                     return null;
                 }
             }
-            if (lockItem is KeyLock && banks.ContainsKey(player.userID))
+
+            BankProfile bank;
+            if (lockItem is KeyLock && banks.TryGetValue(player.userID, out bank))
             {
                 KeyLock keyLock = (KeyLock)lockItem;
 
-                BankProfile bank = banks[player.userID];
-
-                List<int> codes = new List<int>();
-                foreach(ItemProfile profile in bank.items) {
-                    if(profile.dataInt != 0) {
-                        codes.Add(profile.dataInt);
-                    }
-                }
+                List<int> codes = bank.items.Select(profile => profile.dataInt).Where(dataInt => dataInt != 0).ToList();
+                //foreach(ItemProfile profile in bank.items) {
+                //    if(profile.dataInt != 0) {
+                //        codes.Add(profile.dataInt);
+                //    }
+                //}
 
                 if (!keyLock.IsLocked())
                 {
@@ -974,7 +974,7 @@ namespace Oxide.Plugins
             var view = GameManager.server.CreateEntity(box,pos) as StorageContainer;
             
             if (!view) return;
-
+            view.limitNetworking = true;
             view.transform.position = pos;
 
             player.EndLooting();

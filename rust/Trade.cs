@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Trade", "Calytic", "1.1.2", ResourceId = 1242)]
+    [Info("Trade", "Calytic", "1.1.5", ResourceId = 1242)]
     class Trade : RustPlugin
     {
         #region Configuration Data
@@ -385,6 +385,24 @@ namespace Oxide.Plugins
             }
         }
 
+        void OnItemAction(Item item, string cmd) {
+            if(cmd == "drop") {
+                BasePlayer player = item.GetOwnerPlayer();
+
+                if (player is BasePlayer)
+                {
+                    OnlinePlayer onlinePlayer;
+                    if (onlinePlayers.TryGetValue(player, out onlinePlayer) && onlinePlayer.Trade != null)
+                    {
+                        if (item.parent == player.inventory.containerMain && !onlinePlayer.Trade.IsInventorySufficient())
+                        {
+                            ShowTrades(onlinePlayer.Trade, "Trade: Pending");
+                        }
+                    }
+                }
+            }
+        }
+
         void OnItemAddedToContainer(ItemContainer container, Item item)
         {
             if(container.playerOwner is BasePlayer) {
@@ -395,8 +413,7 @@ namespace Oxide.Plugins
 
                     if (!t.complete)
                     {
-                        t.sourceAccept = false;
-                        t.targetAccept = false;
+                        t.ResetAcceptance();
 
                         if (t.IsValid())
                         {
@@ -420,8 +437,7 @@ namespace Oxide.Plugins
                     OpenTrade t = onlinePlayers[container.playerOwner].Trade;
                     if (!t.complete)
                     {
-                        t.sourceAccept = false;
-                        t.targetAccept = false;
+                        t.ResetAcceptance();
 
                         if (t.IsValid())
                         {
@@ -552,6 +568,8 @@ namespace Oxide.Plugins
                 SendReply(target, GetMsg("Trade: They Declined", target));
 
                 TradeCloseBoxes(onlinePlayer.Trade);
+            } else if(player is BasePlayer) {
+                HideTrade(player);
             }
         }
 
@@ -609,6 +627,8 @@ namespace Oxide.Plugins
                 } else {
                     ShowTrades(t, "Trade: Pending");
                 }
+            } else if(player is BasePlayer) {
+                HideTrade(player);
             }
         }
 
@@ -682,7 +702,9 @@ namespace Oxide.Plugins
             }
             send = send.Replace("{targetstatus}", status);
 
+            var slotsAvailable = target.inventory.containerMain.capacity - (target.inventory.containerMain.itemList.Count);
             List<string> sourceItems = new List<string>();
+            var x = 1;
             foreach(Item i in sourceContainer.inventory.itemList) {
                 string n = "";
                 if(i.IsBlueprint()) {
@@ -690,6 +712,11 @@ namespace Oxide.Plugins
                 } else {
                     n = i.amount + " x "+ i.info.displayName.english;
                 }
+
+                if(x > slotsAvailable) {
+                    n = "<color=red>" + n + "</color>";
+                }
+                x++;
                 
                 sourceItems.Add(n);
             }
@@ -697,7 +724,9 @@ namespace Oxide.Plugins
             send = send.Replace("{sourceitems}", string.Join("\n", sourceItems.ToArray()));
 
             if(player != target) {
+                slotsAvailable = player.inventory.containerMain.capacity - (player.inventory.containerMain.itemList.Count);
                 List<string> targetItems = new List<string>();
+                x = 1;
                 if(targetContainer != null) {
                     foreach(Item i in targetContainer.inventory.itemList) {
                         string n2 = "";
@@ -706,6 +735,10 @@ namespace Oxide.Plugins
                         } else {
                             n2 = i.amount + " x "+ i.info.displayName.english;
                         }
+                        if(x > slotsAvailable) {
+                            n2 = "<color=red>" + n2 + "</color>";
+                        }
+                        x++;
                         targetItems.Add(n2);
                     }
                 }
@@ -770,7 +803,7 @@ namespace Oxide.Plugins
                 CloseBoxView(trade.sourcePlayer, trade.source.View);
             }
 
-            if (trade.IsTargetValid())
+            if (trade.IsTargetValid() && trade.targetPlayer != trade.sourcePlayer)
             {
                 CloseBoxView(trade.targetPlayer, trade.target.View);
             }
@@ -891,20 +924,21 @@ namespace Oxide.Plugins
         void OpenBoxView(BasePlayer player, BaseEntity targArg)
         {
             var pos = new Vector3(player.transform.position.x, player.transform.position.y-1, player.transform.position.z);
-            var corpse = GameManager.server.CreateEntity(box,pos) as StorageContainer;
-            corpse.transform.position = pos;
+            var boxContainer = GameManager.server.CreateEntity(box,pos) as StorageContainer;
+            boxContainer.transform.position = pos;
 
-            if (!corpse) return;
+            if (!boxContainer) return;
 
-            StorageContainer view = corpse as StorageContainer;
+            StorageContainer view = boxContainer as StorageContainer;
+            view.limitNetworking = true;
             player.EndLooting();
             if(targArg is BasePlayer) {
                 
                 BasePlayer target = targArg as BasePlayer;
                 ItemContainer container = new ItemContainer();
                 container.playerOwner = player;
-                container.ServerInitialize((Item) null, slots);
-                if ((int) container.uid == 0)
+                container.ServerInitialize(null, slots);
+                if (container.uid == 0)
                     container.GiveUID();
 
                 view.enableSaving = false;
@@ -953,6 +987,17 @@ namespace Oxide.Plugins
                     if (item.position != -1)
                     {
                         item.MoveToContainer(player.inventory.containerMain);
+                    }
+                }
+            }
+
+            if (view.inventory.itemList.Count > 0)
+            {
+                foreach (Item item in view.inventory.itemList.ToArray())
+                {
+                    if (item.position != -1)
+                    {
+                        item.MoveToContainer(player.inventory.containerBelt);
                     }
                 }
             }
@@ -1048,7 +1093,7 @@ namespace Oxide.Plugins
         {
             foreach (KeyValuePair<BasePlayer, OnlinePlayer> kvp in onlinePlayers)
             {
-                if (kvp.Value.View != null && kvp.Value.View.net.ID == entity.net.ID)
+                if (kvp.Value.View != null && kvp.Value.View.net != null && entity.net != null && kvp.Value.View.net.ID == entity.net.ID)
                 {
                     return true;
                 }

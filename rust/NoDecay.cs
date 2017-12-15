@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("NoDecay", "Diesel_42o", "1.0.15", ResourceId = 1160)]  //Original Credit to Deicide666ra/Piarb
+    [Info("NoDecay", "Diesel_42o", "1.0.17", ResourceId = 1160)]  //Original Credit to Deicide666ra/Piarb
     [Description("Scales or disables decay of items")]
 
     class NoDecay : RustPlugin
@@ -85,7 +85,7 @@ namespace Oxide.Plugins
         private void SendHelpText(BasePlayer player)
         {
             var sb = new StringBuilder();
-            sb.Append("<color=yellow>NoDecay 1.0.3</color> · Controls decay\n");
+            sb.Append("<color=#05eb59>NoDecay 1.0.3</color> · Controls decay\n");
             sb.Append("  · ").AppendLine($"twig={c_twigMultiplier} - campfire={c_campfireMultiplier}");
             sb.Append("  · ").Append($"wood ={ c_woodMultiplier} - stone ={ c_stoneMultiplier} - sheet ={ c_sheetMultiplier} - armored ={ c_armoredMultiplier}");
             player.ChatMessage(sb.ToString());
@@ -113,7 +113,12 @@ namespace Oxide.Plugins
                     if (c_outputToRcon)
                         Puts($"Decay ({entity_name}) before: {before} after: {hitInfo.damageTypes.Get(Rust.DamageType.Decay)}");
                 }
-                else if (entity.LookupPrefab().name.Contains("deployed"))
+                else if (entity.LookupPrefab().name.Contains("deployed") ||
+                        entity.LookupPrefab().name.Contains("toptier") ||
+                        entity.LookupPrefab().name.Contains("reinforced") ||
+                        entity.LookupPrefab().name.Contains("shopfront") ||
+                        entity.LookupPrefab().name.Contains("bars") ||
+                        entity.LookupPrefab().name.Contains("shutter"))
                 {
                     var before = hitInfo.damageTypes.Get(Rust.DamageType.Decay);
                     hitInfo.damageTypes.Scale(Rust.DamageType.Decay, c_deployablesMultiplier);
