@@ -7,7 +7,7 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("PresentLoot", "redBDGR", "1.0.5", ResourceId = 2599)]
+    [Info("PresentLoot", "redBDGR", "1.0.6", ResourceId = 2599)]
     [Description("Modify the loot tables for the presents")]
 
     class PresentLoot : RustPlugin
@@ -131,7 +131,8 @@ namespace Oxide.Plugins
         private int mediumMaxItems = 2;
         private int largeMinItems = 1;
         private int largeMaxItems = 2;
-        bool weaponsSpawnWithAmmo = false;
+        private bool weaponsSpawnWithAmmo = false;
+        private bool sureItemsWillAlwaysSpawn = false;
 
         private void Init()
         {
@@ -171,7 +172,7 @@ namespace Oxide.Plugins
             if (largeList.Count == 0)
             {
                 largeList.Add(new ItemInfo { attachments = new Dictionary<string, float>(), minItemAmount = 1, chance = 0.20f, itemName = "stocking.large", maxItemAmount = 1, skinID = 0 });
-                largeList.Add(new ItemInfo { attachments = new Dictionary<string, float> { {"weapon.mod.holosight", 0.5f}, {"weapon.mod.lasersight", 0.5f} }, minItemAmount = 1, chance = 0.20f, itemName = "shotgun.pump", maxItemAmount = 1, skinID = 0 });
+                largeList.Add(new ItemInfo { attachments = new Dictionary<string, float> { { "weapon.mod.holosight", 0.5f }, { "weapon.mod.lasersight", 0.5f } }, minItemAmount = 1, chance = 0.20f, itemName = "shotgun.pump", maxItemAmount = 1, skinID = 0 });
                 largeList.Add(new ItemInfo { attachments = new Dictionary<string, float>(), minItemAmount = 5, chance = 0.20f, itemName = "ammo.shotgun", maxItemAmount = 15, skinID = 0 });
                 updated = true;
             }
@@ -205,7 +206,7 @@ namespace Oxide.Plugins
         private bool CheckAmountNeeded(string itemName, BasePlayer player)
         {
             bool sufficent = false;
-            foreach(Item item in player.inventory.containerMain.itemList)
+            foreach (Item item in player.inventory.containerMain.itemList)
             {
                 if (item.info.shortname == itemName)
                     if (item.amount >= amountNeededDic[item.info.shortname])
@@ -249,35 +250,53 @@ namespace Oxide.Plugins
             switch (presentname)
             {
                 case "xmas.present.small":
-                {
-                    int maxItemAmount = Mathf.RoundToInt(Random.Range(Convert.ToSingle(smallMinItems), Convert.ToSingle(smallMaxItems)));
-                        while (itemCount < maxItemAmount)
                     {
-                        x.Add(TryMakeItem(smallList));
-                        itemCount++;
+                        if (sureItemsWillAlwaysSpawn)
+                            foreach (var entry in CheckFor100Items(smallList))
+                            {
+                                x.Add(entry);
+                                itemCount++;
+                            }
+                        int maxItemAmount = Mathf.RoundToInt(Random.Range(Convert.ToSingle(smallMinItems), Convert.ToSingle(smallMaxItems)));
+                        while (itemCount < maxItemAmount)
+                        {
+                            x.Add(TryMakeItem(smallList));
+                            itemCount++;
+                        }
+                        return x;
                     }
-                    return x;
-                }
                 case "xmas.present.medium":
-                {
-                    int maxItemAmount = Mathf.RoundToInt(Random.Range(Convert.ToSingle(mediumMinItems), Convert.ToSingle(mediumMaxItems)));
+                    {
+                        if (sureItemsWillAlwaysSpawn)
+                            foreach (var entry in CheckFor100Items(mediumList))
+                            {
+                                x.Add(entry);
+                                itemCount++;
+                            }
+                        int maxItemAmount = Mathf.RoundToInt(Random.Range(Convert.ToSingle(mediumMinItems), Convert.ToSingle(mediumMaxItems)));
                         while (itemCount < maxItemAmount)
-                    {
-                        x.Add(TryMakeItem(mediumList));
-                        itemCount++;
+                        {
+                            x.Add(TryMakeItem(mediumList));
+                            itemCount++;
+                        }
+                        return x;
                     }
-                    return x;
-                }
                 case "xmas.present.large":
-                {
-                    int maxItemAmount = Mathf.RoundToInt(Random.Range(Convert.ToSingle(largeMinItems), Convert.ToSingle(largeMaxItems)));
-                    while (itemCount < maxItemAmount)
                     {
-                        x.Add(TryMakeItem(largeList));
-                        itemCount++;
+                        if (sureItemsWillAlwaysSpawn)
+                            foreach (var entry in CheckFor100Items(largeList))
+                            {
+                                x.Add(entry);
+                                itemCount++;
+                            }
+                        int maxItemAmount = Mathf.RoundToInt(Random.Range(Convert.ToSingle(largeMinItems), Convert.ToSingle(largeMaxItems)));
+                        while (itemCount < maxItemAmount)
+                        {
+                            x.Add(TryMakeItem(largeList));
+                            itemCount++;
+                        }
+                        return x;
                     }
-                    return x;
-                }
             }
             return x;
         }
@@ -286,12 +305,12 @@ namespace Oxide.Plugins
         {
             Item madeItem = null;
             bool x = true;
-            while (x == true)
+            while (x)
             {
                 ItemInfo entry = list[Mathf.RoundToInt(Random.Range(0f, Convert.ToSingle(list.Count - 1)))];
                 if (Random.Range(0f, 1f) > entry.chance)
                     continue;
-                Item newItem = ItemManager.CreateByName(entry.itemName, Random.Range(entry.minItemAmount, entry.maxItemAmount), (ulong) entry.skinID);
+                Item newItem = ItemManager.CreateByName(entry.itemName, Random.Range(entry.minItemAmount, entry.maxItemAmount), (ulong)entry.skinID);
                 foreach (var attachmentName in entry.attachments)
                     if (Random.Range(0f, 1f) < attachmentName.Value)
                         ItemManager.CreateByName(attachmentName.Key).MoveToContainer(newItem.contents);
@@ -307,6 +326,34 @@ namespace Oxide.Plugins
                 break;
             }
             return madeItem;
+        }
+
+        private IEnumerable<Item> CheckFor100Items(IEnumerable<ItemInfo> list)
+        {
+            List<Item> x = new List<Item>();
+            foreach (var entry in list)
+            {
+                if (entry.chance <= 0.99f)
+                    continue;
+                Item newItem = ItemManager.CreateByName(entry.itemName, UnityEngine.Random.Range(entry.minItemAmount, entry.maxItemAmount), (ulong)entry.skinID);
+                foreach (var attachmentName in entry.attachments)
+                    if (UnityEngine.Random.Range(0f, 1f) < attachmentName.Value)
+                        ItemManager.CreateByName(attachmentName.Key).MoveToContainer(newItem.contents);
+                if (weaponsSpawnWithAmmo)
+                {
+                    if (newItem.info.category != ItemCategory.Weapon)
+                    {
+                        x.Add(newItem);
+                        continue;
+                    }
+                    BaseProjectile ent = newItem.GetHeldEntity()?.GetComponent<BaseProjectile>();
+                    if (ent == null) continue;
+                    if (ent.primaryMagazine != null)
+                        ent.primaryMagazine.contents = ent.primaryMagazine.capacity;
+                }
+                x.Add(newItem);
+            }
+            return x;
         }
 
         private static void ItemRemovalThink(Item item, BasePlayer player, int itemsToTake)
