@@ -1,0 +1,16 @@
+{
+    "name": "ToggleNoggin",
+    "description": "Bindable console command to spawn, equip and ignite a candle hat or miners hat.",
+    "author": "carny666",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/togglenoggin.2725",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
