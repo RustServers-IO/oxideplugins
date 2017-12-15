@@ -3,9 +3,10 @@ using System;
 using UnityEngine;
 using Oxide.Core.Plugins;
 
+
 namespace Oxide.Plugins
 {
-    [Info("ToggleNoggin", "carny666", "1.0.2", ResourceId = 2725)]
+    [Info("ToggleNoggin", "carny666", "1.0.3", ResourceId = 2725)]
     class ToggleNoggin : RustPlugin
     {
         const string adminPermission = "ToggleNoggin.admin";
@@ -78,17 +79,15 @@ namespace Oxide.Plugins
                 if (player.inventory.containerWear.FindItemsByItemName("hat.miner") == null && player.inventory.containerWear.FindItemsByItemName("hat.candle") == null)
                 {
                     var hatDef = ItemManager.FindItemDefinition(hatItemName);
-                    var fuelDef = ItemManager.FindItemDefinition("lowgradefuel");
 
                     // save last hat for removeal next time..
                     lastHat = hatItemName;
 
-                    if (hatDef != null && fuelDef != null)
+                    if (hatDef != null)
                     {
                         Item hatItem = ItemManager.CreateByItemID(hatDef.itemid, 1);
                         if (hatItem != null)
                         {
-                            hatItem.contents.AddItem(fuelDef, 140);
                             player.inventory.GiveItem(hatItem, player.inventory.containerWear);
                             hatItem.SetFlag(global::Item.Flag.IsOn, true);
                         }

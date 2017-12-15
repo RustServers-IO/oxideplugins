@@ -14,7 +14,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("ZoneManager", "Reneb / Nogrod", "2.4.6", ResourceId = 739)]
+    [Info("ZoneManager", "Reneb / Nogrod", "2.4.61", ResourceId = 739)]
     public class ZoneManager : RustPlugin
     {
         #region Fields
@@ -38,7 +38,6 @@ namespace Oxide.Plugins
         private readonly Dictionary<BasePlayer, ZoneFlags> playerTags = new Dictionary<BasePlayer, ZoneFlags>();
         
         private static readonly int playersMask = LayerMask.GetMask("Player (Server)");
-        private static readonly FieldInfo decay = typeof(DecayEntity).GetField("decay", BindingFlags.Instance | BindingFlags.NonPublic);        
         private static readonly Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic))?.GetValue(null);
         #endregion
 
@@ -1570,6 +1569,30 @@ namespace Oxide.Plugins
                 }
             }
             return false;
+        }
+
+        private List<string> GetEntityZones(BaseEntity entity)
+        {
+            if (entity == null) return null;
+
+            HashSet<Zone> zones = null;
+            ResourceDispenser disp = entity.GetComponent<ResourceDispenser>();
+
+            if (disp != null)
+                resourceZones.TryGetValue(disp, out zones);
+            else if (entity is BasePlayer)
+                playerZones.TryGetValue(entity as BasePlayer, out zones);
+            else if (entity is BaseCombatEntity)
+                buildingZones.TryGetValue(entity as BaseCombatEntity, out zones);
+            else
+                otherZones.TryGetValue(entity, out zones);
+
+            List<string> zoneIds = new List<string>();
+
+            if (zones != null)
+                zoneIds.AddRange(zones.Select(x => x.Info.Id));  
+            
+            return zoneIds;
         }
         #endregion
 
