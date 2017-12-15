@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.1.3", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.1.4", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
@@ -62,11 +62,9 @@ namespace Oxide.Plugins
 
             Vector3 GetGroundPosition(Vector3 sourcePos)
             {
-                LayerMask GROUND_MASKS = LayerMask.GetMask("Terrain", "World", "Construction");  // TODO: mountain? wtf?
                 RaycastHit hitInfo;
-
-                if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, GROUND_MASKS))
-                    sourcePos.y = hitInfo.point.y;
+                if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo))
+                        sourcePos.y = hitInfo.point.y;
 
                 sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
 
@@ -162,7 +160,7 @@ namespace Oxide.Plugins
                     { "setgroupusageerror", "Must have 3 arguments. /setgroup groupName 30 10" },
                     { "setwaterdepthreply", "Allowable water depth has been set to {waterdepth}" },
                     { "setwaterdeptherror", "usage: /setwaterdepth 1.0" },
-                    { "toggleDeathMessagereply", "Death message has been toggled to {displayDeath}" } 
+                    { "toggleDeathMessagereply", "Death message has been toggled to {displayDeath}" }
                 }, this, "en");
             }
             catch (Exception ex)
@@ -912,7 +910,6 @@ namespace Oxide.Plugins
             player.SendNetworkUpdateImmediate(false);
             if (player.net?.connection == null) return;
 
-            //TODO temporary for potential rust bug
             try { player.ClearEntityQueue(null); } catch { }
             player.SendFullSnapshot();
         }
@@ -991,11 +988,9 @@ namespace Oxide.Plugins
         }
 
         Vector3 GetGroundPosition(Vector3 sourcePos)
-        {   // wish i understood this.
-            LayerMask GROUND_MASKS = LayerMask.GetMask("Terrain", "World", "Construction");  // TODO: mountain? wtf?
+        {
             RaycastHit hitInfo;
-
-            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, GROUND_MASKS))
+            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo))
                 sourcePos.y = hitInfo.point.y;
             sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
 
@@ -1105,7 +1100,6 @@ namespace Oxide.Plugins
                 var direction = "";
                 if (index > -1)
                 {
-                    //var sp = new SpawnPosition(new Vector3(xx, 0, zz));
                     if (position.z > spawnGrid[index].GroundPosition.z)
                         direction += "N";
                     else if (position.z < spawnGrid[index].GroundPosition.z)
