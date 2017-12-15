@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoFuel", "redBDGR", "1.0.2", ResourceId = 2717)]
+    [Info("AutoFuel", "redBDGR", "1.0.3", ResourceId = 2717)]
     [Description("Automatically fuel lights if there is fuel in the toolcupboards inventory")]
 
     class AutoFuel : RustPlugin
@@ -79,18 +79,9 @@ namespace Oxide.Plugins
                 return null;
             if (HasFuel(oven))
                 return null;
-            DecayEntity decayEnt = oven.GetComponent<DecayEntity>();
-            if (decayEnt == null)
-            {
-                PrintError("DecayEntity is null (if you are seeing this error, post it in the support thread http://oxidemod.org/plugins/autofuel.2717/)");
-                return null;
-            }
-            BuildingManager.Building building = decayEnt.GetBuilding();
+            BuildingManager.Building building = oven.GetComponent<DecayEntity>()?.GetBuilding();
             if (building == null)
-            {
-                PrintError("BuildingManager.Building is null (if you are seeing this error, post it in the support thread http://oxidemod.org/plugins/autofuel.2717/)");
                 return null;
-            }
             foreach (BuildingPrivlidge priv in building.buildingPrivileges)
             {
                 if (dontRequireFuel)
@@ -111,15 +102,11 @@ namespace Oxide.Plugins
 
         private bool HasFuel(BaseOven oven)
         {
-            if (oven.inventory?.itemList == null || oven.inventory.itemList.Count == 0)
-                return false;
             return oven.inventory.itemList.Where(item => item != null).Any(item => item.info == oven.fuelType);
         }
 
         private Item GetFuel(BuildingPrivlidge priv, BaseOven oven)
         {
-            if (priv.inventory?.itemList == null || priv.inventory.itemList.Count == 0)
-                return null;
             return priv.inventory.itemList.Where(item => item != null).FirstOrDefault(item => item.info == oven.fuelType);
         }
 
