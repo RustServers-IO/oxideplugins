@@ -5,10 +5,13 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("ToggleNoggin", "carny666", "1.0.1", ResourceId = 2725)]
+    [Info("ToggleNoggin", "carny666", "1.0.2", ResourceId = 2725)]
     class ToggleNoggin : RustPlugin
     {
         const string adminPermission = "ToggleNoggin.admin";
+        const string candlePermission = "ToggleNoggin.candle";
+        const string minersPermission = "ToggleNoggin.miners";
+
         static string lastHat = "";
 
         void Init()
@@ -16,6 +19,9 @@ namespace Oxide.Plugins
             try
             {
                 permission.RegisterPermission(adminPermission, this);
+                permission.RegisterPermission(candlePermission, this);
+                permission.RegisterPermission(minersPermission, this);
+
             }
             catch (Exception ex)
             {
@@ -31,11 +37,9 @@ namespace Oxide.Plugins
                 var player = arg.Player();
                 if (player == null) return;
 
-                if (!permission.UserHasPermission(player.UserIDString, adminPermission)) return;
-
-                if (arg.Args.Length > 1)
+                if ((arg.Args.Length > 1) && (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, minersPermission)))
                     ToggleHat(player, "hat.miner");
-                else
+                else if (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, candlePermission))
                     ToggleHat(player, "hat.candle");
             }
             catch (Exception ex)
@@ -52,11 +56,9 @@ namespace Oxide.Plugins
             {
                 if (player == null) return;
 
-                if (!permission.UserHasPermission(player.UserIDString, adminPermission)) return;
-
-                if (args.Length > 0)
+                if ((args.Length > 0) && (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, minersPermission)))
                     ToggleHat(player, "hat.miner");
-                else
+                else if (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, candlePermission))
                     ToggleHat(player, "hat.candle");
             }
             catch (Exception ex)
