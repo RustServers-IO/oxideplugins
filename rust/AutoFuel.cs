@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoFuel", "redBDGR", "1.0.1", ResourceId = 2717)]
+    [Info("AutoFuel", "redBDGR", "1.0.2", ResourceId = 2717)]
     [Description("Automatically fuel lights if there is fuel in the toolcupboards inventory")]
 
     class AutoFuel : RustPlugin
@@ -60,14 +60,6 @@ namespace Oxide.Plugins
             DoStartupItemNames();
         }
 
-        private void Unload()
-        {
-            foreach(BaseOven oven in UnityEngine.Object.FindObjectsOfType<BaseOven>())
-                if (activeShortNames.Contains(oven.GetComponent<BaseEntity>().ShortPrefabName))
-                    if (oven.inventory.IsLocked())
-                        oven.inventory.SetLocked(false);
-        }
-
         private void OnEntitySpawned(BaseNetworkable entity)
         {
             if (entity.GetComponent<BaseEntity>()?.ShortPrefabName == "jackolantern.angry" || entity.GetComponent<BaseEntity>()?.ShortPrefabName == "jackolantern.happy")
@@ -76,12 +68,29 @@ namespace Oxide.Plugins
 
         private Item OnFindBurnable(BaseOven oven)
         {
-            if (!activeShortNames.Contains(oven.GetComponent<BaseEntity>()?.ShortPrefabName))
+            if (oven == null)
+                return null;
+            if (oven.fuelType == null)
+            {
+                PrintError($"BaseOven FuelType is null {oven.ShortPrefabName} (if you are seeing this error, post it in the support thread http://oxidemod.org/plugins/autofuel.2717/)");
+                return null;
+            }
+            if (!activeShortNames.Contains(oven.ShortPrefabName))
                 return null;
             if (HasFuel(oven))
                 return null;
-            BuildingManager.Building building = oven.GetComponent<DecayEntity>().GetBuilding();
-            if (building == null) return null;
+            DecayEntity decayEnt = oven.GetComponent<DecayEntity>();
+            if (decayEnt == null)
+            {
+                PrintError("DecayEntity is null (if you are seeing this error, post it in the support thread http://oxidemod.org/plugins/autofuel.2717/)");
+                return null;
+            }
+            BuildingManager.Building building = decayEnt.GetBuilding();
+            if (building == null)
+            {
+                PrintError("BuildingManager.Building is null (if you are seeing this error, post it in the support thread http://oxidemod.org/plugins/autofuel.2717/)");
+                return null;
+            }
             foreach (BuildingPrivlidge priv in building.buildingPrivileges)
             {
                 if (dontRequireFuel)
@@ -102,16 +111,22 @@ namespace Oxide.Plugins
 
         private bool HasFuel(BaseOven oven)
         {
-            return oven.inventory.itemList.Any(item => item.info == oven.fuelType);
+            if (oven.inventory?.itemList == null || oven.inventory.itemList.Count == 0)
+                return false;
+            return oven.inventory.itemList.Where(item => item != null).Any(item => item.info == oven.fuelType);
         }
 
         private Item GetFuel(BuildingPrivlidge priv, BaseOven oven)
         {
-            return priv.inventory.itemList.FirstOrDefault(item => item.info == oven.fuelType);
+            if (priv.inventory?.itemList == null || priv.inventory.itemList.Count == 0)
+                return null;
+            return priv.inventory.itemList.Where(item => item != null).FirstOrDefault(item => item.info == oven.fuelType);
         }
 
         private static void RemoveItemThink(Item item)
         {
+            if (item == null)
+                return;
             if (item.amount == 1)
             {
                 item.RemoveFromContainer();

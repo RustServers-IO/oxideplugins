@@ -12,7 +12,7 @@ using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerChallenges", "k1lly0u", "2.0.30", ResourceId = 1442)]
+    [Info("PlayerChallenges", "k1lly0u", "2.0.31", ResourceId = 1442)]
     class PlayerChallenges : RustPlugin
     {
         #region Fields
@@ -28,31 +28,29 @@ namespace Oxide.Plugins
         private Dictionary<ulong, StatData> statCache = new Dictionary<ulong, StatData>();
         private Dictionary<Challenges, LeaderData> titleCache = new Dictionary<Challenges, LeaderData>();
         private Dictionary<ulong, WoundedData> woundedData = new Dictionary<ulong, WoundedData>();
-        
+        static Dictionary<string, string> uiColors;
 
         private bool UIDisabled = false;
         #endregion
 
         #region UI Creation
-        class UI
+        public static class UI
         {
-            static public Dictionary<string, string> uiColors = new Dictionary<string, string>();
-
             static public CuiElementContainer Container(string panelName, string aMin, string aMax, bool cursor = false)
             {
                 var NewElement = new CuiElementContainer()
-            {
                 {
-                    new CuiPanel
                     {
-                        Image = {Color = uiColors["background"]},
-                        RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
-                        CursorEnabled = cursor
-                    },
-                    new CuiElement().Parent = "Overlay",
-                    panelName
-                }
-            };
+                        new CuiPanel
+                        {
+                            Image = {Color = uiColors["background"]},
+                            RectTransform = {AnchorMin = aMin, AnchorMax = aMax},
+                            CursorEnabled = cursor
+                        },
+                        new CuiElement().Parent = "Overlay",
+                        panelName
+                    }
+                };
                 return NewElement;
             }
 
@@ -263,18 +261,19 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
             LoadData();
-            CheckValidData();
 
+            CheckValidData();
             RegisterTitles();
             RegisterGroups();
             AddAllUsergroups();
 
-            UI.uiColors.Add("background", UI.Color(configData.Colors.Background.Color, configData.Colors.Background.Alpha));
-            UI.uiColors.Add("button", UI.Color(configData.Colors.Button.Color, configData.Colors.Button.Alpha));
-            UI.uiColors.Add("panel", UI.Color(configData.Colors.Panel.Color, configData.Colors.Panel.Alpha));
+            uiColors = new Dictionary<string, string>();
+            uiColors.Add("background", UI.Color(configData.Colors.Background.Color, configData.Colors.Background.Alpha));
+            uiColors.Add("button", UI.Color(configData.Colors.Button.Color, configData.Colors.Button.Alpha));
+            uiColors.Add("panel", UI.Color(configData.Colors.Panel.Color, configData.Colors.Panel.Alpha));
 
             SaveLoop();
-            
+
             if (configData.Options.UseUpdateTimer)
                 CheckUpdateTimer();
             foreach (var player in BasePlayer.activePlayerList)
@@ -287,7 +286,7 @@ namespace Oxide.Plugins
             foreach (var player in BasePlayer.activePlayerList)
                 DestroyUI(player);
             RemoveAllUsergroups();
-            UI.uiColors = null;
+            uiColors = null;
         }
 
         private void OnPluginLoaded(Plugin plugin)
@@ -795,7 +794,7 @@ namespace Oxide.Plugins
         }
 
         protected override void LoadDefaultConfig() => configData = GetBaseConfig();
-
+        
         private ConfigData GetBaseConfig()
         {
             return new ConfigData
