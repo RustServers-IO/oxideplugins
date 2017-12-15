@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.15", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.16", ResourceId = 2193)]
     class ImageLibrary : RustPlugin
     {
         #region Fields
@@ -636,6 +636,7 @@ namespace Oxide.Plugins
             {"guntrap", "http://i.imgur.com/iNFOxbT.png" },
             {"dropbox", "http://i.imgur.com/KqV8FcU.png" },
             {"mailbox", "http://i.imgur.com/DaDrDIK.png" },
+            {"scrap", "https://vignette.wikia.nocookie.net/play-rust/images/0/03/Scrap_icon.png" }
        };
         #endregion
 
