@@ -5,13 +5,13 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("ToggleNoggin", "carny666", "1.0.0")]
+    [Info("ToggleNoggin", "carny666", "1.0.1", ResourceId = 2725)]
     class ToggleNoggin : RustPlugin
     {
-        private const string adminPermission = "ToggleNoggin.admin";
+        const string adminPermission = "ToggleNoggin.admin";
         static string lastHat = "";
 
-        void Loaded()
+        void Init()
         {
             try
             {
@@ -28,40 +28,81 @@ namespace Oxide.Plugins
         {
             try
             {
-                if (arg.Player() == null) return;
-                BasePlayer player = arg.Player();
+                var player = arg.Player();
+                if (player == null) return;
 
                 if (!permission.UserHasPermission(player.UserIDString, adminPermission)) return;
 
-                var hat = (arg.Args.Length > 1) ? "hat.miner" : "hat.candle";
-
-                if (player.inventory.containerWear.FindItemsByItemName("hat.miner") == null &&  player.inventory.containerWear.FindItemsByItemName("hat.candle") == null)
-                {
-                    var hatDef = ItemManager.FindItemDefinition(hat);
-                    var fuelDef = ItemManager.FindItemDefinition("lowgradefuel");
-
-                    lastHat = hat;
-
-                    if (hatDef != null && fuelDef != null)
-                    {
-                        Item hatItem = ItemManager.CreateByItemID(hatDef.itemid, 1);
-                        hatItem.contents.AddItem(fuelDef, 140);
-                        player.inventory.GiveItem(hatItem, player.inventory.containerWear);
-                        hatItem.SetFlag(global::Item.Flag.IsOn, true);                        
-                    }
-                }
+                if (arg.Args.Length > 1)
+                    ToggleHat(player, "hat.miner");
                 else
-                {
-                    var p = player.inventory.containerWear.FindItemsByItemName(lastHat);
-                    p.RemoveFromContainer();
-
-                }
-
+                    ToggleHat(player, "hat.candle");
             }
             catch (Exception ex)
             {
                 throw new Exception($"Error in ccToggleNoggin {ex.Message}");
 
+            }
+        }
+
+        [ChatCommand("togglenoggin")]
+        void chcToggleNoggin(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (player == null) return;
+
+                if (!permission.UserHasPermission(player.UserIDString, adminPermission)) return;
+
+                if (args.Length > 0)
+                    ToggleHat(player, "hat.miner");
+                else
+                    ToggleHat(player, "hat.candle");
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error in chcToggleNoggin {ex.Message}");
+
+            }
+
+        }
+
+        void ToggleHat(BasePlayer player, string hatItemName)
+        {
+            try
+            {
+
+                /// test is hat already exists
+                if (player.inventory.containerWear.FindItemsByItemName("hat.miner") == null && player.inventory.containerWear.FindItemsByItemName("hat.candle") == null)
+                {
+                    var hatDef = ItemManager.FindItemDefinition(hatItemName);
+                    var fuelDef = ItemManager.FindItemDefinition("lowgradefuel");
+
+                    // save last hat for removeal next time..
+                    lastHat = hatItemName;
+
+                    if (hatDef != null && fuelDef != null)
+                    {
+                        Item hatItem = ItemManager.CreateByItemID(hatDef.itemid, 1);
+                        if (hatItem != null)
+                        {
+                            hatItem.contents.AddItem(fuelDef, 140);
+                            player.inventory.GiveItem(hatItem, player.inventory.containerWear);
+                            hatItem.SetFlag(global::Item.Flag.IsOn, true);
+                        }
+                    }
+                }
+                else
+                {
+                    var p = player.inventory.containerWear.FindItemsByItemName(lastHat);
+                    if (p != null)
+                        p.RemoveFromContainer();
+
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error in ToggleHat {ex.Message}");
             }
         }
 
