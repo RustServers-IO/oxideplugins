@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.5.10", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.6.0", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -167,9 +167,11 @@ namespace Oxide.Plugins {
 		
         void OnHammerHit(BasePlayer player, HitInfo hit) {
 
-            //ListComponentsDebug(player, hit.HitEntity);
+			//Puts(hit.HitEntity.ToString());
+			//ListComponentsDebug(player, hit.HitEntity);
+			//ListComponentsDebug(player, player);
 
-            UserInfo userinfo = GetUserInfo(player);
+			UserInfo userinfo = GetUserInfo(player);
 
             if (hit.HitEntity.GetComponent<StorageContainer>() != null) { // if we hit a StorageContainer
 
@@ -314,8 +316,15 @@ namespace Oxide.Plugins {
 			return null;
 		}
 
-        // When item is added to filter
-        ItemContainer.CanAcceptResult? CanAcceptItem(ItemContainer container, Item item) {
+		// disable xmas lights pickup
+		bool? CanPickupEntity(BaseCombatEntity entity, BasePlayer player) {
+			if (entity.GetComponent<jPipeSegChildLights>() != null) return false;
+			return null;
+		}
+
+
+		// When item is added to filter
+		ItemContainer.CanAcceptResult? CanAcceptItem(ItemContainer container, Item item) {
 
             if (container == null || item == null || container.entityOwner == null || container.entityOwner.GetComponent<jPipeFilterStash>() == null)
                 return null;
@@ -820,11 +829,12 @@ namespace Oxide.Plugins {
                         ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", (segments == 1) ? (sourcepos + ((rotation * Vector3.up) * ((distance - pipesegdist) * 0.5f))) : sourcepos, rotation);
                         mainlogic = jPipeLogic.Attach(ent, this, updaterate, pipeplugin.flowrates[0]);
                         mainparent = ent;
-                    } else {
+					} else {
                         //ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", sourcepos + rotation * (Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset)), rotation);
                         // position based on parent
                         ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset));
-                    }
+						
+					}
 
                     ent.enableSaving = false;
 
@@ -838,12 +848,21 @@ namespace Oxide.Plugins {
                         block.SetHealthToMax();
                     }
 
-                    jPipeSegChild.Attach(ent, this);
+					jPipeSegChild.Attach(ent, this);
 
                     if (i != 0)
                     ent.SetParent(mainparent);
 
-                    pillars.Add(ent);
+					if (pipeplugin.xmaslights) {
+
+						BaseEntity lights = GameManager.server.CreateEntity("assets/prefabs/misc/xmas/christmas_lights/xmas.lightstring.deployed.prefab", (Vector3.up * pipesegdist * 0.5f) + (Vector3.forward * 0.13f) + (Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset)), Quaternion.Euler(0, -60, 90));
+						lights.enableSaving = false;
+						lights.Spawn();
+						lights.SetParent(mainparent);
+						jPipeSegChildLights.Attach(lights, this);
+					}
+
+					pillars.Add(ent);
                     ent.enableSaving = false;
 
                 }
@@ -1958,7 +1977,17 @@ namespace Oxide.Plugins {
                 jPipeSegChild n = entity.gameObject.AddComponent<jPipeSegChild>();
                 n.pipe = pipe;
             }
-        }
+		}
+
+		private class jPipeSegChildLights : jPipeSegChild {
+
+			public static void Attach(BaseEntity entity, jPipe pipe) {
+				jPipeSegChildLights n = entity.gameObject.AddComponent<jPipeSegChildLights>();
+				n.pipe = pipe;
+			}
+
+
+		}
 
         private class jPipeFilterStash : MonoBehaviour {
 
@@ -2167,7 +2196,8 @@ namespace Oxide.Plugins {
         private List<int> flowrates;
         private List<int> filtersizes;
         private bool nodecay;
-        private Dictionary<string, permlevel> permlevels = new Dictionary<string, permlevel>();
+        private bool xmaslights;
+		private Dictionary<string, permlevel> permlevels = new Dictionary<string, permlevel>();
 
 
         protected override void LoadDefaultConfig() {
@@ -2188,8 +2218,9 @@ namespace Oxide.Plugins {
             flowrates = ConfigGet("flowrates", new List<int>() { 1, 5, 10, 30, 50 }, (List<int> l) => l.Count == 5, "should contain 5 integers");
             filtersizes = ConfigGet("filtersizes", new List<int>() { 0, 6, 12, 18, 30 }, (List<int> l) => l.Count == 5 && !l.Exists(x => x < 0 || x > 30), "should contain 5 integers with each val ue between 0 and 30");
             nodecay = ConfigGet("nodecay", true);
+			xmaslights = ConfigGet("xmaslights", true);
 
-            var permlevelsval = Config["permlevels"];
+			var permlevelsval = Config["permlevels"];
 
             if (permlevelsval != null) {
 
@@ -2376,7 +2407,7 @@ namespace Oxide.Plugins {
 		//void ListComponentsDebug(BasePlayer player, BaseEntity ent) {
 
 		//	List<string> lines = new List<string>();
-		//	//string s = "-----------------------------------------";
+		//	string s = "-----------------------------------------";
 		//	string s = "<color=#80c5ff>───────────────────────</color>";
 		//	int limit = 1030;
 
@@ -2409,8 +2440,8 @@ namespace Oxide.Plugins {
 		//			s += "\n";
 		//		s += types.Count > 0 ? "╔" : "═";
 		//		s += $" {c.GetType()} : {c.GetType().BaseType}";
-		//		//s += " <"+c.name+">\n";
-		//		//if (c.sharedMesh != null) s += "-> "+c.sharedMesh.triangles.Length.ToString()+"\n";
+		//		s += " <"+c.name+">\n";
+		//		if (c.sharedMesh != null) s += "-> "+c.sharedMesh.triangles.Length.ToString()+"\n";
 
 		//		for (int i = 0; i < types.Count; i++) {
 
