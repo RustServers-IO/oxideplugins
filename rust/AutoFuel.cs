@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoFuel", "redBDGR", "1.0.3", ResourceId = 2717)]
+    [Info("AutoFuel", "redBDGR", "1.0.4", ResourceId = 2717)]
     [Description("Automatically fuel lights if there is fuel in the toolcupboards inventory")]
 
     class AutoFuel : RustPlugin
@@ -71,26 +71,30 @@ namespace Oxide.Plugins
             if (oven == null)
                 return null;
             if (oven.fuelType == null)
-            {
-                PrintError($"BaseOven FuelType is null {oven.ShortPrefabName} (if you are seeing this error, post it in the support thread http://oxidemod.org/plugins/autofuel.2717/)");
                 return null;
-            }
             if (!activeShortNames.Contains(oven.ShortPrefabName))
                 return null;
             if (HasFuel(oven))
                 return null;
-            BuildingManager.Building building = oven.GetComponent<DecayEntity>()?.GetBuilding();
+            DecayEntity decayEnt = oven.GetComponent<DecayEntity>();
+            if (decayEnt == null)
+                return null;
+            BuildingManager.Building building = decayEnt.GetBuilding();
             if (building == null)
+                return null;
+            if (building.buildingPrivileges == null)
                 return null;
             foreach (BuildingPrivlidge priv in building.buildingPrivileges)
             {
+                if (priv == null)
+                    continue;
                 if (dontRequireFuel)
                     return ItemManager.CreateByName(oven.fuelType.shortname, 1);
                 Item fuelItem = GetFuel(priv, oven);
                 if (fuelItem == null)
                     continue;
                 RemoveItemThink(fuelItem);
-                ItemManager.CreateByName(oven.fuelType.shortname, 1).MoveToContainer(oven.inventory);
+                ItemManager.CreateByName(oven.fuelType.shortname, 1)?.MoveToContainer(oven.inventory);
                 return null;
             }
             return null;
@@ -102,12 +106,18 @@ namespace Oxide.Plugins
 
         private bool HasFuel(BaseOven oven)
         {
-            return oven.inventory.itemList.Where(item => item != null).Any(item => item.info == oven.fuelType);
+            foreach (Item item in oven.inventory.itemList)
+                if (item.info == oven.fuelType)
+                    return true;
+            return false;
         }
 
         private Item GetFuel(BuildingPrivlidge priv, BaseOven oven)
         {
-            return priv.inventory.itemList.Where(item => item != null).FirstOrDefault(item => item.info == oven.fuelType);
+            foreach (Item item in priv.inventory?.itemList)
+                if (item.info == oven.fuelType)
+                    return item;
+            return null;
         }
 
         private static void RemoveItemThink(Item item)
@@ -118,7 +128,6 @@ namespace Oxide.Plugins
             {
                 item.RemoveFromContainer();
                 item.RemoveFromWorld();
-                item.Remove();
             }
             else
             {
