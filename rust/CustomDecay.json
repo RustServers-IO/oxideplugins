@@ -2,7 +2,7 @@
     "name": "CustomDecay",
     "description": "Custom decay for all individual entities with auto configuration for any new entities added to rust",
     "author": "",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/customdecay.2690",
