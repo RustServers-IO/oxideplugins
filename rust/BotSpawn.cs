@@ -16,10 +16,10 @@ using ProtoBuf;
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.3.2", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.3.3", ResourceId = 2580)]
     
     [Description("Spawn Bots with kits at monuments.")]
-// /botspawn move fix
+//population fix
 	
     class BotSpawn : RustPlugin
     {
@@ -65,10 +65,7 @@ namespace Oxide.Plugins
             Wipe();
             LoadConfigVariables();
             if (configData.Options.Cull_Default_Population)
-            {
-            NPCPlayerApex.Population = 0;
-            NPCMurderer.Population = 0;
-            }
+            Scientist.Population = 0;
         }
         
         void OnServerInitialized()
@@ -1277,6 +1274,13 @@ namespace Oxide.Plugins
             Puts($"There are {total} bots.");
         }
         
+        [ConsoleCommand("default.count")]
+        void cmdDefaultBots()
+        {
+            var allobjects = UnityEngine.Object.FindObjectsOfType<NPCPlayerApex>();
+           foreach (var gobject in allobjects)
+           Puts($"{gobject}");
+        }
         //[ConsoleCommand("bot.stats")]
         //void cmdBotStats()
         //{
