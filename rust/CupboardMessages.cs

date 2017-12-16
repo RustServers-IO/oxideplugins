@@ -5,7 +5,7 @@ using Oxide.Plugins.CupboardMessagesExt;
 
 namespace Oxide.Plugins
 {
-    [Info("Cupboard Messages", "Ryan", "1.0.0")]
+    [Info("Cupboard Messages", "Ryan", "1.1.0")]
     [Description("Sends a configured message to a user when they place a tool cupboard")]
 
     public class CupboardMessages : RustPlugin
@@ -14,6 +14,17 @@ namespace Oxide.Plugins
 
         public static CupboardMessages Instance;
         private const string Perm = "cupboardmessages.use";
+        private bool UseTooltips;
+        private readonly Dictionary<ulong, Timer> NoticeTimers = new Dictionary<ulong, Timer>();
+
+        #endregion
+
+        #region Configuration
+
+        protected override void LoadDefaultConfig()
+        {
+            Config["Use Tooltips"] = UseTooltips = true;
+        }
 
         #endregion
 
@@ -31,12 +42,36 @@ namespace Oxide.Plugins
 
         #endregion
 
+        #region Methods
+
+        private void NoticePlayer(BasePlayer player, string notice)
+        {
+            if (NoticeTimers.ContainsKey(player.userID))
+            {
+                NoticeTimers[player.userID]?.Destroy();
+                player.SendConsoleCommand("gametip.hidegametip");
+            }
+            player.SendConsoleCommand("gametip.showgametip", notice);
+            var noticeTimer = Instance.timer.Once(7.5f, () =>
+            {
+                if (player.IsConnected)
+                    player.SendConsoleCommand("gametip.hidegametip");
+            });
+            if (!NoticeTimers.ContainsKey(player.userID))
+                NoticeTimers.Add(player.userID, noticeTimer);
+            else NoticeTimers[player.userID] = noticeTimer;
+        }
+
+        #endregion
+
         #region Hooks
 
         private void Init()
         {
             permission.RegisterPermission(Perm, this);
             Instance = this;
+            if(!bool.TryParse(Config["Use Tooltips"].ToString(), out UseTooltips))
+                LoadDefaultConfig();
         }
 
         private void OnEntitySpawned(BaseNetworkable networkable)
@@ -45,7 +80,14 @@ namespace Oxide.Plugins
             var cupboard = (BuildingPrivlidge) networkable;
             var player = BasePlayer.FindByID(cupboard.OwnerID);
             if (player != null && player.HasPermission(Perm))
+            {
+                if (UseTooltips)
+                {
+                    NoticePlayer(player, $"Notice.{UnityEngine.Random.Range(1, 3)}".Lang(player.UserIDString));
+                    return;
+                }
                 PrintToChat(player, $"Notice.{UnityEngine.Random.Range(1, 3)}".Lang(player.UserIDString));
+            }
         }
 
         #endregion
