@@ -1,31 +1,34 @@
-﻿using System.Collections.Generic;
-using Oxide.Core;
+﻿using Oxide.Core;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoFuelRequirements", "k1lly0u", "1.3.5", ResourceId = 1179)]
+    [Info("NoFuelRequirements", "k1lly0u", "1.3.6", ResourceId = 1179)]
     class NoFuelRequirements : RustPlugin
     {
         #region Fields        
-        bool usingPermissions;
-        bool initialized;
+        private bool usingPermissions;
+        private bool isInitialized;
 
-        string[] ValidFuelTypes = new string[] { "wood", "lowgradefuel" };
+        private string[] ValidFuelTypes = new string[] { "wood", "lowgradefuel" };
         #endregion
 
         #region Oxide Hooks        
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
-            LoadVariables();
             RegisterPermissions();
-            initialized = true;
+            isInitialized = true;
         }
-        void OnConsumeFuel(BaseOven oven, Item fuel, ItemModBurnable burnable)
+
+        private void OnConsumeFuel(BaseOven oven, Item fuel, ItemModBurnable burnable)
         {
-            if (!initialized || oven == null || fuel == null) return;
-            ConsumeTypes type = StringToType(oven?.ShortPrefabName ?? string.Empty);
-            if (type == ConsumeTypes.None) return;
+            if (!isInitialized || oven == null || fuel == null) return;
+            ConsumeType type = StringToType(oven?.ShortPrefabName ?? string.Empty);
+            if (type == ConsumeType.None) return;
 
             if (IsActiveType(type))
             {
@@ -37,15 +40,15 @@ namespace Oxide.Plugins
             }
         }
         
-        void OnItemUse(Item item, int amount)
+        private void OnItemUse(Item item, int amount)
         {
-            if (!initialized || item == null || amount == 0 || !ValidFuelTypes.Contains(item.info.shortname)) return;
+            if (!isInitialized || item == null || amount == 0 || !ValidFuelTypes.Contains(item.info.shortname)) return;
            
             string shortname = item?.parent?.parent?.info?.shortname ?? item?.GetRootContainer()?.entityOwner?.ShortPrefabName;
             if (string.IsNullOrEmpty(shortname)) return;
 
-            ConsumeTypes type = StringToType(shortname);
-            if (type == ConsumeTypes.None) return;
+            ConsumeType type = StringToType(shortname);
+            if (type == ConsumeType.None) return;
 
             if (IsActiveType(type))
             {
@@ -65,106 +68,148 @@ namespace Oxide.Plugins
         #endregion
 
         #region Functions
-        void RegisterPermissions()
+
+        private void RegisterPermissions()
         {
             if (configData.UsePermissions)
             {
                 usingPermissions = true;
-                foreach (var perm in configData.Permissions)
+                foreach (var type in Enum.GetValues(typeof(ConsumeType)))
                 {
-                    permission.RegisterPermission(perm.Value, this);
+                    permission.RegisterPermission($"nofuelrequirements.{type}", this);
                 }
             }
         }
-        bool HasPermission(string ownerId, ConsumeTypes type) => permission.UserHasPermission(ownerId, configData.Permissions[type]);
-        bool IsActiveType(ConsumeTypes type) => configData.AffectedTypes[type];
-        ConsumeTypes StringToType(string name)
+
+        private object IgnoreFuelConsumption(string consumeTypeStr, ulong ownerId)
+        {
+            ConsumeType consumeType = ParseType(consumeTypeStr);
+            if (consumeType != ConsumeType.None && configData.AffectedTypes[consumeType])
+            {
+                if (usingPermissions && !HasPermission(ownerId.ToString(), consumeType))
+                    return null;
+                return true;
+            }
+            return null;
+        }
+
+        private bool HasPermission(string ownerId, ConsumeType type) => permission.UserHasPermission(ownerId, $"nofuelrequirements.{type}");
+
+        private bool IsActiveType(ConsumeType type) => configData.AffectedTypes[type];
+
+        private ConsumeType StringToType(string name)
         {
             switch (name)
             {
                 case "campfire":
-                    return ConsumeTypes.Campfires;
+                    return ConsumeType.Campfire;
+                case "skull_fire_pit":
+                    return ConsumeType.Firepit;
+                case "fireplace.deployed":
+                    return ConsumeType.Fireplace;
                 case "furnace":
-                    return ConsumeTypes.Furnace;
+                    return ConsumeType.Furnace;
                 case "furnace.large":
-                    return ConsumeTypes.LargeFurnace;
+                    return ConsumeType.LargeFurnace;
                 case "refinery_small_deployed":
-                    return ConsumeTypes.OilRefinery;
+                    return ConsumeType.OilRefinery;
                 case "ceilinglight.deployed":
-                    return ConsumeTypes.CeilingLight;
+                    return ConsumeType.CeilingLight;
                 case "lantern.deployed":
-                    return ConsumeTypes.Lanterns;
+                    return ConsumeType.Lanterns;
                 case "hat.miner":
-                    return ConsumeTypes.MinersHat;
+                    return ConsumeType.MinersHat;
                 case "hat.candle":
-                    return ConsumeTypes.CandleHat;
+                    return ConsumeType.CandleHat;
                 case "fuelstorage":
-                    return ConsumeTypes.Quarry;
+                    return ConsumeType.Quarry;
                 case "tunalight.deployed":
-                    return ConsumeTypes.TunaLight;
+                    return ConsumeType.TunaLight;
                 case "searchlight.deployed":
-                    return ConsumeTypes.Searchlight;
+                    return ConsumeType.Searchlight;
                 default:
-                    return ConsumeTypes.None;
+                    return ConsumeType.None;
+            }
+        }
+
+        private ConsumeType ParseType(string type)
+        {
+            try
+            {
+                return (ConsumeType)Enum.Parse(typeof(ConsumeType), type, true);
+            }
+            catch
+            {
+                return ConsumeType.None;
             }
         }
         #endregion
 
         #region Config  
-        enum ConsumeTypes
-        {
-            Campfires, CandleHat, CeilingLight, Furnace, Lanterns, LargeFurnace, MinersHat, OilRefinery, Quarry, TunaLight, Searchlight, None
-        }
+        enum ConsumeType { Campfire, CandleHat, CeilingLight, Firepit, Fireplace, Furnace, Lanterns, LargeFurnace, MinersHat, OilRefinery, Quarry, TunaLight, Searchlight, None }
+       
         private ConfigData configData;
         class ConfigData
-        {            
-            public Dictionary<ConsumeTypes, bool> AffectedTypes { get; set; }
-            public Dictionary<ConsumeTypes, string> Permissions { get; set; }
+        {
+            [JsonProperty(PropertyName = "Entities that ignore fuel consumption")]
+            public Dictionary<ConsumeType, bool> AffectedTypes { get; set; }
+            [JsonProperty(PropertyName = "Require permission to ignore fuel consumption")]
             public bool UsePermissions { get; set; }
+            public Oxide.Core.VersionNumber Version { get; set; }
         }
-        private void LoadVariables()
+
+        protected override void LoadConfig()
         {
-            LoadConfigVariables();
-            SaveConfig();
+            base.LoadConfig();
+            configData = Config.ReadObject<ConfigData>();
+
+            if (configData.Version < Version)
+                UpdateConfigValues();
+
+            Config.WriteObject(configData, true);
         }
-        protected override void LoadDefaultConfig()
+
+        protected override void LoadDefaultConfig() => configData = GetBaseConfig();
+
+        private ConfigData GetBaseConfig()
         {
-            var config = new ConfigData
+            return new ConfigData
             {
-                AffectedTypes = new Dictionary<ConsumeTypes, bool>
+                AffectedTypes = new Dictionary<ConsumeType, bool>
                 {
-                    {ConsumeTypes.Campfires, true },
-                    {ConsumeTypes.CandleHat, true },
-                    {ConsumeTypes.CeilingLight, true },
-                    {ConsumeTypes.Furnace, true },
-                    {ConsumeTypes.Lanterns, true },
-                    {ConsumeTypes.LargeFurnace, true },
-                    {ConsumeTypes.MinersHat, true },
-                    {ConsumeTypes.OilRefinery, true },
-                    {ConsumeTypes.Quarry, true },
-                    {ConsumeTypes.TunaLight, true },
-                    {ConsumeTypes.Searchlight, true }
+                    [ConsumeType.Campfire] = true,
+                    [ConsumeType.CandleHat] = true,
+                    [ConsumeType.CeilingLight] = true,
+                    [ConsumeType.Firepit] = true,
+                    [ConsumeType.Fireplace] = true,
+                    [ConsumeType.Furnace] = true,
+                    [ConsumeType.Lanterns] = true,
+                    [ConsumeType.LargeFurnace] = true,
+                    [ConsumeType.MinersHat] = true,
+                    [ConsumeType.OilRefinery] = true,
+                    [ConsumeType.Quarry] = true,
+                    [ConsumeType.TunaLight] = true,
+                    [ConsumeType.Searchlight] = true
                 },
-                Permissions = new Dictionary<ConsumeTypes, string>
-                {
-                    {ConsumeTypes.Campfires, "nofuelrequirements.campfire" },
-                    {ConsumeTypes.CandleHat, "nofuelrequirements.candlehat" },
-                    {ConsumeTypes.CeilingLight, "nofuelrequirements.ceilinglight" },
-                    {ConsumeTypes.Furnace, "nofuelrequirements.furnace" },
-                    {ConsumeTypes.Lanterns, "nofuelrequirements.lantern" },
-                    {ConsumeTypes.LargeFurnace, "nofuelrequirements.largefurnace" },
-                    {ConsumeTypes.MinersHat, "nofuelrequirements.minershat" },
-                    {ConsumeTypes.OilRefinery, "nofuelrequirements.oilrefinery" },
-                    {ConsumeTypes.Quarry, "nofuelrequirements.quarry" },
-                    {ConsumeTypes.TunaLight, "nofuelrequirements.tunalight" },
-                    {ConsumeTypes.Searchlight, "nofuelrequirements.searchlight" }
-                },
-                UsePermissions = false
+                UsePermissions = false,
+                Version = Version
             };
-            SaveConfig(config);
         }
-        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+
+        protected override void SaveConfig() => Config.WriteObject(configData, true);
+
+        private void UpdateConfigValues()
+        {
+            PrintWarning("Config update detected! Updating config values...");
+
+            ConfigData baseConfig = GetBaseConfig();
+            if (configData.Version < new VersionNumber(1, 3, 6))
+                configData = baseConfig;
+
+            configData.Version = Version;
+            PrintWarning("Config update completed!");
+        }
+
         #endregion
     }
 }
