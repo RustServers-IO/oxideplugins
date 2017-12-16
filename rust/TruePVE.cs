@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TruePVE", "ignignokt84", "0.8.7", ResourceId = 1789)]
+	[Info("TruePVE", "ignignokt84", "0.8.8", ResourceId = 1789)]
 	[Description("Improvement of the default Rust PVE behavior")]
 	class TruePVE : RustPlugin
 	{
@@ -854,8 +854,15 @@ namespace Oxide.Plugins
 			if ((!ruleSet.HasFlag(RuleFlags.CupboardOwnership) && player.userID == entity.OwnerID) || entity.OwnerID == 0L)
 				return true; // player is the owner or the owner is undefined, allow damage/looting
 			
+			// block if building blocked
 			if (player.IsBuildingBlocked(entity.transform.position, entity.transform.rotation, entity.bounds))
 				return false;
+
+			// if not CupboardOwnership, check for build authorization
+			if (!ruleSet.HasFlag(RuleFlags.CupboardOwnership))
+				return player.IsBuildingAuthed(entity.transform.position, entity.transform.rotation, entity.bounds);
+
+			// else, allow damage
 			return true;
 		}
 		
@@ -975,6 +982,39 @@ namespace Oxide.Plugins
 						return true;
 					}
 			if (trace) Trace("No shared locations, or no matching exclusion mapping - no exclusions)", 3);
+			return false;
+		}
+
+		// add or update a mapping
+		bool AddOrUpdateMapping(string key, string ruleset)
+		{
+			if (string.IsNullOrEmpty(key))
+				return false;
+			if (ruleset == null || (!data.ruleSets.Select(r => r.name).Contains(ruleset) && ruleset != "exclude"))
+				return false;
+
+			if (data.HasMapping(key))
+				// update existing mapping
+				data.mappings[key] = ruleset;
+			else
+				// add new mapping
+				data.mappings.Add(key, ruleset);
+			SaveData();
+
+			return true;
+		}
+
+		// remove a mapping
+		bool RemoveMapping(String key)
+		{
+			if (string.IsNullOrEmpty(key))
+				return false;
+			if (data.HasMapping(key))
+			{
+				data.mappings.Remove(key);
+				SaveData();
+				return true;
+			}
 			return false;
 		}
 
