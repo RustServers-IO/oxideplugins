@@ -9,16 +9,23 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.2", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.3", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
 		#region Variables
+		/// <summary>
+		/// References to other plugins
+		/// </summary>
 		[PluginReference]
 		Plugin Clans, Vanish;
-
+		/// <summary>
+		/// Targeting mode for security lights
+		/// </summary>
 		public enum TargetMode { all, players, heli, lightshow };
-
+		/// <summary>
+		/// Configuration options
+		/// </summary>
 		class ConfigData
 		{
 			public int allDetectionRadius;
@@ -32,12 +39,16 @@ namespace Oxide.Plugins
 			public bool nightOnly;
 			public bool acquisitionSound;
 		}
-
+		/// <summary>
+		/// Data saved by the plugin
+		/// </summary>
 		class StoredData
 		{
 			public Dictionary<uint, TargetMode> Security_Lights { get; set; } = new Dictionary<uint, TargetMode>();
 		}
-
+		/// <summary>
+		/// Main behaviour of security lights
+		/// </summary>
 		class SecurityLight : MonoBehaviour
 		{
 			#region Variables
@@ -363,7 +374,8 @@ namespace Oxide.Plugins
 				if (entity is BaseHelicopter)
 					return true;
 
-				Ray ray = new Ray((entity is BasePlayer ? (light.eyePoint.transform.position + Vector3.up) : light.eyePoint.transform.position), (entity is BasePlayer ? ((entity.transform.position + Vector3.up) - (light.eyePoint.transform.position + Vector3.up)) : (entity.transform.position - light.eyePoint.transform.position)));
+				Ray ray = new Ray(light.eyePoint.transform.position, entity.transform.position - light.transform.position);
+				ray.origin += ray.direction / 2;
 				float distance = 0;
 
 				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
@@ -1154,7 +1166,7 @@ namespace Oxide.Plugins
 			{
 				if (!sl.HasLoS(target) || (sl.IsTargeting() && !sl.IsTargeting(target)))
 					continue;
-				Vector3 line = target.transform.position + Vector3.up - sl.Position();
+				Vector3 line = target.transform.position - sl.Position();
 				if (Vector3.Magnitude(line) < distance)
 				{
 					distance = Vector3.Magnitude(line);
