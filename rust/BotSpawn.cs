@@ -12,15 +12,16 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using UnityEngine.SceneManagement;
 using Facepunch;
-using ProtoBuf;
+
 namespace Oxide.Plugins
 
 {
-    [Info("BotSpawn", "Steenamaroo", "1.3.3", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.3.4", ResourceId = 2580)]
     
     [Description("Spawn Bots with kits at monuments.")]
-//population fix
-	
+//aggression range per profile
+//junkyard added
+
     class BotSpawn : RustPlugin
     {
         [PluginReference]
@@ -544,19 +545,23 @@ namespace Oxide.Plugins
                 return 0f;
                 if (configData.Options.Peace_Keeper)
                 {
-                if (victim.svActiveItemID == 0u)
-                {
-                return 0f;
-                }
-                else
-                {
-                    var heldWeapon = victim.GetHeldEntity() as BaseProjectile;
-                    var heldFlame = victim.GetHeldEntity() as FlameThrower;
-                    if (heldWeapon == null && heldFlame == null)
+                    if (victim.svActiveItemID == 0u)
+                    {
                     return 0f;
-                }                   
+                    }
+                    else
+                    {
+                        var heldWeapon = victim.GetHeldEntity() as BaseProjectile;
+                        var heldFlame = victim.GetHeldEntity() as FlameThrower;
+                        if (heldWeapon == null && heldFlame == null)
+                        return 0f;
+                    }
                 }
+                
 
+	
+            if ((npcPlayer.transform.position-victim.transform.position).magnitude > TempRecord.MonumentProfiles[TempRecord.NPCPlayers[npcPlayer].monumentName].Aggression_Range)
+            return 0f; // Thanks Lobod
 
             if(!victim.userID.IsSteamId() && configData.Options.Ignore_HumanNPC)
             return 0f;
@@ -670,11 +675,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Powerplant.Bot_Damage,
                         Disable_Radio = configData.Zones.Powerplant.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Powerplant.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Powerplant.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Powerplant.Spawn_Height,
                         Respawn_Timer = configData.Zones.Powerplant.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Powerplant.Aggression_Range,
                     });             
                     continue;
                     }
@@ -696,11 +702,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Airfield.Bot_Damage,
                         Disable_Radio = configData.Zones.Airfield.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Airfield.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Airfield.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Airfield.Spawn_Height,
                         Respawn_Timer = configData.Zones.Airfield.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Airfield.Aggression_Range,
                     });    
                     continue;
                     }
@@ -722,11 +729,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Trainyard.Bot_Damage,
                         Disable_Radio = configData.Zones.Trainyard.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Trainyard.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Trainyard.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Trainyard.Spawn_Height,
                         Respawn_Timer = configData.Zones.Trainyard.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Trainyard.Aggression_Range,
                     });              
                     continue;
                     }
@@ -748,11 +756,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Watertreatment.Bot_Damage,
                         Disable_Radio = configData.Zones.Watertreatment.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Watertreatment.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Watertreatment.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Watertreatment.Spawn_Height,
                         Respawn_Timer = configData.Zones.Watertreatment.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Watertreatment.Aggression_Range,
                     });     
                     continue;
                     }
@@ -774,11 +783,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Satellite.Bot_Damage,  
                         Disable_Radio = configData.Zones.AirDrop.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.AirDrop.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Satellite.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Satellite.Spawn_Height,
                         Respawn_Timer = configData.Zones.Satellite.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Satellite.Aggression_Range,
                     });   
                     continue;
                     } 
@@ -800,11 +810,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Dome.Bot_Damage,
                         Disable_Radio = configData.Zones.Dome.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Dome.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Dome.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Dome.Spawn_Height,
                         Respawn_Timer = configData.Zones.Dome.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Dome.Aggression_Range,
                     }); 
                     continue;
                     }
@@ -826,11 +837,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Radtown.Bot_Damage,
                         Disable_Radio = configData.Zones.Radtown.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Radtown.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Radtown.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Radtown.Spawn_Height,
                         Respawn_Timer = configData.Zones.Radtown.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Radtown.Aggression_Range,
                     });      
                     continue;
                     }
@@ -852,15 +864,43 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Launchsite.Bot_Damage,
                         Disable_Radio = configData.Zones.Launchsite.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Launchsite.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Launchsite.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Launchsite.Spawn_Height,
                         Respawn_Timer = configData.Zones.Launchsite.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Launchsite.Aggression_Range,
                     }); 
                     continue;
                     }
 
+		    if (gobject.name.Contains("junkyard"))
+                    {
+                    TempRecord.MonumentProfiles.Add("Junkyard", new MonumentSettings
+                    {
+                        Activate = configData.Zones.Junkyard.Activate,
+                        Murderer = configData.Zones.Junkyard.Murderer,
+                        Bots = configData.Zones.Junkyard.Bots,
+                        BotHealth = configData.Zones.Junkyard.BotHealth,
+                        Radius = configData.Zones.Junkyard.Radius,
+                        Kit = configData.Zones.Junkyard.Kit,
+                        BotName = configData.Zones.Junkyard.BotName,
+                        //Chute = configData.Zones.Junkyard.Chute,
+                        Bot_Firing_Range = configData.Zones.Junkyard.Bot_Firing_Range,
+                        Bot_Accuracy = configData.Zones.Junkyard.Bot_Accuracy,
+                        Bot_Damage = configData.Zones.Junkyard.Bot_Damage,
+                        Disable_Radio = configData.Zones.Junkyard.Disable_Radio,
+                        //Invincible_In_Air = configData.Zones.Junkyard.Invincible_In_Air,
+                        //Spawn_Height = configData.Zones.Junkyard.Spawn_Height,
+                        Respawn_Timer = configData.Zones.Junkyard.Respawn_Timer,
+                        LocationX = pos.x,
+                        LocationY = pos.y,
+                        LocationZ = pos.z,
+                        Aggression_Range = configData.Zones.Junkyard.Aggression_Range,
+                    }); 
+                    continue;
+                    }
+		    
                     if (gobject.name.Contains("military_tunnel_1"))
                     {
                     TempRecord.MonumentProfiles.Add("MilitaryTunnel", new MonumentSettings
@@ -878,11 +918,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.MilitaryTunnel.Bot_Damage,  
                         Disable_Radio = configData.Zones.MilitaryTunnel.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.MilitaryTunnel.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.MilitaryTunnel.Spawn_Height,
+                        //Spawn_Height = configData.Zones.MilitaryTunnel.Spawn_Height,
                         Respawn_Timer = configData.Zones.MilitaryTunnel.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.MilitaryTunnel.Aggression_Range,
                     }); 
                     continue;
                     }
@@ -904,11 +945,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Harbor1.Bot_Damage,  
                         Disable_Radio = configData.Zones.Harbor1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Harbor1.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Harbor1.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Harbor1.Spawn_Height,
                         Respawn_Timer = configData.Zones.Harbor1.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Harbor1.Aggression_Range,
                     });     
                     continue;
                     }
@@ -930,11 +972,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Harbor2.Bot_Damage,  
                         Disable_Radio = configData.Zones.Harbor2.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Harbor2.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Harbor2.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Harbor2.Spawn_Height,
                         Respawn_Timer = configData.Zones.Harbor2.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Harbor2.Aggression_Range,
                     });             
                     continue;
                     }
@@ -956,11 +999,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.GasStation.Bot_Damage,  
                         Disable_Radio = configData.Zones.GasStation.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.GasStation.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.GasStation.Spawn_Height,
+                        //Spawn_Height = configData.Zones.GasStation.Spawn_Height,
                         Respawn_Timer = configData.Zones.GasStation.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.GasStation.Aggression_Range,
                     });
                     gasstation++;
                     continue;
@@ -983,11 +1027,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.GasStation1.Bot_Damage,  
                         Disable_Radio = configData.Zones.GasStation1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.GasStation1.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.GasStation1.Spawn_Height,
+                        //Spawn_Height = configData.Zones.GasStation1.Spawn_Height,
                         Respawn_Timer = configData.Zones.GasStation1.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.GasStation1.Aggression_Range,
                     });
                     gasstation++;
                     continue;
@@ -1010,11 +1055,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.SuperMarket.Bot_Damage,  
                         Disable_Radio = configData.Zones.SuperMarket.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.SuperMarket.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.SuperMarket.Spawn_Height,
+                        //Spawn_Height = configData.Zones.SuperMarket.Spawn_Height,
                         Respawn_Timer = configData.Zones.SuperMarket.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.SuperMarket.Aggression_Range,
                     });
                     spermket++;
                     continue;
@@ -1037,11 +1083,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.SuperMarket1.Bot_Damage,  
                         Disable_Radio = configData.Zones.SuperMarket1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.SuperMarket1.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.SuperMarket1.Spawn_Height,
+                        //Spawn_Height = configData.Zones.SuperMarket1.Spawn_Height,
                         Respawn_Timer = configData.Zones.SuperMarket1.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.SuperMarket1.Aggression_Range,
                     });
                     spermket++;
                     continue;
@@ -1064,11 +1111,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Lighthouse.Bot_Damage,
                         Disable_Radio = configData.Zones.Lighthouse.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Lighthouse.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Lighthouse.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Lighthouse.Spawn_Height,
                         Respawn_Timer = configData.Zones.Lighthouse.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Lighthouse.Aggression_Range,
                     });             
                     lighthouse++;
                     continue;
@@ -1091,11 +1139,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Lighthouse1.Bot_Damage,
                         Disable_Radio = configData.Zones.Lighthouse1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Lighthouse1.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Lighthouse1.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Lighthouse1.Spawn_Height,
                         Respawn_Timer = configData.Zones.Lighthouse1.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Lighthouse1.Aggression_Range,
                     });     
                     lighthouse++;
                     continue;
@@ -1118,11 +1167,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Lighthouse2.Bot_Damage,
                         Disable_Radio = configData.Zones.Lighthouse2.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Lighthouse2.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Lighthouse2.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Lighthouse2.Spawn_Height,
                         Respawn_Timer = configData.Zones.Lighthouse2.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+			Aggression_Range = configData.Zones.Lighthouse2.Aggression_Range,
                     });     
                     lighthouse++;
                     continue;
@@ -1145,11 +1195,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Warehouse.Bot_Damage,
                         Disable_Radio = configData.Zones.Warehouse.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Warehouse.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Warehouse.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Warehouse.Spawn_Height,
                         Respawn_Timer = configData.Zones.Warehouse.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+                        Aggression_Range = configData.Zones.Warehouse.Aggression_Range,
                     });             
                     warehouse++;
                     continue;
@@ -1172,11 +1223,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Warehouse1.Bot_Damage,
                         Disable_Radio = configData.Zones.Warehouse1.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Warehouse1.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Warehouse1.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Warehouse1.Spawn_Height,
                         Respawn_Timer = configData.Zones.Warehouse1.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+                        Aggression_Range = configData.Zones.Warehouse1.Aggression_Range,
                     });     
                     warehouse++;
                     continue;
@@ -1199,11 +1251,12 @@ namespace Oxide.Plugins
                         Bot_Damage = configData.Zones.Warehouse2.Bot_Damage,
                         Disable_Radio = configData.Zones.Warehouse2.Disable_Radio,
                         //Invincible_In_Air = configData.Zones.Warehouse2.Invincible_In_Air,
-                        Spawn_Height = configData.Zones.Warehouse2.Spawn_Height,
+                        //Spawn_Height = configData.Zones.Warehouse2.Spawn_Height,
                         Respawn_Timer = configData.Zones.Warehouse2.Respawn_Timer,
                         LocationX = pos.x,
                         LocationY = pos.y,
                         LocationZ = pos.z,
+                        Aggression_Range = configData.Zones.Warehouse2.Aggression_Range,
                     });     
                     warehouse++;
                     continue;
@@ -1237,7 +1290,8 @@ namespace Oxide.Plugins
                     LocationY = 0f,
                     LocationZ = 0f,
                     Respawn_Timer = 10,
-                    Spawn_Height = 100,
+                    //Spawn_Height = 100,
+                    Aggression_Range = configData.Zones.AirDrop.Aggression_Range,
                 });     
             
             foreach (var profile in storedData.CustomProfiles)
@@ -1458,9 +1512,10 @@ namespace Oxide.Plugins
             public int Bot_Accuracy = 4;
             public float Bot_Damage = 0.4f;     
             //public bool Invincible_In_Air = true;
-            public int Spawn_Height = 100;
+            //public int Spawn_Height = 100;
             public int Respawn_Timer = 60;
             public bool Disable_Radio = true;
+            public int Aggression_Range = 20;
         }
         class MonumentSettings
         {
@@ -1476,12 +1531,13 @@ namespace Oxide.Plugins
             public int Bot_Accuracy = 4;
             public float Bot_Damage = 0.4f;     
             //public bool Invincible_In_Air = true;
-            public int Spawn_Height = 100;
+            //public int Spawn_Height = 100;
             public int Respawn_Timer = 60;
             public bool Disable_Radio = true;
             public float LocationX;
             public float LocationY;
             public float LocationZ;
+            public int Aggression_Range = 20;
         }
         class AirDropSettings
         {
@@ -1498,9 +1554,11 @@ namespace Oxide.Plugins
             public float Bot_Damage = 0.4f;
             public bool Disable_Radio = true;
             //public bool Invincible_In_Air = true;
+            public int Aggression_Range = 20;
+	    
         }
         class Options
-        {        
+        {
             public bool Ignore_Animals { get; set; }
             public bool APC_Safe { get; set; }
             public bool Reset { get; set; }
@@ -1528,7 +1586,8 @@ namespace Oxide.Plugins
             public CustomSettings Watertreatment { get; set; }
             public CustomSettings Launchsite { get; set; }
             public CustomSettings MilitaryTunnel { get; set; }
-            public CustomSettings Harbor1 { get; set; }
+            public CustomSettings Junkyard { get; set; }
+	    public CustomSettings Harbor1 { get; set; }
             public CustomSettings Harbor2 { get; set; }
             public CustomSettings Warehouse { get; set; }
             public CustomSettings Warehouse1 { get; set; }
@@ -1593,6 +1652,7 @@ namespace Oxide.Plugins
                     Watertreatment = new CustomSettings{},
                     Launchsite = new CustomSettings{},
                     MilitaryTunnel = new CustomSettings{},
+		    Junkyard = new CustomSettings{},
                     Harbor1 = new CustomSettings{},
                     Harbor2 = new CustomSettings{},
                     GasStation = new CustomSettings{},
