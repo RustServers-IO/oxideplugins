@@ -794,4 +794,484 @@ namespace Oxide.Plugins
                     else
                     {
                         if (Player.EnterZone == true && Player.ZoneId == zoneDef.Value.Id && Player.ExitZone == false)
-                        
+                        {
+                            Player.EnterZone = false;
+                            Player.ExitZone = true;
+
+                            if (zoneDef.Value.ZoneExitMessageOn == true)
+                            {
+                                SendMessage(player, zoneDef.Value.ExitZoneMessage, false, false);
+                            }
+
+                        }
+
+                        if (Player.EnterZone == false && Player.ExitZone == true)
+                        {
+                            Player.ExitZone = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        private bool IsInZone(Player player, float zoneX, float zoneZ, float radius)
+        {
+            if (PData.ContainsKey(player))
+            {
+
+                PlayerData Player = GetCache(player);
+
+                if (Server.PlayerIsOnline(player.Id))
+                {
+                    foreach (Vector2 zone in zones)
+                    {
+
+                        Vector2 vector = new Vector2(zoneX, zoneZ);
+                        float distance = Math.Abs(Vector2.Distance(vector, new Vector2(player.Entity.Position.x, player.Entity.Position.z)));
+                        if (distance <= radius)
+                        {
+                            return true;
+                        }
+                        else
+                            return false;
+                    }
+                    return false;
+                }
+                return false;
+            }
+            return false;
+        }
+        private bool IsEntityInZone(Vector3 location, float zoneX, float zoneZ, float radius)
+        {
+            foreach (Vector2 zone in zones)
+            {
+
+                Vector2 vector = new Vector2(zoneX, zoneZ);
+                float distance = Math.Abs(Vector2.Distance(vector, new Vector2(location.x, location.z)));
+                if (distance <= radius)
+                {
+                    return true;
+                }
+                else
+                    return false;
+            }
+
+            return false;
+
+        }
+        private void SendMessage(Player player, string message , bool repeat, bool inZone)
+        {
+			string playerId = player.Id.ToString();
+            if (MessagesOn == true)
+            {
+                if (repeat == true && !timers.ContainsKey(playerId))
+                {                              
+                        timers.Add(playerId, timer.Repeat(MessageInterval, 0, () => SendReply(player, message)));
+                }
+                else
+                {
+                    if (repeat == false)
+                    {
+                        if (inZone == false && timers.ContainsKey(playerId)) 
+                        {
+                            timers[playerId].Destroy();
+                            timers.Remove(playerId);
+                        }
+                        SendReply(player, message);
+                    }
+                }
+            }
+        }
+        private bool OwnsCrestArea(Player player)
+        {
+            CrestScheme crestScheme = SocialAPI.Get<CrestScheme>();
+            Crest crest = crestScheme.GetCrestAt(player.Entity.Position);
+
+            if (crest == null) return false;
+            if (crest.GuildName == player.GetGuild().Name) return true;
+            return false;
+        }
+        private bool IsNPC(EntityDamageEvent damageEvent)
+        {
+            string npcName = damageEvent.Entity.name;
+            if (npcName.Contains("Plague Villager") || npcName.Contains("Grizzly Bear") || npcName.Contains("Wolf") || npcName.Contains("Werewolf") || npcName.Contains("Baby Chicken") || npcName.Contains("Bat") || npcName.Contains("Chicken") || npcName.Contains("Crab") || npcName.Contains("Crow") || npcName.Contains("Deer") || npcName.Contains("Duck") || npcName.Contains("Moose") || npcName.Contains("Pigeon") || npcName.Contains("Rabbit") || npcName.Contains("Rooster") || npcName.Contains("Seagull") || npcName.Contains("Sheep") || npcName.Contains("Stag"))
+                return true;
+            return false;
+        }
+        private void EjectPlayer(float radius, Vector3 location, Player player)
+        {            
+            Vector3 newPos = Vector3.zero;
+            
+            if (newPos == Vector3.zero)
+            {
+                float dist;                
+                dist = radius;
+                newPos = location + (player.Entity.transform.position - location).normalized * (dist + 5f);
+                newPos.y = TerrainAPIBase.GetTerrainHeightAt(newPos);
+            }            
+            EventManager.CallEvent((BaseEvent)new TeleportEvent(player.Entity, newPos));
+            
+        }
+         
+        private void EjectSleeper(float radius, Vector3 location, PlayerSleeperObject sleeper)
+        {
+            Vector3 newPos = Vector3.zero;
+            var sleeperPos = sleeper.Entity.Position;            
+            if (newPos == Vector3.zero)
+            {
+                float dist;
+                dist = radius;
+                newPos = location + (sleeper.transform.position - location).normalized * (dist + 5f);
+                newPos.y = TerrainAPIBase.GetTerrainHeightAt(newPos);
+            }
+
+            sleeper.Entity.Position = new Vector3(newPos.x, newPos.y, newPos.z);
+            sleeperPos = sleeper.Entity.Position;                          
+        }
+        
+        PlayerData GetCache(Player Player)
+        {
+            PlayerData CachedPlayer = null;
+            return PData.TryGetValue(Player, out CachedPlayer) ? CachedPlayer : null;
+        }
+        void CacheAllOnlinePlayers()
+        {           
+            if (Server.AllPlayers.Count > 0)
+            {
+                foreach (Player player in Server.AllPlayers)
+                {
+                    if (player.Name.ToLower() == "server")
+                    {
+                        continue;
+                    }
+                   if (player.Id == 9999999999) continue; //fixes error
+
+                    if (Server.PlayerIsOnline(player.Id))
+                    {
+                        string playerId = player.Id.ToString();                        
+                        if (!PData.ContainsKey(player))
+                        {
+                            PData.Add(player, new PlayerData(player.Id));
+                            if (ZoneCheckOn == true)
+                            {
+                                if (!ZoneCheckTimer.ContainsKey(playerId))
+                                {
+                                    ZoneCheckTimer.Add(playerId, timer.Repeat(ZoneCheckInterval, 0, () => CheckPlayerLocation(player)));
+                                }
+                            }
+
+                        }
+                    }
+                }
+            }
+            
+        }
+        #endregion
+        #region API
+        private bool EditZone(string zoneId, string[] args, Player player = null)
+        {
+            ZoneInfo zonedef;
+            ZoneDefinitions.TryGetValue(zoneId, out zonedef);            
+            UpdateZoneInfo(zonedef, args, player);
+            ZoneDefinitions[zoneId] = zonedef;
+            storedData.ZoneDefinitions.Add(zonedef);
+            SaveData();
+            if (zonedef.Location == null) return false;
+            return true;
+        }
+        private bool NewZone(string[] args, Player player = null)//NewZone needs name and location or "here" in args
+        {            
+            var location = Vector3.zero;
+            if (player != null)
+            {
+                foreach (var zoneDef in ZoneDefinitions)
+                {
+                    if (zoneDef.Value.ZoneName == args[0])
+                    {
+                        PrintWarning(lang.GetMessage("cslnameExists", this), args[0]);
+                        return false;
+                    }
+                    if (IsInZone(player, zoneDef.Value.ZoneX, zoneDef.Value.ZoneZ, zoneDef.Value.ZoneRadius) == true)
+                    {
+                        PrintWarning(lang.GetMessage("cslinZoneError", this));
+                        return false;
+                    }
+                }
+            }
+            if (player != null && args[1].Equals("here", StringComparison.OrdinalIgnoreCase))
+            {
+                location = player.Entity.Position;
+            }
+
+            if (!args[1].Equals("here", StringComparison.OrdinalIgnoreCase))
+            {
+                var loc = args[1].Trim().Split(' ');
+                if (loc.Length == 3)
+                {
+                    location = new Vector3(Convert.ToSingle(loc[0]), Convert.ToSingle(loc[1]), Convert.ToSingle(loc[2]));
+                }
+                else
+                {
+                    if (player != null) SendReply(player, lang.GetMessage("cslformatError", this, player.Id.ToString()));
+                    else
+                        PrintError(lang.GetMessage("cslformatError", this));
+                    return false;
+                }
+            }
+            var newzoneinfo = new ZoneInfo(location) { Id = UnityEngine.Random.Range(1, 99999999).ToString() };
+            if (ZoneDefinitions.ContainsKey(newzoneinfo.Id)) storedData.ZoneDefinitions.Remove(ZoneDefinitions[newzoneinfo.Id]);
+            ZoneDefinitions[newzoneinfo.Id] = newzoneinfo;
+            storedData.ZoneDefinitions.Add(newzoneinfo);
+            SaveData();
+            string name = args[0];
+            float zonex = location.x; 
+            float zoney = location.y;
+            float zonez = location.z;           
+            ZoneDefinitions[newzoneinfo.Id].ZoneX = zonex;
+            ZoneDefinitions[newzoneinfo.Id].ZoneZ = zonez;
+            ZoneDefinitions[newzoneinfo.Id].ZoneName = name;
+            if (player != null)
+                ZoneDefinitions[newzoneinfo.Id].ZoneCreatorName = player.ToString();
+            else
+                ZoneDefinitions[newzoneinfo.Id].ZoneCreatorName = "Server";
+            if (player != null)
+                SendReply(player, lang.GetMessage("zoneAdded", this, player.Id.ToString()), newzoneinfo.Id, name);
+            else
+                Puts(lang.GetMessage("cslzoneAdded", this), newzoneinfo.Id, name);
+            SaveData();
+            LoadZones();
+            return true;
+        }
+        private bool RemoveZone(string zoneId)
+        {
+            ZoneInfo zone;
+            if (!ZoneDefinitions.TryGetValue(zoneId, out zone)) return false;
+            storedData.ZoneDefinitions.Remove(zone);
+            ZoneDefinitions.Remove(zoneId);
+            SaveData();
+            LoadZones();
+            return true;
+        }
+        private bool IsPlayerInZone(Player player)
+        {
+            foreach (var zoneDef in ZoneDefinitions)                
+            if (IsInZone(player, zoneDef.Value.ZoneX, zoneDef.Value.ZoneZ, zoneDef.Value.ZoneRadius))
+            {
+                    var zoneId = zoneDef.Value.Id;
+                    return ZoneDefinitions.Any(ZoneDefinitions => ZoneDefinitions.Value.Id == zoneId);                
+            }
+            return false;
+        }
+        private object GetZoneId(Player player)
+        {
+            foreach (var zoneDef in ZoneDefinitions)
+                if (IsInZone(player, zoneDef.Value.ZoneX, zoneDef.Value.ZoneZ, zoneDef.Value.ZoneRadius))
+                {
+                    var zoneId = zoneDef.Value.Id;                    
+                    return ZoneDefinitions.ContainsKey(zoneId) ? ZoneDefinitions[zoneId].Id : null;                   
+                }
+            return null;
+        }
+        private object GetZoneName(string zoneID) => GetZoneByID(zoneID)?.ZoneName;                
+        private ZoneInfo GetZoneByID(string zoneId)
+        {
+            return ZoneDefinitions.ContainsKey(zoneId) ? ZoneDefinitions[zoneId] : null;
+        }
+        private bool HasFlag(string zoneId, string zoneFlag)
+        {
+            try
+            {
+                var zone = GetZoneByID(zoneId);                
+                if (HasZoneFlag(zone, zoneFlag))
+                    return true;
+            }
+            catch
+            {
+            }
+            return false;
+           
+        }
+        private bool HasZoneFlag(ZoneInfo zone, string flag)
+        {
+            if (flag == "pve" && zone.ZoneNoPVP == true || flag == "nobuild" && zone.ZoneNoBuild == true || flag == "nodamage" && zone.ZoneNoDamage == true || flag == "nosleeperdamage" && zone.ZoneNoSleeperDamage == true || flag == "nocrestdamage" && zone.ZoneNoCrestDamage == true || flag == "noroping" && zone.ZoneNoPlayerRoping == true || flag == "nopve" && zone.ZoneNoPVE == true || flag == "noprefabdamage" && zone.ZoneNoPreFabDamage == true || flag == "ejectplayer" && zone.ZoneEjectPlayer == true || flag == "ejectsleeper" && zone.ZoneEjectSleeper == true || flag == "nochestlooting" && zone.ZoneNoChestLooting == true || flag == "nocampfirelooting" && zone.ZoneNoCampfireLooting == true || flag == "notorchlooting" && zone.ZoneNoTorchLooting == true || flag == "nofireplacelooting" && zone.ZoneNoFireplaceLooting == true || flag == "nofurniturelooting" && zone.ZoneNoFurnitureLooting == true || flag == "nostationlooting" && zone.ZoneNoStationLooting == true || flag == "novillagerlooting" && zone.ZoneNoVillagerLooting == true || flag == "messageon" && zone.ZoneMessageOn == true || flag == "entermessageon" && zone.ZoneEnterMessageOn == true || flag == "exitmessageon" && zone.ZoneExitMessageOn == true)
+                return true;
+            return false;
+        }        
+        private void UpdateZoneInfo(ZoneInfo zone, string[] args, Player player = null)
+        {
+            bool isFlag = false;
+            for (var i = 0; i < args.Length; i = i + 1)
+            {
+                object editflag;
+                switch (args[i].ToLower())
+                {
+                    case "name":
+                        editflag = zone.ZoneName = args[i + 1];
+                        isFlag = true;
+                        break;
+                    case "id":
+                        editflag = zone.Id = args[i + 1];
+                        isFlag = true;
+                        break;
+                    case "radius":
+                        editflag = zone.ZoneRadius = Convert.ToSingle(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "location":
+                        if (player != null && args[i + 1].Equals("here", StringComparison.OrdinalIgnoreCase))
+                        {
+                            editflag = zone.Location = player.Entity.Position;
+                            isFlag = true;
+                            break;
+                        }
+                        var loc = args[i + 1].Trim().Split(' ');
+                        if (loc.Length == 3)
+                        {
+                            editflag = zone.Location = new Vector3(Convert.ToSingle(loc[0]), Convert.ToSingle(loc[1]), Convert.ToSingle(loc[2]));
+                            isFlag = true;
+                        }
+                        else
+                        {
+                            if (player != null) SendReply(player, "Invalid location format, use: \"x y z\" or here");
+                            continue;
+                        }
+                        break;
+                    case "entermessage":
+                        editflag = zone.EnterZoneMessage = args[i + 1];
+                        isFlag = true;
+                        break;
+                    case "leavemessage":
+                        editflag = zone.ExitZoneMessage = args[i + 1];
+                        isFlag = true;
+                        break;
+                    case "zonemessage":
+                        editflag = zone.ZoneMessage = args[i + 1];
+                        isFlag = true;
+                        break;
+                    case "nopvp":
+                        editflag = zone.ZoneNoPVP = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nobuild":
+                        editflag = zone.ZoneNoBuild = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nodamage":
+                        editflag = zone.ZoneNoDamage = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nosleeperdamage":
+                        editflag = zone.ZoneNoSleeperDamage = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nocrestdamage":
+                        editflag = zone.ZoneNoCrestDamage = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "noroping":
+                        editflag = zone.ZoneNoPlayerRoping = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nopve":
+                        editflag = zone.ZoneNoPVE = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "noprefabdamage":
+                        editflag = zone.ZoneNoPreFabDamage = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "ejectplayer":
+                        editflag = zone.ZoneEjectPlayer = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "ejectsleeper":
+                        editflag = zone.ZoneEjectSleeper = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nochestlooting":
+                        editflag = zone.ZoneNoChestLooting = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nocampfirelooting":
+                        editflag = zone.ZoneNoCampfireLooting = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "notorchlooting":
+                        editflag = zone.ZoneNoTorchLooting = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nofireplacelooting":
+                        editflag = zone.ZoneNoFireplaceLooting = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nofurniturelooting":
+                        editflag = zone.ZoneNoFurnitureLooting = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "nostationlooting":
+                        editflag = zone.ZoneNoStationLooting = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "novillagerlooting":
+                        editflag = zone.ZoneNoVillagerLooting = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "messageon":
+                        editflag = zone.ZoneMessageOn = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "entermessageon":
+                        editflag = zone.ZoneEnterMessageOn = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    case "exitmessageon":
+                        editflag = zone.ZoneExitMessageOn = Convert.ToBoolean(args[i + 1]);
+                        isFlag = true;
+                        break;
+                    default:
+                        isFlag = false;
+                        editflag = false;
+                        break;
+                }                
+                SaveData();
+                LoadZones();
+                if (isFlag)
+                    if (player != null) SendReply(player, lang.GetMessage("zoneEdited", this, player.Id.ToString()), args[i], zone.Id, editflag); 
+                         
+            }
+        }
+        #endregion         
+        
+        T GetConfig<T>(string name, T defaultValue)
+        {
+            if (Config[name] == null) return defaultValue;
+            return (T)Convert.ChangeType(Config[name], typeof(T));
+        }
+        #region Vector3 Json Converter         
+        private class UnityVector3Converter : JsonConverter
+        {
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                var vector = (Vector3)value;
+                writer.WriteValue($"{vector.x} {vector.y} {vector.z}");
+            }
+
+            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+            {
+                if (reader.TokenType == JsonToken.String)
+                {
+                    var values = reader.Value.ToString().Trim().Split(' ');
+                    return new Vector3(Convert.ToSingle(values[0]), Convert.ToSingle(values[1]), Convert.ToSingle(values[2]));
+                }
+                var o = JObject.Load(reader);
+                return new Vector3(Convert.ToSingle(o["x"]), Convert.ToSingle(o["y"]), Convert.ToSingle(o["z"]));
+            }
+
+            public override bool CanConvert(Type objectType)
+            {
+                return objectType == typeof(Vector3);
+            }
+        }
+        #endregion
+    }
+}
