@@ -1596,3 +1596,579 @@ namespace Oxide.Plugins
                     case 9:
                         return ReinforcedLevel;
                     default:
+                        return 1;
+                }
+            switch (cube.Material)
+            {
+                case 1:
+                    if (cube.PrefabId == 10) return ReinforcedSteelDoorLevel;
+                    return StoneWindowLevel;
+                case 2:
+                    if (cube.PrefabId == 10) return IronDoorLevel;
+                    else if (cube.PrefabId == 11) return IronGateLevel;
+                    return IronWindowLevel;
+                case 3:
+                    if (cube.PrefabId == 10) return ReinforcedIronDoorLevel;
+                    return ReinforcedIronGateLevel;
+                case 4:
+                    if (cube.PrefabId == 10) return WoodDoorLevel;
+                    return WoodGateLevel;
+                case 7:
+                    if (cube.PrefabId == 11) return DrawbridgeLevel;
+                    return WoodWindowLevel;
+                case 8:
+                    if (cube.PrefabId == 11) return LongDrawbridgeLevel;
+                    return StoneArchLevel;
+                case 9:
+                    return ReinforcedIronTrapDoorLevel;
+                default:
+                    return 1;
+            }
+        }
+
+        private bool IsInCrestArea(Vector3 position)
+        {
+            var crestScheme = SocialAPI.Get<CrestScheme>();
+            var crest = crestScheme.GetCrestAt(position);
+            return crest != null && crest.Completed;
+        }
+
+        private bool IsInOwnCrestArea(Player player, Vector3 position)
+        {
+            var crestScheme = SocialAPI.Get<CrestScheme>();
+            var crest = crestScheme.GetCrestAt(position);
+            return crest?.SocialId == player.GetGuild().BaseID;
+        }
+
+        private bool IsAnimal(Entity e)
+        {
+            return e.Has<MonsterEntity>() || e.Has<CritterEntity>();
+        }
+
+        private bool IsSiegeWeapon(Entity e)
+        {
+            return e.name.ContainsIgnoreCase("trebuchet") || e.name.ContainsIgnoreCase("ballista");
+        }
+
+        private void DropInventory(Player player)
+        {
+            var corpse = player.Entity.TryGet<CreateCorpseOnDeath>();
+            if (corpse == null) return;
+
+            var gameObject = CustomNetworkInstantiate.ServerInstantiate(corpse.corpsePrefab, player.Entity.Position, player.Entity.Rotation);
+            var entity = gameObject.TryGetEntity();
+            var container = entity.TryGet<Container>();
+
+            var inv = player.GetInventory();
+            InvEquipment.DropInventory(inv.Contents, container.Contents);
+        }
+
+        private bool UlongTryConvert(ulong? value, out ulong result)
+        {
+            result = default(ulong);
+            if (value == null) return false;
+            try
+            {
+                result = (ulong)value;
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
+        private bool IntTryConvert(int? value, out int result)
+        {
+            result = default(int);
+            if (value == null) return false;
+            try
+            {
+                result = (int)value;
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
+        #endregion
+
+        #region Hooks
+
+        private void OnPlayerRespawn(PlayerRespawnEvent respawnEvent)
+        {
+            CheckPlayerExists(respawnEvent.Player);
+            AddStatBonusses(respawnEvent.Player);
+            if (UseNametag) PlayerXpData[respawnEvent.Player.Id].UpdateChatFormat(respawnEvent.Player);
+        }
+
+        private void OnPlayerConnected(Player player)
+        {
+            #region Checks
+            if (player == null) return;
+            #endregion
+            CheckPlayerExists(player);
+            if (UseNametag) PlayerXpData[player.Id].UpdateChatFormat(player);
+        }
+
+        private void OnPlayerChat(PlayerEvent e)
+        {
+            CheckPlayerExists(e.Player);
+        }
+
+        private void OnEntityDeath(EntityDeathEvent deathEvent)
+        {
+            #region Null Checks
+            if (deathEvent == null) return;
+            if (deathEvent.Cancelled) return;
+            if (deathEvent.KillingDamage == null) return;
+            if (deathEvent.KillingDamage.DamageSource == null) return;
+            if (deathEvent.Entity == null) return;
+            if (deathEvent.KillingDamage.DamageSource == deathEvent.Entity) return;
+            if (!deathEvent.KillingDamage.DamageSource.IsPlayer) return;
+            #endregion
+
+            var player = deathEvent.KillingDamage.DamageSource.Owner;
+            if (player == null) return;
+            CheckPlayerExists(player);
+            var pData = PlayerXpData[player.Id];
+            var playerLevel = pData.Level.Id;
+
+            var entity = deathEvent.Entity;
+
+            if (!deathEvent.Entity.IsPlayer)
+            {
+                if (!UsePveXp) return;
+                if (!IsAnimal(entity)) return;
+
+                var villager = entity.name.Contains("Plague Villager");
+                var bear = entity.name.Contains("Grizzly Bear");
+                var wolf = entity.name.Contains("Wolf");
+                var werewolf = entity.name.Contains("Werewolf");
+
+                int xpAmount;
+                if (villager || bear || wolf || werewolf)
+                    xpAmount = GetRandomXp(playerLevel, MonsterKillMinXp, MonsterKillMaxXp);
+                else xpAmount = GetRandomXp(playerLevel, AnimalKillMinXp, AnimalKillMaxXp);
+
+                GiveXp(player, xpAmount);
+            }
+            else
+            {
+                if (!UsePvpXp) return;
+
+                var victim = deathEvent.Entity.Owner;
+                if (victim == null) return;
+                if (player.Name.ToLower().Contains("server") || victim.Name.ToLower().Contains("server")) return;
+                CheckPlayerExists(victim);
+                var vData = PlayerXpData[victim.Id];
+
+                if (victim.GetGuild() == null || player.GetGuild() == null) return;
+                if (victim.GetGuild().BaseID == player.GetGuild().BaseID)
+                {
+                    PrintToChat(player, GetMessage("Killed Guild Member", player));
+                    return;
+                }
+
+                var victimLevel = vData.Level.Id;
+                var lvlDiff = playerLevel - victimLevel;
+                var xpGain = GetRandomXp(playerLevel, PvpGetMinXp, PvpGetMaxXp);
+                var xpLoss = GetRandomXp(victimLevel, PvpLoseMinXp, PvpLoseMaxXp);
+                var xpLossLvlDiff = 100 - PvpXpLossPercentage * lvlDiff;
+                if (xpLossLvlDiff < 0) xpLossLvlDiff = 0;
+                else if (xpLossLvlDiff > 100) xpLossLvlDiff = 100;
+                xpLossLvlDiff = xpLossLvlDiff / 100;
+
+                xpGain = (int)(xpGain * xpLossLvlDiff);
+                xpLoss = (int)(xpLoss * xpLossLvlDiff);
+
+                GiveXp(player, xpGain);
+                RemoveXp(victim, xpLoss);
+            }
+
+            SaveXpData();
+        }
+
+        private void OnCubeTakeDamage(CubeDamageEvent damageEvent)
+        {
+            #region Checks
+            if (damageEvent == null) return;
+            if (damageEvent.Cancelled) return;
+            if (damageEvent.Damage == null) return;
+            if (damageEvent.Damage.Damager == null) return;
+            if (damageEvent.Damage.DamageSource == null) return;
+            if (!damageEvent.Damage.DamageSource.IsPlayer) return;
+            if (damageEvent.Damage.Amount <= 0) return;
+            #endregion
+
+            var damageSource = damageEvent.Damage.Damager.name;
+            var player = damageEvent.Damage.DamageSource.Owner;
+            if (player == null) return;
+            CheckPlayerExists(player);
+            var data = PlayerXpData[player.Id];
+            var currentLevel = data.Level.Id;
+
+            if (IsInCrestArea(player.Entity.Position) && UseCrestIgnoring) return;
+
+            if (UseCubeLevel && currentLevel < CubeLevel)
+            {
+                player.SendError(GetMessage("Not High Enough Cube Damage Level", player), CubeLevel);
+                var centralPrefabAtLocal = BlockManager.DefaultCubeGrid.GetCentralPrefabAtLocal(damageEvent.Position);
+                if (centralPrefabAtLocal != null)
+                {
+                    var component = centralPrefabAtLocal.GetComponent<SalvageModifier>();
+                    if (component != null) component.info.NotSalvageable = true;
+                }
+                damageEvent.Damage.Amount = 0f;
+                damageEvent.Cancel();
+                return;
+            }
+            else
+            {
+                var centralPrefabAtLocal = BlockManager.DefaultCubeGrid.GetCentralPrefabAtLocal(damageEvent.Position);
+                if (centralPrefabAtLocal != null)
+                {
+                    var component = centralPrefabAtLocal.GetComponent<SalvageModifier>();
+                    if (component != null) component.info.NotSalvageable = false;
+                }
+            }
+
+            var damage = damageEvent.Damage.Amount;
+            if (damageSource.Contains("Ballista")) damageEvent.Damage.Amount = CalculateDamage(data, Skill.BallistaDamage, damage);
+            else if (damageSource.Contains("Trebuchet")) damageEvent.Damage.Amount = CalculateDamage(data, Skill.TrebuchetDamage, damage);
+            else damageEvent.Damage.Amount = CalculateDamage(data, Skill.CubeDamage, damage);
+        }
+
+        private void OnEntityHealthChange(EntityDamageEvent damageEvent)
+        {
+            #region Checks
+            if (damageEvent == null) return;
+            if (damageEvent.Cancelled) return;
+            if (damageEvent.Damage == null) return;
+            if (damageEvent.Damage.DamageSource == null) return;
+            if (damageEvent.Entity == null) return;
+            if (damageEvent.Entity == damageEvent.Damage.DamageSource) return;
+            #endregion
+            var sourceIsPlayer = damageEvent.Damage.DamageSource.IsPlayer;
+            var entityIsPlayer = damageEvent.Entity.IsPlayer;
+            var player = damageEvent.Damage.DamageSource.Owner;
+            if (player == null) return;
+            PlayerData pData = null;
+            if (sourceIsPlayer)
+            {
+                CheckPlayerExists(player);
+                pData = PlayerXpData[player.Id];
+            }
+            var victim = damageEvent.Entity.Owner;
+            if (victim == null) return;
+            PlayerData vData = null;
+            if (entityIsPlayer)
+            {
+                CheckPlayerExists(victim);
+                vData = PlayerXpData[victim.Id];
+            }
+            var damage = damageEvent.Damage.Amount;
+
+            if (sourceIsPlayer)
+            {
+                var playerCurrentLevel = pData.Level.Id;
+
+                #region Crest Requirement
+                if (damageEvent.Entity.name.Contains("Crest") && UseCrestLevel)
+                {
+                    if (playerCurrentLevel < CrestLevel)
+                    {
+                        player.SendError(GetMessage("Not High Enough Crest Damage Level", player), CrestLevel);
+                        damageEvent.Damage.Amount = 0f;
+                        damageEvent.Cancel();
+                        return;
+                    }
+                }
+                #endregion
+
+                if (entityIsPlayer)
+                {
+                    var victimCurrentLevel = vData.Level.Id;
+
+                    if (!IsInCrestArea(victim.Entity.Position) || !UseCrestIgnoring)
+                    {
+                        #region PvP Requirement
+                        if (UsePvpLevel && playerCurrentLevel < PvpLevel)
+                        {
+                            player.SendError(GetMessage("Not High Enough Pvp Attack Level", player), PvpLevel);
+                            damageEvent.Damage.Amount = 0f;
+                            damageEvent.Cancel();
+                            return;
+                        }
+                        if (UsePvpLevel && victimCurrentLevel < PvpLevel)
+                        {
+                            player.SendError(GetMessage("Not High Enough Pvp Defense Level", player), PvpLevel);
+                            damageEvent.Damage.Amount = 0f;
+                            damageEvent.Cancel();
+                            return;
+                        }
+                        #endregion
+                    }
+
+                    if (UseDamageBonus) damage = CalculateDamage(pData, Skill.PlayerDamage, damage);
+                }
+                else if (UseDamageBonus && IsAnimal(damageEvent.Entity))
+                    damage = CalculateDamage(pData, Skill.BeastDamage, damage);
+                else if (IsSiegeWeapon(damageEvent.Entity) || IsSiegeWeapon(damageEvent.Damage.DamageSource))
+                {
+                    #region Siege Requirement
+                    if (playerCurrentLevel < SiegeLevel)
+                    {
+                        player.SendError(GetMessage("Not High Enough Siege Damage Level", player), CrestLevel);
+                        damageEvent.Damage.Amount = 0f;
+                        damageEvent.Cancel();
+                        return;
+                    }
+                    #endregion
+                }
+            }
+
+            #region Defense Bonus
+            if (!UseDefenseBonus || !entityIsPlayer) return;
+            {
+                if (sourceIsPlayer) damage = CalculateDamage(vData, Skill.PlayerDefense, damage);
+                if (IsAnimal(damageEvent.Entity)) damage = CalculateDamage(vData, Skill.BeastDefense, damage);
+            }
+
+            damageEvent.Damage.Amount = damage;
+            #endregion
+        }
+        
+        private void OnPlayerInteract(InteractEvent interactEvent)
+        {
+            #region Checks
+            if (SiegeLevel <= 1) return;
+            if (interactEvent == null) return;
+            if (interactEvent.Cancelled) return;
+            if (interactEvent.Entity == null) return;
+            if (interactEvent.ControllerEntity == null) return;
+            if (!interactEvent.ControllerEntity.IsPlayer) return;
+            #endregion
+
+            if (IsSiegeWeapon(interactEvent.Entity))
+            {
+                if (interactEvent.Gesture.key == Key.PickUp) return;
+                var player = interactEvent.ControllerEntity.Owner;
+                CheckPlayerExists(player);
+                var playerLvl = PlayerXpData[player.Id].Level.Id;
+
+                if (playerLvl >= SiegeLevel) return;
+
+                player.SendError(GetMessage("Not High Enough Siege Interact Level", player), SiegeLevel);
+                interactEvent.Cancel();
+            }
+            
+        }
+
+        private void OnItemCrafted(ItemCrafterFinishEvent craftEvent)
+        {
+            #region Checks
+            if (!UseCraftingXp) return;
+            if (CraftOwnership == null) return;
+            if (craftEvent == null) return;
+            if (craftEvent.Cancelled) return;
+            if (craftEvent.Entity == null) return;
+            #endregion
+
+            ulong playerId;
+            int amount;
+            if (!UlongTryConvert((ulong?)CraftOwnership.Call("GetLastCrafter", craftEvent.Entity),
+                out playerId)) return;
+            if (!IntTryConvert((int?)CraftOwnership.Call("GetCraftedAmount", craftEvent.Entity),
+                out amount)) return;
+
+            var player = Server.GetPlayerById(playerId);
+
+            CheckPlayerExists(playerId);
+            var xpData = PlayerXpData[playerId];
+            var xpAmount = 0;
+            for (int i = 0; i < amount; i++)
+                xpAmount += GetRandomXp(xpData.Level.Id, CraftingMinXp, CraftingMaxXp);
+
+            if (player == null)
+            {
+                GiveXp(playerId, xpAmount);
+                return;
+            }
+
+            player.SendMessage(GetMessage("Crafting Finished", player));
+            GiveXp(player, xpAmount);
+
+        }
+
+        private void OnThroneCapture(AncientThroneCaptureEvent captureEvent)
+        {
+            #region Checks
+            if (!UseThroneLevel) return;
+            if (captureEvent == null) return;
+            if (captureEvent.Cancelled) return;
+            if (captureEvent.Player == null) return;
+            #endregion
+
+            var player = captureEvent.Player;
+            CheckPlayerExists(player);
+            if (PlayerXpData[player.Id].Level.Id >= ThroneLevel) return;
+            if (captureEvent.State == AncientThroneCaptureEvent.States.Cancelled) return;
+            captureEvent.Cancel();
+            player.ShowPopup("Error", string.Format(GetMessage("Not High Enough Throne Level", player), ThroneLevel));
+        }
+
+        private void OnPlayerCapture(PlayerCaptureEvent captureEvent)
+        {
+            #region Checks
+            if (!UseRopingLevel) return;
+            if (captureEvent == null) return;
+            if (captureEvent.Cancelled) return;
+            if (captureEvent.Captor == null) return;
+            if (captureEvent.TargetEntity == null) return;
+            if (captureEvent.Captor == captureEvent.TargetEntity) return;
+            if (!captureEvent.Captor.IsPlayer) return;
+            if (!captureEvent.TargetEntity.IsPlayer) return;
+            #endregion
+
+            var captor = captureEvent.Captor.Owner;
+            if (UseCrestIgnoring && IsInCrestArea(captureEvent.TargetEntity.Position)) return;
+            if (UseCrestRoping && IsInOwnCrestArea(captor, captureEvent.TargetEntity.Position)) return;
+            CheckPlayerExists(captor);
+            if (PlayerXpData[captor.Id].Level.Id < RopingLevel)
+            {
+                captor.SendError(GetMessage("Not High Enough Roping Own Level", captor), RopingLevel);
+                captureEvent.Cancel();
+                return;
+            }
+
+            var target = captureEvent.TargetEntity.Owner;
+            CheckPlayerExists(target);
+            if (PlayerXpData[target.Id].Level.Id >= RopingLevel) return;
+            captor.SendError(GetMessage("Not High Enough Roping Other Level", captor), RopingLevel);
+            captureEvent.Cancel();
+        }
+
+        private void OnCubePlacement(CubePlaceEvent placeEvent)
+        {
+            #region Check
+            if (placeEvent == null) return;
+            if (placeEvent.Cancelled) return;
+            if (placeEvent.Material == 0) return;
+            if (placeEvent.Entity == null) return;
+            if (placeEvent.Entity.Owner == null) return;
+            #endregion
+
+            var player = placeEvent.Entity.Owner;
+            CheckPlayerExists(player);
+            var cube = placeEvent.Cube;
+
+            var neededLevel = GetCubePlaceLevel(cube);
+            if (PlayerXpData[player.Id].Level.Id >= neededLevel) return;
+
+            player.SendError(GetMessage("Not High Enough Cube Placing Level", player), neededLevel);
+            placeEvent.Cancel();
+
+            if (!UseReturnCube) return;
+
+            var blueprint = InventoryUtil.GetTilesetBlueprint(cube.Material, cube.PrefabId);
+            var inventory = player.GetInventory().Contents;
+            var invGameItemStack = new InvGameItemStack(blueprint, 1, null);
+            inventory.AddItem(invGameItemStack);
+        }
+
+        private void SendHelpText(Player player)
+        {
+            player.SendMessage("[0000FF]Level Commands[FFFFFF]");
+            player.SendMessage("[00FF00]/xp[FFFFFF] - Shows your current amount of xp, your current level and the amount of xp you need to reach the next level.");
+            player.SendMessage("[00FF00]/levellist[FFFFFF] - Shows from all online players their current level.");
+            player.SendMessage("[00FF00]/topplayers[FFFFFF] - Shows a numerical list of players ordered on their current level starting with the player with the highest level.");
+            player.SendMessage("[00FF00]/levelup[FFFFFF] - Improve one of your skills at the cost of skill points.");
+            player.SendMessage("[00FF00]/xpstats[FFFFFF] - Shows your current stat bonusses.");
+            if (UseRemoveMyXpCommand) player.SendMessage("[00FF00]/removemyxp[FFFFFF] - Kills you, removes all your xp and puts you back at level 1. USE WITH CAUTION!");
+            if (UseStatReset) player.SendMessage("[00FF00]/xpresetstats[FFFFFF] - Will reset your skills to default and refund all your skill points.");
+            if (player.HasPermission("LevelSystem.Info.Player")) player.SendMessage("[00FF00]/xpplayer (player)[FFFFFF] - Gives info about a player.");
+            if (player.HasPermission("LevelSystem.Modify.Xp"))
+            {
+                player.SendMessage("[00FF00]/givexp (amount) (optional: player)[FFFFFF] - Gives the amount of xp (optional: to the target player).");
+                player.SendMessage("[00FF00]/removexp (amount) (optional: player)[FFFFFF] - Removes the amount of xp (optional: to the target player).");
+                player.SendMessage("[00FF00]/clearxp[FFFFFF] - Removes all xp values from al players.");
+                player.SendMessage("[00FF00]/xpconvertdatafile[FFFFFF] - Converts all data from version 0.4.6 and earlier to the new data file. Will overwrite anything already in the new data file.");
+            }
+            if (player.HasPermission("LevelSystem.Modify.Points"))
+            {
+                player.SendMessage("[00FF00]/givepoints (amount) (optional: player)[FFFFFF] - Gives the amount of skill points (optional: to the target player).");
+                player.SendMessage("[00FF00]/removepoints (amount) (optional: player)[FFFFFF] - Removes the amount of skill points (optional: to the target player).");
+                player.SendMessage("[00FF00]/xpstatrespec (optional: player)[FFFFFF] - Refunds all skill points and sets all bonus values to 0 for all players unless one is specified.");
+            }
+            if (player.HasPermission("LevelSystem.Toggle.Xp"))
+            {
+                player.SendMessage("[00FF00]/xppvp[FFFFFF] - Toggle if players can get xp from pvp.");
+                player.SendMessage("[00FF00]/xppve[FFFFFF] - Toggle if players can get xp from pve.");
+            }
+            if (player.HasPermission("LevelSystem.Toggle.Bonus"))
+            {
+                player.SendMessage("[00FF00]/xpdamage[FFFFFF] - Toggle the use of the damage bonus.");
+                player.SendMessage("[00FF00]/xpdefense[FFFFFF] - Toggle the use of the defense bonus.");
+                player.SendMessage("[00FF00]/xpgain[FFFFFF] - Toggle the use of the xp gain bonus.");
+            }
+            if (player.HasPermission("LevelSystem.Toggle.Stats"))
+            {
+                player.SendMessage("[00FF00]/xpinventory[FFFFFF] - Toggle the inventory slot bonus.");
+                player.SendMessage("[00FF00]/xpstatpopup[FFFFFF] - Toggle the use of the levelup skill popup.");
+            }
+            if (player.HasPermission("LevelSystem.Toggle.Requirement"))
+            {
+                player.SendMessage("[00FF00]/xpthronereq[FFFFFF] - Toggle the throne level requirement.");
+                player.SendMessage("[00FF00]/xpcrestreq[FFFFFF] - Toggle the crest damage level requirement.");
+                player.SendMessage("[00FF00]/xpcubereq[FFFFFF] - Toggle the cube damage level requirement.");
+                player.SendMessage("[00FF00]/xppvpreq[FFFFFF] - Toggle the pvp level requirement.");
+                player.SendMessage("[00FF00]/xpropingreq[FFFFFF] - Toggle the roping level requirement.");
+                player.SendMessage("[00FF00]/xpplacingreq[FFFFFF] - Toggle the cube placing level requirement.");
+            }
+            if (player.HasPermission("LevelSystem.Toggle.Command"))
+            {
+                player.SendMessage("[00FF00]/xpcmdremovemyxp[FFFFFF] - Toggle the ability to use the /removemyxp command.");
+            }
+            if (player.HasPermission("LevelSystem.Toggle.Modify"))
+            {
+                player.SendMessage("[00FF00]/xpcubereturn[FFFFFF] - Toggle returning the placed cube when not meeting the level requirement.");
+                player.SendMessage("[00FF00]/xpcrestroping[FFFFFF] - Toggle roping players that do not meet the roping level requirement in own crest area.");
+                player.SendMessage("[00FF00]/xpstatreset[FFFFFF] - Toggle the allowance for players to reset their skill points.");
+            }
+        }
+
+        #endregion
+
+        #region Utility
+
+        private T GetConfig<T>(string category, string setting, T defaultValue)
+        {
+            var data = Config[category] as Dictionary<string, object>;
+            if (data == null)
+            {
+                data = new Dictionary<string, object>();
+                Config[category] = data;
+            }
+            object value;
+            if (data.TryGetValue(setting, out value)) return (T)Convert.ChangeType(value, typeof(T));
+            value = defaultValue;
+            data[setting] = value;
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+
+        private string GetMessage(string key, Player player = null) => lang.GetMessage(key, this, player?.Id.ToString());
+
+        private void Log(string msg) => LogFileUtil.LogTextToFile($"..\\oxide\\logs\\LevelSystem_{DateTime.Now:yyyy-MM-dd}.txt", $"[{DateTime.Now:h:mm:ss tt}] {msg}\r\n");
+
+        private int GetCurrentLevel(Player player)
+        {
+            CheckPlayerExists(player);
+            return PlayerXpData[player.Id].Level.Id;
+        }
+
+        #endregion
+    }
+}
