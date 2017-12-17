@@ -2,7 +2,7 @@
     "name": "JPipes",
     "description": "Pipes that automatically transfer items between boxes, furnaces, turrets, quarries, etc.",
     "author": "",
-    "version": null,
+    "version": "0.6.0",
     "configuration": true,
     "suggest": {
         "FurnaceSplitter": "*",

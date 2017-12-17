@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("HandyMan", "nivex", "1.0.6")]
+    [Info("HandyMan", "nivex", "1.1.0")]
     [Description("Provides AOE repair functionality to the player. Repair is only possible where you can build.")]
     public class HandyMan : RustPlugin
     {
@@ -143,19 +143,40 @@ namespace Oxide.Plugins
                 SendChatMessage(player, Title, GetMsg("NotAllowed", player.userID));
         }
 
+        bool CanRepair(BaseCombatEntity entity, BasePlayer player)
+        {
+            float num = entity.MaxHealth() - entity.health;
+            float num2 = num / entity.MaxHealth();
+            var list = entity.RepairCost(num2);
+
+            if (list != null && list.Count > 0)
+            {
+                foreach(var ia in list)
+                {
+                    var items = player.inventory.FindItemIDs(ia.itemid);
+                    int sum = items.Sum(item => item.amount);
+
+                    if (sum < ia.amount)
+                        return false;
+                }
+            }
+
+            return player.CanBuild(new OBB(entity.transform, entity.bounds));
+        }
+
         /// <summary>
         /// Contains the actual AOE repair logic
         /// </summary>
         /// <param name="block"></param>
         /// <param name="player"></param>
-        private void RepairAOE(BaseCombatEntity block, BasePlayer player)
+        private void RepairAOE(BaseCombatEntity entity, BasePlayer player)
         {
             //This needs to be set to false in order to prevent the subsequent repairs from triggering the AOE repair.
             //If you don't do this - you create an infinite repair loop.
             _allowAOERepair = false;
-
+            
             //gets the position of the block we just hit
-            var position = new OBB(block.transform, block.bounds).ToBounds().center;
+            var position = new OBB(entity.transform, entity.bounds).ToBounds().center;
             //sets up the collectionf or the blocks that will be affected
             var entities = Pool.GetList<BaseCombatEntity>();
 
@@ -169,15 +190,20 @@ namespace Oxide.Plugins
                 bool hasRepaired = false;
 
                 //cycle through our block list - figure out which ones need repairing
-                foreach (var entity in entities)
+                foreach (var ent in entities)
                 {   
                     //check to see if the block has been damaged before repairing.
-                    if (entity.health < entity.MaxHealth())
+                    if (ent.health < ent.MaxHealth())
                     {
                         //yes - repair
-                        DoRepair(entity, player);
+                        if (!CanRepair(ent, player))
+                            continue;
+
+                        DoRepair(ent, player);
                         hasRepaired = true;
-                        repaired++;
+
+                        if (++repaired > maxRepairEnts)
+                            break;
                     }
                 }
                 Pool.FreeList(ref entities);
@@ -272,11 +298,11 @@ namespace Oxide.Plugins
                     if (num6 > 0)
                     {
                         num5 += num6;
-                        player.Command("note.inv", new object[]
+                        /*player.Command("note.inv", new object[]
                         {
                             current.itemid,
                             num6 * -1
-                        });
+                        });*/
                     }
                 }
                 float num7 = (float)num5 / num3;
@@ -331,11 +357,7 @@ namespace Oxide.Plugins
 
             if (args.Length > 0)
             {
-                if (args[0].ToLower() == "on")
-                    playerPrefs_IsActive[player.userID] = true;
-                else
-                    playerPrefs_IsActive[player.userID] = false;
-
+                playerPrefs_IsActive[player.userID] = args[0].ToLower() == "on";
                 dataFile.WriteObject(playerPrefs_IsActive);
             }
 
@@ -355,7 +377,7 @@ namespace Oxide.Plugins
         /// <param name="userID"></param>
         /// <returns></returns>
         string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID == null ? null : userID.ToString());
-        bool IsRaidBlocked(string targetId) => UseRaidBlocker && (bool)(NoEscape?.Call("IsRaidBlockedS", targetId) ?? false);
+        bool IsRaidBlocked(string targetId) => UseRaidBlocker && (bool)(NoEscape?.Call("IsRaidBlocked", targetId) ?? false);
         bool HasPerm(BasePlayer player) => permission.UserHasPermission(player.UserIDString, permName) || player.IsAdmin;
 
         /// <summary>
@@ -376,6 +398,7 @@ namespace Oxide.Plugins
         private int HandyManChatInterval;
         private float repairMulti;
         private bool repairDeployables;
+        private int maxRepairEnts;
 
         void LoadVariables() //Assigns configuration data once read
         {
@@ -385,6 +408,7 @@ namespace Oxide.Plugins
             UseRaidBlocker = Convert.ToBoolean(GetConfig("Settings", "Use Raid Blocker", false));
             repairMulti = Convert.ToSingle(GetConfig("Settings", "Repair Cost Multiplier", 1.0f));
             repairDeployables = Convert.ToBoolean(GetConfig("Settings", "Repair Deployables", false));
+            maxRepairEnts = Convert.ToInt32(GetConfig("Settings", "Maximum Entities To Repair", 50));
 
             if (repairMulti < 1.0f)
                 repairMulti = 1.0f;
