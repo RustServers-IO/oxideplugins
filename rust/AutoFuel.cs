@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoFuel", "redBDGR", "1.0.4", ResourceId = 2717)]
+    [Info("AutoFuel", "redBDGR", "1.0.5", ResourceId = 2717)]
     [Description("Automatically fuel lights if there is fuel in the toolcupboards inventory")]
 
     class AutoFuel : RustPlugin
@@ -106,18 +106,12 @@ namespace Oxide.Plugins
 
         private bool HasFuel(BaseOven oven)
         {
-            foreach (Item item in oven.inventory.itemList)
-                if (item.info == oven.fuelType)
-                    return true;
-            return false;
+            return oven.inventory.itemList.Any(item => item.info == oven.fuelType);
         }
 
         private Item GetFuel(BuildingPrivlidge priv, BaseOven oven)
         {
-            foreach (Item item in priv.inventory?.itemList)
-                if (item.info == oven.fuelType)
-                    return item;
-            return null;
+            return priv.inventory?.itemList?.FirstOrDefault(item => item.info == oven.fuelType);
         }
 
         private static void RemoveItemThink(Item item)

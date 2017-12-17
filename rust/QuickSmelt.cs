@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("QuickSmelt", "Wulf/Fujikura", "3.0.3", ResourceId = 1067)]
+    [Info("QuickSmelt", "Wulf/Fujikura", "3.1.0", ResourceId = 1067)]
     [Description("Increases the speed of the furnace smelting")]
 
     class QuickSmelt : RustPlugin
@@ -30,36 +30,7 @@ namespace Oxide.Plugins
 		Dictionary<string, object> ovenMultipliers = new Dictionary<string, object>();
 		Dictionary<string, object> cookTimes = new Dictionary<string, object>();
 		Dictionary<string, object> amountsOfBecome = new Dictionary<string, object>();
-		
-		Dictionary<string, object> ovenDefaults()
-        {
-            var dp = new Dictionary<string, object>();
-            var baseOvens = Resources.FindObjectsOfTypeAll<BaseOven>().Where(c => !c.isActiveAndEnabled && !(c is BaseFuelLightSource)).Cast<BaseEntity>().ToList();
-			foreach (var oven in baseOvens)
-			{
-				if (!dp.ContainsKey(oven.ShortPrefabName))
-					dp.Add(oven.ShortPrefabName, 1.0f);
-			}
-           return dp;
-        }
-		
-		Dictionary<string, object> cookTimeDefaults()
-        {
-            var dp = new Dictionary<string, object>();
-			foreach (var itemDef in ItemManager.GetItemDefinitions())
-			{
-				ItemModCookable component = itemDef.GetComponent<ItemModCookable>();
-				if (component)
-				{
-					if (!overcookMeat && (component.name.Contains("cooked") || component.name.Contains("burned")))
-						continue;
-					if (!dp.ContainsKey(component.name.Replace(".item","")))
-						dp.Add(component.name.Replace(".item",""), component.cookTime);
-				}				
-			}
-			return dp;
-		}
-		
+
 		Dictionary<string, object> amountOfBecomeDefaults()
         {
             var dp = new Dictionary<string, object>();
@@ -102,9 +73,40 @@ namespace Oxide.Plugins
 			else
 			{
 				Config["CookInFurnaces"] = cookInFurnaces = GetConfig("CookInFurnaces", false);
-				Config["OvenMultipliers"] = ovenMultipliers = GetConfig("OvenMultipliers", ovenDefaults());
-				Config["CookTimes"] = cookTimes = GetConfig("CookTimes", cookTimeDefaults());
-				Config["AmountsOfBecome"] = amountsOfBecome = GetConfig("AmountsOfBecome", amountOfBecomeDefaults());
+				Config["OvenMultipliers"] = ovenMultipliers = GetConfig("OvenMultipliers", new Dictionary<string, object>());
+				var baseOvens = Resources.FindObjectsOfTypeAll<BaseOven>().Where(c => !c.isActiveAndEnabled && !(c is BaseFuelLightSource)).Cast<BaseEntity>().ToList();
+				foreach (var oven in baseOvens)
+				{
+					if (!ovenMultipliers.ContainsKey(oven.ShortPrefabName))
+						ovenMultipliers.Add(oven.ShortPrefabName, 1.0f);
+				}
+			
+				Config["CookTimes"] = cookTimes = GetConfig("CookTimes", new Dictionary<string, object>());
+				foreach (var itemDef in ItemManager.GetItemDefinitions())
+				{
+					ItemModCookable component = itemDef.GetComponent<ItemModCookable>();
+					if (component)
+					{
+						if (!overcookMeat && (component.name.Contains("cooked") || component.name.Contains("burned")))
+							continue;
+						if (!cookTimes.ContainsKey(component.name.Replace(".item","")))
+							cookTimes.Add(component.name.Replace(".item",""), component.cookTime);
+					}				
+				}
+
+				Config["AmountsOfBecome"] = amountsOfBecome = GetConfig("AmountsOfBecome", new Dictionary<string, object>());
+				foreach (var itemDef in ItemManager.GetItemDefinitions())
+				{
+					ItemModCookable component = itemDef.GetComponent<ItemModCookable>();
+					if (component)
+					{
+						if (!overcookMeat && (component.name.Contains("cooked") || component.name.Contains("burned")))
+							continue;
+						if (!amountsOfBecome.ContainsKey(component.name.Replace(".item","")))
+							amountsOfBecome.Add(component.name.Replace(".item",""), component.amountOfBecome);
+					}				
+				}
+
 				Config["CharcoalPercentLoss"] = charcoalPercentLoss = GetConfig("CharcoalPercentLoss", 25);
 				Config["CharcoalMultiplier"] = charcoalMultiplier = GetConfig("CharcoalMultiplier", 1);
 				Config["WoodFuelAmount"] = woodFuelAmount = GetConfig("WoodFuelAmount", 10.0f);
@@ -124,17 +126,7 @@ namespace Oxide.Plugins
 						if (amount.Key.Contains("cooked") || amount.Key.Contains("burned"))
 							cookTimes.Remove(amount.Key);
 				}
-				else
-				{
-					foreach (var amount in cookTimeDefaults().ToList())
-						if (!cookTimes.ContainsKey(amount.Key))
-							cookTimes.Add(amount.Key, amount.Value);
-					foreach (var amount in amountOfBecomeDefaults().ToList())
-						if (!amountsOfBecome.ContainsKey(amount.Key))
-							amountsOfBecome.Add(amount.Key, amount.Value);
-				}
 			}
-
 			SaveConfig();
         }
 
@@ -213,12 +205,6 @@ namespace Oxide.Plugins
 				return;
 			}
 
-			if (ovenMultipliers == null || ovenMultipliers.Count == 0)
-			{
-				Config["OvenMultipliers"] = ovenMultipliers = ovenDefaults();
-				SaveConfig();
-			}
-			
 			if (!overcookMeat)
 				foreach (var item in ItemManager.GetItemDefinitions())
 				{
