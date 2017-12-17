@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.2", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.3", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
 	
@@ -258,8 +258,6 @@ namespace Oxide.Plugins
 			if (!permission.PermissionExists(permissionName)) permission.RegisterPermission(permissionName, this);
             if ((_craftData = Interface.GetMod().DataFileSystem.ReadObject<CraftData>("ZLevelsCraftDetails")) == null)
                 _craftData = new CraftData();
-            playerPrefs = Interface.GetMod().DataFileSystem.ReadObject<PlayerData>(this.Title);
-			
 			var index = 0;
 			skillIndex = new Dictionary<string,int>();
 			foreach (var skill in Skills.ALL)
@@ -301,7 +299,8 @@ namespace Oxide.Plugins
 		void OnServerInitialized()
 		{
 			CheckCollectible();
-			if (newSaveDetected)
+			playerPrefs = Interface.GetMod().DataFileSystem.ReadObject<PlayerData>(this.Title);
+			if (newSaveDetected || (playerPrefs == null || playerPrefs.PlayerInfo == null || playerPrefs.PlayerInfo.Count == 0))
 			{
 				playerPrefs = new PlayerData();
 				Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerPrefs);
