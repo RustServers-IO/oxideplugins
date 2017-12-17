@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("FancyDrop", "Fujikura", "2.6.26", ResourceId = 1934)]
+	[Info("FancyDrop", "Fujikura", "2.7.0", ResourceId = 1934)]
 	[Description("The Next Level of a fancy airdrop-toolset")]
 	class FancyDrop : RustPlugin
 	{
@@ -47,9 +47,6 @@ namespace Oxide.Plugins
 		List<SupplyDrop> LootedDrops = new List<SupplyDrop>();
 		List<BaseEntity> activeSignals = new List<BaseEntity>();
 		Dictionary<BasePlayer, Timer> timers = new Dictionary<BasePlayer, Timer>();
-
-		ExportData dropLoot = null;
-		TableData dropTable = null;
 
 		static Dictionary<string, object> defaultRealTimers()
 		{
@@ -769,9 +766,9 @@ namespace Oxide.Plugins
 
 		#region ObjectsCreation
 
-		private CargoPlane createCargoPlane()
+		private CargoPlane createCargoPlane(Vector3 pos = new Vector3())
 		{
-			var newPlane = GameManager.server.CreateEntity("assets/prefabs/npc/cargo plane/cargo_plane.prefab", new Vector3(), new Quaternion(), true) as CargoPlane;
+			var newPlane = GameManager.server.CreateEntity("assets/prefabs/npc/cargo plane/cargo_plane.prefab", pos, new Quaternion(), true) as CargoPlane;
 			return newPlane;
 		}
 
@@ -809,8 +806,6 @@ namespace Oxide.Plugins
 
 		void SpawnNetworkable(BaseNetworkable ent)
 		{
-			FieldInfo _isSpawned = typeof(BaseNetworkable).GetField("isSpawned", (BindingFlags.Instance | BindingFlags.NonPublic));
-			FieldInfo _creationFrame = typeof(BaseNetworkable).GetField("creationFrame", (BindingFlags.Instance | BindingFlags.NonPublic));
 			if (ent.GetComponent<UnityEngine.Component>().transform.root != ent.GetComponent<UnityEngine.Component>().transform)
 				ent.GetComponent<UnityEngine.Component>().transform.parent = null;
 			Rust.Registry.Entity.Register(ent.GetComponent<UnityEngine.Component>().gameObject, ent);
@@ -927,13 +922,15 @@ namespace Oxide.Plugins
 					(plane as BaseNetworkable).net = Network.Net.sv.CreateNetworkable();
 				CargoPlanes.Add(plane);
 			}
+			(plane as BaseNetworkable).limitNetworking = true;
 			if((int)_creationFrame.GetValue(plane) == 0)
-				plane.Spawn();
+				plane.Spawn();	
 			plane.transform.position = startPos;
 			plane.transform.rotation = Quaternion.LookRotation(endPos - startPos);
 			dropPlanestartPos.SetValue(plane, startPos);
 			dropPlaneendPos.SetValue(plane, endPos);
-			dropPlanesecondsToTake.SetValue(plane, secondsToTake);
+			dropPlanesecondsToTake.SetValue(plane, secondsToTake);			
+			(plane as BaseNetworkable).limitNetworking = false;
 			if (showinfo)
 				DropNotifier(dropToPos, dropType, staticList, notificationInfo);
 		}
@@ -1239,7 +1236,7 @@ namespace Oxide.Plugins
 			if((airdropCleanupAtStart && UnityEngine.Time.realtimeSinceStartup < 60) || BasePlayer.activePlayerList.Count == 1 ) airdropCleanUp();
 			if (airdropRemoveInBuilt) removeBuiltInAirdrop();
 			if (airdropTimerEnabled) airdropTimerNext();
-			//NextTick(() => SetupLoot());
+			NextTick(() => SetupLoot());
 			object value;
 			var checkdefaults = defaultDrop();
 			foreach( var pair in checkdefaults)
@@ -2005,87 +2002,78 @@ namespace Oxide.Plugins
 
 		class ExportData
 		{
+			public string Name;
+			public int NumberToSpawn;
+			public float Probability;
 			public Dictionary<int,Dictionary<string,Dictionary<string,int>>> Categories = new Dictionary<int,Dictionary<string,Dictionary<string,int>>>();
 			public Dictionary<string,Dictionary<string,int>> Items = new Dictionary<string,Dictionary<string,int>>();
-		}
-
-		class TableData
-		{
-			public Dictionary<int,Dictionary<string,Dictionary<string,int>>> Categories = new Dictionary<int,Dictionary<string,Dictionary<string,int>>>();
+			[JsonIgnore]
 			public Dictionary<string,Dictionary<ItemDefinition,int>> ItemDefs = new Dictionary<string,Dictionary<ItemDefinition,int>>();
 		}
 
-		void ExportLootSpawn(LootSpawn lootSpawn, int level)
+		void SpawnIntoContainer(ref int itemCount, ItemContainer container, int itemDivider, int level, ExportData expData, string category = "")
 		{
-			if (lootSpawn.subSpawn != null && lootSpawn.subSpawn.Length > 0)
+			if (level == 1)
 			{
-				if(!dropLoot.Categories.ContainsKey(level))
-					dropLoot.Categories.Add(level, new Dictionary<string,Dictionary<string,int>>());
-				foreach (var entry in lootSpawn.subSpawn)
-				{
-					string cat = entry.category.ToString().Replace(" (LootSpawn)", "");
-					if(!dropLoot.Categories[level].ContainsKey(lootSpawn.name))
-						dropLoot.Categories[level].Add(lootSpawn.name, new Dictionary<string,int>());
-					dropLoot.Categories[level][lootSpawn.name].Add(cat , entry.weight);
-					ExportLootSpawn(entry.category, level+1);
-				}
-				return;
+				category = expData.Categories[level].First().Key.ToString();
 			}
-			if (lootSpawn.items != null && lootSpawn.items.Length > 0)
+			if (expData.Categories.ContainsKey(level))
 			{
-				foreach (var amount in lootSpawn.items)
+				if (expData.Categories[level].ContainsKey(category) && expData.Categories[level][category].Count > 0)
 				{
-					if(!dropLoot.Items.ContainsKey(lootSpawn.name))
-						dropLoot.Items.Add(lootSpawn.name, new Dictionary<string,int>() );
-					dropLoot.Items[lootSpawn.name].Add(amount.itemDef.shortname , (int)amount.amount);
-				}
-			}
-		}
-
-		void SpawnIntoContainer(ItemContainer container, int itemDivider, int level = 1 ,string category = "LootSpawn.SupplyDrop")
-		{
-			if (dropTable.Categories.ContainsKey(level))
-			if (dropTable.Categories[level].ContainsKey(category) && dropTable.Categories[level][category].Count > 0)
-				{
-					SubCategoryIntoContainer(container, itemDivider, level, category);
+					SubCategoryIntoContainer(ref itemCount, container, itemDivider, level, expData, category);
 					return;
 				}
-			if (dropTable.ItemDefs.ContainsKey(category))
-				foreach(var itemdef in dropTable.ItemDefs[category])
+			}
+			if (expData.ItemDefs.ContainsKey(category))
+			{
+				foreach(var itemdef in expData.ItemDefs[category])
 				{
+					if (itemCount >= container.capacity || container.IsFull())
+					{
+						return;
+					}
 					int count = 0;
 					 count = UnityEngine.Random.Range(Mathf.CeilToInt((int)itemdef.Value / itemDivider), (int)itemdef.Value);
 					if (count <= 0)
 						count = itemdef.Value;
 					Item item = ItemManager.Create(itemdef.Key, count, 0);
-					if (item != null && !item.MoveToContainer(container, -1, true))
+					if (item != null)
 					{
-						item.Remove(0f);
+						if(item.MoveToContainer(container, -1, true))
+						{
+							itemCount++;
+						}
+						else
+							item.Remove(0f);
 					}
 				}
+			}
 		}
 
-		void SubCategoryIntoContainer(ItemContainer container, int itemDivider, int level, string category)
+		
+		void SubCategoryIntoContainer(ref int itemCount, ItemContainer container, int itemDivider, int level, ExportData expData, string category = "")
 		{
 			int num = 0;
-			foreach (var cat in dropTable.Categories[level][category])
+			foreach (var cat in expData.Categories[level][category])
 				num += cat.Value;
 			int num2 = UnityEngine.Random.Range(0, num);
-			foreach (var cat in dropTable.Categories[level][category])
-				if (!(dropTable.Categories[level][category][cat.Key] == 0))
+			foreach (var cat in expData.Categories[level][category])
+			{
+				if (!(expData.Categories[level][category][cat.Key] == 0))
 				{
 					num -= cat.Value;
 					if (num2 >= num)
 					{
-						SpawnIntoContainer(container, itemDivider, level+1, cat.Key);
+						SpawnIntoContainer(ref itemCount, container, itemDivider, level+1, expData, cat.Key);
 						return;
 					}
 				}
+			}
 		}
 
 	   void SetupContainer(StorageContainer drop, Dictionary<string,object> setup)
 	   {
-			try { setup["useCustomLootTable"] = false; } catch {}
 			int slots = Mathf.RoundToInt(UnityEngine.Random.Range(Convert.ToSingle(setup["minItems"])*100f, Convert.ToSingle(setup["maxItems"])*100f) / 100f);
 			bool ALCustom = false;
 			if (setup.ContainsKey("AlCustom"))
@@ -2181,18 +2169,55 @@ namespace Oxide.Plugins
 				drop.inventory.MarkDirty();
 				return;
 			}
-			if(!(bool)setup["betterloot"] && (bool)setup["useCustomLootTable"] && (dropTable.ItemDefs.Count > 0 || ALCustom))
+			
+			if(!(bool)setup["betterloot"] && (bool)setup["useCustomLootTable"] && (dropLoot.First().ItemDefs.Count > 0 || ALCustom))
 			{
 				if (!container_init)
 				{
 					drop.inventory = new ItemContainer();
 					drop.inventory.ServerInitialize(null, slots);
 				}
-				do
+				else
 				{
-					SpawnIntoContainer(drop.inventory, (int)setup["itemDivider"]);
-				} while(!drop.inventory.IsFull());
+					drop.inventory.capacity = slots;
+					drop.inventorySlots = slots;
+				}
+				int itemCount = 0;
+				for (int i = 0; i < dropLoot.Count; i++)
+				{
+					var dLoot = dropLoot[i];
+					for (int j = 0; j < dLoot.NumberToSpawn; j++)
+					{
+						float num = UnityEngine.Random.Range(0f, 1f);
+						if (num <= dLoot.Probability)
+						{
+							SpawnIntoContainer(ref itemCount, drop.inventory, (int)setup["itemDivider"], 1, dLoot);
+							if (drop.inventory.IsFull() || itemCount >= slots)
+							{
+								break;
+							}
+						}
+					}
+					if (drop.inventory.IsFull() || itemCount >= slots)
+					{
+						break;
+					}
+				}
+				
+				if (!drop.inventory.IsFull() && itemCount < slots)
+				{
+					do
+					{
+						SpawnIntoContainer(ref itemCount, drop.inventory, (int)setup["itemDivider"], 1, dropLoot.Last());
+						if (itemCount >= slots || drop.inventory.IsFull())
+							break;
+					} while(true);
+				}
+				drop.panelName = "generic";
+				drop.inventory.capacity = drop.inventory.itemList.Count;
+				drop.inventory.MarkDirty();
 			}
+			
 
 			if(!(bool)setup["betterloot"] && !(bool)setup["useCustomLootTable"])
 			{
@@ -2212,43 +2237,89 @@ namespace Oxide.Plugins
 			drop.inventory.MarkDirty();
 	   }
 
+		List<ExportData> dropLoot = null;
+		
 		void SetupLoot()
 		{
-			dropLoot = new ExportData();
-			dropTable = new TableData();
-			dropLoot = Interface.GetMod().DataFileSystem.ReadObject<ExportData>(this.Title);
-			if (dropLoot.Categories.Count == 0)
+			dropLoot = new List<ExportData>();
+			
+			try { dropLoot = Interface.GetMod().DataFileSystem.ReadObject<List<ExportData>>(this.Title); }
+			catch { dropLoot = new List<ExportData>(); } 
+			
+			if (dropLoot == null || dropLoot.Count == 0)
 			{
 				var loot = GameManager.server.FindPrefab("assets/prefabs/misc/supply drop/supply_drop.prefab").GetComponent<LootContainer>();
-				ExportLootSpawn(loot.lootDefinition, 1);
+				for (int i = 0; i < loot.LootSpawnSlots.Length; i++)
+				{
+					var lootSlot = loot.LootSpawnSlots[i];
+					var exportData = new ExportData();
+					exportData.Name = lootSlot.definition.name.ToString();
+					exportData.NumberToSpawn = lootSlot.numberToSpawn;
+					exportData.Probability = lootSlot.probability;			
+					ExportLootSpawn(exportData, lootSlot.definition, 1);
+					dropLoot.Add(exportData);
+				}
 				Interface.GetMod().DataFileSystem.WriteObject(this.Title, dropLoot);
 			}
-			if (dropLoot.Items.Count > 0)
+			
+			int items = 0;
+			foreach (var dLoot in dropLoot.ToList())
 			{
-				int items = 0;
-				dropTable.Categories = dropLoot.Categories;
-				foreach (var amount in dropLoot.Items)
+				if (dLoot.Items.Count > 0)
 				{
-					foreach(var item in amount.Value)
+					
+					foreach (var amount in dLoot.Items)
 					{
-						var def = ItemManager.FindItemDefinition(item.Key);
-						if (def == null)
-							continue;
-						var chk = ItemManager.Create(def);
-						if (chk == null)
+						foreach(var item in amount.Value)
 						{
-							try { chk.Remove(0f); } catch {}
-							continue;
+							var def = ItemManager.FindItemDefinition(item.Key);
+							if (def == null)
+								continue;
+							var chk = ItemManager.Create(def);
+							if (chk == null)
+							{
+								try { chk.Remove(0f); } catch {}
+								continue;
+							}
+							if(!dLoot.ItemDefs.ContainsKey(amount.Key))
+								dLoot.ItemDefs.Add(amount.Key, new Dictionary<ItemDefinition,int>() );
+							dLoot.ItemDefs[amount.Key].Add(def , item.Value);
+							items++;
 						}
-						if(!dropTable.ItemDefs.ContainsKey(amount.Key))
-							dropTable.ItemDefs.Add(amount.Key, new Dictionary<ItemDefinition,int>() );
-						dropTable.ItemDefs[amount.Key].Add(def , item.Value);
-						items++;
 					}
 				}
-				Puts($"Custom loot table loaded with '{items}' items");
+			}
+			Puts($"'{dropLoot.Count}' custom loot tables loaded with overall '{items}' items");
+		}
+		
+		void ExportLootSpawn(ExportData expData, LootSpawn lootSpawn, int level)
+		{
+			if (lootSpawn.subSpawn != null && lootSpawn.subSpawn.Length > 0)
+			{
+				if(!expData.Categories.ContainsKey(level))
+					expData.Categories.Add(level, new Dictionary<string,Dictionary<string,int>>());
+				foreach (var entry in lootSpawn.subSpawn)
+				{
+					string cat = entry.category.ToString().Replace(" (LootSpawn)", "");
+					if(!expData.Categories[level].ContainsKey(lootSpawn.name))
+						expData.Categories[level].Add(lootSpawn.name, new Dictionary<string,int>());
+					expData.Categories[level][lootSpawn.name].Add(cat , entry.weight);
+					ExportLootSpawn(expData, entry.category, level+1);
+				}
+				return;
+			}
+			if (lootSpawn.items != null && lootSpawn.items.Length > 0)
+			{
+				foreach (var amount in lootSpawn.items)
+				{
+					if(!expData.Items.ContainsKey(lootSpawn.name))
+						expData.Items.Add(lootSpawn.name, new Dictionary<string,int>() );
+					expData.Items[lootSpawn.name].Add(amount.itemDef.shortname , (int)amount.amount);
+				}
 			}
 		}
+		
+		
 		#endregion SetupLoot
 
 		#region SimpleUI
