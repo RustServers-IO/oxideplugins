@@ -5686,4 +5686,1081 @@ namespace Oxide.Plugins
                         if (!CanWinTannery) continue;
                         else
                         {
-                            var blueprintForName = InvDefinitions.Ins
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Tannery", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Tannery", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 372:
+
+                        if (!CanWinTearsOfTheGods) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Tears Of The Gods", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Tears Of The Gods", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 373:
+
+                        if (!CanWinThatchBlock) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Thatch Block", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 50;
+                            GiveItem(player, "Thatch Block", 50);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 374:
+
+                        if (!CanWinThatchCorner) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Thatch Corner", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            GiveItem(player, "Thatch Corner", 10);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 375:
+
+                        if (!CanWinThatchInvertedCorner) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Thatch Inverted Corner", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            GiveItem(player, "Thatch Inverted Corner", 10);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 376:
+
+                        if (!CanWinThatchRamp) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Thatch Ramp", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            GiveItem(player, "Thatch Ramp", 10);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 377:
+
+                        if (!CanWinThatchStairs) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Thatch Stairs", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Thatch Stairs", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 378:
+
+                        if (!CanWinTheaterMaskGoldRed) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Theater Mask (Gold & Red)", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Theater Mask (Gold & Red)", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 379:
+
+                        if (!CanWinTheaterMaskWhiteBlue) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Theater Mask (White & Blue)", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Theater Mask (White & Blue)", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 380:
+
+                        if (!CanWinTheaterMaskWhiteGold) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Theater Mask (White & Gold)", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Theater Mask (White & Gold)", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 381:
+
+                        if (!CanWinTheaterMaskWhiteRed) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Theater Mask (White & Red)", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Theater Mask (White & Red)", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 382:
+
+                        if (!CanWinTheatreMaskComedy) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Theatre Mask (Comedy)", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Theatre Mask (Comedy)", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 383:
+
+                        if (!CanWinTheatreMaskTragedy) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Theatre Mask (Tragedy)", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Theatre Mask (Tragedy)", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 384:
+
+                        if (!CanWinThrowingStone) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Throwing Stone", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Throwing Stone", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 385:
+
+                        if (!CanWinTinker) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Tinker", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Tinker", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 386:
+
+                        if (!CanWinTorch) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Torch", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Torch", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 387:
+
+                        if (!CanWinTrebuchet) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Trebuchet", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Trebuchet", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 388:
+
+                        if (!CanWinTrebuchetHayBale) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Trebuchet Hay Bale", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            GiveItem(player, "Trebuchet Hay Bale", 10);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 389:
+
+                        if (!CanWinTrebuchetStone) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Trebuchet Stone", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Trebuchet Stone", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 390:
+
+                        if (!CanWinWallLantern) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wall Lantern", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 2;
+                            GiveItem(player, "Wall Lantern", 2);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 391:
+
+                        if (!CanWinWallTorch) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wall Torch", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 2;
+                            GiveItem(player, "Wall Torch", 2);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 392:
+
+                        if (!CanWinWarDrum) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("War Drum", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "War Drum", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 393:
+
+                        if (!CanWinWasp) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wasp", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wasp", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 394:
+
+                        if (!CanWinWater) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Water", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 200;
+                            GiveItem(player, "Water", 200);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 395:
+
+                        if (!CanWinWateringPot) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Watering Pot", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Watering Pot", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 396:
+
+                        if (!CanWinWell) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Well", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Well", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 397:
+
+                        if (!CanWinWencelasHelmet) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wencelas Helmet", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wencelas Helmet", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 398:
+
+                        if (!CanWinWerewolf) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Werewolf", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Werewolf", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 399:
+
+                        if (!CanWinWhip) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Whip", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Whip", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 400:
+
+                        if (!CanWinWolf) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wolf", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wolf", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 401:
+
+                        if (!CanWinWolfPelt) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wolf Pelt", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 6;
+                            GiveItem(player, "Wolf Pelt", 6);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 402:
+
+                        if (!CanWinWood) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 200;
+                            GiveItem(player, "Wood", 200);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 403:
+
+                        if (!CanWinWoodArrow) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Arrow", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Wood Arrow", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 404:
+
+                        if (!CanWinWoodBarricade) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Barricade", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 4;
+                            GiveItem(player, "Wood Barricade", 4);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 405:
+
+                        if (!CanWinWoodBlock) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Block", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 50;
+                            GiveItem(player, "Wood Block", 50);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 406:
+
+                        if (!CanWinWoodBracers) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Bracers", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Bracers", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 407:
+
+                        if (!CanWinWoodBuckler) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Buckler", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Buckler", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 408:
+
+                        if (!CanWinWoodCage) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Cage", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Cage", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 409:
+
+                        if (!CanWinWoodChest) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Chest", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Chest", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 410:
+
+                        if (!CanWinWoodCorner) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Corner", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            GiveItem(player, "Wood Corner", 10);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 411:
+
+                        if (!CanWinWoodDoor) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Door", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 2;
+                            GiveItem(player, "Wood Door", 2);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 412:
+
+                        if (!CanWinWoodDrawbridge) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Drawbridge", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Drawbridge", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 413:
+
+                        if (!CanWinWoodFlute) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Flute", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Flute", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 414:
+
+                        if (!CanWinWoodGate) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Gate", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Gate", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 415:
+
+                        if (!CanWinWoodHeater) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Heater", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Heater", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 416:
+
+                        if (!CanWinWoodHelmet) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Helmet", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Helmet", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 417:
+
+                        if (!CanWinWoodInvertedCorner) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Inverted Corner", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Wood Inverted Corner", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 418:
+
+                        if (!CanWinWoodJavelin) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Javelin", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Wood Javelin", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 419:
+
+                        if (!CanWinWoodLedge) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Ledge", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 2;
+                            GiveItem(player, "Wood Ledge", 2);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 420:
+
+                        if (!CanWinWoodMace) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Mace", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 2;
+                            GiveItem(player, "Wood Mace", 2);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 421:
+
+                        if (!CanWinWoodPictureFrame) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Picture Frame", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 2;
+                            GiveItem(player, "Wood Picture Frame", 2);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 422:
+
+                        if (!CanWinWoodRamp) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Ramp", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Wood Ramp", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 423:
+
+                        if (!CanWinWoodSandals) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Sandals", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Sandals", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 424:
+
+                        if (!CanWinWoodShortBow) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Short Bow", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Short Bow", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 425:
+
+                        if (!CanWinWoodShutters) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Shutters", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 4;
+                            GiveItem(player, "Wood Shutters", 4);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 426:
+
+                        if (!CanWinWoodSkirt) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Skirt", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Skirt", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 427:
+
+                        if (!CanWinWoodSpear) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Spear", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Spear", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 428:
+
+                        if (!CanWinWoodSpikes) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Spikes", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Spikes", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 429:
+
+                        if (!CanWinWoodStairs) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Stairs", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Wood Stairs", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 430:
+
+                        if (!CanWinWoodStick) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Stick", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Stick", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 431:
+
+                        if (!CanWinWoodSword) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Sword", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Sword", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 432:
+
+                        if (!CanWinWoodTotem) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Totem", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Totem", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 433:
+
+                        if (!CanWinWoodTower) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Tower", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Tower", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 434:
+
+                        if (!CanWinWoodVest) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wood Vest", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Wood Vest", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 435:
+
+                        if (!CanWinWoodworking) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Woodworking", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Woodworking", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 436:
+
+                        if (!CanWinWool) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Wool", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 20;
+                            GiveItem(player, "Wool", 20);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 437:
+
+                        if (!CanWinWorkBench) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Work Bench", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            GiveItem(player, "Work Bench", 1);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 438:
+
+                        if (!CanWinWorms) continue;
+                        else
+                        {
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Worms", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            GiveItem(player, "Worms", 10);
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 439:
+
+                        if (!CanWinJackpot) continue;
+                        else
+                        {
+                            PrintToChat(player, string.Format(GetMessage("30", player.Id.ToString()), "439"));
+                            PrintToChat(player, string.Format(GetMessage("6", player.Id.ToString()), "439"));
+                            GiveItem(player, "Bat", 10);
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Bat", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Trebuchet", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Trebuchet", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "War Drum", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("War Drum", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Trebuchet Stone", 20);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Trebuchet Stone", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 20;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Steel Greatsword", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Steel Greatsword", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 440:
+
+                        if (!CanWinSteelArmorSetJackpot) continue;
+                        else
+                        {
+                            PrintToChat(player, string.Format(GetMessage("30", player.Id.ToString()), "440"));
+                            PrintToChat(player, string.Format(GetMessage("7", player.Id.ToString()), "440"));
+                            GiveItem(player, "Steel Plate Boots", 1);
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Steel Plate Boots", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Steel Plate Gauntlets", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Steel Plate Gauntlets", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Steel Plate Helmet", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Steel Plate Helmet", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Steel Plate Pants", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Steel Plate Pants", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Steel Plate Vest", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Steel Plate Vest", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 441:
+
+                        if (!CanWinIronArmorSetJackpot) continue;
+                        else
+                        {
+                            PrintToChat(player, string.Format(GetMessage("30", player.Id.ToString()), "441"));
+                            PrintToChat(player, string.Format(GetMessage("8", player.Id.ToString()), "441"));
+                            GiveItem(player, "Iron Plate Boots", 1);
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Iron Plate Boots", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Iron Plate Gauntlets", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Iron Plate Gauntlets", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Iron Plate Helmet", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Iron Plate Helmet", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Iron Plate Pants", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Iron Plate Pants", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Iron Plate Vest", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Iron Plate Vest", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 442:
+
+                        if (!CanWinLeatherArmorSetJackpot) continue;
+                        else
+                        {
+                            PrintToChat(player, string.Format(GetMessage("30", player.Id.ToString()), "442"));
+                            PrintToChat(player, string.Format(GetMessage("9", player.Id.ToString()), "442"));
+                            GiveItem(player, "Light Leather Boots", 1);
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Light Leather Boots", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Light Leather Bracers", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Light Leather Bracers", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Light Leather Helmet", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Light Leather Helmet", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Light Leather Pants", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Light Leather Pants", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Light Leather Vest", 1);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Light Leather Vest", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 1;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 443:
+
+                        if (!CanWinBuilderSetJackpot) continue;
+                        else
+                        {
+                            PrintToChat(player, string.Format(GetMessage("30", player.Id.ToString()), "443"));
+                            PrintToChat(player, string.Format(GetMessage("10", player.Id.ToString()), "443"));
+                            GiveItem(player, "Stone Block", 700);
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Stone Block", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 700;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Stone Ramp", 100);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Stone Ramp", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 100;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Stone Stairs", 100);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Stone Stairs", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 100;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Iron Door", 2);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Iron Door", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 2;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                            GiveItem(player, "Iron Gate", 2);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Iron Gate", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 2;
+                            PrintToChat(player, string.Format(GetMessage("2", player.Id.ToString()), amount.ToString(), itemstring));
+                        }
+                        return;
+                    case 444:
+
+                        if (!CanWinRobbed) continue;
+                        else
+                        {
+                            PrintToChat(player, string.Format(GetMessage("23", player.Id.ToString()), "445"));
+                            Bite(player);
+                            PrintToChat(player, string.Format(GetMessage("11", player.Id.ToString()), "44"));
+                            GiveItem(player, "Blood", 10);
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Blood", true, true);
+                            string itemstring = blueprintForName.Name;
+                        }
+                        return;
+                    case 445:
+
+                        if (!CanWinGangAttack) continue;
+                        else
+                        {
+                            PrintToChat(player, string.Format(GetMessage("23", player.Id.ToString()), "445"));
+                            Bite(player);
+                            PrintToChat(player, string.Format(GetMessage("12", player.Id.ToString()), "445"));
+                            Bite(player);
+                            Bite(player);
+                            PrintToChat(player, string.Format(GetMessage("13", player.Id.ToString()), "445"));
+                            Bite(player);
+                            PrintToChat(player, string.Format(GetMessage("14", player.Id.ToString()), "445"));
+                            PrintToChat(player, string.Format(GetMessage("15", player.Id.ToString()), "445"));
+                            PrintToChat(player, string.Format(GetMessage("16", player.Id.ToString()), "445"));
+                            PrintToChat(player, string.Format(GetMessage("17", player.Id.ToString()), "445"));
+                            GiveItem(player, "Bandage", 10);
+                            var blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Bandage", true, true);
+                            string itemstring = blueprintForName.Name;
+                            int amount = 10;
+                            GiveItem(player, "Water", 10);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Water", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 10;
+                            PrintToChat(player, string.Format(GetMessage("18", player.Id.ToString()), "445"));
+                            GiveItem(player, "Cooked Meat", 10);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Cooked Meat", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 10;
+                            PrintToChat(player, string.Format(GetMessage("19", player.Id.ToString()), "445"));
+                            GiveItem(player, "Bat", 10);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Bat", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 10;
+                            PrintToChat(player, string.Format(GetMessage("20", player.Id.ToString()), "445"));
+                            GiveItem(player, "Diamond", 10);
+                            blueprintForName = InvDefinitions.Instance.Blueprints.GetBlueprintForName("Diamond", true, true);
+                            itemstring = blueprintForName.Name;
+                            amount = 10;
+                            PrintToChat(player, string.Format(GetMessage("21", player.Id.ToString()), "445"));
+                            PrintToChat(player, string.Format(GetMessage("22", player.Id.ToString()), "445"));
+                        }
+                        return;
+                    case 446:
+
+                        if (!CanWinGold1K) continue;
+                        else
+                        if (GrandExchange != null)
+                        {
+                            GrandExchange.CallHook("GiveGold", player, 1000);
+                            PrintToChat(player, string.Format(GetMessage("24", player.Id.ToString()), "445")); return;
+                        }
+                        else continue;
+                    case 447:
+
+                        if (!CanWinGold10K) continue;
+                        else
+                        if (GrandExchange != null)
+                        {
+                            GrandExchange.CallHook("GiveGold", player, 10000);
+                            PrintToChat(player, string.Format(GetMessage("25", player.Id.ToString()), "445")); return;
+                        }
+                        else continue;
+                    case 448:
+
+                        if (!CanWinGold100K) continue;
+                        else
+                        if (GrandExchange != null)
+                        {
+                            GrandExchange.CallHook("GiveGold", player, 100000);
+                            PrintToChat(player, string.Format(GetMessage("26", player.Id.ToString()), "445")); return;
+                        }
+                        else continue;
+                }
+            }
+        }
+
+        void OnPlayerConnected(Player player)
+        {
+            Puts("OnPlayerConnected works!");
+        }
+        #endregion
+    }
+}
