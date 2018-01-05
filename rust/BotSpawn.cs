@@ -5,6 +5,7 @@ using Oxide.Core;
 using Oxide.Core.Plugins;
 using Rust;
 using UnityEngine;
+using UnityEngine.Playables;
 using Oxide.Game.Rust;
 using System.Globalization;
 using Newtonsoft.Json.Linq;
@@ -16,7 +17,7 @@ using Facepunch;
 namespace Oxide.Plugins
 //comments are wide to the right --->
 {
-    [Info("BotSpawn", "Steenamaroo", "1.4.2", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.4.3", ResourceId = 2580)]
     
     [Description("Spawn tailored AI with kits at monuments and custom locations.")]
 
@@ -93,9 +94,15 @@ namespace Oxide.Plugins
         {
 	    foreach (var bot in TempRecord.NPCPlayers)
 	    {
-            var bData = bot.GetComponent<botData>();
-            if (bData.bot != null)
-            bData.bot.Kill();
+            if (bot == null)
+            {
+                TempRecord.NPCPlayers.Remove(bot);
+                Wipe();
+                return;
+            }
+            var comp = bot.GetComponent<BasePlayer>();
+            if (comp != null)
+            comp.Kill();
             else
             continue;
 	    }
@@ -112,20 +119,14 @@ namespace Oxide.Plugins
     
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            NPCPlayerApex Scientist = null;
+            NPCPlayerApex Scientist = null; 
+            
             if (entity is NPCPlayerApex)
                {
                     Scientist = entity as NPCPlayerApex;
                     
                     if (!TempRecord.NPCPlayers.Contains(Scientist))
                     return null;
-                
-                    if (info.Initiator is NPCPlayer && !(configData.Options.NPC_Retaliate))                                                                     //bots wont retaliate to friendly fire
-                    {
-                        info.Initiator = null;
-                    }
-                    
-                    if (info.Initiator == null) return null;
                     
                     if (info.Initiator is BasePlayer)
                     {
@@ -145,27 +146,20 @@ namespace Oxide.Plugins
                             info.damageTypes.ScaleAll(0);
                             }
                             
-                        foreach (var bot in TempRecord.NPCPlayers)                                                                                              //multiplier to simulate custom health setting
-                        {
-                            var bData = bot.GetComponent<botData>();
-                            if (bData.botID == damagedbot.userID)
-                            {
-                                float multiplier = 100f / bData.health;
-                                info.damageTypes.ScaleAll(multiplier);
-                            }
-                        }
+                            var bData = Scientist.GetComponent<botData>();
+                            float multiplier = 100f / bData.health;
+                            info.damageTypes.ScaleAll(multiplier);
                     }
                }
 
             if (info?.Initiator is NPCPlayer && entity is BasePlayer)                                                                                           //add in bot accuracy
             {
-                var attacker = info?.Initiator as NPCPlayer;
+                var attacker = info.Initiator as NPCPlayerApex;
             
-                foreach (var bot in TempRecord.NPCPlayers)
+                if (TempRecord.NPCPlayers.Contains(attacker))
                 {
-                    var bData = bot.GetComponent<botData>();
-                    if (bData.botID == attacker.userID)
-                    {
+                    var bData = attacker.GetComponent<botData>();
+
                     System.Random rnd = new System.Random();
                     int rand = rnd.Next(1, 10);
                         if (bData.accuracy < rand)                                                                                                              //scale bot attack damage
@@ -177,7 +171,6 @@ namespace Oxide.Plugins
                         info.damageTypes.ScaleAll(bData.damage);
                         return null;    
                         }
-                    }
                 }
             }
             return null;
@@ -185,67 +178,49 @@ namespace Oxide.Plugins
         
         void OnPlayerDie(BasePlayer player)
         {
+            string respawnLocationName = "";
             NPCPlayerApex Scientist = null;
             if (player is NPCPlayerApex)
             {
                 Scientist = player as NPCPlayerApex;
                 if (!TempRecord.NPCPlayers.Contains(Scientist))
                 return;
-                var bData = Scientist.GetComponent<botData>();
-                Item activeItem = player.GetActiveItem();
-                if (bData.dropweapon == true)
-                {
-                    using (TimeWarning timeWarning = TimeWarning.New("PlayerBelt.DropActive", 0.1f))
-                    {
-                        activeItem.Drop(player.eyes.position, new Vector3(), new Quaternion());
-                        player.svActiveItemID = 0;
-                        player.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                    }
-                }
-            }
-        }
-        void OnEntityDeath(BaseEntity entity)
-        {
-            string respawnLocationName = "";
-            NPCPlayerApex Scientist = null;
-            if (entity is NPCPlayerApex)
-            {
-                Scientist = entity as NPCPlayerApex;
-                if (!TempRecord.NPCPlayers.Contains(Scientist))
-                return;
             
-                var bData = entity.GetComponent<botData>();
-                foreach (var bot in TempRecord.NPCPlayers)                                                                                                      //kill radio effects
-                {
-                    Scientist = entity as NPCPlayerApex;
-                    var bDataCheck = bot.GetComponent<botData>();
-                    if (bDataCheck.botID == Scientist.userID)
-                        {
-                            no_of_AI--;
-                            respawnLocationName = bDataCheck.monumentName;
-                            TempRecord.DeadNPCPlayerIds.Add(bDataCheck.botID);
-                            if (TempRecord.MonumentProfiles[respawnLocationName].Disable_Radio == true)
-                            Scientist.DeathEffect = new GameObjectRef();
-                        }
-                }
-
-                if(bData.respawn == false)
-                {
-                UpdateRecords(Scientist);
-                return;
-                }
-                foreach (var profile in TempRecord.MonumentProfiles)
-                {
-                    if(profile.Key == respawnLocationName)
+                if (TempRecord.NPCPlayers.Contains(Scientist))                                                                                                      //kill radio effects
+                {                     
+                    var bData = Scientist.GetComponent<botData>();
+                    Item activeItem = player.GetActiveItem();
+                    if (bData.dropweapon == true)
                     {
-                        timer.Once(profile.Value.Respawn_Timer, () => SpawnBots(profile.Key, profile.Value, null));
-                        UpdateRecords(Scientist);
+                        using (TimeWarning timeWarning = TimeWarning.New("PlayerBelt.DropActive", 0.1f))
+                        {
+                            activeItem.Drop(player.eyes.position, new Vector3(), new Quaternion());
+                            player.svActiveItemID = 0;
+                            player.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+                        }
                     }
-                }
-            }
-            else
-            {
-                return;
+                    no_of_AI--;
+                    respawnLocationName = bData.monumentName;
+                    TempRecord.DeadNPCPlayerIds.Add(Scientist.userID);
+                    if (TempRecord.MonumentProfiles[respawnLocationName].Disable_Radio == true)
+                    Scientist.DeathEffect = new GameObjectRef();
+
+                    if(bData.respawn == false)
+                    {
+                    UnityEngine.Object.Destroy(Scientist.GetComponent<botData>());
+                    UpdateRecords(Scientist);
+                    return;
+                    }
+                    foreach (var profile in TempRecord.MonumentProfiles)
+                    {
+                        if(profile.Key == respawnLocationName)
+                        {
+                            timer.Once(profile.Value.Respawn_Timer, () => SpawnBots(profile.Key, profile.Value, null));
+                            UnityEngine.Object.Destroy(Scientist.GetComponent<botData>());
+                            UpdateRecords(Scientist);
+                        }
+                    }
+                }  
             }
         }
       
@@ -309,56 +284,51 @@ namespace Oxide.Plugins
              
                 
                 TempRecord.NPCPlayers.Add(botapex);
-                botapex.Spawn();
+
                 botapex.GuardPosition = newPos;
                 
-                        if (zone.Roam_Range < 20)
-                        zone.Roam_Range = 20;
-                        
-                        int suicInt = rnd.Next((configData.Options.Suicide_Timer), (configData.Options.Suicide_Timer + 10));                                            //slightly randomise suicide de-spawn time
-                        
-                        NextTick(() =>
-                        {
-                             bData.spawnPoint = newPos;
-                             bData.accuracy = zone.Bot_Accuracy;
-                             bData.damage = zone.Bot_Damage;
-                             bData.health = zone.BotHealth;
-                             bData.range = (zone.Aggression_Range / 3f);
-                             bData.botID = entity.userID;
-                             bData.bot = entity;
-                             bData.monumentName = name;
-                             bData.respawn = true;
-                             bData.roamRange = zone.Roam_Range;
-                             bData.dropweapon = zone.Weapon_Drop;
-                             bData.keepAttire = zone.Keep_Default_Loadout;
-
-                            if (type == "AirDrop" || type == "Attack")
-                            {
-                            bData.respawn = false;
-                            timer.Once(suicInt, () =>
-                            {
-                                if (TempRecord.NPCPlayers.Contains(botapex))
-                                {
-                                    if (botapex != null)
-                                    {
-                                    Effect.server.Run("assets/prefabs/weapons/rocketlauncher/effects/rocket_explosion.prefab", botapex.transform.position); //fix for manual OnEntityDeath
-                                    HitInfo nullHit = new HitInfo();
-                                    nullHit.damageTypes.Add(Rust.DamageType.Explosion, 10000);
-                                    botapex.Hurt(nullHit);
-                                    }
-                                    else
-                                    {
-                                        TempRecord.NPCPlayers.Remove(botapex);
-                                        Puts("This Shouldn't Happen");
-                                        return;
-                                    }
-                                }
-                                else return; 
-                            });
-                            }
+                if (zone.Roam_Range < 20)
+                zone.Roam_Range = 20;
+                botapex.Spawn();
                 
+                bData.spawnPoint = newPos;
+                bData.accuracy = zone.Bot_Accuracy;
+                bData.damage = zone.Bot_Damage;
+                bData.health = zone.BotHealth;
+                bData.range = (zone.Aggression_Range / 3f);
+                bData.monumentName = name;
+                bData.respawn = true;
+                bData.roamRange = zone.Roam_Range;
+                bData.dropweapon = zone.Weapon_Drop;
+                bData.keepAttire = zone.Keep_Default_Loadout;
+                                
+                int suicInt = rnd.Next((configData.Options.Suicide_Timer), (configData.Options.Suicide_Timer + 10));                                            //slightly randomise suicide de-spawn time
+                
+                if (type == "AirDrop" || type == "Attack")
+                {
+                bData.respawn = false;
+                timer.Once(suicInt, () =>
+                {
+                    if (TempRecord.NPCPlayers.Contains(botapex))
+                    {
+                        if (botapex != null)
+                        {
+                        Effect.server.Run("assets/prefabs/weapons/rocketlauncher/effects/rocket_explosion.prefab", botapex.transform.position); //fix for manual OnEntityDeath
+                        HitInfo nullHit = new HitInfo();
+                        nullHit.damageTypes.Add(Rust.DamageType.Explosion, 10000);
+                        botapex.Hurt(nullHit);
                         }
-                        );
+                        else
+                        {
+                            TempRecord.NPCPlayers.Remove(botapex);
+                            Puts("This Shouldn't Happen");
+                            return;
+                        }
+                    }
+                    else return; 
+                });
+                }
+
                 
                 int kitRnd;
                 if (zone.Kit.Count != 0)
@@ -369,7 +339,7 @@ namespace Oxide.Plugins
                         object checkKit = (Kits.CallHook("GetKitInfo", zone.Kit[kitRnd], true));
                         if (checkKit == null)
                         {
-                            PrintWarning($"Kit {zone.Kit[kitRnd]} does not exist - Defaulting to 'Scientist'.");
+                            PrintWarning($"Kit {zone.Kit[kitRnd]} does not exist - Defaulting to Scientist or Murderer.");
                         }
                         else
                         {
@@ -384,13 +354,13 @@ namespace Oxide.Plugins
                                 {
                                     JObject item = weap as JObject;
                 
-                                    if (item["container"].ToString() == "belt" && item["weapon"].ToString() == "True")
+                                    if (item["container"].ToString() == "belt")
                                         weaponInBelt = true;
                                 }
                             }
                             if (!weaponInBelt)
                             {
-                                PrintWarning($"Kit {zone.Kit[kitRnd]} has no weapon in belt - Defaulting to 'Scientist'.");
+                                PrintWarning($"Kit {zone.Kit[kitRnd]} has no items in belt - Defaulting to Scientist or Murderer.");
                             }
                             else
                             {
@@ -784,10 +754,7 @@ namespace Oxide.Plugins
         {
             if (!TempRecord.NPCPlayers.Contains(npcPlayer))
             return null;
-        
-            if (entity is NPCPlayer)                                                                                                                            //stop murderers attacking scientists.
-            return 0f;
-        
+
             if (npcPlayer == null || entity == null)
             return null;
             BasePlayer victim = null;
@@ -834,7 +801,7 @@ namespace Oxide.Plugins
                 var profile = bData.monumentName;
             }
 
-            if(!victim.userID.IsSteamId() && configData.Options.Ignore_HumanNPC)                                                                                //stops bots targeting animals
+            if(!victim.userID.IsSteamId() && configData.Options.Ignore_HumanNPC)                                                                                //stops bots targeting humannpc
             return 0f;
             }
             if (entity.name.Contains("agents/") && configData.Options.Ignore_Animals)                                                                           //stops bots targeting animals
@@ -870,7 +837,7 @@ namespace Oxide.Plugins
         {
         Vector3 location = (CalculateGroundPos(player.transform.position));
     
-            timer.Repeat(0f,profile.Bots, () =>
+            timer.Repeat(1f,profile.Bots, () =>
             {
             profile.LocationX = location.x;
             profile.LocationY = location.y;
@@ -1182,6 +1149,11 @@ namespace Oxide.Plugins
         [ConsoleCommand("botspawn.reset")]                                                                                                                      //debug precaution - Kill all bots, whether from this plug or not.
         void cmdDefaultBots()
         {
+            var allofem = UnityEngine.Object.FindObjectsOfType<botData>();
+            foreach (var gobject in allofem)
+            {
+                 UnityEngine.Object.Destroy(gobject);
+            }
             var allobjects = UnityEngine.Object.FindObjectsOfType<NPCPlayer>();
             foreach (var gobject in allobjects)
             {
@@ -1258,10 +1230,12 @@ namespace Oxide.Plugins
                     {
                         foreach (var bot in TempRecord.NPCPlayers)
                         {
+                            if (bot == null)
+                                return;
                             var bData = bot.GetComponent<botData>();
                             if (bData.monumentName == name)
-                                if (bData.bot != null)
-                                bData.bot.Kill();
+                            if (bData.transform.parent.gameObject != null)
+                            bData.transform.parent.gameObject.GetComponent<BasePlayer>().Kill();
                                 else
                                 continue;
                         }
@@ -1338,8 +1312,6 @@ namespace Oxide.Plugins
             public float damage;
             public float range;
             public int health;
-            public ulong botID;
-            public BasePlayer bot;
             public string monumentName;
             public bool dropweapon;
             public bool respawn;
@@ -1347,9 +1319,13 @@ namespace Oxide.Plugins
             public bool goingHome;
             public bool keepAttire;
             
+            NPCPlayerApex botapex;
+                void Start()
+                {
+                    botapex = this.GetComponent<NPCPlayerApex>();
+                }
                 void Update()
                 {
-                    var botapex = bot.GetComponent<NPCPlayerApex>();
                     if (botapex.AttackTarget == null && (Vector3.Distance(botapex.transform.position, botapex.GuardPosition) > roamRange))
                     {
                         goingHome = true;
@@ -1429,7 +1405,6 @@ namespace Oxide.Plugins
             public int Suicide_Timer { get; set; }
             public bool Supply_Enabled { get; set; }
             public bool Cull_Default_Population { get; set; }
-            public bool NPC_Retaliate { get; set; }
             public bool Remove_BackPacks { get; set; }
             public bool Ignore_HumanNPC { get; set; }
             public bool Peace_Keeper { get; set; }
@@ -1501,7 +1476,6 @@ namespace Oxide.Plugins
                     Suicide_Timer = 300,
                     Supply_Enabled = false,
                     Cull_Default_Population = true,
-                    NPC_Retaliate = false,
                     Remove_BackPacks = true,
                     Ignore_HumanNPC = true,
                     Peace_Keeper = true,
