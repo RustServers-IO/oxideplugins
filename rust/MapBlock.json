@@ -1,0 +1,16 @@
+{
+    "name": "Map Block",
+    "description": "Creates a black marker over the map.",
+    "author": "Kappasaurus",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/map-block.2708",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

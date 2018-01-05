@@ -2,7 +2,7 @@
     "name": "RealtimeWipeInfo",
     "description": "Auto title & description updating, auto wipe schedule, chat filter & more!",
     "author": "Ryan",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "configuration": true,
     "suggest": {
         "BetterChat": "*"

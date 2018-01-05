@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("KDRScoreboard", "Ankawi", "1.0.0")]
+    [Info("KDRScoreboard", "Ankawi", "1.0.1")]
     [Description("Enables scoreboards that can show Kills, Deaths, or K/D Ratio")]
     class KDRScoreboard : RustPlugin
     {
@@ -231,7 +231,7 @@ namespace Oxide.Plugins
             string playerName = data.name;
             float kdr = data.KDR;
 
-            rust.SendChatMessage(player, "<color=red> Player Name : </color>" + $"{playerName}"
+            PrintToChat(player, "<color=red> Player Name : </color>" + $"{playerName}"
                                         + "\n" + "<color=lime> Kills : </color>" + $"{kills}"
                                         + "\n" + "<color=lime> Deaths : </color>" + $"{deaths}"
                                         + "\n" + "<color=lime> K/D Ratio : </color>" + $"{kdr}");

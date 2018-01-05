@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Trapper", "redBDGR", "1.0.9", ResourceId = 2417)]
+    [Info("Trapper", "redBDGR", "1.0.11", ResourceId = 2417)]
     [Description("Adds a few new features to traps")]
     class Trapper : RustPlugin
     {
@@ -25,6 +25,7 @@ namespace Oxide.Plugins
         private bool hurtFriends;
         private bool hurtClanMates;
         private bool hurtOwner;
+        private bool ignoreProjectiles;
         private float resetTime = 5f;
 
         private void Init()
@@ -49,21 +50,31 @@ namespace Oxide.Plugins
             hurtOwner = Convert.ToBoolean(GetConfig("Settings", "Trigger for Owner", true));
             hurtFriends = Convert.ToBoolean(GetConfig("Settings", "Trigger for Friends", true));
             hurtClanMates = Convert.ToBoolean(GetConfig("Settings", "Trigger for clan mates", true));
+            ignoreProjectiles = Convert.ToBoolean(GetConfig("Settings", "Ignore Projectiles", false));
 
             if (!Changed) return;
             SaveConfig();
             Changed = false;
         }
 
-        private void OnServerInitialized()
+        private void Loaded()
         {
-            if (hurtFriends)
-            {
-                rustIOEnabled = RustIO != null && RustIO.Call<bool>("IsInstalled");
-                friendsEnabled = Friends != null;
-                clansRebornEnabled = ClansReborn != null;
-                clansEnabled = Clans != null;
-            }
+            rustIOEnabled = RustIO != null && RustIO.Call<bool>("IsInstalled");
+            friendsEnabled = Friends != null;
+            clansRebornEnabled = ClansReborn != null;
+            clansEnabled = Clans != null;
+        }
+
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
+        {
+            if (!ignoreProjectiles) return null;
+            BaseTrap trap = entity.GetComponent<BaseTrap>();
+            if (!trap) return null;
+            if (!info.IsProjectile()) return null;
+            BearTrap bearTrap = entity.GetComponent<BearTrap>();
+            if (bearTrap)
+                bearTrap.Arm();
+            return true;
         }
 
         private object OnTrapTrigger(BaseTrap trap, GameObject obj)
@@ -88,7 +99,7 @@ namespace Oxide.Plugins
                 if (!hurtFriends)
                 {
                     if (friendsEnabled)
-                        if ((bool)Friends?.CallHook("AreFriends", target.userID, player.userID))
+                        if ((bool) Friends?.CallHook("AreFriends", target.userID, player.userID))
                             if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
                                 return false;
                     if (rustIOEnabled)

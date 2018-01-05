@@ -1,15 +1,17 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Physics = UnityEngine.Physics;
 
 namespace Oxide.Plugins
 {
-    [Info("ExternalWallProtect", "redBDGR", "1.0.1", ResourceId = 2576)]
+    [Info("ExternalWallProtect", "redBDGR", "1.0.2", ResourceId = 2576)]
     [Description("Prevent ladders from being able to be placed on external walls")]
 
     class ExternalWallProtect : RustPlugin
     {
         private const string permissionName = "externalwallprotect.exempt";
+        private static LayerMask collLayers = LayerMask.GetMask("Construction", "Clutter", "Deployed", "Tree", "Terrain", "World", "Water", "Default");
 
         private void Init()
         {
@@ -24,13 +26,10 @@ namespace Oxide.Plugins
         private object CanBuild(Planner plan, Construction prefab)
         {
             if (prefab.prefabID != 2205372577) return null;
-            RaycastHit hit;
             BasePlayer player = plan.GetOwnerPlayer();
             if (permission.UserHasPermission(player.UserIDString, permissionName)) return null;
-            if (!Physics.Raycast(player.eyes.HeadRay(), out hit, 5f)) return null;
-            BaseEntity ent = hit.GetEntity();
-            if (!ent) return null;
-            if (!ent.ShortPrefabName.Contains("external")) return null;
+            RaycastHit[] hits = Physics.RaycastAll(player.eyes.HeadRay(), 5f, collLayers);
+            if (!hits.Where(hit => hit.GetEntity() != null).Any(hit => hit.GetEntity().ShortPrefabName.Contains("external"))) return null;
             player.ChatMessage(msg("Deny Crusher", player.UserIDString));
             return false;
         }

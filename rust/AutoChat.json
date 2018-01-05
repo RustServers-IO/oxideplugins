@@ -2,7 +2,7 @@
     "name": "AutoChat",
     "description": "Automatic clans\/private chat switching",
     "author": "Frenk92",
-    "version": "0.4.7",
+    "version": "0.4.9",
     "configuration": true,
     "suggest": {
         "BetterChat": "*",

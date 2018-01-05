@@ -8,7 +8,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("NoRaid", "Ryan", "1.2.0", ResourceId = 2530)]
+    [Info("NoRaid", "Ryan", "1.3.0", ResourceId = 2530)]
     [Description("Prevents players destroying buildings of those they're not associated with")]
 
     class NoRaid : RustPlugin
@@ -263,6 +263,77 @@ namespace Oxide.Plugins
             if (Math.Floor(timeSpan.TotalSeconds) >= 60)
                 return string.Format(timeSpan.Minutes > 1 ? Lang("Msg_MinsFormat", null, timeSpan.Minutes, timeSpan.Seconds) : Lang("Msg_MinFormat", null, timeSpan.Minutes, timeSpan.Seconds));
             return Lang("Msg_SecsFormat", null, timeSpan.Seconds);
+        }
+
+        private void StartPeriod()
+        {
+            _cachedRaidTime = DateTime.UtcNow;
+            _canRaid = false;
+            foreach (var p in BasePlayer.activePlayerList)
+            {
+                PrintToChat(p, Lang("Cmd_NoRaid", p.UserIDString, GetFormattedTime((_cachedRaidTime.AddMinutes(_startMinutes)
+                    - DateTime.UtcNow).TotalSeconds)));
+            }
+            _startTimer = timer.Every(cFile.NoRaidCommand.CheckInterval, () =>
+            {
+                if (UI.ShouldDestroy(_cachedRaidTime, _startMinutes))
+                {
+                    _canRaid = true;
+                    PrintToChat(Lang("CanRaid"));
+                    _startTimer?.Destroy();
+                    _startUiTimer?.Destroy();
+                    _startTimer = null;
+                    _startUiTimer = null;
+                    foreach (var p in BasePlayer.activePlayerList)
+                    {
+                        if (_uiPlayers.Contains(p.userID))
+                            _uiPlayers.Remove(p.userID);
+                        CuiHelper.DestroyUi(p, _uiParent);
+                    }
+                }
+
+            });
+            if (cFile.Ui.Enabled)
+            {
+                UI.ConstructCachedUi();
+                _startUiTimer = timer.Every(cFile.Ui.RefreshInterval, () =>
+                {
+                    if (UI.ShouldDestroy(_cachedRaidTime, _startMinutes))
+                        return;
+
+                    var container = UI.ConstructTimer(_cachedRaidTime, _startMinutes);
+
+                    foreach (var p in BasePlayer.activePlayerList)
+                    {
+                        if (!_uiPlayers.Contains(p.userID))
+                        {
+                            CuiHelper.AddUi(p, _cachedContainer);
+                            _uiPlayers.Add(p.userID);
+                        }
+                        CuiHelper.DestroyUi(p, _timerParent);
+                        CuiHelper.AddUi(p, container);
+                    }
+                });
+            }
+        }
+
+        private void StopPeriod()
+        {
+            if (_startTimer != null)
+            {
+                _canRaid = true;
+                PrintToChat(Lang("CanRaid"));
+                _startTimer?.Destroy();
+                _startUiTimer?.Destroy();
+                _startTimer = null;
+                _startUiTimer = null;
+                foreach (var p in BasePlayer.activePlayerList)
+                {
+                    if (_uiPlayers.Contains(p.userID))
+                        _uiPlayers.Remove(p.userID);
+                    CuiHelper.DestroyUi(p, _uiParent);
+                }
+            }
         }
 
         #region UI
@@ -623,76 +694,46 @@ namespace Oxide.Plugins
                     }
                     float outNum;
                     _startMinutes = args.Length == 2 && float.TryParse(args[1], out outNum) ? outNum : cFile.NoRaidCommand.DefaultMin;
-                    _cachedRaidTime = DateTime.UtcNow;
-                    _canRaid = false;
-                    foreach (var p in BasePlayer.activePlayerList)
-                    {
-                        PrintToChat(p,Lang("Cmd_NoRaid", p.UserIDString, GetFormattedTime((_cachedRaidTime.AddMinutes(_startMinutes) 
-                            - DateTime.UtcNow).TotalSeconds)));
-                    }
-                    _startTimer = timer.Every(cFile.NoRaidCommand.CheckInterval, () =>
-                    {
-                        if (UI.ShouldDestroy(_cachedRaidTime, _startMinutes))
-                        {
-                            _canRaid = true;
-                            PrintToChat(Lang("CanRaid"));
-                            _startTimer?.Destroy();
-                            _startUiTimer?.Destroy();
-                            _startTimer = null;
-                            _startUiTimer = null;
-                            foreach (var p in BasePlayer.activePlayerList)
-                            {
-                                if (_uiPlayers.Contains(p.userID))
-                                    _uiPlayers.Remove(p.userID);
-                                CuiHelper.DestroyUi(p, _uiParent);
-                            }
-                        }
-                        
-                    });
-                    if (cFile.Ui.Enabled)
-                    {
-                        UI.ConstructCachedUi();
-                        _startUiTimer = timer.Every(cFile.Ui.RefreshInterval, () =>
-                        {
-                            if (UI.ShouldDestroy(_cachedRaidTime, _startMinutes))
-                                return;
-
-                            var container = UI.ConstructTimer(_cachedRaidTime, _startMinutes);
-
-                            foreach (var p in BasePlayer.activePlayerList)
-                            {
-                                if (!_uiPlayers.Contains(p.userID))
-                                {
-                                    CuiHelper.AddUi(p, _cachedContainer);
-                                    _uiPlayers.Add(p.userID);
-                                }
-                                CuiHelper.DestroyUi(p, _timerParent);
-                                CuiHelper.AddUi(p, container);
-                            }
-                        });
-                    }
+                    StartPeriod();
                     return;
                 }
                 case "stop":
                 {
-                    if (_startTimer != null)
-                    {
-                        _canRaid = true;
-                        PrintToChat(Lang("CanRaid"));
-                        _startTimer?.Destroy();
-                        _startUiTimer?.Destroy();
-                        _startTimer = null;
-                        _startUiTimer = null;
-                        foreach (var p in BasePlayer.activePlayerList)
-                        {
-                            if (_uiPlayers.Contains(p.userID))
-                                _uiPlayers.Remove(p.userID);
-                            CuiHelper.DestroyUi(p, _uiParent);
-                        }
-                    }
+                    StopPeriod();
                     return;
                 }
             }
+        }
+
+        [ConsoleCommand("noraid.start")]
+        private void ConsoleStartCommand(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null && !permission.UserHasPermission(arg.Connection.userid.ToString(), _perm))
+            {
+                arg.ReplyWith(Lang("Cmd_Permission", arg.Connection.userid.ToString()));
+                return;
+            }
+            if (_startTimer != null)
+            {
+                arg.ReplyWith(Lang("Cmd_CantStart"));
+                return;
+            }
+            float outNum;
+            _startMinutes = arg.Args.Length >= 1 && float.TryParse(arg.Args[0], out outNum) ? outNum : cFile.NoRaidCommand.DefaultMin;
+            arg.ReplyWith($"Started NoRaid period that lasts for {_startMinutes} minutes");
+            StartPeriod();
+        }
+
+        [ConsoleCommand("noraid.stop")]
+        private void ConsoleStopCommand(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null && !permission.UserHasPermission(arg.Connection.userid.ToString(), _perm))
+            {
+                arg.ReplyWith(Lang("Cmd_Permission", arg.Connection.userid.ToString()));
+                return;
+            }
+            StopPeriod();
+            arg.ReplyWith("NoRaid period stopped");
         }
 
         #endregion

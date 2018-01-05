@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NightLantern", "k1lly0u", "2.0.9", ResourceId = 1182)]
+    [Info("NightLantern", "k1lly0u", "2.0.92", ResourceId = 1182)]
     class NightLantern : RustPlugin
     {
         #region Fields 
@@ -106,10 +106,17 @@ namespace Oxide.Plugins
         #region Functions  
         private IEnumerator CreateAllLights(IEnumerable<BaseNetworkable> entities)
         {
-            foreach (BaseNetworkable entity in entities)
+            if (entities.Count() > 0)
             {
-                yield return new WaitForSeconds(UnityEngine.Random.Range(0.1f, 0.25f));
-                InitializeLightController(entity as BaseEntity);
+                for (int i = entities.Count() - 1; i >= 0; i--)
+                {
+                    BaseNetworkable entity = entities.ElementAt(i);
+
+                    yield return new WaitForSeconds(UnityEngine.Random.Range(0.1f, 0.25f));
+                    if (entity == null || entity.IsDestroyed)
+                        continue;
+                    InitializeLightController(entity as BaseEntity);
+                }
             }
 
             CheckCurrentTime();
@@ -156,10 +163,16 @@ namespace Oxide.Plugins
                 
         private IEnumerator ToggleAllLights(IEnumerable<LightController> lights, bool status)
         {
-            foreach (LightController lightController in lights)
+            if (lights.Count() > 0)
             {
-                yield return new WaitForSeconds(UnityEngine.Random.Range(0.1f, 0.25f));
-                lightController.ToggleLight(status);
+                for (int i = lights.Count() - 1; i >= 0; i--)
+                {
+                    LightController lightController = lights.ElementAt(i);
+                    yield return new WaitForSeconds(UnityEngine.Random.Range(0.1f, 0.25f));
+
+                    if (lightController != null)
+                        lightController.ToggleLight(status);
+                }
             }
         }
         
@@ -188,6 +201,8 @@ namespace Oxide.Plugins
                     return ConsumeType.TunaLight;
                 case "searchlight.deployed":
                     return ConsumeType.Searchlight;
+                case "bbq.deployed":
+                    return ConsumeType.BBQ;
                 default:
                     return ConsumeType.None;
             }
@@ -350,7 +365,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Config   
-        enum ConsumeType { Campfire, CeilingLight, Firepit, Fireplace, Furnace, LargeFurnace, Lanterns, JackOLantern, TunaLight, Searchlight, None }
+        enum ConsumeType { BBQ, Campfire, CeilingLight, Firepit, Fireplace, Furnace, LargeFurnace, Lanterns, JackOLantern, TunaLight, Searchlight, None }
 
         private ConfigData configData;
         class ConfigData
@@ -395,6 +410,13 @@ namespace Oxide.Plugins
             {
                 Types = new Dictionary<ConsumeType, ConfigData.LightSettings>
                 {
+                    [ConsumeType.BBQ] = new ConfigData.LightSettings
+                    {
+                        ConsumeFuel = true,
+                        Enabled = true,
+                        Permission = true,
+                        Owner = true
+                    },
                     [ConsumeType.Campfire] = new ConfigData.LightSettings
                     {
                         ConsumeFuel = true,
@@ -478,8 +500,12 @@ namespace Oxide.Plugins
             PrintWarning("Config update detected! Updating config values...");
 
             ConfigData baseConfig = GetBaseConfig();
+
             if (configData.Version < new Core.VersionNumber(2, 0, 9))
                 configData = baseConfig;
+
+            if (configData.Version < new Core.VersionNumber(2, 0, 92))
+                configData.Types.Add(ConsumeType.BBQ, baseConfig.Types[ConsumeType.BBQ]);
 
             configData.Version = Version;
             PrintWarning("Config update completed!");

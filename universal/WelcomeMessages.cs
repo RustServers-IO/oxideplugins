@@ -1,22 +1,26 @@
 ﻿using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using Oxide.Core;
+using System;
 
 namespace Oxide.Plugins
 {
-    [Info("WelcomeMessages", "Ankawi", "1.0.4", ResourceId = 2219)]
+    [Info("WelcomeMessages", "Ankawi", "1.0.5", ResourceId = 2219)]
     [Description("Sends players welcome messages")]
 
     class WelcomeMessages : CovalencePlugin
     {
+        private float timeInSeconds;
+
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating new configuration file for " + this.Title + "--Version#: " + this.Version);
-            Config["WaitIntervalInSeconds"] = 25f;
+            Config["WaitIntervalInSeconds"] = 20;
+            SaveConfig();
         }
         void Init()
         {
-            LoadDefaultConfig();
+            LoadConfig();
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 ["Welcome"] = "[#cyan]Welcome to the server {0}![/#]"
@@ -35,10 +39,12 @@ namespace Oxide.Plugins
 
         void OnUserConnected(IPlayer player)
         {
-            timer.Once((float)(Config["WaitIntervalInSeconds"]), () =>
+            if (player == null) return;
+            timeInSeconds = Convert.ToSingle(Config["WaitIntervalInSeconds"]);
+            timer.Once((timeInSeconds), () =>
             {
                 player.Reply(covalence.FormatText(string.Format(lang.GetMessage("Welcome", this, player.Id), player.Name.Sanitize())));
-            });        
+            });
         }
     }
 }

@@ -2,7 +2,7 @@
     "name": "Smooth Restarter",
     "description": "Quit'ter with realtime support and automated checks\/reboots on new Devblogs\/OxideBuilds",
     "author": "Fujikura",
-    "version": "1.2.4",
+    "version": "1.2.5",
     "configuration": false,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/smooth-restarter.1826",

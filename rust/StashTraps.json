@@ -1,0 +1,16 @@
+{
+    "name": "Stash Traps",
+    "description": "Catch ESP hackers quickly and efficiently!",
+    "author": "Kappasaurus",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/stash-traps.2735",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

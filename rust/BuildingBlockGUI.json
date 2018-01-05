@@ -1,7 +1,7 @@
 {
     "name": "BuildingBlockGUI",
     "description": "Displays GUI to player when he enters or leaves building block without need of Planner",
-    "author": "wzp",
+    "author": "wazzzup",
     "version": "1.0.0",
     "configuration": true,
     "language": "cs",

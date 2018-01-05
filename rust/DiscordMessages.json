@@ -2,12 +2,12 @@
     "name": "DiscordMessages",
     "description": "Report and Ban plugin with messages sent straight to discord!",
     "author": "Slut",
-    "version": "1.6.4",
+    "version": "1.6.6",
     "configuration": true,
     "suggest": {
         "BetterChatMute": "*"
     },
-    "language": "cs",
+    "language": "cs\r\n",
     "url": "http:\/\/oxidemod.org\/plugins\/discordmessages.2486",
     "games": [
         "rust"

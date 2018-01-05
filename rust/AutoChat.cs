@@ -9,7 +9,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoChat", "Frenk92", "0.4.7", ResourceId = 2230)]
+    [Info("AutoChat", "Frenk92", "0.4.9", ResourceId = 2230)]
     [Description("Automatic clans/private chat switching")]
     class AutoChat : RustPlugin
     {
@@ -491,31 +491,25 @@ namespace Oxide.Plugins
         #endregion
 
         #region Methods
-        void OnServerCommand(ConsoleSystem.Arg arg)
+        private void OnUserCommand(IPlayer player, string command, string[] args)
         {
-            if (!_config.Enabled || arg == null || arg.Connection == null || arg.Args == null) return;
+            if (!_config.Enabled || !player.IsConnected || args == null) return;
+            var bpl = player.Object as BasePlayer;
+            if (!bpl || !HasPermission(bpl.UserIDString, PermUse) || !isActive(bpl.userID)) return;
 
-            var str = arg.GetString(0);
-            if (str.Length == 0 || str[0] != '/') return;
-
-            var player = (BasePlayer)arg.Connection.player;
-            if (!player || !HasPermission(player.UserIDString, PermUse) || !isActive(player.userID)) return;
-
-            var args = str.Split(' ');
-            var command = args[0].Replace("/", "");
             var cmdtarget = command + " $target";
             if (!ChatType.Contains(command) && !ChatType.Contains(cmdtarget)) return;
 
             var target = "";
             if (ChatType.Contains(cmdtarget))
             {
-                if (args.Length > 1) target = " " + args[1];
+                if (args.Length > 0) target = " " + args[0];
                 else return;
             }
-            if (!chatUser[player.userID].Contains(command) || (target != "" && !chatUser[player.userID].Equals(command + target)))
+            if (!chatUser[bpl.userID].Contains(command) || (target != "" && !chatUser[bpl.userID].Equals(command + target)))
             {
-                chatUser[player.userID] = command + target;
-                UpdateUI(player);
+                chatUser[bpl.userID] = command + target;
+                UpdateUI(bpl);
             }
         }
 

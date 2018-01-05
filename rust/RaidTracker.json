@@ -2,7 +2,7 @@
     "name": "Raid Tracker",
     "description": "Log raids in progress by tracking explosions to be later recreated on-screen via drawn methods.",
     "author": "nivex",
-    "version": "0.1.14",
+    "version": "1.0.0",
     "configuration": true,
     "suggest": {
         "Slack": "*",

@@ -1,0 +1,23 @@
+{
+    "name": "DynamicPVP",
+    "description": "Creates temporary PVP zones around SupplyDrops for use with TruePVE and ZoneManager",
+    "author": "",
+    "version": "1.0.2",
+    "configuration": true,
+    "suggest": {
+        "ZoneDomes": "*"
+    },
+    "require": {
+        "TruePVE": "*",
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/dynamicpvp.2728",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

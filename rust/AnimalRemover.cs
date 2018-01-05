@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AnimalRemover", "Ankawi", "1.0.2")]
+    [Info("AnimalRemover", "Ankawi", "1.0.3")]
     [Description("Allows you to disable specific animals from spawning on the server")]
     public class AnimalRemover : RustPlugin
     {
@@ -36,7 +36,7 @@ namespace Oxide.Plugins
 
         Dictionary<string, IGrouping<string, BaseEntity>> GetAnimals()
         {
-            return Resources.FindObjectsOfTypeAll<BaseNPC>()
+            return Resources.FindObjectsOfTypeAll<BaseAnimalNPC>()
                 .Where(c => c.isActiveAndEnabled)
                 .Cast<BaseEntity>()
                 .GroupBy(c => c.ShortPrefabName).ToDictionary(c => c.Key, c => c);

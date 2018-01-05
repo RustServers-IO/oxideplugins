@@ -13,7 +13,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Raid Tracker", "nivex", "0.1.14", ResourceId = 2458), Description("Add tracking devices to explosives for detailed raid logging.")]
+    [Info("Raid Tracker", "nivex", "1.0.0", ResourceId = 2458), Description("Add tracking devices to explosives for detailed raid logging.")]
     public class RaidTracker : RustPlugin
     {
         [PluginReference] private Plugin Discord, Slack, DiscordMessages, PopupNotifications;
@@ -172,6 +172,7 @@ namespace Oxide.Plugins
                         //foreach (var kvp in sorted) Debug.Log(string.Format("{0} {1}", kvp.Value, kvp.Key));
 
                         entityHit = sorted[0].Value.ShortPrefabName;
+                        entityHit = ItemManager.FindItemDefinition(entityHit)?.displayName?.english ?? entityHit;
                         entityOwner = sorted[0].Value.OwnerID;
 
                         prefabs.Clear();
@@ -393,6 +394,8 @@ namespace Oxide.Plugins
                 return;
             if (entity.ShortPrefabName.Contains("beancan") && !_trackBeancan)
                 return;
+            if (entity.ShortPrefabName.Contains("grenade.smoke"))
+                return;
             if (!_trackF1 && !_trackBeancan && !entity.name.Contains("explosive"))
                 return;
 
@@ -407,7 +410,7 @@ namespace Oxide.Plugins
 
         private void OnRocketLaunched(BasePlayer player, BaseEntity entity)
         {
-            if (!init || player == null || entity?.net == null || entity.name.Contains("smoke"))
+            if (!init || player == null || entity?.net == null)
                 return;
 
             var tracker = entity.gameObject.AddComponent<TrackingDevice>();

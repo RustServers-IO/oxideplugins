@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Trade", "Calytic", "1.1.5", ResourceId = 1242)]
+    [Info("Trade", "Calytic", "1.1.7", ResourceId = 1242)]
     class Trade : RustPlugin
     {
         #region Configuration Data
@@ -126,6 +126,16 @@ namespace Oxide.Plugins
 
             public bool IsInventorySufficient()
             {
+                if(target == null || source == null)
+                {
+                    return false;
+                }
+
+                if(target.containerMain == null || source.containerMain == null)
+                {
+                    return false;
+                }
+
                 if ((target.containerMain.capacity - target.containerMain.itemList.Count) < source.View.inventory.itemList.Count ||
                        (source.containerMain.capacity - source.containerMain.itemList.Count) < target.View.inventory.itemList.Count)
                 {
@@ -187,7 +197,24 @@ namespace Oxide.Plugins
 
         void Init()
         {
-            Unsubscribe(nameof(CanNetworkTo));
+            
+            UnsubscribeAll();
+        }
+
+        void UnsubscribeAll()
+        {
+            //Unsubscribe(nameof(CanNetworkTo));
+            Unsubscribe(nameof(OnItemAction));
+            Unsubscribe(nameof(OnItemAddedToContainer));
+            Unsubscribe(nameof(OnItemRemovedFromContainer));
+        }
+
+        void SubscribeAll()
+        {
+            //Subscribe(nameof(CanNetworkTo));
+            Subscribe(nameof(OnItemAction));
+            Subscribe(nameof(OnItemAddedToContainer));
+            Subscribe(nameof(OnItemRemovedFromContainer));
         }
 
         void Loaded() {
@@ -313,25 +340,25 @@ namespace Oxide.Plugins
 
         #region Oxide Hooks
 
-        object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
-        {
-            if (entity == null || target == null || entity == target) return null;
-            if (target.IsAdmin) return null;
+        //object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
+        //{
+        //    if (entity == null || target == null || entity == target) return null;
+        //    if (target.IsAdmin) return null;
 
-            OnlinePlayer onlinePlayer;
-            bool IsMyBox = false;
-            if (onlinePlayers.TryGetValue(target, out onlinePlayer))
-            {
-                if (onlinePlayer.View != null && onlinePlayer.View.net.ID == entity.net.ID)
-                {
-                    IsMyBox = true;
-                }
-            }
+        //    OnlinePlayer onlinePlayer;
+        //    bool IsMyBox = false;
+        //    if (onlinePlayers.TryGetValue(target, out onlinePlayer))
+        //    {
+        //        if (onlinePlayer.View != null && onlinePlayer.View.net.ID == entity.net.ID)
+        //        {
+        //            IsMyBox = true;
+        //        }
+        //    }
 
-            if (IsTradeBox(entity) && !IsMyBox) return false;
+        //    if (IsTradeBox(entity) && !IsMyBox) return false;
 
-            return null;
-        }
+        //    return null;
+        //}
 
         void OnPlayerInit(BasePlayer player)
         {
@@ -392,7 +419,7 @@ namespace Oxide.Plugins
                 if (player is BasePlayer)
                 {
                     OnlinePlayer onlinePlayer;
-                    if (onlinePlayers.TryGetValue(player, out onlinePlayer) && onlinePlayer.Trade != null)
+                    if (onlinePlayers.TryGetValue(player, out onlinePlayer) && onlinePlayer.Trade != null && player.inventory != null)
                     {
                         if (item.parent == player.inventory.containerMain && !onlinePlayer.Trade.IsInventorySufficient())
                         {
@@ -909,7 +936,7 @@ namespace Oxide.Plugins
 
         void OpenBox(BasePlayer player, BaseEntity target)
         {
-            Subscribe(nameof(CanNetworkTo));
+            SubscribeAll();
             var ply = onlinePlayers[player];
             if (ply.View == null)
             {
@@ -1021,7 +1048,7 @@ namespace Oxide.Plugins
 
             if (onlinePlayers.Values.Count(p => p.View != null) <= 0)
             {
-                Unsubscribe(nameof(CanNetworkTo));
+                UnsubscribeAll();
             }
         }
 

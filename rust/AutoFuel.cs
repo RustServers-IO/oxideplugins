@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoFuel", "redBDGR", "1.0.5", ResourceId = 2717)]
+    [Info("AutoFuel", "redBDGR", "1.0.6", ResourceId = 2717)]
     [Description("Automatically fuel lights if there is fuel in the toolcupboards inventory")]
 
     class AutoFuel : RustPlugin
@@ -19,6 +19,8 @@ namespace Oxide.Plugins
         private bool useLantern;
         private bool useSearchLight;
         private bool useTunaCanLamp;
+        private bool useFireplace;
+        private bool useSkullFirepit;
 
         private bool dontRequireFuel;
 
@@ -44,6 +46,8 @@ namespace Oxide.Plugins
             useSearchLight = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Search Light", true));
             useTunaCanLamp = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Tuna Can Lamp", true));
             dontRequireFuel = Convert.ToBoolean(GetConfig("Settings", "Don't require fuel", false));
+            useFireplace = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Fireplace", false));
+            useSkullFirepit = Convert.ToBoolean(GetConfig("Types to autofuel", "Use Skull Fire Pit", false));
 
             if (!Changed) return;
             SaveConfig();
@@ -151,6 +155,10 @@ namespace Oxide.Plugins
                 activeShortNames.Add("searchlight.deployed");
             if (useTunaCanLamp)
                 activeShortNames.Add("tunalight.deployed");
+            if (useFireplace)
+                activeShortNames.Add("fireplace.deployed");
+            if (useSkullFirepit)
+                activeShortNames.Add("skull_fire_pit");
         }
 
         private object GetConfig(string menu, string datavalue, object defaultValue)

@@ -2,7 +2,7 @@
     "name": "KDR Scoreboard",
     "description": "Enables scoreboards that can show Kills, Deaths, or K\/D Ratio.",
     "author": "Ankawi",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "configuration": false,
     "require": {
         "Scoreboards": "*"

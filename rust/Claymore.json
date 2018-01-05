@@ -1,0 +1,19 @@
+{
+    "name": "Claymore",
+    "description": "Converts land mines to Claymore antipersonnel mines",
+    "author": "wazzzup",
+    "version": "1.0.0",
+    "configuration": true,
+    "suggest": {
+        "Friends": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/claymore.2733",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

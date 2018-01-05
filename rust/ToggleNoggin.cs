@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("ToggleNoggin", "carny666", "1.0.3", ResourceId = 2725)]
+    [Info("ToggleNoggin", "carny666", "1.0.4", ResourceId = 2725)]
     class ToggleNoggin : RustPlugin
     {
         const string adminPermission = "ToggleNoggin.admin";
@@ -38,15 +38,15 @@ namespace Oxide.Plugins
                 var player = arg.Player();
                 if (player == null) return;
 
-                if ((arg.Args.Length > 1) && (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, minersPermission)))
+                if ((permission.UserHasPermission(player.UserIDString, minersPermission) || permission.UserHasPermission(player.UserIDString, adminPermission)) && arg?.Args != null)
                     ToggleHat(player, "hat.miner");
-                else if (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, candlePermission))
+                else if (permission.UserHasPermission(player.UserIDString, candlePermission) && permission.UserHasPermission(player.UserIDString, adminPermission))
                     ToggleHat(player, "hat.candle");
+
             }
             catch (Exception ex)
             {
                 throw new Exception($"Error in ccToggleNoggin {ex.Message}");
-
             }
         }
 
@@ -57,7 +57,7 @@ namespace Oxide.Plugins
             {
                 if (player == null) return;
 
-                if ((args.Length > 0) && (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, minersPermission)))
+                if ((permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, minersPermission)) && args.Length > 0)
                     ToggleHat(player, "hat.miner");
                 else if (permission.UserHasPermission(player.UserIDString, adminPermission) || permission.UserHasPermission(player.UserIDString, candlePermission))
                     ToggleHat(player, "hat.candle");
@@ -98,7 +98,6 @@ namespace Oxide.Plugins
                     var p = player.inventory.containerWear.FindItemsByItemName(lastHat);
                     if (p != null)
                         p.RemoveFromContainer();
-
                 }
             }
             catch (Exception ex)

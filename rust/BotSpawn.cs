@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using Oxide.Core;
@@ -13,14 +12,13 @@ using Newtonsoft.Json;
 using UnityEngine.SceneManagement;
 using Facepunch;
 
-namespace Oxide.Plugins
 
+namespace Oxide.Plugins
+//comments are wide to the right --->
 {
-    [Info("BotSpawn", "Steenamaroo", "1.3.4", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.4.2", ResourceId = 2580)]
     
-    [Description("Spawn Bots with kits at monuments.")]
-//aggression range per profile
-//junkyard added
+    [Description("Spawn tailored AI with kits at monuments and custom locations.")]
 
     class BotSpawn : RustPlugin
     {
@@ -58,7 +56,7 @@ namespace Oxide.Plugins
             Formatting = Newtonsoft.Json.Formatting.Indented,
             ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore
             };
-            var filter = RustExtension.Filter.ToList(); // Thanks Fuji. :)
+            var filter = RustExtension.Filter.ToList();                                                                                                         //Thanks Fuji. :)
             filter.Add("cover points");
             filter.Add("resulted in a conflict");
             RustExtension.Filter = filter.ToArray();
@@ -79,8 +77,6 @@ namespace Oxide.Plugins
             lang.RegisterMessages(messages, this);
             permission.RegisterPermission(permAllowed, this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("BotSpawn");
-            if (configData.Options.Reset)
-            timer.Repeat(configData.Options.Reset_Timer, 0, () => cmdBotRespawn());
         }
         
         void Unload()
@@ -97,8 +93,9 @@ namespace Oxide.Plugins
         {
 	    foreach (var bot in TempRecord.NPCPlayers)
 	    {
-            if (bot.Value.bot != null)
-            bot.Value.bot.Kill();
+            var bData = bot.GetComponent<botData>();
+            if (bData.bot != null)
+            bData.bot.Kill();
             else
             continue;
 	    }
@@ -113,79 +110,72 @@ namespace Oxide.Plugins
                     return true;
         }
     
-    
-	void OnPlayerDropActiveItem(BasePlayer player, Item item)
-	{
-	    if (player as NPCPlayer != null)
-            {
-                NPCPlayerApex botapex = player as NPCPlayerApex;
-                
-            if (TempRecord.NPCPlayers.ContainsKey(botapex) && !configData.Options.Bots_Drop_Weapons)
-            {
-                item.Remove(0f);
-                return;
-                }
-            }   
-	}
-    
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-	//bool chute;                       //commented awaiting changes in Rust.
-	//NPCPlayerApex botapex;
-	//if (entity is NPCPlayer)
-	//{
-	//    botapex = entity.GetComponent<NPCPlayerApex>();
-	//	if (TempRecord.NPCPlayers.ContainsKey(botapex))
-	//	{
-	//	    if (TempRecord.NPCPlayers[botapex].invincible)
-	//	    foreach (var child in botapex.children)
-	//	    if (child.ToString().Contains("parachute"))
-	//	    return true;
-	//	}
-	//}
-            
-            if (entity is NPCPlayer && info.Initiator is BasePlayer)
-            {
-                var canNetwork = Vanish?.Call("IsInvisible", info.Initiator); //bots wont retaliate to vanished players
-                    if ((canNetwork is bool))
-                    if ((bool)canNetwork)
+            NPCPlayerApex Scientist = null;
+            if (entity is NPCPlayerApex)
+               {
+                    Scientist = entity as NPCPlayerApex;
+                    
+                    if (!TempRecord.NPCPlayers.Contains(Scientist))
+                    return null;
+                
+                    if (info.Initiator is NPCPlayer && !(configData.Options.NPC_Retaliate))                                                                     //bots wont retaliate to friendly fire
                     {
                         info.Initiator = null;
                     }
-
-                    if (configData.Options.Peace_Keeper)
+                    
+                    if (info.Initiator == null) return null;
+                    
+                    if (info.Initiator is BasePlayer)
                     {
-                    var heldMelee = info.Weapon as BaseMelee;
-                    var heldTorchWeapon = info.Weapon as TorchWeapon; 
-                    if (heldMelee != null || heldTorchWeapon != null)
-                    info.damageTypes.ScaleAll(0);
-                    }//prevent melee farming with peacekeeper on
+                        var damagedbot = entity as NPCPlayer;
+                        var canNetwork = Vanish?.Call("IsInvisible", info.Initiator);                                                                           //bots wont retaliate to vanished players
+                            if ((canNetwork is bool))
+                            if ((bool)canNetwork)
+                            {
+                                info.Initiator = null;
+                            }
+        
+                            if (configData.Options.Peace_Keeper)                                                                                                //prevent melee farming with peacekeeper on
+                            {
+                            var heldMelee = info.Weapon as BaseMelee;
+                            var heldTorchWeapon = info.Weapon as TorchWeapon; 
+                            if (heldMelee != null || heldTorchWeapon != null)
+                            info.damageTypes.ScaleAll(0);
+                            }
+                            
+                        foreach (var bot in TempRecord.NPCPlayers)                                                                                              //multiplier to simulate custom health setting
+                        {
+                            var bData = bot.GetComponent<botData>();
+                            if (bData.botID == damagedbot.userID)
+                            {
+                                float multiplier = 100f / bData.health;
+                                info.damageTypes.ScaleAll(multiplier);
+                            }
+                        }
+                    }
+               }
 
-            }
-
-            if (entity is NPCPlayer && info.Initiator is NPCPlayer && !(configData.Options.NPC_Retaliate)) //bots wont retaliate to friendly fire
-            {
-                info.Initiator = null;
-            }
-            
-            if (info?.Initiator is NPCPlayer && entity is BasePlayer)
+            if (info?.Initiator is NPCPlayer && entity is BasePlayer)                                                                                           //add in bot accuracy
             {
                 var attacker = info?.Initiator as NPCPlayer;
             
                 foreach (var bot in TempRecord.NPCPlayers)
                 {
-                    if (bot.Value.botID == attacker.userID)
+                    var bData = bot.GetComponent<botData>();
+                    if (bData.botID == attacker.userID)
                     {
                     System.Random rnd = new System.Random();
                     int rand = rnd.Next(1, 10);
-                        if (bot.Value.accuracy < rand)
+                        if (bData.accuracy < rand)                                                                                                              //scale bot attack damage
                         {
                         return true;
                         }
                         else
                         {
-                        info.damageTypes.ScaleAll(bot.Value.damage);
-                        return null;
+                        info.damageTypes.ScaleAll(bData.damage);
+                        return null;    
                         }
                     }
                 }
@@ -193,25 +183,53 @@ namespace Oxide.Plugins
             return null;
         }
         
+        void OnPlayerDie(BasePlayer player)
+        {
+            NPCPlayerApex Scientist = null;
+            if (player is NPCPlayerApex)
+            {
+                Scientist = player as NPCPlayerApex;
+                if (!TempRecord.NPCPlayers.Contains(Scientist))
+                return;
+                var bData = Scientist.GetComponent<botData>();
+                Item activeItem = player.GetActiveItem();
+                if (bData.dropweapon == true)
+                {
+                    using (TimeWarning timeWarning = TimeWarning.New("PlayerBelt.DropActive", 0.1f))
+                    {
+                        activeItem.Drop(player.eyes.position, new Vector3(), new Quaternion());
+                        player.svActiveItemID = 0;
+                        player.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+                    }
+                }
+            }
+        }
         void OnEntityDeath(BaseEntity entity)
         {
             string respawnLocationName = "";
             NPCPlayerApex Scientist = null;
             if (entity is NPCPlayerApex)
             {
-                foreach (var bot in TempRecord.NPCPlayers)
+                Scientist = entity as NPCPlayerApex;
+                if (!TempRecord.NPCPlayers.Contains(Scientist))
+                return;
+            
+                var bData = entity.GetComponent<botData>();
+                foreach (var bot in TempRecord.NPCPlayers)                                                                                                      //kill radio effects
                 {
-		    Scientist = entity as NPCPlayerApex;
-                    if (bot.Value.botID == Scientist.userID)
+                    Scientist = entity as NPCPlayerApex;
+                    var bDataCheck = bot.GetComponent<botData>();
+                    if (bDataCheck.botID == Scientist.userID)
                         {
                             no_of_AI--;
-                            respawnLocationName = bot.Value.monumentName;
-                            TempRecord.DeadNPCPlayerIds.Add(bot.Value.botID);
+                            respawnLocationName = bDataCheck.monumentName;
+                            TempRecord.DeadNPCPlayerIds.Add(bDataCheck.botID);
                             if (TempRecord.MonumentProfiles[respawnLocationName].Disable_Radio == true)
                             Scientist.DeathEffect = new GameObjectRef();
                         }
                 }
-                if(TempRecord.dontRespawn.Contains(Scientist.userID))
+
+                if(bData.respawn == false)
                 {
                 UpdateRecords(Scientist);
                 return;
@@ -220,7 +238,7 @@ namespace Oxide.Plugins
                 {
                     if(profile.Key == respawnLocationName)
                     {
-                        timer.Once(profile.Value.Respawn_Timer, () => SpawnSci(profile.Key, profile.Value, null));
+                        timer.Once(profile.Value.Respawn_Timer, () => SpawnBots(profile.Key, profile.Value, null));
                         UpdateRecords(Scientist);
                     }
                 }
@@ -231,30 +249,22 @@ namespace Oxide.Plugins
             }
         }
       
-        void UpdateRecords(BasePlayer player)
+        void UpdateRecords(NPCPlayerApex player)
         {
-            foreach (var bot in TempRecord.NPCPlayers)
+            if (TempRecord.NPCPlayers.Contains(player))
             {
-                if (bot.Value.botID == player.userID)
-                {
-                foreach (Item item in player.inventory.containerBelt.itemList) 
-                {
-                    item.Remove();
-                } 
-                TempRecord.NPCPlayers.Remove(bot.Key);
-                TempRecord.dontRespawn.Remove(bot.Value.botID);
+                TempRecord.NPCPlayers.Remove(player);
                 return;
-                }
             }
         }
 	
         // Facepunch.RandomUsernames
-        public static string Get(ulong v) //credit fuji.
+        public static string Get(ulong v)                                                                                                                       //credit Fujikura.
         {
             return Facepunch.RandomUsernames.Get((int)(v % 2147483647uL));
         }
 
-        BaseEntity InstantiateSci(Vector3 position, Quaternion rotation, bool murd) // Spawn population spam fix - credit Fuji
+        BaseEntity InstantiateSci(Vector3 position, Quaternion rotation, bool murd)                                                                             //Spawn population spam fix - credit Fujikura
         {
             string prefabname = "assets/prefabs/npc/scientist/scientist.prefab";
             if (murd == true)
@@ -270,130 +280,305 @@ namespace Oxide.Plugins
                     UnityEngine.Object.Destroy(gameObject.GetComponent<Spawnable>());
                 if (!gameObject.activeSelf)
                     gameObject.SetActive(true);
-			BaseEntity component = gameObject.GetComponent<BaseEntity>();
-            return component;
+			BaseEntity component = gameObject.GetComponent<BaseEntity>();     
+                return component;
+        
+                       
         }
 
-        void SpawnSci(string name, MonumentSettings settings, string type = null)
+        void SpawnBots(string name, MonumentSettings settings, string type = null)
         {
 
             var murd = settings.Murderer;
             var pos = new Vector3 (settings.LocationX, settings.LocationY, settings.LocationZ);
             var zone = settings;
 
-                int X = rnd.Next((-zone.Radius/2), (zone.Radius/2));
+                int X = rnd.Next((-zone.Radius/2), (zone.Radius/2));                                                                                            //no need for /2
                 int Z = rnd.Next((-zone.Radius/2), (zone.Radius/2));
                 int dropX = rnd.Next(5, 10);
                 int dropZ = rnd.Next(5, 10);
-		int Y = 100;
-	    //int Y = rnd.Next(zone.Spawn_Height, (zone.Spawn_Height + 50));
+                int Y = 100;
                 var CentrePos = new Vector3((pos.x + X),200,(pos.z + Z));    
                 Quaternion rot = Quaternion.Euler(0, 0, 0);
                 Vector3 newPos = (CalculateGroundPos(CentrePos));
-	    //if (zone.Chute)newPos =  newPos + new Vector3(0,Y,0);  //commented awaiting changes in Rust.
-	    //if (type == "AirDrop" && zone.Chute) newPos = new Vector3((pos.x + dropX),pos.y,(pos.z + dropZ));
-		//NPCPlayer entity = GameManager.server.CreateEntity("assets/prefabs/npc/scientist/scientist.prefab", newPos, rot, true) as NPCPlayer;
-
                 NPCPlayer entity = (NPCPlayer)InstantiateSci(newPos, rot, murd);
                     
-                    var botapex = entity.GetComponent<NPCPlayerApex>();
-                    botapex.Spawn();
-
-                if (zone.Disable_Radio)
-                botapex.GetComponent<FacepunchBehaviour>().CancelInvoke(new Action(botapex.RadioChatter));
-                                      
-                TempRecord.NPCPlayers.Add(botapex, new botData()
-                {
-                spawnPoint = newPos,
-		//invincible = zone.Invincible_In_Air,
-                accuracy = zone.Bot_Accuracy,
-                damage = zone.Bot_Damage,
-                botID = entity.userID,
-                bot = entity,
-                monumentName = name,
-                });
-
-                int suicInt = rnd.Next((configData.Options.Suicide_Timer), (configData.Options.Suicide_Timer + 10));
+                var botapex = entity.GetComponent<NPCPlayerApex>();
+                               
+                var bData = botapex.gameObject.AddComponent<botData>();        
+             
                 
-                if (type == "AirDrop" || type == "Attack")
-                {
-                TempRecord.dontRespawn.Add(botapex.userID);
-                timer.Once(suicInt, () =>
-                {
-                    if (TempRecord.NPCPlayers.ContainsKey(botapex))
-                    {
-                        if (botapex != null)
+                TempRecord.NPCPlayers.Add(botapex);
+                botapex.Spawn();
+                botapex.GuardPosition = newPos;
+                
+                        if (zone.Roam_Range < 20)
+                        zone.Roam_Range = 20;
+                        
+                        int suicInt = rnd.Next((configData.Options.Suicide_Timer), (configData.Options.Suicide_Timer + 10));                                            //slightly randomise suicide de-spawn time
+                        
+                        NextTick(() =>
                         {
-                        OnEntityDeath(botapex);
-                        Effect.server.Run("assets/prefabs/weapons/rocketlauncher/effects/rocket_explosion.prefab", botapex.transform.position);
-                        botapex.Kill();
+                             bData.spawnPoint = newPos;
+                             bData.accuracy = zone.Bot_Accuracy;
+                             bData.damage = zone.Bot_Damage;
+                             bData.health = zone.BotHealth;
+                             bData.range = (zone.Aggression_Range / 3f);
+                             bData.botID = entity.userID;
+                             bData.bot = entity;
+                             bData.monumentName = name;
+                             bData.respawn = true;
+                             bData.roamRange = zone.Roam_Range;
+                             bData.dropweapon = zone.Weapon_Drop;
+                             bData.keepAttire = zone.Keep_Default_Loadout;
+
+                            if (type == "AirDrop" || type == "Attack")
+                            {
+                            bData.respawn = false;
+                            timer.Once(suicInt, () =>
+                            {
+                                if (TempRecord.NPCPlayers.Contains(botapex))
+                                {
+                                    if (botapex != null)
+                                    {
+                                    Effect.server.Run("assets/prefabs/weapons/rocketlauncher/effects/rocket_explosion.prefab", botapex.transform.position); //fix for manual OnEntityDeath
+                                    HitInfo nullHit = new HitInfo();
+                                    nullHit.damageTypes.Add(Rust.DamageType.Explosion, 10000);
+                                    botapex.Hurt(nullHit);
+                                    }
+                                    else
+                                    {
+                                        TempRecord.NPCPlayers.Remove(botapex);
+                                        Puts("This Shouldn't Happen");
+                                        return;
+                                    }
+                                }
+                                else return; 
+                            });
+                            }
+                
+                        }
+                        );
+                
+                int kitRnd;
+                if (zone.Kit.Count != 0)
+                {
+                    kitRnd = rnd.Next(zone.Kit.Count);
+                    if (zone.Kit[kitRnd] != null)
+                    {
+                        object checkKit = (Kits.CallHook("GetKitInfo", zone.Kit[kitRnd], true));
+                        if (checkKit == null)
+                        {
+                            PrintWarning($"Kit {zone.Kit[kitRnd]} does not exist - Defaulting to 'Scientist'.");
                         }
                         else
                         {
-                            TempRecord.dontRespawn.Remove(botapex.userID);
-                            TempRecord.NPCPlayers.Remove(botapex);
-                            return;
+                            bool weaponInBelt = false;
+                            if (checkKit != null && checkKit is JObject)
+                            {
+                                List<string> contentList = new List<string>();
+                                JObject kitContents = checkKit as JObject;
+                
+                                JArray items = kitContents["items"] as JArray;
+                                foreach (var weap in items)
+                                {
+                                    JObject item = weap as JObject;
+                
+                                    if (item["container"].ToString() == "belt" && item["weapon"].ToString() == "True")
+                                        weaponInBelt = true;
+                                }
+                            }
+                            if (!weaponInBelt)
+                            {
+                                PrintWarning($"Kit {zone.Kit[kitRnd]} has no weapon in belt - Defaulting to 'Scientist'.");
+                            }
+                            else
+                            {
+                                if(bData.keepAttire == false)
+                                    entity.inventory.Strip(); 
+                            Kits?.Call($"GiveKit", entity, zone.Kit[kitRnd], true);
+                            TempRecord.kitList.Add(botapex.userID, zone.Kit[kitRnd]);
+                            }
                         }
                     }
-                    else return; 
-                });
                 }
+
                 no_of_AI++;
 
-                if (zone.Kit != "default")
-                {
-                    object checkKit = (Kits.CallHook("GetKitInfo", zone.Kit, true));
-                    if (checkKit == null)
+                    foreach (Item item in botapex.inventory.containerBelt.itemList)                                                                             //store organised weapons lists
                     {
-                        PrintWarning("Kit does not exist - Defaulting to 'Scientist'.");
-                        return;
+                        var held = item.GetHeldEntity();
+
+                        if (held as HeldEntity != null)
+                        {
+                            if (held as BaseMelee != null || held as TorchWeapon != null)
+                            bData.MeleeWeapons.Add(item);
+                                else
+                                {
+                                    if (held as BaseProjectile != null)
+                                    {
+                                    bData.AllProjectiles.Add(item);
+                                    if (held.name.Contains("m92") || held.name.Contains("pistol") || held.name.Contains("python") || held.name.Contains("waterpipe"))
+                                    bData.CloseRangeWeapons.Add(item);
+                                        else if (held.name.Contains("bolt"))
+                                        bData.LongRangeWeapons.Add(item);
+                                            else
+                                            bData.MediumRangeWeapons.Add(item);
+                                    }
+                                }
+                        }
                     }
+
+                    if (zone.BotName == "randomname")
+                    entity.displayName = Get(entity.userID);
                     else
+                    entity.displayName = zone.BotName;
+            
+                    botapex.Stats.VisionRange = bData.range;
+                    entity.health = zone.BotHealth;
+            
+                    if (zone.Disable_Radio)
+                    botapex.GetComponent<FacepunchBehaviour>().CancelInvoke(new Action(botapex.RadioChatter));
+            
+                    timer.Once(1, () => SelectWeapon(botapex, null, false));
+        }
+        
+	    void OnEntitySpawned(BaseEntity entity)
+        {
+            if (entity != null)
+            {
+                if (entity is NPCPlayerCorpse)
+                {                
+                    var corpse = entity as NPCPlayerCorpse;
+                    if (!configData.Options.Allow_Rust_Loot)
+                            NextTick(() =>
+                               {
+                                corpse.containers[0].Clear();
+                                corpse.containers[1].Clear();
+                                corpse.containers[2].Clear();
+                               }
+                               );
+                            
+                    string kit;
+                    if (TempRecord.kitList.ContainsKey(corpse.playerSteamID))
                     {
-                    entity.inventory.Strip(); 
-                    Kits?.Call($"GiveKit", entity, zone.Kit, true);
+                    kit = TempRecord.kitList[corpse.playerSteamID];
+                    if (kit == null)
+                    return;
+                    string[] checkKit = (Kits.CallHook("GetKitContents", kit)) as string[];
+                    
+                        var tempbody = GameManager.server.CreateEntity("assets/prefabs/player/player.prefab", (corpse.transform.position - new Vector3(0,-100,0)), corpse.transform.rotation).ToPlayer();
+                        tempbody.Spawn();
+            
+                        Kits?.Call($"GiveKit", tempbody, kit, true);
+    
+                        NextTick(() =>
+                        {
+                            var source = new ItemContainer[] { tempbody.inventory.containerMain, tempbody.inventory.containerWear, tempbody.inventory.containerBelt };
+    
+                                for (int i = 0; i < (int)source.Length; i++)
+                                    {
+                                        Item[] array = source[i].itemList.ToArray();
+                                        for (int j = 0; j < (int)array.Length; j++)
+                                        {
+                                            Item item = array[j];
+                                            if (!item.MoveToContainer(corpse.containers[i], -1, true))
+                                            {
+                                                item.Remove(0f);
+                                            }
+                                        }
+                                    }
+                                    tempbody.Kill();
+    
+                            if (configData.Options.Wipe_Belt)
+                            corpse.containers[2].Clear();
+                            if (configData.Options.Wipe_Clothing)
+                            corpse.containers[1].Clear();
+			    
+                            TempRecord.kitList.Remove(corpse.playerSteamID);
+                        });
+                    }  
+                }
+                
+                if (entity is DroppedItemContainer)
+                {
+                    NextTick(() =>
+                    {
+                        if (entity == null || entity.IsDestroyed) return;
+                        var container = entity as DroppedItemContainer;
+                        
+                        ulong ownerID = container.playerSteamID;
+                        if (ownerID == 0) return;
+                        if (configData.Options.Remove_BackPacks)
+                        {
+                            if (TempRecord.DeadNPCPlayerIds.Contains(ownerID))
+                                {
+                                    entity.Kill();
+                                    TempRecord.DeadNPCPlayerIds.Remove(ownerID);
+                                    return;
+                                }
+                        }
+    
+                    });
+                }
+            
+                Vector3 dropLocation = new Vector3(0,0,0);
+                if (!(entity.name.Contains("supply_drop")))
+                return;
+                    
+                dropLocation = (CalculateGroundPos(entity.transform.position));
+                List<BaseEntity> entitiesWithinRadius = new List<BaseEntity>();
+                Vis.Entities(dropLocation, 50f, entitiesWithinRadius);
+                
+                foreach (var BaseEntity in entitiesWithinRadius)                                                                                                //check for smoking grenade at proposed airdrop spawn location
+                {
+                    if (BaseEntity.name.Contains("grenade.smoke.deployed") && !(configData.Options.Supply_Enabled))
+                    return;
+                }
+                
+                foreach (var profile in TempRecord.MonumentProfiles)
+                {
+                    if(profile.Key == "AirDrop" && profile.Value.Activate == true)
+                    {
+                        timer.Repeat(0f,profile.Value.Bots, () =>
+                        {
+                        profile.Value.LocationX = entity.transform.position.x;
+                        profile.Value.LocationY = entity.transform.position.y;
+                        profile.Value.LocationZ = entity.transform.position.z;
+                        SpawnBots(profile.Key, profile.Value, "AirDrop");
+                        }
+                        );
                     }
                 }
-
-                entity.health = zone.BotHealth;
-		
-                if (zone.BotName == "randomname")
-                {
-                entity.displayName = Get(entity.userID);
-                }
-                else
-                {
-                entity.displayName = zone.BotName;
-                }
-                SetFiringRange(botapex, zone.Bot_Firing_Range);
-	//if (zone.Chute)                   //commented awaiting changes in Rust.
-	//{
-	//var Chute = GameManager.server.CreateEntity("assets/prefabs/misc/parachute/parachute.prefab", newPos, rot);
-	//Chute.gameObject.Identity();
-	//Chute.SetParent(botapex, "parachute");
-	//Chute.Spawn();
-	//float x = Convert.ToSingle(GetRandomNumber(-0.16, 0.16));
-	//float z = Convert.ToSingle(GetRandomNumber(-0.16, 0.16));
-	//float varySpeed = Convert.ToSingle(GetRandomNumber(0.4, 0.8));
-	//Drop(botapex, Chute, zone, x, varySpeed, z);
-	//}         
-
+            }
         }
-
-        void SetFiringRange(NPCPlayerApex botapex, int range)
+        
+        void SelectWeapon(NPCPlayerApex npcPlayer, BasePlayer victim, bool hasAttacker)
         {
-            if (botapex == null)
-            {        
-                TempRecord.NPCPlayers.Remove(botapex);
-                TempRecord.dontRespawn.Remove(botapex.userID);
+            if (npcPlayer == null)
+            return;
+        
+            if (npcPlayer.svActiveItemID == 0)
+            {
                 return;
             }
 
-            var heldEntity = botapex.GetActiveItem();
-            if (botapex.svActiveItemID != 0)
-            {
-                    List<int> weapons = new List<int>(); //check all their weapons
-                    foreach (Item item in botapex.inventory.containerBelt.itemList)
+                var active = npcPlayer.GetActiveItem();
+                HeldEntity heldEntity1 = null;
+                AttackEntity heldGun = null;
+                
+                if (active != null)
+                heldEntity1 = active.GetHeldEntity() as HeldEntity;
+                if (heldEntity1 != null)
+                heldGun = npcPlayer.GetHeldEntity() as AttackEntity;
+            
+                var bData = npcPlayer.GetComponent<botData>();
+                
+                
+                if (hasAttacker == false)
+                {
+                    List<int> weapons = new List<int>();                                                                                                        //check all their weapons
+                    foreach (Item item in npcPlayer.inventory.containerBelt.itemList)
                     {
                         if (item.GetHeldEntity() as BaseProjectile != null || item.GetHeldEntity() as BaseMelee != null || item.GetHeldEntity() as TorchWeapon != null)
                         {
@@ -406,188 +591,274 @@ namespace Oxide.Plugins
                         Puts("No suitable weapon found in kit.");
                         return;
                     }
-                int index = rnd.Next(weapons.Count);
-                
-                foreach (Item item in botapex.inventory.containerBelt.itemList) //pick one at random
-                {
-                    
-                    if (item.position == weapons[index])
-                    {
-                    var UID = botapex.inventory.containerBelt.GetSlot(weapons[index]).uid;
-                    Item activeItem = item;
-                    botapex.svActiveItemID = 0;
-                    botapex.inventory.UpdatedVisibleHolsteredItems();
-                    HeldEntity held = activeItem.GetHeldEntity() as HeldEntity;
-                    botapex.svActiveItemID = UID;
-                    botapex.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-                    held.SetHeld(true);
-                    botapex.svActiveItemID = UID;
-                    botapex.inventory.UpdatedVisibleHolsteredItems();
-                    }
-                }
-                
-                AttackEntity heldGun = botapex.GetHeldEntity() as AttackEntity;
-                if (heldGun != null)
-                {
-                    var heldMelee = heldGun as BaseMelee;
-                    var heldTorchWeapon = heldGun as TorchWeapon;
-                    if (heldMelee != null || heldTorchWeapon != null)
-                       heldGun.effectiveRange = 1; 
-                    else
-                        heldGun.effectiveRange = range;
-                    return;
-                }
-		    }
-            else
-            {
-                timer.Once(1, () => SetFiringRange(botapex, range));
-            }
+                    int index = rnd.Next(weapons.Count);
+                    var currentTime = TOD_Sky.Instance.Cycle.Hour;
 
-        }
-	//    void Drop(NPCPlayer bot, BaseEntity Chute, MonumentSettings zone, float x, float varyY, float z)
-	//    {
-	//	if (bot == null) return;
-	//	isInAir = true;
-	//	var gnd = (CalculateGroundPos(bot.transform.position));
-	//	var botapex = bot.GetComponent<NPCPlayerApex>();
-	//	if (bot.transform.position.y > gnd.y)
-	//	{
-	//	    float logSpeed = ((bot.transform.position.y / 150f) + varyY);
-	//	    bot.transform.position = bot.transform.position + new Vector3(x, (-logSpeed), z);
-	//	    timer.Once(0.2f, () =>
-	//	    {
-	//		if (TempRecord.NPCPlayers.ContainsKey(botapex))
-	//		Drop(bot, Chute, zone, x, varyY, z);
-	//	    });
-	//			    
-	//	}
-	//	else
-	//	{
-	//	    isInAir = false;
-	//	    botapex.Resume();
-	//	    bot.RemoveChild(Chute);
-	//	    Chute.Kill();
-	//	}
-	//    }
-
-	void OnEntitySpawned(BaseEntity entity)
-	{
-        if (entity != null)
-        {
-            if (entity is DroppedItemContainer)
-            {
-                NextTick(() =>
-                {
-                    if (entity == null || entity.IsDestroyed) return;
-                    var container = entity as DroppedItemContainer;
-                    
-                    ulong ownerID = container.playerSteamID;
-                    if (ownerID == 0) return;
-                    if (configData.Options.Remove_BackPacks)
+                    if (currentTime > 20 || currentTime < 8)
                     {
-                        foreach (var ID in TempRecord.DeadNPCPlayerIds)
+                        foreach (Item item in npcPlayer.inventory.containerBelt.itemList)                                                                          
                         {
-                            if (ID.ToString() == ownerID.ToString())
+                            HeldEntity held = item.GetHeldEntity() as HeldEntity;
+                            
+                            if (item.ToString().Contains("flashlight"))
                             {
-                                entity.Kill();
-                                TempRecord.DeadNPCPlayerIds.Remove(ownerID);
-                                return;
+                            if (heldEntity1 != null)
+                            heldEntity1.SetHeld(false);
+                            var UID = item.uid;
+                            
+                            ChangeWeapon(npcPlayer, held, UID);
+                            return;
                             }
                         }
                     }
-
-                });
-            }
-	    
-	    
-            Vector3 dropLocation = new Vector3(0,0,0);
-            if (!(entity.name.Contains("supply_drop")))
-            return;
-                
-            dropLocation = (CalculateGroundPos(entity.transform.position));
-            List<BaseEntity> entitiesWithinRadius = new List<BaseEntity>();
-            Vis.Entities(dropLocation, 50f, entitiesWithinRadius);
-            
-            foreach (var BaseEntity in entitiesWithinRadius)
-            {
-                if (BaseEntity.name.Contains("grenade.smoke.deployed") && !(configData.Options.Supply_Enabled))
-                return;
-            }
-                foreach (var profile in TempRecord.MonumentProfiles)
-                {
-                    if(profile.Key == "AirDrop" && profile.Value.Activate == true)
+                    else
                     {
-                        timer.Repeat(0f,profile.Value.Bots, () =>
+                        foreach (Item item in npcPlayer.inventory.containerBelt.itemList)                                                                           //pick one at random to start with
                         {
-                        profile.Value.LocationX = entity.transform.position.x;
-                        profile.Value.LocationY = entity.transform.position.y;
-                        profile.Value.LocationZ = entity.transform.position.z;
-                        SpawnSci(profile.Key, profile.Value, "AirDrop");
+                            HeldEntity held = item.GetHeldEntity() as HeldEntity;
+                            
+                            if (item.position == weapons[index])
+                            {
+                            if (heldEntity1 != null)
+                            heldEntity1.SetHeld(false);
+                            var UID = npcPlayer.inventory.containerBelt.GetSlot(weapons[index]).uid;
+                            
+                            ChangeWeapon(npcPlayer, held, UID);
+                            return;
+                            }
                         }
-                        );
                     }
                 }
+
+                if (hasAttacker == true)
+                {
+                        bData.canChangeWeapon ++;
+                        
+                        if (bData.canChangeWeapon > 3)
+                        {
+                        bData.canChangeWeapon = 0;                
+
+                            if (npcPlayer == null)
+                            return;
+                        
+                            float distance = Vector3.Distance(npcPlayer.transform.position, victim.transform.position);
+                            int noOfAvailableWeapons = 0;
+                            int selectedWeapon;
+                            Item chosenWeapon = null;
+                            HeldEntity held = null;
+                            int newCurrentRange = 0;
+                            var currentTime = TOD_Sky.Instance.Cycle.Hour;
+                            bool night = false;
+                            
+                            if (currentTime > 20 || currentTime < 8)
+                                night = true;
+
+                            if (npcPlayer.AttackTarget == null && night)
+                            {
+                                foreach (var weap in bData.MeleeWeapons)
+                                {
+                                    if (weap.ToString().Contains("flashlight"))
+                                    {
+                                        chosenWeapon = weap;
+                                        newCurrentRange = 1;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if (distance < 2f && bData.MeleeWeapons != null)
+                                {
+                                    foreach (var weap in bData.MeleeWeapons)
+                                    {
+                                    noOfAvailableWeapons++;
+                                    }
+                                    if (noOfAvailableWeapons > 0)
+                                    {
+                                        selectedWeapon = rnd.Next(bData.MeleeWeapons.Count);
+                                        chosenWeapon = bData.MeleeWeapons[selectedWeapon];
+                                        newCurrentRange = 1;
+                                    }
+                                }
+                                else if (distance > 1f && distance < 10f && bData.CloseRangeWeapons != null)
+                                {
+                                    foreach (var weap in bData.CloseRangeWeapons)
+                                    {
+                                    noOfAvailableWeapons++;
+                                    }
+                                    if (noOfAvailableWeapons > 0)
+                                    {
+                                        selectedWeapon = rnd.Next(bData.CloseRangeWeapons.Count);
+                                        chosenWeapon = bData.CloseRangeWeapons[selectedWeapon];
+                                        newCurrentRange = 2;
+                                    }
+                                }
+                                else if (distance > 9f && distance < 30f && bData.MediumRangeWeapons != null)
+                                {
+                                    foreach (var weap in bData.MediumRangeWeapons)
+                                    {
+                                        noOfAvailableWeapons++;
+                                    }
+                                    if (noOfAvailableWeapons > 0)
+                                    {
+                                        selectedWeapon = rnd.Next(bData.MediumRangeWeapons.Count);
+                                        chosenWeapon = bData.MediumRangeWeapons[selectedWeapon];
+                                        newCurrentRange = 3;
+                                    }
+                                }
+                                else if (distance > 29 && bData.LongRangeWeapons != null)
+                                {
+                                    foreach (var weap in bData.LongRangeWeapons)
+                                    {
+                                    noOfAvailableWeapons++;
+                                    }
+                                    if (noOfAvailableWeapons > 0)
+                                    {
+                                        selectedWeapon = rnd.Next(bData.LongRangeWeapons.Count);
+                                        chosenWeapon = bData.LongRangeWeapons[selectedWeapon];
+                                        newCurrentRange = 4;
+                                    }
+                                }
+                                
+                                if (chosenWeapon == null)                                                                                                       //if no weapon suited to range, pick any random bullet weapon
+                                {                                                                                                                               //prevents sticking with melee @>2m when no pistol is available
+                                    foreach (var weap in bData.AllProjectiles)
+                                    {
+                                    noOfAvailableWeapons++;
+                                    }
+                                    if (noOfAvailableWeapons > 0)
+                                    {
+                                        selectedWeapon = rnd.Next(bData.AllProjectiles.Count);
+                                        chosenWeapon = bData.AllProjectiles[selectedWeapon];
+                                        newCurrentRange = 5;
+                                    }
+                                }
+                            }     
+                            if (chosenWeapon == null) return;
+                            
+                            if (newCurrentRange == bData.currentWeaponRange)
+                            return;
+                            else
+                            bData.currentWeaponRange = newCurrentRange;
+                            held = chosenWeapon.GetHeldEntity() as HeldEntity;
+                            if (heldEntity1.name == held.name) return;
+   
+                            heldEntity1.SetHeld(false);
+                            var UID = chosenWeapon.uid;
+                            
+                            ChangeWeapon(npcPlayer, held, UID);
+                        }
+                }
+                else
+                {
+                    timer.Once(1, () => SelectWeapon(npcPlayer, victim, false));
+                }
         }
-	}
         
+        void ChangeWeapon(NPCPlayer npcPlayer, HeldEntity held, uint UID)
+        {
+            npcPlayer.svActiveItemID = 0;
+            npcPlayer.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+            npcPlayer.inventory.UpdatedVisibleHolsteredItems();
+            
+            npcPlayer.svActiveItemID = UID;
+            npcPlayer.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+            held.SetHeld(true);
+            npcPlayer.svActiveItemID = UID;
+            npcPlayer.inventory.UpdatedVisibleHolsteredItems();
+            
+            AttackEntity heldGun = npcPlayer.GetHeldEntity() as AttackEntity;
+                if (heldGun != null)
+                {
+                    if (heldGun as BaseMelee != null || heldGun as TorchWeapon != null)
+                        heldGun.effectiveRange = 2;
+                    else if (held.name.Contains("bolt"))
+                        heldGun.effectiveRange = 800f;
+                    else
+                        heldGun.effectiveRange = 200f;
+                    return;      
+                }
+        }
         #region targeting
         
-        object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)//stops bots targetting animals
+        object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
         {
-	    //if ((bool)isInAir && configData.Options.Ai_Falling_Disable)
-	    //return 0f;
+            if (!TempRecord.NPCPlayers.Contains(npcPlayer))
+            return null;
+        
+            if (entity is NPCPlayer)                                                                                                                            //stop murderers attacking scientists.
+            return 0f;
+        
+            if (npcPlayer == null || entity == null)
+            return null;
             BasePlayer victim = null;
             if (entity is BasePlayer)
             {
             victim = entity as BasePlayer; 
-                    
-                if (victim is NPCPlayer) //stop murderers attacking scientists.
-                return 0f;
-                if (configData.Options.Peace_Keeper)
+            SelectWeapon(npcPlayer, victim, true); 
+            var currentTime = TOD_Sky.Instance.Cycle.Hour;
+            
+            
+            var active = npcPlayer.GetActiveItem();
+            
+            HeldEntity heldEntity1 = null;
+            HeldEntity attackerheldEntity1 = null;
+            if (active != null)
+            heldEntity1 = active.GetHeldEntity() as HeldEntity;
+		    
+            if (heldEntity1 != null)
+            {
+                if (currentTime > 20 || currentTime < 8)
+                heldEntity1.SetLightsOn(true);
+                else
+                heldEntity1.SetLightsOn(false);
+            }
+    
+            if (configData.Options.Peace_Keeper)
+            {
+                if (victim.svActiveItemID == 0u)
                 {
-                    if (victim.svActiveItemID == 0u)
-                    {
-                    return 0f;
-                    }
-                    else
-                    {
-                        var heldWeapon = victim.GetHeldEntity() as BaseProjectile;
-                        var heldFlame = victim.GetHeldEntity() as FlameThrower;
-                        if (heldWeapon == null && heldFlame == null)
-                        return 0f;
-                    }
+                return 0f;
                 }
+                else
+                {
+                    var heldWeapon = victim.GetHeldEntity() as BaseProjectile;
+                    var heldFlame = victim.GetHeldEntity() as FlameThrower;
+                    if (heldWeapon == null && heldFlame == null)
+                    return 0f;
+                }
+            }
                 
+            if (TempRecord.NPCPlayers.Contains(npcPlayer))
+            {
+                var bData = npcPlayer.GetComponent<botData>();
+                var profile = bData.monumentName;
+            }
 
-	
-            if ((npcPlayer.transform.position-victim.transform.position).magnitude > TempRecord.MonumentProfiles[TempRecord.NPCPlayers[npcPlayer].monumentName].Aggression_Range)
-            return 0f; // Thanks Lobod
-
-            if(!victim.userID.IsSteamId() && configData.Options.Ignore_HumanNPC)
+            if(!victim.userID.IsSteamId() && configData.Options.Ignore_HumanNPC)                                                                                //stops bots targeting animals
             return 0f;
             }
-            if (entity.name.Contains("agents/") && configData.Options.Ignore_Animals)
+            if (entity.name.Contains("agents/") && configData.Options.Ignore_Animals)                                                                           //stops bots targeting animals
             return 0f;
             else
             return null;
 
         }
         
-        object CanBradleyApcTarget(BradleyAPC bradley, BaseEntity target)//stops bradley targetting bots
+        object CanBradleyApcTarget(BradleyAPC bradley, BaseEntity target)                                                                                       //stops bradley targeting bots
         {
             if (target is NPCPlayer && configData.Options.APC_Safe)
             return false;
             return null;
         }
         
-        object OnNpcTarget(BaseNpc npc, BaseEntity entity)//stops animals targetting bots
-        {
+        object OnNpcTarget(BaseNpc npc, BaseEntity entity)                                                                                                      //stops animals targeting bots
+        {                                                                                                                                                       //at present this is not working
             if (entity is NPCPlayer && configData.Options.Animal_Safe)
             return 0f;
             return null;
         }
 
-        object CanBeTargeted(BaseCombatEntity player, MonoBehaviour turret)//stops autoturrets targetting bots
+        object CanBeTargeted(BaseCombatEntity player, MonoBehaviour turret)                                                                                     //stops autoturrets targetting bots
         {
             if (player is NPCPlayer && configData.Options.Turret_Safe)
             return false;
@@ -604,7 +875,7 @@ namespace Oxide.Plugins
             profile.LocationX = location.x;
             profile.LocationY = location.y;
             profile.LocationZ = location.z;
-            SpawnSci(name, profile, "Attack");
+            SpawnBots(name, profile, "Attack");
             }
             );
         }
@@ -632,7 +903,7 @@ namespace Oxide.Plugins
             return result;
         }
 
-        static Vector3 CalculateGroundPos(Vector3 sourcePos) // credit Wulf & Nogrod 
+        static Vector3 CalculateGroundPos(Vector3 sourcePos)                                                                                                    //credit Wulf & Nogrod 
         {
             RaycastHit hitInfo;
 
@@ -644,7 +915,7 @@ namespace Oxide.Plugins
             return sourcePos;
         } 
   
-        private void FindMonuments() // credit K1lly0u 
+        private void FindMonuments() 										                                                                                    //credit K1lly0u 
         {
             
             TempRecord.MonumentProfiles.Clear();
@@ -658,609 +929,163 @@ namespace Oxide.Plugins
                 if (gobject.name.Contains("autospawn/monument")) 
                 {
                     var pos = gobject.transform.position;
+                    if (gobject.name.Contains("mining_quarry_a"))
+                    {
+                    AddProfile("QuarryA", configData.Zones.QuarryA, pos);
+                    continue;
+                    }
+                    if (gobject.name.Contains("mining_quarry_b"))
+                    {
+                    AddProfile("QuarryB", configData.Zones.QuarryB, pos);     
+                    continue;
+                    }
+                    if (gobject.name.Contains("mining_quarry_c"))
+                    {
+                    AddProfile("QuarryC", configData.Zones.QuarryB, pos);    
+                    continue;
+                    }
                     if (gobject.name.Contains("powerplant_1"))
                     {
-                    TempRecord.MonumentProfiles.Add("PowerPlant", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Powerplant.Activate,
-                        Murderer = configData.Zones.Powerplant.Murderer,
-                        Bots = configData.Zones.Powerplant.Bots,
-                        BotHealth = configData.Zones.Powerplant.BotHealth,
-                        Radius = configData.Zones.Powerplant.Radius,
-                        Kit = configData.Zones.Powerplant.Kit,
-                        BotName = configData.Zones.Powerplant.BotName,
-                        //Chute = configData.Zones.Powerplant.Chute,
-                        Bot_Firing_Range = configData.Zones.Powerplant.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Powerplant.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Powerplant.Bot_Damage,
-                        Disable_Radio = configData.Zones.Powerplant.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Powerplant.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Powerplant.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Powerplant.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Powerplant.Aggression_Range,
-                    });             
+                    AddProfile("PowerPlant", configData.Zones.PowerPlant, pos);                 
                     continue;
                     }
  
                     if (gobject.name.Contains("airfield_1"))
                     {
-                    TempRecord.MonumentProfiles.Add("Airfield", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Airfield.Activate,
-                        Murderer = configData.Zones.Airfield.Murderer,
-                        Bots = configData.Zones.Airfield.Bots,
-                        BotHealth = configData.Zones.Airfield.BotHealth,
-                        Radius = configData.Zones.Airfield.Radius,
-                        Kit = configData.Zones.Airfield.Kit,
-                        BotName = configData.Zones.Airfield.BotName,
-                        //Chute = configData.Zones.Airfield.Chute,
-                        Bot_Firing_Range = configData.Zones.Airfield.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Airfield.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Airfield.Bot_Damage,
-                        Disable_Radio = configData.Zones.Airfield.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Airfield.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Airfield.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Airfield.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Airfield.Aggression_Range,
-                    });    
+                    AddProfile("Airfield", configData.Zones.Airfield, pos);     
                     continue;
                     }
 
                     if (gobject.name.Contains("trainyard_1"))
                     {
-                    TempRecord.MonumentProfiles.Add("Trainyard", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Trainyard.Activate,
-                        Murderer = configData.Zones.Trainyard.Murderer,
-                        Bots = configData.Zones.Trainyard.Bots,
-                        BotHealth = configData.Zones.Trainyard.BotHealth,
-                        Radius = configData.Zones.Trainyard.Radius,
-                        Kit = configData.Zones.Trainyard.Kit,
-                        BotName = configData.Zones.Trainyard.BotName,
-                        //Chute = configData.Zones.Trainyard.Chute,
-                        Bot_Firing_Range = configData.Zones.Trainyard.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Trainyard.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Trainyard.Bot_Damage,
-                        Disable_Radio = configData.Zones.Trainyard.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Trainyard.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Trainyard.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Trainyard.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Trainyard.Aggression_Range,
-                    });              
+                    AddProfile("Trainyard", configData.Zones.Trainyard, pos);             
                     continue;
                     }
 
                     if (gobject.name.Contains("water_treatment_plant_1")) 
                     {
-                    TempRecord.MonumentProfiles.Add("Watertreatment", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Watertreatment.Activate,
-                        Murderer = configData.Zones.Watertreatment.Murderer,
-                        Bots = configData.Zones.Watertreatment.Bots,
-                        BotHealth = configData.Zones.Watertreatment.BotHealth,
-                        Radius = configData.Zones.Watertreatment.Radius,
-                        Kit = configData.Zones.Watertreatment.Kit,
-                        BotName = configData.Zones.Watertreatment.BotName,
-                        //Chute = configData.Zones.Watertreatment.Chute,
-                        Bot_Firing_Range = configData.Zones.Watertreatment.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Watertreatment.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Watertreatment.Bot_Damage,
-                        Disable_Radio = configData.Zones.Watertreatment.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Watertreatment.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Watertreatment.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Watertreatment.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Watertreatment.Aggression_Range,
-                    });     
+                    AddProfile("Watertreatment", configData.Zones.Watertreatment, pos);    
                     continue;
                     }
 
                     if (gobject.name.Contains("satellite_dish")) 
                     {
-                    TempRecord.MonumentProfiles.Add("Satellite", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Satellite.Activate,
-                        Murderer = configData.Zones.Satellite.Murderer,
-                        Bots = configData.Zones.Satellite.Bots,
-                        BotHealth = configData.Zones.Satellite.BotHealth,
-                        Radius = configData.Zones.Satellite.Radius,
-                        Kit = configData.Zones.Satellite.Kit,
-                        BotName = configData.Zones.Satellite.BotName,
-                        //Chute = configData.Zones.Satellite.Chute,
-                        Bot_Firing_Range = configData.Zones.Satellite.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Satellite.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Satellite.Bot_Damage,  
-                        Disable_Radio = configData.Zones.AirDrop.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.AirDrop.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Satellite.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Satellite.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Satellite.Aggression_Range,
-                    });   
+                    AddProfile("Satellite", configData.Zones.Satellite, pos);  
                     continue;
                     } 
 
                     if (gobject.name.Contains("sphere_tank"))
                     {
-                    TempRecord.MonumentProfiles.Add("Dome", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Dome.Activate,
-                        Murderer = configData.Zones.Dome.Murderer,
-                        Bots = configData.Zones.Dome.Bots,
-                        BotHealth = configData.Zones.Dome.BotHealth,
-                        Radius = configData.Zones.Dome.Radius,
-                        Kit = configData.Zones.Dome.Kit,
-                        BotName = configData.Zones.Dome.BotName,
-                        //Chute = configData.Zones.Dome.Chute,
-                        Bot_Firing_Range = configData.Zones.Dome.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Dome.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Dome.Bot_Damage,
-                        Disable_Radio = configData.Zones.Dome.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Dome.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Dome.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Dome.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Dome.Aggression_Range,
-                    }); 
+                    AddProfile("Dome", configData.Zones.Dome, pos);
                     continue;
                     }
 
                     if (gobject.name.Contains("radtown_small_3"))
                     {
-                    TempRecord.MonumentProfiles.Add("Radtown", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Radtown.Activate,
-                        Murderer = configData.Zones.Radtown.Murderer,
-                        Bots = configData.Zones.Radtown.Bots,
-                        BotHealth = configData.Zones.Radtown.BotHealth,
-                        Radius = configData.Zones.Radtown.Radius,
-                        Kit = configData.Zones.Radtown.Kit,
-                        BotName = configData.Zones.Radtown.BotName,
-                        //Chute = configData.Zones.Radtown.Chute,
-                        Bot_Firing_Range = configData.Zones.Radtown.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Radtown.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Radtown.Bot_Damage,
-                        Disable_Radio = configData.Zones.Radtown.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Radtown.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Radtown.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Radtown.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Radtown.Aggression_Range,
-                    });      
+                    AddProfile("Radtown", configData.Zones.Radtown, pos); 
                     continue;
                     }
                     
                     if (gobject.name.Contains("launch_site"))
                     {
-                    TempRecord.MonumentProfiles.Add("Launchsite", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Launchsite.Activate,
-                        Murderer = configData.Zones.Launchsite.Murderer,
-                        Bots = configData.Zones.Launchsite.Bots,
-                        BotHealth = configData.Zones.Launchsite.BotHealth,
-                        Radius = configData.Zones.Launchsite.Radius,
-                        Kit = configData.Zones.Launchsite.Kit,
-                        BotName = configData.Zones.Launchsite.BotName,
-                        //Chute = configData.Zones.Launchsite.Chute,
-                        Bot_Firing_Range = configData.Zones.Launchsite.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Launchsite.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Launchsite.Bot_Damage,
-                        Disable_Radio = configData.Zones.Launchsite.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Launchsite.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Launchsite.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Launchsite.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Launchsite.Aggression_Range,
-                    }); 
+                    AddProfile("Launchsite", configData.Zones.Launchsite, pos);
                     continue;
                     }
 
-		    if (gobject.name.Contains("junkyard"))
+                    if (gobject.name.Contains("junkyard"))
                     {
-                    TempRecord.MonumentProfiles.Add("Junkyard", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Junkyard.Activate,
-                        Murderer = configData.Zones.Junkyard.Murderer,
-                        Bots = configData.Zones.Junkyard.Bots,
-                        BotHealth = configData.Zones.Junkyard.BotHealth,
-                        Radius = configData.Zones.Junkyard.Radius,
-                        Kit = configData.Zones.Junkyard.Kit,
-                        BotName = configData.Zones.Junkyard.BotName,
-                        //Chute = configData.Zones.Junkyard.Chute,
-                        Bot_Firing_Range = configData.Zones.Junkyard.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Junkyard.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Junkyard.Bot_Damage,
-                        Disable_Radio = configData.Zones.Junkyard.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Junkyard.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Junkyard.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Junkyard.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-                        Aggression_Range = configData.Zones.Junkyard.Aggression_Range,
-                    }); 
+                    AddProfile("Junkyard", configData.Zones.Junkyard, pos);
                     continue;
                     }
 		    
                     if (gobject.name.Contains("military_tunnel_1"))
                     {
-                    TempRecord.MonumentProfiles.Add("MilitaryTunnel", new MonumentSettings
-                    {
-                        Activate = configData.Zones.MilitaryTunnel.Activate,
-                        Murderer = configData.Zones.MilitaryTunnel.Murderer,
-                        Bots = configData.Zones.MilitaryTunnel.Bots,
-                        BotHealth = configData.Zones.MilitaryTunnel.BotHealth,
-                        Radius = configData.Zones.MilitaryTunnel.Radius,
-                        Kit = configData.Zones.MilitaryTunnel.Kit,
-                        BotName = configData.Zones.MilitaryTunnel.BotName,
-                        //Chute = configData.Zones.MilitaryTunnel.Chute,
-                        Bot_Firing_Range = configData.Zones.MilitaryTunnel.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.MilitaryTunnel.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.MilitaryTunnel.Bot_Damage,  
-                        Disable_Radio = configData.Zones.MilitaryTunnel.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.MilitaryTunnel.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.MilitaryTunnel.Spawn_Height,
-                        Respawn_Timer = configData.Zones.MilitaryTunnel.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.MilitaryTunnel.Aggression_Range,
-                    }); 
+                    AddProfile("MilitaryTunnel", configData.Zones.MilitaryTunnel, pos);
                     continue;
                     }
 
                     if (gobject.name.Contains("harbor_1"))
                     { 
-                    TempRecord.MonumentProfiles.Add("Harbor1", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Harbor1.Activate,
-                        Murderer = configData.Zones.Harbor1.Murderer,
-                        Bots = configData.Zones.Harbor1.Bots,
-                        BotHealth = configData.Zones.Harbor1.BotHealth,
-                        Radius = configData.Zones.Harbor1.Radius,
-                        Kit = configData.Zones.Harbor1.Kit,
-                        BotName = configData.Zones.Harbor1.BotName,
-                        //Chute = configData.Zones.Harbor1.Chute,
-                        Bot_Firing_Range = configData.Zones.Harbor1.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Harbor1.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Harbor1.Bot_Damage,  
-                        Disable_Radio = configData.Zones.Harbor1.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Harbor1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Harbor1.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Harbor1.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Harbor1.Aggression_Range,
-                    });     
+                    AddProfile("Harbor1", configData.Zones.Harbor1, pos);   
                     continue;
                     }
 
                     if (gobject.name.Contains("harbor_2"))
                     {
-                    TempRecord.MonumentProfiles.Add("Harbor2", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Harbor2.Activate,
-                        Murderer = configData.Zones.Harbor2.Murderer,
-                        Bots = configData.Zones.Harbor2.Bots,
-                        BotHealth = configData.Zones.Harbor2.BotHealth,
-                        Radius = configData.Zones.Harbor2.Radius,
-                        Kit = configData.Zones.Harbor2.Kit,
-                        BotName = configData.Zones.Harbor2.BotName,
-                        //Chute = configData.Zones.Harbor2.Chute,
-                        Bot_Firing_Range = configData.Zones.Harbor2.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Harbor2.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Harbor2.Bot_Damage,  
-                        Disable_Radio = configData.Zones.Harbor2.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Harbor2.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Harbor2.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Harbor2.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Harbor2.Aggression_Range,
-                    });             
+                    AddProfile("Harbor2", configData.Zones.Harbor2, pos);          
                     continue;
                     }
                     
                     if (gobject.name.Contains("gas_station_1") && gasstation == 0)
                     {
-                    TempRecord.MonumentProfiles.Add("GasStation", new MonumentSettings
-                    {
-                        Activate = configData.Zones.GasStation.Activate,
-                        Murderer = configData.Zones.GasStation.Murderer,
-                        Bots = configData.Zones.GasStation.Bots,
-                        BotHealth = configData.Zones.GasStation.BotHealth,
-                        Radius = configData.Zones.GasStation.Radius,
-                        Kit = configData.Zones.GasStation.Kit,
-                        BotName = configData.Zones.GasStation.BotName,
-                        //Chute = configData.Zones.GasStation.Chute,
-                        Bot_Firing_Range = configData.Zones.GasStation.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.GasStation.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.GasStation.Bot_Damage,  
-                        Disable_Radio = configData.Zones.GasStation.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.GasStation.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.GasStation.Spawn_Height,
-                        Respawn_Timer = configData.Zones.GasStation.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.GasStation.Aggression_Range,
-                    });
+                    AddProfile("GasStation", configData.Zones.GasStation, pos);
                     gasstation++;
                     continue;
                     }
               
                     if (gobject.name.Contains("gas_station_1") && gasstation == 1)
                     {
-                    TempRecord.MonumentProfiles.Add("GasStation1", new MonumentSettings
-                    {
-                        Activate = configData.Zones.GasStation1.Activate,
-                        Murderer = configData.Zones.GasStation1.Murderer,
-                        Bots = configData.Zones.GasStation1.Bots,
-                        BotHealth = configData.Zones.GasStation1.BotHealth,
-                        Radius = configData.Zones.GasStation1.Radius,
-                        Kit = configData.Zones.GasStation1.Kit,
-                        BotName = configData.Zones.GasStation1.BotName,
-                        //Chute = configData.Zones.GasStation1.Chute,
-                        Bot_Firing_Range = configData.Zones.GasStation1.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.GasStation1.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.GasStation1.Bot_Damage,  
-                        Disable_Radio = configData.Zones.GasStation1.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.GasStation1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.GasStation1.Spawn_Height,
-                        Respawn_Timer = configData.Zones.GasStation1.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.GasStation1.Aggression_Range,
-                    });
+                    AddProfile("GasStation1", configData.Zones.GasStation1, pos);      
                     gasstation++;
                     continue;
                     }
                     
                     if (gobject.name.Contains("supermarket_1") && spermket == 0)
                     {
-                    TempRecord.MonumentProfiles.Add("SuperMarket", new MonumentSettings
-                    {
-                        Activate = configData.Zones.SuperMarket.Activate,
-                        Murderer = configData.Zones.SuperMarket.Murderer,
-                        Bots = configData.Zones.SuperMarket.Bots,
-                        BotHealth = configData.Zones.SuperMarket.BotHealth,
-                        Radius = configData.Zones.SuperMarket.Radius,
-                        Kit = configData.Zones.SuperMarket.Kit,
-                        BotName = configData.Zones.SuperMarket.BotName,
-                        //Chute = configData.Zones.SuperMarket.Chute,
-                        Bot_Firing_Range = configData.Zones.SuperMarket.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.SuperMarket.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.SuperMarket.Bot_Damage,  
-                        Disable_Radio = configData.Zones.SuperMarket.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.SuperMarket.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.SuperMarket.Spawn_Height,
-                        Respawn_Timer = configData.Zones.SuperMarket.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.SuperMarket.Aggression_Range,
-                    });
+                    AddProfile("SuperMarket", configData.Zones.SuperMarket, pos);       
                     spermket++;
                     continue;
                     }
                     
                     if (gobject.name.Contains("supermarket_1") && spermket == 1)
                     {
-                    TempRecord.MonumentProfiles.Add("SuperMarket1", new MonumentSettings
-                    {
-                        Activate = configData.Zones.SuperMarket1.Activate,
-                        Murderer = configData.Zones.SuperMarket1.Murderer,
-                        Bots = configData.Zones.SuperMarket1.Bots,
-                        BotHealth = configData.Zones.SuperMarket1.BotHealth,
-                        Radius = configData.Zones.SuperMarket1.Radius,
-                        Kit = configData.Zones.SuperMarket1.Kit,
-                        BotName = configData.Zones.SuperMarket1.BotName,
-                        //Chute = configData.Zones.SuperMarket1.Chute,
-                        Bot_Firing_Range = configData.Zones.SuperMarket1.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.SuperMarket1.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.SuperMarket1.Bot_Damage,  
-                        Disable_Radio = configData.Zones.SuperMarket1.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.SuperMarket1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.SuperMarket1.Spawn_Height,
-                        Respawn_Timer = configData.Zones.SuperMarket1.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.SuperMarket1.Aggression_Range,
-                    });
+                    AddProfile("SuperMarket1", configData.Zones.SuperMarket1, pos); 
                     spermket++;
                     continue;
                     }
                     
                     if (gobject.name.Contains("lighthouse") && lighthouse == 0)
                     {
-                    TempRecord.MonumentProfiles.Add("Lighthouse", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Lighthouse.Activate,
-                        Murderer = configData.Zones.Lighthouse.Murderer,
-                        Bots = configData.Zones.Lighthouse.Bots,
-                        BotHealth = configData.Zones.Lighthouse.BotHealth,
-                        Radius = configData.Zones.Lighthouse.Radius,
-                        Kit = configData.Zones.Lighthouse.Kit,
-                        BotName = configData.Zones.Lighthouse.BotName,
-                        //Chute = configData.Zones.Lighthouse.Chute,
-                        Bot_Firing_Range = configData.Zones.Lighthouse.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Lighthouse.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Lighthouse.Bot_Damage,
-                        Disable_Radio = configData.Zones.Lighthouse.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Lighthouse.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Lighthouse.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Lighthouse.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Lighthouse.Aggression_Range,
-                    });             
+                    AddProfile("Lighthouse", configData.Zones.Lighthouse, pos);          
                     lighthouse++;
                     continue;
                     }
     
                     if (gobject.name.Contains("lighthouse") && lighthouse == 1)
                     {                        
-                    TempRecord.MonumentProfiles.Add("Lighthouse1", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Lighthouse1.Activate,
-                        Murderer = configData.Zones.Lighthouse1.Murderer,
-                        Bots = configData.Zones.Lighthouse1.Bots,
-                        BotHealth = configData.Zones.Lighthouse1.BotHealth,
-                        Radius = configData.Zones.Lighthouse1.Radius,
-                        Kit = configData.Zones.Lighthouse1.Kit,
-                        BotName = configData.Zones.Lighthouse1.BotName,
-                        //Chute = configData.Zones.Lighthouse1.Chute,
-                        Bot_Firing_Range = configData.Zones.Lighthouse1.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Lighthouse1.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Lighthouse1.Bot_Damage,
-                        Disable_Radio = configData.Zones.Lighthouse1.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Lighthouse1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Lighthouse1.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Lighthouse1.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Lighthouse1.Aggression_Range,
-                    });     
+                    AddProfile("Lighthouse1", configData.Zones.Lighthouse1, pos);    
                     lighthouse++;
                     continue;
                     }
                     
                     if (gobject.name.Contains("lighthouse") && lighthouse == 2)
                     {
-                    TempRecord.MonumentProfiles.Add("Lighthouse2", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Lighthouse2.Activate,
-                        Murderer = configData.Zones.Lighthouse2.Murderer,
-                        Bots = configData.Zones.Lighthouse2.Bots,
-                        BotHealth = configData.Zones.Lighthouse2.BotHealth,
-                        Radius = configData.Zones.Lighthouse2.Radius,
-                        Kit = configData.Zones.Lighthouse2.Kit,
-                        BotName = configData.Zones.Lighthouse2.BotName,
-                        //Chute = configData.Zones.Lighthouse2.Chute,
-                        Bot_Firing_Range = configData.Zones.Lighthouse2.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Lighthouse2.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Lighthouse2.Bot_Damage,
-                        Disable_Radio = configData.Zones.Lighthouse2.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Lighthouse2.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Lighthouse2.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Lighthouse2.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-			Aggression_Range = configData.Zones.Lighthouse2.Aggression_Range,
-                    });     
+                    AddProfile("Lighthouse2", configData.Zones.Lighthouse2, pos);   
                     lighthouse++;
                     continue;
                     }
 
                     if (gobject.name.Contains("warehouse") && warehouse == 0)
                     {
-                    TempRecord.MonumentProfiles.Add("Warehouse", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Warehouse.Activate,
-                        Murderer = configData.Zones.Warehouse.Murderer,
-                        Bots = configData.Zones.Warehouse.Bots,
-                        BotHealth = configData.Zones.Warehouse.BotHealth,
-                        Radius = configData.Zones.Warehouse.Radius,
-                        Kit = configData.Zones.Warehouse.Kit,
-                        BotName = configData.Zones.Warehouse.BotName,
-                        //Chute = configData.Zones.Warehouse.Chute,
-                        Bot_Firing_Range = configData.Zones.Warehouse.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Warehouse.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Warehouse.Bot_Damage,
-                        Disable_Radio = configData.Zones.Warehouse.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Warehouse.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Warehouse.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Warehouse.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-                        Aggression_Range = configData.Zones.Warehouse.Aggression_Range,
-                    });             
+                    AddProfile("Warehouse", configData.Zones.Warehouse, pos);             
                     warehouse++;
                     continue;
                     }
     
-                    if (gobject.name.Contains("warehouse") && warehouse == 1)
+                    if (gobject.name.Contains("warehouse") && warehouse == 1) 
                     {                        
-                    TempRecord.MonumentProfiles.Add("Warehouse1", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Warehouse1.Activate,
-                        Murderer = configData.Zones.Warehouse1.Murderer,
-                        Bots = configData.Zones.Warehouse1.Bots,
-                        BotHealth = configData.Zones.Warehouse1.BotHealth,
-                        Radius = configData.Zones.Warehouse1.Radius,
-                        Kit = configData.Zones.Warehouse1.Kit,
-                        BotName = configData.Zones.Warehouse1.BotName,
-                        //Chute = configData.Zones.Warehouse1.Chute,
-                        Bot_Firing_Range = configData.Zones.Warehouse1.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Warehouse1.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Warehouse1.Bot_Damage,
-                        Disable_Radio = configData.Zones.Warehouse1.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Warehouse1.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Warehouse1.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Warehouse1.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-                        Aggression_Range = configData.Zones.Warehouse1.Aggression_Range,
-                    });     
+                    AddProfile("Warehouse1", configData.Zones.Warehouse1, pos); 
                     warehouse++;
                     continue;
                     }
                     
                     if (gobject.name.Contains("warehouse") && warehouse == 2)
                     {
-                    TempRecord.MonumentProfiles.Add("Warehouse2", new MonumentSettings
-                    {
-                        Activate = configData.Zones.Warehouse2.Activate,
-                        Murderer = configData.Zones.Warehouse2.Murderer,
-                        Bots = configData.Zones.Warehouse2.Bots,
-                        BotHealth = configData.Zones.Warehouse2.BotHealth,
-                        Radius = configData.Zones.Warehouse2.Radius,
-                        Kit = configData.Zones.Warehouse2.Kit,
-                        BotName = configData.Zones.Warehouse2.BotName,
-                        //Chute = configData.Zones.Warehouse2.Chute,
-                        Bot_Firing_Range = configData.Zones.Warehouse2.Bot_Firing_Range,
-                        Bot_Accuracy = configData.Zones.Warehouse2.Bot_Accuracy,
-                        Bot_Damage = configData.Zones.Warehouse2.Bot_Damage,
-                        Disable_Radio = configData.Zones.Warehouse2.Disable_Radio,
-                        //Invincible_In_Air = configData.Zones.Warehouse2.Invincible_In_Air,
-                        //Spawn_Height = configData.Zones.Warehouse2.Spawn_Height,
-                        Respawn_Timer = configData.Zones.Warehouse2.Respawn_Timer,
-                        LocationX = pos.x,
-                        LocationY = pos.y,
-                        LocationZ = pos.z,
-                        Aggression_Range = configData.Zones.Warehouse2.Aggression_Range,
-                    });     
+                    AddProfile("Warehouse2", configData.Zones.Warehouse2, pos);           
                     warehouse++;
                     continue;
                     }
+		    
                     if (gobject.name.Contains("warehouse") && warehouse > 2)
                     continue;
                     if (gobject.name.Contains("lighthouse") && lighthouse > 2)
@@ -1280,34 +1105,60 @@ namespace Oxide.Plugins
                     Radius = configData.Zones.AirDrop.Radius,
                     Kit = configData.Zones.AirDrop.Kit,
                     BotName = configData.Zones.AirDrop.BotName,
-                    //Chute = configData.Zones.AirDrop.Chute,
-                    Bot_Firing_Range = configData.Zones.AirDrop.Bot_Firing_Range,
                     Bot_Accuracy = configData.Zones.AirDrop.Bot_Accuracy,
                     Bot_Damage = configData.Zones.AirDrop.Bot_Damage,
                     Disable_Radio = configData.Zones.AirDrop.Disable_Radio,
-                    //Invincible_In_Air = configData.Zones.AirDrop.Invincible_In_Air,
                     LocationX = 0f,
                     LocationY = 0f,
                     LocationZ = 0f,
                     Respawn_Timer = 10,
-                    //Spawn_Height = 100,
                     Aggression_Range = configData.Zones.AirDrop.Aggression_Range,
-                });     
+		    Roam_Range = configData.Zones.AirDrop.Roam_Range,
+		    Weapon_Drop = configData.Zones.AirDrop.Weapon_Drop,
+		    Keep_Default_Loadout = configData.Zones.AirDrop.Keep_Default_Loadout,
+                });        
             
             foreach (var profile in storedData.CustomProfiles)
             TempRecord.MonumentProfiles.Add(profile.Key, profile.Value);
 
             foreach (var profile in TempRecord.MonumentProfiles)
             {
-                if (profile.Value.Kit != "default" && Kits == null)
+                if (profile.Value.Kit == null && Kits == null)
                 {
                     PrintWarning(lang.GetMessage("nokits", this));
                     return;
                 }
             if(profile.Value.Activate == true && profile.Value.Bots > 0 && !profile.Key.Contains("AirDrop"))
-            timer.Repeat(2,profile.Value.Bots, () => SpawnSci(profile.Key, profile.Value, null));
+            timer.Repeat(2,profile.Value.Bots, () => SpawnBots(profile.Key, profile.Value, null));
             }
         }
+	
+	
+        void AddProfile(string name, CustomSettings monument, Vector3 pos)                                                                                      //bring config data into live data
+        {
+            TempRecord.MonumentProfiles.Add(name, new MonumentSettings
+            {
+            Activate = monument.Activate,
+            Murderer = monument.Murderer,
+            Bots = monument.Bots,
+            BotHealth = monument.BotHealth,
+            Radius = monument.Radius,
+            Kit = monument.Kit,
+            BotName = monument.BotName,
+            Bot_Accuracy = monument.Bot_Accuracy, 
+            Bot_Damage = monument.Bot_Damage,
+            Disable_Radio = monument.Disable_Radio,
+            Respawn_Timer = monument.Respawn_Timer,
+            LocationX = pos.x,
+            LocationY = pos.y,
+            LocationZ = pos.z,
+            Aggression_Range = monument.Aggression_Range,
+	    Roam_Range = monument.Roam_Range,
+            Weapon_Drop = monument.Weapon_Drop,
+            Keep_Default_Loadout = monument.Keep_Default_Loadout,
+            });  
+        }
+    
         #region Commands
         [ConsoleCommand("bot.respawn")]
         void cmdBotRespawn()
@@ -1328,36 +1179,19 @@ namespace Oxide.Plugins
             Puts($"There are {total} bots.");
         }
         
-        [ConsoleCommand("default.count")]
+        [ConsoleCommand("botspawn.reset")]                                                                                                                      //debug precaution - Kill all bots, whether from this plug or not.
         void cmdDefaultBots()
         {
-            var allobjects = UnityEngine.Object.FindObjectsOfType<NPCPlayerApex>();
-           foreach (var gobject in allobjects)
-           Puts($"{gobject}");
-        }
-        //[ConsoleCommand("bot.stats")]
-        //void cmdBotStats()
-        //{
-        //    foreach(var botapex in GameObject.FindObjectsOfType<NPCPlayerApex>())
-        //    {
-        //        Puts($"agentTypeIndex = {botapex.agentTypeIndex}");
-        //        Puts($"AttackTarget = {botapex.AttackTarget}");
-        //        Puts($"IsStopped = {botapex.IsStopped}");
-        //        Puts($"GuardPosition = {botapex.GuardPosition}");
-        //        Puts($"AttackReady = {botapex.AttackReady()}");
-        //        Puts($"WeaponAttackRange = {botapex.WeaponAttackRange()}");
-        //        Puts($"Size = {botapex.Stats.Size}");
-        //        Puts($"Speed = {botapex.Stats.Speed}");
-        //        Puts($"Acceleration = {botapex.Stats.Acceleration}");
-        //        Puts($"TurnSpeed = {botapex.Stats.TurnSpeed}");
-        //        Puts($"VisionRange = {botapex.Stats.VisionRange}");
-        //        Puts($"VisionCone = {botapex.Stats.VisionCone}");
-        //        Puts($"Hostility = {botapex.Stats.Hostility}");
-        //        Puts($"Defensiveness = {botapex.Stats.Defensiveness}");
-        //        Puts($"AggressionRange = {botapex.Stats.AggressionRange}");
-        //    }
-        //}        
-        
+            var allobjects = UnityEngine.Object.FindObjectsOfType<NPCPlayer>();
+            foreach (var gobject in allobjects)
+            {
+                 gobject.Kill();
+            }
+                 Unload();
+                 Init();
+                 OnServerInitialized();
+        }   
+            
         [ChatCommand("botspawn")]
         void botspawn(BasePlayer player, string command, string[] args)
         {
@@ -1400,7 +1234,6 @@ namespace Oxide.Plugins
                     storedData.CustomProfiles.Add(name, customSettings);
                     Interface.Oxide.DataFileSystem.WriteObject("BotSpawn", storedData);
                     SendReply(player, "<color=orange>" + lang.GetMessage("Title", this) + "</color>" + lang.GetMessage("customsaved", this),player.transform.position);
-                    //timer.Repeat(2,storedData.CustomProfiles[name].Bots, () => SpawnSci(name, customSettings, null));
                 }
                 
                 else if (args[0] == "move")
@@ -1425,9 +1258,10 @@ namespace Oxide.Plugins
                     {
                         foreach (var bot in TempRecord.NPCPlayers)
                         {
-                            if (bot.Value.monumentName == name)
-                                if (bot.Value.bot != null)
-                                bot.Value.bot.Kill();
+                            var bData = bot.GetComponent<botData>();
+                            if (bData.monumentName == name)
+                                if (bData.bot != null)
+                                bData.bot.Kill();
                                 else
                                 continue;
                         }
@@ -1468,7 +1302,7 @@ namespace Oxide.Plugins
                                 SendReply(player, "<color=orange>" + lang.GetMessage("Title", this) + "</color>" + lang.GetMessage("deployed", this),profile, target.displayName);
                                 }
                             }
-  
+
                 }
                 else
                 SendReply(player, "<color=orange>" + lang.GetMessage("Title", this) + "</color>" + lang.GetMessage("error", this));
@@ -1483,20 +1317,51 @@ namespace Oxide.Plugins
         
         class TempRecord
         {
-            public static Dictionary<NPCPlayerApex, botData> NPCPlayers = new Dictionary<NPCPlayerApex, botData>();
-            public static List<ulong> dontRespawn = new List<ulong>();
+            public static List<NPCPlayerApex> NPCPlayers = new List<NPCPlayerApex>();
             public static Dictionary<string, MonumentSettings> MonumentProfiles = new Dictionary<string, MonumentSettings>();
             public static List<ulong> DeadNPCPlayerIds = new List<ulong>();
+            public static Dictionary<ulong, string> kitList = new Dictionary<ulong, string>();
         }
-        class botData
+        public class botData : MonoBehaviour
         {
             public Vector3 spawnPoint;
             public bool invincible;
+            public int canChangeWeapon;
+            public float enemyDistance;
+            public int currentWeaponRange;
+            public List<Item> AllProjectiles = new List<Item>();
+            public List<Item> MeleeWeapons = new List<Item>();
+            public List<Item> CloseRangeWeapons = new List<Item>();
+            public List<Item> MediumRangeWeapons = new List<Item>();
+            public List<Item> LongRangeWeapons = new List<Item>();
             public int accuracy;
             public float damage;
+            public float range;
+            public int health;
             public ulong botID;
             public BasePlayer bot;
             public string monumentName;
+            public bool dropweapon;
+            public bool respawn;
+            public int roamRange;
+            public bool goingHome;
+            public bool keepAttire;
+            
+                void Update()
+                {
+                    var botapex = bot.GetComponent<NPCPlayerApex>();
+                    if (botapex.AttackTarget == null && (Vector3.Distance(botapex.transform.position, botapex.GuardPosition) > roamRange))
+                    {
+                        goingHome = true;
+                    }
+                    if (Vector3.Distance(botapex.transform.position, botapex.GuardPosition) > (10) && goingHome == true)
+                    {
+                        if (botapex.GetNavAgent.isOnNavMesh)
+                        botapex.GetNavAgent.SetDestination(botapex.GuardPosition);
+                    }
+                    else
+                    goingHome = false;
+                }
         }
         class CustomSettings
         {
@@ -1505,17 +1370,16 @@ namespace Oxide.Plugins
             public int Bots = 5;
             public int BotHealth = 100;
             public int Radius = 100;
-            public string Kit = "default";
+            public List<string> Kit = new List<string>();
             public string BotName = "randomname";
-            //public bool Chute = false;
-            public int Bot_Firing_Range = 20;
             public int Bot_Accuracy = 4;
-            public float Bot_Damage = 0.4f;     
-            //public bool Invincible_In_Air = true;
-            //public int Spawn_Height = 100;
+            public float Bot_Damage = 0.4f;  
             public int Respawn_Timer = 60;
             public bool Disable_Radio = true;
-            public int Aggression_Range = 20;
+            public int Aggression_Range = 40;
+            public int Roam_Range = 40;
+            public bool Weapon_Drop = true;
+            public bool Keep_Default_Loadout = false;
         }
         class MonumentSettings
         {
@@ -1524,20 +1388,19 @@ namespace Oxide.Plugins
             public int Bots = 5;
             public int BotHealth = 100;
             public int Radius = 100;
-            public string Kit = "default";
+            public List<string> Kit = new List<string>();
             public string BotName = "randomname";
-            //public bool Chute = false;
-            public int Bot_Firing_Range = 20;
             public int Bot_Accuracy = 4;
             public float Bot_Damage = 0.4f;     
-            //public bool Invincible_In_Air = true;
-            //public int Spawn_Height = 100;
             public int Respawn_Timer = 60;
             public bool Disable_Radio = true;
             public float LocationX;
             public float LocationY;
             public float LocationZ;
-            public int Aggression_Range = 20;
+            public int Aggression_Range = 40;
+            public int Roam_Range = 40;
+            public bool Weapon_Drop = true;
+            public bool Keep_Default_Loadout = false;
         }
         class AirDropSettings
         {
@@ -1546,40 +1409,39 @@ namespace Oxide.Plugins
             public int Bots = 5;
             public int BotHealth = 100;
             public int Radius = 100;
-            public string Kit = "default";
+            public List<string> Kit = new List<string>();
             public string BotName = "randomname";
-            //public bool Chute = false;
-            public int Bot_Firing_Range = 20;
             public int Bot_Accuracy = 4;
             public float Bot_Damage = 0.4f;
             public bool Disable_Radio = true;
-            //public bool Invincible_In_Air = true;
-            public int Aggression_Range = 20;
+            public int Aggression_Range = 40;
+            public int Roam_Range = 40;
+            public bool Weapon_Drop = true;
+            public bool Keep_Default_Loadout = false;
 	    
         }
         class Options
         {
             public bool Ignore_Animals { get; set; }
             public bool APC_Safe { get; set; }
-            public bool Reset { get; set; }
-            public int Reset_Timer { get; set; }
             public bool Turret_Safe { get; set; }
             public bool Animal_Safe { get; set; }
             public int Suicide_Timer { get; set; }
-            //public bool Ai_Falling_Disable { get; set; }
-            public bool Bots_Drop_Weapons { get; set; }
             public bool Supply_Enabled { get; set; }
             public bool Cull_Default_Population { get; set; }
             public bool NPC_Retaliate { get; set; }
             public bool Remove_BackPacks { get; set; }
             public bool Ignore_HumanNPC { get; set; }
             public bool Peace_Keeper { get; set; }
+            public bool Allow_Rust_Loot { get; set; }
+            public bool Wipe_Belt { get; set; }
+            public bool Wipe_Clothing { get; set; }
         }
         class Zones
         {
             public CustomSettings Airfield { get; set; }
             public CustomSettings Dome { get; set; }
-            public CustomSettings Powerplant { get; set; }
+            public CustomSettings PowerPlant { get; set; }
             public CustomSettings Radtown { get; set; }
             public CustomSettings Satellite { get; set; }
             public CustomSettings Trainyard { get; set; }
@@ -1587,7 +1449,7 @@ namespace Oxide.Plugins
             public CustomSettings Launchsite { get; set; }
             public CustomSettings MilitaryTunnel { get; set; }
             public CustomSettings Junkyard { get; set; }
-	    public CustomSettings Harbor1 { get; set; }
+            public CustomSettings Harbor1 { get; set; }
             public CustomSettings Harbor2 { get; set; }
             public CustomSettings Warehouse { get; set; }
             public CustomSettings Warehouse1 { get; set; }
@@ -1599,7 +1461,11 @@ namespace Oxide.Plugins
             public CustomSettings Lighthouse { get; set; }
             public CustomSettings Lighthouse1 { get; set; }
             public CustomSettings Lighthouse2 { get; set; }
+            public CustomSettings QuarryA { get; set; }
+            public CustomSettings QuarryB { get; set; }
+            public CustomSettings QuarryC { get; set; }
             public AirDropSettings AirDrop { get; set; }
+            
         }
         
         class ConfigData
@@ -1625,15 +1491,14 @@ namespace Oxide.Plugins
             {
                Options = new Options
                {
+                    Allow_Rust_Loot = true,
+                    Wipe_Belt = true,
+                    Wipe_Clothing = true,
                     Ignore_Animals = true,
                     APC_Safe = true,
-                    Reset = true,
                     Turret_Safe = true,
                     Animal_Safe = true,
                     Suicide_Timer = 300,
-                    Reset_Timer = 300,
-                    //Ai_Falling_Disable = true,
-                    Bots_Drop_Weapons = false,
                     Supply_Enabled = false,
                     Cull_Default_Population = true,
                     NPC_Retaliate = false,
@@ -1645,14 +1510,14 @@ namespace Oxide.Plugins
                {
                     Airfield = new CustomSettings{},
                     Dome = new CustomSettings{},
-                    Powerplant = new CustomSettings{},
+                    PowerPlant = new CustomSettings{},
                     Radtown = new CustomSettings{},
                     Satellite = new CustomSettings{},
                     Trainyard = new CustomSettings{},
                     Watertreatment = new CustomSettings{},
                     Launchsite = new CustomSettings{},
                     MilitaryTunnel = new CustomSettings{},
-		    Junkyard = new CustomSettings{},
+                    Junkyard = new CustomSettings{},
                     Harbor1 = new CustomSettings{},
                     Harbor2 = new CustomSettings{},
                     GasStation = new CustomSettings{},
@@ -1664,7 +1529,10 @@ namespace Oxide.Plugins
                     Warehouse2 = new CustomSettings{},
                     Lighthouse = new CustomSettings{},
                     Lighthouse1 = new CustomSettings{},
-                    Lighthouse2 = new CustomSettings{}, 
+                    Lighthouse2 = new CustomSettings{},
+                    QuarryA = new CustomSettings{},
+                    QuarryB = new CustomSettings{},
+                    QuarryC = new CustomSettings{},
                     AirDrop = new AirDropSettings{}
                }
             };

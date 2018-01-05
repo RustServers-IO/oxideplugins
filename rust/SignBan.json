@@ -1,0 +1,19 @@
+{
+    "name": "Sign Ban",
+    "description": "Prevents users from updating signs.",
+    "author": "Tori1157",
+    "version": "1.0.0",
+    "configuration": false,
+    "suggest": {
+        "SignArtist": "*"
+    },
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/sign-ban.2727",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

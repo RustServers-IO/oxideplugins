@@ -11,7 +11,7 @@ namespace Oxide.Plugins
 {
     //Body part scaling from k1lly0u's plugin, with permission (thanks, k1lly0u)
     //Further code cleanup/improvement with help of k1lly0u
-    [Info("Weapon Damage Scaler", "Shady", "1.1.1", ResourceId = 1594)]
+    [Info("Weapon Damage Scaler", "Shady", "1.1.2", ResourceId = 1594)]
     [Description("Scale damage per weapon, ammo types, skins, prefabs, and per body part.")]
     internal class WeaponDamageScaler : RustPlugin
     {
@@ -399,13 +399,25 @@ namespace Oxide.Plugins
             skinIDName.TryGetValue(skinID, out skinName);
             return skinName;
         }
+        ItemDefinition GetItemDefFromPrefabName(string shortprefabName)
+        {
+            if (string.IsNullOrEmpty(shortprefabName)) return null;
+            var adjName = shortprefabName.Replace("_deployed", "").Replace(".deployed", "").Replace("_", "").Replace(".entity", "");
+            var def = ItemManager.FindItemDefinition(adjName);
+            if (def != null) return def;
+            adjName = shortprefabName.Replace("_deployed", "").Replace(".deployed", "").Replace("_", ".").Replace(".entity", "");
+            return ItemManager.FindItemDefinition(adjName);
+        }
 
         //this code feels messy but it works I guess
         private void ScaleDealtDamage(HitInfo hitInfo)
         {
             if (hitInfo == null || hitInfo?.damageTypes == null) return;
+            if (hitInfo?.Weapon == null && hitInfo?.WeaponPrefab == null) return;
             var bodypart = StringPool.Get((hitInfo?.HitBone ?? 0)) ?? string.Empty;
-            var weaponName = hitInfo?.Weapon?.GetItem()?.info?.shortname ?? string.Empty;
+            var wepPrefab = hitInfo?.Weapon?.ShortPrefabName ?? hitInfo?.WeaponPrefab?.ShortPrefabName ?? string.Empty;
+            var weaponName = hitInfo?.Weapon?.GetItem()?.info?.shortname ?? hitInfo?.WeaponPrefab?.GetItem()?.info?.shortname ?? string.Empty;
+            if (string.IsNullOrEmpty(weaponName) && !string.IsNullOrEmpty(wepPrefab) && !wepPrefab.Contains("rocket") && !wepPrefab.Contains("explosive")) weaponName = GetItemDefFromPrefabName(wepPrefab)?.shortname ?? string.Empty;
             var ammoName = hitInfo?.Weapon?.GetItem()?.GetHeldEntity()?.GetComponent<BaseProjectile>()?.primaryMagazine?.ammoType?.shortname ?? string.Empty;
             var skinName = GetSkinName(hitInfo?.Weapon?.GetItem()?.skin ?? 0);
             ItemStructure weaponInfo = null;
@@ -467,14 +479,9 @@ namespace Oxide.Plugins
             };
             phrase = new Regex("(<color=.+?>)").Replace(phrase, string.Empty);
             phrase = new Regex("(<size=.+?>)").Replace(phrase, string.Empty);
-
-            for (int i = 0; i < forbiddenTags.Count; i++)
-            {
-                var tag = forbiddenTags[i];
-                phrase = phrase.Replace(tag, string.Empty);
-            }
-
-            return phrase;
+            var phraseSB = new StringBuilder(phrase);
+            for (int i = 0; i < forbiddenTags.Count; i++) phraseSB.Replace(forbiddenTags[i], "");
+            return phraseSB.ToString();
         }
 
         private void RegisterPerm(string perm) => permission.RegisterPermission(perm, this);
@@ -486,7 +493,7 @@ namespace Oxide.Plugins
         private void SendReply(IPlayer player, string message)
         {
             if (player == null || string.IsNullOrEmpty(message)) return;
-            if (player?.Object == null) message = RemoveTags(message); //remove tags for console
+            if (player.IsServer || player?.Object == null) message = RemoveTags(message); //remove tags for console (may no longer be needed? - needs to be checked)
             player.Message(message);
         }
 
@@ -508,9 +515,9 @@ namespace Oxide.Plugins
         private string FirstUpper(string original)
         {
             if (string.IsNullOrEmpty(original)) return string.Empty;
-            var newSB = new StringBuilder().Append(original);
-            newSB[0] = Convert.ToChar(newSB[0].ToString().ToUpper());
-            return newSB.ToString();
+            var charArray = original.ToCharArray();
+            charArray[0] = char.ToUpper(charArray[0]);
+            return new string(charArray);
         }
         #endregion
     }

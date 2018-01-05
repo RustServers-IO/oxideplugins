@@ -8,7 +8,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("PermissionsManager", "Steenamaroo", "0.0.6", ResourceId = 2629)]
+    [Info("PermissionsManager", "Steenamaroo", "0.0.9", ResourceId = 2629)]
     class PermissionsManager : RustPlugin
     {
         #region VariablesAndStorage
@@ -17,16 +17,21 @@ namespace Oxide.Plugins
         Dictionary<int, string> numberedPerms = new Dictionary<int, string>();
         List<ulong> MenuOpen = new List<ulong>();
 
+        Dictionary<ulong, info> ActiveAdmins = new Dictionary<ulong, info>();
         
-        int plugNumber;
-        int noOfGroups;
-        int noOfPlugs;
-        bool exists = false;
-        int previousPage = 1;
-        string subjectGroup;
+        public class info
+        {
+            public int plugNumber;
+            public int noOfGroups;
+            public int noOfPlugs;
+            public bool exists = false;
+            public int previousPage = 1;
+            public string subjectGroup;
+            public BasePlayer subject;
+        }
+
         string ButtonColour1 = "0.7 0.32 0.17 1";
         string ButtonColour2 = "0.2 0.2 0.2 1";
-        BasePlayer subject;
         #endregion
 
         void OnPluginLoaded(Plugin plugin)
@@ -58,8 +63,6 @@ namespace Oxide.Plugins
 
             LoadConfigVariables();
             SaveConfig();
-            GetPlugs();
-            GetGroups();
         }
 
         void Wipe()
@@ -69,10 +72,11 @@ namespace Oxide.Plugins
             numberedPerms.Clear();
         }
         
-        void GetPlugs()
+        void GetPlugs(BasePlayer player)
         {
+            var path = ActiveAdmins[player.userID];
             PlugList.Clear();
-            noOfPlugs = 0;
+            path.noOfPlugs = 0;
             List<string> sortedPlugs = new List<string>();
             foreach (var entry in plugins.GetAll())
             {
@@ -90,12 +94,12 @@ namespace Oxide.Plugins
                 {
                     if (perm.Contains($"{str}") && !(BlockList.Split(',').ToList().Contains($"{str}")))
                     {
-                    exists = false;
+                    path.exists = false;
 
                         foreach (var livePlug in sortedPlugs)
                         if(livePlug == str)
-                        exists = true; //prevent duplicates entries
-                        if(!exists)
+                        path.exists = true; //prevent duplicates entries
+                        if(!path.exists)
                         {
                         sortedPlugs.Add(str);// add to list for sorting
                         }
@@ -105,25 +109,26 @@ namespace Oxide.Plugins
             sortedPlugs.Sort();
             foreach (var entry in sortedPlugs) //bring from sorted list to numbered dictionary
             {
-                noOfPlugs++;
-                PlugList.Add(noOfPlugs, entry);
+                path.noOfPlugs++;
+                PlugList.Add(path.noOfPlugs, entry);
             }
         }
         
-        void GetGroups()
+        void GetGroups(BasePlayer player)
         {
+        var path = ActiveAdmins[player.userID];
         GroupUsersList.Clear();
-        noOfGroups = 0;
+        path.noOfGroups = 0;
         
             foreach (var group in permission.GetGroups())
             {
-                noOfGroups++;
-                GroupUsersList.Add(noOfGroups, new List<string>());
-                GroupUsersList[noOfGroups].Add(group);          // first entry is group name - players follow
+                path.noOfGroups++;
+                GroupUsersList.Add(path.noOfGroups, new List<string>());
+                GroupUsersList[path.noOfGroups].Add(group);          // first entry is group name - players follow
 
                 foreach (var useringroup in permission.GetUsersInGroup(group))
                 {
-                    GroupUsersList[noOfGroups].Add(useringroup);
+                    GroupUsersList[path.noOfGroups].Add(useringroup);
                 }
             }
         }
@@ -246,11 +251,12 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, elements);
         }
 
-        object PermsCheck(string group, string info)
+        object PermsCheck(BasePlayer player, string group, string info)
         {
-            if (group == "true" && permission.GroupHasPermission(subjectGroup, info))
+            var path = ActiveAdmins[player.userID];
+            if (group == "true" && permission.GroupHasPermission(path.subjectGroup, info))
             return true;
-            else if (group == "false" && permission.UserHasPermission(subject.userID.ToString(), info))
+            else if (group == "false" && permission.UserHasPermission(path.subject.userID.ToString(), info))
             return true;
             else return false;
         }
@@ -268,6 +274,7 @@ namespace Oxide.Plugins
 
         void PermsUI(BasePlayer player, string msg, int PlugNumber, string permSet, string group, int page)
         {
+            var path = ActiveAdmins[player.userID];
             int total = 0;
             foreach (var item in numberedPerms)
             {
@@ -325,7 +332,7 @@ namespace Oxide.Plugins
                  
         if (permNo < (1 + (page*20)) && permNo > (-20 + (page*20)))
         {
-            if ((bool)PermsCheck(group, numberedPerms[permNo]))
+            if ((bool)PermsCheck(player, group, numberedPerms[permNo]))
             { ButtonColour1 = Colour1; ButtonColour2 = Colour2; } else{ ButtonColour1 =Colour2; ButtonColour2 = Colour1; }
             
             elements.Add(new CuiButton
@@ -337,9 +344,8 @@ namespace Oxide.Plugins
             elements.Add(new CuiButton
             { Button = { Command = $"permsList {PlugNumber} revoke {numberedPerms[permNo]} {group} null {page}", Color = ButtonColour2 }, RectTransform = { AnchorMin = $"{CMin1} {(AMin2 - (pos1*3f)/100f)}", AnchorMax = $"{CMax1} {(AMax2 - (pos1*3f)/100f)}" }, Text = { Text = lang.GetMessage("Revoked", this), FontSize = 10, Align = TextAnchor.MiddleCenter } }, mainName);
         } 
-
     }
-            elements.Add(new CuiButton { Button = { Command = $"Navigate {group} {previousPage}", Color = ButtonColour }, RectTransform = { AnchorMin = "0.4 0.02", AnchorMax = "0.6 0.06" }, Text = { Text = lang.GetMessage("Back", this), FontSize = 14, Align = TextAnchor.MiddleCenter} }, mainName);
+            elements.Add(new CuiButton { Button = { Command = $"Navigate {group} {path.previousPage}", Color = ButtonColour }, RectTransform = { AnchorMin = "0.4 0.02", AnchorMax = "0.6 0.06" }, Text = { Text = lang.GetMessage("Back", this), FontSize = 14, Align = TextAnchor.MiddleCenter} }, mainName);
             elements.Add(new CuiButton { Button = { Command = $"permsList {PlugNumber} grant null {group} all {page}", Color = ButtonColour }, RectTransform = { AnchorMin = "0.3 0.02", AnchorMax = "0.36 0.06" }, Text = { Text = lang.GetMessage("All", this), FontSize = 14, Align = TextAnchor.MiddleCenter} }, mainName);
             elements.Add(new CuiButton { Button = { Command = $"permsList {PlugNumber} revoke null {group} all {page}", Color = ButtonColour }, RectTransform = { AnchorMin = "0.64 0.02", AnchorMax = "0.7 0.06" }, Text = { Text = lang.GetMessage("None", this), FontSize = 14, Align = TextAnchor.MiddleCenter} }, mainName);
             elements.Add(new CuiLabel { Text = { Text = msg, FontSize = 16, Align = TextAnchor.MiddleCenter }, RectTransform = { AnchorMin = "0 0.9", AnchorMax = "1 0.98" } }, mainName);
@@ -354,6 +360,7 @@ namespace Oxide.Plugins
         
         void GroupsUI(BasePlayer player, string msg, int page)
         {
+            var path = ActiveAdmins[player.userID];
             int groupTotal = 0;
             var outmsg = string.Format(lang.GetMessage("GUIGroupsFor", this), msg);
             string guiString = String.Format("0.1 0.1 0.1 {0}", guitransparency);
@@ -402,7 +409,7 @@ namespace Oxide.Plugins
 
                  if (groupNo < (-19 + (page*40)) && groupNo > (-40 + (page*40)))
                  {
-                     if ((bool)GroupCheck(groupNo, subject.userID.ToString()))
+                     if ((bool)GroupCheck(groupNo, path.subject.userID.ToString()))
                      { ButtonColour1 = Colour1; ButtonColour2 = Colour2; } else{ ButtonColour1 =Colour2; ButtonColour2 = Colour1; }
                      
                      elements.Add(new CuiButton
@@ -417,7 +424,7 @@ namespace Oxide.Plugins
                 
                  if (groupNo < (1 + (page*40)) && groupNo > (-20 + (page*40)))
                  {
-                     if ((bool)GroupCheck(groupNo, subject.userID.ToString()))
+                     if ((bool)GroupCheck(groupNo, path.subject.userID.ToString()))
                      { ButtonColour1 = Colour1; ButtonColour2 = Colour2; } else{ ButtonColour1 =Colour2; ButtonColour2 = Colour1; }
                      
                      elements.Add(new CuiButton
@@ -477,19 +484,20 @@ namespace Oxide.Plugins
         private void Empty(ConsoleSystem.Arg arg, string confirm)
         {
             var player = arg.Connection.player as BasePlayer;
+            var path = ActiveAdmins[player.userID];
             string confirmation = arg.Args[0];
             if (confirmation == "true")
             {
                 int count = 0;
-                foreach (var user in permission.GetUsersInGroup(subjectGroup))
+                foreach (var user in permission.GetUsersInGroup(path.subjectGroup))
                 {
                     count++;
                     string str = user.Substring(0,17);
-                    permission.RemoveUserGroup(str, subjectGroup);
-                    GetGroups();
+                    permission.RemoveUserGroup(str, path.subjectGroup);
+                    GetGroups(player);
                     CuiHelper.DestroyUi(player, "MenuGUI");
                     CuiHelper.DestroyUi(player, "MenuGUI1");
-                    var argsOut = new string[] { "group", subjectGroup};
+                    var argsOut = new string[] { "group", path.subjectGroup};
                     cmdPerms(player, null, argsOut);
                 }
                 if (count == 0)
@@ -507,27 +515,29 @@ namespace Oxide.Plugins
         private void GroupAddRemove(ConsoleSystem.Arg arg, string action, string group, int page)
         {
             var player = arg.Connection.player as BasePlayer;
+            var path = ActiveAdmins[player.userID];
             if (player == null || arg.Args == null || arg.Args.Length < 3) return;
-            string Pname = subject.userID.ToString();
+            string Pname = path.subject.userID.ToString();
             string userGroup = arg.Args[1];
             page = Convert.ToInt32(arg.Args[2]);
             if (arg.Args[0] == "add")
             permission.AddUserGroup(Pname, userGroup);
             if (arg.Args[0] == "remove")
             permission.RemoveUserGroup(Pname, userGroup);
-            GetGroups();
+            GetGroups(player);
             CuiHelper.DestroyUi(player, "MenuGUI");
-            GroupsUI(player, $"{subject.displayName}", page);
+            GroupsUI(player, $"{path.subject.displayName}", page);
         }
 
         [ConsoleCommand("Groups")]
         private void GroupsPM(ConsoleSystem.Arg arg, int page)
         {
             var player = arg.Connection.player as BasePlayer;
+            var path = ActiveAdmins[player.userID];
             if (player == null || arg.Args == null || arg.Args.Length < 1) return;
             page = Convert.ToInt32(arg.Args[0]);
             CuiHelper.DestroyUi(player, "MenuGUI");
-            GroupsUI(player, $"{subject.displayName}", page);
+            GroupsUI(player, $"{path.subject.displayName}", page);
         }
 
         [ConsoleCommand("ClosePM")]
@@ -544,18 +554,19 @@ namespace Oxide.Plugins
         private void Navigate(ConsoleSystem.Arg arg, string group, int page)
         {
             var player = arg.Connection.player as BasePlayer;
+            var path = ActiveAdmins[player.userID];
             if (player == null || arg.Args == null || arg.Args.Length < 2) return;
-            previousPage = Convert.ToInt32(arg.Args[1]);
+            ActiveAdmins[player.userID].previousPage = Convert.ToInt32(arg.Args[1]);
             CuiHelper.DestroyUi(player, "MenuGUI");
             string[] argsOut = new string[]{};
             if (arg.Args[0] == "true")
             {
-            argsOut = new string[] { "group", subjectGroup, previousPage.ToString()};
+            argsOut = new string[] { "group", path.subjectGroup, path.previousPage.ToString()};
             cmdPerms(player, null, argsOut);
             }
             else
             {
-            argsOut = new string[] { "player", player.displayName, previousPage.ToString()};
+            argsOut = new string[] { "player", path.subject.displayName, path.previousPage.ToString()};
             cmdPerms(player, null, argsOut);
             }
             return;
@@ -565,6 +576,7 @@ namespace Oxide.Plugins
         private void permsList(ConsoleSystem.Arg arg, int plugNumber, string actiontype, string Perm, string isGroup, string all, int page)
         {
             var player = arg.Connection.player as BasePlayer;
+            var path = ActiveAdmins[player.userID];
             if (player == null || arg.Args == null || arg.Args.Length < 6) return;
             int pageNo = Convert.ToInt32(arg.Args[5]);
             string Pname;
@@ -573,7 +585,7 @@ namespace Oxide.Plugins
             {
                 if (arg.Args[2] != null)
                 {
-                    Pname = subject?.userID.ToString();
+                    Pname = path.subject?.userID.ToString();
                     string action = arg.Args[1];
                     string PermInHand = arg.Args[2];
                     foreach (var perm in numberedPerms)
@@ -585,9 +597,9 @@ namespace Oxide.Plugins
                             if (action == "revoke" && group == "false")
                             permission.RevokeUserPermission(Pname, perm.Value);
                             if (action == "grant" && group == "true")
-                            permission.GrantGroupPermission(subjectGroup, perm.Value, null);
+                            permission.GrantGroupPermission(path.subjectGroup, perm.Value, null);
                             if (action == "revoke" && group == "true")
-                            permission.RevokeGroupPermission(subjectGroup, perm.Value);
+                            permission.RevokeGroupPermission(path.subjectGroup, perm.Value);
                         }
                         if (AllPerPage == false)
                         {
@@ -596,16 +608,16 @@ namespace Oxide.Plugins
                             if (action == "revoke" && group == "false")
                             permission.RevokeUserPermission(Pname, perm.Value);
                             if (action == "grant" && group == "true")
-                            permission.GrantGroupPermission(subjectGroup, perm.Value, null);
+                            permission.GrantGroupPermission(path.subjectGroup, perm.Value, null);
                             if (action == "revoke" && group == "true")
-                            permission.RevokeGroupPermission(subjectGroup, perm.Value);
+                            permission.RevokeGroupPermission(path.subjectGroup, perm.Value);
                         }
                     }
                 }
             }
             else
             {
-                Pname = subject?.userID.ToString();
+                Pname = path.subject?.userID.ToString();
                 string action = arg.Args[1];
                 string PermInHand = arg.Args[2];
                 if (arg.Args[2] != null)
@@ -615,9 +627,9 @@ namespace Oxide.Plugins
                     if (action == "revoke" && group == "false")
                     permission.RevokeUserPermission(Pname, PermInHand);
                     if (action == "grant" && group == "true")
-                    permission.GrantGroupPermission(subjectGroup, PermInHand, null);
+                    permission.GrantGroupPermission(path.subjectGroup, PermInHand, null);
                     if (action == "revoke" && group == "true")
-                    permission.RevokeGroupPermission(subjectGroup, PermInHand);  
+                    permission.RevokeGroupPermission(path.subjectGroup, PermInHand);  
                 }
             }
 
@@ -641,9 +653,9 @@ namespace Oxide.Plugins
             }
             CuiHelper.DestroyUi(player, "MenuGUI");
             if (group == "false")
-            PermsUI(player, $"{subject.displayName} - {plugName}", plugNumber, null, group, pageNo);
+            PermsUI(player, $"{path.subject.displayName} - {plugName}", plugNumber, null, group, pageNo);
             else
-            PermsUI(player, $"{subjectGroup} - {plugName}", plugNumber, null, group, pageNo);
+            PermsUI(player, $"{path.subjectGroup} - {plugName}", plugNumber, null, group, pageNo);
             return;
         }
         #endregion
@@ -653,10 +665,16 @@ namespace Oxide.Plugins
         [ChatCommand("perms")]
         void cmdPerms(BasePlayer player, string command, string[] args)
         {
+        if (ActiveAdmins.ContainsKey(player.userID))
+        ActiveAdmins.Remove(player.userID);
+        ActiveAdmins.Add(player.userID, new info());
+        var path = ActiveAdmins[player.userID];
+        GetPlugs(player);
+        GetGroups(player);
+            
             int page = 1;
-            if (args.Length == 3)
+            if (args.Length == 3) 
             page = Convert.ToInt32(args[2]);
-            args[1] = args[1].ToLower();
             if (isAuth(player))
             {
                 if (args == null || args.Length < 2)
@@ -664,15 +682,16 @@ namespace Oxide.Plugins
                 SendReply(player, TitleColour + lang.GetMessage("title", this) + "</color>" + MessageColour + lang.GetMessage("Syntax", this) + "</color>");
                 return;
                 }
+                args[1] = args[1].ToLower();
                 if (args[0] == "player")
                 {
-                    subject = FindPlayerByName(args[1]);
-                    if (subject == null)
+                    path.subject = FindPlayerByName(args[1]);
+                    if (path.subject == null)
                     {
                     SendReply(player, TitleColour + lang.GetMessage("title", this) + "</color>" + MessageColour + lang.GetMessage("NoPlayer", this) + "</color>", args[1]);
                     return;
                     }
-                    string msg = string.Format(lang.GetMessage("GUIName", this), subject.displayName);
+                    string msg = string.Format(lang.GetMessage("GUIName", this), path.subject.displayName);
 
                         if (MenuOpen.Contains(player.userID))
                         {
@@ -690,11 +709,11 @@ namespace Oxide.Plugins
                         {
                            Groups.Add(group);
                         }
-                    if (Groups.Contains($"{args[1]}"))
+                    if (Groups.Contains($"{args[1]}")) 
                     {
                     string msg = string.Format(lang.GetMessage("GUIName", this), args[1]);
                     
-                        subjectGroup = args[1];
+                        ActiveAdmins[player.userID].subjectGroup = args[1];
                         if (MenuOpen.Contains(player.userID))
                         {
                             MenuOpen.Remove(player.userID);
@@ -761,7 +780,7 @@ namespace Oxide.Plugins
             CheckCfg("GUI - Label colour", ref ButtonColour);
             CheckCfg("GUI - All = per page", ref AllPerPage);
             CheckCfg("GUI - On colour", ref Colour1);
-            CheckCfg("GUI - Off colour", ref Colour2);
+            CheckCfg("GUI - Off colour", ref Colour2); 
         }
 
         private void CheckCfg<T>(string Key, ref T var)

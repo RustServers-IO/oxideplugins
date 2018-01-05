@@ -5,10 +5,11 @@ using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
 using Rust;
 using UnityEngine;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.3.8", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.4", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
@@ -32,7 +33,9 @@ namespace Oxide.Plugins
 
         int layers = LayerMask.GetMask("Construction", "Deployed");
         int time, refundTimes, frequency;
-        bool show, showTime, refund, preventnew, unnoobnew;
+        double steamInGameTime;
+        bool show, showTime, refund, preventnew, unnoobnew, checkSteam;
+        string apiKey = "";
 
         #region Config
         protected override void LoadDefaultConfig()
@@ -44,6 +47,9 @@ namespace Oxide.Plugins
             Config["Show time until raidable"] = showTime = GetConfig("Show time until raidable", false);
             Config["User data refresh interval (seconds)"] = frequency = GetConfig("User data refresh interval (seconds)", 30);
             Config["Refund explosives"] = refund = GetConfig("Refund explosives", true);
+            Config["Check Steam for in game time"] = checkSteam = GetConfig("Check Steam for in game time", true);
+            Config["Steam API key"] = apiKey = GetConfig("Steam API key", "");
+            Config["In-game steam time which mark player as non-noob (hours)"] = steamInGameTime = GetConfig("In-game steam time which mark player as non-noob (hours)", 200);
             Config["Refunds before player starts losing explosives"] = refundTimes = GetConfig("Refunds before player starts losing explosives", 1);
             SaveConfig();
         }
@@ -61,6 +67,11 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
+                {"steam_marking", "Marking {0} as non noob"},
+                {"steam_connected", "{0} has connected with {1} in game hours"},
+                {"steam_private", "Steam profile of {0} is private"},
+                {"steam_responsewrong", "Failed to contact steam API, profile is private/wrong API key"},
+                {"steam_wrongapikey", "Invalid API key"},
                 {"pt_notInstalled", "Playtime Tracker is not installed!"},
                 {"userinfo_nofound", "Failed to get playtime info for {0}! trying again in 20 seconds!"},
                 {"userinfo_nofoundmsg", "Failed to find playtime info for player with steamID {0}"},
@@ -118,6 +129,34 @@ namespace Oxide.Plugins
         StoredData storedData;
 
         #endregion
+        #region Steam
+        class steamGames
+        {
+            [JsonProperty("response")]
+            public Content response;
+
+            public class Content
+            {
+                [JsonProperty("game_count")]
+                public int game_count;
+                [JsonProperty("games")]
+                public Game[] games;
+
+                public class Game
+                {
+                    [JsonProperty("appid")]
+                    public uint appid;
+                    [JsonProperty("playtime_2weeks")]
+                    public int playtime_2weeks;
+                    [JsonProperty("playtime_forever")]
+                    public int playtime_forever;
+                }
+            }
+        }
+
+        T Deserialise<T>(string file) => JsonConvert.DeserializeObject<T>(file);
+
+        #endregion
         #region Hooks
 
         void Unload() => SaveFile();
@@ -139,6 +178,54 @@ namespace Oxide.Plugins
         void OnUserConnected(IPlayer player)
         {
             BasePlayer bp = player.Object as BasePlayer;
+
+            if (checkSteam)
+            {
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    Puts(lang.GetMessage("steam_wrongapikey", this, null));
+                    return;
+                }
+
+                webrequest.Enqueue("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=" + apiKey + "&steamid=" + bp.UserIDString, null, (code, response) =>
+                {
+                    if (!valid((response)code))
+                    {
+                        Puts(lang.GetMessage("steam_responsewrong", this, null));
+                        return;
+                    }
+
+                    var des = Deserialise<steamGames>(response);
+                    if (des?.response?.games == null)
+                    {
+                        Puts(lang.GetMessage("steam_private", this, null), bp);
+                        return;
+                    }
+
+                    foreach (var game in des.response.games)
+                    {
+                        if(game.appid == 252490)
+                        {
+                            double hours = game.playtime_forever / 60d;
+                            Puts(lang.GetMessage("steam_connected", this, null), bp, Math.Round(hours, 2));
+                            if (hours >= steamInGameTime)
+                            {
+                                Puts(lang.GetMessage("steam_marking", this, null), bp.displayName);
+                                if (!storedData.players.ContainsKey(bp.userID))
+                                {
+                                    storedData.players.Add(bp.userID, -50d);
+                                    SaveFile();
+                                    return;
+                                }
+
+                                storedData.players[bp.userID] = -50d;
+                                SaveFile();
+                                return;
+                            }
+                        }
+                    }
+                }, this);        
+            }
 
             double time = -1d;
             try
@@ -263,7 +350,20 @@ namespace Oxide.Plugins
         }
 
         #endregion
-        #region Functions
+        #region Functions&stuff
+
+        enum response
+        {
+            Valid = 200,
+            InvalidKey = 403,
+            Unavailable = 503,
+        }
+
+        bool valid(response code)
+        {
+            if (code == response.Valid) return true;
+            else return false;
+        }
 
         void RemoveCD(BasePlayer player)
         {
@@ -414,7 +514,7 @@ namespace Oxide.Plugins
                         continue;
                     }
 
-                    foreach(var e in toremove)
+                    foreach (var e in toremove)
                     {
                         if (storedData.playersWithNoData.Contains(e)) storedData.playersWithNoData.Remove(e);
                     }
@@ -743,6 +843,55 @@ namespace Oxide.Plugins
 
             double time = -1d;
             string ID = args[0];
+            ulong d;
+
+            if(!ulong.TryParse(ID, out d))
+            {
+                SendReply(player, "Wrong ID");
+                return;
+            }
+
+            webrequest.Enqueue("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=" + apiKey + "&steamid=" + ID, null, (code, response) =>
+            {
+                if (!valid((response)code))
+                {
+                    Puts("Failed to contact steam API, profile is private/wrong API key");
+                    return;
+                }
+
+                var des = Deserialise<steamGames>(response);
+                if(des.response.games == null)
+                {
+                    SendReply(player, "Steam profile of " + d + " is private");
+                    return;
+                }
+
+                foreach (var game in des.response.games)
+                {
+                    if (game.appid == 252490)
+                    {
+                        double hours = game.playtime_forever / 60d;
+                        hours = Math.Round(hours, 2);
+                        SendReply(player, "Got hours for " + ID + " : " + hours);
+                        if (hours >= steamInGameTime)
+                        {
+                            SendReply(player,"Marking " + ID + " as non noob");
+                            if (!storedData.players.ContainsKey(d))
+                            {
+                                storedData.players.Add(d, -50d);
+                                SaveFile();
+                                return;
+                            }
+
+                            storedData.players[d] = -50d;
+                            SaveFile();
+                            return;
+                        }
+                    }
+                }
+                SendReply(player, "Steam profile of " + d + " is private");
+                return;
+            }, this);
 
             try
             {

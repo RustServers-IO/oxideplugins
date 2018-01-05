@@ -8,7 +8,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("Fishing", "Colon Blow", "1.3.1", ResourceId = 1537)]
+    [Info("Fishing", "Colon Blow", "1.3.2", ResourceId = 1537)]
     class Fishing : RustPlugin
     {
 
@@ -142,6 +142,7 @@ namespace Oxide.Plugins
             ["notlookingatwater"] = "You must be aiming at water !!!!",
             ["notstandinginwater"] = "You must be standing in water !!!!",
             ["alreadyfishing"] = "You are already fishing !!",
+            ["toosoon"] = "Please wait to try that again !!",
             ["cantmove"] = "You must stay still while fishing !!!",
             ["wrongweapon"] = "You are not holding a fishing pole !!!",
             ["commonfish1"] = "You Got a Savis Island Swordfish",
@@ -161,6 +162,8 @@ namespace Oxide.Plugins
             if (!IsAllowed(player, "fishing.allowed")) return;
             var isfishing = player.GetComponent<FishingControl>();
             if (isfishing) { SendReply(player, msg("alreadyfishing", player.UserIDString)); return; }
+	    var incooldown = player.GetComponent<SpearFishingControl>();
+	    if (incooldown)  { SendReply(player, msg("toosoon", player.UserIDString)); return; }
             if (!UsingFishingWeapon(player)) { SendReply(player, msg("wrongweapon", player.UserIDString)); return; }
             if (!LookingAtWater(player)) { SendReply(player, msg("notlookingatwater", player.UserIDString)); return; }
             Vector3 whitpos = new Vector3();
@@ -266,9 +269,14 @@ namespace Oxide.Plugins
                 Vector3 hitloc = hitInfo.HitPositionWorld;
                 if (hitInfo.WeaponPrefab.ToString().Contains("spear") || hitInfo.WeaponPrefab.ToString().Contains("bow"))
                 {
+            		var isfishing = player.GetComponent<FishingControl>();
+            		if (isfishing) { SendReply(player, msg("alreadyfishing", player.UserIDString)); return; }
+		    	var incooldown = player.GetComponent<SpearFishingControl>();
+		    	if (incooldown)  { SendReply(player, msg("toosoon", player.UserIDString)); return; }
                     if (IsStandingInWater(player))
                     {
                         catchChanceMod(player, hitloc, true);
+			player.gameObject.AddComponent<SpearFishingControl>();
                         hitInfo.CanGather = true;
                         return;
                     }
@@ -277,6 +285,7 @@ namespace Oxide.Plugins
                 {
                     {
                         catchChanceMod(player, hitloc, true);
+			player.gameObject.AddComponent<SpearFishingControl>();
                         hitInfo.CanGather = true;
                         return;
                     }
@@ -301,15 +310,17 @@ namespace Oxide.Plugins
         void OnPlayerRespawned(BasePlayer player)
         {
             var isfishing = player.GetComponent<FishingControl>();
-            if (!isfishing) return;
-            isfishing.OnDestroy();
+            if (isfishing) isfishing.OnDestroy();
+	    var hascooldown = player.GetComponent<SpearFishingControl>();
+            if (hascooldown) hascooldown.OnDestroy();
         }
 
         void OnPlayerDisconnected(BasePlayer player, string reason)
         {
             var isfishing = player.GetComponent<FishingControl>();
-            if (!isfishing) return;
-            isfishing.OnDestroy();
+            if (isfishing) isfishing.OnDestroy();
+	    var hascooldown = player.GetComponent<SpearFishingControl>();
+            if (hascooldown) hascooldown.OnDestroy();
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -336,6 +347,7 @@ namespace Oxide.Plugins
             if (Physics.Raycast(player.eyes.HeadRay(), out whit, 50f, waterlayer)) Wdistance = whit.distance;
             if (Physics.Raycast(player.eyes.HeadRay(), out hit, 50f, groundlayer)) Gdistance = hit.distance;
             if (Gdistance > Wdistance) return true;
+	    if (Gdistance == 0 && Wdistance != null) return true;
             return false;
         }
 
@@ -361,6 +373,7 @@ namespace Oxide.Plugins
         void Unload()
         {
             DestroyAll<FishingControl>();
+            DestroyAll<SpearFishingControl>();
             foreach (var player in BasePlayer.activePlayerList)
             {
                 string guiInfo;
@@ -413,6 +426,65 @@ namespace Oxide.Plugins
         {
             string guiInfo;
             if (GuiInfo.TryGetValue(player.userID, out guiInfo)) CuiHelper.DestroyUi(player, guiInfo);
+        }
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        class SpearFishingControl : MonoBehaviour
+        {
+            BasePlayer player;
+            public string anchormaxstr;
+            Fishing fishing;
+            public int counter;
+
+            void Awake()
+            {
+                fishing = new Fishing();
+                player = base.GetComponentInParent<BasePlayer>();
+                counter = 1000;
+            }
+
+            void FixedUpdate()
+            {
+                counter = counter - 10;
+                if (counter <= 0) OnDestroy();
+                fishingindicator(player, counter);
+            }
+
+            public void fishingindicator(BasePlayer player, int counter)
+            {
+                DestroyCui(player);
+                if (counter >= 901 && counter <= 1000) anchormaxstr = "0.60 0.145";
+                if (counter >= 801 && counter <= 900) anchormaxstr = "0.58 0.145";
+                if (counter >= 701 && counter <= 800) anchormaxstr = "0.56 0.145";
+                if (counter >= 601 && counter <= 700) anchormaxstr = "0.54 0.145";
+                if (counter >= 501 && counter <= 600) anchormaxstr = "0.52 0.145";
+                if (counter >= 401 && counter <= 500) anchormaxstr = "0.50 0.145";
+                if (counter >= 301 && counter <= 400) anchormaxstr = "0.48 0.145";
+                if (counter >= 201 && counter <= 300) anchormaxstr = "0.46 0.145";
+                if (counter >= 101 && counter <= 200) anchormaxstr = "0.44 0.145";
+                if (counter >= 0 && counter <= 100) anchormaxstr = "0.42 0.145";
+                var fishingindicator = new CuiElementContainer();
+
+                fishingindicator.Add(new CuiButton
+                {
+                    Button = { Command = $"", Color = "1.0 0.0 0.0 0.6" },
+                    RectTransform = { AnchorMin = "0.40 0.125", AnchorMax = anchormaxstr },
+                    Text = { Text = (""), FontSize = 14, Color = "1.0 1.0 1.0 0.6", Align = TextAnchor.MiddleRight }
+                }, "Overall", "FishingGui");
+                CuiHelper.AddUi(player, fishingindicator);
+            }
+
+            void DestroyCui(BasePlayer player)
+            {
+                CuiHelper.DestroyUi(player, "FishingGui");
+            }
+
+            public void OnDestroy()
+            {
+                DestroyCui(player);
+                Destroy(this);
+            }
         }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////

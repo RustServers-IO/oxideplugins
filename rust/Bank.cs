@@ -15,7 +15,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Bank", "rustservers.io", "0.1.1", ResourceId = 2116)]
+    [Info("Bank", "rustservers.io", "0.1.2", ResourceId = 2116)]
     [Description("Safe player storage")]
     class Bank : RustPlugin
     {
@@ -332,7 +332,7 @@ namespace Oxide.Plugins
         #region Initialization & Data
 
         void Init() {
-            Unsubscribe(nameof(CanNetworkTo));
+            //Unsubscribe(nameof(CanNetworkTo));
             Unsubscribe(nameof(OnEntityTakeDamage));
             ////Unsubscribe(nameof(OnItemAddedToContainer));
         }
@@ -575,36 +575,33 @@ namespace Oxide.Plugins
             ShowBank(player, player);
         }
 
-        object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
-        {
-            if (entity == null || target == null || entity == target || entity.net == null) return null;
-            if (target.IsAdmin) return null;
+        //object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
+        //{
+        //    if (entity == null || target == null || entity == target || entity.net == null) return null;
+        //    if (target.IsAdmin) return null;
 
-            OnlinePlayer onlinePlayer;
-            bool IsMyBank = false;
-            if(onlinePlayers.TryGetValue(target, out onlinePlayer)) {
-                if(onlinePlayer.View != null && onlinePlayer.View.net != null && onlinePlayer.View.net.ID == entity.net.ID) {
-                    IsMyBank = true;
-                }
-            }
+        //    OnlinePlayer onlinePlayer;
+        //    bool IsMyBank = false;
+        //    if(onlinePlayers.TryGetValue(target, out onlinePlayer)) {
+        //        if(onlinePlayer.View != null && onlinePlayer.View.net != null && onlinePlayer.View.net.ID == entity.net.ID) {
+        //            IsMyBank = true;
+        //        }
+        //    }
 
-            if (IsBank(entity) && !IsMyBank) return false;
+        //    if (IsBank(entity) && !IsMyBank) return false;
 
-            return null;
-        }
+        //    return null;
+        //}
 
-        private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
             if (hitInfo == null)
-            {
-                return;
-            }
+                return null;
 
-            if(IsBank(entity)) {
-                hitInfo.damageTypes = new DamageTypeList();
-                hitInfo.DoHitEffects = false;
-                hitInfo.HitMaterial = 0;
-            }
+            if(IsBank(entity)) 
+                return false;
+
+            return null;
         }
 
         object CanUseLockedEntity(BasePlayer player, BaseLock lockItem)
@@ -848,12 +845,7 @@ namespace Oxide.Plugins
                 SendReply(player, GetMsg("Denied: Swimming", player));
                 return false;
             }
-            if (!player.IsOnGround())
-            {
-                SendReply(player, GetMsg("Denied: Falling", player));
-                return false;
-            }
-            if (player.IsFlying)
+            if (!player.IsOnGround() || player.IsFlying)
             {
                 SendReply(player, GetMsg("Denied: Falling", player));
                 return false;
@@ -961,7 +953,7 @@ namespace Oxide.Plugins
 
         void OpenBank(BasePlayer player, BaseEntity targArg)
         {
-            Subscribe(nameof(CanNetworkTo));
+            //Subscribe(nameof(CanNetworkTo));
             Subscribe(nameof(OnEntityTakeDamage));
             //Subscribe(nameof(OnItemAddedToContainer));
             var pos = new Vector3(player.transform.position.x, player.transform.position.y-1, player.transform.position.z);
@@ -1046,7 +1038,7 @@ namespace Oxide.Plugins
             view.Kill(BaseNetworkable.DestroyMode.None);
             //view.KillMessage();
             if (onlinePlayers.Values.Count(p => p.View != null) <= 0) {
-                Unsubscribe(nameof(CanNetworkTo));
+                //Unsubscribe(nameof(CanNetworkTo));
                 Unsubscribe(nameof(OnEntityTakeDamage));
             }
         }

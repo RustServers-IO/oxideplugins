@@ -1,17 +1,17 @@
-﻿using Oxide.Core;
-using System.Linq;
+﻿using System.Linq;
 using UnityEngine;
-using Oxide.Core.Plugins;
 using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("StashBlocker", "Ankawi", "1.0.0")]
+    [Info("StashBlocker", "Ankawi", "1.0.2")]
     [Description("Disables players from building near foundation")]
 
     class StashBlocker : RustPlugin
     {
         private float radius;
+        bool heldItemIsFoundation = false;
+        bool heldItemIsStash = false;
 
         #region Configuration
         protected override void LoadDefaultConfig()
@@ -33,25 +33,41 @@ namespace Oxide.Plugins
             BasePlayer player = planner.GetOwnerPlayer();
             BaseEntity entity = gameObject.ToBaseEntity();
 
-            // Make sure gameobject is a BaseEntity
-            // Make sure player and entity exists
             if (entity == null || player == null)
                 return;
 
-            // Make sure entity is a small stash
-            if (!entity.PrefabName.ToLower().Contains("stash") || !entity.PrefabName.ToLower().Contains("small"))
-                return;
-
-            // Get all entities in a radius of 5
             List<BaseEntity> closeEntities = new List<BaseEntity>();
             Vis.Entities(gameObject.transform.position, radius, closeEntities);
 
-            if (closeEntities.Any(ent => ent.ShortPrefabName.ToLower().Contains("foundation")))
+            if (entity.PrefabName.ToLower().Contains("foundation"))
             {
-                PrintToChat(player, GetMsg("CannotPlaceStash", player.UserIDString));
-                player.inventory.GiveItem(ItemManager.CreateByItemID(1051155022, 1));
-                entity.Kill();
-            }        
+                heldItemIsFoundation = true;
+                if (heldItemIsFoundation)
+                {
+                    if (closeEntities.Any(ent => ent.PrefabName.ToLower().Contains("stash")))
+                    {
+                        PrintToChat(player, GetMsg("CannotPlaceStash", player.UserIDString));
+                        entity.Kill();
+                    }
+                }
+                return;
+            }
+
+            if (entity.PrefabName.ToLower().Contains("stash"))
+            {
+                heldItemIsStash = true;
+                if (heldItemIsStash)
+                {
+                    if (closeEntities.Any(ent => ent.ShortPrefabName.ToLower().Contains("foundation")))
+                    {
+                        PrintToChat(player, GetMsg("CannotPlaceStash", player.UserIDString));
+                        player.inventory.GiveItem(ItemManager.CreateByItemID(1051155022, 1));
+                        entity.Kill();
+                    }
+                }
+                return;
+            }
+            else return;
         }
         #endregion
 
@@ -60,7 +76,7 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["CannotPlaceStash"] = "You cannot place stashes near foundations"
+                ["CannotPlaceStash"] = "You cannot place your stash here."
             }, this, "en");
         }
         #endregion

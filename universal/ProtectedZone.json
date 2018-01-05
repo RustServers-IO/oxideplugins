@@ -1,0 +1,16 @@
+{
+    "name": "",
+    "description": "",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/protectedzone.2638",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Realtime Wipe Info", "Ryan", "2.1.0", ResourceId = 2473)]
+    [Info("Realtime Wipe Info", "Ryan", "2.1.1", ResourceId = 2473)]
     class RealtimeWipeInfo : RustPlugin
     {
         #region Declaration
@@ -473,6 +473,7 @@ namespace Oxide.Plugins
 
         private object ChatMessageResult(BasePlayer player, string input, bool reply)
         {
+            if (!CFile.Phrase.Enabled) return null;
             foreach (var phrase in CFile.Phrase.Phrases)
             {
                 if (input.ToLower().Contains(phrase.Key.ToLower()))

@@ -2,7 +2,7 @@
     "name": "Animal Remover",
     "description": "Allows you to disable specific animals from spawning on the server",
     "author": "Ankawi",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/animal-remover.2067",

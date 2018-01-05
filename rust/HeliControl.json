@@ -2,7 +2,7 @@
     "name": "HeliControl",
     "description": "Manage helicopter health, player damage, configure turrets\/rockets, and more!",
     "author": "Shady757",
-    "version": "1.2.4",
+    "version": "1.2.5",
     "configuration": true,
     "suggest": {
         "NTeleportation": "*"

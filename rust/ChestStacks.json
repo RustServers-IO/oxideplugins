@@ -1,0 +1,16 @@
+{
+    "name": "ChestStacks",
+    "description": "Higher stack sizes in storage containers, keeping normal stack sizes your inventory.",
+    "author": "Jake Rich",
+    "version": "1.0.5",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/cheststacks.2739",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

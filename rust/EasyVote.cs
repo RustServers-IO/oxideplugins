@@ -12,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "2.0.31", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "2.0.32", ResourceId = 2102)]
     [Description("Simple and smooth voting start by activating one scirpt.")]
     class EasyVote : RustPlugin
     {
@@ -1052,20 +1052,45 @@ namespace Oxide.Plugins
         #endregion
 
         #region API
+        // Output : string() UserID;
+        // If there multiple player has same vote value, include them all in one string.
+        // Multiple player output format: userid,userid,userid .. etc
         private string getHighestvoter()
         {
+            // Helppers
             string output = string.Empty;
+            int tempValue = 0;
             Dictionary<string, int> tempList = new Dictionary<string, int>();
 
+            // Receive EasyVote StoreData and save it to tempList.
             foreach (KeyValuePair<string, PlayerData> item in _storedData.Players)
                 tempList.Add(item.Key, item.Value.voted);
 
-            foreach (var item in tempList.OrderByDescending(key => key.Value).Take(1))
-                output = item.Key;
+            // Loop tempList
+            foreach (var item in tempList.OrderByDescending(key => key.Value))
+            {
+                // Run once
+                if (tempValue == 0)
+                {
+                    output = item.Key;
+                    tempValue = item.Value;
+                    continue;
+                }
 
+                if (tempValue != 0)
+                {
+                    // If tempValue match.
+                    if (item.Value == tempValue)
+                    {
+                        output += $",{item.Key}";
+                    }
+                    continue;
+                }
+            }
             return output;
         }
 
+        // Output : string() UserID;
         private string getLastvoter()
         {
             string output = string.Empty;
@@ -1080,6 +1105,26 @@ namespace Oxide.Plugins
             return output;
         }
 
+        // Output : Only console message.
+        private void resetPlayerVotedData(string steamID, bool displayMessage = true)
+        {
+            // Null checks
+            if (string.IsNullOrEmpty(steamID))
+                return;
+
+            if (!_storedData.Players.ContainsKey(steamID))
+                return;
+
+            // Reset voted data
+            _storedData.Players[steamID].voted = 0;
+            Interface.GetMod().DataFileSystem.WriteObject("EasyVote", _storedData);
+
+            // Print console message
+            if (displayMessage)
+                Puts($"Player '{steamID}' voted data has been reseted.");
+        }
+
+        // Output : Only console message.
         private void resetData(bool backup = true)
         {
             string currentTime = DateTime.UtcNow.ToString("dd-MM-yyyy");

@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.2.4", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb", "4.2.5", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -1227,7 +1227,7 @@ namespace Oxide.Plugins
             }
             if (RemoveWithFriends && Friends != null)
             {
-                var r = Friends.CallHook("HasFriend", steamid, friend);
+                var r = Friends?.CallHook("HasFriendS", steamid, friend);
                 if (r != null && (bool)r) return true;
             }
 			if (RemoveWithClans && Clans != null)

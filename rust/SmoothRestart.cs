@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.4", ResourceId = 1826)]
+	[Info("SmoothRestart", "Fujikura/Visagalis", "1.2.5", ResourceId = 1826)]
 	public class SmoothRestart : RustPlugin
 	{
 		bool Changed;
@@ -246,7 +246,7 @@ namespace Oxide.Plugins
 				// breaks here on times under a minute
 			}
 			lastMinute = DateTime.Now.Minute;
-			if (countDownActive)
+			if (countDownActive || (!countDownActive && timerActivated && currentCountDown == 1))
 			{
 				if (countDownMinutes.Contains(currentCountDown))
 					DoSmoothRestart(currentCountDown);
@@ -422,6 +422,7 @@ namespace Oxide.Plugins
 					if (timerActivated)
 					{
 						timerActivated = false;
+						secondsActive = false;
 						SendReply(arg, StripTags(lang.GetMessage("ManualCancel", this)));
 					}
 				}
@@ -463,6 +464,7 @@ namespace Oxide.Plugins
 						if (timerActivated)
 						{
 							timerActivated = false;
+							secondsActive = false;
 							SendReply(player, lang.GetMessage("ManualCancel", this));
 						}
 					}

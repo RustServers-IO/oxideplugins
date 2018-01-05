@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("ResearchControl", "Vlad-00003", "1.0.3")]
+    [Info("ResearchControl", "Vlad-00003", "1.0.4")]
     [Description("Allow you to adjust price for a research")]
     /*
      * Author info:
@@ -118,37 +118,21 @@ namespace Oxide.Plugins
         #endregion
 
         #region Oxide hooks
-        private Dictionary<BasePlayer, ItemDefinition> Workaround = new Dictionary<BasePlayer, ItemDefinition>();
-        void OnItemResearch(Item item, BasePlayer player)
+        void OnItemResearch(ResearchTable table, Item item, BasePlayer player)
         {
-            if (Workaround.ContainsKey(player))
+            if (!player)
             {
-                PrintWarning("Attempted to add player to workaround that already exists.");
-                Workaround[player] = item.info;
+                table.researchDuration = 10;
                 return;
             }
-            Workaround.Add(player, item.info);
-        }
-        void OnItemResearchStart(ResearchTable table)
-        {
-            if (table.user != null && Workaround.ContainsKey(table.user))
-            {
-                var def = Workaround[table.user];
-                var speed = GetPlayerSpeed(table.user);
-                if (!speed.IsModifier)
-                    table.researchDuration = (float)speed.Speed;
+            var speed = GetPlayerSpeed(player);
+            if (!speed.IsModifier)
+                table.researchDuration = (float)speed.Speed;
+            else
+                if (config.Prices.ContainsKey(item.info))
+                    table.researchDuration = (float)(config.Prices[item.info].Speed * speed.Speed);
                 else
-                    if (config.Prices.ContainsKey(def))
-                        table.researchDuration = (float)(config.Prices[def].Speed * speed.Speed);
-                    else
-                        table.researchDuration = (float)(10 * speed.Speed);
-                Workaround.Remove(table.user);
-                return;
-            }
-            PrintError("Error has occured. We don't know who is researching and what. Send the data listed below to the developer:\nTable user: {0}, list of Workaround:{1}",
-                table.user == null ? "Unknown" : table.user.displayName,
-                string.Join("\n", Workaround.Select(p => $"Player: {p.Key} | Item: {p.Value.displayName.english}").ToArray()));
-            table.researchDuration = 10;
+                    table.researchDuration = (float)(10 * speed.Speed);
         }
         int OnItemScrap(ResearchTable table, Item item)
         {

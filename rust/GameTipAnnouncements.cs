@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("GameTipAnnouncements", "redBDGR", "1.0.1", ResourceId = 2689)]
+    [Info("GameTipAnnouncements", "redBDGR", "1.0.2", ResourceId = 2689)]
     [Description("Send notifications to players as gametips")]
 
     //
@@ -95,7 +95,7 @@ namespace Oxide.Plugins
             CreateGameTipAll(args[0], length);
         }
 
-        [ConsoleCommand("sendgtall")]
+        [ConsoleCommand("sendgt")]
         private void SendGameTipAllCONSOLECMD(ConsoleSystem.Arg args)
         {
             if (args.Connection != null)

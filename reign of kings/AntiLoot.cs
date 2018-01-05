@@ -1,4 +1,4 @@
-﻿/* TODO:
+﻿/* TODO: * 
  * Cannot get Loot Sacks to work right, they do not have an owner assigned, I have to find a way to catch 
  the Loot bag on death, grab the netviewId so I can associate it with the player in a list, and I have not 
  been successful, I believe it will take another hook. 
@@ -18,11 +18,11 @@ using CodeHatch.Engine.Modules.SocialSystem.Objects;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiLoot", "Mordeus", "1.0.0")]
+    [Info("AntiLoot", "Mordeus", "1.1.0")]
     public class AntiLoot : ReignOfKingsPlugin
     {
         [PluginReference]
-        Plugin ProtectedZone;
+        Plugin DeclarationOfWar, ProtectedZone;
         //config
         private bool MessagesOn => GetConfig("MessagesOn", true);
         //private bool AllowPlayerLooting => GetConfig("AllowPlayerLooting", true);
@@ -37,7 +37,8 @@ namespace Oxide.Plugins
         private bool AllowGuildAccess => GetConfig("AllowGuildAccess", true);
         private bool AdminCanLoot => GetConfig("AdminCanLoot", true);
         private bool LogLooting => GetConfig("LogLooting", true);
-        private bool ProtectedZoneEnable => GetConfig("ProtectedZoneEnable", false);        
+        private bool ProtectedZoneEnable => GetConfig("ProtectedZoneEnable", false);
+        private bool DeclarationOfWarEnable => GetConfig("DeclarationOfWarEnable", false);
 
         #region Config
         protected override void LoadDefaultConfig()
@@ -55,11 +56,12 @@ namespace Oxide.Plugins
             Config["AllowGuildAccess"] = AllowGuildAccess;
             Config["AdminCanLoot"] = AdminCanLoot;
             Config["LogLooting"] = LogLooting;
-            Config["ProtectedZoneEnable"] = ProtectedZoneEnable;            
+            Config["ProtectedZoneEnable"] = ProtectedZoneEnable;
+            Config["DeclarationOfWarEnable"] = DeclarationOfWarEnable;
             SaveConfig();
         }
 
-        private void LoadDefaultMessages()
+        private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {                
@@ -95,21 +97,48 @@ namespace Oxide.Plugins
                     return;
                 }
             }
+            if (DeclarationOfWarEnable)
+            {
+                try
+                {
+                    DeclarationOfWar.Call("isLoaded", null);
+                }
+                catch (Exception)
+                {
+                    PrintWarning($"DeclarationOfWar is missing. Unloading {Name} as it will not work without DeclarationOfWar, change DeclarationOfWarEnabled in the config to false to use without.");
+                    Interface.Oxide.UnloadPlugin(Name);
+                    return;
+                }
+            }
         }
         private void Init()
         {
-            LoadDefaultConfig();
-            LoadDefaultMessages();            
+            LoadDefaultConfig();                       
         }         
         private void OnPlayerInteract(InteractEvent Event)
         {            
             if (Event.Entity == null) return;
             if (Event.Interactable == null) return;
             if (Event.ControllerEntity == null) return;                        
-            Player player = Event.Sender; //player thats interacting              
-            //var owner = Event.Entity.Owner; // owner of object - always returns server           
+            Player player = Event.Sender; //player thats interacting                         
             if (player.HasPermission("admin") && AdminCanLoot) return;
-            if (SocialAPI.Get<SecurityScheme>().OwnsObject(player.Id, Event.Entity.TryGet<ISecurable>())) return;//checks for ownership           
+            if (SocialAPI.Get<SecurityScheme>().OwnsObject(player.Id, Event.Entity.TryGet<ISecurable>())) return;//checks for ownership    
+            if (DeclarationOfWarEnable)
+            {
+                var playerguild = player.GetGuild();
+                ulong playerguildId = playerguild.BaseID;
+                CrestScheme crestScheme = SocialAPI.Get<CrestScheme>();
+                Crest crest = crestScheme.GetCrestAt(player.Entity.Position);
+                if (crest != null)
+                {
+                    var crestguid = crest.ObjectGUID;
+                    Guild targetguild = SocialAPI.Get<GuildScheme>().TryGetGuildByObject(crestguid);
+                    if (IsAtWar(playerguildId, targetguild.BaseID) && targetguild != null)
+                    {
+                        return;
+                    }
+                }
+            }
             var container = Clean(Event.Entity.name);             
             var playerId = player.ToString();
             var position = Event.Entity.Position;
@@ -252,6 +281,16 @@ namespace Oxide.Plugins
             return ProtectedZone.Call("GetZoneId", player);
         }
         #endregion
+        #region DeclarationOfWar 
+        bool IsAtWar(ulong guildId1, ulong guildId2)
+        {
+            if ((bool)DeclarationOfWar.Call("IsAtWar", guildId1) && (bool)DeclarationOfWar.Call("IsAtWar", guildId2))
+                return true;
+            else
+                return false;
+        }
+
+        #endregion DeclarationOfWar
         #region Functions
         private bool OwnsCrestArea(Player player)
         {

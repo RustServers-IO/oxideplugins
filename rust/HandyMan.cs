@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("HandyMan", "nivex", "1.1.0")]
+    [Info("HandyMan", "nivex", "1.1.1", ResourceId = 1737)]
     [Description("Provides AOE repair functionality to the player. Repair is only possible where you can build.")]
     public class HandyMan : RustPlugin
     {
@@ -156,7 +156,7 @@ namespace Oxide.Plugins
                     var items = player.inventory.FindItemIDs(ia.itemid);
                     int sum = items.Sum(item => item.amount);
 
-                    if (sum < ia.amount)
+                    if (sum * repairMulti < ia.amount * repairMulti)
                         return false;
                 }
             }
@@ -206,20 +206,9 @@ namespace Oxide.Plugins
                             break;
                     }
                 }
-                Pool.FreeList(ref entities);
 
-                //checks to see if any entities were repaired
-                if (hasRepaired)
-                {
-                    //yes - indicate
-                    //SendChatMessage(player, Title, GetMsg("IFixed", player.userID));
-                    SendChatMessage(player, Title, string.Format(GetMsg("IFixedEx", player.userID), repaired));
-                }
-                else
-                {
-                    //No - indicate
-                    SendChatMessage(player, Title, GetMsg("FixDone", player.userID));
-                }
+                Pool.FreeList(ref entities);
+                SendChatMessage(player, Title, hasRepaired ? string.Format(GetMsg("IFixedEx", player.userID), repaired) : GetMsg("FixDone", player.userID));
             }
             else
             {
@@ -242,6 +231,15 @@ namespace Oxide.Plugins
                 //set it to fire every xx seconds based on configuration
                 RepairMessageTimer.Every(HandyManChatInterval, RepairMessageTimer_Elapsed);
             }
+        }
+
+        /// <summary>
+        /// Timer for our repair message elapsed - set allow to true
+        /// </summary>
+        private void RepairMessageTimer_Elapsed()
+        {
+            //set the allow message to true so the next message will show
+            _allowHandyManFixMessage = true;
         }
 
         // BaseCombatEntity
@@ -322,16 +320,6 @@ namespace Oxide.Plugins
             {
                 entity.OnRepair();
             }
-        }
-
-
-        /// <summary>
-        /// Timer for our repair message elapsed - set allow to true
-        /// </summary>
-        private void RepairMessageTimer_Elapsed()
-        {
-            //set the allow message to true so the next message will show
-            _allowHandyManFixMessage = true;
         }
 
         #endregion

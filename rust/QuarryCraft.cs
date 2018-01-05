@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("QuarryCraft", "Vlad-00003", "1.0.0")]
+    [Info("QuarryCraft", "Vlad-00003", "1.0.1")]
     [Description("Allow players with permissions craft quarry")]
     /*
      * Author info:
@@ -156,9 +156,9 @@ namespace Oxide.Plugins
             foreach (var ingredient in bp.ingredients)
             {
                 var playeram = player.inventory.GetAmount(ingredient.itemDef.itemid);
-                if (playeram > ingredient.amount) continue;
+                if (playeram >= ingredient.amount) continue;
                 var reply = bp.ingredients.Select(x =>
-                    GetMsg(player.inventory.GetAmount(x.itemDef.itemid) > x.amount
+                    GetMsg(player.inventory.GetAmount(x.itemDef.itemid) >= x.amount
                             ? "EnoughtIngridient"
                             : "NotEnoughtIngridient"
                         , player, x.itemDef.displayName.translated, player.inventory.GetAmount(x.itemDef.itemid),

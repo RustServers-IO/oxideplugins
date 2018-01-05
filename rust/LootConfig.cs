@@ -8,26 +8,26 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+
 using Oxide.Core;
 
 using Rust;
 
 using UnityEngine;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-
 namespace Oxide.Plugins
 {
-    [Info("LootConfig", "Nogrod", "1.0.27")]
+    [Info("LootConfig", "Nogrod", "1.0.28")]
     internal class LootConfig : RustPlugin
     {
-        private const int VersionConfig = 14;
+        private const int VersionConfig = 15;
         private readonly FieldInfo ParentSpawnGroupField = typeof (SpawnPointInstance).GetField("parentSpawnGroup", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnGroupsField = typeof (SpawnHandler).GetField("SpawnGroups", BindingFlags.Instance | BindingFlags.NonPublic);
         private readonly FieldInfo SpawnPointsField = typeof(SpawnGroup).GetField("spawnPoints", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        private readonly Regex _findLoot = new Regex(@"(crate[\-_](basic|elite|mine|normal|tools)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed|minecart|bradley[\-_]crate[\-_\d\w]*)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private readonly Regex _findLoot = new Regex(@"(crate[\-_](basic|elite|mine|normal|tools)[\-_\d\w]*(food|medical)*|foodbox[\-_\d\w]*|loot[\-_](barrel|trash)[\-_\d\w]*|heli[\-_]crate[\-_\d\w]*|oil[\-_]barrel[\-_\d\w]*|supply[\-_]drop[\-_\d\w]*|trash[\-_]pile[\-_\d\w]*|/dmloot/.*|giftbox[\-_]loot|stocking[\-_](small|large)[\-_]deployed|minecart|murderer(_corpse)*|bradley[\-_]crate[\-_\d\w]*)\.prefab", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private ConfigData _config;
         private Dictionary<string, ItemDefinition> _itemsDict;
 
@@ -132,6 +132,7 @@ namespace Oxide.Plugins
             var lootSpawns = Resources.FindObjectsOfTypeAll<LootSpawn>();
             var itemModReveals = Resources.FindObjectsOfTypeAll<ItemModReveal>();
             var itemModUnwraps = Resources.FindObjectsOfTypeAll<ItemModUnwrap>();
+            var murderers = Resources.FindObjectsOfTypeAll<NPCMurderer>();
             var workbenchs = Resources.FindObjectsOfTypeAll<Workbench>();
 #if DEBUG
             var sb = new StringBuilder();
@@ -166,6 +167,7 @@ namespace Oxide.Plugins
             Array.Sort(lootSpawns, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             Array.Sort(itemModReveals, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             Array.Sort(itemModUnwraps, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
+            Array.Sort(murderers, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             Array.Sort(workbenchs, (a, b) => caseInsensitiveComparer.Compare(a.name, b.name));
             var spawnGroupsData = new Dictionary<string, Dictionary<string, LootContainer>>();
             var spawnGroups = (List<SpawnGroup>)SpawnGroupsField.GetValue(SpawnHandler.Instance);
@@ -217,6 +219,7 @@ namespace Oxide.Plugins
                         new LootSpawnSlotConverter(),
                         new ItemModRevealConverter(),
                         new ItemModUnwrapConverter(),
+                        new MurdererConverter(),
                         new WorkbenchConverter(),
                         new StringEnumConverter(),
                     }
@@ -231,6 +234,7 @@ namespace Oxide.Plugins
                     SpawnGroups = spawnGroupsData.OrderBy(l => l.Key).ToDictionary(l => l.Key, l => l.Value),
                     ItemModReveals = itemModReveals.ToDictionary(l => l.name),
                     ItemModUnwraps = itemModUnwraps.Where(l => l.revealList != null).ToDictionary(l => l.name),
+                    Murderers = murderers.Where(l => !l.gameObject.activeInHierarchy).ToDictionary(l => l.name),
                     Workbenchs = workbenchs.Where(l => !l.gameObject.activeInHierarchy).ToDictionary(l => l.name),
                     Categories = lootSpawns.ToDictionary(l => l.name)
                 });
@@ -296,6 +300,7 @@ namespace Oxide.Plugins
             var lootSpawnsOld = Resources.FindObjectsOfTypeAll<LootSpawn>();
             var itemModReveals = Resources.FindObjectsOfTypeAll<ItemModReveal>();
             var itemModUnwraps = Resources.FindObjectsOfTypeAll<ItemModUnwrap>();
+            var murderers = Resources.FindObjectsOfTypeAll<NPCMurderer>();
             var workbenchs = Resources.FindObjectsOfTypeAll<Workbench>();
             var monuments = Resources.FindObjectsOfTypeAll<MonumentInfo>();
 #if DEBUG
@@ -412,6 +417,29 @@ namespace Oxide.Plugins
                 }
                 unwrap.revealList = lootSpawn;
             }
+            foreach (var murderer in murderers)
+            {
+#if DEBUG
+                Puts("Update Murderer: {0}", murderer.name);
+#endif
+                MurdererData murdererConfig;
+                if (!_config.Murderers.TryGetValue(murderer.name.Replace("(Clone)", ""), out murdererConfig))
+                {
+                    Puts("No murderer data found: {0}", murderer.name.Replace("(Clone)", ""));
+                    continue;
+                }
+                murderer.LootSpawnSlots = new LootContainer.LootSpawnSlot[murdererConfig.LootSpawnSlots.Length];
+                for (var i = 0; i < murdererConfig.LootSpawnSlots.Length; i++)
+                {
+                    var lootSpawnSlot = murdererConfig.LootSpawnSlots[i];
+                    murderer.LootSpawnSlots[i] = new LootContainer.LootSpawnSlot
+                    {
+                        definition = GetLootSpawn(lootSpawnSlot.Definition, lootSpawns),
+                        numberToSpawn = lootSpawnSlot.NumberToSpawn,
+                        probability = lootSpawnSlot.Probability
+                    };
+                }
+            }
             foreach (var workbench in workbenchs)
             {
 #if DEBUG
@@ -420,13 +448,13 @@ namespace Oxide.Plugins
                 WorkbenchData workbenchConfig;
                 if (!_config.Workbenchs.TryGetValue(workbench.name.Replace("(Clone)", ""), out workbenchConfig))
                 {
-                    Puts("No reveal data found: {0}", workbench.name.Replace("(Clone)", ""));
+                    Puts("No workbench data found: {0}", workbench.name.Replace("(Clone)", ""));
                     continue;
                 }
                 var lootSpawn = GetLootSpawn(workbenchConfig.ExperimentalItems, lootSpawns);
                 if (lootSpawn == null)
                 {
-                    Puts("RevealList category '{0}' for '{1}' not found, skipping", workbenchConfig.ExperimentalItems, workbench.name.Replace("(Clone)", ""));
+                    Puts("ExperimentalItems category '{0}' for '{1}' not found, skipping", workbenchConfig.ExperimentalItems, workbench.name.Replace("(Clone)", ""));
                     continue;
                 }
                 workbench.experimentalItems = lootSpawn;
@@ -539,7 +567,7 @@ namespace Oxide.Plugins
         private string GetSpawnGroupKey(SpawnGroup spawnGroup, MonumentInfo[] monuments, Dictionary<SpawnGroup, int> indexes)
         {
             if (!indexes.ContainsKey(spawnGroup))
-                return "unkown";
+                return "unknown";
             var index = indexes[spawnGroup];
             return $"{GetSpawnGroupId(spawnGroup, monuments)}{(index > 0 ? $"_{index}" : string.Empty)}";
         }
@@ -619,6 +647,7 @@ namespace Oxide.Plugins
             public Dictionary<string, Dictionary<string, LootContainerData>> SpawnGroups { get; set; } = new Dictionary<string, Dictionary<string, LootContainerData>>();
             public Dictionary<string, ItemModRevealData> ItemModReveals { get; set; } = new Dictionary<string, ItemModRevealData>();
             public Dictionary<string, ItemModUnwrapData> ItemModUnwraps { get; set; } = new Dictionary<string, ItemModUnwrapData>();
+            public Dictionary<string, MurdererData> Murderers { get; set; } = new Dictionary<string, MurdererData>();
             public Dictionary<string, WorkbenchData> Workbenchs { get; set; } = new Dictionary<string, WorkbenchData>();
             public Dictionary<string, LootSpawnData> Categories { get; set; } = new Dictionary<string, LootSpawnData>();
         }
@@ -637,6 +666,7 @@ namespace Oxide.Plugins
             public Dictionary<string, Dictionary<string, LootContainer>> SpawnGroups { get; set; } = new Dictionary<string, Dictionary<string, LootContainer>>();
             public Dictionary<string, ItemModReveal> ItemModReveals { get; set; } = new Dictionary<string, ItemModReveal>();
             public Dictionary<string, ItemModUnwrap> ItemModUnwraps { get; set; } = new Dictionary<string, ItemModUnwrap>();
+            public Dictionary<string, NPCMurderer> Murderers { get; set; } = new Dictionary<string, NPCMurderer>();
             public Dictionary<string, Workbench> Workbenchs { get; set; } = new Dictionary<string, Workbench>();
             public Dictionary<string, LootSpawn> Categories { get; set; } = new Dictionary<string, LootSpawn>();
         }
@@ -957,6 +987,43 @@ namespace Oxide.Plugins
         {
             public string Category { get; set; }
             public int Weight { get; set; }
+        }
+
+        #endregion
+
+        #region Nested type: MurdererConverter
+
+        private class MurdererConverter : JsonConverter
+        {
+            public override bool CanRead => false;
+
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                var entry = (NPCMurderer)value;
+                writer.WriteStartObject();
+                writer.WritePropertyName("LootSpawnSlots");
+                serializer.Serialize(writer, entry.LootSpawnSlots);
+                writer.WriteEndObject();
+            }
+
+            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+            {
+                return null;
+            }
+
+            public override bool CanConvert(Type objectType)
+            {
+                return typeof(NPCMurderer).IsAssignableFrom(objectType);
+            }
+        }
+
+        #endregion
+
+        #region Nested type: MurdererData
+
+        public class MurdererData
+        {
+            public LootSpawnSlotData[] LootSpawnSlots { get; set; }
         }
 
         #endregion

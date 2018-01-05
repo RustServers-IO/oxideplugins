@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.16", ResourceId = 2193)]
+    [Info("ImageLibrary", "Absolut & K1lly0u", "2.0.17", ResourceId = 2193)]
     class ImageLibrary : RustPlugin
     {
         #region Fields
@@ -222,7 +222,7 @@ namespace Oxide.Plugins
                         assets.Add(item.Key, null, item.Value);
                 }
                 orderPending = true;
-                assets.BeginLoad(nextLoad.loadName);
+                assets.BeginLoad(nextLoad.loadSilent ? string.Empty : nextLoad.loadName);
             }
         }
 

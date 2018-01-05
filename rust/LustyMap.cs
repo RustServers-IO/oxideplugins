@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.36", ResourceId = 1333)]
+    [Info("LustyMap", "Kayzor / k1lly0u", "2.1.39", ResourceId = 1333)]
     class LustyMap : RustPlugin
     {
         #region Fields
@@ -34,8 +34,8 @@ namespace Oxide.Plugins
 
         private bool activated;
         private bool isNewSave;
-        private bool isRustFriends;
-
+        private bool isRustFriends;        
+        
         MarkerData storedMarkers;
         private DynamicConfigFile markerData;
 
@@ -50,8 +50,8 @@ namespace Oxide.Plugins
 
         static string dataDirectory = $"file://{Interface.Oxide.DataDirectory}{Path.DirectorySeparatorChar}LustyMap{Path.DirectorySeparatorChar}";
         #endregion
-
-        #region User Class
+        
+        #region User Class  
         class MapUser : MonoBehaviour
         {
             private Dictionary<string, List<string>> friends;
@@ -77,7 +77,7 @@ namespace Oxide.Plugins
             private int changeCount;
             private double lastChange;
             private bool isBlocked;
-
+            
             private ConfigData.SpamOptions spam;
 
             private bool afkDisabled;
@@ -87,7 +87,7 @@ namespace Oxide.Plugins
 
 
             void Awake()
-            {
+            {                
                 player = GetComponent<BasePlayer>();
                 friends = new Dictionary<string, List<string>>
                 {
@@ -95,7 +95,7 @@ namespace Oxide.Plugins
                     {"FriendsAPI", new List<string>() }
                 };
                 friendList = new HashSet<string>();
-                spam = instance.configData.Spam;
+                spam = instance.configData.Spam;             
                 inEvent = false;
                 mapOpen = false;
                 afkDisabled = false;
@@ -116,7 +116,7 @@ namespace Oxide.Plugins
                 if (MapSettings.friends)
                 {
                     FillFriendList();
-                }
+                }                
 
                 if (!instance.configData.Map.StartOpen)
                 {
@@ -137,19 +137,19 @@ namespace Oxide.Plugins
                 {
                     mode = MapMode.Minimap;
                     ToggleMapType(mode);
-                }
+                }               
             }
 
             #region Friends
             private void FillFriendList()
-            {
+            {                
                 if (instance.configData.Friends.UseClans)
                 {
                     var clanTag = instance.GetClan(player.userID);
-                    if (!string.IsNullOrEmpty(clanTag) && instance.clanData.ContainsKey(clanTag))
+                    if (!string.IsNullOrEmpty(clanTag) && instance.clanData.ContainsKey(clanTag))                    
                         friends["Clans"] = instance.clanData[clanTag];
                 }
-
+                    
                 if (instance.configData.Friends.UseFriends)
                     friends["FriendsAPI"] = instance.GetFriends(player.userID);
                 UpdateMembers();
@@ -167,30 +167,30 @@ namespace Oxide.Plugins
 
             #region Maps
             public float Rotation() => GetDirection(player?.transform?.rotation.eulerAngles.y ?? 0);
-            public int Position(bool x) => x ? mapX : mapZ;
+            public int Position(bool x) => x ? mapX : mapZ;            
             public void Position(bool x, int pos)
             {
                 if (x) mapX = pos;
                 else mapZ = pos;
-            }
-
+            } 
+                        
             public void ToggleMapType(MapMode mapMode)
             {
                 if (isBlocked || IsSpam()) return;
 
-                DestroyUI();
+                DestroyUI();               
 
                 if (mapMode == MapMode.None)
                 {
-                    InvokeHandler.CancelInvoke(this, UpdateMap);
+                    InvokeHandler.CancelInvoke(this, UpdateMap);                   
                     mode = MapMode.None;
                     mapOpen = false;
 
-                    if (MapSettings.minimap)
-                        instance.CreateShrunkUI(player);
+                    if (MapSettings.minimap)                    
+                        instance.CreateShrunkUI(player);                    
                 }
                 else
-                {
+                {               
                     mapOpen = true;
                     switch (mapMode)
                     {
@@ -199,7 +199,7 @@ namespace Oxide.Plugins
                             instance.OpenMainMap(player);
                             break;
                         case MapMode.Complex:
-                            mode = MapMode.Complex;
+                            mode = MapMode.Complex;                            
                             instance.OpenComplexMap(player);
                             break;
                         case MapMode.Minimap:
@@ -207,12 +207,12 @@ namespace Oxide.Plugins
                             instance.OpenMiniMap(player);
                             break;
                     }
-                    if (!IsInvoking("UpdateMap"))
-                        InvokeHandler.InvokeRepeating(this, UpdateMap, 0.1f, instance.configData.Map.UpdateSpeed);
-                }
-            }
+                    if (!IsInvoking("UpdateMap"))                    
+                        InvokeHandler.InvokeRepeating(this, UpdateMap, 0.1f, instance.configData.Map.UpdateSpeed);                    
+                }     
+            }                      
             public void UpdateMap()
-            {
+            {                
                 switch (mode)
                 {
                     case MapMode.None:
@@ -255,7 +255,7 @@ namespace Oxide.Plugins
             private void SwitchZoom(int zoom)
             {
                 if (zoom == 0 && MapSettings.minimap)
-                {
+                {                    
                     mapZoom = zoom;
                     ToggleMapType(MapMode.Minimap);
                 }
@@ -263,7 +263,7 @@ namespace Oxide.Plugins
                 {
                     if (zoom == 0 && !MapSettings.minimap)
                         zoom = 1;
-
+                    
                     mapZoom = zoom;
                     currentX = 0;
                     currentZ = 0;
@@ -275,7 +275,7 @@ namespace Oxide.Plugins
             {
                 if (x) currentX = num;
                 else currentZ = num;
-            }
+            }           
             private void CheckForChange()
             {
                 var mapSlices = ZoomToCount(mapZoom);
@@ -327,7 +327,7 @@ namespace Oxide.Plugins
                 return false;
             }
             private void Block()
-            {
+            {                
                 isBlocked = true;
                 OnDestroy();
             }
@@ -373,10 +373,10 @@ namespace Oxide.Plugins
                         afkDisabled = true;
                         DisableUser();
                     }
-                }
+                }              
             }
             public MapMarker GetMarker() => marker;
-
+            
             public void ToggleMain()
             {
                 if (HasMapOpen())
@@ -407,7 +407,7 @@ namespace Oxide.Plugins
             }
             public void EnableUser()
             {
-                if (mapOpen) return;
+                if (mapOpen) return;                
                 ToggleMapType(mode);
             }
             public void EnterEvent() => inEvent = true;
@@ -439,17 +439,17 @@ namespace Oxide.Plugins
             private string icon;
 
             void Awake()
-            {
+            {                
                 entity = GetComponent<BaseEntity>();
                 marker = new MapMarker();
-                enabled = false;
+                enabled = false;             
             }
             void OnDestroy()
             {
                 InvokeHandler.CancelInvoke(this, UpdatePosition);
             }
             public void SetType(AEType type)
-            {
+            {                                
                 this.type = type;
                 switch (type)
                 {
@@ -484,14 +484,14 @@ namespace Oxide.Plugins
                         icon = "car";
                         marker.name = instance.msg("Car");
                         break;
-                }
+                }            
                 InvokeHandler.InvokeRepeating(this, UpdatePosition, 0.1f, 1f);
             }
             public MapMarker GetMarker() => marker;
             void UpdatePosition()
             {
                 if (type == AEType.Helicopter || type == AEType.Plane || type == AEType.Car || type == AEType.Tank)
-                {
+                {                    
                     marker.r = GetDirection(entity?.transform?.rotation.eulerAngles.y ?? 0);
                     marker.icon = $"{icon}{marker.r}";
                 }
@@ -499,7 +499,7 @@ namespace Oxide.Plugins
                 marker.x = GetPosition(entity.transform.position.x);
                 marker.z = GetPosition(entity.transform.position.z);
                 if (type == AEType.Vending || type == AEType.SupplyDrop || type == AEType.Debris)
-                    InvokeHandler.CancelInvoke(this, UpdatePosition);
+                    InvokeHandler.CancelInvoke(this, UpdatePosition);                
             }
         }
         class MapMarker
@@ -513,7 +513,7 @@ namespace Oxide.Plugins
         static class MapSettings
         {
             static public bool minimap, complexmap, monuments, names, compass, caves, plane, heli, supply, debris, player, allplayers, friends, vending, forcedzoom, cars, tanks;
-            static public int zoomlevel;
+            static public int zoomlevel;       
         }
         public enum MapMode
         {
@@ -531,7 +531,7 @@ namespace Oxide.Plugins
             Debris,
             Vending,
             Car,
-            Tank
+            Tank            
         }
         #endregion
 
@@ -566,9 +566,9 @@ namespace Oxide.Plugins
                 panel, CuiHelper.GetGuid());
             }
             static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
-            {
+            {                
                 container.Add(new CuiLabel
-                {
+                {                    
                     Text = { Color = color, FontSize = size, Align = align, FadeIn = 0, Text = text },
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
                 },
@@ -576,7 +576,7 @@ namespace Oxide.Plugins
 
             }
             static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
-            {
+            {                
                 container.Add(new CuiButton
                 {
                     Button = { Color = color, Command = command, FadeIn = 0 },
@@ -597,8 +597,8 @@ namespace Oxide.Plugins
                         new CuiRectTransformComponent {AnchorMin = aMin, AnchorMax = aMax }
                     }
                 });
-            }
-        }
+            }            
+        }        
         #endregion
 
         #region Oxide Hooks
@@ -628,13 +628,13 @@ namespace Oxide.Plugins
             mapSeed = ConVar.Server.seed.ToString();
             level = ConVar.Server.level;
             mapSize = TerrainMeta.Size.x;
-
+                       
             mapSplitter = new MapSplitter();
 
             LoadVariables();
-            LoadData();
+            LoadData();            
             LoadSettings();
-
+           
             FindStaticMarkers();
             FindVendingMachines();
             FindVehicles();
@@ -652,7 +652,7 @@ namespace Oxide.Plugins
                 return;
             }
             if (activated)
-            {
+            {                
                 var user = GetUser(player);
                 if (user != null)
                 {
@@ -669,7 +669,7 @@ namespace Oxide.Plugins
         }
         void OnPlayerDisconnected(BasePlayer player)
         {
-            if (player == null) return;
+            if (player == null) return;            
             if (mapUsers.ContainsKey(player.UserIDString))
             {
                 UnityEngine.Object.Destroy(mapUsers[player.UserIDString]);
@@ -695,9 +695,9 @@ namespace Oxide.Plugins
             UnityEngine.Object.Destroy(activeEntity);
         }
         void Unload()
-        {
-            foreach (var player in BasePlayer.activePlayerList)
-                OnPlayerDisconnected(player);
+        {            
+            foreach (var player in BasePlayer.activePlayerList)                            
+                OnPlayerDisconnected(player);            
 
             var mapUsers = UnityEngine.Object.FindObjectsOfType<MapUser>();
             if (mapUsers != null)
@@ -801,7 +801,7 @@ namespace Oxide.Plugins
                     }
                 }
                 catch
-                {
+                {  
                 }
             }
             private static void AddElementIds(BasePlayer player, ref CuiElementContainer container)
@@ -809,7 +809,7 @@ namespace Oxide.Plugins
                 if (!OpenUI.ContainsKey(player.userID))
                     OpenUI.Add(player.userID, new List<string>());
                 foreach (var piece in container)
-                    OpenUI[player.userID].Add(piece.Name);
+                    OpenUI[player.userID].Add(piece.Name);               
             }
             public static void DestroyUI(BasePlayer player)
             {
@@ -823,7 +823,7 @@ namespace Oxide.Plugins
                 if (!OpenUI.ContainsKey(player.userID)) return;
                 foreach (var piece in OpenUI[player.userID])
                     CuiHelper.DestroyUi(player, piece);
-            }
+            }         
             public static string Color(string hexColor, float alpha)
             {
                 int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
@@ -881,7 +881,7 @@ namespace Oxide.Plugins
             var mapContainer = LMUI.CreateElementContainer(LustyUI.Main, "0 0 0 1", LustyUI.MainMin, LustyUI.MainMax, true);
             LMUI.LoadImage(ref mapContainer, LustyUI.Main, mapimage, "0 0", "1 1");
             LMUI.CreatePanel(ref mapContainer, LustyUI.Main, LustyUI.Color("2b627a", 0.4f), "0 0.96", "1 1");
-            LMUI.CreateLabel(ref mapContainer, LustyUI.Main, "", $"{Title}  v{Version}", 14, "0.01 0.96", "0.99 1");
+            LMUI.CreateLabel(ref mapContainer, LustyUI.Main, "", $"{Title}  v{Version}", 14, "0.01 0.96", "0.99 1");            
 
             foreach(var marker in staticMarkers)
             {
@@ -893,7 +893,7 @@ namespace Oxide.Plugins
             }
             LustyUI.StaticMain = mapContainer;
             Puts("[Warning] Main map generated successfully!");
-            if (!MapSettings.minimap)
+            if (!MapSettings.minimap)            
                 LustyUI.RenameComponents();
         }
         void CreateStaticMini()
@@ -907,7 +907,7 @@ namespace Oxide.Plugins
                 return;
             }
             float iconsize = 0.03f;
-
+            
             var mapContainer = LMUI.CreateElementContainer(LustyUI.Mini, "0 0 0 1", LustyUI.MiniMin, LustyUI.MiniMax);
             LMUI.LoadImage(ref mapContainer, LustyUI.Mini, mapimage, "0 0", "1 1");
 
@@ -915,16 +915,16 @@ namespace Oxide.Plugins
             {
                 var image = GetImage(marker.icon);
                 if (string.IsNullOrEmpty(image)) continue;
-                LMUI.LoadImage(ref mapContainer, LustyUI.Mini, image, $"{marker.x - iconsize} {marker.z - iconsize}", $"{marker.x + iconsize} {marker.z + iconsize}");
+                LMUI.LoadImage(ref mapContainer, LustyUI.Mini, image, $"{marker.x - iconsize} {marker.z - iconsize}", $"{marker.x + iconsize} {marker.z + iconsize}");                
             }
             LustyUI.StaticMini = mapContainer;
             Puts("[Warning] Mini map generated successfully!");
-            if (!MapSettings.complexmap)
-                LustyUI.RenameComponents();
-        }
+            if (!MapSettings.complexmap)            
+                LustyUI.RenameComponents();            
+        }       
         void CreateStaticComplex()
         {
-            Puts("[Warning] Generating the complex map. This may take a few moments, please wait!");
+            Puts("[Warning] Generating the complex map. This may take a few moments, please wait!");            
             foreach (var mapslices in new List<int> { 6, 12, 26 })//, 32 })
             {
                 for (int number = 0; number < (mapslices * mapslices); number++)
@@ -937,7 +937,7 @@ namespace Oxide.Plugins
                         rowNum = number - (colNum * mapslices);
                     }
                     else rowNum = number;
-
+                    
                     var mapContainer = LMUI.CreateElementContainer(LustyUI.Complex, "0 0 0 1", LustyUI.MiniMin, LustyUI.MiniMax);
 
                     string imageId = GetImage($"map-{mapslices}-{rowNum}-{colNum}");
@@ -960,13 +960,13 @@ namespace Oxide.Plugins
                     if (column < 1) column = 1;
                     if (column > mapslices - 2) column = mapslices - 2;
                     if (row < 1) row = 1;
-                    if (row > mapslices - 2) row = mapslices - 2;
+                    if (row > mapslices - 2) row = mapslices - 2;                    
 
                     double colStart = (width * column) - width;
                     double colEnd = colStart + (width * 3);
 
                     double rowStart = 1 - ((width * row) - width);
-                    double rowEnd = (rowStart - (width * 3));
+                    double rowEnd = (rowStart - (width * 3));                   
 
                     foreach (var marker in staticMarkers)
                     {
@@ -991,9 +991,9 @@ namespace Oxide.Plugins
                 }
             }
             Puts("[Warning] Complex map generated successfully!");
-            LustyUI.RenameComponents();
+            LustyUI.RenameComponents();            
         }
-
+        
         static int ZoomToCount(int zoom)
         {
             switch (zoom)
@@ -1031,8 +1031,8 @@ namespace Oxide.Plugins
         #region Maps
         void ActivateMaps()
         {
-            foreach (var player in BasePlayer.activePlayerList)
-                OnPlayerInit(player);
+            foreach (var player in BasePlayer.activePlayerList)            
+                OnPlayerInit(player);            
         }
         void AddMapCompass(BasePlayer player, ref CuiElementContainer mapContainer, string panel, int fontsize, string offsetMin, string offsetMax)
         {
@@ -1067,7 +1067,7 @@ namespace Oxide.Plugins
                 b_text = ">>>";
                 container = LMUI.CreateElementContainer(LustyUI.Buttons, "0 0 0 0", $"{startx - 0.02f} {starty}", $"{startx - 0.001f} {endy}");
             }
-
+           
             LMUI.CreateButton(ref container, LustyUI.Buttons, LustyUI.Color("696969", 0.6f), b_text, 12, $"0 0.9", $"1 1", "LMUI_Control shrink");
             if (MapSettings.complexmap && !MapSettings.forcedzoom)
             {
@@ -1088,11 +1088,11 @@ namespace Oxide.Plugins
             string b_text = ">>>";
 
             if (!configData.MiniMap.OnLeftSide)
-            {
+            {                
                 b_endx = 0.999f - configData.MiniMap.OffsetSide;
                 b_startx = b_endx - 0.02f;
                 b_text = "<<<";
-            }
+            }                       
             var container = LMUI.CreateElementContainer(LustyUI.Buttons, "0 0 0 0", $"{b_startx} {b_endy - 0.025f}", $"{b_endx} {b_endy}");
             LMUI.CreateButton(ref container, LustyUI.Buttons, LustyUI.Color("696969", 0.6f), b_text, 12, "0 0", "1 1", "LMUI_Control expand");
             CuiHelper.DestroyUi(player, LustyUI.Buttons);
@@ -1107,7 +1107,7 @@ namespace Oxide.Plugins
             var mapContainer = LMUI.CreateElementContainer(panel, "0 0 0 0", posMin, posMax);
 
             var user = GetUser(player);
-            if (user == null) return;
+            if (user == null) return;            
             foreach (var marker in customMarkers)
             {
                 var image = GetImage(marker.Key);
@@ -1127,9 +1127,9 @@ namespace Oxide.Plugins
                 var marker = entity.Value.GetMarker();
                 if (marker == null) continue;
                 var image = GetImage(marker.icon);
-                if (string.IsNullOrEmpty(image)) continue;
+                if (string.IsNullOrEmpty(image)) continue;                
                 AddIconToMap(ref mapContainer, panel, image, "", entity.Value.type == AEType.Vending ? iconsize : iconsize * 1.4f, marker.x, marker.z);
-            }
+            }            
             if (user.IsAdmin || MapSettings.allplayers)
             {
                 foreach (var mapuser in mapUsers)
@@ -1140,7 +1140,7 @@ namespace Oxide.Plugins
                     if (marker == null) continue;
                     var image = GetImage($"other{marker.r}");
                     if (string.IsNullOrEmpty(image)) continue;
-                    AddIconToMap(ref mapContainer, panel, image, marker.name, iconsize * 1.25f, marker.x, marker.z);
+                    AddIconToMap(ref mapContainer, panel, image, marker.name, iconsize * 1.25f, marker.x, marker.z);                    
                 }
             }
             else if (MapSettings.friends)
@@ -1172,16 +1172,16 @@ namespace Oxide.Plugins
             }
 
             if (panel == LustyUI.MainOverlay)
-            {
+            {                
                 LMUI.CreateButton(ref mapContainer, panel, LustyUI.Color("88a8b6", 1), "X", 14, "0.95 0.961", "0.999 0.999", "LMUI_Control map");
                 if (MapSettings.compass)
                     AddMapCompass(player, ref mapContainer, panel, 14, "0.75 0.88", "1 0.95");
             }
 
             if (panel == LustyUI.MiniOverlay)
-            {
+            {                
                 if (MapSettings.compass)
-                    AddMapCompass(player, ref mapContainer, panel, 10, "0 -0.25", "1 -0.02");
+                    AddMapCompass(player, ref mapContainer, panel, 10, "0 -0.25", "1 -0.02");                
             }
 
             CuiHelper.DestroyUi(player, panel);
@@ -1193,7 +1193,7 @@ namespace Oxide.Plugins
             LMUI.LoadImage(ref mapContainer, panel, image, $"{posX - iconsize} {posZ - iconsize}", $"{posX + iconsize} {posZ + iconsize}");
             if (MapSettings.names)
                 LMUI.CreateLabel(ref mapContainer, panel, "", name, 10, $"{posX - 0.1} {posZ - iconsize - 0.025}", $"{posX + 0.1} {posZ - iconsize}");
-        }
+        }        
         #endregion
 
         #region Complex Maps
@@ -1277,7 +1277,7 @@ namespace Oxide.Plugins
                         AddComplexIcon(ref mapContainer, LustyUI.ComplexOverlay, image, "", iconsize * 1.3f, marker.x, marker.z, colStart, colEnd, rowStart, rowEnd);
                     }
                 }
-            }
+            }            
             if (MapSettings.player)
             {
                 var selfMarker = user.GetMarker();
@@ -1290,7 +1290,7 @@ namespace Oxide.Plugins
             }
             if (MapSettings.compass)
                 AddMapCompass(player, ref mapContainer, LustyUI.ComplexOverlay, 10, "0 -0.25", "1 -0.02");
-
+            
             CuiHelper.DestroyUi(player, LustyUI.ComplexOverlay);
             CuiHelper.AddUi(player, mapContainer);
         }
@@ -1323,9 +1323,9 @@ namespace Oxide.Plugins
             if (user == null) return;
             switch (arg.Args[0].ToLower())
             {
-                case "map":
+                case "map":                              
                     user.ToggleMain();
-                    return;
+                    return;               
                 case "shrink":
                     user.ToggleMapType(MapMode.None);
                     return;
@@ -1350,7 +1350,7 @@ namespace Oxide.Plugins
             if (arg.Connection != null) return;
             SendReply(arg, "Map reset Confirmed! Creating a new image load order with ImageLibrary");
             LoadImages();
-            LoadMapImage();
+            LoadMapImage();                 
         }
         [ChatCommand("map")]
         void cmdOpenMap(BasePlayer player, string command, string[] args)
@@ -1414,7 +1414,7 @@ namespace Oxide.Plugins
                     if (args.Length > 2)
                         icon = args[2];
                     if (AddMarker(player.transform.position.x, player.transform.position.z, name, icon))
-                        SendReply(player, $"You have successfully added a new map marker with the name: {name}");
+                        SendReply(player, $"You have successfully added a new map marker with the name: {name}");  
                     else SendReply(player, $"A map marker with the name \"{name}\" already exists");
                     return;
                 case "remove":
@@ -1429,12 +1429,12 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Functions
+        #region Functions    
         private void CheckFriends()
         {
             if (Friends)
             {
-                if (Friends.ResourceId == 686)
+                if (Friends.ResourceId == 686)               
                     isRustFriends = true;
             }
         }
@@ -1446,12 +1446,12 @@ namespace Oxide.Plugins
             if (entity is CargoPlane)
             {
                 if (!configData.Markers.ShowPlanes) return;
-                type = AEType.Plane;
+                type = AEType.Plane;                
             }
             else if (entity is BaseHelicopter)
             {
                 if (!configData.Markers.ShowHelicopters) return;
-                type = AEType.Helicopter;
+                type = AEType.Helicopter;               
             }
             else if (entity is BradleyAPC)
             {
@@ -1466,19 +1466,19 @@ namespace Oxide.Plugins
             else if (entity is SupplyDrop)
             {
                 if (!configData.Markers.ShowSupplyDrops) return;
-                type = AEType.SupplyDrop;
+                type = AEType.SupplyDrop;                
             }
             else if (entity is HelicopterDebris)
             {
                 if (!configData.Markers.ShowDebris) return;
-                type = AEType.Debris;
-            }
+                type = AEType.Debris;                
+            }  
             else if (entity is VendingMachine)
             {
                 if (!configData.Markers.ShowPublicVendingMachines) return;
                 if (!(entity as VendingMachine).IsBroadcasting()) return;
                 type = AEType.Vending;
-            }
+            }         
             var actEnt = entity.gameObject.AddComponent<ActiveEntity>();
             actEnt.SetType(type);
 
@@ -1509,14 +1509,14 @@ namespace Oxide.Plugins
                 MapSettings.zoomlevel = 1;
             if (MapSettings.zoomlevel > 3)
                 MapSettings.zoomlevel = 3;
-        }
+        }        
         private void FindStaticMarkers()
         {
             if (MapSettings.monuments)
-            {
+            { 
                 var monuments = UnityEngine.Object.FindObjectsOfType<MonumentInfo>();
                 foreach (var monument in monuments)
-                {
+                {                    
                     MapMarker mon = new MapMarker
                     {
                         x = GetPosition(monument.transform.position.x),
@@ -1537,7 +1537,7 @@ namespace Oxide.Plugins
                         staticMarkers.Add(mon);
                         continue;
                     }
-
+                    
                     if (monument.name.Contains("powerplant_1"))
                     {
                         mon.name = msg("powerplant");
@@ -1631,6 +1631,7 @@ namespace Oxide.Plugins
                         staticMarkers.Add(mon);
                         continue;
                     }
+
                     if (monument.name.Contains("gas_station_1"))
                     {
                         mon.name = msg("gasstation");
@@ -1646,8 +1647,40 @@ namespace Oxide.Plugins
                         staticMarkers.Add(mon);
                         continue;
                     }
+
+                    if (monument.name.Contains("mining_quarry_c"))
+                    {
+                        mon.name = msg("quarryhqm");
+                        mon.icon = "quarryhqm";
+                        staticMarkers.Add(mon);
+                        continue;
+                    }
+
+                    if (monument.name.Contains("mining_quarry_a"))
+                    {
+                        mon.name = msg("quarrysulfur");
+                        mon.icon = "quarrysulfur";
+                        staticMarkers.Add(mon);
+                        continue;
+                    }
+
+                    if (monument.name.Contains("mining_quarry_b"))
+                    {
+                        mon.name = msg("quarrystone");
+                        mon.icon = "quarrystone";
+                        staticMarkers.Add(mon);
+                        continue;
+                    }
+
+                    if (monument.name.Contains("junkyard_1"))
+                    {
+                        mon.name = msg("junkyard");
+                        mon.icon = "junkyard";
+                        staticMarkers.Add(mon);
+                        continue;
+                    }
                 }
-            }
+            }                      
         }
         private void FindVendingMachines()
         {
@@ -1668,7 +1701,7 @@ namespace Oxide.Plugins
                     AddTemporaryEntityMarker(car);
                 }
             }
-
+            
             if (MapSettings.tanks)
             {
                 var tanks = UnityEngine.Object.FindObjectsOfType<BradleyAPC>();
@@ -1694,7 +1727,7 @@ namespace Oxide.Plugins
             }
             return sb.ToString();
         }
-        static float GetPosition(float pos) => (pos + mapSize / 2f) / mapSize;
+        static float GetPosition(float pos) => (pos + mapSize / 2f) / mapSize;  
         static int GetDirection(float rotation) => (int)((rotation - 5) / 10 + 0.5) * 10;
         #endregion
 
@@ -1826,7 +1859,7 @@ namespace Oxide.Plugins
                 if (key.StartsWith(name))
                     temporaryMarkers.Remove(key);
 
-            }
+            }            
             return true;
         }
         #endregion
@@ -1890,8 +1923,8 @@ namespace Oxide.Plugins
             return true;
         }
         #endregion
-
-        string GetMap() => GetImage("mapimage");
+               
+        string GetMap() => GetImage("mapimage"); 
         bool SplitMap(int splices)
         {
             mapSplitter.SplitMap(GetImage("mapimage_high"), splices);
@@ -1900,7 +1933,7 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region External API
+        #region External API  
         void JoinedEvent(BasePlayer player)
         {
             var user = GetUser(player);
@@ -1988,7 +2021,7 @@ namespace Oxide.Plugins
             var newList = new List<string>();
             var clan = instance.Clans?.Call("GetClan", clanTag);
             if (clan != null && clan is JObject)
-            {
+            {                
                 var members = (clan as JObject).GetValue("members");
                 if (members != null && members is JArray)
                 {
@@ -2008,31 +2041,31 @@ namespace Oxide.Plugins
         void OnClanUpdate(string tag)
         {
             var members = GetClanMembers(tag);
-            if (!clanData.ContainsKey(tag))
-                clanData.Add(tag, members);
+            if (!clanData.ContainsKey(tag))                            
+                clanData.Add(tag, members);            
             else
             {
-                foreach (var member in clanData[tag])
-                    RemoveFriendList(member, "Clans", true);
+                foreach (var member in clanData[tag])                                    
+                    RemoveFriendList(member, "Clans", true); 
                 foreach(var member in members)
                     AddFriendList(member, "Clans", members, true);
                 clanData[tag] = members;
-            }
+            }            
         }
         void OnClanDestroy(string tag)
-        {
+        {            
             if (clanData.ContainsKey(tag))
             {
-                foreach(var member in clanData[tag])
-                    RemoveFriendList(member, "Clans", true);
+                foreach(var member in clanData[tag])                                    
+                    RemoveFriendList(member, "Clans", true);                
                 clanData.Remove(tag);
             }
         }
         #endregion
         #endregion
 
-        #region Config
-        private ConfigData configData;
+        #region Config        
+        private ConfigData configData;        
         class ConfigData
         {
             [JsonProperty(PropertyName = "Friend Options")]
@@ -2097,7 +2130,7 @@ namespace Oxide.Plugins
                 [JsonProperty(PropertyName = "Show map compass")]
                 public bool ShowCompass { get; set; }
                 [JsonProperty(PropertyName = "Map image options")]
-                public MapImages MapImage { get; set; }
+                public MapImages MapImage { get; set; }                
                 [JsonProperty(PropertyName = "Map update time (seconds)")]
                 public float UpdateSpeed { get; set; }
 
@@ -2109,7 +2142,7 @@ namespace Oxide.Plugins
                     public bool CustomMap_Use { get; set; }
                     [JsonProperty(PropertyName = "Custom map filename")]
                     public string CustomMap_Filename { get; set; }
-                }
+                }                
             }
             public class Minimap
             {
@@ -2124,7 +2157,7 @@ namespace Oxide.Plugins
                 [JsonProperty(PropertyName = "Minimap offset from side of the screen")]
                 public float OffsetSide { get; set; }
                 [JsonProperty(PropertyName = "Minimap offset from top of the screen")]
-                public float OffsetTop { get; set; }
+                public float OffsetTop { get; set; }                
             }
             public class ComplexMap
             {
@@ -2181,8 +2214,8 @@ namespace Oxide.Plugins
                     ShowTanks = true
                 },
                 Map = new ConfigData.MapOptions
-                {
-                    EnableAFKTracking = true,
+                {           
+                    EnableAFKTracking = true,         
                     HideEventPlayers = true,
                     ShowCompass = true,
                     StartOpen = true,
@@ -2191,11 +2224,11 @@ namespace Oxide.Plugins
                         APIKey = "",
                         CustomMap_Filename = "",
                         CustomMap_Use = false
-                    },
+                    },                    
                     UpdateSpeed = 1f
                 },
                 MiniMap = new ConfigData.Minimap
-                {
+                {                    
                     HorizontalScale = 1.0f,
                     VerticalScale = 1.0f,
                     OnLeftSide = true,
@@ -2217,7 +2250,7 @@ namespace Oxide.Plugins
                     TimeBetweenAttempts = 3,
                     WarningAttempts = 5
                 }
-
+                             
             };
             SaveConfig(config);
         }
@@ -2225,13 +2258,13 @@ namespace Oxide.Plugins
         void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
         #endregion
 
-        #region Data Management
+        #region Data Management        
         void SaveMarkers()
         {
             markerData.WriteObject(storedMarkers);
         }
         void LoadData()
-        {
+        {          
             try
             {
                 storedMarkers = markerData.ReadObject<MarkerData>();
@@ -2241,7 +2274,7 @@ namespace Oxide.Plugins
             {
                 storedMarkers = new MarkerData();
             }
-        }
+        }       
         class MarkerData
         {
             public Dictionary<string, MapMarker> data = new Dictionary<string, MapMarker>();
@@ -2252,8 +2285,8 @@ namespace Oxide.Plugins
         private string GetImage(string name)
         {
             if (string.IsNullOrEmpty(name)) return null;
-            return ImageLibrary.GetImage(name, 0);
-        }
+            return ImageLibrary.GetImage(name, 0);            
+        }        
         void ValidateImages()
         {
             Puts("[Warning] Validating imagery");
@@ -2263,20 +2296,20 @@ namespace Oxide.Plugins
                 LoadMapImage();
             }
             else GenerateMaps(true, MapSettings.minimap, MapSettings.complexmap);
-        }
-
+        }                
+        
         private void LoadImages()
         {
             Puts("[Warning] Icon images have not been found. Uploading images to file storage");
-
+                    
             string[] files = new string[] { "self", "friend", "other", "heli", "plane", "car", "tank" };
             string path = $"{dataDirectory}icons{Path.DirectorySeparatorChar}";
 
             Dictionary<string, string> newLoadOrder = new Dictionary<string, string>();
             foreach (string file in files)
-            {
+            {                
                 for (int i = 0; i <= 360; i = i + 10)
-                    newLoadOrder.Add($"{file}{i}", $"{path}{file}{i}.png");
+                    newLoadOrder.Add($"{file}{i}", $"{path}{file}{i}.png");                
             }
 
             newLoadOrder.Add("lighthouse", $"{path}lighthouse.png");
@@ -2293,6 +2326,10 @@ namespace Oxide.Plugins
             newLoadOrder.Add("vending", $"{path}vending.png");
             newLoadOrder.Add("gasstation", $"{path}gas.png");
             newLoadOrder.Add("supermarket", $"{path}market.png");
+            newLoadOrder.Add("quarryhqm", $"{path}quarryhqm.png");
+            newLoadOrder.Add("quarrystone", $"{path}quarrystone.png");
+            newLoadOrder.Add("quarrysulfur", $"{path}quarrysulfur.png");
+            newLoadOrder.Add("junkyard", $"{path}junkyard.png");
 
             foreach (var image in customMarkers)
             {
@@ -2304,13 +2341,13 @@ namespace Oxide.Plugins
                     newLoadOrder.Add(image.Value.icon, icon);
                 }
             }
-            ImageLibrary.ImportImageList(Title, newLoadOrder, 0, true);
-        }
+            ImageLibrary.ImportImageList(Title, newLoadOrder, 0, true);                
+        } 
         private void LoadMapImage()
         {
             if (configData.Map.MapImage.CustomMap_Use)
             {
-                Puts("[Warning] Downloading map image to file storage. Please wait!");
+                Puts("[Warning] Downloading map image to file storage. Please wait!"); 
                 ImageLibrary.AddImage(dataDirectory + configData.Map.MapImage.CustomMap_Filename, "mapimage_high", 0);
                 ScaleMapImage();
                 if (MapSettings.complexmap)
@@ -2321,7 +2358,7 @@ namespace Oxide.Plugins
                 else GenerateMaps(true, MapSettings.minimap, false);
             }
             else DownloadMapImage();
-        }
+        }       
         #endregion
 
         #region Map Generation - Credits to Calytic, Nogrod, kraz and beancan.io for the awesome looking map images and API to make this possible!
@@ -2334,25 +2371,25 @@ namespace Oxide.Plugins
                 return;
             }
             Puts("[Warning] Attempting to contact beancan.io to download your map image!");
-            GetQueueID();
+            GetQueueID();            
         }
         void GetQueueID()
         {
             var url = $"http://beancan.io/map-queue-generate?level={level}&seed={mapSeed}&size={mapSize}&key={configData.Map.MapImage.APIKey}";
-            webrequest.Enqueue(url, null, (code, response) =>
+            webrequest.Enqueue(url, "", (code, response) =>
             {
                 if (code != 200 || string.IsNullOrEmpty(response))
                 {
                     if (code == 403)
                         PrintError($"Error: {code} - Invalid API key. Unable to download map image");
-                    else Puts($"[Warning] Error: {code} - Couldn't get an answer from beancan.io. Unable to download map image. Please try again in a few minutes");
+                    else Puts($"[Warning] Error: {code} - Couldn't get an answer from beancan.io. Unable to download map image. Please try again in a few minutes");                    
                 }
                 else CheckAvailability(response);
             }, this);
         }
         void CheckAvailability(string queueId)
         {
-            webrequest.Enqueue($"http://beancan.io/map-queue/{queueId}", null, (code, response) =>
+            webrequest.Enqueue($"http://beancan.io/map-queue/{queueId}", "", (code, response) =>
             {
                 if (string.IsNullOrEmpty(response))
                 {
@@ -2383,7 +2420,7 @@ namespace Oxide.Plugins
         void GetMapURL(string queueId)
         {
             var url = $"http://beancan.io/map-queue-image/{queueId}";
-            webrequest.Enqueue(url, null, (code, response) =>
+            webrequest.Enqueue(url, "", (code, response) =>
             {
                 if (string.IsNullOrEmpty(response))
                 {
@@ -2403,8 +2440,8 @@ namespace Oxide.Plugins
                 Puts("[Warning] Attempting to split and store the complex mini-map. This may take a while, please wait!");
                 AttemptSplit();
             }
-            else GenerateMaps(true, MapSettings.minimap, false);
-        }
+            else GenerateMaps(true, MapSettings.minimap, false);            
+        }     
         void ScaleMapImage()
         {
             if (ImageLibrary.HasImage("mapimage_high", 0))
@@ -2414,7 +2451,7 @@ namespace Oxide.Plugins
                 ImageLibrary.ImportImageData($"{instance.Title} - Map Image", new Dictionary<string, byte[]> { { "mapimage", bytes } }, 0, true);
             }
             else timer.In(1, ScaleMapImage);
-        }
+        }   
         #endregion
 
         #region Map Splitter
@@ -2423,7 +2460,7 @@ namespace Oxide.Plugins
             if (attempts == 5)
             {
                 Puts("[Error] The plugin has timed out trying to find the map image to split! Complex map has been disabled");
-                MapSettings.complexmap = false;
+                MapSettings.complexmap = false;                
                 return;
             }
             if (ImageLibrary.HasImage("mapimage_high", 0))
@@ -2451,7 +2488,7 @@ namespace Oxide.Plugins
                 Puts($"[Warning] Map image not found in file store. Waiting for 10 seconds and trying again (Attempt: {attempts + 1} / 5)");
                 timer.Once(10, () => AttemptSplit(attempts + 1));
             }
-        }
+        }        
         class MapSplitter
         {
             public bool SplitMap(string imageId, int amount)
@@ -2489,13 +2526,13 @@ namespace Oxide.Plugins
                         colCount++;
 
                         byte[] array = ResizeImage(cutPiece, 256);
-                        newLoadOrder.Add($"map-{amount}-{r}-{c}", array);
+                        newLoadOrder.Add($"map-{amount}-{r}-{c}", array);                        
                     }
                     rowCount++;
                 }
                 instance.ImageLibrary.ImportImageData($"{instance.Title} - Complex ({amount})", newLoadOrder, 0, true);
                 return true;
-            }
+            }           
             public System.Drawing.Image ImageFromStorage(uint imageId)
             {
                 byte[] imageData = FileStorage.server.Get(imageId, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID);
@@ -2514,7 +2551,7 @@ namespace Oxide.Plugins
             {
                 var destRect = new Rectangle(0, 0, pixels, pixels);
                 var destImage = new Bitmap(pixels, pixels);
-
+                
                 destImage.SetResolution(image?.HorizontalResolution ?? pixels, image?.VerticalResolution ?? pixels);
 
                 using (var graphics = System.Drawing.Graphics.FromImage(destImage))
@@ -2533,7 +2570,7 @@ namespace Oxide.Plugins
                 }
                 System.Drawing.ImageConverter converter = new System.Drawing.ImageConverter();
                 byte[] array = (byte[])converter.ConvertTo(destImage, typeof(byte[]));
-                return array;
+                return array;               
             }
         }
         #endregion

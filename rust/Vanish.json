@@ -1,10 +1,10 @@
 {
     "name": "Vanish",
     "description": "Allows players with permission to become truly invisible",
-    "author": "Wulf",
-    "version": "0.4.1",
+    "author": "Jake Rich",
+    "version": "0.4.2",
     "configuration": true,
-    "language": "cs\r\n",
+    "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/vanish.1420",
     "games": [
         "rust"

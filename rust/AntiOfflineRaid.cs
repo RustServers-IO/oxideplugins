@@ -16,7 +16,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiOfflineRaid", "rustservers.io", "0.3.1", ResourceId = 1464)]
+    [Info("AntiOfflineRaid", "rustservers.io", "0.3.3", ResourceId = 1464)]
     [Description("Prevents/reduces offline raiding")]
     public class AntiOfflineRaid : RustPlugin
     {
@@ -29,6 +29,7 @@ namespace Oxide.Plugins
 
         private Dictionary<ulong, LastOnline> lastOnline = new Dictionary<ulong, LastOnline>();
         private Dictionary<string, object> damageScale = new Dictionary<string, object>();
+        private Dictionary<string, object> absoluteDamageScale = new Dictionary<string, object>();
 
         internal static int cooldownMinutes;
         private float interimDamage;
@@ -201,7 +202,8 @@ namespace Oxide.Plugins
             LoadMessages();
             LoadData();
 
-            damageScale = GetConfig("damageScale", GetDefaultReduction());
+            damageScale = GetConfig("damageScale", GetDefaultScales());
+            absoluteDamageScale = GetConfig("absoluteTimeScale", GetDefaultAbsoluteDamageScales());
             prefabs = GetConfig("prefabs", GetDefaultPrefabs());
             afkMinutes = GetConfig("afkMinutes", 5);
             cooldownMinutes = GetConfig("cooldownMinutes", 10);
@@ -230,7 +232,7 @@ namespace Oxide.Plugins
             });
         }
 
-        protected Dictionary<string, object> GetDefaultReduction()
+        protected Dictionary<string, object> GetDefaultScales()
         {
             return new Dictionary<string, object>()
             {
@@ -239,6 +241,14 @@ namespace Oxide.Plugins
                 {"6", 0.5f},
                 {"12", 0.8f},
                 {"48", 1}
+            };
+        }
+
+        protected Dictionary<string, object> GetDefaultAbsoluteDamageScales()
+        {
+            return new Dictionary<string, object>()
+            {
+                {"03", 0.1},
             };
         }
 
@@ -272,7 +282,8 @@ namespace Oxide.Plugins
             PrintToConsole("Creating new configuration");
             Config.Clear();
 
-            Config["damageScale"] = GetDefaultReduction();
+            Config["damageScale"] = GetDefaultScales();
+            Config["absoluteTimeScale"] = GetDefaultAbsoluteDamageScales();
             Config["afkMinutes"] = 5;
             Config["cooldownMinutes"] = 10;
             Config["interimDamage"] = 0f;
@@ -292,6 +303,7 @@ namespace Oxide.Plugins
 
             // NEW CONFIGURATION OPTIONS HERE
             Config["clanFirstOffline"] = GetConfig("clanFirstOffline", false);
+            Config["absoluteTimeScale"] = GetConfig("absoluteTimeScale", GetDefaultAbsoluteDamageScales());
             // END NEW CONFIGURATION OPTIONS
 
             PrintWarning("Upgrading configuration file");
@@ -363,12 +375,15 @@ namespace Oxide.Plugins
             }
         }
 
-        private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
-            if (hitInfo == null) return;
-            if (entity == null) return;
+            if (hitInfo == null) return null;
+            if (entity == null) return null;
 
-            if (IsBlocked(entity)) OnStructureAttack(entity, hitInfo);
+            if (IsBlocked(entity)) 
+                return OnStructureAttack(entity, hitInfo);
+
+            return null;
         }
 
         #endregion
@@ -416,7 +431,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnStructureAttack(BaseEntity entity, HitInfo hitinfo)
+        object OnStructureAttack(BaseEntity entity, HitInfo hitinfo)
         {
             ulong targetID = 0;
 
@@ -424,15 +439,19 @@ namespace Oxide.Plugins
             if (targetID.IsSteamId() && HasPerm(targetID.ToString(), "antiofflineraid.protect") && lastOnline.ContainsKey(targetID))
             {
                 float scale = scaleDamage(targetID);
-if (clanShare)
-    if (IsClanOffline(targetID))
-        mitigateDamage(hitinfo, scale);
-else
-    mitigateDamage(hitinfo, scale);
+                if (clanShare)
+                {
+                    if (IsClanOffline(targetID))
+                        return mitigateDamage(hitinfo, scale);
+                }
+                else
+                    return mitigateDamage(hitinfo, scale);
             }
+
+            return null;
         }
 
-        public void mitigateDamage(HitInfo hitinfo, float scale)
+        public object mitigateDamage(HitInfo hitinfo, float scale)
         {
             if (scale > -1 && scale != 1)
             {
@@ -441,14 +460,16 @@ else
                 if (scale == 0)
                 {
                     // completely cancel damage
-                    hitinfo.damageTypes = new DamageTypeList();
-                    hitinfo.DoHitEffects = false;
-                    hitinfo.HitMaterial = 0;
+                    //hitinfo.damageTypes = new DamageTypeList();
+                    //hitinfo.DoHitEffects = false;
+                    //hitinfo.HitMaterial = 0;
                     if (showMessage && ((isFire && hitinfo.WeaponPrefab != null) || (!isFire)) )
                         sendMessage(hitinfo);
 
                     if (playSound && hitinfo.Initiator is BasePlayer && !isFire)
                         Effect.server.Run(sound, hitinfo.Initiator.transform.position);
+
+                    return false;
                 }
                 else
                 {
@@ -464,6 +485,8 @@ else
                     }
                 }
             }
+
+            return null;
         }
 
         private void sendMessage(HitInfo hitinfo, int amt = 100)
@@ -477,19 +500,12 @@ else
             float scale = -1;
 
             var lastOffline = targetID;
-            if (clanShare)
+            if (clanShare && Clans != null)
             {
                 var tag = Clans.Call<string>("GetClanOf", targetID);
                 if (!string.IsNullOrEmpty(tag))
                 {
-                    if (clanFirstOffline)
-                    {
-                        lastOffline = getClanFirstOffline(tag);
-                    }
-                    else
-                    {
-                        lastOffline = getClanLastOffline(tag);
-                    }
+                    lastOffline = getClanOffline(tag);
                 }
             }
 
@@ -509,6 +525,17 @@ else
             {
                 if (lastOnlinePlayer.HasMinutes(60))
                 {
+                    // if absolute scale is configured, override relative scaling
+                    if (absoluteDamageScale.Count > 0)
+                    {
+                        var hour = DateTime.Now.ToString("HH", System.Globalization.DateTimeFormatInfo.InvariantInfo);
+                        object scaleObj;
+                        if (absoluteDamageScale.TryGetValue(hour, out scaleObj))
+                        {
+                            return Convert.ToSingle(scaleObj);
+                        }
+                    }
+
                     // if you've been offline/afk for more than an hour, use hourly scales
                     var keys = damageScale.Keys.Select(int.Parse).ToList();
                     keys.Sort();
@@ -620,14 +647,13 @@ else
                         {
                             ulong lastOffline = 0;
                             string msg = "";
+                            lastOffline = getClanOffline(tag);
                             if (clanFirstOffline)
                             {
-                                lastOffline = getClanFirstOffline(tag);
                                 msg = "First Offline";
                             }
                             else
                             {
-                                lastOffline = getClanLastOffline(tag);
                                 msg = "Last Offline";
                             }
 
@@ -742,7 +768,7 @@ else
             return members;
         }
 
-        public ulong getClanFirstOffline(string tag)
+        public ulong getClanOffline(string tag)
         {
             var clanMembers = getClanMembers(tag);
 
@@ -763,39 +789,22 @@ else
                 }
             }
 
-            foreach (var kvp in members.OrderByDescending(p => p.Value))
+            if (clanFirstOffline)
             {
-                return Convert.ToUInt64(kvp.Key);
-            }
-
-            return 0;
-        }
-
-        public ulong getClanLastOffline(string tag)
-        {
-            var clanMembers = getClanMembers(tag);
-
-            var members = new Dictionary<string, DateTime>();
-
-            if (clanMembers == null || (clanMembers != null && clanMembers.Count == 0))
-            {
-                return 0;
-            }
-
-            foreach (string memberid in clanMembers)
-            {
-                var mid = Convert.ToUInt64(memberid);
-                LastOnline lastOnlineMember;
-                if(lastOnline.TryGetValue(mid, out lastOnlineMember) && IsOffline(mid))  
+                foreach (var kvp in members.OrderByDescending(p => p.Value))
                 {
-                    members.Add(memberid, lastOnlineMember.lastOnline);
+                    return Convert.ToUInt64(kvp.Key);
+                }
+            }
+            else
+            {
+                foreach (var kvp in members.OrderBy(p => p.Value))
+                {
+                    return Convert.ToUInt64(kvp.Key);
                 }
             }
 
-            foreach (var kvp in members.OrderBy(p => p.Value))
-            {
-                return Convert.ToUInt64(kvp.Key);
-            }
+            
 
             return 0;
         }

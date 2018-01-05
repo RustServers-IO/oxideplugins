@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Instant Research", "Artasan/Tori1157", "2.0.1", ResourceId = 1318)]
+    [Info("Instant Research", "Artasan/Tori1157", "2.0.2", ResourceId = 1318)]
     [Description("Allows control over research speed.")]
     public class InstantResearch : RustPlugin
     {
@@ -58,9 +58,8 @@ namespace Oxide.Plugins
 
         #region Functions
 
-        private void OnItemResearchStart(ResearchTable table)
+        private void OnItemResearch(ResearchTable table, Item targetItem, BasePlayer player)
         {
-            var player = table.user;
             if (player == null) return;
 
             if (CanInstant(player) && CanControlled(player))

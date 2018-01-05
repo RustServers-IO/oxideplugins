@@ -1,0 +1,16 @@
+{
+    "name": "UpgradeTimer",
+    "description": "Twig has a configurable cooldown before it can be upgraded after being placed.",
+    "author": "Jake Rich",
+    "version": "1.0.1",
+    "configuration": true,
+    "language": "cs",
+    "url": "http:\/\/oxidemod.org\/plugins\/upgradetimer.2740",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

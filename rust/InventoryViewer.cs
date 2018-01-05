@@ -1,307 +1,416 @@
-﻿
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Inventory Viewer", "Mughisi", "2.0.6", ResourceId = 871)]
+    [Info("Inventory Viewer", "Mughisi", "3.0.1", ResourceId = 871)]
+    [Description("This plugin allows those with the permission assigned to view anyone's inventory.")]
     public class InventoryViewer : RustPlugin
     {
-        private string prefix = "Inspector";
-        private string prefixColor = "#008000ff";
+        private readonly string RequiredPermission = "inventoryviewer.allowed";
 
-        private const string Permission = "inventoryviewer.allowed";
-        private static InventoryViewer instance;
-        private readonly Dictionary<BasePlayer, List<BasePlayer>> activeMatches = new Dictionary<BasePlayer, List<BasePlayer>>();
+        private readonly Dictionary<BasePlayer, List<BasePlayer>> matches = new Dictionary<BasePlayer, List<BasePlayer>>();
 
-        public class Inspector : MonoBehaviour
+        /// <summary>
+        /// UnityEngine script to be attached to the player viewing someone's inventory.
+        /// </summary>
+        private class Inspector : MonoBehaviour
         {
+            /// <summary>
+            /// The player doing the inspecting.
+            /// </summary>
             private BasePlayer player;
+
+            /// <summary>
+            /// The player being inspected.
+            /// </summary>
             private BasePlayer target;
-            private LootableCorpse view;
+
+            /// <summary>
+            /// The tick counter used by the Inspector.
+            /// </summary>
             private int ticks;
 
+            /// <summary>
+            /// Reference to the MarkDirty method in the PlayerLoot class obtained through Reflection.
+            /// </summary>
             private readonly MethodInfo markDirty = typeof(PlayerLoot).GetMethod("MarkDirty", BindingFlags.NonPublic | BindingFlags.Instance);
 
+            /// <summary>
+            /// Reference to the PositionChecks field in the PlayerLoot class obtained through Reflection.
+            /// </summary>
             private readonly FieldInfo positionChecks = typeof(PlayerLoot).GetField("PositionChecks", BindingFlags.NonPublic | BindingFlags.Instance);
 
-            public void StartInspecting(BasePlayer p, BasePlayer t)
+            /// <summary>
+            /// Instantiates the Inspector script.
+            /// </summary>
+            public void Instantiate(BasePlayer player, BasePlayer target)
             {
-                player = p;
-                target = t;
-
-                var corpse = GameManager.server.CreateEntity("assets/prefabs/player/player_corpse.prefab") as BaseCorpse;
-                if (corpse == null) return;
-                corpse.parentEnt = null;
-                corpse.transform.position = new Vector3(player.transform.position.x, -100, player.transform.position.z);
-                corpse.CancelInvoke("RemoveCorpse");
-
-                view = corpse as LootableCorpse;
-
-                if (view == null) return;
-
-                var source = new[] { target.inventory.containerMain, target.inventory.containerWear, target.inventory.containerBelt };
-                view.containers = new ItemContainer[source.Length];
-                for (var i = 0; i < source.Length; i++)
-                {
-                    view.containers[i] = source[i];
-                    view.containers[i].playerOwner = target;
-                }
-
-                view.playerName = $"Inspecting {target.displayName}";
-                view.playerSteamID = 0;
-                view.enableSaving = false;
-                view.Spawn();
-                view.GetComponentInChildren<Rigidbody>().useGravity = false;
+                this.player = player;
+                this.target = target;
 
                 BeginLooting();
 
-                InvokeRepeating("Inspect", 0f, 0.1f);
+                InvokeRepeating("UpdateLoot", 0f, 0.1f);
             }
 
-            private void Inspect()
+            /// <summary>
+            /// Updates the loot.
+            /// </summary>
+            private void UpdateLoot()
             {
-                ticks++;
-                if (!player.inventory.loot.IsLooting()) BeginLooting();
-                if (target.IsDead())
+                if (!target)
                 {
-                    instance.SendChatMessage(player, instance.GetTranslation("TargetDied", player.UserIDString));
-                    StopInspecting();
+                    return;
                 }
-                if (!player.IsConnected) return;
+
+                if (!target.inventory)
+                {
+                    return;
+                }
+
+                ticks++;
+
+                if (!player.inventory.loot.IsLooting())
+                {
+                    BeginLooting();
+                }
 
                 player.inventory.loot.SendImmediate();
-                player.SendNetworkUpdate();
+
+                player.SendNetworkUpdateImmediate();
             }
 
-            public void StopInspecting()
+            /// <summary>
+            /// Stops inspecting.
+            /// </summary>
+            private void StopInspecting(bool forced = false)
             {
-                if (ticks < 5 && !target.IsDead()) return;
-                CancelInvoke("Inspect");
-                StopLooting();
-                for (var i = 0; i < view.containers.Length; i++) view.containers[i] = new ItemContainer();
-                view.Kill();
-                Remove();
+                if (ticks < 5 && !forced)
+                {
+                    return;
+                }
+
+                CancelInvoke("UpdateLoot");
+
+                EndLooting();
             }
 
+            /// <summary>
+            /// Starts the looting.
+            /// </summary>
             private void BeginLooting()
             {
-                if (target.IsDead()) return;
-
                 player.inventory.loot.Clear();
+
+                if (!target)
+                {
+                    return;
+                }
+
+                if (!target.inventory)
+                {
+                    return;
+                }
+
+                player.inventory.loot.AddContainer(target.inventory.containerMain);
+                player.inventory.loot.AddContainer(target.inventory.containerWear);
+                player.inventory.loot.AddContainer(target.inventory.containerBelt);
                 positionChecks.SetValue(player.inventory.loot, false);
-                player.inventory.loot.entitySource = view;
+                player.inventory.loot.entitySource = target;
                 player.inventory.loot.itemSource = null;
                 markDirty.Invoke(player.inventory.loot, null);
-                view.SetFlag(BaseEntity.Flags.Open, true);
-
-                foreach (var container in view.containers)
-                    player.inventory.loot.containers.Add(container);
-
                 player.inventory.loot.SendImmediate();
-                view.ClientRPCPlayer(null, player, "RPC_ClientLootCorpse");
-                player.SendNetworkUpdate();
-                ticks = 0;
+                player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "player_corpse");
+                player.SendNetworkUpdateImmediate();
             }
 
-            private void StopLooting()
+            /// <summary>
+            /// Ends the looting.
+            /// </summary>
+            private void EndLooting()
             {
                 markDirty.Invoke(player.inventory.loot, null);
 
                 if (player.inventory.loot.entitySource)
+                {
                     player.inventory.loot.entitySource.SendMessage("PlayerStoppedLooting", player, SendMessageOptions.DontRequireReceiver);
+                }
 
-                foreach (var container in player.inventory.loot.containers)
+                foreach (ItemContainer container in player.inventory.loot.containers)
+                {
                     if (container != null)
-                        container.onDirty -= (Action)Delegate.CreateDelegate(typeof(Action), player.inventory.loot, "MarkDirty");
+                    {
+                        container.onDirty -= (Action)Delegate.CreateDelegate(typeof(Action), player.inventory.loot, markDirty);
+                    }
+                }
 
                 player.inventory.loot.containers.Clear();
                 player.inventory.loot.entitySource = null;
                 player.inventory.loot.itemSource = null;
             }
 
-            public void Remove()
+            /// <summary>
+            /// Destroys the script
+            /// </summary>
+            public void Remove(bool forced = false)
             {
+                if (ticks < 5 && !forced)
+                {
+                    return;
+                }
+
+                StopInspecting(forced);
+
                 Destroy(this);
             }
         }
 
-        private void Init()
+        /// <summary>
+        /// Oxide hook that is triggered when the plugin is loaded.
+        /// </summary>
+        private void Loaded()
         {
-            instance = this;
-            LoadConfigValues();
-            permission.RegisterPermission(Permission, this);
+            permission.RegisterPermission(RequiredPermission, this);
         }
 
-        protected override void LoadDefaultConfig() => Puts("New configuration file generated.");
-
-        private void LoadConfigValues()
-        {
-            prefix = GetConfig("Prefix", prefix);
-            prefixColor = GetConfig("PrefixColor", prefixColor);
-        }
-
+        /// <summary>
+        /// Oxide hook that is triggered after the plugin is loaded to setup localized messages.
+        /// </summary>
         private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                { "NotAllowed", "You are not allowed to use this command." },
+                { "InvalidArguments", "Invalid argument(s) supplied! Use '/{0} <name>' or '/{0} list <number>'." },
+                { "InvalidSelection", "Invalid number, use the number in front of the player's name. Use '/{0} list' to check the list of players again." },
+                { "MultiplePlayersFound", "Multiple players found with that name, please select one of these players by using '/{0} list <number>':" },
+                { "NoListAvailable", "You do not have a players list available, use '/{0} <name>' instead." },
                 { "NoPlayersFound", "Couldn't find any players matching that name." },
-                { "MultiplePlayersFound", "Multiple players found with that name, please select one of these players by using '/viewinv list <number>':" },
-                { "InvalidSelection", "Invalid number, use the number in front of the player's name. Use '/viewinv list' to check the list of players again." },
-                { "InvalidArguments", "Invalid argument(s) supplied! Use '/viewinv <name>' or '/viewinv list <number>'." },
-                { "NoListAvailable", "You do not have a players list available, use '/viewinv <name>' instead." },
-                { "TargetDied", "The player you were looting died." }
+                { "NotAllowed", "You are not allowed to use this command." },
+                { "TooManyPlayersFound", "Too many players were found, the list of matches is only showing the first 5. Try to be more specific." }
             }, this);
         }
 
+        /// <summary>
+        /// Oxide hook that is triggered when the plugin is unloaded.
+        /// </summary>
         private void Unload()
         {
-            var inspectors = UnityEngine.Object.FindObjectsOfType<Inspector>();
-            foreach (var inspector in inspectors)
-                inspector.StopInspecting();
+            Inspector[] inspectors = UnityEngine.Object.FindObjectsOfType<Inspector>();
+
+            foreach (Inspector inspector in inspectors)
+                inspector.Remove();
         }
 
-        private void OnPlayerLootEnd(PlayerLoot looter)
+        /// <summary>
+        /// Oxide hook that is triggered when a console command is executed.
+        /// </summary>
+        private void OnServerCommand(ConsoleSystem.Arg arg)
         {
-            looter.GetComponentInParent<BasePlayer>()?.GetComponent<Inspector>()?.StopInspecting();
+            if (arg.cmd.FullName == "inventory.endloot")
+            {
+                BasePlayer player = arg.Player();
+                player.GetComponent<Inspector>()?.Remove();
+            }
         }
 
-        private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
+        /// <summary>
+        /// Oxide hook that is triggered when a player attempts to loot another player
+        /// </summary>
+        private object CanLootPlayer(BasePlayer target, BasePlayer looter)
         {
-            if (info == null) return;
+            if (looter.GetComponent<Inspector>() == null)
+            {
+                return null;
+            }
 
-            var view = entity as LootableCorpse;
-            if (view == null) return;
-            if (view.playerName == null) return;
-
-            if (!view.playerName.StartsWith("Inspecting")) return;
-            info.damageTypes.ScaleAll(0f);
+            return true;
         }
 
+        /// <summary>
+        /// Handles the /inspect command
+        /// </summary>
+        [ChatCommand("inspect")]
+        private void InspectCommand(BasePlayer player, string command, string[] args)
+        {
+            ViewInventoryCommand(player, command, args);
+        }
+
+        /// <summary>
+        /// Handles the /viewinv command
+        /// </summary>
         [ChatCommand("viewinv")]
+        private void ViewInvCommand(BasePlayer player, string command, string[] args)
+        {
+            ViewInventoryCommand(player, command, args);
+        }
+
+        /// <summary>
+        /// Handles the /viewinventory command
+        /// </summary>
+        [ChatCommand("viewinventory")]
         private void ViewInventoryCommand(BasePlayer player, string command, string[] args)
         {
-            if (!IsAllowed(player.UserIDString))
+            if (!CanUseCommand(player))
             {
-                SendChatMessage(player, GetTranslation("NotAllowed", player.UserIDString));
+                SendChatMessage(player, "NotAllowed");
                 return;
             }
 
             if (args.Length < 1)
             {
-                SendChatMessage(player, GetTranslation("InvalidArguments", player.UserIDString));
+                SendChatMessage(player, "InvalidArguments", command);
                 return;
             }
 
             if (args[0] == "list")
             {
+                if (args.Length == 1)
+                {
+                    if (!matches.ContainsKey(player) || matches[player] == null)
+                    {
+                        SendChatMessage(player, "NoListAvailable", command);
+                        return;
+                    }
+
+                    ShowMatches(player);
+
+                    return;
+                }
+
                 int num;
-                if (args.Length == 1) ShowMatches(player);
-                else if (int.TryParse(args[1], out num)) ShowMatch(player, num);
+                if (int.TryParse(args[1], out num))
+                {
+                    if (!matches.ContainsKey(player) || matches[player] == null)
+                    {
+                        SendChatMessage(player, "NoListAvailable", command);
+                        return;
+                    }
+
+                    if (num > matches[player].Count)
+                    {
+                        SendChatMessage(player, "InvalidSelection", command);
+                        ShowMatches(player);
+                        return;
+                    }
+
+                    StartInspecting(player, matches[player][num - 1]);
+                    return;
+                }
+
+                SendChatMessage(player, "InvalidArguments", command);
             }
             else
             {
-                var name = string.Join(" ", args);
-                var players = FindPlayersByNameOrId(name);
+                string name = string.Join(" ", args);
+                List<BasePlayer> players = FindPlayersByNameOrId(name);
 
                 switch (players.Count)
                 {
                     case 0:
-                        SendChatMessage(player, GetTranslation("NoPlayersFound", player.UserIDString));
+                        SendChatMessage(player, "NoPlayersFound", command);
                         break;
                     case 1:
-                        ViewInventory(player, players[0]);
+                        StartInspecting(player, players[0]);
                         break;
                     default:
-                        SendChatMessage(player, GetTranslation("MultiplePlayersFound", player.UserIDString));
-                        if (!activeMatches.ContainsKey(player)) activeMatches.Add(player, null);
-                        activeMatches[player] = players;
-                        ShowMatches(player);
-                        break;
+                        SendChatMessage(player, "MultiplePlayersFound", command);
 
+                        if (!matches.ContainsKey(player))
+                        {
+                            matches.Add(player, players);
+                        }
+                        else
+                        {
+                            matches[player] = players;
+                        }
+
+                        ShowMatches(player);
+
+                        break;
                 }
             }
         }
 
-        private void ViewInventory(BasePlayer player, BasePlayer target)
-        {
-            var inspector = player.gameObject.GetComponent<Inspector>();
-            inspector?.StopInspecting();
-            inspector = player.gameObject.AddComponent<Inspector>();
-            inspector.StartInspecting(player, target);
-        }
-
+        /// <summary>
+        /// Looks up all players (active and sleeping) by a given (partial) name or steam id.
+        /// </summary>
         private List<BasePlayer> FindPlayersByNameOrId(string nameOrId)
         {
-            var matches = new List<BasePlayer>();
+            List<BasePlayer> matches = new List<BasePlayer>();
 
-            foreach (var ply in BasePlayer.activePlayerList)
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
-                if (ply.displayName.ToLower().Contains(nameOrId.ToLower()) || ply.UserIDString == nameOrId)
-                    matches.Add(ply);
+                if (player.displayName.ToLower().Contains(nameOrId.ToLower()) || player.UserIDString == nameOrId)
+                {
+                    matches.Add(player);
+                }
             }
 
-            foreach (var ply in BasePlayer.sleepingPlayerList)
+            foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
             {
-                if (ply.displayName.ToLower().Contains(nameOrId.ToLower()) || ply.UserIDString == nameOrId)
-                    matches.Add(ply);
+                if (player.displayName.ToLower().Contains(nameOrId.ToLower()) || player.UserIDString == nameOrId)
+                {
+                    matches.Add(player);
+                }
             }
 
-            return matches;
+            return matches.OrderBy(p => p.displayName).ToList();
         }
 
+        /// <summary>
+        /// Shows the cached matches for the player.
+        /// </summary>
         private void ShowMatches(BasePlayer player)
         {
-            if (!activeMatches.ContainsKey(player) || activeMatches[player] == null)
+            for (int i = 0; i < matches[player].Count; i++)
             {
-                SendChatMessage(player, GetTranslation("NoListAvailable", player.UserIDString));
-                return;
-            }
+                SendChatMessage(player, $"{i + 1}. {matches[player][i].displayName}");
 
-            for (var i = 0; i < activeMatches[player].Count; i++)
-                SendReply(player, $"{i + 1}. {activeMatches[player][i].displayName}");
+                if (i == 4 && i < matches[player].Count)
+                {
+                    SendChatMessage(player, "TooManyPlayersFound");
+                    break;
+                }
+            }
         }
 
-        private void ShowMatch(BasePlayer player, int num)
+        /// <summary>
+        /// Initializes the inspector for the given player and target.
+        /// </summary>
+        private void StartInspecting(BasePlayer player, BasePlayer target)
         {
-            if (!activeMatches.ContainsKey(player) || activeMatches[player] == null)
+            Inspector inspector = player.gameObject.GetComponent<Inspector>();
+            inspector?.Remove();
+
+            inspector = player.gameObject.AddComponent<Inspector>();
+            inspector.Instantiate(player, target);
+        }
+
+        /// <summary>
+        /// Checks if the specified BasePlayer has the required permission.
+        /// </summary>
+        private bool CanUseCommand(BasePlayer player)
+        {
+            return permission.UserHasPermission(player.UserIDString, RequiredPermission);
+        }
+
+        /// <summary>
+        /// Sends a localized chat message using the key to the specified player
+        /// </summary>
+        private void SendChatMessage(BasePlayer player, string key, params string[] args)
+        {
+            if (args == null || args.Length == 0)
             {
-                SendChatMessage(player, GetTranslation("NoListAvailable", player.UserIDString));
-                return;
+                Player.Reply(player, lang.GetMessage(key, this, player.UserIDString));
             }
-
-            if (num > activeMatches[player].Count)
+            else
             {
-                SendChatMessage(player, GetTranslation("InvalidSelection", player.UserIDString));
-                ShowMatches(player);
-                return;
+                Player.Reply(player, string.Format(lang.GetMessage(key, this, player.UserIDString), args));
             }
-
-            ViewInventory(player, activeMatches[player][num - 1]);
-        }
-
-        private T GetConfig<T>(string name, T defaultValue)
-        {
-            if (Config[name] == null) Config[name] = defaultValue;
-            return (T)Convert.ChangeType(Config[name], typeof(T));
-        }
-
-        private string GetTranslation(string key, string id = null)
-        {
-            return lang.GetMessage(key, this, id);
-        }
-
-        private bool IsAllowed(string id)
-        {
-            return permission.UserHasPermission(id, Permission);
-        }
-
-        private void SendChatMessage(BasePlayer player, string message)
-        {
-            PrintToChat(player, $"<color={prefixColor}>{prefix}</color>: {message}");
         }
     }
 }

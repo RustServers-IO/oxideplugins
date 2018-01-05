@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 
 namespace Oxide.Plugins
 {
-    [Info("RadtownAnimals", "k1lly0u", "0.2.8", ResourceId = 1561)]
+    [Info("RadtownAnimals", "k1lly0u", "0.2.82", ResourceId = 1561)]
     class RadtownAnimals : RustPlugin
     {
         #region Fields
@@ -25,7 +25,7 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {            
-            LoadVariables();
+            
             InitializeAnimalSpawns();
         }
 
@@ -178,22 +178,53 @@ namespace Oxide.Plugins
                             SpawnAnimals(pos, GetSpawnList(configData.Zone.Radtown.Counts));
                         continue;
                     }
+
                     if (gobject.name.Contains("launch_site_1"))
                     {
                         if (configData.Zone.RocketFactory.Enabled)
                             SpawnAnimals(pos, GetSpawnList(configData.Zone.RocketFactory.Counts));
                         continue;
                     }
+
                     if (gobject.name.Contains("gas_station_1"))
                     {
                         if (configData.Zone.GasStation.Enabled)
                             SpawnAnimals(pos, GetSpawnList(configData.Zone.GasStation.Counts));
                         continue;
                     }
+
                     if (gobject.name.Contains("supermarket_1"))
                     {                        
                         if (configData.Zone.Supermarket.Enabled)
                             SpawnAnimals(pos, GetSpawnList(configData.Zone.Supermarket.Counts));
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("mining_quarry_c"))
+                    {
+                        if (configData.Zone.Quarry_HQM.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Quarry_HQM.Counts));
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("mining_quarry_a"))
+                    {
+                        if (configData.Zone.Quarry_Sulfur.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Quarry_Sulfur.Counts));
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("mining_quarry_b"))
+                    {
+                        if (configData.Zone.Quarry_Stone.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Quarry_Stone.Counts));
+                        continue;
+                    }
+
+                    if (gobject.name.Contains("junkyard_1"))
+                    {
+                        if (configData.Zone.Junkyard.Enabled)
+                            SpawnAnimals(pos, GetSpawnList(configData.Zone.Junkyard.Counts));
                         continue;
                     }
                 }               
@@ -439,10 +470,17 @@ namespace Oxide.Plugins
             {
                 public MonumentSettings Airfield { get; set; }
                 public MonumentSettings Dome { get; set; }
+                public MonumentSettings Junkyard { get; set; }
                 public MonumentSettings Lighthouse { get; set; }
                 public MonumentSettings LargeHarbor { get; set; }
                 public MonumentSettings GasStation { get; set; }
                 public MonumentSettings Powerplant { get; set; }
+                [JsonProperty(PropertyName = "Stone Quarry")]
+                public MonumentSettings Quarry_Stone { get; set; }
+                [JsonProperty(PropertyName = "Sulfur Quarry")]
+                public MonumentSettings Quarry_Sulfur { get; set; }
+                [JsonProperty(PropertyName = "HQM Quarry")]
+                public MonumentSettings Quarry_HQM { get; set; }
                 public MonumentSettings Radtown { get; set; }
                 public MonumentSettings RocketFactory { get; set; }
                 public MonumentSettings Satellite { get; set; }
@@ -474,15 +512,25 @@ namespace Oxide.Plugins
                     }
                 }
             }
-        }
-        private void LoadVariables()
+            public Oxide.Core.VersionNumber Version { get; set; }
+        }       
+
+        protected override void LoadConfig()
         {
-            LoadConfigVariables();
-            SaveConfig();
+            base.LoadConfig();
+            configData = Config.ReadObject<ConfigData>();
+
+            if (configData.Version < Version)
+                UpdateConfigValues();
+
+            Config.WriteObject(configData, true);
         }
-        protected override void LoadDefaultConfig()
+
+        protected override void LoadDefaultConfig() => configData = GetBaseConfig();
+
+        private ConfigData GetBaseConfig()
         {
-            var config = new ConfigData
+            return new ConfigData
             {
                 Settings = new ConfigData.Options
                 {
@@ -540,6 +588,22 @@ namespace Oxide.Plugins
                         },
                         Enabled = false
                     },
+                    Junkyard = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
                     LargeHarbor = new ConfigData.Zones.MonumentSettings
                     {
                         Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
@@ -573,6 +637,54 @@ namespace Oxide.Plugins
                         Enabled = false
                     },
                     Powerplant = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    Quarry_HQM = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    Quarry_Stone = new ConfigData.Zones.MonumentSettings
+                    {
+                        Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
+                        {
+                            Bears = 0,
+                            Boars = 0,
+                            Chickens = 0,
+                            Horses = 0,
+                            Murderers = 0,
+                            Scientists = 0,
+                            Stags = 0,
+                            Wolfs = 0,
+                            Zombies = 0
+                        },
+                        Enabled = false
+                    },
+                    Quarry_Sulfur = new ConfigData.Zones.MonumentSettings
                     {
                         Counts = new ConfigData.Zones.MonumentSettings.AnimalCounts
                         {
@@ -732,12 +844,30 @@ namespace Oxide.Plugins
                         },
                         Enabled = false
                     }
-                }
+                },
+                Version = Version
             };
-            SaveConfig(config);
         }
-        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+
+        protected override void SaveConfig() => Config.WriteObject(configData, true);
+
+        private void UpdateConfigValues()
+        {
+            PrintWarning("Config update detected! Updating config values...");
+
+            ConfigData baseConfig = GetBaseConfig();
+
+            if (configData.Version < new Core.VersionNumber(0, 2, 80))
+            {
+                configData.Zone.Junkyard = baseConfig.Zone.Junkyard;
+                configData.Zone.Quarry_HQM = baseConfig.Zone.Quarry_HQM;
+                configData.Zone.Quarry_Stone = baseConfig.Zone.Quarry_Stone;
+                configData.Zone.Quarry_Sulfur = baseConfig.Zone.Quarry_Sulfur;
+            }
+
+            configData.Version = Version;
+            PrintWarning("Config update completed!");
+        }
         #endregion      
 
         #region Messaging

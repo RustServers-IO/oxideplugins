@@ -2,7 +2,7 @@
     "name": "Trade",
     "description": "Allows players to trade items safely at a distance",
     "author": "Calytic",
-    "version": "1.1.5",
+    "version": "1.1.7",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/trade.1242",
