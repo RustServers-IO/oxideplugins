@@ -2,7 +2,7 @@
     "name": "Dangerous Treasures",
     "description": "Dangerous event with treasure chests.",
     "author": "nivex",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "configuration": true,
     "suggest": {
         "LustyMap": "*",
