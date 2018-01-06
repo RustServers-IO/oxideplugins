@@ -8,7 +8,7 @@ using CodeHatch.UserInterface.Dialogues;
 
 namespace Oxide.Plugins
 {
-    [Info("PopUpManager", "Mordeus", "1.0.1")]
+    [Info("PopUpManager", "Mordeus", "1.0.2")]
     public class PopUpManager : ReignOfKingsPlugin
     {
         PopUpData popupData;       
@@ -35,7 +35,8 @@ namespace Oxide.Plugins
         private void Init()
         {
             LoadDefaultConfig();
-            LoadDefaultMessages();            
+            permission.RegisterPermission("popupmanager.popup", this);
+            permission.RegisterPermission("popupmanager.edit", this);
             popupdata = Interface.Oxide.DataFileSystem.GetFile("PopUpManager/RuleList");
             data = Interface.GetMod().DataFileSystem.ReadObject<Data>("PopUpManager/PlayerRulesdata");
             noticedata = Interface.GetMod().DataFileSystem.ReadObject<NoticeData>("PopUpManager/PlayerNoticedata");
@@ -48,7 +49,7 @@ namespace Oxide.Plugins
                 cmd.AddChatCommand("notices", this, "CmdNotices");            
             LoadData();
         }
-        private void LoadDefaultMessages()
+        private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -241,7 +242,7 @@ namespace Oxide.Plugins
         private void PopUpCommand(Player player, string cmd, string[] args)
         {
             string playerId = player.Id.ToString();
-            if (!player.HasPermission("admin"))
+            if (!player.HasPermission("admin") || !player.HasPermission("popupmanager.popup"))
             {
                 player.SendError(lang.GetMessage("notAllowed", this, playerId));
                 return;
@@ -277,7 +278,7 @@ namespace Oxide.Plugins
                     
                     return;
                     
-                default:
+                default:                    
                     if (args.Length == 0)
                     {
                         SendReply(player, lang.GetMessage("synError", this, playerId));
@@ -329,7 +330,7 @@ namespace Oxide.Plugins
         void CmdClearNoticeData(Player player, string cmd, string[] args)
         {
             string playerId = player.Id.ToString();
-            if (!player.HasPermission("admin"))
+            if (!hasPermission(player))
             {
                 player.SendError(lang.GetMessage("notAllowed", this, playerId));
                 return;
@@ -343,7 +344,7 @@ namespace Oxide.Plugins
         void AddData(Player player, string[] args, bool rule = true, bool command = false, bool notice = false)
         {
             string playerId = player.Id.ToString();
-            if (!player.HasPermission("admin"))
+            if (!hasPermission(player))
             {
                 player.SendError(lang.GetMessage("notAllowed", this, playerId));
                 return;
@@ -393,7 +394,7 @@ namespace Oxide.Plugins
         void EditData(Player player, string[] args, bool rule = true, bool command = false, bool notice = false)
         {
             string playerId = player.Id.ToString();            
-            if (!player.HasPermission("admin"))
+            if (!hasPermission(player))
             {
                 player.SendError(lang.GetMessage("notAllowed", this, playerId));
                 return;
@@ -419,7 +420,7 @@ namespace Oxide.Plugins
         void DeleteData(Player player, string[] args, bool rule = true, bool command = false, bool notice = false)
         {
             string playerId = player.Id.ToString();
-            if (!player.HasPermission("admin"))
+            if (!hasPermission(player))
             {
                 player.SendError(lang.GetMessage("notAllowed", this, playerId));
                 return;
@@ -668,10 +669,21 @@ namespace Oxide.Plugins
 
         }
         #endregion
+        #region Helpers
         T GetConfig<T>(string name, T defaultValue)
         {
             if (Config[name] == null) return defaultValue;
             return (T)Convert.ChangeType(Config[name], typeof(T));
         }
+        private bool hasPermission(Player player)
+        {
+            string playerId = player.Id.ToString();
+            if (!(player.HasPermission("admin") || player.HasPermission("popupmanager.edit")))
+            {                
+                return false;
+            }
+            return true;
+        }
+        #endregion Helpers
     }
 }
