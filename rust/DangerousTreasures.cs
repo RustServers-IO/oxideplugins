@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Dangerous Treasures", "nivex", "1.1.0", ResourceId = 2479)]
+    [Info("Dangerous Treasures", "nivex", "1.1.2", ResourceId = 2479)]
     [Description("Event with treasure chests.")]
     public class DangerousTreasures : RustPlugin
     {
@@ -39,6 +39,7 @@ namespace Oxide.Plugins
         static int heightMask = LayerMask.GetMask(new[] { "Terrain", "World", "Default", "Construction", "Deployed" });
         static int twdMask = LayerMask.GetMask(new[] { "Terrain", "World", "Default" });
         static int twwMask = LayerMask.GetMask(new[] { "Terrain", "World", "Water" });
+        static int worldMask = LayerMask.GetMask("World");
         List<int> BlockedLayers = new List<int> { (int)Layer.Water, (int)Layer.Construction, (int)Layer.Trigger, (int)Layer.Prevent_Building, (int)Layer.Deployed, (int)Layer.Tree };
 
         List<Vector3> monuments = new List<Vector3>(); // positions of monuments on the server
@@ -430,19 +431,19 @@ namespace Oxide.Plugins
 
             void KillNpc()
             {
-                foreach(var entry in npcs.ToList())
+                foreach (var entry in npcs.ToList())
                 {
                     if (entry.Key == uid)
                     {
-                        foreach(var npc in entry.Value.ToList())
+                        foreach (var npc in entry.Value.ToList())
                         {
                             if (npc != null && !npc.IsDestroyed)
-                            {   
+                            {
                                 npc.Kill();
                             }
                         }
 
-                        npcs.Remove(entry.Key);                        
+                        npcs.Remove(entry.Key);
                     }
                 }
             }
@@ -491,7 +492,7 @@ namespace Oxide.Plugins
                     return;
 
                 var missilePos = missilePositions.GetRandom();
-                var y = TerrainMeta.HeightMap.GetHeight(missilePos) + 15f;
+                float y = TerrainMeta.HeightMap.GetHeight(missilePos) + 15f;
                 missilePos.y = 200f;
 
                 RaycastHit hit;
@@ -740,7 +741,7 @@ namespace Oxide.Plugins
         {
             if (init)
                 return;
-            
+
             ins = this;
             dataFile = Interface.Oxide.DataFileSystem.GetFile(Title.Replace(" ", ""));
 
@@ -923,10 +924,49 @@ namespace Oxide.Plugins
             return null;
         }
 
+        void OnPlayerDie(BasePlayer player)
+        {
+            var npc = player as NPCPlayer;
+
+            if (npc == null || !npcs.Any(entry => entry.Value.Contains(npc)))
+                return;
+
+            player.svActiveItemID = 0;
+            player.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+        }
+
         void OnEntitySpawned(BaseNetworkable entity)
         {
             if (!init || entity == null || (!(entity is FireBall)) && !(entity is BaseLock) && !(entity is NPCPlayerCorpse))
                 return;
+
+            if (entity is NPCPlayerCorpse)
+            {
+                if (spawnsDespawnInventory)
+                {
+                    var corpse = entity as NPCPlayerCorpse;
+
+                    foreach (var entry in npcs)
+                    {
+                        foreach (var npc in entry.Value)
+                        {
+                            if (npc.userID == corpse.playerSteamID)
+                            {
+                                NextTick(() =>
+                                {
+                                    corpse.containers[0].Clear();
+                                    corpse.containers[1].Clear();
+                                    corpse.containers[2].Clear();
+                                });
+
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                return;
+            }
 
             foreach (var entry in treasureChests)
             {
@@ -940,17 +980,6 @@ namespace Oxide.Plugins
                     else if (entity is BaseLock)
                     {
                         entity.KillMessage();
-                    }
-                    else if (entity is NPCPlayerCorpse && spawnsDespawnInventory)
-                    {
-                        var corpse = entity as NPCPlayerCorpse;
-
-                        NextTick(() =>
-                        {
-                            corpse.containers[0].Clear();
-                            corpse.containers[1].Clear();
-                            corpse.containers[2].Clear();
-                        });
                     }
 
                     break;
@@ -1121,8 +1150,11 @@ namespace Oxide.Plugins
             {
                 if (init)
                 {
-                    if (useFireballs)
+                    if (useFireballs || spawnNpcs)
+                    {
                         Subscribe(nameof(OnEntitySpawned));
+                        Subscribe(nameof(OnPlayerDie));
+                    }
 
                     Subscribe(nameof(OnEntityTakeDamage));
                     Subscribe(nameof(OnItemRemovedFromContainer));
@@ -1139,6 +1171,7 @@ namespace Oxide.Plugins
                 Unsubscribe(nameof(OnLootEntity));
                 Unsubscribe(nameof(CanAcceptItem));
                 Unsubscribe(nameof(CanBuild));
+                Unsubscribe(nameof(OnPlayerDie));
             }
         }
 
@@ -1189,7 +1222,7 @@ namespace Oxide.Plugins
             rocket.timerAmountMax = 20f;
             //rocket.damageTypes = new List<DamageTypeEntry>(); // no damage
 
-            foreach(var type in rocket.damageTypes)
+            foreach (var type in rocket.damageTypes)
             {
                 type.amount = rocketDamageAmount;
             }
@@ -1278,7 +1311,10 @@ namespace Oxide.Plugins
 
             if (Physics.Raycast(position, Vector3.down, out hit))
             {
-                if (!BlockedLayers.Contains(hit.collider?.gameObject?.layer ?? BlockedLayers[0]))
+                if (hit.collider?.gameObject == null)
+                    return Vector3.zero;
+
+                if (!BlockedLayers.Contains(hit.collider.gameObject.layer))
                 {
                     position.y = Mathf.Max(hit.point.y, TerrainMeta.HeightMap.GetHeight(position));
 
@@ -1500,7 +1536,7 @@ namespace Oxide.Plugins
                 if (useGUIAnnouncements && GUIAnnouncements != null && distance <= guiDrawDistance)
                 {
                     GUIAnnouncements?.Call("CreateAnnouncement", message, guiTintColor, guiTextColor, target);
-                }                
+                }
 
                 if (useRocketOpener && showBarrage)
                     SendDangerousMessage(target, container.transform.position, msg(szEventBarrage, target.UserIDString, numRockets));
@@ -1572,10 +1608,22 @@ namespace Oxide.Plugins
                     return;
 
                 var ppos = spawnpoints.GetRandom();
-                ppos.y = TerrainMeta.HeightMap.GetHeight(ppos);
+                ppos.y = GetGroundPosition(ppos);
+
                 SpawnNPC(ppos, rot, spawnNpcsBoth ? UnityEngine.Random.Range(0.1f, 1.0f) > 0.5f : spawnNpcsMurderers, uid);
                 spawnpoints.Remove(ppos);
             }
+        }
+
+        static float GetGroundPosition(Vector3 pos)
+        {
+            float y = TerrainMeta.HeightMap.GetHeight(pos);
+
+            RaycastHit hit;
+            if (Physics.Raycast(new Vector3(pos.x, pos.y + 200f, pos.z), Vector3.down, out hit, Mathf.Infinity, heightMask))
+                return Mathf.Max(hit.point.y, y);
+
+            return y;
         }
 
         static void SpawnNPC(Vector3 pos, Quaternion rot, bool murd, uint uid)
@@ -1595,10 +1643,13 @@ namespace Oxide.Plugins
 
             apex.Spawn();
             apex.GuardPosition = epos;
-            apex.Stats.VisionRange = eventRadius;
+            apex.Stats.AggressionRange = 250f;
+            apex.Stats.VisionRange = 250f;
             apex.Stats.MaxRoamRange = eventRadius;
             apex.GetComponent<FacepunchBehaviour>().CancelInvoke(new Action(apex.RadioChatter));
-            npc.displayName = Get(npc.userID);
+
+            if (spawnNpcsRandomNames)
+                npc.displayName = Get(npc.userID);
 
             if (!npcs.ContainsKey(uid))
                 npcs.Add(uid, new List<NPCPlayer>());
@@ -1606,16 +1657,45 @@ namespace Oxide.Plugins
             if (!npcs[uid].Contains(npc))
                 npcs[uid].Add(npc);
 
-            ins.timer.Once(10f, () => UpdateDestination(apex, epos));
+            ins.timer.Once(10f, () => UpdateDestination(apex, epos, uid));
         }
-        
-        static void UpdateDestination(NPCPlayerApex apex, Vector3 pos)
+
+        static void UpdateDestination(NPCPlayerApex apex, Vector3 pos, uint uid)
         {
             if (apex == null || apex.IsDestroyed)
                 return;
 
             apex.SetDestination(pos);
-            ins.timer.Once(10f, () => UpdateDestination(apex, pos));
+
+            if (IsInRock(apex.transform.position) || Vector3.Distance(apex.transform.position, pos) > eventRadius)
+            {
+                var player = apex.GetComponent<BasePlayer>();
+                var spawnpoint = GetRandomPositions(treasureChests.ContainsKey(uid) ? treasureChests[uid].containerPos : pos, 15f, 5, 0f).GetRandom();
+
+                spawnpoint.y = GetGroundPosition(spawnpoint);
+                apex.Pause();
+                player.ServerPosition = spawnpoint;
+                apex.Resume();
+                ins.timer.Once(10f, () => UpdateDestination(apex, spawnpoint, uid));
+                return;
+            }
+
+            ins.timer.Once(10f, () => UpdateDestination(apex, pos, uid));
+        }
+
+        static bool IsInRock(Vector3 pos)
+        {
+            pos.y += 200f;
+            var hits = Physics.RaycastAll(pos, Vector3.down, pos.y + 1f, worldMask);
+            pos.y -= 200f;
+            foreach (var hit in hits)
+            {
+                if (hit.collider.name.Contains("rock"))
+                {
+                    return hit.point.y - 0.1f > pos.y;
+                }
+            }
+            return false;
         }
 
         void CheckSecondsUntilEvent()
@@ -1657,6 +1737,9 @@ namespace Oxide.Plugins
 
         public static string FormatGridReference(Vector3 position) // Credit: Jake_Rich
         {
+            if (showXZ)
+                return string.Format("{0} {1}", position.x.ToString("N2"), position.z.ToString("N2"));
+
             Vector2 roundedPos = new Vector2(World.Size / 2 + position.x, World.Size / 2 - position.z);
             string grid = $"{NumberToLetter((int)(roundedPos.y / 150))}{(int)(roundedPos.x / 150)}";
 
@@ -1677,7 +1760,7 @@ namespace Oxide.Plugins
             }
             return text + Convert.ToChar(65 + num3).ToString();
         }
-        
+
         string FormatTime(double seconds, string id = null)
         {
             if (seconds == 0)
@@ -1759,12 +1842,8 @@ namespace Oxide.Plugins
 
         void AddMapMarker(Vector3 position, uint uid)
         {
-            var mapInfo = new MapInfo();
-            mapInfo.IconName = lustyMapIconName;
-            mapInfo.Position = position;
-            mapInfo.Url = lustyMapIconFile;
-            mapMarkers[uid] = mapInfo;
-            Map?.Call("ApiAddPointUrl", mapInfo.Url, mapInfo.IconName, mapInfo.Position);
+            mapMarkers[uid] = new MapInfo { IconName = lustyMapIconName, Position = position, Url = lustyMapIconFile };
+            Map?.Call("ApiAddPointUrl", lustyMapIconFile, lustyMapIconName, position);
             storedData.Markers.Add(uid);
         }
 
@@ -1813,7 +1892,7 @@ namespace Oxide.Plugins
 
             if (Map)
             {
-                foreach(uint marker in storedData.Markers.ToList())
+                foreach (uint marker in storedData.Markers.ToList())
                 {
                     RemoveMapMarker(marker);
                 }
@@ -2256,6 +2335,8 @@ namespace Oxide.Plugins
         static bool spawnNpcsBoth;
         static int spawnNpcsAmount;
         static bool spawnsDespawnInventory;
+        static bool showXZ;
+        static bool spawnNpcsRandomNames;
 
         List<object> DefaultTimesInSeconds
         {
@@ -2737,6 +2818,8 @@ namespace Oxide.Plugins
             spawnNpcsBoth = Convert.ToBoolean(GetConfig("NPCs", "Spawn Murderers And Scientists", false));
             spawnNpcsMurderers = Convert.ToBoolean(GetConfig("NPCs", "Spawn Murderers", false));
             spawnsDespawnInventory = Convert.ToBoolean(GetConfig("NPCs", "Despawn Inventory On Death", true));
+            spawnNpcsRandomNames = Convert.ToBoolean(GetConfig("NPCs", "Generate Random Names", true));
+            showXZ = Convert.ToBoolean(GetConfig("Settings", "Show X Z Coordinates", false));
 
             if (Changed)
             {
@@ -2866,7 +2949,7 @@ namespace Oxide.Plugins
 
                 message = prefix + message;
             }
-            
+
             if (!showPrefix && key.Length > 0 && key[0] == 'p')
                 message = "<color=silver>" + message;
 
