@@ -2,7 +2,7 @@
     "name": "PopUpManager",
     "description": "Simply allows a server to have a popup for Rules, Commands, and Notices, and when a player joins",
     "author": "Mordeus",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "configuration": true,
     "language": "cs",
     "url": "http:\/\/oxidemod.org\/plugins\/popupmanager.2668",

@@ -8,7 +8,7 @@ using CodeHatch.UserInterface.Dialogues;
 
 namespace Oxide.Plugins
 {
-    [Info("PopUpManager", "Mordeus", "1.0.2")]
+    [Info("PopUpManager", "Mordeus", "1.0.3")]
     public class PopUpManager : ReignOfKingsPlugin
     {
         PopUpData popupData;       
@@ -242,7 +242,7 @@ namespace Oxide.Plugins
         private void PopUpCommand(Player player, string cmd, string[] args)
         {
             string playerId = player.Id.ToString();
-            if (!player.HasPermission("admin") || !player.HasPermission("popupmanager.popup"))
+            if (!(player.HasPermission("admin") || player.HasPermission("popupmanager.popup")))
             {
                 player.SendError(lang.GetMessage("notAllowed", this, playerId));
                 return;
