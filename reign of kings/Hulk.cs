@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using CodeHatch.Blocks.Networking.Events;
 using CodeHatch.Common;
@@ -8,214 +9,374 @@ using CodeHatch.Networking.Events;
 using CodeHatch.Networking.Events.Entities;
 using CodeHatch.Networking.Events.Players;
 using CodeHatch.Permissions;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Hulk", "SweetLouHD", "1.0.2", ResourceId = 1463)]
+    [Info("Hulk", "SweetLouHD & D-Kay", "2.0.0", ResourceId = 1463)]
     public class Hulk : ReignOfKingsPlugin
-	{
-		public float hulkAmt = 10000f;
-		public static string prefix = "[FFFFFF][[64CEE1]Server[FFFFFF]]: ";
-		public const string UsePermission = "oxide.hulk";
-		Permission permissions;
-		List<string> hulkList = new List<string>();
+    {
+        #region Variables
 
-		void OnServerInitialized()
-		{
-			permissions = Server.Permissions;
-		}
+        private static float DefaultDamage { get; set; } = 100000;
+        public static string Prefix = "[FFFFFF][[64CEE1]Server[FFFFFF]]: ";
+        private Dictionary<ulong, PlayerData> Data { get; set; } = new Dictionary<ulong, PlayerData>();
 
-		bool HasPermission(Player player, string perm = null){return PlayerExtensions.HasPermission(player, perm);}
+        private class PlayerData
+        {
+            public string Name { get; set; }
+            public float Damage { get; set; }
 
-		private void SendHelpText(Player player)
-		{
-			if(HasPermission(player, UsePermission)){
-				PrintToChat(player, "/hulk on - [666666]Turn on Hulk Mode.[-]");
-				PrintToChat(player, "/hulk off - [666666]Turn off Hulk Mode.[-]");
-				PrintToChat(player, "/hulk status - [666666]Displays status of your Hulk Mode.[-]");
-				PrintToChat(player, "/hulk status {{name}} - [666666]Displays status of the specified names Hulk Mode.[-]");
-				PrintToChat(player, "/hulk list - [666666]List of players that currently have Hulk turned on.[-]");
-				PrintToChat(player, "/hulk amt - [666666]Displays the current Hulk Amount.[-]");
-				PrintToChat(player, "/hulk amt {{number}}- [666666]Sets the amount of Damage and Repair Hulk does. This affects all users.[-]");
-			}
-		}
+            public PlayerData() { }
 
-		[ChatCommand("hulk")]
-		private void cmdHulk(Player player, string cmd, string[] args)
-		{
-			if (!HasPermission(player, UsePermission))
-			{
-				PrintToChat(player, "You are not permitted to use this command.[-]");
-				return;
-			}
-			if (args.Length < 1) PrintToChat(player, $"{prefix}Incorrect usage. Type /help if you need.[-]");
-			switch(args[0].ToLower())
-			{
-				case "on":
-					hulkList.Add(player.Id.ToString());
-					PrintToChat(player, $"{prefix}Hulk mode is now turned on. Amt: {hulkAmt}[-]");
-					break;
-				case "off":
-					hulkList.Remove(player.Id.ToString());
-					PrintToChat(player, $"{prefix}Hulk mode is now turned off.[-]");
-					break;
-				case "status":
-					if(args.Length < 2)
-					{
-						if(hulkList.Contains(player.Id.ToString()))
-						{
-							PrintToChat(player, $"{prefix}You currently have Hulk turned on. Amt: {hulkAmt}[-]");
-						}
-						else
-						{
-							PrintToChat(player, $"{prefix}You currently have Hulk turned off.[-]");
-						}
-					}
-					else if(args.Length < 3)
-					{
-						List<Player> onlineplayers = Server.ClientPlayers as List<Player>;
-						foreach (Player toCheck in onlineplayers.ToArray())
-						{
-							if(toCheck.DisplayName.ToLower() == args[1].ToLower())
-							{
-								if(hulkList.Contains(toCheck.Id.ToString()))
-									PrintToChat(player, $"{prefix}{args[1]} currently has Hulk turned on. Amt: {hulkAmt}[-]");
-								else
-									PrintToChat(player, $"{prefix}{args[1]} currently has Hulk turned off.[-]");
-								return;
-							}
-						}
-						PrintToChat(player, $"{prefix}{args[1]} is currently not online.[-]");
-					}
-					else
-					{
-						PrintToChat(player, "{prefix}Incorrect usage. Type /help if you need.[-]");
-					}
-					break;
-				case "list":
-					if(args.Length < 2)
-					{
-						PrintToChat(player, $"{prefix}List of Hulks:");
-						List<Player> onlineplayers = Server.ClientPlayers as List<Player>;
-						var i = 0;
-						foreach (Player toCheck in onlineplayers.ToArray())
-						{
-							if(hulkList.Contains(toCheck.Id.ToString()))
-							{
-								i++;
-								PrintToChat(player, $"     {toCheck.DisplayName}");
-							}
-								
-						}
-						if(i == 0)
-							PrintToChat(player, "     No one has Hulk Turned on.[-]");
-						else
-							PrintToChat(player, "[-]");
-						return;
-					}
-					else
-						PrintToChat(player, "{prefix}Incorrect usage. Type /help if you need.[-]");
-					break;
-				case "amt":
-					if(args.Length < 2)
-					{
-						PrintToChat(player, "{prefix}Hulk Amount is currently set to {hulkAmt}.[-]");
-						return;
-					}
-					else if(args.Length < 3)
-					{
-						try
-						{
-							hulkAmt = float.Parse(args[1]);
-							if(hulkAmt < 0)
-							{
-								PrintToChat(player, $"{prefix}{args[1]} is not a valid number. Please try again.[-]");
-								return;
-							}
-							List<Player> onlineplayers = Server.ClientPlayers as List<Player>;
-							foreach (Player toCheck in onlineplayers.ToArray())
-							{
-								if(hulkList.Contains(toCheck.Id.ToString()))
-									PrintToChat(toCheck, $"{prefix}{player.DisplayName} has just adjusted the Hulk Amount to {args[1]}.[-]");
-								else if(toCheck == player)
-									PrintToChat(player, $"{prefix}You have changed Hulk Amount to {args[1]}.[-]");
-							}
-						}
-						catch
-						{
-							PrintToChat(player, $"{prefix}{args[1]} is not a valid number. Please try again.[-]");
-						}
-					}
-					break;
-				default:
-					PrintToChat(player, "{prefix}Incorrect usage. Type /help if you need.[-]");
-					break;
-			}
-		}
+            public PlayerData(string name)
+            {
+                Name = name;
+                Damage = DefaultDamage;
+            }
 
-		private void OnPlayerConnected(Player player)
-		{
-			hulkList.Remove(player.Id.ToString());
-		}
+            public PlayerData(string name, float damage)
+            {
+                Name = name;
+                Damage = damage;
+            }
 
-		private void OnPlayerDisconnected(Player player)
-		{
-			hulkList.Remove(player.Id.ToString());
-		}
+            public float GetDamage()
+            {
+                return Damage;
+            }
 
-		private void OnEntityHealthChange(EntityDamageEvent e)
-		{
-			switch(e.Damage.DamageTypes.ToString())
-			{
-				case "Hunger":
-				case "Thirst":
-					return;
-				break;
-				default:
-					try{
-						if (e.Damage.DamageSource.Owner is Player)
-						{
-							Player damager = e.Damage.DamageSource.Owner;
-							if(!hulkList.Contains(damager.Id.ToString())) return;
-							if (!HasPermission(damager, UsePermission)) return;
-							if(damager.DisplayName.ToLower() == "server") return;
-							if(e.Damage.Amount < 0)
-							{
-								e.Damage.Amount = hulkAmt * -1f;
-								PrintToChat(damager, $"{prefix}Hulk healing {hulkAmt.ToString()} damage.[-]");
-								return;
-							}
-							e.Damage.Amount = hulkAmt;
-							PrintToChat(damager, $"{prefix}Hulk dealing {hulkAmt.ToString()} damage.[-]");
-							return;
-						}
-						else
-						{
-							return;
-						}
-					}
-					catch
-					{
-						return;
-					}
-					return;
-				break;
-			}
-		}
+            public float GetHeal()
+            {
+                return Damage * -1;
+            }
+        }
 
-		void OnCubeTakeDamage(CubeDamageEvent e)
-		{
-			Player damager = e.Damage.DamageSource.Owner;
-			if(!hulkList.Contains(damager.Id.ToString())) return;
-			if (!HasPermission(damager, UsePermission)) return;
-			if(e.Damage.Amount < 0)
-			{
-				e.Damage.Amount = hulkAmt * -1f;
-				PrintToChat(damager, $"{prefix}Hulk healing {hulkAmt.ToString()} damage.[-]");
-				return;
-			}
-			PrintToChat(damager, $"{prefix}Hulk dealing {hulkAmt.ToString()} damage.[-]");
-			e.Damage.Amount = hulkAmt;
-		}
-	}
+        #endregion
+
+        #region Save and Load Data
+
+        private void Loaded()
+        {
+            LoadConfigData();
+
+            permission.RegisterPermission("hulk.use", this);
+            permission.RegisterPermission("hulk.status", this);
+            permission.RegisterPermission("hulk.status.others", this);
+            permission.RegisterPermission("hulk.list", this);
+            permission.RegisterPermission("hulk.amount", this);
+            permission.RegisterPermission("hulk.amount.others", this);
+            permission.RegisterPermission("hulk.admin", this);
+            permission.RegisterPermission("hulk.heal", this);
+            permission.RegisterPermission("hulk.damage", this);
+        }
+
+        protected override void LoadDefaultConfig()
+        {
+            LoadConfigData();
+            SaveConfigData();
+        }
+        
+        private void LoadConfigData()
+        {
+            DefaultDamage = GetConfig("Default Hulk Damage", 100000);
+            Prefix = GetConfig("Message Prefix", "[FFFFFF][[64CEE1]Server[FFFFFF]]: ");
+        }
+
+        private void SaveConfigData()
+        {
+            Config["Default Hulk Damage"] = DefaultDamage;
+            Config["Message Prefix"] = Prefix;
+        }
+
+        #endregion
+
+        #region Commands
+
+        [ChatCommand("hulk")]
+        private void CmdHulk(Player player, string cmd, string[] args)
+        {
+            if (!HasPermission(player, "hulk.use"))
+            {
+                player.SendError("You are not permitted to use this command.[-]");
+                return;
+            }
+
+            if (!args.Any())
+            {
+                player.SendError($"{Prefix}Incorrect usage. Type /help if you need.[-]");
+                return;
+            }
+
+            switch (args[0].ToLower())
+            {
+                case "on":
+                    Activate(player);
+                    break;
+                case "off":
+                    Deactivate(player);
+                    break;
+                case "status":
+                    Status(player, args.Skip(1).ToArray());
+                    break;
+                case "list":
+                    List(player);
+                    break;
+                case "amt":
+                    Amount(player, args.Skip(1).ToArray());
+                    break;
+                default:
+                    PrintToChat(player, "{prefix}Incorrect usage. Type /help if you need.[-]");
+                    break;
+            }
+        }
+
+        #endregion
+
+        #region Functions
+
+        private void Activate(Player player)
+        {
+            if (Data.ContainsKey(player.Id))
+            {
+                player.SendError("You have already activated hulk mode.");
+                return;
+            }
+            var data = new PlayerData(player.Name);
+            Data.Add(player.Id, data);
+            player.SendMessage($"{Prefix}Hulk mode is now turned on. Amount: {data.GetDamage()}[-]");
+        }
+
+        private void Deactivate(Player player)
+        {
+            if (!Data.ContainsKey(player.Id))
+            {
+                player.SendError("You have not activated hulk mode yet.");
+                return;
+            }
+            Data.Remove(player.Id);
+            player.SendMessage($"{Prefix}Hulk mode is now turned off.[-]");
+        }
+
+        private void Status(Player player, string[] args)
+        {
+            if (!HasPermission(player, "hulk.status")) return;
+
+            if (!args.Any())
+            {
+                player.SendMessage(
+                    Data.ContainsKey(player.Id)
+                        ? $"{Prefix}You currently have Hulk turned on. Amount: {Data[player.Id].Damage}[-]"
+                        : $"{Prefix}You currently have Hulk turned off.[-]");
+                return;
+            }
+            
+            if (!HasPermission(player, "hulk.status.others")) return;
+
+            var targetName = args.JoinToString(" ");
+            var target = Server.ClientPlayers.Find(p => string.Equals(p.Name, targetName, StringComparison.CurrentCultureIgnoreCase));
+            if (target == null)
+            {
+                player.SendError($"{Prefix}{targetName} is currently not online.[-]");
+                return;
+            }
+
+            player.SendMessage(
+                Data.ContainsKey(target.Id)
+                    ? $"{Prefix}{target.Name} currently has Hulk turned on. Amount: {Data[target.Id].Damage}[-]"
+                    : $"{Prefix}{args[1]} currently has Hulk turned off.[-]");
+        }
+
+        private void List(Player player)
+        {
+            if (!HasPermission(player, "hulk.list")) return;
+
+            if (!Data.Any())
+            {
+                player.SendError($"{Prefix}No one has Hulk Turned on.[-]");
+                return;
+            }
+
+            player.SendMessage($"{Prefix}List of Hulks:");
+            Data.Foreach(p => player.SendMessage($"     {p.Value.Name}"));
+        }
+
+        private void Amount(Player player, string[] args)
+        {
+            if (!HasPermission(player, "hulk.amount")) return;
+
+            if (!args.Any())
+            {
+                player.SendMessage($"{Prefix}Hulk Amount is currently set to {Data[player.Id].Damage}.[-]");
+                return;
+            }
+
+            float amt;
+            if (!float.TryParse(args[0], out amt))
+            {
+                player.SendError($"{Prefix}{args[0]} is not a valid number. Please try again.[-]");
+                return;
+            }
+
+            var target = player;
+            if (args.Length > 1)
+            {
+                if (!HasPermission(player, "hulk.amount.others")) return;
+
+                var targetName = args.Skip(1).JoinToString(" ");
+                target = Server.GetPlayerByName(targetName);
+                if (target == null || Equals(target, player))
+                {
+
+                    player.SendError($"{Prefix}{targetName} is currently not online.[-]");
+                    return;
+                }
+            }
+
+            Data[target.Id].Damage = amt;
+            player.SendMessage($"{Prefix}You have changed the Hulk Amount of {target.Name} to {amt}.[-]");
+        }
+
+        private bool HasPermission(Player player, string permission)
+        {
+            var hasPermission = player.HasPermission("hulk.admin") || player.HasPermission(permission);
+            if (!hasPermission) player.SendError("You are not permitted to use this command.[-]");
+            return hasPermission;
+        }
+
+        #endregion
+
+        #region Hooks
+
+        private void SendHelpText(Player player)
+        {
+            player.SendMessage("[0000FF]Hulk[FFFFFF]");
+
+            if (player.HasPermission("hulk.admin"))
+            {
+                player.SendMessage("/hulk on - [666666]Turn on Hulk Mode.[-]");
+                player.SendMessage("/hulk off - [666666]Turn off Hulk Mode.[-]");
+                player.SendMessage("/hulk status - [666666]Displays status of your Hulk Mode.[-]");
+                player.SendMessage("/hulk status {{name}} - [666666]Displays status of the specified names Hulk Mode.[-]");
+                player.SendMessage("/hulk list - [666666]List of players that currently have Hulk turned on.[-]");
+                player.SendMessage("/hulk amt - [666666]Displays the current Hulk Amount.[-]");
+                player.SendMessage("/hulk amt {{number}}- [666666]Sets the amount of Damage and Repair Hulk does. This affects all users.[-]");
+                return;
+            }
+
+            if (player.HasPermission("hulk.use"))
+            {
+
+                player.SendMessage("/hulk on - [666666]Turn on Hulk Mode.[-]");
+                player.SendMessage("/hulk off - [666666]Turn off Hulk Mode.[-]");
+                player.SendMessage("/hulk amt - [666666]Displays the current Hulk Amount.[-]");
+            }
+
+            if (player.HasPermission("hulk.status"))
+            {
+                player.SendMessage("/hulk status - [666666]Displays status of your Hulk Mode.[-]");
+            }
+
+            if (player.HasPermission("hulk.status.others"))
+            {
+                player.SendMessage("/hulk status {{name}} - [666666]Displays status of the specified names Hulk Mode.[-]");
+            }
+
+            if (player.HasPermission("hulk.list"))
+            {
+                player.SendMessage("/hulk list - [666666]List of players that currently have Hulk turned on.[-]");
+            }
+
+            if (player.HasPermission("hulk.amount"))
+            {
+                player.SendMessage("/hulk amt {{number}}- [666666]Sets the amount of Damage and Repair Hulk does.[-]");
+            }
+
+            if (player.HasPermission("hulk.amount.others"))
+            {
+                player.SendMessage("/hulk amt {{number}} {{name}}- [666666]Sets the amount of Damage and Repair Hulk does for another player.[-]");
+            }
+        }
+
+        private void OnPlayerConnected(Player player)
+        {
+            if (Data.ContainsKey(player.Id)) Data.Remove(player.Id);
+        }
+
+        private void OnPlayerDisconnected(Player player)
+        {
+            if (Data.ContainsKey(player.Id)) Data.Remove(player.Id);
+        }
+
+        private void OnEntityHealthChange(EntityDamageEvent e)
+        {
+            #region Checks
+            if (e?.Damage == null) return;
+            if (e.Damage.DamageSource == null) return;
+            if (!e.Damage.DamageSource.IsPlayer) return;
+            if (e.Entity == null) return;
+            if (e.Entity == e.Damage.DamageSource) return;
+            if (!Data.ContainsKey(e.Damage.DamageSource.Owner.Id)) return;
+            #endregion
+
+            var player = e.Damage.DamageSource.Owner;
+            var data = Data[player.Id];
+
+            if (e.Damage.Amount >= 0)
+            {
+                if (!HasPermission(player, "hulk.damage")) return;
+                if (e.Cancelled) e.Uncancel();
+                e.Damage.Amount = data.GetDamage();
+                player.SendMessage($"{Prefix}Hulk dealing {e.Damage.Amount} damage.[-]");
+            }
+            else
+            {
+                if (!HasPermission(player, "hulk.heal")) return;
+                if (e.Cancelled) e.Uncancel();
+                e.Damage.Amount = data.GetHeal();
+                player.SendMessage($"{Prefix}Hulk healing {e.Damage.Amount} damage.[-]");
+            }
+        }
+
+        private void OnCubeTakeDamage(CubeDamageEvent e)
+        {
+            #region Checks
+            if (e?.Damage == null) return;
+            if (e.Damage.Damager == null) return;
+            if (e.Damage.DamageSource == null) return;
+            if (!e.Damage.DamageSource.IsPlayer) return;
+            if (!Data.ContainsKey(e.Damage.DamageSource.Owner.Id)) return;
+            #endregion
+
+            var player = e.Damage.DamageSource.Owner;
+            var data = Data[player.Id];
+
+            if (e.Damage.Amount >= 0)
+            {
+                if (!HasPermission(player, "hulk.damage")) return;
+                if (e.Cancelled) e.Uncancel();
+                e.Damage.Amount = data.GetDamage();
+                player.SendMessage($"{Prefix}Hulk dealing {e.Damage.Amount} damage.[-]");
+            }
+            else
+            {
+                if (!HasPermission(player, "hulk.heal")) return;
+                if (e.Cancelled) e.Uncancel();
+                e.Damage.Amount = data.GetHeal();
+                player.SendMessage($"{Prefix}Hulk healing {e.Damage.Amount} damage.[-]");
+            }
+        }
+
+        #endregion
+
+        #region Utility
+
+        private T GetConfig<T>(string name, T defaultValue)
+        {
+            if (Config[name] == null) return defaultValue;
+            return (T)Convert.ChangeType(Config[name], typeof(T));
+        }
+
+        #endregion
+    }
 }
