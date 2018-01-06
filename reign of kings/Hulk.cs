@@ -13,7 +13,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("Hulk", "SweetLouHD & D-Kay", "2.0.0", ResourceId = 1463)]
+    [Info("Hulk", "SweetLouHD & D-Kay", "2.0.1", ResourceId = 1463)]
     public class Hulk : ReignOfKingsPlugin
     {
         #region Variables
@@ -96,15 +96,15 @@ namespace Oxide.Plugins
         [ChatCommand("hulk")]
         private void CmdHulk(Player player, string cmd, string[] args)
         {
-            if (!HasPermission(player, "hulk.use"))
+            if (!args.Any())
             {
-                player.SendError("You are not permitted to use this command.[-]");
+                SendHelpText(player);
                 return;
             }
 
-            if (!args.Any())
+            if (!HasPermission(player, "hulk.use"))
             {
-                player.SendError($"{Prefix}Incorrect usage. Type /help if you need.[-]");
+                player.SendError("You are not permitted to use this command.[-]");
                 return;
             }
 
@@ -126,7 +126,7 @@ namespace Oxide.Plugins
                     Amount(player, args.Skip(1).ToArray());
                     break;
                 default:
-                    PrintToChat(player, "{prefix}Incorrect usage. Type /help if you need.[-]");
+                    PrintToChat(player, "{prefix}Incorrect usage. Type /hulk to see the available commands.[-]");
                     break;
             }
         }
@@ -205,6 +205,12 @@ namespace Oxide.Plugins
         {
             if (!HasPermission(player, "hulk.amount")) return;
 
+            if (!Data.ContainsKey(player.Id))
+            {
+                player.SendError($"You do not have hulk mode turned on.");
+                return;
+            }
+
             if (!args.Any())
             {
                 player.SendMessage($"{Prefix}Hulk Amount is currently set to {Data[player.Id].Damage}.[-]");
@@ -227,8 +233,12 @@ namespace Oxide.Plugins
                 target = Server.GetPlayerByName(targetName);
                 if (target == null || Equals(target, player))
                 {
-
                     player.SendError($"{Prefix}{targetName} is currently not online.[-]");
+                    return;
+                }
+                if (!Data.ContainsKey(target.Id))
+                {
+                    player.SendError($"{target.Name} does not have hulk mode turned on.");
                     return;
                 }
             }
@@ -250,17 +260,18 @@ namespace Oxide.Plugins
 
         private void SendHelpText(Player player)
         {
-            player.SendMessage("[0000FF]Hulk[FFFFFF]");
+            player.SendMessage("[0000FF]Hulk[-]");
 
             if (player.HasPermission("hulk.admin"))
             {
                 player.SendMessage("/hulk on - [666666]Turn on Hulk Mode.[-]");
                 player.SendMessage("/hulk off - [666666]Turn off Hulk Mode.[-]");
-                player.SendMessage("/hulk status - [666666]Displays status of your Hulk Mode.[-]");
-                player.SendMessage("/hulk status {{name}} - [666666]Displays status of the specified names Hulk Mode.[-]");
+                player.SendMessage("/hulk status - [666666]Displays your current hulk status.[-]");
+                player.SendMessage("/hulk status (playername) - [666666]Displays the current hulk status of the target player.[-]");
                 player.SendMessage("/hulk list - [666666]List of players that currently have Hulk turned on.[-]");
-                player.SendMessage("/hulk amt - [666666]Displays the current Hulk Amount.[-]");
-                player.SendMessage("/hulk amt {{number}}- [666666]Sets the amount of Damage and Repair Hulk does. This affects all users.[-]");
+                player.SendMessage("/hulk amt - [666666]Displays your current Hulk Amount.[-]");
+                player.SendMessage("/hulk amt (number) - [666666]Sets the amount of Damage and Repair your Hulk mode does.[-]");
+                player.SendMessage("/hulk amt (number) (playername) - [666666]Sets the amount of Damage and Repair Hulk mode does for the target player.[-]");
                 return;
             }
 
@@ -274,12 +285,12 @@ namespace Oxide.Plugins
 
             if (player.HasPermission("hulk.status"))
             {
-                player.SendMessage("/hulk status - [666666]Displays status of your Hulk Mode.[-]");
+                player.SendMessage("/hulk status - [666666]Displays your current hylk mode status.[-]");
             }
 
             if (player.HasPermission("hulk.status.others"))
             {
-                player.SendMessage("/hulk status {{name}} - [666666]Displays status of the specified names Hulk Mode.[-]");
+                player.SendMessage("/hulk status (playername) - [666666]Displays the current hulk status of the taget player.[-]");
             }
 
             if (player.HasPermission("hulk.list"))
@@ -289,12 +300,13 @@ namespace Oxide.Plugins
 
             if (player.HasPermission("hulk.amount"))
             {
-                player.SendMessage("/hulk amt {{number}}- [666666]Sets the amount of Damage and Repair Hulk does.[-]");
+                player.SendMessage("/hulk amt - [666666]Displays your current Hulk Amount.[-]");
+                player.SendMessage("/hulk amt (number) - [666666]Sets the amount of Damage and Repair your Hulk mode does.[-]");
             }
 
             if (player.HasPermission("hulk.amount.others"))
             {
-                player.SendMessage("/hulk amt {{number}} {{name}}- [666666]Sets the amount of Damage and Repair Hulk does for another player.[-]");
+                player.SendMessage("/hulk amt (number) (playername) - [666666]Sets the amount of Damage and Repair Hulk mode does for the target player.[-]");
             }
         }
 
