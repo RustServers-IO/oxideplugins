@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("FancyDrop", "Fujikura", "2.7.0", ResourceId = 1934)]
+	[Info("FancyDrop", "Fujikura", "2.7.1", ResourceId = 1934)]
 	[Description("The Next Level of a fancy airdrop-toolset")]
 	class FancyDrop : RustPlugin
 	{
@@ -799,6 +799,7 @@ namespace Oxide.Plugins
 			}
 			else
 				newDrop.Spawn();
+			Interface.CallHook("OnLootSpawn", new object[]{ newDrop.GetComponent<LootContainer>()});
 			SupplyDrops.Add(newDrop);
 			if (supplyDropLight)
 				createLantern(newDrop as BaseEntity);

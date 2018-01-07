@@ -2,7 +2,7 @@
     "name": "FancyDrop",
     "description": "The All-In-One Airdrop toolset",
     "author": "Fujikura",
-    "version": "2.7.0",
+    "version": "2.7.1",
     "configuration": true,
     "suggest": {
         "GUIAnnouncements": "*",
