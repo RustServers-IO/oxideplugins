@@ -1,0 +1,19 @@
+{
+    "name": "GoldenAKChallenge",
+    "description": "Deploys a special AK, that is tracked in the map for capture",
+    "author": "",
+    "version": "0.0.2",
+    "configuration": false,
+    "require": {
+        "GUIAnnouncements": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/goldenakchallenge.2709",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

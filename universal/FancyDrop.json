@@ -1,0 +1,20 @@
+{
+    "name": "FancyDrop",
+    "description": "The All-In-One Airdrop toolset",
+    "author": "Fujikura",
+    "version": "2.7.1",
+    "configuration": false,
+    "suggest": {
+        "GUIAnnouncements": "*",
+        "BetterLoot": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/fancydrop.1934",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "BetterGrenades",
+    "description": "Enhanced grenade features",
+    "author": "redBDGR",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/bettergrenades.2712",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

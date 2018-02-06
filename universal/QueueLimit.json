@@ -1,0 +1,16 @@
+{
+    "name": "QueueLimit",
+    "description": "Limits the amount of people allowed to be in a queue at any one time",
+    "author": "Ryan",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/queuelimit.2550",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,26 @@
+{
+    "name": "ServerRewards",
+    "description": "Earn reward points in various ways and spend them on many different options in the GUI reward store",
+    "author": "k1lly0u",
+    "version": "0.4.64",
+    "configuration": false,
+    "suggest": {
+        "PlaytimeTracker": "*",
+        "Economics": "*",
+        "HumanNPC": "*",
+        "LustyMap": "*",
+        "Kits": "*"
+    },
+    "require": {
+        "ImageLibrary": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/serverrewards.1751",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

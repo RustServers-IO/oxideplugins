@@ -1,0 +1,19 @@
+{
+    "name": "ZLevelsRemastered",
+    "description": "Allows player to level up 5 different skills (Mining, Woodcutting, Crafting, Skinning, Aquire)",
+    "author": "Fujikura",
+    "version": "2.9.4",
+    "configuration": false,
+    "suggest": {
+        "TimeOfDay": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/zlevelsremastered.1453",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

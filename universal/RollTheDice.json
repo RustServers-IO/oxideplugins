@@ -1,0 +1,16 @@
+{
+    "name": "RollTheDice",
+    "description": "Randomized item giving with possible negative outcomes",
+    "author": "Wulf",
+    "version": "1.0.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/rollthedice.1682",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

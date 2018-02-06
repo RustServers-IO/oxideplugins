@@ -1,0 +1,22 @@
+{
+    "name": "RaidNotes",
+    "description": "Broadcasts raid activity to chat",
+    "author": "Calytic",
+    "version": "1.0.0",
+    "configuration": false,
+    "suggest": {
+        "Slack": "*",
+        "Discord": "*",
+        "LustyMap": "*",
+        "Clans": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/raidnotes.2117",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "No Raid Zones",
+    "description": "Create easily zones which blocks the usage of C4 or a Drill",
+    "author": "",
+    "version": "1.3.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/no-raid-zones.1837",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "ADSystem",
+    "description": "Player Ads for Players",
+    "author": "mcnovinho08",
+    "version": "1.1.1",
+    "configuration": false,
+    "suggest": {
+        "MoneySystem": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/adsystem.2371",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

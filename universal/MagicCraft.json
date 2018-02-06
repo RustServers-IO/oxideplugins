@@ -1,0 +1,19 @@
+{
+    "name": "Magic Craft",
+    "description": "Alternative crafting system",
+    "author": "Norn",
+    "version": "0.3.1",
+    "configuration": false,
+    "suggest": {
+        "PopupNotifications": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/magic-craft.1347",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

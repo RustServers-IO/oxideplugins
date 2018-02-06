@@ -1,0 +1,16 @@
+{
+    "name": "InstaSmelt",
+    "description": "Makes your items smelt by whole stacks at a time",
+    "author": "{RTR}Jojolepro",
+    "version": "1.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/instasmelt.2235",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

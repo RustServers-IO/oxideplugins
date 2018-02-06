@@ -1,0 +1,16 @@
+{
+    "name": "AntiGriefJail",
+    "description": "Crowd-sourced anti-grief system to let the community govern itself",
+    "author": "Pho3niX90",
+    "version": "1.1.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/antigriefjail.1512",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

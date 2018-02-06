@@ -1,0 +1,16 @@
+{
+    "name": "ChristmasTreePresents",
+    "description": "Spawn christmas presents under christmas trees when the christmas event happens",
+    "author": "redBDGR",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/christmastreepresents.2734",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

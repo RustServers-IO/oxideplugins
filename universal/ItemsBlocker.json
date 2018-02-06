@@ -1,0 +1,20 @@
+{
+    "name": "Items Blocker",
+    "description": "Prevents some items from being used for a limited period of time. With UI.",
+    "author": "Vlad-00003",
+    "version": "3.1.11",
+    "configuration": false,
+    "suggest": {
+        "BotSpawn": "*",
+        "HumanNPC": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/items-blocker.2407",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

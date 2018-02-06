@@ -1,0 +1,16 @@
+{
+    "name": "Bounty Tracker",
+    "description": "When you want that scumbug to be dead, put an attractive price on his head!",
+    "author": "Scorpyon",
+    "version": "1.0.5",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/bounty-tracker.1138",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

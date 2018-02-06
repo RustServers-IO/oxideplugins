@@ -1,0 +1,16 @@
+{
+    "name": "Night Vision",
+    "description": "See at night",
+    "author": "Jake Rich",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/night-vision.2615",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

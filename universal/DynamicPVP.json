@@ -1,0 +1,23 @@
+{
+    "name": "DynamicPVP",
+    "description": "Create temporary PVP zones around SupplyDrops, Tank and\/or Heli (requires TruePVE and ZoneManager)",
+    "author": "",
+    "version": "1.2.3",
+    "configuration": false,
+    "suggest": {
+        "ZoneDomes": "*"
+    },
+    "require": {
+        "TruePVE": "*",
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/dynamicpvp.2728",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

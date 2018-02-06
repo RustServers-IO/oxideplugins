@@ -1,11 +1,11 @@
 {
     "name": "HelpText",
-    "description": "Allows people to use \/help to get help info from all plugins",
-    "author": "Calytic",
-    "version": "2.0.5",
-    "configuration": true,
+    "description": "Allows people to use \/help to get help info from plugins",
+    "author": "Mughisi",
+    "version": "1.0.3",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/helptext.676",
+    "url": "https:\/\/oxidemod.org\/plugins\/helptext.1055",
     "games": [
         "universal"
     ],

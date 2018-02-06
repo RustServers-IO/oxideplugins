@@ -1,0 +1,16 @@
+{
+    "name": "MagicChat",
+    "description": "An alternative chat system",
+    "author": "Wulf",
+    "version": "0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/magicchat.1595",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Clothing Slots",
+    "description": "Available Inventory Slots Depends On Clothing Worn",
+    "author": "Jake Rich",
+    "version": "1.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/clothing-slots.2749",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

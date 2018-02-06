@@ -1,0 +1,19 @@
+{
+    "name": "Shop",
+    "description": "Shop for buy and sell",
+    "author": "RD156",
+    "version": "1.1.2",
+    "configuration": false,
+    "require": {
+        "Banks": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/shop.1639",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

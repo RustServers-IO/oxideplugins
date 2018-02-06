@@ -1,0 +1,16 @@
+{
+    "name": "UpdateChecker",
+    "description": "Automatic update checking and notifications for plugins",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/updatechecker.681",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

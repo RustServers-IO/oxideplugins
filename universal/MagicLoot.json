@@ -1,0 +1,16 @@
+{
+    "name": "Magic Loot",
+    "description": "Simple components multiplier & loot system",
+    "author": "",
+    "version": "0.1.24",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/magic-loot.2212",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "DoorControl",
+    "description": "Open or Close all doors, or define a distance",
+    "author": "Noviets",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/doorcontrol.1695",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

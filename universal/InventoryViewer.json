@@ -1,0 +1,16 @@
+{
+    "name": "Inventory Viewer",
+    "description": "Look into a player's inventory",
+    "author": "Mughisi",
+    "version": "3.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/inventory-viewer.871",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

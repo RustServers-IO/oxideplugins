@@ -1,0 +1,16 @@
+{
+    "name": "Out Of Character Chat",
+    "description": "Adds an Out Of Character chat to the game -> For roleplay servers!",
+    "author": "D-Kay",
+    "version": "1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/out-of-character-chat.1078",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

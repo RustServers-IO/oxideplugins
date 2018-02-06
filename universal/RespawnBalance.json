@@ -1,0 +1,16 @@
+{
+    "name": "Respawn Balance",
+    "description": "Balances respawning so players value their life.",
+    "author": "Jake Rich",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/respawn-balance.2742",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

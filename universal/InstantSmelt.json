@@ -1,0 +1,16 @@
+{
+    "name": "Instant Smelt",
+    "description": "Smelts resources as soon as they hit the inventory",
+    "author": "Serenity 3",
+    "version": "1.1.5",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/instant-smelt.2352",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

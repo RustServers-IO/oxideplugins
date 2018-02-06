@@ -1,0 +1,16 @@
+{
+    "name": "RemoveClaim",
+    "description": "Finally you can claim that stolen vehicle. Remove the claim of the vehicle you're driving.",
+    "author": "",
+    "version": "1.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/removeclaim.1716",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

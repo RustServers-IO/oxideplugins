@@ -1,0 +1,21 @@
+{
+    "name": "Running Man",
+    "description": "Plugin Runnung Man",
+    "author": "sami37",
+    "version": "1.5.9",
+    "configuration": false,
+    "suggest": {
+        "Economics": "*",
+        "KarmaSystem": "*",
+        "ServerRewards": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/running-man.777",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

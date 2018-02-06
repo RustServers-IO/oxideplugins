@@ -1,0 +1,23 @@
+{
+    "name": "Hotel",
+    "description": "Hotel System",
+    "author": "FireStorm78",
+    "version": "1.1.9",
+    "configuration": false,
+    "suggest": {
+        "HumanNPC": "*",
+        "Economics": "*"
+    },
+    "require": {
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/hotel.1298",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

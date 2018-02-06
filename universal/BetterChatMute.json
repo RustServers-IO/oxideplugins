@@ -1,14 +1,11 @@
 {
-    "name": "BetterChat Mute",
+    "name": "BetterChatMute",
     "description": "Simple mute system, made for use with BetterChat",
-    "author": "LaserHydra",
-    "version": "1.0.8",
+    "author": "",
+    "version": null,
     "configuration": false,
-    "suggest": {
-        "BetterChat": "*"
-    },
-    "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/betterchat-mute.2272",
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/betterchatmute.2272",
     "games": [
         "universal"
     ],

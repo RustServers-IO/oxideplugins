@@ -1,0 +1,16 @@
+{
+    "name": "TimedEvents",
+    "description": "Triggers various types of events like Airdrops, Christmas, Helicopter",
+    "author": "",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/timedevents.2757",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

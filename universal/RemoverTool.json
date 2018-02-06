@@ -1,0 +1,22 @@
+{
+    "name": "R-RemoverTool",
+    "description": "Building and entity removal tool",
+    "author": "Fujikura",
+    "version": "4.2.8",
+    "configuration": false,
+    "suggest": {
+        "BuildingOwners": "*",
+        "Friends": "*",
+        "Clans": "*",
+        "Economics": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/r-removertool.651",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

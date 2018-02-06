@@ -1,0 +1,16 @@
+{
+    "name": "CupboardMessages",
+    "description": "Sends a configured message to a user when they place a tool cupboard",
+    "author": "Ryan",
+    "version": "1.1.0",
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/cupboardmessages.2721",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

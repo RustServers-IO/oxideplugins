@@ -1,0 +1,22 @@
+{
+    "name": "AutoChat",
+    "description": "Automatic clans\/private chat switching",
+    "author": "Frenk92",
+    "version": "0.4.9",
+    "configuration": false,
+    "suggest": {
+        "BetterChat": "*",
+        "Clans": "*",
+        "PrivateMessage": "*",
+        "Friends": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/autochat.2230",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

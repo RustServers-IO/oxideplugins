@@ -1,0 +1,16 @@
+{
+    "name": "Instant Research",
+    "description": "Allows control over research speed.",
+    "author": "Tori1157",
+    "version": "2.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/instant-research.1318",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

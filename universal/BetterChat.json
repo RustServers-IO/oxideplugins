@@ -1,11 +1,11 @@
 {
-    "name": "Better Chat",
+    "name": "BetterChat",
     "description": "Customize chat colors, formatting, prefix and more",
-    "author": "LaserHydra",
-    "version": "5.0.14",
-    "configuration": true,
-    "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/better-chat.979",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/betterchat.979",
     "games": [
         "rust"
     ],

@@ -1,11 +1,11 @@
 {
-    "name": "",
-    "description": "",
-    "author": "",
-    "version": null,
+    "name": "VehicleManager",
+    "description": "Customize\/install\/remove\/switch vehicle attachments",
+    "author": "Wulf",
+    "version": "1.2.5",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/vehiclemanager.1725",
+    "url": "https:\/\/oxidemod.org\/plugins\/vehiclemanager.1725",
     "games": [
         "universal"
     ],

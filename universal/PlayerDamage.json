@@ -1,0 +1,16 @@
+{
+    "name": "Player Damage",
+    "description": "Turn ON\/OFF the player damage.",
+    "author": "PaiN",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-damage.1401",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

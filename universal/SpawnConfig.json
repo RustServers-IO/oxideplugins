@@ -1,0 +1,16 @@
+{
+    "name": "SpawnConfig",
+    "description": "Change values of the different spawners",
+    "author": "Nogrod",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/spawnconfig.1570",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

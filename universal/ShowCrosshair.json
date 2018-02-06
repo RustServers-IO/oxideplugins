@@ -1,0 +1,19 @@
+{
+    "name": "ShowCrosshair",
+    "description": "Shows a crosshair on the screen",
+    "author": "",
+    "version": "1.0.78",
+    "configuration": false,
+    "require": {
+        "ImageLibrary": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/showcrosshair.2057",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "InventoryInfo",
+    "description": "Saves player inventory info to file",
+    "author": "Shadow 8",
+    "version": "1.0.8",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/inventoryinfo.2153",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

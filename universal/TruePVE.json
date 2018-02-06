@@ -1,0 +1,19 @@
+{
+    "name": "TruePVE",
+    "description": "Better PVE\/PVP implementation",
+    "author": "ignignokt84",
+    "version": "0.8.8",
+    "configuration": false,
+    "suggest": {
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/truepve.1789",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

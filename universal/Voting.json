@@ -1,0 +1,16 @@
+{
+    "name": "Voting",
+    "description": "Polls for the server, with totally efficient voting form!",
+    "author": "mcnovinho08",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/voting.2397",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

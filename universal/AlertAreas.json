@@ -1,0 +1,17 @@
+{
+    "name": "AlertAreas",
+    "description": "Set areas with notification messages",
+    "author": "",
+    "version": "0.1.1",
+    "configuration": false,
+    "suggest": {},
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/alertareas.1749",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

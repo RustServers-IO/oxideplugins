@@ -1,0 +1,16 @@
+{
+    "name": "Reserved Names",
+    "description": "Reserve a nickname X by SteamID Y for Z amount of time",
+    "author": "",
+    "version": "0.0.8",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/reserved-names.1681",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

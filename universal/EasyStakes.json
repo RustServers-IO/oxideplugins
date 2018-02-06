@@ -1,0 +1,16 @@
+{
+    "name": "EasyStakes",
+    "description": "Fill all authorized stakes with amber from your inventory from anywhere",
+    "author": "Noviets",
+    "version": "1.0.9",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/easystakes.1697",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

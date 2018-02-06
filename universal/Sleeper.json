@@ -1,0 +1,16 @@
+{
+    "name": "Sleeper Protection",
+    "description": "Protect sleepers from being attacked",
+    "author": "Edrom",
+    "version": "0.2.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/sleeper-protection.1035",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

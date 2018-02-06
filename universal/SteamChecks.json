@@ -1,11 +1,11 @@
 {
     "name": "SteamChecks",
-    "description": "Check Steam servers to grab information about players.",
-    "author": "Spicy",
-    "version": "3.0.1",
-    "configuration": true,
-    "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/steamchecks.2113",
+    "description": "Kicks players when they join depending on information from their Steam accounts",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/steamchecks.2113",
     "games": [
         "universal"
     ],

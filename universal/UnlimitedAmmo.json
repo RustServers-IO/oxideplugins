@@ -1,0 +1,16 @@
+{
+    "name": "Unlimited Ammo",
+    "description": "Allows players to have unlimited ammo",
+    "author": "LaserHydra",
+    "version": "1.2.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/unlimited-ammo.1619",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

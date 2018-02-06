@@ -1,11 +1,11 @@
 {
-    "name": "",
-    "description": "",
-    "author": "",
-    "version": null,
+    "name": "Stacksize",
+    "description": "Simple stacksize config",
+    "author": "Noviets",
+    "version": "1.2.2",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/stacksize.1666",
+    "url": "https:\/\/oxidemod.org\/plugins\/stacksize.1666",
     "games": [
         "universal"
     ],

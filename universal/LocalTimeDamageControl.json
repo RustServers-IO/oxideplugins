@@ -1,0 +1,16 @@
+{
+    "name": "LocalTimeDamageControl",
+    "description": "Allows admin to control when damage can be done by non-owner players to using local server time.",
+    "author": "carny666",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/localtimedamagecontrol.2720",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "AdvancedUpgrading",
+    "description": "Advanced upgrading that disallows players from upgrading building blocks quickly",
+    "author": "Ryan",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/advancedupgrading.2632",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "Duel AKA Wager of Battle",
+    "description": "Players can duel one another for money, winner gets the cash",
+    "author": "Pho3niX90",
+    "version": "0.1.3",
+    "configuration": false,
+    "require": {
+        "EconomyBanks": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/duel-aka-wager-of-battle.1726",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

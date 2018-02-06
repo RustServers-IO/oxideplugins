@@ -1,0 +1,16 @@
+{
+    "name": "Build",
+    "description": "Build, spawn, plant, upgrade, deploy anything the way that you want it.",
+    "author": "Ryan",
+    "version": "1.1.93",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/build.715",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

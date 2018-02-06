@@ -1,0 +1,16 @@
+{
+    "name": "Magic Stakes",
+    "description": "Set which stake you spawn at via command.",
+    "author": "Norn",
+    "version": "0.1.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/magic-stakes.2497",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

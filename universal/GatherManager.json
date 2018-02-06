@@ -1,0 +1,16 @@
+{
+    "name": "Gather Manager",
+    "description": "Increases the amount of items gained from gathering resources",
+    "author": "Ryan",
+    "version": "2.2.6",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/gather-manager.675",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

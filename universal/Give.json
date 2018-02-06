@@ -1,0 +1,16 @@
+{
+    "name": "Give",
+    "description": "A simple give plugin.",
+    "author": "PaiN",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/give.1400",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

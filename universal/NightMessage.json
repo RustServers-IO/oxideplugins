@@ -1,0 +1,16 @@
+{
+    "name": "Day\/Night Message",
+    "description": "Broadcasts a custom message at dawn and\/or dusk",
+    "author": "Mordeus",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/day-night-message.2770",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

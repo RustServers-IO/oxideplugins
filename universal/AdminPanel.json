@@ -1,0 +1,23 @@
+{
+    "name": "AdminPanel",
+    "description": "A small panel for clickable commands for admins",
+    "author": "Wulf",
+    "version": "1.2.8",
+    "configuration": false,
+    "suggest": {
+        "Vanish": "*",
+        "Godmode": "*",
+        "NTeleportation": "*",
+        "AdminRadar": "*",
+        "UpdateChecker": "*"
+    },
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/adminpanel.2034",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

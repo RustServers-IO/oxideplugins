@@ -1,0 +1,16 @@
+{
+    "name": "Bank",
+    "description": "Safe player storage",
+    "author": "Calytic",
+    "version": "0.1.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/bank.2116",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

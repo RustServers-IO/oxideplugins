@@ -1,0 +1,16 @@
+{
+    "name": "Killing Only At Night",
+    "description": "Players can only kill each other at night",
+    "author": "",
+    "version": "0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/killing-only-at-night.1092",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

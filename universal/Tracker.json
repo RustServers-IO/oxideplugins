@@ -1,0 +1,16 @@
+{
+    "name": "Tracker",
+    "description": "This plugins allows you to check the amount of an Item on the map and where it is stored.",
+    "author": "Maurice",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/tracker.1278",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

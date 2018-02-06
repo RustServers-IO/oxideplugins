@@ -1,0 +1,19 @@
+{
+    "name": "Player Manager",
+    "description": "GUI-based player manager",
+    "author": "Reneb",
+    "version": "1.0.11",
+    "configuration": false,
+    "suggest": {
+        "PlayerDatabase": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-manager.1535",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

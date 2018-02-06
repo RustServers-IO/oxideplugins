@@ -1,0 +1,19 @@
+{
+    "name": "SafeTrade",
+    "description": "Allows players to trade safely without scams. Can use SafeTrade Zone.",
+    "author": "SouZa",
+    "version": "1.1.0",
+    "configuration": false,
+    "suggest": {
+        "AlertAreas": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/safetrade.1896",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

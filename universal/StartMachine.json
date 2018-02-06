@@ -1,0 +1,16 @@
+{
+    "name": "StartMachine",
+    "description": "Starts machines automatically on server startup and by manual control",
+    "author": "Wulf",
+    "version": "2.1.1",
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/startmachine.1586",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

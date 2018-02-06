@@ -1,0 +1,23 @@
+{
+    "name": "Factions",
+    "description": "A Faction system with Leaders, Taxes, Trades, Ranks, Kill Rewards, and MORE!",
+    "author": "Absolut",
+    "version": "3.5.5",
+    "configuration": false,
+    "suggest": {
+        "Economics": "*",
+        "ServerRewards": "*",
+        "EventManager": "*",
+        "LustyMap": "*",
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/factions.1919",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

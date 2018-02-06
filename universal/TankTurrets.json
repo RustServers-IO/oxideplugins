@@ -1,0 +1,19 @@
+{
+    "name": "TankTurrets",
+    "description": "Spawn Tanks for saved points",
+    "author": "Shadow 8",
+    "version": "1.0.10",
+    "configuration": false,
+    "suggest": {
+        "Vanish": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/tankturrets.2633",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

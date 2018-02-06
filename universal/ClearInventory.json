@@ -1,0 +1,16 @@
+{
+    "name": "Clear Inventory",
+    "description": "Clear the inventory of any player",
+    "author": "Trentu",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/clear-inventory.1558",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

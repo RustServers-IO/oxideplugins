@@ -1,0 +1,16 @@
+{
+    "name": "QuickLoadouts",
+    "description": "Fast access to preset inventory packages.",
+    "author": "carny666",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/quickloadouts.2731",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

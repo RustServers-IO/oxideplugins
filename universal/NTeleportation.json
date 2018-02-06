@@ -1,11 +1,14 @@
 {
-    "name": "",
-    "description": "",
-    "author": "",
-    "version": null,
+    "name": "N Teleportation",
+    "description": "Multiple teleportation systems for admins and players.",
+    "author": "Nogrod",
+    "version": "1.0.25",
     "configuration": false,
+    "suggest": {
+        "Friends": "*"
+    },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/n-teleportation.1832",
+    "url": "https:\/\/oxidemod.org\/plugins\/n-teleportation.1832",
     "games": [
         "universal"
     ],

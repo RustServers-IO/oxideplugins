@@ -1,0 +1,16 @@
+{
+    "name": "High Wall Barricades",
+    "description": "Automatically removes High External Walls placed outside of cupboard range after a period of time.",
+    "author": "Kappasaurus",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/high-wall-barricades.2415",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "Guild Info",
+    "description": "Know thy Enemy! Find out how many members a guild has and which of them are online!",
+    "author": "D-Kay",
+    "version": "1.2.1",
+    "configuration": false,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/guild-info.1125",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

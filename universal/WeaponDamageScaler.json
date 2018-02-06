@@ -1,0 +1,16 @@
+{
+    "name": "Weapon Damage Scaler",
+    "description": "Allows scaling of player damage per weapon\/ammo\/skin\/prefab",
+    "author": "Shady757",
+    "version": "1.1.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/weapon-damage-scaler.1594",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

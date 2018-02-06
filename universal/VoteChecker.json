@@ -1,0 +1,20 @@
+{
+    "name": "Vote Checker & Rewarder",
+    "description": "Give rewards to users for voting on game-servers.top & reign-of-kings.net",
+    "author": "Pho3niX90",
+    "version": "2.2.2",
+    "configuration": false,
+    "suggest": {
+        "HelpText": "*",
+        "GrandExchange": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/vote-checker-rewarder.1189",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

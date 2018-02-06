@@ -1,0 +1,16 @@
+{
+    "name": "NoWorkbench",
+    "description": "Eliminate the requirement of being near a bench to craft",
+    "author": "k1lly0u",
+    "version": "0.1.43",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/noworkbench.2645",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

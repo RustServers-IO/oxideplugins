@@ -1,0 +1,20 @@
+{
+    "name": "Voting System",
+    "description": "Players can vote to change the time and weather",
+    "author": "D-Kay",
+    "version": "1.4.2",
+    "configuration": false,
+    "suggest": {
+        "LevelSystem": "*",
+        "GrandExchange": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/voting-system.1190",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

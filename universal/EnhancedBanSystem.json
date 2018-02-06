@@ -2,13 +2,13 @@
     "name": "Enhanced Ban System",
     "description": "Ban by steam or ip, online & offline players, local or webrequest banlist",
     "author": "Slut",
-    "version": "5.1.11",
-    "configuration": true,
+    "version": "5.1.14",
+    "configuration": false,
     "suggest": {
         "DiscordMessages": "*"
     },
-    "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/enhanced-ban-system.1951",
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/enhanced-ban-system.1951",
     "games": [
         "rust"
     ],

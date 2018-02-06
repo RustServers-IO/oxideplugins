@@ -7,10 +7,11 @@ using System.Linq;
 
 // TODO: Add SQLite and MySQL database support?
 // TODO: Add individual permissions for each self command?
+// TODO: Add config setting to set maximum balance for players, and reduce balances above max
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.1.5", ResourceId = 717)]
+    [Info("Economics", "Wulf/lukespragg", "3.1.6", ResourceId = 717)]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -91,9 +92,8 @@ namespace Oxide.Plugins
                 ["DataSaved"] = "Economics data saved!",
                 ["DataWiped"] = "Economics data wiped!",
                 ["NegativeBalance"] = "Balance can not be negative!",
-                ["NewPlayerBalance"] = "New player balance: {0:C}",
                 ["NotAllowed"] = "You are not allowed to use the '{0}' command",
-                ["NoPlayersFound"] = "No players found with '{0}'",
+                ["NoPlayersFound"] = "No players found with name or ID '{0}'",
                 ["PlayerBalance"] = "Balance for {0}: {1:C}",
                 ["PlayerLacksMoney"] = "'{0}' does not have enough money!",
                 ["PlayersFound"] = "Multiple players were found, please specify: {0}",
@@ -105,7 +105,7 @@ namespace Oxide.Plugins
                 ["UsageDeposit"] = "{0} <name or id> <amount> - deposits amount to player",
                 ["UsageSetMoney"] = "Usage: {0} <name or id> <amount>",
                 ["UsageTransfer"] = "Usage: {0} <name or id> <amount> - transfers amount to player (fee may apply)",
-                ["UsageWithdraw"] = "Usage: {0} <amount>",
+                ["UsageWithdraw"] = "Usage: {0} <name or id> <amount>",
                 ["UsageWipe"] = "Usage: {0} - wipes all economics data",
                 ["YouLackMoney"] = "You do not have enough money!",
                 ["YouLostMoney"] = "You lost: {0:C}",
@@ -300,7 +300,7 @@ namespace Oxide.Plugins
             }
 
             Deposit(target.Id, amount);
-            Message(player, "NewPlayerBalance", target.Name, Balance(target.Id));
+            Message(player, "PlayerBalance", target.Name, Balance(target.Id));
         }
 
         #endregion Deposit Command
@@ -333,7 +333,7 @@ namespace Oxide.Plugins
             }
 
             SetMoney(target.Id, amount);
-            Message(player, "NewPlayerBalance", Balance(target.Id));
+            Message(player, "PlayerBalance", target.Name, Balance(target.Id));
         }
 
         #endregion Set Money Command
@@ -406,7 +406,7 @@ namespace Oxide.Plugins
             }
 
             if (Withdraw(target.Id, amount))
-                Message(player, "NewPlayerBalance", Balance(target.Id));
+                Message(player, "PlayerBalance", target.Name, Balance(target.Id));
             else
                 Message(player, "YouLackMoney", target.Name);
         }
@@ -417,6 +417,12 @@ namespace Oxide.Plugins
 
         private void WipeCommand(IPlayer player, string command, string[] args)
         {
+            if (!player.HasPermission(permAdmin))
+            {
+                Message(player, "NotAllowed", command);
+                return;
+            }
+
             storedData = new StoredData();
             changed = true;
             SaveData();

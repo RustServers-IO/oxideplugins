@@ -1,0 +1,16 @@
+{
+    "name": "CustomWipe",
+    "description": "Wipe a server with custom options",
+    "author": "SouZa",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/customwipe.1977",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

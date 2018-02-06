@@ -1,0 +1,16 @@
+{
+    "name": "AdminControl",
+    "description": "Some profiles to have more control in your admins, mods among others.",
+    "author": "Gute",
+    "version": "2.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/admincontrol.2365",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

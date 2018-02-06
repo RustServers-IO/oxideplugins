@@ -1,0 +1,17 @@
+{
+    "name": "No Friendly Fire",
+    "description": "Prevents guild members from doing damage to each other",
+    "author": "D-Kay",
+    "version": "1.2",
+    "configuration": false,
+    "suggest": {},
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/no-friendly-fire.1091",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

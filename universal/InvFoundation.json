@@ -1,0 +1,20 @@
+{
+    "name": "InvFoundation",
+    "description": "Invulnerable foundation",
+    "author": "sami37",
+    "version": "1.2.4",
+    "configuration": false,
+    "suggest": {
+        "BuildingOwners": "*",
+        "EntityOwner": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/invfoundation.2096",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

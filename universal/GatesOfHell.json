@@ -1,0 +1,16 @@
+{
+    "name": "Gates of Hell",
+    "description": "A Plugin to spawn enormous amounts of Plague Villagers and Werewolves",
+    "author": "juk3b0x",
+    "version": "1.2.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/gates-of-hell.2696",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

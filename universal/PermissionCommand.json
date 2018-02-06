@@ -1,0 +1,16 @@
+{
+    "name": "Permission Command",
+    "description": "Temp plugin that provides access to the permission command",
+    "author": "Mughisi",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/permission-command.1133",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

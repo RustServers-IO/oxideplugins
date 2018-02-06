@@ -1,0 +1,16 @@
+{
+    "name": "UpgradeTimer",
+    "description": "Online raiding buffed as walls keep their health when upgraded.",
+    "author": "Jake Rich",
+    "version": "2.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/upgradetimer.2740",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

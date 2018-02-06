@@ -1,0 +1,16 @@
+{
+    "name": "Compass GUI",
+    "description": "Shows which direction the player is facing with a GUI",
+    "author": "PaiN",
+    "version": "1.2.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/compass-gui.1231",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

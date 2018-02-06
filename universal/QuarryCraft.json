@@ -1,0 +1,16 @@
+{
+    "name": "Quarry Craft",
+    "description": "Returns the ability to craft quarries back!",
+    "author": "Vlad-00003",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/quarry-craft.2715",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

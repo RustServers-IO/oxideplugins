@@ -1,0 +1,19 @@
+{
+    "name": "Jail",
+    "description": "Very early Jail Plugin. Based off of Rust Jail... Well Kind of.",
+    "author": "SweetLouHD",
+    "version": "0.1.1",
+    "configuration": false,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/jail.1177",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

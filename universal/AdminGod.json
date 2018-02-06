@@ -1,11 +1,14 @@
 {
-    "name": "",
-    "description": "",
-    "author": "",
-    "version": null,
+    "name": "AdminGod",
+    "description": "Have godmode with ease and remove.",
+    "author": "Gute",
+    "version": "3.0.0",
     "configuration": false,
+    "suggest": {
+        "AdminControl": "*"
+    },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/admingod.1786",
+    "url": "https:\/\/oxidemod.org\/plugins\/admingod.1786",
     "games": [
         "universal"
     ],

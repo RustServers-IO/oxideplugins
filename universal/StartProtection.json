@@ -1,0 +1,22 @@
+{
+    "name": "StartProtection",
+    "description": "Protect new players when they first connect",
+    "author": "wazzzup",
+    "version": "2.2.0",
+    "configuration": false,
+    "suggest": {
+        "Friends": "*"
+    },
+    "require": {
+        "ImageLibrary": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/startprotection.1342",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

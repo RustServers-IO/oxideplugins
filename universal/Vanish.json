@@ -1,0 +1,16 @@
+{
+    "name": "Vanish",
+    "description": "Allows players with permission to become truly invisible",
+    "author": "Jake Rich",
+    "version": "0.5.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/vanish.1420",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

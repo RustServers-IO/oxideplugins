@@ -1,11 +1,11 @@
 {
     "name": "Logger",
     "description": "Configurable logging of chat, commands, connections, and more",
-    "author": "Wulf",
-    "version": "2.1.3",
-    "configuration": true,
+    "author": "",
+    "version": null,
+    "configuration": false,
     "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/logger.670",
+    "url": "https:\/\/oxidemod.org\/plugins\/logger.670",
     "games": [
         "rust"
     ],

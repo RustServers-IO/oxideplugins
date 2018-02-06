@@ -1,0 +1,16 @@
+{
+    "name": "Timber [Obsolete]",
+    "description": "Makes trees and cacti fall before being destroyed.",
+    "author": "Mattparks",
+    "version": "0.1.11",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/timber-obsolete.2565",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

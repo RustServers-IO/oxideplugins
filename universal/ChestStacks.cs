@@ -11,10 +11,10 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("ChestStacks", "Jake_Rich", "1.0.5", ResourceId = 2739)]
+    [Info("ChestStacks", "Jake_Rich", "1.0.6", ResourceId = 2739)]
     [Description("Higher stack sizes in storage containers.")]
 
-    public class ChestStacks : RustPlugin
+    public class ChestStacks : RustPlugin //Hobobarrel_static, item_drop
     {
         public static ChestStacks _plugin;
         public ConfigData Settings { get { return _settingsFile.Instance; } }
@@ -39,6 +39,10 @@ namespace Oxide.Plugins
 
         object OnMaxStackable(Item item)
         {
+            if (item.info.itemType == ItemContainer.ContentsType.Liquid)
+            {
+                return null;
+            }
             if (item.info.stackable == 1)
             {
                 return null;
@@ -121,8 +125,9 @@ namespace Oxide.Plugins
                 {
                     if (player.serverInput.IsDown(BUTTON.SPRINT))
                     {
-                        var items = playerInventory.AllItems().Where(x => x.info == movedItem.info);
-                        foreach (var item in items)
+                        List<Item> allItems = new List<global::Item>(playerInventory.containerMain.itemList);
+                        allItems.AddRange(playerInventory.containerBelt.itemList);
+                        foreach (var item in allItems.Where(x => x.info == movedItem.info))
                         {
                             if (!item.MoveToContainer(lootContainer))
                             {
@@ -344,6 +349,13 @@ namespace Oxide.Plugins
                 { "recycler_static", 1f }, //Recycler
                 { "water_catcher_small", 1f }, // Small Water Catcher
                 { "water_catcher_large", 1f }, // Large Water Catcher
+                { "small_refinery_static", 1f }, // Refineries in radtowns
+                { "player_corpse", 1f }, // Corpses
+                { "item_drop_backpack", 1f }, // Backpacks
+                { "fridge.deployed", 5f }, // Fridge
+                { "survivalfishtrap.deployed", 5f }, // Fridge
+                { "hobobarrel_static", 1f }, //Hobo barrels!
+                { "item_drop", 5f } //Dropped container when chests are broken
             };
 
             public float GetStackSize(BaseEntity entity)

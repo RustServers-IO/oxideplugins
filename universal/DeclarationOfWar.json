@@ -1,11 +1,11 @@
 {
-    "name": "",
-    "description": "",
-    "author": "",
-    "version": null,
+    "name": "DeclarationOfWar",
+    "description": "Disables cube damage with siege when no war has been declared",
+    "author": "D-Kay",
+    "version": "2.0.0",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/declarationofwar.2080",
+    "url": "https:\/\/oxidemod.org\/plugins\/declarationofwar.2080",
     "games": [
         "universal"
     ],

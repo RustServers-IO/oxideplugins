@@ -1,0 +1,16 @@
+{
+    "name": "Popup Message",
+    "description": "Admins can send a popup with \/pop playername title message",
+    "author": "DumbleDora",
+    "version": "1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/popup-message.1118",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

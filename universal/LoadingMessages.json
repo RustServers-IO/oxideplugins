@@ -1,0 +1,16 @@
+{
+    "name": "Loading Messages",
+    "description": "Show your own customizable texts on loading screen.",
+    "author": "",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/loading-messages.2762",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

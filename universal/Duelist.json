@@ -1,0 +1,21 @@
+{
+    "name": "Duelist",
+    "description": "1v1 and TDM dueling event.",
+    "author": "nivex",
+    "version": "1.1.5",
+    "configuration": false,
+    "suggest": {
+        "Kits": "*",
+        "Economics": "*",
+        "ServerRewards": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/duelist.2520",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

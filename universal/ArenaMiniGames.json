@@ -1,0 +1,19 @@
+{
+    "name": "ArenaMiniGames",
+    "description": "ArenaMiniGames 3 Types Of Games And An Arena.",
+    "author": "tugamano",
+    "version": "1.0.1",
+    "configuration": false,
+    "suggest": {
+        "ZoneManager": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/arenaminigames.2194",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

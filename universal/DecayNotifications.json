@@ -1,0 +1,19 @@
+{
+    "name": "Decay Notifications",
+    "description": "Automatic decay notifications and a command for upkeep status in minutes.",
+    "author": "Ankawi",
+    "version": "1.0.1",
+    "configuration": false,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/decay-notifications.2765",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

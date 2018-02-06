@@ -1,0 +1,16 @@
+{
+    "name": "Server Logs",
+    "description": "Log plugin for servers to record server activity",
+    "author": "",
+    "version": "0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/server-logs.1030",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

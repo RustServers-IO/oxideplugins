@@ -1,0 +1,16 @@
+{
+    "name": "Kill Feed",
+    "description": "Displays a basic Kill Feed on screen!",
+    "author": "",
+    "version": "1.17",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/kill-feed.1433",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

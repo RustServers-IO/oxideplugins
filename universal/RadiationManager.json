@@ -1,0 +1,16 @@
+{
+    "name": "RadiationManager",
+    "description": "Allows for slight managment of radiated zones",
+    "author": "redBDGR",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/radiationmanager.2766",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

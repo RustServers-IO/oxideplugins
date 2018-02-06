@@ -1,0 +1,16 @@
+{
+    "name": "Stake Authorizer",
+    "description": "Authorize yourself for every stake",
+    "author": "LaserHydra",
+    "version": "1.1.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/stake-authorizer.1577",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

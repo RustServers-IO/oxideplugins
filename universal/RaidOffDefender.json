@@ -1,0 +1,16 @@
+{
+    "name": "RaidOffDefender",
+    "description": "Punish people doing raidoff or\/and raidon",
+    "author": "",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/raidoffdefender.1769",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

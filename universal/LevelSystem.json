@@ -1,0 +1,22 @@
+{
+    "name": "Level System",
+    "description": "A simple plugin to add XP and levels in the game",
+    "author": "D-Kay",
+    "version": "1.1.0",
+    "configuration": false,
+    "suggest": {
+        "HelpText": "*"
+    },
+    "require": {
+        "CraftOwnership": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/level-system.1822",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

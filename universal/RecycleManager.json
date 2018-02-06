@@ -1,0 +1,16 @@
+{
+    "name": "RecycleManager",
+    "description": "Easily change features about the recycler",
+    "author": "redBDGR",
+    "version": "1.0.9",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/recyclemanager.2391",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

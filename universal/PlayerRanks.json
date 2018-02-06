@@ -1,0 +1,21 @@
+{
+    "name": "Player Ranks",
+    "description": "Player ranks and stats database",
+    "author": "Steenamaroo",
+    "version": "1.3.4",
+    "configuration": false,
+    "suggest": {
+        "EventManager": "*",
+        "Friends": "*",
+        "Clans": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-ranks.2359",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

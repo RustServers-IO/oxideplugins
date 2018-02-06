@@ -1,0 +1,16 @@
+{
+    "name": "ConnectingMSG",
+    "description": "Differentiated connection messages for your server!",
+    "author": "mcnovinho08",
+    "version": "0.1.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/connectingmsg.2392",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

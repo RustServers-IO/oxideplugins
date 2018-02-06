@@ -1,0 +1,19 @@
+{
+    "name": "GatherControl",
+    "description": "Control gather rates by day and night with permissions",
+    "author": "CaseMan",
+    "version": "1.5.2",
+    "configuration": false,
+    "suggest": {
+        "GUIAnnouncements": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/gathercontrol.2477",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

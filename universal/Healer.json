@@ -1,11 +1,11 @@
 {
     "name": "Healer",
     "description": "Allows players with permission to heal themselves or others",
-    "author": "Wulf",
-    "version": "2.4.0",
-    "configuration": true,
-    "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/healer.658",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs\r\n",
+    "url": "https:\/\/oxidemod.org\/plugins\/healer.658",
     "games": [
         "rust"
     ],

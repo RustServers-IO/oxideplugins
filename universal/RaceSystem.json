@@ -1,11 +1,15 @@
 {
-    "name": "",
-    "description": "",
-    "author": "",
-    "version": null,
+    "name": "Race System",
+    "description": "Add races to your server",
+    "author": "D-Kay",
+    "version": "1.0.0",
     "configuration": false,
+    "suggest": {
+        "HelpText": "*",
+        "UpdateChecker": "*"
+    },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/race-system.2287",
+    "url": "https:\/\/oxidemod.org\/plugins\/race-system.2287",
     "games": [
         "universal"
     ],

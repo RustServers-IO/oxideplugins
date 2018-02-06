@@ -1,0 +1,16 @@
+{
+    "name": "Private Message",
+    "description": "A simple private messaging plugin for players.",
+    "author": "SouZa",
+    "version": "1.2.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/private-message.1541",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

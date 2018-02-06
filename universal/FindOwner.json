@@ -1,11 +1,11 @@
 {
-    "name": "",
-    "description": "",
-    "author": "",
-    "version": null,
+    "name": "FindOwner",
+    "description": "A \/prod command that gives owner info for sleepers, blocks in crest zones, and any player item",
+    "author": "Mordeus",
+    "version": "1.0.1",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/findowner.2702",
+    "url": "https:\/\/oxidemod.org\/plugins\/findowner.2702",
     "games": [
         "universal"
     ],

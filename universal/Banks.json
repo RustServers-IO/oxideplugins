@@ -1,0 +1,16 @@
+{
+    "name": "Banks",
+    "description": "Bank with account, tax and Cash in your pocket",
+    "author": "RD156",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/banks.1638",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

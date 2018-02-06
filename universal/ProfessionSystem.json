@@ -1,0 +1,16 @@
+{
+    "name": "ProfessionSystem",
+    "description": "Read the update section for info on v2",
+    "author": "juk3b0x",
+    "version": "2.2.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/professionsystem.2613",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

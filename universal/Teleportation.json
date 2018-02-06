@@ -1,0 +1,16 @@
+{
+    "name": "Teleportation",
+    "description": "Advanced teleportation and homes",
+    "author": "LaserHydra",
+    "version": "1.5.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/teleportation.1519",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

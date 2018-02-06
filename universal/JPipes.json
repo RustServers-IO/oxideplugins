@@ -1,0 +1,21 @@
+{
+    "name": "JPipes",
+    "description": "Pipes that automatically transfer items between boxes, furnaces, turrets, quarries, etc.",
+    "author": "",
+    "version": "0.6.4",
+    "configuration": false,
+    "suggest": {
+        "FurnaceSplitter": "*",
+        "HammerTime": "*",
+        "AutoFuel": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/jpipes.2402",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

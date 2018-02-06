@@ -1,0 +1,16 @@
+{
+    "name": "Custom Resource Spawns",
+    "description": "Create additional spawn points for resources of your choosing, that re-spawn on a timer",
+    "author": "k1lly0u",
+    "version": "0.2.25",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/custom-resource-spawns.1783",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}
